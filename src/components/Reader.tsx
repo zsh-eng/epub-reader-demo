@@ -186,7 +186,7 @@ export function Reader() {
   }, [bookId, book, currentChapterIndex]);
 
   // Navigation handlers
-  const goToPreviousChapter = () => {
+  const goToPreviousChapter = useCallback(() => {
     if (currentChapterIndex > 0) {
       setCurrentChapterIndex((prev) => prev - 1);
     }
@@ -194,9 +194,9 @@ export function Reader() {
       top: 0,
       behavior: "instant",
     });
-  };
+  }, [currentChapterIndex]);
 
-  const goToNextChapter = () => {
+  const goToNextChapter = useCallback(() => {
     if (book && currentChapterIndex < book.spine.length - 1) {
       setCurrentChapterIndex((prev) => prev + 1);
       window.scrollTo({
@@ -204,7 +204,31 @@ export function Reader() {
         behavior: "instant",
       });
     }
-  };
+  }, [book, currentChapterIndex]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore if user is typing in an input field
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToPreviousChapter();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToNextChapter();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentChapterIndex, book, goToPreviousChapter, goToNextChapter]);
 
   const goToChapterByHref = (href: string) => {
     if (!book) return;
