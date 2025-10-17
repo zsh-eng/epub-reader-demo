@@ -40,6 +40,29 @@ export function Reader() {
   const lastScrollProgress = useRef<number>(0);
   const resourceUrlsRef = useRef<Map<string, string>>(new Map());
 
+  // Helper function to find TOC item by href (searches recursively)
+  const findTOCItemByHref = useCallback(
+    (items: TOCItem[], targetHref: string): TOCItem | null => {
+      for (const item of items) {
+        // Check if this item matches (compare both full path and just filename)
+        if (
+          item.href === targetHref ||
+          item.href.endsWith(targetHref) ||
+          targetHref.endsWith(item.href)
+        ) {
+          return item;
+        }
+        // Recursively search children
+        if (item.children && item.children.length > 0) {
+          const found = findTOCItemByHref(item.children, targetHref);
+          if (found) return found;
+        }
+      }
+      return null;
+    },
+    [],
+  );
+
   // Load book data
   useEffect(() => {
     const loadBook = async () => {
@@ -243,6 +266,7 @@ export function Reader() {
       return;
     }
 
+    console.log("testing this point", book.spine);
     const spineIndex = book.spine.findIndex(
       (item) => item.idref === manifestItem.id,
     );
@@ -288,9 +312,27 @@ export function Reader() {
     return null;
   }
 
-  const currentChapterTitle =
-    book.toc[currentChapterIndex]?.label ||
-    `Chapter ${currentChapterIndex + 1}`;
+  // Get current chapter title by mapping spine index to TOC
+  const getCurrentChapterTitle = () => {
+    const spineItem = book.spine[currentChapterIndex];
+    if (!spineItem) return ``;
+
+    // Find the manifest item to get the href
+    const manifestItem = book.manifest.find(
+      (item) => item.id === spineItem.idref,
+    );
+    if (!manifestItem) return ``;
+
+    // Find the corresponding TOC item
+    const tocItem = findTOCItemByHref(book.toc, manifestItem.href);
+    if (!tocItem) {
+      return "";
+    }
+
+    return tocItem.label;
+  };
+
+  const currentChapterTitle = getCurrentChapterTitle();
   const hasPreviousChapter = currentChapterIndex > 0;
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
 
