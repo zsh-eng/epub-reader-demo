@@ -347,6 +347,7 @@ export function Reader() {
       {/* Scrollable Chapter Content */}
       <ScrollArea className="flex-1">
         <div
+          key={currentChapterIndex}
           ref={contentRef}
           className="reader-content max-w-[80ch] mx-auto px-6 py-8 sm:px-8 md:px-12"
           dangerouslySetInnerHTML={{ __html: chapterContent }}
