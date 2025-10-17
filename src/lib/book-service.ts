@@ -1,12 +1,12 @@
-import { parseEPUB } from "./epub-parser";
+import { parseEPUB } from "@/lib/epub-parser";
 import {
   addBook,
   addBookFile,
   getAllBooks,
   deleteBook,
   updateBookLastOpened,
-} from "./db";
-import type { Book } from "./db";
+} from "@/lib/db";
+import type { Book } from "@/lib/db";
 
 /**
  * Add a book from an EPUB file

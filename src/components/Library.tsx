@@ -3,12 +3,12 @@ import {
   addBookFromFile,
   getLibraryBooks,
   removeBook,
-} from "../lib/book-service";
-import type { Book } from "../lib/db";
-import { BookCard } from "./BookCard";
-import { Button } from "./ui/button";
+} from "@/lib/book-service";
+import type { Book } from "@/lib/db";
+import { BookCard } from "@/components/BookCard";
+import { Button } from "@/components/ui/button";
 import { Plus, Upload } from "lucide-react";
-import { useToast } from "../hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 
 export function Library() {
   const [books, setBooks] = useState<Book[]>([]);

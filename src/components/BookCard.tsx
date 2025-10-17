@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import type { Book } from "../lib/db";
-import { getBookCoverUrl } from "../lib/db";
+import type { Book } from "@/lib/db";
+import { getBookCoverUrl } from "@/lib/db";
 import { Trash2, Book as BookIcon } from "lucide-react";
 import { Button } from "./ui/button";
 

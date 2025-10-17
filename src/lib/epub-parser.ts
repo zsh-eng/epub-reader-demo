@@ -1,5 +1,11 @@
 import { unzip } from "fflate";
-import type { Book, ManifestItem, SpineItem, TOCItem, BookFile } from "./db";
+import type {
+  Book,
+  ManifestItem,
+  SpineItem,
+  TOCItem,
+  BookFile,
+} from "@/lib/db";
 
 export interface ParsedEPUB {
   book: Book;
