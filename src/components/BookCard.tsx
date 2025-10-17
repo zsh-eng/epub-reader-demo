@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import type { Book } from "../lib/db";
 import { Trash2, Book as BookIcon } from "lucide-react";
 import { Button } from "./ui/button";
@@ -8,9 +9,10 @@ interface BookCardProps {
 }
 
 export function BookCard({ book, onDelete }: BookCardProps) {
+  const navigate = useNavigate();
+
   const handleClick = () => {
-    // TODO: Navigate to reader page
-    console.log("Opening book:", book.id);
+    navigate(`/reader/${book.id}`);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
