@@ -161,11 +161,19 @@ export function Reader() {
     if (currentChapterIndex > 0) {
       setCurrentChapterIndex((prev) => prev - 1);
     }
+    window.scrollTo({
+      top: 0,
+      behavior: "instant",
+    });
   };
 
   const goToNextChapter = () => {
     if (book && currentChapterIndex < book.spine.length - 1) {
       setCurrentChapterIndex((prev) => prev + 1);
+      window.scrollTo({
+        top: 0,
+        behavior: "instant",
+      });
     }
   };
 
@@ -298,7 +306,7 @@ export function Reader() {
           variant="outline"
           onClick={goToPreviousChapter}
           disabled={!hasPreviousChapter}
-          className="gap-2"
+          className="gap-2 w-28"
         >
           <ChevronLeft className="h-4 w-4" />
           Previous
@@ -312,7 +320,7 @@ export function Reader() {
           variant="outline"
           onClick={goToNextChapter}
           disabled={!hasNextChapter}
-          className="gap-2"
+          className="gap-2 w-28"
         >
           Next
           <ChevronRight className="h-4 w-4" />
