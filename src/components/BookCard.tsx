@@ -1,5 +1,7 @@
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import type { Book } from "../lib/db";
+import { getBookCoverUrl } from "../lib/db";
 import { Trash2, Book as BookIcon } from "lucide-react";
 import { Button } from "./ui/button";
 
@@ -10,6 +12,28 @@ interface BookCardProps {
 
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
+  const [coverUrl, setCoverUrl] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    let objectUrl: string | undefined;
+
+    async function loadCover() {
+      if (book.coverImagePath) {
+        const url = await getBookCoverUrl(book.id, book.coverImagePath);
+        objectUrl = url;
+        setCoverUrl(url);
+      }
+    }
+
+    loadCover();
+
+    // Cleanup: revoke the blob URL when component unmounts
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [book.id, book.coverImagePath]);
 
   const handleClick = () => {
     navigate(`/reader/${book.id}`);
@@ -34,9 +58,9 @@ export function BookCard({ book, onDelete }: BookCardProps) {
       >
         {/* Cover Image */}
         <div className="aspect-[2/3] bg-gray-200 relative overflow-hidden">
-          {book.coverImageUrl ? (
+          {coverUrl ? (
             <img
-              src={book.coverImageUrl}
+              src={coverUrl}
               alt={`Cover of ${book.title}`}
               className="w-full h-full object-cover"
               loading="lazy"

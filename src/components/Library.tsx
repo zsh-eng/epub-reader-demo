@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
-import { addBookFromFile, getLibraryBooks, removeBook } from '../lib/book-service';
-import type { Book } from '../lib/db';
-import { BookCard } from './BookCard';
-import { Button } from './ui/button';
-import { Plus, Upload } from 'lucide-react';
-import { useToast } from '../hooks/use-toast';
+import { useState, useEffect, useCallback } from "react";
+import {
+  addBookFromFile,
+  getLibraryBooks,
+  removeBook,
+} from "../lib/book-service";
+import type { Book } from "../lib/db";
+import { BookCard } from "./BookCard";
+import { Button } from "./ui/button";
+import { Plus, Upload } from "lucide-react";
+import { useToast } from "../hooks/use-toast";
 
 export function Library() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -19,16 +23,16 @@ export function Library() {
       const allBooks = await getLibraryBooks();
       setBooks(allBooks);
     } catch (error) {
-      console.error('Error loading books:', error);
+      console.error("Error loading books:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to load books from library',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to load books from library",
+        variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     loadBooks();
@@ -45,18 +49,19 @@ export function Library() {
       const book = await addBookFromFile(file);
 
       toast({
-        title: 'Success',
+        title: "Success",
         description: `"${book.title}" has been added to your library`,
       });
 
       // Reload books
       await loadBooks();
     } catch (error) {
-      console.error('Error adding book:', error);
+      console.error("Error adding book:", error);
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to add book',
-        variant: 'destructive',
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to add book",
+        variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
@@ -99,25 +104,25 @@ export function Library() {
     try {
       await removeBook(bookId);
       toast({
-        title: 'Success',
-        description: 'Book removed from library',
+        title: "Success",
+        description: "Book removed from library",
       });
       await loadBooks();
     } catch (error) {
-      console.error('Error deleting book:', error);
+      console.error("Error deleting book:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to remove book',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to remove book",
+        variant: "destructive",
       });
     }
   };
 
   // Handle file input button click
   const handleAddBookClick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.epub';
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".epub";
     input.onchange = (e) => {
       const target = e.target as HTMLInputElement;
       handleFileSelect(target.files);
@@ -144,8 +149,8 @@ export function Library() {
           <h1 className="text-4xl font-bold text-gray-900 mb-2">My Library</h1>
           <p className="text-gray-600">
             {books.length === 0
-              ? 'Start building your library by adding EPUB books'
-              : `${books.length} book${books.length !== 1 ? 's' : ''} in your library`}
+              ? "Start building your library by adding EPUB books"
+              : `${books.length} book${books.length !== 1 ? "s" : ""} in your library`}
           </p>
         </div>
 
@@ -179,15 +184,23 @@ export function Library() {
           onDrop={handleDrop}
           className={`
             border-2 border-dashed rounded-lg p-8 mb-8 transition-colors
-            ${isDragging
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-300 bg-white hover:border-gray-400'}
+            ${
+              isDragging
+                ? "border-blue-500 bg-blue-50"
+                : "border-gray-300 bg-white hover:border-gray-400"
+            }
           `}
         >
           <div className="flex flex-col items-center justify-center text-center">
-            <Upload className={`h-12 w-12 mb-4 ${isDragging ? 'text-blue-500' : 'text-gray-400'}`} />
-            <p className={`text-lg font-medium mb-2 ${isDragging ? 'text-blue-700' : 'text-gray-700'}`}>
-              {isDragging ? 'Drop EPUB file here' : 'Drag and drop EPUB files here'}
+            <Upload
+              className={`h-12 w-12 mb-4 ${isDragging ? "text-blue-500" : "text-gray-400"}`}
+            />
+            <p
+              className={`text-lg font-medium mb-2 ${isDragging ? "text-blue-700" : "text-gray-700"}`}
+            >
+              {isDragging
+                ? "Drop EPUB file here"
+                : "Drag and drop EPUB files here"}
             </p>
             <p className="text-sm text-gray-500">
               or click the "Add Book" button above
@@ -199,11 +212,7 @@ export function Library() {
         {books.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
             {books.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
-                onDelete={handleDeleteBook}
-              />
+              <BookCard key={book.id} book={book} onDelete={handleDeleteBook} />
             ))}
           </div>
         ) : (
@@ -223,7 +232,9 @@ export function Library() {
                 />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No books yet</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No books yet
+            </h3>
             <p className="text-gray-500">
               Add your first EPUB book to get started
             </p>

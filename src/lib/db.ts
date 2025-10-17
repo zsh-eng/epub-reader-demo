@@ -5,7 +5,7 @@ export interface Book {
   id: string; // Primary key (UUID)
   title: string;
   author: string;
-  coverImageUrl?: string; // Object URL or data URL
+  coverImagePath?: string; // Path to cover image file within the EPUB
   dateAdded: Date;
   lastOpened?: Date;
   fileSize: number;
@@ -172,4 +172,19 @@ export async function updateReadingSettings(
 ): Promise<void> {
   const current = await getReadingSettings();
   await db.readingSettings.put({ ...current, ...settings });
+}
+
+/**
+ * Get the cover image blob URL for a book
+ * Creates a fresh blob URL from stored BookFile data
+ */
+export async function getBookCoverUrl(
+  bookId: string,
+  coverPath: string,
+): Promise<string | undefined> {
+  const bookFile = await getBookFile(bookId, coverPath);
+  if (!bookFile) {
+    return undefined;
+  }
+  return URL.createObjectURL(bookFile.content);
 }

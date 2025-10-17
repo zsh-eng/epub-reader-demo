@@ -39,13 +39,8 @@ export async function parseEPUB(file: File): Promise<ParsedEPUB> {
   // Extract table of contents
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
 
-  // Extract cover image
-  const coverImageUrl = await extractCoverImage(
-    opfDoc,
-    manifest,
-    unzipped,
-    opfPath,
-  );
+  // Extract cover image path
+  const coverImagePath = extractCoverImagePath(opfDoc, manifest, unzipped);
 
   // Generate unique ID
   const bookId = generateId();
@@ -55,7 +50,7 @@ export async function parseEPUB(file: File): Promise<ParsedEPUB> {
     id: bookId,
     title: metadata.title || file.name.replace(".epub", ""),
     author: metadata.author || "Unknown Author",
-    coverImageUrl,
+    coverImagePath,
     dateAdded: new Date(),
     fileSize: file.size,
     manifest,
@@ -349,15 +344,14 @@ function parseTOCFromNCX(ncxDoc: Document, basePath: string): TOCItem[] {
 }
 
 /**
- * Extract cover image from EPUB
+ * Extract cover image path from EPUB
+ * Returns the path to the cover image file within the EPUB structure
  */
-async function extractCoverImage(
+function extractCoverImagePath(
   opfDoc: Document,
   manifest: ManifestItem[],
   files: Record<string, Uint8Array>,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _opfPath: string,
-): Promise<string | undefined> {
+): string | undefined {
   // Method 1: Look for cover in metadata
   const metaCover = opfDoc.querySelector('metadata meta[name="cover"]');
   if (metaCover) {
@@ -365,7 +359,7 @@ async function extractCoverImage(
     if (coverId) {
       const coverItem = manifest.find((item) => item.id === coverId);
       if (coverItem && files[coverItem.href]) {
-        return createImageUrl(files[coverItem.href], coverItem.mediaType);
+        return coverItem.href;
       }
     }
   }
@@ -375,7 +369,7 @@ async function extractCoverImage(
     item.properties?.includes("cover-image"),
   );
   if (coverItem && files[coverItem.href]) {
-    return createImageUrl(files[coverItem.href], coverItem.mediaType);
+    return coverItem.href;
   }
 
   // Method 3: Look for common cover file names
@@ -388,7 +382,7 @@ async function extractCoverImage(
   for (const item of manifest) {
     const fileName = item.href.split("/").pop()?.toLowerCase() || "";
     if (commonCoverNames.includes(fileName) && files[item.href]) {
-      return createImageUrl(files[item.href], item.mediaType);
+      return item.href;
     }
   }
 
@@ -397,18 +391,10 @@ async function extractCoverImage(
     item.mediaType.startsWith("image/"),
   );
   if (firstImage && files[firstImage.href]) {
-    return createImageUrl(files[firstImage.href], firstImage.mediaType);
+    return firstImage.href;
   }
 
   return undefined;
-}
-
-/**
- * Create an object URL from image data
- */
-function createImageUrl(data: Uint8Array, mediaType: string): string {
-  const blob = new Blob([data.buffer as ArrayBuffer], { type: mediaType });
-  return URL.createObjectURL(blob);
 }
 
 /**

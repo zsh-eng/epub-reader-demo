@@ -1,14 +1,20 @@
-import { parseEPUB } from './epub-parser';
-import { addBook, addBookFile, getAllBooks, deleteBook, updateBookLastOpened } from './db';
-import type { Book } from './db';
+import { parseEPUB } from "./epub-parser";
+import {
+  addBook,
+  addBookFile,
+  getAllBooks,
+  deleteBook,
+  updateBookLastOpened,
+} from "./db";
+import type { Book } from "./db";
 
 /**
  * Add a book from an EPUB file
  */
 export async function addBookFromFile(file: File): Promise<Book> {
   // Validate file type
-  if (!file.name.toLowerCase().endsWith('.epub')) {
-    throw new Error('Only EPUB files are supported');
+  if (!file.name.toLowerCase().endsWith(".epub")) {
+    throw new Error("Only EPUB files are supported");
   }
 
   try {
@@ -25,8 +31,10 @@ export async function addBookFromFile(file: File): Promise<Book> {
 
     return book;
   } catch (error) {
-    console.error('Error adding book:', error);
-    throw new Error(`Failed to add book: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error("Error adding book:", error);
+    throw new Error(
+      `Failed to add book: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 }
 
@@ -41,13 +49,6 @@ export async function getLibraryBooks(): Promise<Book[]> {
  * Delete a book from the library
  */
 export async function removeBook(bookId: string): Promise<void> {
-  const book = await import('./db').then(m => m.getBook(bookId));
-
-  // Revoke cover image URL if it exists
-  if (book?.coverImageUrl && book.coverImageUrl.startsWith('blob:')) {
-    URL.revokeObjectURL(book.coverImageUrl);
-  }
-
   await deleteBook(bookId);
 }
 
