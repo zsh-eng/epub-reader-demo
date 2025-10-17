@@ -92,10 +92,20 @@ export function Reader() {
 
         // Load reading progress
         const progress = await getReadingProgress(bookId);
-        console.log("progress", progress);
-        if (progress) {
-          setCurrentChapterIndex(progress.currentSpineIndex);
-        }
+        if (!progress) return;
+
+        setCurrentChapterIndex(progress.currentSpineIndex);
+        lastScrollProgress.current = progress.scrollProgress;
+        console.log("scroll progress", progress.scrollProgress);
+        setTimeout(() => {
+          const scrollHeight = document.documentElement.scrollHeight;
+          const clientHeight = window.innerHeight;
+          const maxScroll = scrollHeight - clientHeight;
+          window.scrollTo({
+            top: maxScroll * progress.scrollProgress,
+            behavior: "smooth",
+          });
+        }, 100);
       } catch (error) {
         console.error("Error loading book:", error);
         toast({
@@ -188,22 +198,28 @@ export function Reader() {
     if (!bookId || !book) return;
 
     const saveProgress = async () => {
-      const scrollProgress = contentRef.current
-        ? contentRef.current.scrollTop /
-          (contentRef.current.scrollHeight - contentRef.current.clientHeight)
-        : 0;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+
+      const scrollProgress =
+        scrollHeight > clientHeight
+          ? scrollTop / (scrollHeight - clientHeight)
+          : 0;
 
       // Only save if progress changed significantly
-      if (Math.abs(scrollProgress - lastScrollProgress.current) > 0.01) {
-        lastScrollProgress.current = scrollProgress;
-        await saveReadingProgress({
-          id: bookId,
-          bookId,
-          currentSpineIndex: currentChapterIndex,
-          scrollProgress: isNaN(scrollProgress) ? 0 : scrollProgress,
-          lastRead: new Date(),
-        });
-      }
+      const hasScrollProgressChanged =
+        Math.abs(scrollProgress - lastScrollProgress.current) > 0.01;
+      if (!hasScrollProgressChanged) return;
+
+      lastScrollProgress.current = scrollProgress;
+      await saveReadingProgress({
+        id: bookId,
+        bookId,
+        currentSpineIndex: currentChapterIndex,
+        scrollProgress: isNaN(scrollProgress) ? 0 : scrollProgress,
+        lastRead: new Date(),
+      });
     };
 
     const interval = setInterval(saveProgress, 3000);
@@ -374,7 +390,7 @@ export function Reader() {
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col bg-white">
       {/* Header */}
       <header className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-10">
         {/* Hamburger Menu */}
@@ -424,15 +440,12 @@ export function Reader() {
         </div>
       </header>
 
-      {/* Scrollable Chapter Content */}
-      <ScrollArea className="flex-1">
-        <div
-          key={currentChapterIndex}
-          ref={contentRef}
-          className="reader-content max-w-[80ch] mx-auto px-6 py-8 sm:px-8 md:px-12"
-          dangerouslySetInnerHTML={{ __html: chapterContent }}
-        />
-      </ScrollArea>
+      <div
+        key={currentChapterIndex}
+        ref={contentRef}
+        className="reader-content max-w-[80ch] mx-auto px-6 py-8 sm:px-8 md:px-12"
+        dangerouslySetInnerHTML={{ __html: chapterContent }}
+      />
 
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between px-4 py-4 border-t border-gray-200 bg-white">
