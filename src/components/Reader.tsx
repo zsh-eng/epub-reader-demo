@@ -1,6 +1,13 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, Menu } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import {
   getBook,
@@ -14,15 +21,9 @@ import {
   cleanupResourceUrls,
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { ArrowLeft, ChevronLeft, ChevronRight, Menu } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -261,7 +262,7 @@ export function Reader() {
       <div key={`${level}-${index}`} style={{ paddingLeft: `${level * 16}px` }}>
         <button
           onClick={() => goToChapterByHref(item.href)}
-          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-md transition-colors text-sm"
+          className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-none transition-colors text-sm"
         >
           {item.label}
         </button>
@@ -308,7 +309,7 @@ export function Reader() {
             <SheetHeader>
               <SheetTitle>Table of Contents</SheetTitle>
             </SheetHeader>
-            <ScrollArea className="h-[calc(100vh-8rem)] mt-6">
+            <SheetDescription className="overflow-scroll px-2">
               {book.toc && book.toc.length > 0 ? (
                 <div className="space-y-1">{renderTOCItems(book.toc)}</div>
               ) : (
@@ -316,7 +317,7 @@ export function Reader() {
                   No table of contents available
                 </p>
               )}
-            </ScrollArea>
+            </SheetDescription>
           </SheetContent>
         </Sheet>
 
