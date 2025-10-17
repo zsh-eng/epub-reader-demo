@@ -92,6 +92,7 @@ export function Reader() {
 
         // Load reading progress
         const progress = await getReadingProgress(bookId);
+        console.log("progress", progress);
         if (progress) {
           setCurrentChapterIndex(progress.currentSpineIndex);
         }
@@ -210,25 +211,50 @@ export function Reader() {
   }, [bookId, book, currentChapterIndex]);
 
   // Navigation handlers
-  const goToPreviousChapter = useCallback(() => {
+  const goToPreviousChapter = useCallback(async () => {
+    if (!bookId) return;
+
     if (currentChapterIndex > 0) {
-      setCurrentChapterIndex((prev) => prev - 1);
+      const newIndex = currentChapterIndex - 1;
+      setCurrentChapterIndex(newIndex);
+
+      // Save progress immediately on chapter change
+      await saveReadingProgress({
+        id: bookId,
+        bookId,
+        currentSpineIndex: newIndex,
+        scrollProgress: 0,
+        lastRead: new Date(),
+      });
     }
     window.scrollTo({
       top: 0,
       behavior: "instant",
     });
-  }, [currentChapterIndex]);
+  }, [currentChapterIndex, bookId]);
 
-  const goToNextChapter = useCallback(() => {
+  const goToNextChapter = useCallback(async () => {
+    if (!bookId) return;
+
     if (book && currentChapterIndex < book.spine.length - 1) {
-      setCurrentChapterIndex((prev) => prev + 1);
+      const newIndex = currentChapterIndex + 1;
+      setCurrentChapterIndex(newIndex);
+
+      // Save progress immediately on chapter change
+      await saveReadingProgress({
+        id: bookId,
+        bookId,
+        currentSpineIndex: newIndex,
+        scrollProgress: 0,
+        lastRead: new Date(),
+      });
+
       window.scrollTo({
         top: 0,
         behavior: "instant",
       });
     }
-  }, [book, currentChapterIndex]);
+  }, [book, currentChapterIndex, bookId]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -254,7 +280,7 @@ export function Reader() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentChapterIndex, book, goToPreviousChapter, goToNextChapter]);
 
-  const goToChapterByHref = (href: string) => {
+  const goToChapterByHref = async (href: string) => {
     if (!book) return;
 
     // Find the spine index for this href
@@ -273,6 +299,17 @@ export function Reader() {
     if (spineIndex !== -1) {
       setCurrentChapterIndex(spineIndex);
       setIsTOCOpen(false);
+
+      // Save progress immediately on chapter change
+      if (bookId) {
+        await saveReadingProgress({
+          id: bookId,
+          bookId,
+          currentSpineIndex: spineIndex,
+          scrollProgress: 0,
+          lastRead: new Date(),
+        });
+      }
     }
   };
 
