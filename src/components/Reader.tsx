@@ -10,6 +10,10 @@ import {
   type Book,
   type TOCItem,
 } from "../lib/db";
+import {
+  cleanupResourceUrls,
+  processEmbeddedResources,
+} from "../lib/epub-resource-utils";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import {
@@ -33,6 +37,7 @@ export function Reader() {
 
   const contentRef = useRef<HTMLDivElement>(null);
   const lastScrollProgress = useRef<number>(0);
+  const resourceUrlsRef = useRef<Map<string, string>>(new Map());
 
   // Load book data
   useEffect(() => {
@@ -111,9 +116,25 @@ export function Reader() {
         return;
       }
 
+      // Clean up previous resource URLs
+      cleanupResourceUrls(resourceUrlsRef.current);
+
       // Convert blob to text
       const text = await bookFile.content.text();
-      setChapterContent(text);
+
+      // Process embedded resources (images, stylesheets, fonts, etc.)
+      const { html } = await processEmbeddedResources({
+        content: text,
+        mediaType: manifestItem.mediaType,
+        basePath: manifestItem.href,
+        loadResource: async (path: string) => {
+          const resourceFile = await getBookFile(bookId, path);
+          return resourceFile?.content || null;
+        },
+        resourceUrlMap: resourceUrlsRef.current,
+      });
+
+      setChapterContent(html);
 
       // Reset scroll position when chapter changes
       if (contentRef.current) {
@@ -127,6 +148,14 @@ export function Reader() {
 
   useEffect(() => {
     loadChapterContent();
+
+    // Capture the current map reference for cleanup
+    const urlsMap = resourceUrlsRef.current;
+
+    // Cleanup function to revoke object URLs when component unmounts
+    return () => {
+      cleanupResourceUrls(urlsMap);
+    };
   }, [loadChapterContent]);
 
   // Save reading progress periodically
