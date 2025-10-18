@@ -197,6 +197,12 @@
     outline: 1px solid rgba(0, 0, 0, 0.1);
 }
 
+/* Group hover effect for highlights with same data-highlight-id */
+.epub-highlight-group-hover {
+    opacity: 0.8;
+    outline: 1px solid rgba(0, 0, 0, 0.1);
+}
+
 /* Predefined colors */
 .epub-highlight[data-color="yellow"] {
     background-color: rgba(255, 235, 59, 0.35);
