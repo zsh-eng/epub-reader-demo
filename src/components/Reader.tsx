@@ -8,49 +8,63 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { useToast } from "@/hooks/use-toast";
-import {
-  getBook,
-  getBookFile,
-  getReadingProgress,
-  saveReadingProgress,
-  type Book,
-  type TOCItem,
-} from "@/lib/db";
-import {
-  cleanupResourceUrls,
-  processEmbeddedResources,
-} from "@/lib/epub-resource-utils";
-import {
-  createHighlightFromSelection,
-  getSelectionPosition,
-} from "@/lib/highlight-utils";
+import { useBookLoader } from "@/hooks/use-book-loader";
+import { useChapterContent } from "@/hooks/use-chapter-content";
+import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
+import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
+import { useReadingProgress } from "@/hooks/use-reading-progress";
+import { useTextSelection } from "@/hooks/use-text-selection";
+import { type TOCItem } from "@/lib/db";
 import { ArrowLeft, ChevronLeft, ChevronRight, Menu } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReaderContent from "./ReaderContent";
 
 export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
-
-  const [book, setBook] = useState<Book | null>(null);
-  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
-  const [chapterContent, setChapterContent] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isTOCOpen, setIsTOCOpen] = useState(false);
 
   const contentRef = useRef<HTMLDivElement>(null);
-  const lastScrollProgress = useRef<number>(0);
-  const resourceUrlsRef = useRef<Map<string, string>>(new Map());
+  const [isTOCOpen, setIsTOCOpen] = useState(false);
 
-  // Highlight toolbar state
-  const [showHighlightToolbar, setShowHighlightToolbar] = useState(false);
-  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
-  const [currentSelection, setCurrentSelection] = useState<Selection | null>(
-    null,
+  // Load book and restore progress
+  const {
+    book,
+    currentChapterIndex,
+    setCurrentChapterIndex,
+    isLoading,
+    lastScrollProgress,
+  } = useBookLoader(bookId);
+
+  // Load chapter content
+  const { chapterContent } = useChapterContent(
+    book,
+    bookId,
+    currentChapterIndex,
   );
+
+  // Handle text selection and highlights
+  const {
+    showHighlightToolbar,
+    toolbarPosition,
+    handleHighlightColorSelect,
+    handleCloseHighlightToolbar,
+  } = useTextSelection(contentRef);
+
+  // Chapter navigation
+  const { goToPreviousChapter, goToNextChapter, goToChapterByHref } =
+    useChapterNavigation(
+      book,
+      bookId,
+      currentChapterIndex,
+      setCurrentChapterIndex,
+    );
+
+  // Auto-save reading progress
+  useReadingProgress(bookId, book, currentChapterIndex, lastScrollProgress);
+
+  // Keyboard navigation
+  useKeyboardNavigation(goToPreviousChapter, goToNextChapter);
 
   // Helper function to find TOC item by href (searches recursively)
   const findTOCItemByHref = useCallback(
@@ -75,356 +89,35 @@ export function Reader() {
     [],
   );
 
-  // Load book data
-  useEffect(() => {
-    const loadBook = async () => {
-      if (!bookId) {
-        toast({
-          title: "Error",
-          description: "No book ID provided",
-          variant: "destructive",
-        });
-        navigate("/");
-        return;
-      }
+  // Get current chapter title by mapping spine index to TOC
+  const getCurrentChapterTitle = useCallback(() => {
+    if (!book) return "";
 
-      try {
-        const bookData = await getBook(bookId);
-        if (!bookData) {
-          toast({
-            title: "Error",
-            description: "Book not found",
-            variant: "destructive",
-          });
-          navigate("/");
-          return;
-        }
+    const spineItem = book.spine[currentChapterIndex];
+    if (!spineItem) return "";
 
-        setBook(bookData);
-
-        // Load reading progress
-        const progress = await getReadingProgress(bookId);
-        if (!progress) return;
-
-        setCurrentChapterIndex(progress.currentSpineIndex);
-        lastScrollProgress.current = progress.scrollProgress;
-        console.log("scroll progress", progress.scrollProgress);
-        setTimeout(() => {
-          const scrollHeight = document.documentElement.scrollHeight;
-          const clientHeight = window.innerHeight;
-          const maxScroll = scrollHeight - clientHeight;
-          window.scrollTo({
-            top: maxScroll * progress.scrollProgress,
-            behavior: "smooth",
-          });
-        }, 100);
-      } catch (error) {
-        console.error("Error loading book:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load book",
-          variant: "destructive",
-        });
-        navigate("/");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadBook();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bookId]);
-
-  // Load chapter content
-  const loadChapterContent = useCallback(async () => {
-    if (!book || !bookId) return;
-
-    try {
-      const spineItem = book.spine[currentChapterIndex];
-      if (!spineItem) {
-        console.error("Spine item not found for index:", currentChapterIndex);
-        return;
-      }
-
-      // Find the manifest item
-      const manifestItem = book.manifest.find(
-        (item) => item.id === spineItem.idref,
-      );
-      if (!manifestItem) {
-        console.error("Manifest item not found for idref:", spineItem.idref);
-        return;
-      }
-
-      // Load the file content
-      const bookFile = await getBookFile(bookId, manifestItem.href);
-      if (!bookFile) {
-        console.error("Book file not found:", manifestItem.href);
-        setChapterContent("<p>Chapter content not found.</p>");
-        return;
-      }
-
-      // Clean up previous resource URLs
-      cleanupResourceUrls(resourceUrlsRef.current);
-
-      // Convert blob to text
-      const text = await bookFile.content.text();
-
-      // Process embedded resources (images, stylesheets, fonts, etc.)
-      const { html } = await processEmbeddedResources({
-        content: text,
-        mediaType: manifestItem.mediaType,
-        basePath: manifestItem.href,
-        loadResource: async (path: string) => {
-          const resourceFile = await getBookFile(bookId, path);
-          return resourceFile?.content || null;
-        },
-        resourceUrlMap: resourceUrlsRef.current,
-      });
-
-      setChapterContent(html);
-
-      // Reset scroll position when chapter changes
-      if (contentRef.current) {
-        contentRef.current.scrollTop = 0;
-      }
-    } catch (error) {
-      console.error("Error loading chapter:", error);
-      setChapterContent("<p>Error loading chapter content.</p>");
-    }
-  }, [book, bookId, currentChapterIndex]);
-
-  useEffect(() => {
-    loadChapterContent();
-
-    // Capture the current map reference for cleanup
-    const urlsMap = resourceUrlsRef.current;
-
-    // Cleanup function to revoke object URLs when component unmounts
-    return () => {
-      cleanupResourceUrls(urlsMap);
-    };
-  }, [loadChapterContent]);
-
-  // Save reading progress periodically
-  useEffect(() => {
-    if (!bookId || !book) return;
-
-    const saveProgress = async () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = window.innerHeight;
-
-      const scrollProgress =
-        scrollHeight > clientHeight
-          ? scrollTop / (scrollHeight - clientHeight)
-          : 0;
-
-      // Only save if progress changed significantly
-      const hasScrollProgressChanged =
-        Math.abs(scrollProgress - lastScrollProgress.current) > 0.01;
-      if (!hasScrollProgressChanged) return;
-
-      lastScrollProgress.current = scrollProgress;
-      await saveReadingProgress({
-        id: bookId,
-        bookId,
-        currentSpineIndex: currentChapterIndex,
-        scrollProgress: isNaN(scrollProgress) ? 0 : scrollProgress,
-        lastRead: new Date(),
-      });
-    };
-
-    const interval = setInterval(saveProgress, 3000);
-    return () => clearInterval(interval);
-  }, [bookId, book, currentChapterIndex]);
-
-  // Navigation handlers
-  const goToPreviousChapter = useCallback(async () => {
-    if (!bookId) return;
-
-    if (currentChapterIndex > 0) {
-      const newIndex = currentChapterIndex - 1;
-      setCurrentChapterIndex(newIndex);
-
-      // Save progress immediately on chapter change
-      await saveReadingProgress({
-        id: bookId,
-        bookId,
-        currentSpineIndex: newIndex,
-        scrollProgress: 0,
-        lastRead: new Date(),
-      });
-    }
-    window.scrollTo({
-      top: 0,
-      behavior: "instant",
-    });
-  }, [currentChapterIndex, bookId]);
-
-  const goToNextChapter = useCallback(async () => {
-    if (!bookId) return;
-
-    if (book && currentChapterIndex < book.spine.length - 1) {
-      const newIndex = currentChapterIndex + 1;
-      setCurrentChapterIndex(newIndex);
-
-      // Save progress immediately on chapter change
-      await saveReadingProgress({
-        id: bookId,
-        bookId,
-        currentSpineIndex: newIndex,
-        scrollProgress: 0,
-        lastRead: new Date(),
-      });
-
-      window.scrollTo({
-        top: 0,
-        behavior: "instant",
-      });
-    }
-  }, [book, currentChapterIndex, bookId]);
-
-  // Keyboard navigation
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore if user is typing in an input field
-      if (
-        event.target instanceof HTMLInputElement ||
-        event.target instanceof HTMLTextAreaElement
-      ) {
-        return;
-      }
-
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        goToPreviousChapter();
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        goToNextChapter();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentChapterIndex, book, goToPreviousChapter, goToNextChapter]);
-
-  // Text selection handler
-  useEffect(() => {
-    const handleTextSelection = () => {
-      const selection = window.getSelection();
-
-      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-        setShowHighlightToolbar(false);
-        return;
-      }
-
-      // Check if selection is within the reader content
-      if (!contentRef.current?.contains(selection.anchorNode)) {
-        setShowHighlightToolbar(false);
-        return;
-      }
-
-      const position = getSelectionPosition(selection);
-      if (position) {
-        setToolbarPosition(position);
-        setCurrentSelection(selection);
-        setShowHighlightToolbar(true);
-      }
-    };
-
-    // Use a small delay to prevent flickering during drag selection
-    let timeoutId: number;
-    const handleMouseUp = () => {
-      timeoutId = window.setTimeout(handleTextSelection, 100);
-    };
-
-    document.addEventListener("mouseup", handleMouseUp);
-    document.addEventListener("selectionchange", () => {
-      // Clear timeout on selection change to avoid showing toolbar prematurely
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    });
-
-    return () => {
-      document.removeEventListener("mouseup", handleMouseUp);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, []);
-
-  // Handle highlight color selection
-  const handleHighlightColorSelect = (color: string) => {
-    if (!currentSelection || !contentRef.current) {
-      setShowHighlightToolbar(false);
-      return;
-    }
-
-    const highlightData = createHighlightFromSelection(
-      currentSelection,
-      contentRef.current,
-    );
-
-    if (highlightData) {
-      console.log("=== Highlight Created ===");
-      console.log("Color:", color);
-      console.log("Start Offset:", highlightData.startOffset);
-      console.log("End Offset:", highlightData.endOffset);
-      console.log("Selected Text:", highlightData.selectedText);
-      console.log("Text Before:", highlightData.textBefore);
-      console.log("Text After:", highlightData.textAfter);
-      console.log("========================");
-
-      // TODO: Save to database in next iteration
-    }
-
-    // Clear selection and hide toolbar
-    currentSelection.removeAllRanges();
-    setShowHighlightToolbar(false);
-    setCurrentSelection(null);
-  };
-
-  const handleCloseHighlightToolbar = () => {
-    setShowHighlightToolbar(false);
-    setCurrentSelection(null);
-  };
-
-  const goToChapterByHref = async (href: string) => {
-    if (!book) return;
-
-    // Find the spine index for this href
+    // Find the manifest item to get the href
     const manifestItem = book.manifest.find(
-      (item) => item.href === href || item.href.endsWith(href),
+      (item) => item.id === spineItem.idref,
     );
-    if (!manifestItem) {
-      console.error("Manifest item not found for href:", href);
-      return;
+    if (!manifestItem) return "";
+
+    // Find the corresponding TOC item
+    const tocItem = findTOCItemByHref(book.toc, manifestItem.href);
+    if (!tocItem) {
+      return "";
     }
 
-    console.log("testing this point", book.spine);
-    const spineIndex = book.spine.findIndex(
-      (item) => item.idref === manifestItem.id,
-    );
-    if (spineIndex !== -1) {
-      setCurrentChapterIndex(spineIndex);
-      setIsTOCOpen(false);
-
-      // Save progress immediately on chapter change
-      if (bookId) {
-        await saveReadingProgress({
-          id: bookId,
-          bookId,
-          currentSpineIndex: spineIndex,
-          scrollProgress: 0,
-          lastRead: new Date(),
-        });
-      }
-    }
-  };
+    return tocItem.label;
+  }, [book, currentChapterIndex, findTOCItemByHref]);
 
   const handleBackToLibrary = () => {
     navigate("/");
+  };
+
+  const handleTOCNavigate = async (href: string) => {
+    await goToChapterByHref(href);
+    setIsTOCOpen(false);
   };
 
   // Render TOC items recursively
@@ -432,7 +125,7 @@ export function Reader() {
     return items.map((item, index) => (
       <div key={`${level}-${index}`} style={{ paddingLeft: `${level * 16}px` }}>
         <button
-          onClick={() => goToChapterByHref(item.href)}
+          onClick={() => handleTOCNavigate(item.href)}
           className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded-none transition-colors text-sm"
         >
           {item.label}
@@ -458,26 +151,6 @@ export function Reader() {
   if (!book) {
     return null;
   }
-
-  // Get current chapter title by mapping spine index to TOC
-  const getCurrentChapterTitle = () => {
-    const spineItem = book.spine[currentChapterIndex];
-    if (!spineItem) return ``;
-
-    // Find the manifest item to get the href
-    const manifestItem = book.manifest.find(
-      (item) => item.id === spineItem.idref,
-    );
-    if (!manifestItem) return ``;
-
-    // Find the corresponding TOC item
-    const tocItem = findTOCItemByHref(book.toc, manifestItem.href);
-    if (!tocItem) {
-      return "";
-    }
-
-    return tocItem.label;
-  };
 
   const currentChapterTitle = getCurrentChapterTitle();
   const hasPreviousChapter = currentChapterIndex > 0;
