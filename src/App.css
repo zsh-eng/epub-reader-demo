@@ -56,7 +56,7 @@
     line-height: 1.6;
     color: #1a1a1a;
     text-align: left;
-    animation: fadeIn 0.4s ease-in;
+    animation: fadeIn 0.5s ease-in;
 }
 
 .reader-content * {
