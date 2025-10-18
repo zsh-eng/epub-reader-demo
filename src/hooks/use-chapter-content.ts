@@ -3,11 +3,17 @@ import {
   cleanupResourceUrls,
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 export interface UseChapterContentReturn {
   chapterContent: string;
-  resourceUrlsRef: React.MutableRefObject<Map<string, string>>;
+  resourceUrlsRef: RefObject<Map<string, string>>;
 }
 
 export function useChapterContent(
