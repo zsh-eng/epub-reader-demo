@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
-  SheetDescription,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
@@ -171,7 +170,7 @@ export function Reader() {
             <SheetHeader>
               <SheetTitle>Table of Contents</SheetTitle>
             </SheetHeader>
-            <SheetDescription className="overflow-scroll px-2">
+            <div className="overflow-scroll px-2">
               {book.toc && book.toc.length > 0 ? (
                 <div className="space-y-1">{renderTOCItems(book.toc)}</div>
               ) : (
@@ -179,7 +178,7 @@ export function Reader() {
                   No table of contents available
                 </p>
               )}
-            </SheetDescription>
+            </div>
           </SheetContent>
         </Sheet>
 
