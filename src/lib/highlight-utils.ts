@@ -1,7 +1,6 @@
 // Utility functions for calculating text offsets and creating highlights
 
 import type { Highlight } from "@/types/highlight";
-import { getMimeTypeForContent } from "./epub-resource-utils";
 
 /**
  * Extracts text-only content from HTML, stripping all tags
@@ -236,27 +235,172 @@ function verifyRangeText(range: Range, expectedText: string): boolean {
 }
 
 /**
- * Wraps a DOM Range with a highlight mark element
+ * Creates a highlight mark element with the given highlight's styling
+ */
+function createHighlightMark(doc: Document, highlight: Highlight): HTMLElement {
+  const mark = doc.createElement("mark");
+  mark.className = "epub-highlight";
+  mark.dataset.highlightId = highlight.id;
+  mark.dataset.color = highlight.color;
+  return mark;
+}
+
+/**
+ * Wraps a text node with a mark element, inserting it before the node
+ * and then appending the node as a child
+ */
+function wrapTextNodeWithMark(node: Text, mark: HTMLElement): void {
+  node.parentNode?.insertBefore(mark, node);
+  mark.appendChild(node);
+}
+
+/**
+ * Wraps a DOM Range with highlight mark elements, respecting block boundaries.
+ * Creates multiple <mark> elements as needed to avoid wrapping block elements.
+ * All marks share the same data-highlight-id for grouping.
  */
 function wrapRangeWithHighlight(
   range: Range,
   highlight: Highlight,
   doc: Document,
 ): void {
-  const mark = doc.createElement("mark");
-  mark.className = "epub-highlight";
-  mark.dataset.highlightId = highlight.id;
-  mark.dataset.color = highlight.color;
-  mark.style.cursor = "pointer";
+  // Get all text nodes that intersect with the range
+  const textNodes: { node: Text; startOffset: number; endOffset: number }[] =
+    [];
 
-  try {
-    range.surroundContents(mark);
-  } catch {
-    // surroundContents fails if range crosses element boundaries
-    // Use extractContents + appendChild instead
-    const contents = range.extractContents();
-    mark.appendChild(contents);
-    range.insertNode(mark);
+  const walker = doc.createTreeWalker(
+    range.commonAncestorContainer,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: (node) => {
+        // Check if this text node intersects with our range
+        const nodeRange = doc.createRange();
+        nodeRange.selectNodeContents(node);
+
+        // Compare ranges: do they intersect?
+        const startsBeforeEnd =
+          range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0;
+        const endsAfterStart =
+          range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0;
+
+        if (startsBeforeEnd && endsAfterStart) {
+          return NodeFilter.FILTER_ACCEPT;
+        }
+        return NodeFilter.FILTER_REJECT;
+      },
+    },
+  );
+
+  let textNode: Node | null;
+  while ((textNode = walker.nextNode())) {
+    const text = textNode as Text;
+    const nodeRange = doc.createRange();
+    nodeRange.selectNodeContents(text);
+
+    // Determine the portion of this text node that falls within our highlight range
+    let startOffset = 0;
+    let endOffset = text.length;
+
+    // Adjust start if range starts within this node
+    if (range.compareBoundaryPoints(Range.START_TO_START, nodeRange) > 0) {
+      if (range.startContainer === text) {
+        startOffset = range.startOffset;
+      } else if (
+        text.contains(range.startContainer) ||
+        range.startContainer.contains(text)
+      ) {
+        // Range starts somewhere within or related to this node
+        const tempRange = doc.createRange();
+        tempRange.setStart(text, 0);
+        tempRange.setEnd(range.startContainer, range.startOffset);
+        // If we can measure it, calculate offset
+        try {
+          const beforeText = tempRange.toString();
+          startOffset = beforeText.length;
+        } catch {
+          startOffset = 0;
+        }
+      }
+    }
+
+    // Adjust end if range ends within this node
+    if (range.compareBoundaryPoints(Range.END_TO_END, nodeRange) < 0) {
+      if (range.endContainer === text) {
+        endOffset = range.endOffset;
+      } else if (
+        text.contains(range.endContainer) ||
+        range.endContainer.contains(text)
+      ) {
+        // Range ends somewhere within or related to this node
+        const tempRange = doc.createRange();
+        tempRange.setStart(text, 0);
+        tempRange.setEnd(range.endContainer, range.endOffset);
+        try {
+          const beforeText = tempRange.toString();
+          endOffset = beforeText.length;
+        } catch {
+          endOffset = text.length;
+        }
+      }
+    }
+
+    if (startOffset < endOffset) {
+      textNodes.push({ node: text, startOffset, endOffset });
+    }
+  }
+
+  // If no text nodes found, try a simpler approach
+  if (textNodes.length === 0) {
+    const startNode = range.startContainer;
+    const endNode = range.endContainer;
+
+    if (startNode === endNode && startNode.nodeType === Node.TEXT_NODE) {
+      textNodes.push({
+        node: startNode as Text,
+        startOffset: range.startOffset,
+        endOffset: range.endOffset,
+      });
+    }
+  }
+
+  // Now wrap each text node segment with a mark element
+  // Process in reverse order to avoid offset issues when modifying the DOM
+  for (let i = textNodes.length - 1; i >= 0; i--) {
+    const { node, startOffset, endOffset } = textNodes[i];
+
+    try {
+      const textLength = node.length;
+      const mark = createHighlightMark(doc, highlight);
+
+      // Handle four cases based on where the highlight starts and ends within the text node:
+
+      // Case 1: Middle section - "abc[de]fg" → split into 3 parts: "abc" + "[de]" + "fg"
+      // We need to isolate the middle portion and wrap only that
+      if (startOffset > 0 && endOffset < textLength) {
+        node.splitText(endOffset); // Split at end first to preserve startOffset
+        const highlightNode = node.splitText(startOffset); // Then split at start
+        wrapTextNodeWithMark(highlightNode, mark);
+      }
+      // Case 2: Middle to end - "abc[def]" → split into 2 parts: "abc" + "[def]"
+      // Wrap everything from startOffset to the end of the node
+      else if (startOffset > 0) {
+        const highlightNode = node.splitText(startOffset);
+        wrapTextNodeWithMark(highlightNode, mark);
+      }
+      // Case 3: Start to middle - "[abc]def" → split into 2 parts: "[abc]" + "def"
+      // Wrap everything from the start to endOffset
+      else if (endOffset < textLength) {
+        node.splitText(endOffset); // This creates the "def" part, original node becomes "[abc]"
+        wrapTextNodeWithMark(node, mark);
+      }
+      // Case 4: Entire node - "[abcdef]" → no split needed
+      // Wrap the entire text node
+      else {
+        wrapTextNodeWithMark(node, mark);
+      }
+    } catch (error) {
+      console.error("Error wrapping text node:", error);
+    }
   }
 }
 
