@@ -1,9 +1,12 @@
-import { HIGHLIGHT_COLORS } from "@/lib/highlight-constants";
+import {
+  HIGHLIGHT_COLORS,
+  type HighlightColor,
+} from "@/lib/highlight-constants";
 import { useEffect, useState } from "react";
 
 interface HighlightToolbarProps {
   position: { x: number; y: number };
-  onColorSelect: (color: string) => void;
+  onColorSelect: (color: HighlightColor) => void;
   onClose: () => void;
 }
 

@@ -11,7 +11,8 @@ import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useReadingProgress } from "@/hooks/use-reading-progress";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
-import { useRef, useState } from "react";
+import type { Highlight } from "@/types/highlight";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 /**
@@ -37,6 +38,9 @@ export function Reader() {
   // Local state (minimal)
   const [isTOCOpen, setIsTOCOpen] = useState(false);
 
+  // In-memory highlights state
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+
   // Custom hooks - all complex logic extracted
   const {
     book,
@@ -50,14 +54,28 @@ export function Reader() {
     book,
     bookId,
     currentChapterIndex,
+    highlights,
   );
+
+  // Callback to add a new highlight
+  const handleHighlightCreate = useCallback((highlight: Highlight) => {
+    setHighlights((prev) => [...prev, highlight]);
+  }, []);
+
+  // Get current spine item ID
+  const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
 
   const {
     showHighlightToolbar,
     toolbarPosition,
     handleHighlightColorSelect,
     handleCloseHighlightToolbar,
-  } = useTextSelection(contentRef);
+  } = useTextSelection(
+    contentRef,
+    bookId,
+    currentSpineItemId,
+    handleHighlightCreate,
+  );
 
   const { goToPreviousChapter, goToNextChapter, goToChapterByHref } =
     useChapterNavigation(

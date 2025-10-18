@@ -3,6 +3,17 @@
  */
 
 /**
+ * Returns the MIME type for parsing EPUB content
+ * Always returns "text/html" to ensure consistent whitespace handling
+ * across the entire content processing pipeline, regardless of whether
+ * the source was XHTML or HTML.
+ * @returns The MIME type to use with DOMParser
+ */
+export function getMimeTypeForContent(): DOMParserSupportedType {
+  return "text/html";
+}
+
+/**
  * Resolves a relative path against a base path
  * @param basePath - The base path (e.g., current chapter's path)
  * @param relativePath - The relative path to resolve
@@ -59,15 +70,21 @@ export interface ProcessResourcesOptions {
  * Result of processing embedded resources
  */
 export interface ProcessResourcesResult {
-  /** The transformed HTML content with resource URLs replaced */
-  html: string;
+  /** The DOM Document with resource URLs replaced */
+  document: Document;
   /** Map of resource paths to their object URLs */
   resourceUrls: Map<string, string>;
+  /** The MIME type used for parsing */
+  mimeType: DOMParserSupportedType;
 }
 
 /**
  * Processes embedded resources in EPUB content (images, stylesheets, fonts, etc.)
  * Finds all resource references, loads them, creates object URLs, and replaces the references
+ *
+ * NOTE: We return the `Document` instead of just the HTML such that when we apply highlights,
+ * we don't have to deserialise the HTML again. Serialising -> deserialising again causes inconsistencies
+ * in the whitespace.
  *
  * @param options - Configuration for processing resources
  * @returns The processed HTML and a map of resource URLs
@@ -75,17 +92,17 @@ export interface ProcessResourcesResult {
 export async function processEmbeddedResources(
   options: ProcessResourcesOptions,
 ): Promise<ProcessResourcesResult> {
-  const { content, mediaType, basePath, loadResource, resourceUrlMap } =
-    options;
+  const { content, basePath, loadResource, resourceUrlMap } = options;
+  // Note: mediaType is kept in the interface for compatibility but not used here
+  // We always parse as "text/html" for consistent whitespace handling
 
   // Use provided map or create a new one
   const resourceUrls = resourceUrlMap || new Map<string, string>();
 
   // Parse the HTML/XHTML to find all resource references
+  // Always use text/html for consistent whitespace handling
   const parser = new DOMParser();
-  const mimeType = mediaType.includes("xhtml")
-    ? "application/xhtml+xml"
-    : "text/html";
+  const mimeType = getMimeTypeForContent();
   const doc = parser.parseFromString(content, mimeType);
 
   // Find all elements with src, href, or xlink:href attributes
@@ -157,12 +174,11 @@ export async function processEmbeddedResources(
     }
   }
 
-  // Serialize back to HTML
-  const transformedHtml = doc.body.innerHTML;
-
+  // Return the DOM document directly to avoid serialization/parsing issues
   return {
-    html: transformedHtml,
+    document: doc,
     resourceUrls,
+    mimeType,
   };
 }
 

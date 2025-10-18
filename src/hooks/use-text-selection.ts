@@ -1,17 +1,21 @@
 import { getSelectionPosition } from "@/lib/highlight-utils";
 import { createHighlightFromSelection } from "@/lib/highlight-utils";
+import type { Highlight, HighlightColor } from "@/types/highlight";
 import { useEffect, useState } from "react";
 
 export interface UseTextSelectionReturn {
   showHighlightToolbar: boolean;
   toolbarPosition: { x: number; y: number };
   currentSelection: Selection | null;
-  handleHighlightColorSelect: (color: string) => void;
+  handleHighlightColorSelect: (color: HighlightColor) => void;
   handleCloseHighlightToolbar: () => void;
 }
 
 export function useTextSelection(
   contentRef: React.RefObject<HTMLDivElement | null>,
+  bookId: string | undefined,
+  spineItemId: string | undefined,
+  onHighlightCreate?: (highlight: Highlight) => void,
 ): UseTextSelectionReturn {
   const [showHighlightToolbar, setShowHighlightToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
@@ -68,28 +72,45 @@ export function useTextSelection(
     };
   }, [contentRef]);
 
-  const handleHighlightColorSelect = (color: string) => {
-    if (!currentSelection || !contentRef.current) {
+  const handleHighlightColorSelect = (color: HighlightColor) => {
+    if (!currentSelection || !contentRef.current || !bookId || !spineItemId) {
       setShowHighlightToolbar(false);
       return;
     }
 
+    console.log("creating selection", currentSelection);
     const highlightData = createHighlightFromSelection(
       currentSelection,
       contentRef.current,
     );
+    console.log("created selection, highlight data is", highlightData);
 
     if (highlightData) {
+      // Create full highlight object
+      const highlight: Highlight = {
+        id: crypto.randomUUID(),
+        bookId,
+        spineItemId,
+        startOffset: highlightData.startOffset,
+        endOffset: highlightData.endOffset,
+        selectedText: highlightData.selectedText,
+        textBefore: highlightData.textBefore,
+        textAfter: highlightData.textAfter,
+        color,
+        createdAt: new Date(),
+      };
+
       console.log("=== Highlight Created ===");
-      console.log("Color:", color);
-      console.log("Start Offset:", highlightData.startOffset);
-      console.log("End Offset:", highlightData.endOffset);
-      console.log("Selected Text:", highlightData.selectedText);
-      console.log("Text Before:", highlightData.textBefore);
-      console.log("Text After:", highlightData.textAfter);
+      console.log("ID:", highlight.id);
+      console.log("Color:", highlight.color);
+      console.log("Spine Item:", highlight.spineItemId);
+      console.log("Start Offset:", highlight.startOffset);
+      console.log("End Offset:", highlight.endOffset);
+      console.log("Selected Text:", highlight.selectedText);
       console.log("========================");
 
-      // TODO: Save to database in next iteration
+      // Call the callback to store the highlight
+      onHighlightCreate?.(highlight);
     }
 
     // Clear selection and hide toolbar

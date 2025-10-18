@@ -3,6 +3,8 @@ import {
   cleanupResourceUrls,
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
+import { applyHighlightsToDocument } from "@/lib/highlight-utils";
+import type { Highlight } from "@/types/highlight";
 import {
   useCallback,
   useEffect,
@@ -20,6 +22,7 @@ export function useChapterContent(
   book: Book | null,
   bookId: string | undefined,
   currentChapterIndex: number,
+  highlights: Highlight[] = [],
 ): UseChapterContentReturn {
   const [chapterContent, setChapterContent] = useState<string>("");
   const resourceUrlsRef = useRef<Map<string, string>>(new Map());
@@ -58,7 +61,7 @@ export function useChapterContent(
       const text = await bookFile.content.text();
 
       // Process embedded resources (images, stylesheets, fonts, etc.)
-      const { html } = await processEmbeddedResources({
+      const { document: doc } = await processEmbeddedResources({
         content: text,
         mediaType: manifestItem.mediaType,
         basePath: manifestItem.href,
@@ -69,7 +72,17 @@ export function useChapterContent(
         resourceUrlMap: resourceUrlsRef.current,
       });
 
-      setChapterContent(html);
+      // Apply highlights for the current chapter
+      const currentSpineItemId = spineItem.idref;
+      const chapterHighlights = highlights.filter(
+        (h) => h.spineItemId === currentSpineItemId,
+      );
+      const htmlWithHighlights = applyHighlightsToDocument(
+        doc,
+        chapterHighlights,
+      );
+
+      setChapterContent(htmlWithHighlights);
 
       // Reset scroll position when chapter changes
       window.scrollTo({
@@ -80,7 +93,7 @@ export function useChapterContent(
       console.error("Error loading chapter:", error);
       setChapterContent("<p>Error loading chapter content.</p>");
     }
-  }, [book, bookId, currentChapterIndex]);
+  }, [book, bookId, currentChapterIndex, highlights]);
 
   useEffect(() => {
     loadChapterContent();
