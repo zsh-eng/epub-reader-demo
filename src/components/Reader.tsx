@@ -1,5 +1,5 @@
+import { HighlightToolbar } from "@/components/HighlightToolbar";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
   SheetContent,
@@ -21,9 +21,14 @@ import {
   cleanupResourceUrls,
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
+import {
+  createHighlightFromSelection,
+  getSelectionPosition,
+} from "@/lib/highlight-utils";
 import { ArrowLeft, ChevronLeft, ChevronRight, Menu } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import ReaderContent from "./ReaderContent";
 
 export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -39,6 +44,13 @@ export function Reader() {
   const contentRef = useRef<HTMLDivElement>(null);
   const lastScrollProgress = useRef<number>(0);
   const resourceUrlsRef = useRef<Map<string, string>>(new Map());
+
+  // Highlight toolbar state
+  const [showHighlightToolbar, setShowHighlightToolbar] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
+  const [currentSelection, setCurrentSelection] = useState<Selection | null>(
+    null,
+  );
 
   // Helper function to find TOC item by href (searches recursively)
   const findTOCItemByHref = useCallback(
@@ -296,6 +308,88 @@ export function Reader() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentChapterIndex, book, goToPreviousChapter, goToNextChapter]);
 
+  // Text selection handler
+  useEffect(() => {
+    const handleTextSelection = () => {
+      const selection = window.getSelection();
+
+      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+        setShowHighlightToolbar(false);
+        return;
+      }
+
+      // Check if selection is within the reader content
+      if (!contentRef.current?.contains(selection.anchorNode)) {
+        setShowHighlightToolbar(false);
+        return;
+      }
+
+      const position = getSelectionPosition(selection);
+      if (position) {
+        setToolbarPosition(position);
+        setCurrentSelection(selection);
+        setShowHighlightToolbar(true);
+      }
+    };
+
+    // Use a small delay to prevent flickering during drag selection
+    let timeoutId: number;
+    const handleMouseUp = () => {
+      timeoutId = window.setTimeout(handleTextSelection, 100);
+    };
+
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("selectionchange", () => {
+      // Clear timeout on selection change to avoid showing toolbar prematurely
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    });
+
+    return () => {
+      document.removeEventListener("mouseup", handleMouseUp);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
+  // Handle highlight color selection
+  const handleHighlightColorSelect = (color: string) => {
+    if (!currentSelection || !contentRef.current) {
+      setShowHighlightToolbar(false);
+      return;
+    }
+
+    const highlightData = createHighlightFromSelection(
+      currentSelection,
+      contentRef.current,
+    );
+
+    if (highlightData) {
+      console.log("=== Highlight Created ===");
+      console.log("Color:", color);
+      console.log("Start Offset:", highlightData.startOffset);
+      console.log("End Offset:", highlightData.endOffset);
+      console.log("Selected Text:", highlightData.selectedText);
+      console.log("Text Before:", highlightData.textBefore);
+      console.log("Text After:", highlightData.textAfter);
+      console.log("========================");
+
+      // TODO: Save to database in next iteration
+    }
+
+    // Clear selection and hide toolbar
+    currentSelection.removeAllRanges();
+    setShowHighlightToolbar(false);
+    setCurrentSelection(null);
+  };
+
+  const handleCloseHighlightToolbar = () => {
+    setShowHighlightToolbar(false);
+    setCurrentSelection(null);
+  };
+
   const goToChapterByHref = async (href: string) => {
     if (!book) return;
 
@@ -440,12 +534,20 @@ export function Reader() {
         </div>
       </header>
 
-      <div
-        key={currentChapterIndex}
+      <ReaderContent
+        content={chapterContent}
+        chapterIndex={currentChapterIndex}
         ref={contentRef}
-        className="reader-content max-w-[80ch] mx-auto px-6 py-8 sm:px-8 md:px-12"
-        dangerouslySetInnerHTML={{ __html: chapterContent }}
       />
+
+      {/* Highlight Toolbar */}
+      {showHighlightToolbar && (
+        <HighlightToolbar
+          position={toolbarPosition}
+          onColorSelect={handleHighlightColorSelect}
+          onClose={handleCloseHighlightToolbar}
+        />
+      )}
 
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between px-4 py-4 border-t border-gray-200 bg-white">
