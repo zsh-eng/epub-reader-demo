@@ -522,6 +522,7 @@ Example CFI: `epubcfi(/6/4[chap01ref]!/4/2/1:3[iss,0])`
 3. Selections at start/end of chapter
 4. Special characters (em dash, quotes, etc.)
 5. Highlights in nested HTML (lists, tables)
+6. Highlight that extends outside of the main container (to the headers above or navigation buttons below)
 
 ## References
 
