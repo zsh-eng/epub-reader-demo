@@ -1,3 +1,4 @@
+import { HighlightDeletePopover } from "@/components/HighlightDeletePopover";
 import { HighlightToolbar } from "@/components/HighlightToolbar";
 import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
 import { NavigationButtons } from "@/components/Reader/NavigationButtons";
@@ -41,6 +42,15 @@ export function Reader() {
   // In-memory highlights state
   const [highlights, setHighlights] = useState<Highlight[]>([]);
 
+  // Highlight delete popover state
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
+    null,
+  );
+  const [deletePopoverPosition, setDeletePopoverPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+
   // Custom hooks - all complex logic extracted
   const {
     book,
@@ -60,6 +70,35 @@ export function Reader() {
   // Callback to add a new highlight
   const handleHighlightCreate = useCallback((highlight: Highlight) => {
     setHighlights((prev) => [...prev, highlight]);
+  }, []);
+
+  // Callback to delete a highlight
+  const handleHighlightDelete = useCallback((highlightId: string) => {
+    setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
+    setActiveHighlightId(null);
+    setDeletePopoverPosition(null);
+  }, []);
+
+  // Handle highlight click to show delete popover
+  const handleHighlightClick = useCallback(
+    (highlightId: string, position: { x: number; y: number }) => {
+      // If clicking the same highlight, close the popover
+      if (activeHighlightId === highlightId) {
+        setActiveHighlightId(null);
+        setDeletePopoverPosition(null);
+      } else {
+        // Open popover for the clicked highlight
+        setActiveHighlightId(highlightId);
+        setDeletePopoverPosition(position);
+      }
+    },
+    [activeHighlightId],
+  );
+
+  // Close delete popover
+  const handleCloseDeletePopover = useCallback(() => {
+    setActiveHighlightId(null);
+    setDeletePopoverPosition(null);
   }, []);
 
   // Get current spine item ID
@@ -123,6 +162,8 @@ export function Reader() {
         content={chapterContent}
         chapterIndex={currentChapterIndex}
         ref={contentRef}
+        onHighlightClick={handleHighlightClick}
+        activeHighlightId={activeHighlightId}
       />
 
       {showHighlightToolbar && (
@@ -130,6 +171,14 @@ export function Reader() {
           position={toolbarPosition}
           onColorSelect={handleHighlightColorSelect}
           onClose={handleCloseHighlightToolbar}
+        />
+      )}
+
+      {deletePopoverPosition && activeHighlightId && (
+        <HighlightDeletePopover
+          position={deletePopoverPosition}
+          onDelete={() => handleHighlightDelete(activeHighlightId)}
+          onClose={handleCloseDeletePopover}
         />
       )}
 
