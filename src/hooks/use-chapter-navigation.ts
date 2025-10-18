@@ -1,4 +1,6 @@
-import { saveReadingProgress, type Book } from "@/lib/db";
+import { type Book } from "@/lib/db";
+import { saveCurrentProgress } from "@/lib/progress-utils";
+import { findSpineIndexByHref } from "@/lib/toc-utils";
 import { useCallback } from "react";
 
 export interface UseChapterNavigationReturn {
@@ -21,13 +23,7 @@ export function useChapterNavigation(
       setCurrentChapterIndex(newIndex);
 
       // Save progress immediately on chapter change
-      await saveReadingProgress({
-        id: bookId,
-        bookId,
-        currentSpineIndex: newIndex,
-        scrollProgress: 0,
-        lastRead: new Date(),
-      });
+      await saveCurrentProgress(bookId, newIndex, 0);
     }
 
     window.scrollTo({
@@ -44,13 +40,7 @@ export function useChapterNavigation(
       setCurrentChapterIndex(newIndex);
 
       // Save progress immediately on chapter change
-      await saveReadingProgress({
-        id: bookId,
-        bookId,
-        currentSpineIndex: newIndex,
-        scrollProgress: 0,
-        lastRead: new Date(),
-      });
+      await saveCurrentProgress(bookId, newIndex, 0);
 
       window.scrollTo({
         top: 0,
@@ -61,33 +51,15 @@ export function useChapterNavigation(
 
   const goToChapterByHref = useCallback(
     async (href: string) => {
-      if (!book) return;
+      if (!book || !bookId) return;
 
       // Find the spine index for this href
-      const manifestItem = book.manifest.find(
-        (item) => item.href === href || item.href.endsWith(href),
-      );
-      if (!manifestItem) {
-        console.error("Manifest item not found for href:", href);
-        return;
-      }
-
-      const spineIndex = book.spine.findIndex(
-        (item) => item.idref === manifestItem.id,
-      );
-      if (spineIndex !== -1) {
+      const spineIndex = findSpineIndexByHref(book, href);
+      if (spineIndex !== null) {
         setCurrentChapterIndex(spineIndex);
 
         // Save progress immediately on chapter change
-        if (bookId) {
-          await saveReadingProgress({
-            id: bookId,
-            bookId,
-            currentSpineIndex: spineIndex,
-            scrollProgress: 0,
-            lastRead: new Date(),
-          });
-        }
+        await saveCurrentProgress(bookId, spineIndex, 0);
 
         window.scrollTo({
           top: 0,

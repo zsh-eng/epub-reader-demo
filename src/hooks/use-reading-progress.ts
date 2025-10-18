@@ -1,4 +1,8 @@
-import { saveReadingProgress, type Book } from "@/lib/db";
+import { type Book } from "@/lib/db";
+import {
+  calculateScrollProgress,
+  saveCurrentProgress,
+} from "@/lib/progress-utils";
 import { useEffect } from "react";
 
 export function useReadingProgress(
@@ -11,14 +15,7 @@ export function useReadingProgress(
     if (!bookId || !book) return;
 
     const saveProgress = async () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      const scrollHeight = document.documentElement.scrollHeight;
-      const clientHeight = window.innerHeight;
-
-      const scrollProgress =
-        scrollHeight > clientHeight
-          ? scrollTop / (scrollHeight - clientHeight)
-          : 0;
+      const scrollProgress = calculateScrollProgress();
 
       // Only save if progress changed significantly (>1%)
       const hasScrollProgressChanged =
@@ -26,13 +23,7 @@ export function useReadingProgress(
       if (!hasScrollProgressChanged) return;
 
       lastScrollProgress.current = scrollProgress;
-      await saveReadingProgress({
-        id: bookId,
-        bookId,
-        currentSpineIndex: currentChapterIndex,
-        scrollProgress: isNaN(scrollProgress) ? 0 : scrollProgress,
-        lastRead: new Date(),
-      });
+      await saveCurrentProgress(bookId, currentChapterIndex, scrollProgress);
     };
 
     const interval = setInterval(saveProgress, 3000);
