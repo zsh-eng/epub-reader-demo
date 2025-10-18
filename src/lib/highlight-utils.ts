@@ -368,6 +368,14 @@ function wrapRangeWithHighlight(
   for (let i = textNodes.length - 1; i >= 0; i--) {
     const { node, startOffset, endOffset } = textNodes[i];
 
+    // Skip if this would result in an empty or whitespace-only highlight
+    const textToHighlight =
+      node.textContent?.substring(startOffset, endOffset) || "";
+    if (textToHighlight.trim().length === 0) {
+      console.log("Skipping empty/whitespace-only text node segment");
+      continue;
+    }
+
     try {
       const textLength = node.length;
       const mark = createHighlightMark(doc, highlight);
