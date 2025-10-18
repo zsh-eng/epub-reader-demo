@@ -432,8 +432,7 @@ export function applyHighlightsToDocument(
   console.log("First 200 chars:\n", body.textContent?.substring(0, 200));
   console.log("=== END DEBUG ===\n");
 
-  // Sort highlights by position to handle them in order
-  const sorted = [...highlights].sort((a, b) => b.startOffset - a.startOffset);
+  const sorted = [...highlights].sort((a, b) => a.startOffset - b.startOffset);
 
   for (const highlight of sorted) {
     try {
