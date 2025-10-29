@@ -22,7 +22,7 @@ export function useChapterContent(
   book: Book | null,
   bookId: string | undefined,
   currentChapterIndex: number,
-  highlights: Highlight[] = [],
+  initialHighlights: Highlight[] = [],
 ): UseChapterContentReturn {
   const [chapterContent, setChapterContent] = useState<string>("");
   const resourceUrlsRef = useRef<Map<string, string>>(new Map());
@@ -72,9 +72,11 @@ export function useChapterContent(
         resourceUrlMap: resourceUrlsRef.current,
       });
 
-      // Apply highlights for the current chapter
+      // Apply initial highlights for the current chapter
+      // Only initial highlights are applied here during chapter load
+      // New highlights created by the user are applied directly to the live DOM
       const currentSpineItemId = spineItem.idref;
-      const chapterHighlights = highlights.filter(
+      const chapterHighlights = initialHighlights.filter(
         (h) => h.spineItemId === currentSpineItemId,
       );
       const htmlWithHighlights = applyHighlightsToDocument(
@@ -93,7 +95,7 @@ export function useChapterContent(
       console.error("Error loading chapter:", error);
       setChapterContent("<p>Error loading chapter content.</p>");
     }
-  }, [book, bookId, currentChapterIndex, highlights]);
+  }, [book, bookId, currentChapterIndex, initialHighlights]);
 
   useEffect(() => {
     loadChapterContent();

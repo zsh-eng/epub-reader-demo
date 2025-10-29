@@ -237,7 +237,10 @@ function verifyRangeText(range: Range, expectedText: string): boolean {
 /**
  * Creates a highlight mark element with the given highlight's styling
  */
-function createHighlightMark(doc: Document, highlight: Highlight): HTMLElement {
+export function createHighlightMark(
+  doc: Document,
+  highlight: Highlight,
+): HTMLElement {
   const mark = doc.createElement("mark");
   mark.className = "epub-highlight";
   mark.dataset.highlightId = highlight.id;
@@ -249,7 +252,7 @@ function createHighlightMark(doc: Document, highlight: Highlight): HTMLElement {
  * Wraps a text node with a mark element, inserting it before the node
  * and then appending the node as a child
  */
-function wrapTextNodeWithMark(node: Text, mark: HTMLElement): void {
+export function wrapTextNodeWithMark(node: Text, mark: HTMLElement): void {
   node.parentNode?.insertBefore(mark, node);
   mark.appendChild(node);
 }
@@ -259,7 +262,7 @@ function wrapTextNodeWithMark(node: Text, mark: HTMLElement): void {
  * Creates multiple <mark> elements as needed to avoid wrapping block elements.
  * All marks share the same data-highlight-id for grouping.
  */
-function wrapRangeWithHighlight(
+export function wrapRangeWithHighlight(
   range: Range,
   highlight: Highlight,
   doc: Document,
@@ -470,4 +473,94 @@ export function applyHighlightsToDocument(
   }
 
   return body.innerHTML;
+}
+
+/**
+ * Applies a single highlight to the live DOM without re-rendering
+ * @param containerElement The container element with the content
+ * @param highlight The highlight to apply
+ * @returns true if successful, false otherwise
+ */
+export function applyHighlightToLiveDOM(
+  containerElement: HTMLElement,
+  highlight: Highlight,
+): boolean {
+  try {
+    console.log("\n=== applyHighlightToLiveDOM ===");
+    console.log("Highlight ID:", highlight.id);
+    console.log("Expected text:", highlight.selectedText);
+    console.log("Offsets:", highlight.startOffset, "to", highlight.endOffset);
+
+    // Find the range in the live DOM
+    const range = findRangeByTextOffset(
+      containerElement,
+      highlight.startOffset,
+      highlight.endOffset,
+    );
+
+    if (!range) {
+      console.warn("Could not find range for highlight:", highlight.id);
+      return false;
+    }
+
+    // Verify the text matches
+    if (!verifyRangeText(range, highlight.selectedText)) {
+      console.warn("Range text does not match expected text:", highlight.id);
+      console.log("Expected:", highlight.selectedText);
+      console.log("Found:", range.toString());
+      return false;
+    }
+
+    // Wrap the range with highlight marks
+    wrapRangeWithHighlight(range, highlight, document);
+
+    console.log("✓ Highlight applied to live DOM successfully");
+    return true;
+  } catch (error) {
+    console.error("Error applying highlight to live DOM:", error);
+    return false;
+  }
+}
+
+/**
+ * Removes a highlight from the live DOM
+ * @param containerElement The container element with the content
+ * @param highlightId The ID of the highlight to remove
+ */
+export function removeHighlightFromLiveDOM(
+  containerElement: HTMLElement,
+  highlightId: string,
+): void {
+  try {
+    console.log("\n=== removeHighlightFromLiveDOM ===");
+    console.log("Removing highlight ID:", highlightId);
+
+    // Find all mark elements with this highlight ID
+    const marks = containerElement.querySelectorAll(
+      `mark[data-highlight-id="${highlightId}"]`,
+    );
+
+    console.log("Found", marks.length, "mark elements to remove");
+
+    // Unwrap each mark element (replace it with its text content)
+    marks.forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) return;
+
+      // Move all child nodes of the mark to before the mark
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+
+      // Remove the now-empty mark element
+      parent.removeChild(mark);
+
+      // Normalize the parent to merge adjacent text nodes
+      parent.normalize();
+    });
+
+    console.log("✓ Highlight removed from live DOM successfully");
+  } catch (error) {
+    console.error("Error removing highlight from live DOM:", error);
+  }
 }
