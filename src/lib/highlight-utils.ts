@@ -64,26 +64,6 @@ export function createHighlightFromSelection(
     range.endOffset,
   );
 
-  console.log("\n=== createHighlightFromSelection DEBUG ===");
-  console.log("Full text length:", fullText.length);
-  console.log("Start offset:", startOffset);
-  console.log("End offset:", endOffset);
-  console.log("Selected text:", selectedText);
-  console.log("First 200 chars:\n", fullText.substring(0, 200));
-  console.log(
-    "Text at offset position:",
-    fullText.substring(startOffset, endOffset),
-  );
-  console.log(
-    "Text before (last 20 chars):",
-    fullText.substring(Math.max(0, startOffset - 20), startOffset),
-  );
-  console.log(
-    "Text after (first 20 chars):",
-    fullText.substring(endOffset, Math.min(fullText.length, endOffset + 20)),
-  );
-  console.log("=== END DEBUG ===\n");
-
   // Extract context (50 chars before and after)
   const textBefore = fullText.substring(
     Math.max(0, startOffset - 50),
@@ -133,9 +113,6 @@ export function findRangeByTextOffset(
   startOffset: number,
   endOffset: number,
 ): Range | null {
-  console.log("\n=== findRangeByTextOffset DEBUG ===");
-  console.log("Looking for startOffset:", startOffset, "endOffset:", endOffset);
-
   const range = document.createRange();
   let currentOffset = 0;
 
@@ -151,63 +128,33 @@ export function findRangeByTextOffset(
   let endNodeOffset = 0;
   let foundStart = false;
 
-  let nodeIndex = 0;
   let node: Node | null;
   while ((node = walker.nextNode())) {
     const textNode = node as Text;
     const text = textNode.textContent || "";
     const length = text.length;
 
-    console.log(`Node ${nodeIndex}:`, {
-      currentOffset,
-      length,
-      text: text.substring(0, 50) + (text.length > 50 ? "..." : ""),
-      parent: textNode.parentElement?.tagName,
-    });
-
     // Find start position
     if (!foundStart && currentOffset + length > startOffset) {
       startNode = textNode;
       startNodeOffset = startOffset - currentOffset;
       foundStart = true;
-      console.log("✓ FOUND START:", {
-        nodeIndex,
-        startNodeOffset,
-        currentOffset,
-        textAtStart: text.substring(
-          Math.max(0, startNodeOffset - 5),
-          startNodeOffset + 20,
-        ),
-      });
     }
 
     // Find end position
     if (foundStart && currentOffset + length >= endOffset) {
       endNode = textNode;
       endNodeOffset = endOffset - currentOffset;
-      console.log("✓ FOUND END:", {
-        nodeIndex,
-        endNodeOffset,
-        currentOffset,
-        textAtEnd: text.substring(
-          Math.max(0, endNodeOffset - 20),
-          endNodeOffset + 5,
-        ),
-      });
       break;
     }
 
     currentOffset += length;
-    nodeIndex++;
   }
 
   if (startNode && endNode) {
     try {
       range.setStart(startNode, startNodeOffset);
       range.setEnd(endNode, endNodeOffset);
-      console.log("Range created successfully");
-      console.log("Range text:", range.toString());
-      console.log("=== END DEBUG ===\n");
       return range;
     } catch (error) {
       console.error("Invalid range:", error);
@@ -215,8 +162,6 @@ export function findRangeByTextOffset(
     }
   }
 
-  console.log("❌ Failed to find start/end nodes");
-  console.log("=== END DEBUG ===\n");
   return null;
 }
 
@@ -375,7 +320,6 @@ export function wrapRangeWithHighlight(
     const textToHighlight =
       node.textContent?.substring(startOffset, endOffset) || "";
     if (textToHighlight.trim().length === 0) {
-      console.log("Skipping empty/whitespace-only text node segment");
       continue;
     }
 
@@ -429,41 +373,18 @@ export function applyHighlightsToDocument(
 
   if (highlights.length === 0) return body.innerHTML;
 
-  console.log("\n=== applyHighlightsToDocument DEBUG ===");
-  console.log("Number of highlights:", highlights.length);
-  console.log("Body text length:", body.textContent?.length);
-  console.log("First 200 chars:\n", body.textContent?.substring(0, 200));
-  console.log("=== END DEBUG ===\n");
-
   const sorted = [...highlights].sort((a, b) => a.startOffset - b.startOffset);
 
   for (const highlight of sorted) {
     try {
-      // Try primary method: direct offset
-      console.log("\n=== Applying Highlight ===");
-      console.log("Highlight ID:", highlight.id);
-      console.log("Expected text:", highlight.selectedText);
-      console.log("Offsets:", highlight.startOffset, "to", highlight.endOffset);
-
-      const bodyText = body.textContent || "";
-      console.log("Text at those offsets in current DOM:");
-      console.log(
-        bodyText.substring(highlight.startOffset, highlight.endOffset),
-      );
-
       const range = findRangeByTextOffset(
         body,
         highlight.startOffset,
         highlight.endOffset,
       );
 
-      console.log("Range found:", range);
-      console.log("Range text:", range?.toString());
-      console.log("Match:", range?.toString() === highlight.selectedText);
-
       if (range && verifyRangeText(range, highlight.selectedText)) {
         wrapRangeWithHighlight(range, highlight, doc);
-        console.log("✓ Highlight applied successfully");
       } else {
         console.warn("Failed to apply highlight:", highlight.id);
       }
@@ -486,11 +407,6 @@ export function applyHighlightToLiveDOM(
   highlight: Highlight,
 ): boolean {
   try {
-    console.log("\n=== applyHighlightToLiveDOM ===");
-    console.log("Highlight ID:", highlight.id);
-    console.log("Expected text:", highlight.selectedText);
-    console.log("Offsets:", highlight.startOffset, "to", highlight.endOffset);
-
     // Find the range in the live DOM
     const range = findRangeByTextOffset(
       containerElement,
@@ -506,15 +422,12 @@ export function applyHighlightToLiveDOM(
     // Verify the text matches
     if (!verifyRangeText(range, highlight.selectedText)) {
       console.warn("Range text does not match expected text:", highlight.id);
-      console.log("Expected:", highlight.selectedText);
-      console.log("Found:", range.toString());
       return false;
     }
 
     // Wrap the range with highlight marks
     wrapRangeWithHighlight(range, highlight, document);
 
-    console.log("✓ Highlight applied to live DOM successfully");
     return true;
   } catch (error) {
     console.error("Error applying highlight to live DOM:", error);
@@ -532,15 +445,10 @@ export function removeHighlightFromLiveDOM(
   highlightId: string,
 ): void {
   try {
-    console.log("\n=== removeHighlightFromLiveDOM ===");
-    console.log("Removing highlight ID:", highlightId);
-
     // Find all mark elements with this highlight ID
     const marks = containerElement.querySelectorAll(
       `mark[data-highlight-id="${highlightId}"]`,
     );
-
-    console.log("Found", marks.length, "mark elements to remove");
 
     // Unwrap each mark element (replace it with its text content)
     marks.forEach((mark) => {
@@ -558,8 +466,6 @@ export function removeHighlightFromLiveDOM(
       // Normalize the parent to merge adjacent text nodes
       parent.normalize();
     });
-
-    console.log("✓ Highlight removed from live DOM successfully");
   } catch (error) {
     console.error("Error removing highlight from live DOM:", error);
   }
