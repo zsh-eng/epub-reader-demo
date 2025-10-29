@@ -196,19 +196,16 @@
 
 .epub-highlight:hover {
     opacity: 0.8;
-    outline: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Active state for selected highlights (when delete popover is shown) */
 .epub-highlight-active {
     opacity: 0.8;
-    outline: 2px solid rgba(0, 0, 0, 0.3);
 }
 
 /* Group hover effect for highlights with same data-highlight-id */
 .epub-highlight-group-hover {
     opacity: 0.8;
-    outline: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 /* Predefined colors */
