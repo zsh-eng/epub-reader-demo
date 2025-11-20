@@ -39,3 +39,14 @@ export interface ChapterInfo {
   hasNext: boolean;
   hasPrevious: boolean;
 }
+
+export type ReaderTheme = 'light' | 'dark' | 'sepia';
+export type FontFamily = 'serif' | 'sans-serif' | 'monospace';
+
+export interface ReaderSettings {
+  fontSize: number; // percentage, e.g. 100
+  lineHeight: number; // multiplier, e.g. 1.5
+  fontFamily: FontFamily;
+  theme: ReaderTheme;
+  textAlign: 'left' | 'justify';
+}
