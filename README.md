@@ -15,18 +15,18 @@ A modern web-based EPUB reader built with React, TypeScript, and DexieJS (Indexe
 ### Prerequisites
 
 - Node.js 20.19+ or 22.12+
-- npm or bun
+- Bun (Package Manager & Runtime)
 
 ### Installation
 
 ```bash
-npm install
+bun install
 ```
 
 ### Development
 
 ```bash
-npm run dev
+bun run dev
 ```
 
 Open [http://localhost:5173](http://localhost:5173) in your browser.
@@ -34,7 +34,7 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 ### Build
 
 ```bash
-npm run build
+bun run build
 ```
 
 ## Usage
