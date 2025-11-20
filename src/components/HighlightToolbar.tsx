@@ -2,7 +2,8 @@ import {
   HIGHLIGHT_COLORS,
   type HighlightColor,
 } from "@/lib/highlight-constants";
-import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import { useEffect } from "react";
 
 interface HighlightToolbarProps {
   position: { x: number; y: number };
@@ -15,18 +16,16 @@ export function HighlightToolbar({
   onColorSelect,
   onClose,
 }: HighlightToolbarProps) {
-  const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
+  // Calculate position directly to avoid layout thrashing/jumping
+  const toolbarWidth = 160; // Reduced width
+  const toolbarHeight = 48; // Reduced height
+  const padding = 12;
 
-  useEffect(() => {
-    // Position the toolbar above the selection, centered
-    const toolbarWidth = 200; // Approximate width
-    const toolbarHeight = 60; // Approximate height
-    const padding = 10;
+  let x = position.x - toolbarWidth / 2;
+  let y = position.y - toolbarHeight - padding;
 
-    let x = position.x - toolbarWidth / 2;
-    let y = position.y - toolbarHeight - padding;
-
-    // Keep toolbar within viewport
+  // Keep toolbar within viewport
+  if (typeof window !== "undefined") {
     const viewportWidth = window.innerWidth;
 
     // Adjust horizontal position
@@ -40,9 +39,7 @@ export function HighlightToolbar({
     if (y < padding) {
       y = position.y + toolbarHeight + padding;
     }
-
-    setToolbarPosition({ x, y });
-  }, [position]);
+  }
 
   // Close toolbar when clicking outside
   useEffect(() => {
@@ -66,24 +63,25 @@ export function HighlightToolbar({
 
   return (
     <div
-      className="highlight-toolbar fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 p-3"
+      className="highlight-toolbar fixed z-50 flex items-center gap-2 p-2 rounded-full bg-white shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
       style={{
-        left: `${toolbarPosition.x}px`,
-        top: `${toolbarPosition.y}px`,
+        left: `${x}px`,
+        top: `${y}px`,
       }}
     >
-      <div className="flex items-center gap-2">
-        {HIGHLIGHT_COLORS.map((color) => (
-          <button
-            key={color.name}
-            onClick={() => onColorSelect(color.name)}
-            className="w-10 h-10 rounded-full border-2 border-gray-300 hover:border-gray-500 transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400"
-            style={{ backgroundColor: color.value }}
-            aria-label={`Highlight with ${color.name}`}
-            title={`Highlight with ${color.name}`}
-          />
-        ))}
-      </div>
+      {HIGHLIGHT_COLORS.map((color) => (
+        <button
+          key={color.name}
+          onClick={() => onColorSelect(color.name)}
+          className={cn(
+            "w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
+            "border border-black/5 hover:border-black/10"
+          )}
+          style={{ backgroundColor: color.hex }}
+          aria-label={`Highlight with ${color.name}`}
+          title={`Highlight with ${color.name}`}
+        />
+      ))}
     </div>
   );
 }
