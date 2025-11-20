@@ -2,8 +2,8 @@
 
 ## Database & Persistence
 
-- [ ] **Database Schema & Types**: Define schema for `highlights` and `readingProgress` in `src/lib/db.ts`.
-- [ ] **Highlight Persistence**: Connect Reader highlight actions to DB (save/load).
+- [x] **Database Schema & Types**: Define schema for `highlights` and `readingProgress` in `src/lib/db.ts`.
+- [x] **Highlight Persistence**: Connect Reader highlight actions to DB (save/load).
 - [ ] **Reading Progress**: Implement auto-save and restore of reading position (chapter + scroll offset).
 
 ## Reader Settings (Appearance)

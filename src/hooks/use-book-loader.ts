@@ -1,7 +1,7 @@
-import { useToast } from "@/hooks/use-toast";
-import { getBook, getReadingProgress, type Book } from "@/lib/db";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useToast } from '@/hooks/use-toast';
+import { getBook, getReadingProgress, type Book } from '@/lib/db';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 export interface UseBookLoaderReturn {
   book: Book | null;
@@ -24,11 +24,11 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
     const loadBook = async () => {
       if (!bookId) {
         toast({
-          title: "Error",
-          description: "No book ID provided",
-          variant: "destructive",
+          title: 'Error',
+          description: 'No book ID provided',
+          variant: 'destructive',
         });
-        navigate("/");
+        navigate('/');
         return;
       }
 
@@ -36,11 +36,11 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
         const bookData = await getBook(bookId);
         if (!bookData) {
           toast({
-            title: "Error",
-            description: "Book not found",
-            variant: "destructive",
+            title: 'Error',
+            description: 'Book not found',
+            variant: 'destructive',
           });
-          navigate("/");
+          navigate('/');
           return;
         }
 
@@ -52,7 +52,7 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
 
         setCurrentChapterIndex(progress.currentSpineIndex);
         lastScrollProgress.current = progress.scrollProgress;
-        console.log("scroll progress", progress.scrollProgress);
+        console.log('scroll progress', progress.scrollProgress);
 
         // Wait for content to be ready before scrolling
         const waitForContent = (callback: () => void, maxAttempts = 20) => {
@@ -81,13 +81,13 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
           });
         });
       } catch (error) {
-        console.error("Error loading book:", error);
+        console.error('Error loading book:', error);
         toast({
-          title: "Error",
-          description: "Failed to load book",
-          variant: "destructive",
+          title: 'Error',
+          description: 'Failed to load book',
+          variant: 'destructive',
         });
-        navigate("/");
+        navigate('/');
       } finally {
         setIsLoading(false);
       }

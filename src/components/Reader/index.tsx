@@ -7,6 +7,7 @@ import ReaderContent from '@/components/ReaderContent';
 import { useBookLoader } from '@/hooks/use-book-loader';
 import { useChapterContent } from '@/hooks/use-chapter-content';
 import { useChapterNavigation } from '@/hooks/use-chapter-navigation';
+import { useHighlights } from '@/hooks/use-highlights';
 import { useKeyboardNavigation } from '@/hooks/use-keyboard-navigation';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTextSelection } from '@/hooks/use-text-selection';
@@ -20,7 +21,7 @@ import {
 } from '@/lib/highlight-utils';
 import { getChapterTitleFromSpine } from '@/lib/toc-utils';
 import type { Highlight } from '@/types/highlight';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 /**
@@ -46,12 +47,6 @@ export function Reader() {
   // Local state (minimal)
   const [isTOCOpen, setIsTOCOpen] = useState(false);
 
-  // In-memory highlights state
-  // This maintains the current highlights for this reading session
-  // In the future, this will sync with the database
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [highlights, setHighlights] = useState<Highlight[]>([]);
-
   // Highlight delete popover state
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
     null
@@ -70,47 +65,66 @@ export function Reader() {
     lastScrollProgress,
   } = useBookLoader(bookId);
 
-  // For now, initial highlights is just an empty array
-  // In the future, this would be loaded from the database
-  const initialHighlights: Highlight[] = [];
+  // Get current spine item ID
+  const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
+
+  const {
+    highlights,
+    addHighlight,
+    deleteHighlight,
+    updateHighlight,
+    isLoading: areHighlightsLoading,
+  } = useHighlights(bookId, currentSpineItemId);
+
+  // We only want to pass the initial highlights to useChapterContent to avoid re-rendering the whole chapter
+  // when we add/remove highlights (since we handle that via DOM manipulation).
+  const [initialChapterHighlights, setInitialChapterHighlights] = useState<
+    Highlight[]
+  >([]);
+
+  useEffect(() => {
+    if (!areHighlightsLoading) {
+      setInitialChapterHighlights(highlights);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [areHighlightsLoading]);
 
   const { chapterContent } = useChapterContent(
     book,
     bookId,
     currentChapterIndex,
-    initialHighlights
+    initialChapterHighlights
   );
 
-  const handleHighlightCreate = useCallback((highlight: Highlight) => {
-    setHighlights((prev) => [...prev, highlight]);
-    if (contentRef.current) {
-      applyHighlightToLiveDOM(contentRef.current, highlight);
-    }
-  }, []);
+  const handleHighlightCreate = useCallback(
+    (highlight: Highlight) => {
+      addHighlight(highlight);
+      if (contentRef.current) {
+        applyHighlightToLiveDOM(contentRef.current, highlight);
+      }
+    },
+    [addHighlight]
+  );
 
-  const handleHighlightDelete = useCallback((highlightId: string) => {
-    setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
-    if (contentRef.current) {
-      removeHighlightFromLiveDOM(contentRef.current, highlightId);
-    }
+  const handleHighlightDelete = useCallback(
+    (highlightId: string) => {
+      deleteHighlight(highlightId);
+      if (contentRef.current) {
+        removeHighlightFromLiveDOM(contentRef.current, highlightId);
+      }
 
-    setActiveHighlightId(null);
-    setDeletePopoverPosition(null);
-  }, []);
+      setActiveHighlightId(null);
+      setDeletePopoverPosition(null);
+    },
+    [deleteHighlight]
+  );
 
   const handleHighlightUpdate = useCallback(
     (highlightId: string, newColorName: HighlightColor) => {
       const newColor = HIGHLIGHT_COLORS.find((c) => c.name === newColorName);
       if (!newColor) return;
 
-      setHighlights((prev) =>
-        prev.map((h) => {
-          if (h.id === highlightId) {
-            return { ...h, color: newColorName };
-          }
-          return h;
-        })
-      );
+      updateHighlight(highlightId, { color: newColorName });
 
       if (contentRef.current) {
         const marks = contentRef.current.querySelectorAll(
@@ -123,7 +137,7 @@ export function Reader() {
         });
       }
     },
-    []
+    [updateHighlight]
   );
 
   const handleHighlightClick = useCallback(
@@ -146,9 +160,6 @@ export function Reader() {
     setActiveHighlightId(null);
     setDeletePopoverPosition(null);
   }, []);
-
-  // Get current spine item ID
-  const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
 
   const {
     showHighlightToolbar,

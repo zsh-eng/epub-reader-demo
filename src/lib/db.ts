@@ -1,4 +1,5 @@
 import Dexie, { type Table } from "dexie";
+import type { Highlight } from "@/types/highlight";
 
 // Database interfaces matching the spec
 export interface Book {
@@ -72,15 +73,17 @@ class EPUBReaderDB extends Dexie {
   bookFiles!: Table<BookFile, string>;
   readingProgress!: Table<ReadingProgress, string>;
   readingSettings!: Table<ReadingSettings, string>;
+  highlights!: Table<Highlight, string>;
 
   constructor() {
     super("epub-reader-db");
 
-    this.version(1).stores({
+    this.version(2).stores({
       books: "id, title, author, dateAdded, lastOpened",
       bookFiles: "id, bookId, path",
       readingProgress: "id, bookId, lastRead",
       readingSettings: "id",
+      highlights: "id, bookId, spineItemId, createdAt",
     });
   }
 }
@@ -187,4 +190,31 @@ export async function getBookCoverUrl(
     return undefined;
   }
   return URL.createObjectURL(bookFile.content);
+}
+
+// Highlight operations
+export async function addHighlight(highlight: Highlight): Promise<string> {
+  return await db.highlights.add(highlight);
+}
+
+export async function getHighlights(
+  bookId: string,
+  spineItemId: string
+): Promise<Highlight[]> {
+  return await db.highlights
+    .where("bookId")
+    .equals(bookId)
+    .and((h) => h.spineItemId === spineItemId)
+    .toArray();
+}
+
+export async function deleteHighlight(id: string): Promise<void> {
+  await db.highlights.delete(id);
+}
+
+export async function updateHighlight(
+  id: string,
+  changes: Partial<Highlight>
+): Promise<void> {
+  await db.highlights.update(id, { ...changes, updatedAt: new Date() });
 }
