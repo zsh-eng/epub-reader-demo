@@ -1,17 +1,50 @@
-import { Trash2 } from "lucide-react";
+import {
+  HIGHLIGHT_COLORS,
+  type HighlightColor,
+} from "@/lib/highlight-constants";
+import { cn } from "@/lib/utils";
 import { useEffect } from "react";
 
 interface HighlightDeletePopoverProps {
   position: { x: number; y: number };
+  currentColor: HighlightColor;
+  onColorSelect: (color: HighlightColor) => void;
   onDelete: () => void;
   onClose: () => void;
 }
 
 export function HighlightDeletePopover({
   position,
+  currentColor,
+  onColorSelect,
   onDelete,
   onClose,
 }: HighlightDeletePopoverProps) {
+  // Calculate position directly to avoid layout thrashing/jumping
+  const toolbarWidth = 160; // Reduced width
+  const toolbarHeight = 48; // Reduced height
+  const padding = 12;
+
+  let x = position.x - toolbarWidth / 2;
+  let y = position.y - toolbarHeight - padding;
+
+  // Keep toolbar within viewport
+  if (typeof window !== "undefined") {
+    const viewportWidth = window.innerWidth;
+
+    // Adjust horizontal position
+    if (x < padding) {
+      x = padding;
+    } else if (x + toolbarWidth > viewportWidth - padding) {
+      x = viewportWidth - toolbarWidth - padding;
+    }
+
+    // Adjust vertical position (show below if not enough space above)
+    if (y < padding) {
+      y = position.y + toolbarHeight + padding;
+    }
+  }
+
   // Close popover when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -49,20 +82,40 @@ export function HighlightDeletePopover({
 
   return (
     <div
-      className="highlight-delete-popover fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200"
+      className="highlight-delete-popover fixed z-50 flex items-center gap-2 p-2 rounded-full bg-white shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
+        left: `${x}px`,
+        top: `${y}px`,
       }}
     >
-      <button
-        onClick={onDelete}
-        className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-        aria-label="Delete highlight"
-      >
-        <Trash2 size={16} />
-        <span className="font-medium">Delete</span>
-      </button>
+      {HIGHLIGHT_COLORS.map((color) => (
+        <button
+          key={color.name}
+          onClick={() => {
+            if (color.name === currentColor) {
+              onDelete();
+            } else {
+              onColorSelect(color.name);
+            }
+          }}
+          className={cn(
+            "w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
+            "border border-black/5 hover:border-black/10",
+            color.name === currentColor && "ring-2 ring-offset-2 ring-gray-900"
+          )}
+          style={{ backgroundColor: color.hex }}
+          aria-label={
+            color.name === currentColor
+              ? "Delete highlight"
+              : `Change highlight to ${color.name}`
+          }
+          title={
+            color.name === currentColor
+              ? "Delete highlight"
+              : `Change highlight to ${color.name}`
+          }
+        />
+      ))}
     </div>
   );
 }

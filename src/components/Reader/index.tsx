@@ -1,24 +1,28 @@
-import { HighlightDeletePopover } from "@/components/HighlightDeletePopover";
-import { HighlightToolbar } from "@/components/HighlightToolbar";
-import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
-import { NavigationButtons } from "@/components/Reader/NavigationButtons";
-import { ReaderHeader } from "@/components/Reader/ReaderHeader";
-import { TableOfContents } from "@/components/Reader/TableOfContents";
-import ReaderContent from "@/components/ReaderContent";
-import { useBookLoader } from "@/hooks/use-book-loader";
-import { useChapterContent } from "@/hooks/use-chapter-content";
-import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
-import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
-import { useReadingProgress } from "@/hooks/use-reading-progress";
-import { useTextSelection } from "@/hooks/use-text-selection";
+import { HighlightDeletePopover } from '@/components/HighlightDeletePopover';
+import { HighlightToolbar } from '@/components/HighlightToolbar';
+import { LoadingSpinner } from '@/components/Reader/LoadingSpinner';
+import { NavigationButtons } from '@/components/Reader/NavigationButtons';
+import { ReaderHeader } from '@/components/Reader/ReaderHeader';
+import { TableOfContents } from '@/components/Reader/TableOfContents';
+import ReaderContent from '@/components/ReaderContent';
+import { useBookLoader } from '@/hooks/use-book-loader';
+import { useChapterContent } from '@/hooks/use-chapter-content';
+import { useChapterNavigation } from '@/hooks/use-chapter-navigation';
+import { useKeyboardNavigation } from '@/hooks/use-keyboard-navigation';
+import { useReadingProgress } from '@/hooks/use-reading-progress';
+import { useTextSelection } from '@/hooks/use-text-selection';
 import {
-  applyHighlightToLiveDOM,
-  removeHighlightFromLiveDOM,
-} from "@/lib/highlight-utils";
-import { getChapterTitleFromSpine } from "@/lib/toc-utils";
-import type { Highlight } from "@/types/highlight";
-import { useCallback, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+    HIGHLIGHT_COLORS,
+    type HighlightColor,
+} from '@/lib/highlight-constants';
+import {
+    applyHighlightToLiveDOM,
+    removeHighlightFromLiveDOM,
+} from '@/lib/highlight-utils';
+import { getChapterTitleFromSpine } from '@/lib/toc-utils';
+import type { Highlight } from '@/types/highlight';
+import { useCallback, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 
 /**
  * Reader Component
@@ -51,7 +55,7 @@ export function Reader() {
 
   // Highlight delete popover state
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
-    null,
+    null
   );
   const [deletePopoverPosition, setDeletePopoverPosition] = useState<{
     x: number;
@@ -75,7 +79,7 @@ export function Reader() {
     book,
     bookId,
     currentChapterIndex,
-    initialHighlights,
+    initialHighlights
   );
 
   const handleHighlightCreate = useCallback((highlight: Highlight) => {
@@ -95,6 +99,34 @@ export function Reader() {
     setDeletePopoverPosition(null);
   }, []);
 
+  const handleHighlightUpdate = useCallback(
+    (highlightId: string, newColorName: HighlightColor) => {
+      const newColor = HIGHLIGHT_COLORS.find((c) => c.name === newColorName);
+      if (!newColor) return;
+
+      setHighlights((prev) =>
+        prev.map((h) => {
+          if (h.id === highlightId) {
+            return { ...h, color: newColorName };
+          }
+          return h;
+        })
+      );
+
+      if (contentRef.current) {
+        const marks = contentRef.current.querySelectorAll(
+          `mark[data-highlight-id="${highlightId}"]`
+        );
+        marks.forEach((mark) => {
+          if (mark instanceof HTMLElement) {
+            mark.style.backgroundColor = newColor.hex;
+          }
+        });
+      }
+    },
+    []
+  );
+
   const handleHighlightClick = useCallback(
     (highlightId: string, position: { x: number; y: number }) => {
       // If clicking the same highlight, close the popover
@@ -107,7 +139,7 @@ export function Reader() {
         setDeletePopoverPosition(position);
       }
     },
-    [activeHighlightId],
+    [activeHighlightId]
   );
 
   // Close delete popover
@@ -128,7 +160,7 @@ export function Reader() {
     contentRef,
     bookId,
     currentSpineItemId,
-    handleHighlightCreate,
+    handleHighlightCreate
   );
 
   const { goToPreviousChapter, goToNextChapter, goToChapterByHref } =
@@ -136,7 +168,7 @@ export function Reader() {
       book,
       bookId,
       currentChapterIndex,
-      setCurrentChapterIndex,
+      setCurrentChapterIndex
     );
 
   useReadingProgress(bookId, book, currentChapterIndex, lastScrollProgress);
@@ -147,23 +179,24 @@ export function Reader() {
   if (!book) return null;
 
   // Derived state
+  const activeHighlight = highlights.find((h) => h.id === activeHighlightId);
   const currentChapterTitle = getChapterTitleFromSpine(
     book,
-    currentChapterIndex,
+    currentChapterIndex
   );
   const hasPreviousChapter = currentChapterIndex > 0;
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
 
   // Render
   return (
-    <div className="flex flex-col bg-white min-h-screen">
+    <div className='flex flex-col bg-white min-h-screen'>
       <ReaderHeader
         book={book}
         currentChapterTitle={currentChapterTitle}
         currentChapterIndex={currentChapterIndex}
         totalChapters={book.spine.length}
         onToggleTOC={() => setIsTOCOpen(true)}
-        onBackToLibrary={() => navigate("/")}
+        onBackToLibrary={() => navigate('/')}
       />
 
       <TableOfContents
@@ -190,10 +223,14 @@ export function Reader() {
         />
       )}
 
-      {deletePopoverPosition && activeHighlightId && (
+      {deletePopoverPosition && activeHighlight && (
         <HighlightDeletePopover
           position={deletePopoverPosition}
-          onDelete={() => handleHighlightDelete(activeHighlightId)}
+          currentColor={activeHighlight.color}
+          onColorSelect={(color) =>
+            handleHighlightUpdate(activeHighlight.id, color)
+          }
+          onDelete={() => handleHighlightDelete(activeHighlight.id)}
           onClose={handleCloseDeletePopover}
         />
       )}
