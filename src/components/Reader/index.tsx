@@ -176,6 +176,7 @@ export function Reader() {
       <ReaderContent
         content={chapterContent}
         chapterIndex={currentChapterIndex}
+        title={currentChapterTitle}
         ref={contentRef}
         onHighlightClick={handleHighlightClick}
         activeHighlightId={activeHighlightId}
