@@ -78,25 +78,15 @@ export function Reader() {
     initialHighlights,
   );
 
-  // Callback to add a new highlight
-  // Apply directly to the live DOM instead of triggering re-render
   const handleHighlightCreate = useCallback((highlight: Highlight) => {
-    // Add to in-memory array for state persistence
     setHighlights((prev) => [...prev, highlight]);
-
-    // Apply directly to the live DOM to avoid re-rendering and scroll jump
     if (contentRef.current) {
       applyHighlightToLiveDOM(contentRef.current, highlight);
     }
   }, []);
 
-  // Callback to delete a highlight
-  // Remove directly from the live DOM instead of triggering re-render
   const handleHighlightDelete = useCallback((highlightId: string) => {
-    // Remove from in-memory array
     setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
-
-    // Remove directly from the live DOM to avoid re-rendering and scroll jump
     if (contentRef.current) {
       removeHighlightFromLiveDOM(contentRef.current, highlightId);
     }
@@ -105,7 +95,6 @@ export function Reader() {
     setDeletePopoverPosition(null);
   }, []);
 
-  // Handle highlight click to show delete popover
   const handleHighlightClick = useCallback(
     (highlightId: string, position: { x: number; y: number }) => {
       // If clicking the same highlight, close the popover

@@ -7,14 +7,16 @@ import {
 import type { Book } from "@/lib/db";
 import { BookCard } from "@/components/BookCard";
 import { Button } from "@/components/ui/button";
-import { Plus, Upload } from "lucide-react";
+import { Plus, Upload, Search, Library as LibraryIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 
 export function Library() {
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
   // Load books from database
@@ -130,114 +132,102 @@ export function Library() {
     input.click();
   };
 
+  const filteredBooks = books.filter((book) =>
+    book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    book.author.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen bg-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading library...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground text-sm">Loading library...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">My Library</h1>
-          <p className="text-gray-600">
-            {books.length === 0
-              ? "Start building your library by adding EPUB books"
-              : `${books.length} book${books.length !== 1 ? "s" : ""} in your library`}
-          </p>
-        </div>
-
-        {/* Add Book Button */}
-        <div className="mb-6">
-          <Button
-            onClick={handleAddBookClick}
-            disabled={isProcessing}
-            size="lg"
-            className="gap-2"
-          >
-            {isProcessing ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Processing...
-              </>
-            ) : (
-              <>
-                <Plus className="h-5 w-5" />
-                Add Book
-              </>
-            )}
-          </Button>
-        </div>
-
-        {/* Drop Zone */}
-        <div
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          className={`
-            border-2 border-dashed rounded-lg p-8 mb-8 transition-colors
-            ${
-              isDragging
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300 bg-white hover:border-gray-400"
-            }
-          `}
-        >
-          <div className="flex flex-col items-center justify-center text-center">
-            <Upload
-              className={`h-12 w-12 mb-4 ${isDragging ? "text-blue-500" : "text-gray-400"}`}
-            />
-            <p
-              className={`text-lg font-medium mb-2 ${isDragging ? "text-blue-700" : "text-gray-700"}`}
-            >
-              {isDragging
-                ? "Drop EPUB file here"
-                : "Drag and drop EPUB files here"}
-            </p>
-            <p className="text-sm text-gray-500">
-              or click the "Add Book" button above
-            </p>
+    <div
+      className="min-h-screen bg-background transition-colors duration-300"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag Overlay */}
+      {isDragging && (
+        <div className="fixed inset-0 z-50 bg-primary/10 backdrop-blur-sm border-4 border-primary border-dashed m-4 rounded-xl flex items-center justify-center pointer-events-none">
+          <div className="text-center bg-background/80 p-8 rounded-2xl shadow-xl backdrop-blur-md">
+            <Upload className="h-16 w-16 text-primary mx-auto mb-4 animate-bounce" />
+            <h3 className="text-2xl font-bold text-primary mb-2">Drop EPUB to Add</h3>
+            <p className="text-muted-foreground">Release to add to your library</p>
           </div>
         </div>
+      )}
+
+      <div className="max-w-[1400px] mx-auto px-6 py-8 md:px-10 md:py-12">
+        {/* Header */}
+        <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+          <div>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">Library</h1>
+            <p className="text-muted-foreground text-lg">
+              {books.length} {books.length === 1 ? "book" : "books"}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search books..."
+                className="pl-9 bg-secondary/50 border-transparent focus:bg-background transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={handleAddBookClick}
+              disabled={isProcessing}
+              className="gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95"
+            >
+              {isProcessing ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Add Book</span>
+            </Button>
+          </div>
+        </header>
 
         {/* Books Grid */}
-        {books.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-            {books.map((book) => (
+        {filteredBooks.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
+            {filteredBooks.map((book) => (
               <BookCard key={book.id} book={book} onDelete={handleDeleteBook} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <div className="text-gray-400 mb-4">
-              <svg
-                className="mx-auto h-24 w-24"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={1}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                />
-              </svg>
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="bg-secondary/50 p-6 rounded-full mb-6">
+              <LibraryIcon className="h-12 w-12 text-muted-foreground/50" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No books yet
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              {searchQuery ? "No books found" : "Your library is empty"}
             </h3>
-            <p className="text-gray-500">
-              Add your first EPUB book to get started
+            <p className="text-muted-foreground max-w-sm mx-auto mb-8">
+              {searchQuery
+                ? `No results for "${searchQuery}"`
+                : "Drag and drop an EPUB file here, or click the button above to add your first book."}
             </p>
+            {!searchQuery && (
+              <Button onClick={handleAddBookClick} variant="outline" className="gap-2">
+                <Upload className="h-4 w-4" />
+                Import EPUB
+              </Button>
+            )}
           </div>
         )}
       </div>
