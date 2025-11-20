@@ -9,12 +9,16 @@ interface HighlightToolbarProps {
   position: { x: number; y: number };
   onColorSelect: (color: HighlightColor) => void;
   onClose: () => void;
+  currentColor?: HighlightColor;
+  onDelete?: () => void;
 }
 
 export function HighlightToolbar({
   position,
   onColorSelect,
   onClose,
+  currentColor,
+  onDelete,
 }: HighlightToolbarProps) {
   // Calculate position directly to avoid layout thrashing/jumping
   const toolbarWidth = 160; // Reduced width
@@ -45,7 +49,11 @@ export function HighlightToolbar({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest(".highlight-toolbar")) {
+      // Check if click is inside the toolbar or on an existing highlight (for edit mode)
+      if (
+        !target.closest(".highlight-toolbar") &&
+        !target.closest(".epub-highlight")
+      ) {
         onClose();
       }
     };
@@ -61,6 +69,18 @@ export function HighlightToolbar({
     };
   }, [onClose]);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
       className="highlight-toolbar fixed z-50 flex items-center gap-2 p-2 rounded-full bg-white shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
@@ -72,14 +92,31 @@ export function HighlightToolbar({
       {HIGHLIGHT_COLORS.map((color) => (
         <button
           key={color.name}
-          onClick={() => onColorSelect(color.name)}
+          onClick={() => {
+            if (currentColor && color.name === currentColor && onDelete) {
+              onDelete();
+            } else {
+              onColorSelect(color.name);
+            }
+          }}
           className={cn(
             "w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
-            "border border-black/5 hover:border-black/10"
+            "border border-black/5 hover:border-black/10",
+            currentColor &&
+              color.name === currentColor &&
+              "ring-2 ring-offset-2 ring-gray-900"
           )}
           style={{ backgroundColor: color.hex }}
-          aria-label={`Highlight with ${color.name}`}
-          title={`Highlight with ${color.name}`}
+          aria-label={
+            currentColor && color.name === currentColor
+              ? "Delete highlight"
+              : `Highlight with ${color.name}`
+          }
+          title={
+            currentColor && color.name === currentColor
+              ? "Delete highlight"
+              : `Highlight with ${color.name}`
+          }
         />
       ))}
     </div>

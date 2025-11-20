@@ -1,4 +1,3 @@
-import { HighlightDeletePopover } from '@/components/HighlightDeletePopover';
 import { HighlightToolbar } from '@/components/HighlightToolbar';
 import { LoadingSpinner } from '@/components/Reader/LoadingSpinner';
 import { NavigationButtons } from '@/components/Reader/NavigationButtons';
@@ -224,7 +223,7 @@ export function Reader() {
       )}
 
       {deletePopoverPosition && activeHighlight && (
-        <HighlightDeletePopover
+        <HighlightToolbar
           position={deletePopoverPosition}
           currentColor={activeHighlight.color}
           onColorSelect={(color) =>
