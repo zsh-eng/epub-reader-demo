@@ -3,8 +3,6 @@ import {
   cleanupResourceUrls,
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
-import { applyHighlightsToDocument } from "@/lib/highlight-utils";
-import type { Highlight } from "@/types/highlight";
 import {
   useCallback,
   useEffect,
@@ -22,7 +20,6 @@ export function useChapterContent(
   book: Book | null,
   bookId: string | undefined,
   currentChapterIndex: number,
-  initialHighlights: Highlight[] = [],
 ): UseChapterContentReturn {
   const [chapterContent, setChapterContent] = useState<string>("");
   const resourceUrlsRef = useRef<Map<string, string>>(new Map());
@@ -72,19 +69,7 @@ export function useChapterContent(
         resourceUrlMap: resourceUrlsRef.current,
       });
 
-      // Apply initial highlights for the current chapter
-      // Only initial highlights are applied here during chapter load
-      // New highlights created by the user are applied directly to the live DOM
-      const currentSpineItemId = spineItem.idref;
-      const chapterHighlights = initialHighlights.filter(
-        (h) => h.spineItemId === currentSpineItemId,
-      );
-      const htmlWithHighlights = applyHighlightsToDocument(
-        doc,
-        chapterHighlights,
-      );
-
-      setChapterContent(htmlWithHighlights);
+      setChapterContent(doc.body.innerHTML);
 
       // Reset scroll position when chapter changes
       window.scrollTo({
@@ -95,7 +80,7 @@ export function useChapterContent(
       console.error("Error loading chapter:", error);
       setChapterContent("<p>Error loading chapter content.</p>");
     }
-  }, [book, bookId, currentChapterIndex, initialHighlights]);
+  }, [book, bookId, currentChapterIndex]);
 
   useEffect(() => {
     loadChapterContent();

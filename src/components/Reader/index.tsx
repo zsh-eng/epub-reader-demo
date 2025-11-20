@@ -73,28 +73,37 @@ export function Reader() {
     addHighlight,
     deleteHighlight,
     updateHighlight,
-    isLoading: areHighlightsLoading,
   } = useHighlights(bookId, currentSpineItemId);
-
-  // We only want to pass the initial highlights to useChapterContent to avoid re-rendering the whole chapter
-  // when we add/remove highlights (since we handle that via DOM manipulation).
-  const [initialChapterHighlights, setInitialChapterHighlights] = useState<
-    Highlight[]
-  >([]);
-
-  useEffect(() => {
-    if (!areHighlightsLoading) {
-      setInitialChapterHighlights(highlights);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [areHighlightsLoading]);
 
   const { chapterContent } = useChapterContent(
     book,
     bookId,
-    currentChapterIndex,
-    initialChapterHighlights
+    currentChapterIndex
   );
+
+  // Apply highlights to the live DOM whenever content or highlights change
+  useEffect(() => {
+    if (!contentRef.current || !book || !chapterContent) return;
+
+    const currentSpineItemId = book.spine[currentChapterIndex]?.idref;
+    if (!currentSpineItemId) return;
+
+    const chapterHighlights = highlights.filter(
+      (h) => h.spineItemId === currentSpineItemId
+    );
+
+    chapterHighlights.forEach((highlight) => {
+      // Check if highlight is already applied to avoid duplicates
+      if (
+        !contentRef.current?.querySelector(
+          `mark[data-highlight-id="${highlight.id}"]`
+        )
+      ) {
+        applyHighlightToLiveDOM(contentRef.current!, highlight);
+      }
+    });
+  }, [chapterContent, highlights, book, currentChapterIndex]);
+
 
   const handleHighlightCreate = useCallback(
     (highlight: Highlight) => {
