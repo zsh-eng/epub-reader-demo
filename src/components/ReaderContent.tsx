@@ -1,3 +1,4 @@
+import { type ReaderSettings } from '@/types/reader.types';
 import { forwardRef, useEffect } from 'react';
 
 interface ReaderContentProps {
@@ -9,13 +10,38 @@ interface ReaderContentProps {
     position: { x: number; y: number }
   ) => void;
   activeHighlightId?: string | null;
+  settings?: ReaderSettings;
 }
 
 const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
   (
-    { content, chapterIndex, title, onHighlightClick, activeHighlightId },
+    {
+      content,
+      chapterIndex,
+      title,
+      onHighlightClick,
+      activeHighlightId,
+      settings,
+    },
     ref
   ) => {
+    const fontStacks = {
+      serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+      'sans-serif':
+        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
+      monospace:
+        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    };
+
+    const style = settings
+      ? {
+          fontSize: `${settings.fontSize}%`,
+          lineHeight: settings.lineHeight,
+          fontFamily: fontStacks[settings.fontFamily],
+          textAlign: settings.textAlign,
+        }
+      : undefined;
+
     useEffect(() => {
       const contentElement = typeof ref === 'function' ? null : ref?.current;
       if (!contentElement) return;
@@ -111,7 +137,8 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       <div
         key={chapterIndex}
         ref={ref}
-        className='reader-content max-w-[80ch] mx-auto px-6 py-12 sm:px-8 sm:py-16 md:px-12 md:py-20'
+        className='reader-content max-w-[80ch] mx-auto px-6 py-12 sm:px-8 sm:py-16 md:px-12 md:py-20 transition-all duration-300 ease-in-out'
+        style={style}
       >
         <header className='mb-32 text-center select-none mt-12'>
           <div className='text-xs font-medium tracking-[0.25em] text-muted-foreground uppercase mb-4'>

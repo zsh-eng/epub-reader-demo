@@ -2,6 +2,7 @@ import { HighlightToolbar } from '@/components/HighlightToolbar';
 import { LoadingSpinner } from '@/components/Reader/LoadingSpinner';
 import { NavigationButtons } from '@/components/Reader/NavigationButtons';
 import { ReaderHeader } from '@/components/Reader/ReaderHeader';
+import { ReaderSettingsBar } from '@/components/Reader/ReaderSettingsBar';
 import { TableOfContents } from '@/components/Reader/TableOfContents';
 import ReaderContent from '@/components/ReaderContent';
 import { useBookLoader } from '@/hooks/use-book-loader';
@@ -9,6 +10,7 @@ import { useChapterContent } from '@/hooks/use-chapter-content';
 import { useChapterNavigation } from '@/hooks/use-chapter-navigation';
 import { useHighlights } from '@/hooks/use-highlights';
 import { useKeyboardNavigation } from '@/hooks/use-keyboard-navigation';
+import { useReaderSettings } from '@/hooks/use-reader-settings';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTextSelection } from '@/hooks/use-text-selection';
 import {
@@ -74,6 +76,11 @@ export function Reader() {
     deleteHighlight,
     updateHighlight,
   } = useHighlights(bookId, currentSpineItemId);
+
+  const {
+    settings,
+    updateSettings,
+  } = useReaderSettings();
 
   const { chapterContent } = useChapterContent(
     book,
@@ -232,7 +239,10 @@ export function Reader() {
         ref={contentRef}
         onHighlightClick={handleHighlightClick}
         activeHighlightId={activeHighlightId}
+        settings={settings}
       />
+
+      <ReaderSettingsBar settings={settings} onUpdateSettings={updateSettings} />
 
       {showHighlightToolbar && (
         <HighlightToolbar
