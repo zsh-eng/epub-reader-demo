@@ -113,16 +113,16 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         ref={ref}
         className='reader-content max-w-[80ch] mx-auto px-6 py-12 sm:px-8 sm:py-16 md:px-12 md:py-20'
       >
-        <header className='mb-20 text-center select-none'>
-          <div className='text-xs font-medium tracking-[0.25em] text-muted-foreground uppercase mb-6'>
+        <header className='mb-32 text-center select-none mt-12'>
+          <div className='text-xs font-medium tracking-[0.25em] text-muted-foreground uppercase mb-4'>
             Chapter {chapterIndex + 1}
           </div>
           {title && (
-            <h1 className='text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-foreground mb-10 tracking-tight text-balance leading-tight'>
+            <h1 className='text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-foreground tracking-tight text-balance leading-tight'>
               {title}
             </h1>
           )}
-          <hr className='w-16 border-t-2 border-muted-foreground/20 mx-auto' />
+          <hr className='w-16 border-t-2 border-muted-foreground/20 mx-auto mt-16' />
         </header>
         <div dangerouslySetInnerHTML={{ __html: content }} />
       </div>
