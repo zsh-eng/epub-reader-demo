@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
 import type { ReaderSettings } from '@/types/reader.types';
+import { useCallback, useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'epub-reader-settings';
 
@@ -15,10 +15,12 @@ export function useReaderSettings() {
   // Initialize state from localStorage or defaults
   const [settings, setSettings] = useState<ReaderSettings>(() => {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS;
-    
+
     try {
       const item = window.localStorage.getItem(STORAGE_KEY);
-      return item ? { ...DEFAULT_SETTINGS, ...JSON.parse(item) } : DEFAULT_SETTINGS;
+      return item
+        ? { ...DEFAULT_SETTINGS, ...JSON.parse(item) }
+        : DEFAULT_SETTINGS;
     } catch (error) {
       console.warn('Error reading settings from localStorage:', error);
       return DEFAULT_SETTINGS;
@@ -29,6 +31,17 @@ export function useReaderSettings() {
   useEffect(() => {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+
+      // Manually handle theme switching since we removed next-themes
+      const root = window.document.documentElement;
+      root.classList.remove(
+        'light',
+        'dark',
+        'sepia',
+        'flexoki-light',
+        'flexoki-dark'
+      );
+      root.classList.add(settings.theme);
     } catch (error) {
       console.warn('Error saving settings to localStorage:', error);
     }

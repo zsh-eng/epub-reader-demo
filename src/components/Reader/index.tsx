@@ -208,7 +208,7 @@ export function Reader() {
 
   // Render
   return (
-    <div className='flex flex-col bg-white min-h-screen'>
+    <div className='flex flex-col bg-background min-h-screen text-foreground'>
       <ReaderHeader
         book={book}
         currentChapterTitle={currentChapterTitle}

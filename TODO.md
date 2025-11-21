@@ -9,8 +9,8 @@
 ## Reader Settings (Appearance)
 
 - [x] **Reader Settings Hook**: Create `useReaderSettings` for preferences (font size, line height, theme, font family).
-- [ ] **Reader Settings UI**: Build a Popover component using shadcn UI components to adjust settings.
-- [ ] **Apply Settings**: Inject CSS variables into `ReaderContent` to apply the user's choices.
+- [x] **Reader Settings UI**: Build a Popover component using shadcn UI components to adjust settings (Theme toggle implemented).
+- [x] **Apply Settings**: Inject CSS variables into `ReaderContent` to apply the user's choices (Theme application implemented).
 
 ## Future / Sync
 

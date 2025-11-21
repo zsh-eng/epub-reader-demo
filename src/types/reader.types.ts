@@ -40,7 +40,7 @@ export interface ChapterInfo {
   hasPrevious: boolean;
 }
 
-export type ReaderTheme = 'light' | 'dark' | 'sepia';
+export type ReaderTheme = 'light' | 'dark' | 'sepia' | 'flexoki-light' | 'flexoki-dark';
 export type FontFamily = 'serif' | 'sans-serif' | 'monospace';
 
 export interface ReaderSettings {
