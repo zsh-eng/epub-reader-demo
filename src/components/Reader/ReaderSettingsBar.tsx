@@ -1,29 +1,17 @@
 import { Button } from '@/components/ui/button';
 import {
-    Popover,
-    PopoverAnchor,
-    PopoverContent,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
 } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useScrollVisibility } from '@/hooks/use-scroll-visibility';
 import { cn } from '@/lib/utils';
-import type {
-    FontFamily,
-    ReaderSettings,
-    ReaderTheme,
-} from '@/types/reader.types';
-import {
-    AlignJustify,
-    AlignLeft,
-    Check,
-    Minus,
-    MoveVertical,
-    Palette,
-    Plus,
-    Type,
-} from 'lucide-react';
+import type { ReaderSettings } from '@/types/reader.types';
+import { Minus, Palette, Plus, Type } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { ThemePanel } from './ReaderSettings/ThemePanel';
+import { TypographyPanel } from './ReaderSettings/TypographyPanel';
 
 interface ReaderSettingsBarProps {
   settings: ReaderSettings;
@@ -38,29 +26,7 @@ export function ReaderSettingsBar({
 }: ReaderSettingsBarProps) {
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const themes: { value: ReaderTheme; label: string; color: string }[] = [
-    { value: 'light', label: 'Light', color: 'bg-white border-gray-200' },
-    { value: 'sepia', label: 'Sepia', color: 'bg-[#f4ecd8] border-[#e6dbbf]' },
-    { value: 'dark', label: 'Dark', color: 'bg-gray-900 border-gray-800' },
-    {
-      value: 'flexoki-light',
-      label: 'Flexoki Light',
-      color: 'bg-[#fffcf0] border-[#cecdc3]',
-    },
-    {
-      value: 'flexoki-dark',
-      label: 'Flexoki Dark',
-      color: 'bg-[#100f0f] border-[#282726]',
-    },
-  ];
 
-  const fonts: { value: FontFamily; label: string }[] = [
-    { value: 'serif', label: 'Serif' },
-    { value: 'sans-serif', label: 'Sans' },
-    { value: 'monospace', label: 'Mono' },
-  ];
-
-  const lineHeights = [1.2, 1.5, 1.8, 2.0];
   const isVisible = useScrollVisibility();
 
   const handlePanelToggle = (panel: Panel) => {
@@ -160,123 +126,17 @@ export function ReaderSettingsBar({
           }}
         >
           {activePanel === 'theme' && (
-            <div className='space-y-4'>
-              <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
-                Theme
-              </h4>
-              <div className='grid grid-cols-5 gap-2'>
-                {themes.map((theme) => (
-                  <button
-                    key={theme.value}
-                    className={cn(
-                      'w-8 h-8 rounded-full border-2 transition-all focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
-                      theme.color,
-                      settings.theme === theme.value
-                        ? 'border-primary scale-110'
-                        : 'border-transparent hover:scale-105'
-                    )}
-                    onClick={() => onUpdateSettings({ theme: theme.value })}
-                    title={theme.label}
-                  >
-                    <span className='sr-only'>{theme.label}</span>
-                    {settings.theme === theme.value && (
-                      <Check
-                        className={cn(
-                          'h-4 w-4 mx-auto',
-                          theme.value.includes('dark')
-                            ? 'text-white'
-                            : 'text-black'
-                        )}
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <ThemePanel
+              settings={settings}
+              onUpdateSettings={onUpdateSettings}
+            />
           )}
 
           {activePanel === 'typography' && (
-            <div className='space-y-6'>
-              {/* Font Family */}
-              <div className='space-y-2'>
-                <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
-                  Font Family
-                </h4>
-                <ToggleGroup
-                  type='single'
-                  value={settings.fontFamily}
-                  onValueChange={(value) =>
-                    value &&
-                    onUpdateSettings({ fontFamily: value as FontFamily })
-                  }
-                  className='justify-start'
-                >
-                  {fonts.map((font) => (
-                    <ToggleGroupItem
-                      key={font.value}
-                      value={font.value}
-                      className='flex-1 text-xs'
-                    >
-                      {font.label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </div>
-
-              {/* Line Height */}
-              <div className='space-y-2'>
-                <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
-                  Line Height
-                </h4>
-                <div className='flex items-center gap-2'>
-                  <MoveVertical className='h-4 w-4 text-muted-foreground' />
-                  <ToggleGroup
-                    type='single'
-                    value={settings.lineHeight.toString()}
-                    onValueChange={(value) =>
-                      value &&
-                      onUpdateSettings({ lineHeight: parseFloat(value) })
-                    }
-                    className='flex-1'
-                  >
-                    {lineHeights.map((lh) => (
-                      <ToggleGroupItem
-                        key={lh}
-                        value={lh.toString()}
-                        className='flex-1 text-xs'
-                      >
-                        {lh}
-                      </ToggleGroupItem>
-                    ))}
-                  </ToggleGroup>
-                </div>
-              </div>
-
-              {/* Text Align */}
-              <div className='space-y-2'>
-                <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
-                  Alignment
-                </h4>
-                <ToggleGroup
-                  type='single'
-                  value={settings.textAlign}
-                  onValueChange={(value) =>
-                    value &&
-                    onUpdateSettings({ textAlign: value as 'left' | 'justify' })
-                  }
-                  className='justify-start'
-                >
-                  <ToggleGroupItem value='left' className='flex-1'>
-                    <AlignLeft className='h-4 w-4 mr-2' />
-                    Left
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value='justify' className='flex-1'>
-                    <AlignJustify className='h-4 w-4 mr-2' />
-                    Justify
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </div>
-            </div>
+            <TypographyPanel
+              settings={settings}
+              onUpdateSettings={onUpdateSettings}
+            />
           )}
         </PopoverContent>
       </Popover>
