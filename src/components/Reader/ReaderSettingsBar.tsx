@@ -1,30 +1,29 @@
 import { Button } from '@/components/ui/button';
 import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverAnchor,
+    PopoverContent,
 } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useScrollVisibility } from '@/hooks/use-scroll-visibility';
 import { cn } from '@/lib/utils';
 import type {
-  FontFamily,
-  ReaderSettings,
-  ReaderTheme,
+    FontFamily,
+    ReaderSettings,
+    ReaderTheme,
 } from '@/types/reader.types';
 import {
-  AlignJustify,
-  AlignLeft,
-  Check,
-  Minus,
-  MoveVertical,
-  Palette,
-  Plus,
-  Type,
+    AlignJustify,
+    AlignLeft,
+    Check,
+    Minus,
+    MoveVertical,
+    Palette,
+    Plus,
+    Type,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 interface ReaderSettingsBarProps {
   settings: ReaderSettings;
@@ -38,6 +37,7 @@ export function ReaderSettingsBar({
   onUpdateSettings,
 }: ReaderSettingsBarProps) {
   const [activePanel, setActivePanel] = useState<Panel>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const themes: { value: ReaderTheme; label: string; color: string }[] = [
     { value: 'light', label: 'Light', color: 'bg-white border-gray-200' },
     { value: 'sepia', label: 'Sepia', color: 'bg-[#f4ecd8] border-[#e6dbbf]' },
@@ -79,7 +79,10 @@ export function ReaderSettingsBar({
         onOpenChange={(open) => !open && setActivePanel(null)}
       >
         <PopoverAnchor>
-          <div className='flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95'>
+          <div
+            ref={menuRef}
+            className='flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95'
+          >
             {/* Font Size Controls */}
             <div className='flex items-center gap-1'>
               <Button
@@ -118,42 +121,43 @@ export function ReaderSettingsBar({
             <Separator orientation='vertical' className='h-6 mx-1' />
 
             {/* Theme Button */}
-            <PopoverTrigger asChild>
-              <Button
-                variant='ghost'
-                size='icon'
-                className={cn(
-                  'h-8 w-8 rounded-full',
-                  activePanel === 'theme' && 'bg-accent'
-                )}
-                onClick={() => handlePanelToggle('theme')}
-              >
-                <Palette className='h-4 w-4' />
-                <span className='sr-only'>Theme</span>
-              </Button>
-            </PopoverTrigger>
+            <Button
+              variant='ghost'
+              size='icon'
+              className={cn(
+                'h-8 w-8 rounded-full',
+                activePanel === 'theme' && 'bg-accent'
+              )}
+              onClick={() => handlePanelToggle('theme')}
+            >
+              <Palette className='h-4 w-4' />
+              <span className='sr-only'>Theme</span>
+            </Button>
 
             {/* Typography Button */}
-            <PopoverTrigger asChild>
-              <Button
-                variant='ghost'
-                size='icon'
-                className={cn(
-                  'h-8 w-8 rounded-full',
-                  activePanel === 'typography' && 'bg-accent'
-                )}
-                onClick={() => handlePanelToggle('typography')}
-              >
-                <Type className='h-4 w-4' />
-                <span className='sr-only'>Typography</span>
-              </Button>
-            </PopoverTrigger>
+            <Button
+              variant='ghost'
+              size='icon'
+              className={cn(
+                'h-8 w-8 rounded-full',
+                activePanel === 'typography' && 'bg-accent'
+              )}
+              onClick={() => handlePanelToggle('typography')}
+            >
+              <Type className='h-4 w-4' />
+              <span className='sr-only'>Typography</span>
+            </Button>
           </div>
         </PopoverAnchor>
 
         <PopoverContent
           className='w-72 p-4 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
           alignOffset={20}
+          onInteractOutside={(e) => {
+            if (menuRef.current && menuRef.current.contains(e.target as Node)) {
+              e.preventDefault();
+            }
+          }}
         >
           {activePanel === 'theme' && (
             <div className='space-y-4'>
