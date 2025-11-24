@@ -117,7 +117,7 @@ export function ReaderSettingsBar({
           </PopoverTrigger>
           <PopoverContent className='w-64 p-4 mb-2' sideOffset={10}>
             <div className='space-y-4'>
-              <h4 className='font-medium leading-none text-sm text-muted-foreground'>
+              <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
                 Theme
               </h4>
               <div className='grid grid-cols-5 gap-2'>
@@ -164,11 +164,11 @@ export function ReaderSettingsBar({
               <span className='sr-only'>Typography</span>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className='w-72 p-4 mb-2' sideOffset={10}>
+          <PopoverContent className='w-72 p-4 mb-2 rounded-xl' sideOffset={10}>
             <div className='space-y-6'>
               {/* Font Family */}
               <div className='space-y-2'>
-                <h4 className='font-medium leading-none text-sm text-muted-foreground'>
+                <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
                   Font Family
                 </h4>
                 <ToggleGroup
@@ -194,7 +194,7 @@ export function ReaderSettingsBar({
 
               {/* Line Height */}
               <div className='space-y-2'>
-                <h4 className='font-medium leading-none text-sm text-muted-foreground'>
+                <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
                   Line Height
                 </h4>
                 <div className='flex items-center gap-2'>
@@ -223,7 +223,7 @@ export function ReaderSettingsBar({
 
               {/* Text Align */}
               <div className='space-y-2'>
-                <h4 className='font-medium leading-none text-sm text-muted-foreground'>
+                <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
                   Alignment
                 </h4>
                 <ToggleGroup
