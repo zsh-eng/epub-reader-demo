@@ -115,7 +115,10 @@ export function ReaderSettingsBar({
               <span className='sr-only'>Theme</span>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className='w-64 p-4 mb-2' sideOffset={10}>
+          <PopoverContent
+            className='w-64 p-4 mb-2 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
+            sideOffset={10}
+          >
             <div className='space-y-4'>
               <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
                 Theme
@@ -164,7 +167,10 @@ export function ReaderSettingsBar({
               <span className='sr-only'>Typography</span>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className='w-72 p-4 mb-2 rounded-xl' sideOffset={10}>
+          <PopoverContent
+            className='w-72 p-4 mb-2 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
+            sideOffset={10}
+          >
             <div className='space-y-6'>
               {/* Font Family */}
               <div className='space-y-2'>
