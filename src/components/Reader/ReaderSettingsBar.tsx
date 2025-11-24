@@ -1,38 +1,43 @@
 import { Button } from '@/components/ui/button';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
 } from '@/components/ui/popover';
 import { Separator } from '@/components/ui/separator';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useScrollVisibility } from '@/hooks/use-scroll-visibility';
 import { cn } from '@/lib/utils';
 import type {
-    FontFamily,
-    ReaderSettings,
-    ReaderTheme,
+  FontFamily,
+  ReaderSettings,
+  ReaderTheme,
 } from '@/types/reader.types';
 import {
-    AlignJustify,
-    AlignLeft,
-    Check,
-    Minus,
-    MoveVertical,
-    Palette,
-    Plus,
-    Type,
+  AlignJustify,
+  AlignLeft,
+  Check,
+  Minus,
+  MoveVertical,
+  Palette,
+  Plus,
+  Type,
 } from 'lucide-react';
+import { useState } from 'react';
 
 interface ReaderSettingsBarProps {
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
 }
 
+type Panel = 'theme' | 'typography' | null;
+
 export function ReaderSettingsBar({
   settings,
   onUpdateSettings,
 }: ReaderSettingsBarProps) {
+  const [activePanel, setActivePanel] = useState<Panel>(null);
   const themes: { value: ReaderTheme; label: string; color: string }[] = [
     { value: 'light', label: 'Light', color: 'bg-white border-gray-200' },
     { value: 'sepia', label: 'Sepia', color: 'bg-[#f4ecd8] border-[#e6dbbf]' },
@@ -58,6 +63,10 @@ export function ReaderSettingsBar({
   const lineHeights = [1.2, 1.5, 1.8, 2.0];
   const isVisible = useScrollVisibility();
 
+  const handlePanelToggle = (panel: Panel) => {
+    setActivePanel(activePanel === panel ? null : panel);
+  };
+
   return (
     <div
       className={cn(
@@ -65,60 +74,88 @@ export function ReaderSettingsBar({
         isVisible ? 'translate-y-0' : 'translate-y-[150%]'
       )}
     >
-      <div className='flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95'>
-        {/* Font Size Controls */}
-        <div className='flex items-center gap-1'>
-          <Button
-            variant='ghost'
-            size='icon'
-            className='h-8 w-8 rounded-full'
-            onClick={() =>
-              onUpdateSettings({
-                fontSize: Math.max(50, settings.fontSize - 10),
-              })
-            }
-            disabled={settings.fontSize <= 50}
-          >
-            <Minus className='h-4 w-4' />
-            <span className='sr-only'>Decrease font size</span>
-          </Button>
-          <span className='text-xs font-medium w-8 text-center tabular-nums'>
-            {settings.fontSize}%
-          </span>
-          <Button
-            variant='ghost'
-            size='icon'
-            className='h-8 w-8 rounded-full'
-            onClick={() =>
-              onUpdateSettings({
-                fontSize: Math.min(200, settings.fontSize + 10),
-              })
-            }
-            disabled={settings.fontSize >= 200}
-          >
-            <Plus className='h-4 w-4' />
-            <span className='sr-only'>Increase font size</span>
-          </Button>
-        </div>
+      <Popover
+        open={activePanel !== null}
+        onOpenChange={(open) => !open && setActivePanel(null)}
+      >
+        <PopoverAnchor>
+          <div className='flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95'>
+            {/* Font Size Controls */}
+            <div className='flex items-center gap-1'>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='h-8 w-8 rounded-full'
+                onClick={() =>
+                  onUpdateSettings({
+                    fontSize: Math.max(50, settings.fontSize - 10),
+                  })
+                }
+                disabled={settings.fontSize <= 50}
+              >
+                <Minus className='h-4 w-4' />
+                <span className='sr-only'>Decrease font size</span>
+              </Button>
+              <span className='text-xs font-medium w-8 text-center tabular-nums'>
+                {settings.fontSize}%
+              </span>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='h-8 w-8 rounded-full'
+                onClick={() =>
+                  onUpdateSettings({
+                    fontSize: Math.min(200, settings.fontSize + 10),
+                  })
+                }
+                disabled={settings.fontSize >= 200}
+              >
+                <Plus className='h-4 w-4' />
+                <span className='sr-only'>Increase font size</span>
+              </Button>
+            </div>
 
-        <Separator orientation='vertical' className='h-6 mx-1' />
+            <Separator orientation='vertical' className='h-6 mx-1' />
 
-        {/* Theme Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant='ghost'
-              size='icon'
-              className='h-8 w-8 rounded-full'
-            >
-              <Palette className='h-4 w-4' />
-              <span className='sr-only'>Theme</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className='w-64 p-4 mb-2 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
-            sideOffset={10}
-          >
+            {/* Theme Button */}
+            <PopoverTrigger asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                className={cn(
+                  'h-8 w-8 rounded-full',
+                  activePanel === 'theme' && 'bg-accent'
+                )}
+                onClick={() => handlePanelToggle('theme')}
+              >
+                <Palette className='h-4 w-4' />
+                <span className='sr-only'>Theme</span>
+              </Button>
+            </PopoverTrigger>
+
+            {/* Typography Button */}
+            <PopoverTrigger asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                className={cn(
+                  'h-8 w-8 rounded-full',
+                  activePanel === 'typography' && 'bg-accent'
+                )}
+                onClick={() => handlePanelToggle('typography')}
+              >
+                <Type className='h-4 w-4' />
+                <span className='sr-only'>Typography</span>
+              </Button>
+            </PopoverTrigger>
+          </div>
+        </PopoverAnchor>
+
+        <PopoverContent
+          className='w-72 p-4 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
+          alignOffset={20}
+        >
+          {activePanel === 'theme' && (
             <div className='space-y-4'>
               <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
                 Theme
@@ -152,25 +189,9 @@ export function ReaderSettingsBar({
                 ))}
               </div>
             </div>
-          </PopoverContent>
-        </Popover>
+          )}
 
-        {/* Typography Popover */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant='ghost'
-              size='icon'
-              className='h-8 w-8 rounded-full'
-            >
-              <Type className='h-4 w-4' />
-              <span className='sr-only'>Typography</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            className='w-72 p-4 mb-2 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
-            sideOffset={10}
-          >
+          {activePanel === 'typography' && (
             <div className='space-y-6'>
               {/* Font Family */}
               <div className='space-y-2'>
@@ -252,9 +273,9 @@ export function ReaderSettingsBar({
                 </ToggleGroup>
               </div>
             </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+          )}
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
