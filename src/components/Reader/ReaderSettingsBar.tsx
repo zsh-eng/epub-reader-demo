@@ -37,7 +37,9 @@ export function ReaderSettingsBar({
     <div
       className={cn(
         'fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 pb-4',
-        isVisible ? 'translate-y-0' : 'translate-y-[150%]'
+        isVisible || activePanel !== null
+          ? 'translate-y-0'
+          : 'translate-y-[150%]'
       )}
     >
       <Popover
@@ -117,7 +119,7 @@ export function ReaderSettingsBar({
         </PopoverAnchor>
 
         <PopoverContent
-          className='w-72 p-4 rounded-2xl bg-background/80 backdrop-blur-md border shadow-lg'
+          className='w-96 p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg'
           alignOffset={20}
           onInteractOutside={(e) => {
             if (menuRef.current && menuRef.current.contains(e.target as Node)) {

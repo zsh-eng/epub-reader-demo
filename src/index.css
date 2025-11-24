@@ -1,9 +1,13 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Custom CSS for this reader app */
+  --text-tiny: 0.625rem;
+
+  /* Shadcn theme */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -125,48 +129,48 @@
 }
 
 .flexoki-light {
-  --background: #FFFCF0;
-  --foreground: #100F0F;
-  --card: #FFFCF0;
-  --card-foreground: #100F0F;
-  --popover: #FFFCF0;
-  --popover-foreground: #100F0F;
-  --primary: #100F0F;
-  --primary-foreground: #FFFCF0;
-  --secondary: #F2F0E5;
-  --secondary-foreground: #100F0F;
-  --muted: #F2F0E5;
-  --muted-foreground: #6F6E69;
-  --accent: #F2F0E5;
-  --accent-foreground: #100F0F;
-  --destructive: #AF3029;
-  --destructive-foreground: #FFFCF0;
-  --border: #E6E4D9;
-  --input: #E6E4D9;
-  --ring: #DAD8CE;
+  --background: #fffcf0;
+  --foreground: #100f0f;
+  --card: #fffcf0;
+  --card-foreground: #100f0f;
+  --popover: #fffcf0;
+  --popover-foreground: #100f0f;
+  --primary: #100f0f;
+  --primary-foreground: #fffcf0;
+  --secondary: #f2f0e5;
+  --secondary-foreground: #100f0f;
+  --muted: #f2f0e5;
+  --muted-foreground: #6f6e69;
+  --accent: #f2f0e5;
+  --accent-foreground: #100f0f;
+  --destructive: #af3029;
+  --destructive-foreground: #fffcf0;
+  --border: #e6e4d9;
+  --input: #e6e4d9;
+  --ring: #dad8ce;
 }
 
 .flexoki-dark {
-  --background: #100F0F;
-  --foreground: #CECDC3;
-  --card: #100F0F;
-  --card-foreground: #CECDC3;
-  --popover: #100F0F;
-  --popover-foreground: #CECDC3;
-  --primary: #CECDC3;
-  --primary-foreground: #100F0F;
-  --secondary: #1C1B1A;
-  --secondary-foreground: #CECDC3;
-  --muted: #1C1B1A;
+  --background: #100f0f;
+  --foreground: #cecdc3;
+  --card: #100f0f;
+  --card-foreground: #cecdc3;
+  --popover: #100f0f;
+  --popover-foreground: #cecdc3;
+  --primary: #cecdc3;
+  --primary-foreground: #100f0f;
+  --secondary: #1c1b1a;
+  --secondary-foreground: #cecdc3;
+  --muted: #1c1b1a;
   --muted-foreground: #878580;
-  --accent: #1C1B1A;
-  --accent-foreground: #CECDC3;
-  --destructive: #D14D41;
-  --destructive-foreground: #100F0F;
+  --accent: #1c1b1a;
+  --accent-foreground: #cecdc3;
+  --destructive: #d14d41;
+  --destructive-foreground: #100f0f;
   --border: #282726;
   --input: #282726;
   --ring: #343331;
-  
+
   /* Inherit dark mode values for charts and sidebar */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);

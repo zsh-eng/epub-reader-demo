@@ -23,7 +23,7 @@ export function TypographyPanel({
     <div className='space-y-6'>
       {/* Font Family */}
       <div className='space-y-2'>
-        <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
+        <h4 className='text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
           Font Family
         </h4>
         <ToggleGroup
@@ -48,7 +48,7 @@ export function TypographyPanel({
 
       {/* Line Height */}
       <div className='space-y-2'>
-        <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
+        <h4 className='text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
           Line Height
         </h4>
         <div className='flex items-center gap-2'>
@@ -76,7 +76,7 @@ export function TypographyPanel({
 
       {/* Text Align */}
       <div className='space-y-2'>
-        <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
+        <h4 className='text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
           Alignment
         </h4>
         <ToggleGroup
@@ -88,11 +88,11 @@ export function TypographyPanel({
           }
           className='justify-start'
         >
-          <ToggleGroupItem value='left' className='flex-1'>
+          <ToggleGroupItem value='left' className='flex-1 text-xs'>
             <AlignLeft className='h-4 w-4 mr-2' />
             Left
           </ToggleGroupItem>
-          <ToggleGroupItem value='justify' className='flex-1'>
+          <ToggleGroupItem value='justify' className='flex-1 text-xs'>
             <AlignJustify className='h-4 w-4 mr-2' />
             Justify
           </ToggleGroupItem>

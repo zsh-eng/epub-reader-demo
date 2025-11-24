@@ -26,7 +26,7 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
 
   return (
     <div className='space-y-4'>
-      <h4 className='text-muted-foreground text-xs font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
+      <h4 className='text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80'>
         Theme
       </h4>
       <div className='grid grid-cols-5 gap-2'>
