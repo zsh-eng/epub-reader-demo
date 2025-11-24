@@ -1,10 +1,10 @@
 import { HighlightToolbar } from '@/components/HighlightToolbar';
 import { LoadingSpinner } from '@/components/Reader/LoadingSpinner';
 import { NavigationButtons } from '@/components/Reader/NavigationButtons';
-import { ReaderHeader } from '@/components/Reader/ReaderHeader';
 import { ReaderSettingsBar } from '@/components/Reader/ReaderSettingsBar';
 import { TableOfContents } from '@/components/Reader/TableOfContents';
 import ReaderContent from '@/components/ReaderContent';
+import { Button } from '@/components/ui/button';
 import { useBookLoader } from '@/hooks/use-book-loader';
 import { useChapterContent } from '@/hooks/use-chapter-content';
 import { useChapterNavigation } from '@/hooks/use-chapter-navigation';
@@ -14,15 +14,16 @@ import { useReaderSettings } from '@/hooks/use-reader-settings';
 import { useReadingProgress } from '@/hooks/use-reading-progress';
 import { useTextSelection } from '@/hooks/use-text-selection';
 import {
-    HIGHLIGHT_COLORS,
-    type HighlightColor,
+  HIGHLIGHT_COLORS,
+  type HighlightColor,
 } from '@/lib/highlight-constants';
 import {
-    applyHighlightToLiveDOM,
-    removeHighlightFromLiveDOM,
+  applyHighlightToLiveDOM,
+  removeHighlightFromLiveDOM,
 } from '@/lib/highlight-utils';
 import { getChapterTitleFromSpine } from '@/lib/toc-utils';
 import type { Highlight } from '@/types/highlight';
+import { ArrowLeft } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -70,17 +71,10 @@ export function Reader() {
   // Get current spine item ID
   const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
 
-  const {
-    highlights,
-    addHighlight,
-    deleteHighlight,
-    updateHighlight,
-  } = useHighlights(bookId, currentSpineItemId);
+  const { highlights, addHighlight, deleteHighlight, updateHighlight } =
+    useHighlights(bookId, currentSpineItemId);
 
-  const {
-    settings,
-    updateSettings,
-  } = useReaderSettings();
+  const { settings, updateSettings } = useReaderSettings();
 
   const { chapterContent } = useChapterContent(
     book,
@@ -110,7 +104,6 @@ export function Reader() {
       }
     });
   }, [chapterContent, highlights, book, currentChapterIndex]);
-
 
   const handleHighlightCreate = useCallback(
     (highlight: Highlight) => {
@@ -216,14 +209,15 @@ export function Reader() {
   // Render
   return (
     <div className='flex flex-col bg-background min-h-screen text-foreground'>
-      <ReaderHeader
-        book={book}
-        currentChapterTitle={currentChapterTitle}
-        currentChapterIndex={currentChapterIndex}
-        totalChapters={book.spine.length}
-        onToggleTOC={() => setIsTOCOpen(true)}
-        onBackToLibrary={() => navigate('/')}
-      />
+      <Button
+        variant='ghost'
+        size='icon'
+        onClick={() => navigate('/')}
+        aria-label='Back to library'
+        className='top-6 left-4 sticky'
+      >
+        <ArrowLeft className='h-5 w-5' />
+      </Button>
 
       <TableOfContents
         toc={book.toc}
@@ -242,7 +236,10 @@ export function Reader() {
         settings={settings}
       />
 
-      <ReaderSettingsBar settings={settings} onUpdateSettings={updateSettings} />
+      <ReaderSettingsBar
+        settings={settings}
+        onUpdateSettings={updateSettings}
+      />
 
       {showHighlightToolbar && (
         <HighlightToolbar
