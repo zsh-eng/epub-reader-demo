@@ -6,7 +6,7 @@ const STORAGE_KEY = 'epub-reader-settings';
 const DEFAULT_SETTINGS: ReaderSettings = {
   fontSize: 100,
   lineHeight: 1.5,
-  fontFamily: 'serif',
+  fontFamily: 'lora',
   theme: 'light',
   textAlign: 'left',
 };

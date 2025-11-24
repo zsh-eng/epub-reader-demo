@@ -31,6 +31,10 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
       monospace:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      lora: '"Lora", serif',
+      iowan: '"Iowan Old Style", "Sitka Text", Palatino, "Book Antiqua", serif',
+      garamond: '"EB Garamond", "Garamond", serif',
+      inter: '"Inter", sans-serif',
     };
 
     const style = settings

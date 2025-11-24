@@ -41,7 +41,7 @@ export interface ChapterInfo {
 }
 
 export type ReaderTheme = 'light' | 'dark' | 'sepia' | 'flexoki-light' | 'flexoki-dark';
-export type FontFamily = 'serif' | 'sans-serif' | 'monospace';
+export type FontFamily = 'serif' | 'sans-serif' | 'monospace' | 'lora' | 'iowan' | 'garamond' | 'inter';
 
 export interface ReaderSettings {
   fontSize: number; // percentage, e.g. 100
