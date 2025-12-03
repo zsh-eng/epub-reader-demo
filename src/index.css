@@ -43,6 +43,24 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+
+    /* Colours for highlights */
+    --color-red-primary: var(--red-primary);
+    --color-red-secondary: var(--red-secondary);
+    --color-orange-primary: var(--orange-primary);
+    --color-orange-secondary: var(--orange-secondary);
+    --color-yellow-primary: var(--yellow-primary);
+    --color-yellow-secondary: var(--yellow-secondary);
+    --color-green-primary: var(--green-primary);
+    --color-green-secondary: var(--green-secondary);
+    --color-cyan-primary: var(--cyan-primary);
+    --color-cyan-secondary: var(--cyan-secondary);
+    --color-blue-primary: var(--blue-primary);
+    --color-blue-secondary: var(--blue-secondary);
+    --color-purple-primary: var(--purple-primary);
+    --color-purple-secondary: var(--purple-secondary);
+    --color-magenta-primary: var(--magenta-primary);
+    --color-magenta-secondary: var(--magenta-secondary);
 }
 
 :root {
@@ -129,60 +147,80 @@
 }
 
 .flexoki-light {
-    --background: #fffcf0;
-    --foreground: #100f0f;
-    --card: #fffcf0;
-    --card-foreground: #100f0f;
-    --popover: #fffcf0;
-    --popover-foreground: #100f0f;
-    --primary: #100f0f;
-    --primary-foreground: #fffcf0;
-    --secondary: #f2f0e5;
-    --secondary-foreground: #100f0f;
-    --muted: #f2f0e5;
-    --muted-foreground: #6f6e69;
-    --accent: #f2f0e5;
-    --accent-foreground: #100f0f;
-    --destructive: #af3029;
-    --destructive-foreground: #fffcf0;
-    --border: #e6e4d9;
-    --input: #e6e4d9;
-    --ring: #dad8ce;
+    --background: hsl(48 100% 97%);
+    --foreground: hsl(0 3% 6%);
+    --card: hsl(48 100% 97%);
+    --card-foreground: hsl(0 3% 6%);
+    --popover: hsl(48 100% 97%);
+    --popover-foreground: hsl(0 3% 6%);
+    --primary: hsl(0 3% 6%);
+    --primary-foreground: hsl(48 100% 97%);
+    --secondary: hsl(51 33% 92%);
+    --secondary-foreground: hsl(0 3% 6%);
+    --muted: hsl(51 33% 92%);
+    --muted-foreground: hsl(50 3% 42%);
+    --accent: hsl(51 33% 92%);
+    --accent-foreground: hsl(0 3% 6%);
+    --destructive: hsl(3 62% 42%);
+    --destructive-foreground: hsl(48 100% 97%);
+    --border: hsl(51 21% 88%);
+    --input: hsl(51 21% 88%);
+    --ring: hsl(55 10% 79%);
+    --radius: 0.5rem;
+
+    --red-primary: hsl(3 62% 42%);
+    --red-secondary: hsl(5 61% 54%);
+    --orange-primary: hsl(22 80% 41%);
+    --orange-secondary: hsl(23 70% 51%);
+    --yellow-primary: hsl(45 99% 34%);
+    --yellow-secondary: hsl(45 82% 45%);
+    --green-primary: hsl(73 84% 27%);
+    --green-secondary: hsl(72 46% 41%);
+    --cyan-primary: hsl(175 57% 33%);
+    --cyan-secondary: hsl(175 49% 45%);
+    --blue-primary: hsl(212 68% 39%);
+    --blue-secondary: hsl(208 49% 50%);
+    --purple-primary: hsl(259 42% 43%);
+    --purple-secondary: hsl(251 40% 64%);
+    --magenta-primary: hsl(326 55% 41%);
+    --magenta-secondary: hsl(329 54% 59%);
 }
 
 .flexoki-dark {
-    --background: #100f0f;
-    --foreground: #cecdc3;
-    --card: #100f0f;
-    --card-foreground: #cecdc3;
-    --popover: #100f0f;
-    --popover-foreground: #cecdc3;
-    --primary: #cecdc3;
-    --primary-foreground: #100f0f;
-    --secondary: #1c1b1a;
-    --secondary-foreground: #cecdc3;
-    --muted: #1c1b1a;
-    --muted-foreground: #878580;
-    --accent: #1c1b1a;
-    --accent-foreground: #cecdc3;
-    --destructive: #d14d41;
-    --destructive-foreground: #100f0f;
-    --border: #282726;
-    --input: #282726;
-    --ring: #343331;
+    --background: hsl(0 3% 6%);
+    --foreground: hsl(55 10% 79%);
+    --card: hsl(0 3% 6%);
+    --card-foreground: hsl(55 10% 79%);
+    --popover: hsl(0 3% 6%);
+    --popover-foreground: hsl(55 10% 79%);
+    --primary: hsl(55 10% 79%);
+    --primary-foreground: hsl(0 3% 6%);
+    --secondary: hsl(30 4% 11%);
+    --secondary-foreground: hsl(55 10% 79%);
+    --muted: hsl(30 4% 11%);
+    --muted-foreground: hsl(43 3% 52%);
+    --accent: hsl(30 4% 11%);
+    --accent-foreground: hsl(55 10% 79%);
+    --destructive: hsl(5 61% 54%);
+    --destructive-foreground: hsl(0 3% 6%);
+    --border: hsl(30 3% 15%);
+    --input: hsl(30 3% 15%);
+    --ring: hsl(30 3% 24%);
 
-    /* Inherit dark mode values for charts and sidebar */
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --red-primary: hsl(5 61% 54%);
+    --red-secondary: hsl(3 62% 42%);
+    --orange-primary: hsl(23 70% 51%);
+    --orange-secondary: hsl(22 80% 41%);
+    --yellow-primary: hsl(45 82% 45%);
+    --yellow-secondary: hsl(45 99% 34%);
+    --green-primary: hsl(72 46% 41%);
+    --green-secondary: hsl(73 84% 27%);
+    --cyan-primary: hsl(175 49% 45%);
+    --cyan-secondary: hsl(175 57% 33%);
+    --blue-primary: hsl(208 49% 50%);
+    --blue-secondary: hsl(212 68% 39%);
+    --purple-primary: hsl(251 40% 64%);
+    --purple-secondary: hsl(259 42% 43%);
+    --magenta-primary: hsl(329 54% 59%);
+    --magenta-secondary: hsl(326 55% 41%);
 }
