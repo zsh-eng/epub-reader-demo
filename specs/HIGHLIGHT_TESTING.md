@@ -7,7 +7,7 @@ We've implemented the basic highlight functionality for the EPUB reader. Here's 
 ### Components Created
 
 1. **`src/lib/highlight-constants.ts`**
-   - Defines the 4 highlight colors: yellow, green, blue, and pink
+   - Defines the 4 highlight colors: yellow, green, blue, and magenta
    - Exports color definitions with both rgba and hex values
 
 2. **`src/lib/highlight-utils.ts`**
@@ -45,7 +45,7 @@ We've implemented the basic highlight functionality for the EPUB reader. Here's 
 3. **Select Text**
    - Click and drag to select any text in the chapter
    - A floating toolbar should appear above your selection
-   - The toolbar contains 4 colored circles (yellow, green, blue, pink)
+   - The toolbar contains 4 colored circles (yellow, green, blue, magenta)
 
 4. **Create a Highlight**
    - Click on any color circle

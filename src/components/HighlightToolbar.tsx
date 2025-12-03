@@ -104,9 +104,9 @@ export function HighlightToolbar({
             "border border-black/5 hover:border-black/10",
             currentColor &&
               color.name === currentColor &&
-              "ring-2 ring-offset-2 ring-gray-900"
+              "ring-2 ring-offset-2 ring-gray-900",
           )}
-          style={{ backgroundColor: color.hex }}
+          style={{ backgroundColor: `var(--${color.name}-secondary)` }}
           aria-label={
             currentColor && color.name === currentColor
               ? "Delete highlight"

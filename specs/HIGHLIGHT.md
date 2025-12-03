@@ -60,7 +60,7 @@ interface Highlight {
   textAfter: string;             // ~50 chars after highlight (for context)
 
   // Styling
-  color: 'yellow' | 'green' | 'blue' | 'pink';  // Predefined color names
+  color: 'yellow' | 'green' | 'blue' | 'magenta';  // Predefined color names
 
   // Optional annotation
   note?: string;                 // User's notes on this highlight
@@ -455,7 +455,7 @@ function verifyRangeText(range: Range, expectedText: string): boolean {
   background-color: rgba(33, 150, 243, 0.35);
 }
 
-.epub-highlight[data-color="pink"] {
+.epub-highlight[data-color="magenta"] {
   background-color: rgba(233, 30, 99, 0.35);
 }
 ```
