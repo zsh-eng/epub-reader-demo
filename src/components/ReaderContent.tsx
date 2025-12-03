@@ -1,5 +1,5 @@
-import { type ReaderSettings } from '@/types/reader.types';
-import { forwardRef, useEffect } from 'react';
+import { type ReaderSettings } from "@/types/reader.types";
+import { forwardRef, useEffect } from "react";
 
 interface ReaderContentProps {
   content: string;
@@ -7,7 +7,7 @@ interface ReaderContentProps {
   title?: string;
   onHighlightClick?: (
     highlightId: string,
-    position: { x: number; y: number }
+    position: { x: number; y: number },
   ) => void;
   activeHighlightId?: string | null;
   settings?: ReaderSettings;
@@ -23,11 +23,11 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       activeHighlightId,
       settings,
     },
-    ref
+    ref,
   ) => {
     const fontStacks = {
       serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-      'sans-serif':
+      "sans-serif":
         'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
       monospace:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
@@ -47,19 +47,19 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       : undefined;
 
     useEffect(() => {
-      const contentElement = typeof ref === 'function' ? null : ref?.current;
+      const contentElement = typeof ref === "function" ? null : ref?.current;
       if (!contentElement) return;
 
       const handleMouseEnter = (event: Event) => {
         const target = event.target as HTMLElement;
-        if (target.classList.contains('epub-highlight')) {
-          const highlightId = target.getAttribute('data-highlight-id');
+        if (target.classList.contains("epub-highlight")) {
+          const highlightId = target.getAttribute("data-highlight-id");
           if (highlightId) {
             const relatedHighlights = contentElement.querySelectorAll(
-              `[data-highlight-id="${highlightId}"]`
+              `[data-highlight-id="${highlightId}"]`,
             );
             relatedHighlights.forEach((el) => {
-              el.classList.add('epub-highlight-group-hover');
+              el.classList.add("epub-highlight-group-hover");
             });
           }
         }
@@ -67,14 +67,14 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
 
       const handleMouseLeave = (event: Event) => {
         const target = event.target as HTMLElement;
-        if (target.classList.contains('epub-highlight')) {
-          const highlightId = target.getAttribute('data-highlight-id');
+        if (target.classList.contains("epub-highlight")) {
+          const highlightId = target.getAttribute("data-highlight-id");
           if (highlightId) {
             const relatedHighlights = contentElement.querySelectorAll(
-              `[data-highlight-id="${highlightId}"]`
+              `[data-highlight-id="${highlightId}"]`,
             );
             relatedHighlights.forEach((el) => {
-              el.classList.remove('epub-highlight-group-hover');
+              el.classList.remove("epub-highlight-group-hover");
             });
           }
         }
@@ -82,8 +82,8 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
 
       const handleClick = (event: Event) => {
         const target = event.target as HTMLElement;
-        if (target.classList.contains('epub-highlight')) {
-          const highlightId = target.getAttribute('data-highlight-id');
+        if (target.classList.contains("epub-highlight")) {
+          const highlightId = target.getAttribute("data-highlight-id");
           if (highlightId && onHighlightClick) {
             // Get position of the clicked highlight element
             const rect = target.getBoundingClientRect();
@@ -96,43 +96,43 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         }
       };
 
-      contentElement.addEventListener('mouseenter', handleMouseEnter, true);
-      contentElement.addEventListener('mouseleave', handleMouseLeave, true);
-      contentElement.addEventListener('click', handleClick, true);
+      contentElement.addEventListener("mouseenter", handleMouseEnter, true);
+      contentElement.addEventListener("mouseleave", handleMouseLeave, true);
+      contentElement.addEventListener("click", handleClick, true);
 
       return () => {
         contentElement.removeEventListener(
-          'mouseenter',
+          "mouseenter",
           handleMouseEnter,
-          true
+          true,
         );
         contentElement.removeEventListener(
-          'mouseleave',
+          "mouseleave",
           handleMouseLeave,
-          true
+          true,
         );
-        contentElement.removeEventListener('click', handleClick, true);
+        contentElement.removeEventListener("click", handleClick, true);
       };
     }, [ref, content, onHighlightClick]);
 
     // Update active highlight class when activeHighlightId changes
     useEffect(() => {
-      const contentElement = typeof ref === 'function' ? null : ref?.current;
+      const contentElement = typeof ref === "function" ? null : ref?.current;
       if (!contentElement) return;
 
       // Remove active class from all highlights
-      const allHighlights = contentElement.querySelectorAll('.epub-highlight');
+      const allHighlights = contentElement.querySelectorAll(".epub-highlight");
       allHighlights.forEach((el) => {
-        el.classList.remove('epub-highlight-active');
+        el.classList.remove("epub-highlight-active");
       });
 
       // Add active class to the selected highlight
       if (activeHighlightId) {
         const activeHighlights = contentElement.querySelectorAll(
-          `[data-highlight-id="${activeHighlightId}"]`
+          `[data-highlight-id="${activeHighlightId}"]`,
         );
         activeHighlights.forEach((el) => {
-          el.classList.add('epub-highlight-active');
+          el.classList.add("epub-highlight-active");
         });
       }
     }, [ref, activeHighlightId, content]);
@@ -141,26 +141,26 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       <div
         key={chapterIndex}
         ref={ref}
-        className='reader-content max-w-[80ch] mx-auto px-6 py-12 sm:px-8 sm:py-16 md:px-12 md:py-20 transition-all duration-300 ease-in-out'
+        className="reader-content max-w-3xl mx-auto px-6 py-12 sm:px-8 sm:py-16 md:px-12 md:py-20 transition-all duration-300 ease-in-out"
         style={style}
       >
-        <header className='mb-32 text-center select-none mt-12'>
-          <div className='text-xs font-medium tracking-[0.25em] text-muted-foreground uppercase mb-4'>
+        <header className="mb-32 text-center select-none mt-12">
+          <div className="text-xs font-medium tracking-[0.25em] text-muted-foreground uppercase mb-4">
             Chapter {chapterIndex + 1}
           </div>
           {title && (
-            <h1 className='text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-foreground tracking-tight text-balance leading-tight'>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-foreground tracking-tight text-balance leading-tight">
               {title}
             </h1>
           )}
-          <hr className='w-16 border-t-2 border-muted-foreground/20 mx-auto mt-16' />
+          <hr className="w-16 border-t-2 border-muted-foreground/20 mx-auto mt-16" />
         </header>
         <div dangerouslySetInnerHTML={{ __html: content }} />
       </div>
     );
-  }
+  },
 );
 
-ReaderContent.displayName = 'ReaderContent';
+ReaderContent.displayName = "ReaderContent";
 
 export default ReaderContent;
