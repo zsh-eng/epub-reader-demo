@@ -13,10 +13,7 @@ import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useReadingProgress } from "@/hooks/use-reading-progress";
 import { useTextSelection } from "@/hooks/use-text-selection";
-import {
-  HIGHLIGHT_COLORS,
-  type HighlightColor,
-} from "@/lib/highlight-constants";
+import { type HighlightColor } from "@/lib/highlight-constants";
 import {
   applyHighlightToLiveDOM,
   removeHighlightFromLiveDOM,
@@ -82,7 +79,9 @@ export function Reader() {
     currentChapterIndex,
   );
 
-  // Apply highlights to the live DOM whenever content or highlights change
+  // Sync highlights to the live DOM whenever content or highlights change.
+  // This is the single source of truth for highlight DOM state - all highlight
+  // appearance updates (new highlights, color changes, etc.) flow through here.
   useEffect(() => {
     if (!contentRef.current || !book || !chapterContent) return;
 
@@ -94,14 +93,32 @@ export function Reader() {
     );
 
     chapterHighlights.forEach((highlight) => {
-      // Check if highlight is already applied to avoid duplicates
-      if (
-        !contentRef.current?.querySelector(
-          `mark[data-highlight-id="${highlight.id}"]`,
-        )
-      ) {
+      const existingMark = contentRef.current?.querySelector(
+        `mark[data-highlight-id="${highlight.id}"]`,
+      );
+      if (!existingMark) {
+        // New highlight - apply it to the DOM
         applyHighlightToLiveDOM(contentRef.current!, highlight);
+        return;
       }
+
+      if (!(existingMark instanceof HTMLElement)) {
+        return;
+      }
+
+      if (existingMark.dataset.color === highlight.color) {
+        return;
+      }
+
+      // Existing highlight - sync the color in case it changed
+      const allMarkElementsForId = contentRef.current!.querySelectorAll(
+        `mark[data-highlight-id="${highlight.id}"]`,
+      );
+      allMarkElementsForId.forEach((mark) => {
+        if (mark instanceof HTMLElement) {
+          mark.dataset.color = highlight.color;
+        }
+      });
     });
   }, [chapterContent, highlights, book, currentChapterIndex]);
 
@@ -130,21 +147,7 @@ export function Reader() {
 
   const handleHighlightUpdate = useCallback(
     (highlightId: string, newColorName: HighlightColor) => {
-      const newColor = HIGHLIGHT_COLORS.find((c) => c.name === newColorName);
-      if (!newColor) return;
-
       updateHighlight(highlightId, { color: newColorName });
-
-      if (contentRef.current) {
-        const marks = contentRef.current.querySelectorAll(
-          `mark[data-highlight-id="${highlightId}"]`,
-        );
-        marks.forEach((mark) => {
-          if (mark instanceof HTMLElement) {
-            mark.style.backgroundColor = newColor.hex;
-          }
-        });
-      }
     },
     [updateHighlight],
   );
