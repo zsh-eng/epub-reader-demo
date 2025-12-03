@@ -204,17 +204,17 @@
 
 /* Predefined colors */
 .epub-highlight[data-color="yellow"] {
-    background-color: rgba(255, 235, 59, 1);
+    background-color: var(--yellow-secondary);
 }
 
 .epub-highlight[data-color="green"] {
-    background-color: rgba(76, 175, 80, 0.35);
+    background-color: var(--green-secondary);
 }
 
 .epub-highlight[data-color="blue"] {
-    background-color: rgba(33, 150, 243, 0.35);
+    background-color: var(--blue-secondary);
 }
 
-.epub-highlight[data-color="pink"] {
-    background-color: rgba(233, 30, 99, 0.35);
+.epub-highlight[data-color="magenta"] {
+    background-color: var(--magenta-secondary);
 }
