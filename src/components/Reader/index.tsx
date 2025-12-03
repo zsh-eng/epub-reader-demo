@@ -1,31 +1,31 @@
-import { HighlightToolbar } from '@/components/HighlightToolbar';
-import { LoadingSpinner } from '@/components/Reader/LoadingSpinner';
-import { NavigationButtons } from '@/components/Reader/NavigationButtons';
-import { ReaderSettingsBar } from '@/components/Reader/ReaderSettingsBar';
-import { TableOfContents } from '@/components/Reader/TableOfContents';
-import ReaderContent from '@/components/ReaderContent';
-import { Button } from '@/components/ui/button';
-import { useBookLoader } from '@/hooks/use-book-loader';
-import { useChapterContent } from '@/hooks/use-chapter-content';
-import { useChapterNavigation } from '@/hooks/use-chapter-navigation';
-import { useHighlights } from '@/hooks/use-highlights';
-import { useKeyboardNavigation } from '@/hooks/use-keyboard-navigation';
-import { useReaderSettings } from '@/hooks/use-reader-settings';
-import { useReadingProgress } from '@/hooks/use-reading-progress';
-import { useTextSelection } from '@/hooks/use-text-selection';
+import { HighlightToolbar } from "@/components/HighlightToolbar";
+import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
+import { NavigationButtons } from "@/components/Reader/NavigationButtons";
+import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
+import { TableOfContents } from "@/components/Reader/TableOfContents";
+import ReaderContent from "@/components/ReaderContent";
+import { Button } from "@/components/ui/button";
+import { useBookLoader } from "@/hooks/use-book-loader";
+import { useChapterContent } from "@/hooks/use-chapter-content";
+import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
+import { useHighlights } from "@/hooks/use-highlights";
+import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
+import { useReaderSettings } from "@/hooks/use-reader-settings";
+import { useReadingProgress } from "@/hooks/use-reading-progress";
+import { useTextSelection } from "@/hooks/use-text-selection";
 import {
   HIGHLIGHT_COLORS,
   type HighlightColor,
-} from '@/lib/highlight-constants';
+} from "@/lib/highlight-constants";
 import {
   applyHighlightToLiveDOM,
   removeHighlightFromLiveDOM,
-} from '@/lib/highlight-utils';
-import { getChapterTitleFromSpine } from '@/lib/toc-utils';
-import type { Highlight } from '@/types/highlight';
-import { ArrowLeft } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+} from "@/lib/highlight-utils";
+import { getChapterTitleFromSpine } from "@/lib/toc-utils";
+import type { Highlight } from "@/types/highlight";
+import { ArrowLeft } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 /**
  * Reader Component
@@ -52,7 +52,7 @@ export function Reader() {
 
   // Highlight delete popover state
   const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
-    null
+    null,
   );
   const [deletePopoverPosition, setDeletePopoverPosition] = useState<{
     x: number;
@@ -79,7 +79,7 @@ export function Reader() {
   const { chapterContent } = useChapterContent(
     book,
     bookId,
-    currentChapterIndex
+    currentChapterIndex,
   );
 
   // Apply highlights to the live DOM whenever content or highlights change
@@ -90,14 +90,14 @@ export function Reader() {
     if (!currentSpineItemId) return;
 
     const chapterHighlights = highlights.filter(
-      (h) => h.spineItemId === currentSpineItemId
+      (h) => h.spineItemId === currentSpineItemId,
     );
 
     chapterHighlights.forEach((highlight) => {
       // Check if highlight is already applied to avoid duplicates
       if (
         !contentRef.current?.querySelector(
-          `mark[data-highlight-id="${highlight.id}"]`
+          `mark[data-highlight-id="${highlight.id}"]`,
         )
       ) {
         applyHighlightToLiveDOM(contentRef.current!, highlight);
@@ -112,7 +112,7 @@ export function Reader() {
         applyHighlightToLiveDOM(contentRef.current, highlight);
       }
     },
-    [addHighlight]
+    [addHighlight],
   );
 
   const handleHighlightDelete = useCallback(
@@ -125,7 +125,7 @@ export function Reader() {
       setActiveHighlightId(null);
       setDeletePopoverPosition(null);
     },
-    [deleteHighlight]
+    [deleteHighlight],
   );
 
   const handleHighlightUpdate = useCallback(
@@ -137,7 +137,7 @@ export function Reader() {
 
       if (contentRef.current) {
         const marks = contentRef.current.querySelectorAll(
-          `mark[data-highlight-id="${highlightId}"]`
+          `mark[data-highlight-id="${highlightId}"]`,
         );
         marks.forEach((mark) => {
           if (mark instanceof HTMLElement) {
@@ -146,7 +146,7 @@ export function Reader() {
         });
       }
     },
-    [updateHighlight]
+    [updateHighlight],
   );
 
   const handleHighlightClick = useCallback(
@@ -161,7 +161,7 @@ export function Reader() {
         setDeletePopoverPosition(position);
       }
     },
-    [activeHighlightId]
+    [activeHighlightId],
   );
 
   // Close delete popover
@@ -179,7 +179,7 @@ export function Reader() {
     contentRef,
     bookId,
     currentSpineItemId,
-    handleHighlightCreate
+    handleHighlightCreate,
   );
 
   const { goToPreviousChapter, goToNextChapter, goToChapterByHref } =
@@ -187,7 +187,7 @@ export function Reader() {
       book,
       bookId,
       currentChapterIndex,
-      setCurrentChapterIndex
+      setCurrentChapterIndex,
     );
 
   useReadingProgress(bookId, book, currentChapterIndex, lastScrollProgress);
@@ -201,22 +201,22 @@ export function Reader() {
   const activeHighlight = highlights.find((h) => h.id === activeHighlightId);
   const currentChapterTitle = getChapterTitleFromSpine(
     book,
-    currentChapterIndex
+    currentChapterIndex,
   );
   const hasPreviousChapter = currentChapterIndex > 0;
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
 
   // Render
   return (
-    <div className='flex flex-col bg-background min-h-screen text-foreground'>
+    <div className="flex flex-col bg-background min-h-screen text-foreground">
       <Button
-        variant='ghost'
-        size='icon'
-        onClick={() => navigate('/')}
-        aria-label='Back to library'
-        className='top-6 left-4 sticky'
+        variant="ghost"
+        size="icon"
+        onClick={() => navigate("/")}
+        aria-label="Back to library"
+        className="top-6 left-4 sticky"
       >
-        <ArrowLeft className='h-5 w-5' />
+        <ArrowLeft className="h-5 w-5" />
       </Button>
 
       <TableOfContents

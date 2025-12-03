@@ -1,10 +1,15 @@
-import { addHighlight as addHighlightToDb, deleteHighlight as deleteHighlightFromDb, getHighlights, updateHighlight as updateHighlightInDb } from '@/lib/db';
-import type { Highlight } from '@/types/highlight';
-import { useCallback, useEffect, useState } from 'react';
+import {
+  addHighlight as addHighlightToDb,
+  deleteHighlight as deleteHighlightFromDb,
+  getHighlights,
+  updateHighlight as updateHighlightInDb,
+} from "@/lib/db";
+import type { Highlight } from "@/types/highlight";
+import { useCallback, useEffect, useState } from "react";
 
 export function useHighlights(
   bookId: string | undefined,
-  spineItemId: string | undefined
+  spineItemId: string | undefined,
 ) {
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,7 +43,7 @@ export function useHighlights(
     try {
       await addHighlightToDb(highlight);
     } catch (error) {
-      console.error('Failed to save highlight:', error);
+      console.error("Failed to save highlight:", error);
       // Rollback? For now, just log.
     }
   }, []);
@@ -50,24 +55,25 @@ export function useHighlights(
     try {
       await deleteHighlightFromDb(id);
     } catch (error) {
-      console.error('Failed to delete highlight:', error);
+      console.error("Failed to delete highlight:", error);
     }
   }, []);
 
   const updateHighlight = useCallback(
     async (id: string, changes: Partial<Highlight>) => {
+      console.log("updating highlight for", id, changes);
       // Optimistic update
       setHighlights((prev) =>
-        prev.map((h) => (h.id === id ? { ...h, ...changes } : h))
+        prev.map((h) => (h.id === id ? { ...h, ...changes } : h)),
       );
       // DB update
       try {
         await updateHighlightInDb(id, changes);
       } catch (error) {
-        console.error('Failed to update highlight:', error);
+        console.error("Failed to update highlight:", error);
       }
     },
-    []
+    [],
   );
 
   return {
