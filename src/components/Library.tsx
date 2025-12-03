@@ -1,15 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { BookCard } from "@/components/BookCard";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import {
   addBookFromFile,
   getLibraryBooks,
   removeBook,
 } from "@/lib/book-service";
 import type { Book } from "@/lib/db";
-import { BookCard } from "@/components/BookCard";
-import { Button } from "@/components/ui/button";
-import { Plus, Upload, Search, Library as LibraryIcon } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
+import { Library as LibraryIcon, Plus, Search, Upload } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 export function Library() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -132,9 +132,10 @@ export function Library() {
     input.click();
   };
 
-  const filteredBooks = books.filter((book) =>
-    book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredBooks = books.filter(
+    (book) =>
+      book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      book.author.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   if (isLoading) {
@@ -161,8 +162,12 @@ export function Library() {
         <div className="fixed inset-0 z-50 bg-primary/10 backdrop-blur-sm border-4 border-primary border-dashed m-4 rounded-xl flex items-center justify-center pointer-events-none">
           <div className="text-center bg-background/80 p-8 rounded-2xl shadow-xl backdrop-blur-md">
             <Upload className="h-16 w-16 text-primary mx-auto mb-4 animate-bounce" />
-            <h3 className="text-2xl font-bold text-primary mb-2">Drop EPUB to Add</h3>
-            <p className="text-muted-foreground">Release to add to your library</p>
+            <h3 className="text-2xl font-bold text-primary mb-2">
+              Drop EPUB to Add
+            </h3>
+            <p className="text-muted-foreground">
+              Release to add to your library
+            </p>
           </div>
         </div>
       )}
@@ -171,7 +176,9 @@ export function Library() {
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">Library</h1>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">
+              Library
+            </h1>
             <p className="text-muted-foreground text-lg">
               {books.length} {books.length === 1 ? "book" : "books"}
             </p>
@@ -223,7 +230,11 @@ export function Library() {
                 : "Drag and drop an EPUB file here, or click the button above to add your first book."}
             </p>
             {!searchQuery && (
-              <Button onClick={handleAddBookClick} variant="outline" className="gap-2">
+              <Button
+                onClick={handleAddBookClick}
+                variant="outline"
+                className="gap-2"
+              >
                 <Upload className="h-4 w-4" />
                 Import EPUB
               </Button>

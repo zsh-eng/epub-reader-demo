@@ -81,8 +81,7 @@ export function BookCard({ book, onDelete }: BookCardProps) {
               <img
                 src={coverUrl}
                 alt={`Cover of ${book.title}`}
-                className={`h-full w-full object-cover transition-opacity duration-500 ${imageLoaded ? "opacity-100" : "opacity-0"
-                  }`}
+                className={`h-full w-full object-cover`}
                 onLoad={() => setImageLoaded(true)}
                 loading="lazy"
               />
