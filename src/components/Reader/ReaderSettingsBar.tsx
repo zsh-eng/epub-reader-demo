@@ -1,24 +1,24 @@
-import { Button } from '@/components/ui/button';
+import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-} from '@/components/ui/popover';
-import { Separator } from '@/components/ui/separator';
-import { useScrollVisibility } from '@/hooks/use-scroll-visibility';
-import { cn } from '@/lib/utils';
-import type { ReaderSettings } from '@/types/reader.types';
-import { Minus, Palette, Plus, Type } from 'lucide-react';
-import { useRef, useState } from 'react';
-import { ThemePanel } from './ReaderSettings/ThemePanel';
-import { TypographyPanel } from './ReaderSettings/TypographyPanel';
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
+import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
+import { cn } from "@/lib/utils";
+import type { ReaderSettings } from "@/types/reader.types";
+import { Minus, Palette, Plus, Type } from "lucide-react";
+import { useRef, useState } from "react";
+import { ThemePanel } from "./ReaderSettings/ThemePanel";
+import { TypographyPanel } from "./ReaderSettings/TypographyPanel";
 
 interface ReaderSettingsBarProps {
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
 }
 
-type Panel = 'theme' | 'typography' | null;
+type Panel = "theme" | "typography" | null;
 
 export function ReaderSettingsBar({
   settings,
@@ -36,10 +36,10 @@ export function ReaderSettingsBar({
   return (
     <div
       className={cn(
-        'fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 pb-4',
+        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 pb-4",
         isVisible || activePanel !== null
-          ? 'translate-y-0'
-          : 'translate-y-[150%]'
+          ? "translate-y-0"
+          : "translate-y-[150%]",
       )}
     >
       <Popover
@@ -49,14 +49,14 @@ export function ReaderSettingsBar({
         <PopoverAnchor>
           <div
             ref={menuRef}
-            className='flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95'
+            className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95"
           >
             {/* Font Size Controls */}
-            <div className='flex items-center gap-1'>
+            <div className="flex items-center gap-1">
               <Button
-                variant='ghost'
-                size='icon'
-                className='h-8 w-8 rounded-full'
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
                 onClick={() =>
                   onUpdateSettings({
                     fontSize: Math.max(50, settings.fontSize - 10),
@@ -64,16 +64,16 @@ export function ReaderSettingsBar({
                 }
                 disabled={settings.fontSize <= 50}
               >
-                <Minus className='h-4 w-4' />
-                <span className='sr-only'>Decrease font size</span>
+                <Minus className="h-4 w-4" />
+                <span className="sr-only">Decrease font size</span>
               </Button>
-              <span className='text-xs font-medium w-8 text-center tabular-nums'>
+              <span className="text-xs font-medium w-8 text-center tabular-nums">
                 {settings.fontSize}%
               </span>
               <Button
-                variant='ghost'
-                size='icon'
-                className='h-8 w-8 rounded-full'
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
                 onClick={() =>
                   onUpdateSettings({
                     fontSize: Math.min(200, settings.fontSize + 10),
@@ -81,45 +81,45 @@ export function ReaderSettingsBar({
                 }
                 disabled={settings.fontSize >= 200}
               >
-                <Plus className='h-4 w-4' />
-                <span className='sr-only'>Increase font size</span>
+                <Plus className="h-4 w-4" />
+                <span className="sr-only">Increase font size</span>
               </Button>
             </div>
 
-            <Separator orientation='vertical' className='h-6 mx-1' />
+            <Separator orientation="vertical" className="h-6 mx-1" />
 
             {/* Theme Button */}
             <Button
-              variant='ghost'
-              size='icon'
+              variant="ghost"
+              size="icon"
               className={cn(
-                'h-8 w-8 rounded-full',
-                activePanel === 'theme' && 'bg-accent'
+                "h-8 w-8 rounded-full",
+                activePanel === "theme" && "bg-accent",
               )}
-              onClick={() => handlePanelToggle('theme')}
+              onClick={() => handlePanelToggle("theme")}
             >
-              <Palette className='h-4 w-4' />
-              <span className='sr-only'>Theme</span>
+              <Palette className="h-4 w-4" />
+              <span className="sr-only">Theme</span>
             </Button>
 
             {/* Typography Button */}
             <Button
-              variant='ghost'
-              size='icon'
+              variant="ghost"
+              size="icon"
               className={cn(
-                'h-8 w-8 rounded-full',
-                activePanel === 'typography' && 'bg-accent'
+                "h-8 w-8 rounded-full",
+                activePanel === "typography" && "bg-accent",
               )}
-              onClick={() => handlePanelToggle('typography')}
+              onClick={() => handlePanelToggle("typography")}
             >
-              <Type className='h-4 w-4' />
-              <span className='sr-only'>Typography</span>
+              <Type className="h-4 w-4" />
+              <span className="sr-only">Typography</span>
             </Button>
           </div>
         </PopoverAnchor>
 
         <PopoverContent
-          className='w-96 p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg'
+          className="w-lg p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg"
           alignOffset={20}
           onInteractOutside={(e) => {
             if (menuRef.current && menuRef.current.contains(e.target as Node)) {
@@ -127,14 +127,14 @@ export function ReaderSettingsBar({
             }
           }}
         >
-          {activePanel === 'theme' && (
+          {activePanel === "theme" && (
             <ThemePanel
               settings={settings}
               onUpdateSettings={onUpdateSettings}
             />
           )}
 
-          {activePanel === 'typography' && (
+          {activePanel === "typography" && (
             <TypographyPanel
               settings={settings}
               onUpdateSettings={onUpdateSettings}
