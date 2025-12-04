@@ -52,11 +52,11 @@ export function ReaderSettingsBar({
             className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95"
           >
             {/* Font Size Controls */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full"
+                size="icon-lg"
+                className="rounded-full"
                 onClick={() =>
                   onUpdateSettings({
                     fontSize: Math.max(50, settings.fontSize - 10),
@@ -72,8 +72,8 @@ export function ReaderSettingsBar({
               </span>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-full"
+                size="icon-lg"
+                className="rounded-full"
                 onClick={() =>
                   onUpdateSettings({
                     fontSize: Math.min(200, settings.fontSize + 10),
@@ -91,28 +91,28 @@ export function ReaderSettingsBar({
             {/* Theme Button */}
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-lg"
               className={cn(
-                "h-8 w-8 rounded-full",
+                "rounded-full",
                 activePanel === "theme" && "bg-accent",
               )}
               onClick={() => handlePanelToggle("theme")}
             >
-              <Palette className="h-4 w-4" />
+              <Palette className="" />
               <span className="sr-only">Theme</span>
             </Button>
 
             {/* Typography Button */}
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-lg"
               className={cn(
-                "h-8 w-8 rounded-full",
+                "rounded-full",
                 activePanel === "typography" && "bg-accent",
               )}
               onClick={() => handlePanelToggle("typography")}
             >
-              <Type className="h-4 w-4" />
+              <Type className="" />
               <span className="sr-only">Typography</span>
             </Button>
           </div>
