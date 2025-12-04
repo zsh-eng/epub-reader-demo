@@ -214,7 +214,7 @@ export function Reader() {
 
   // Render
   return (
-    <div className="flex flex-col bg-background min-h-screen text-foreground">
+    <div className="flex flex-col bg-background min-h-screen text-foreground transition-colors duration-500">
       <Button
         variant="ghost"
         size="icon"
