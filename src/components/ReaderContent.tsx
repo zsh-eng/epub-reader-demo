@@ -1,4 +1,10 @@
-import { type ReaderSettings } from "@/types/reader.types";
+import {
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+  FONT_STACKS,
+  type ReaderSettings,
+} from "@/types/reader.types";
 import { forwardRef, useEffect } from "react";
 
 interface ReaderContentProps {
@@ -25,23 +31,11 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
     },
     ref,
   ) => {
-    const fontStacks = {
-      serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
-      "sans-serif":
-        'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif',
-      monospace:
-        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-      lora: '"Lora", serif',
-      iowan: '"Iowan Old Style", "Sitka Text", Palatino, "Book Antiqua", serif',
-      garamond: '"EB Garamond", "Garamond", serif',
-      inter: '"Inter", sans-serif',
-    };
-
     const style = settings
       ? {
           fontSize: `${settings.fontSize}%`,
           lineHeight: settings.lineHeight,
-          fontFamily: fontStacks[settings.fontFamily],
+          fontFamily: FONT_STACKS[settings.fontFamily],
           textAlign: settings.textAlign,
         }
       : undefined;
@@ -52,48 +46,48 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
 
       const handleMouseEnter = (event: Event) => {
         const target = event.target as HTMLElement;
-        if (target.classList.contains("epub-highlight")) {
-          const highlightId = target.getAttribute("data-highlight-id");
-          if (highlightId) {
-            const relatedHighlights = contentElement.querySelectorAll(
-              `[data-highlight-id="${highlightId}"]`,
-            );
-            relatedHighlights.forEach((el) => {
-              el.classList.add("epub-highlight-group-hover");
-            });
-          }
-        }
+        if (!target.classList.contains(EPUB_HIGHLIGHT_CLASS)) return;
+
+        const highlightId = target.getAttribute(EPUB_HIGHLIGHT_DATA_ATTRIBUTE);
+        if (!highlightId) return;
+
+        const relatedHighlights = contentElement.querySelectorAll(
+          `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlightId}"]`,
+        );
+        relatedHighlights.forEach((el) => {
+          el.classList.add(EPUB_HIGHLIGHT_GROUP_HOVER_CLASS);
+        });
       };
 
       const handleMouseLeave = (event: Event) => {
         const target = event.target as HTMLElement;
-        if (target.classList.contains("epub-highlight")) {
-          const highlightId = target.getAttribute("data-highlight-id");
-          if (highlightId) {
-            const relatedHighlights = contentElement.querySelectorAll(
-              `[data-highlight-id="${highlightId}"]`,
-            );
-            relatedHighlights.forEach((el) => {
-              el.classList.remove("epub-highlight-group-hover");
-            });
-          }
-        }
+        if (!target.classList.contains(EPUB_HIGHLIGHT_CLASS)) return;
+
+        const highlightId = target.getAttribute(EPUB_HIGHLIGHT_DATA_ATTRIBUTE);
+        if (!highlightId) return;
+
+        const relatedHighlights = contentElement.querySelectorAll(
+          `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlightId}"]`,
+        );
+        relatedHighlights.forEach((el) => {
+          el.classList.remove(EPUB_HIGHLIGHT_GROUP_HOVER_CLASS);
+        });
       };
 
       const handleClick = (event: Event) => {
         const target = event.target as HTMLElement;
-        if (target.classList.contains("epub-highlight")) {
-          const highlightId = target.getAttribute("data-highlight-id");
-          if (highlightId && onHighlightClick) {
-            // Get position of the clicked highlight element
-            const rect = target.getBoundingClientRect();
-            const position = {
-              x: rect.left + rect.width / 2,
-              y: rect.bottom + 5, // Position below the highlight
-            };
-            onHighlightClick(highlightId, position);
-          }
-        }
+        if (!target.classList.contains(EPUB_HIGHLIGHT_CLASS)) return;
+
+        const highlightId = target.getAttribute(EPUB_HIGHLIGHT_DATA_ATTRIBUTE);
+        if (!highlightId || !onHighlightClick) return;
+
+        // Get position of the clicked highlight element
+        const rect = target.getBoundingClientRect();
+        const position = {
+          x: rect.left + rect.width / 2,
+          y: rect.bottom + 5, // Position below the highlight
+        };
+        onHighlightClick(highlightId, position);
       };
 
       contentElement.addEventListener("mouseenter", handleMouseEnter, true);
