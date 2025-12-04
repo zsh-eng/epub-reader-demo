@@ -119,7 +119,7 @@ export function ReaderSettingsBar({
         </PopoverAnchor>
 
         <PopoverContent
-          className="w-lg p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg"
+          className="w-md p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg"
           alignOffset={20}
           onInteractOutside={(e) => {
             if (menuRef.current && menuRef.current.contains(e.target as Node)) {

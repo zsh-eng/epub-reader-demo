@@ -59,7 +59,7 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
       <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
         Theme
       </h4>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         {themes.map((theme) => {
           const isSelected = settings.theme === theme.value;
           return (
@@ -67,13 +67,14 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
               key={theme.value}
               onClick={() => onUpdateSettings({ theme: theme.value })}
               className={cn(
-                "relative flex flex-col overflow-hidden rounded-lg border-2 transition-all duration-200 m-1",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "relative flex flex-col overflow-hidden rounded-lg border-2 transition-all duration-200 m-1 h-32",
+                "ring-2 ring-offset-2 ring-offset-background",
+                "focus:outline-none focus-visible:ring-ring",
                 "active:scale-[0.98]",
                 theme.borderClass,
                 isSelected
-                  ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
-                  : "hover:border-muted-foreground/30",
+                  ? "ring-primary"
+                  : "ring-transparent hover:border-muted-foreground/30",
               )}
             >
               {/* Preview area with sample text */}
@@ -85,7 +86,7 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
                 )}
                 style={{ fontFamily: settings.fontFamily }}
               >
-                <p className="text-sm leading-relaxed line-clamp-2">
+                <p className="text-base leading-relaxed line-clamp-2">
                   {SAMPLE_TEXT}
                 </p>
               </div>
