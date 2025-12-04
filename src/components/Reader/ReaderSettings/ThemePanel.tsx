@@ -28,14 +28,6 @@ const themes: ThemeConfig[] = [
     checkClass: "bg-neutral-900 text-white",
   },
   {
-    value: "sepia",
-    label: "Sepia",
-    bgClass: "bg-[#f4ecd8]",
-    textClass: "text-[#5c4b37]",
-    borderClass: "border-[#e6dbbf]",
-    checkClass: "bg-[#5c4b37] text-[#f4ecd8]",
-  },
-  {
     value: "dark",
     label: "Dark",
     bgClass: "bg-neutral-900",

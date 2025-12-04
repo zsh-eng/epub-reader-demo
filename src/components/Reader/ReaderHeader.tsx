@@ -36,17 +36,21 @@ export function ReaderHeader({
   const { settings, updateSettings } = useReaderSettings();
 
   const themes: { value: ReaderTheme; label: string }[] = [
-    { value: 'light', label: 'Light' },
-    { value: 'dark', label: 'Dark' },
-    { value: 'sepia', label: 'Sepia' },
-    { value: 'flexoki-light', label: 'Flexoki Light' },
-    { value: 'flexoki-dark', label: 'Flexoki Dark' },
+    { value: "light", label: "Light" },
+    { value: "dark", label: "Dark" },
+    { value: "flexoki-light", label: "Flexoki Light" },
+    { value: "flexoki-dark", label: "Flexoki Dark" },
   ];
 
   return (
     <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-background sticky top-0 z-10 transition-colors duration-200">
       {/* Hamburger Menu */}
-      <Button variant="ghost" size="icon" onClick={onToggleTOC} aria-label="Table of contents">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggleTOC}
+        aria-label="Table of contents"
+      >
         <Menu className="h-5 w-5" />
       </Button>
 

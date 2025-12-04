@@ -59,6 +59,7 @@ export interface ReadingProgress {
   lastRead: Date;
 }
 
+// TODO: Update the reading settings types to reflect the current settings
 export interface ReadingSettings {
   id: string; // Primary key (single record, use 'default')
   fontSize: number; // In pixels (16-24)
@@ -199,7 +200,7 @@ export async function addHighlight(highlight: Highlight): Promise<string> {
 
 export async function getHighlights(
   bookId: string,
-  spineItemId: string
+  spineItemId: string,
 ): Promise<Highlight[]> {
   return await db.highlights
     .where("bookId")
@@ -214,7 +215,7 @@ export async function deleteHighlight(id: string): Promise<void> {
 
 export async function updateHighlight(
   id: string,
-  changes: Partial<Highlight>
+  changes: Partial<Highlight>,
 ): Promise<void> {
   await db.highlights.update(id, { ...changes, updatedAt: new Date() });
 }

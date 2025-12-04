@@ -1,20 +1,20 @@
-import type { ReaderSettings } from '@/types/reader.types';
-import { useCallback, useEffect, useState } from 'react';
+import { THEME_CLASSES, type ReaderSettings } from "@/types/reader.types";
+import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = 'epub-reader-settings';
+const STORAGE_KEY = "epub-reader-settings";
 
-const DEFAULT_SETTINGS: ReaderSettings = {
+const DEFAULT_SETTINGS = {
   fontSize: 100,
   lineHeight: 1.5,
-  fontFamily: 'lora',
-  theme: 'light',
-  textAlign: 'left',
-};
+  fontFamily: "lora",
+  theme: "light",
+  textAlign: "left",
+} satisfies ReaderSettings;
 
 export function useReaderSettings() {
   // Initialize state from localStorage or defaults
   const [settings, setSettings] = useState<ReaderSettings>(() => {
-    if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+    if (typeof window === "undefined") return DEFAULT_SETTINGS;
 
     try {
       const item = window.localStorage.getItem(STORAGE_KEY);
@@ -22,7 +22,7 @@ export function useReaderSettings() {
         ? { ...DEFAULT_SETTINGS, ...JSON.parse(item) }
         : DEFAULT_SETTINGS;
     } catch (error) {
-      console.warn('Error reading settings from localStorage:', error);
+      console.warn("Error reading settings from localStorage:", error);
       return DEFAULT_SETTINGS;
     }
   });
@@ -34,16 +34,10 @@ export function useReaderSettings() {
 
       // Manually handle theme switching since we removed next-themes
       const root = window.document.documentElement;
-      root.classList.remove(
-        'light',
-        'dark',
-        'sepia',
-        'flexoki-light',
-        'flexoki-dark'
-      );
+      root.classList.remove(...THEME_CLASSES);
       root.classList.add(settings.theme);
     } catch (error) {
-      console.warn('Error saving settings to localStorage:', error);
+      console.warn("Error saving settings to localStorage:", error);
     }
   }, [settings]);
 

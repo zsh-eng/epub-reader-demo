@@ -155,28 +155,6 @@
     }
 }
 
-.sepia {
-    --background: hsl(39 32% 91%);
-    --foreground: hsl(30 20% 20%);
-    --card: hsl(39 32% 91%);
-    --card-foreground: hsl(30 20% 20%);
-    --popover: hsl(39 32% 91%);
-    --popover-foreground: hsl(30 20% 20%);
-    --primary: hsl(30 20% 20%);
-    --primary-foreground: hsl(39 32% 91%);
-    --secondary: hsl(39 28% 85%);
-    --secondary-foreground: hsl(30 20% 20%);
-    --muted: hsl(39 28% 85%);
-    --muted-foreground: hsl(30 15% 45%);
-    --accent: hsl(39 28% 85%);
-    --accent-foreground: hsl(30 20% 20%);
-    --destructive: hsl(0 62% 42%);
-    --destructive-foreground: hsl(39 32% 91%);
-    --border: hsl(39 25% 80%);
-    --input: hsl(39 25% 80%);
-    --ring: hsl(30 20% 50%);
-}
-
 .flexoki-light {
     --background: hsl(48 100% 97%);
     --foreground: hsl(0 3% 6%);

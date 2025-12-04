@@ -40,13 +40,29 @@ export interface ChapterInfo {
   hasPrevious: boolean;
 }
 
-export type ReaderTheme = 'light' | 'dark' | 'sepia' | 'flexoki-light' | 'flexoki-dark';
-export type FontFamily = 'serif' | 'sans-serif' | 'monospace' | 'lora' | 'iowan' | 'garamond' | 'inter';
+export const THEME_CLASSES = [
+  "light",
+  "dark",
+  "flexoki-light",
+  "flexoki-dark",
+] as const;
+export type ReaderTheme = (typeof THEME_CLASSES)[number];
+
+export const FONT_CLASSES = [
+  "serif",
+  "sans-serif",
+  "monospace",
+  "lora",
+  "iowan",
+  "garamond",
+  "inter",
+] as const;
+export type FontFamily = (typeof FONT_CLASSES)[number];
 
 export interface ReaderSettings {
   fontSize: number; // percentage, e.g. 100
   lineHeight: number; // multiplier, e.g. 1.5
   fontFamily: FontFamily;
   theme: ReaderTheme;
-  textAlign: 'left' | 'justify';
+  textAlign: "left" | "justify";
 }
