@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   fontFamily: "lora",
   theme: "light",
   textAlign: "left",
+  contentWidth: "narrow",
 } satisfies ReaderSettings;
 
 export function useReaderSettings() {

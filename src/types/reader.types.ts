@@ -59,6 +59,21 @@ export const FONT_CLASSES = [
 ] as const;
 export type FontFamily = (typeof FONT_CLASSES)[number];
 
+export const CONTENT_WIDTH_CLASSES = [
+  "narrow",
+  "medium",
+  "wide",
+  "full",
+] as const;
+export type ContentWidth = (typeof CONTENT_WIDTH_CLASSES)[number];
+
+export const CONTENT_WIDTH_VALUES: Record<ContentWidth, string> = {
+  narrow: "48rem", // 768px
+  medium: "56rem", // 896px
+  wide: "64rem", // 1024px
+  full: "72rem", // 1152px
+};
+
 export const FONT_STACKS: Record<FontFamily, string> = {
   serif: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
   "sans-serif":
@@ -77,6 +92,7 @@ export interface ReaderSettings {
   fontFamily: FontFamily;
   theme: ReaderTheme;
   textAlign: "left" | "justify";
+  contentWidth: ContentWidth; // width of the reading area
 }
 
 export const EPUB_HIGHLIGHT_CLASS = "epub-highlight";

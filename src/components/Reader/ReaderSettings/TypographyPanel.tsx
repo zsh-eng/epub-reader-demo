@@ -1,7 +1,16 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import type { FontFamily, ReaderSettings } from "@/types/reader.types";
-import { AlignJustify, AlignLeft, MoveVertical } from "lucide-react";
+import type {
+  ContentWidth,
+  FontFamily,
+  ReaderSettings,
+} from "@/types/reader.types";
+import {
+  AlignJustify,
+  AlignLeft,
+  MoveHorizontal,
+  MoveVertical,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 
 interface TypographyPanelProps {
@@ -35,6 +44,12 @@ export function TypographyPanel({
   ];
 
   const lineHeights = [1.2, 1.5, 1.8, 2.0];
+  const contentWidths: { value: ContentWidth; label: string }[] = [
+    { value: "narrow", label: "Narrow" },
+    { value: "medium", label: "Medium" },
+    { value: "wide", label: "Wide" },
+    { value: "full", label: "Full" },
+  ];
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -113,6 +128,34 @@ export function TypographyPanel({
                 className="flex-1 text-xs h-full"
               >
                 {lh}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+      </div>
+
+      {/* Content Width */}
+      <div className="space-y-2">
+        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+          Content Width
+        </h4>
+        <div className="flex items-center gap-2">
+          <MoveHorizontal className="h-4 w-4 text-muted-foreground" />
+          <ToggleGroup
+            type="single"
+            value={settings.contentWidth}
+            onValueChange={(value) =>
+              value && onUpdateSettings({ contentWidth: value as ContentWidth })
+            }
+            className="flex-1 h-12"
+          >
+            {contentWidths.map((width) => (
+              <ToggleGroupItem
+                key={width.value}
+                value={width.value}
+                className="flex-1 text-xs h-full"
+              >
+                {width.label}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
