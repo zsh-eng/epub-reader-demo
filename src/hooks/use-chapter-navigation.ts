@@ -1,5 +1,5 @@
 import { type Book } from "@/lib/db";
-import { saveCurrentProgress } from "@/lib/progress-utils";
+import { saveCurrentProgress } from "@/lib/scroll-anchor";
 import { findSpineIndexByHref } from "@/lib/toc-utils";
 import { useCallback } from "react";
 

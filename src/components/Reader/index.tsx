@@ -4,6 +4,7 @@ import { NavigationButtons } from "@/components/Reader/NavigationButtons";
 import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
 import { TableOfContents } from "@/components/Reader/TableOfContents";
 import ReaderContent from "@/components/ReaderContent";
+import { ScrollRestoration } from "@/components/ScrollRestoration";
 import { Button } from "@/components/ui/button";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useChapterContent } from "@/hooks/use-chapter-content";
@@ -11,7 +12,6 @@ import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useHighlights } from "@/hooks/use-highlights";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
-import { useReadingProgress } from "@/hooks/use-reading-progress";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { type HighlightColor } from "@/lib/highlight-constants";
 import {
@@ -33,7 +33,7 @@ import { useNavigate, useParams } from "react-router-dom";
  * - Chapter navigation
  * - Table of contents
  * - Text selection and highlighting
- * - Reading progress auto-save
+ * - Reading progress auto-save (via ScrollRestoration)
  * - Keyboard navigation
  */
 export function Reader() {
@@ -56,14 +56,18 @@ export function Reader() {
     y: number;
   } | null>(null);
 
-  // Custom hooks - all complex logic extracted
-  const {
-    book,
-    currentChapterIndex,
-    setCurrentChapterIndex,
-    isLoading,
-    lastScrollProgress,
-  } = useBookLoader(bookId);
+  // Load book and initial progress
+  const { book, initialProgress, isLoading } = useBookLoader(bookId);
+
+  // Chapter index state - initialized from saved progress or defaults to 0
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+
+  // Initialize chapter index from saved progress when it loads
+  useEffect(() => {
+    if (initialProgress) {
+      setCurrentChapterIndex(initialProgress.currentSpineIndex);
+    }
+  }, [initialProgress]);
 
   // Get current spine item ID
   const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
@@ -193,12 +197,11 @@ export function Reader() {
       setCurrentChapterIndex,
     );
 
-  useReadingProgress(bookId, book, currentChapterIndex, lastScrollProgress);
   useKeyboardNavigation(goToPreviousChapter, goToNextChapter);
 
   // Early returns
   if (isLoading) return <LoadingSpinner />;
-  if (!book) return null;
+  if (!book || !bookId) return null;
 
   // Derived state
   const activeHighlight = highlights.find((h) => h.id === activeHighlightId);
@@ -229,15 +232,30 @@ export function Reader() {
         onNavigate={goToChapterByHref}
       />
 
-      <ReaderContent
-        content={chapterContent}
+      <ScrollRestoration
+        bookId={bookId}
         chapterIndex={currentChapterIndex}
-        title={currentChapterTitle}
-        ref={contentRef}
-        onHighlightClick={handleHighlightClick}
-        activeHighlightId={activeHighlightId}
-        settings={settings}
-      />
+        contentRef={contentRef}
+        initialProgress={initialProgress}
+        contentReady={!!chapterContent}
+      >
+        {({ isRestoring }) => (
+          <div
+            className="transition-opacity duration-150"
+            style={{ opacity: isRestoring ? 0 : 1 }}
+          >
+            <ReaderContent
+              content={chapterContent}
+              chapterIndex={currentChapterIndex}
+              title={currentChapterTitle}
+              ref={contentRef}
+              onHighlightClick={handleHighlightClick}
+              activeHighlightId={activeHighlightId}
+              settings={settings}
+            />
+          </div>
+        )}
+      </ScrollRestoration>
 
       <ReaderSettingsBar
         settings={settings}

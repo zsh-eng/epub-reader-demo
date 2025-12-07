@@ -1,34 +1,50 @@
-import { useToast } from '@/hooks/use-toast';
-import { getBook, getReadingProgress, type Book } from '@/lib/db';
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useToast } from "@/hooks/use-toast";
+import {
+  getBook,
+  getReadingProgress,
+  type Book,
+  type ReadingProgress,
+} from "@/lib/db";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export interface UseBookLoaderReturn {
+  /** The loaded book data */
   book: Book | null;
-  currentChapterIndex: number;
-  setCurrentChapterIndex: (index: number) => void;
+  /** Initial reading progress from database */
+  initialProgress: ReadingProgress | null;
+  /** Whether the book is currently loading */
   isLoading: boolean;
-  lastScrollProgress: React.MutableRefObject<number>;
 }
 
+/**
+ * Hook for loading book data and initial reading progress.
+ *
+ * This hook is intentionally simple - it only handles:
+ * - Loading the book from the database
+ * - Loading the initial reading progress
+ * - Navigation/error handling if book not found
+ *
+ * Scroll restoration is handled separately by the ScrollRestoration component.
+ */
 export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [book, setBook] = useState<Book | null>(null);
-  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+  const [initialProgress, setInitialProgress] =
+    useState<ReadingProgress | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const lastScrollProgress = useRef<number>(0);
 
   useEffect(() => {
     const loadBook = async () => {
       if (!bookId) {
         toast({
-          title: 'Error',
-          description: 'No book ID provided',
-          variant: 'destructive',
+          title: "Error",
+          description: "No book ID provided",
+          variant: "destructive",
         });
-        navigate('/');
+        navigate("/");
         return;
       }
 
@@ -36,58 +52,27 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
         const bookData = await getBook(bookId);
         if (!bookData) {
           toast({
-            title: 'Error',
-            description: 'Book not found',
-            variant: 'destructive',
+            title: "Error",
+            description: "Book not found",
+            variant: "destructive",
           });
-          navigate('/');
+          navigate("/");
           return;
         }
 
         setBook(bookData);
 
-        // Load reading progress
+        // Load reading progress (may be null for new books)
         const progress = await getReadingProgress(bookId);
-        if (!progress) return;
-
-        setCurrentChapterIndex(progress.currentSpineIndex);
-        lastScrollProgress.current = progress.scrollProgress;
-        console.log('scroll progress', progress.scrollProgress);
-
-        // Wait for content to be ready before scrolling
-        const waitForContent = (callback: () => void, maxAttempts = 20) => {
-          let attempts = 0;
-          const check = () => {
-            const scrollHeight = document.documentElement.scrollHeight;
-            const clientHeight = window.innerHeight;
-
-            if (scrollHeight > clientHeight || attempts >= maxAttempts) {
-              callback();
-            } else {
-              attempts++;
-              requestAnimationFrame(check);
-            }
-          };
-          requestAnimationFrame(check);
-        };
-
-        waitForContent(() => {
-          const scrollHeight = document.documentElement.scrollHeight;
-          const clientHeight = window.innerHeight;
-          const maxScroll = scrollHeight - clientHeight;
-          window.scrollTo({
-            top: maxScroll * progress.scrollProgress,
-            behavior: "smooth",
-          });
-        });
+        setInitialProgress(progress ?? null);
       } catch (error) {
-        console.error('Error loading book:', error);
+        console.error("Error loading book:", error);
         toast({
-          title: 'Error',
-          description: 'Failed to load book',
-          variant: 'destructive',
+          title: "Error",
+          description: "Failed to load book",
+          variant: "destructive",
         });
-        navigate('/');
+        navigate("/");
       } finally {
         setIsLoading(false);
       }
@@ -99,9 +84,7 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
 
   return {
     book,
-    currentChapterIndex,
-    setCurrentChapterIndex,
+    initialProgress,
     isLoading,
-    lastScrollProgress,
   };
 }
