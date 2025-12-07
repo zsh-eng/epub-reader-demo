@@ -36,7 +36,7 @@ export function ReaderSettingsBar({
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 pb-4",
+        "fixed bottom-6 sm:bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 pb-4",
         isVisible || activePanel !== null
           ? "translate-y-0"
           : "translate-y-[150%]",
@@ -52,7 +52,7 @@ export function ReaderSettingsBar({
             className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95"
           >
             {/* Font Size Controls */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3 sm:gap-2">
               <Button
                 variant="ghost"
                 size="icon-lg"
@@ -64,10 +64,10 @@ export function ReaderSettingsBar({
                 }
                 disabled={settings.fontSize <= 50}
               >
-                <Minus className="h-4 w-4" />
+                <Minus className="size-5 sm:size-4" />
                 <span className="sr-only">Decrease font size</span>
               </Button>
-              <span className="text-xs font-medium w-8 text-center tabular-nums">
+              <span className="text-sm sm:text-xs font-medium text-center tabular-nums">
                 {settings.fontSize}%
               </span>
               <Button
@@ -81,7 +81,7 @@ export function ReaderSettingsBar({
                 }
                 disabled={settings.fontSize >= 200}
               >
-                <Plus className="h-4 w-4" />
+                <Plus className="size-5 sm:size-4" />
                 <span className="sr-only">Increase font size</span>
               </Button>
             </div>
@@ -98,7 +98,7 @@ export function ReaderSettingsBar({
               )}
               onClick={() => handlePanelToggle("theme")}
             >
-              <Palette className="" />
+              <Palette className="size-5 sm:size-4" />
               <span className="sr-only">Theme</span>
             </Button>
 
@@ -112,14 +112,14 @@ export function ReaderSettingsBar({
               )}
               onClick={() => handlePanelToggle("typography")}
             >
-              <Type className="" />
+              <Type className="size-5 sm:size-4" />
               <span className="sr-only">Typography</span>
             </Button>
           </div>
         </PopoverAnchor>
 
         <PopoverContent
-          className="w-md p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg"
+          className="w-[95vw] mx-2 sm:w-md p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg"
           alignOffset={20}
           onInteractOutside={(e) => {
             if (menuRef.current && menuRef.current.contains(e.target as Node)) {
