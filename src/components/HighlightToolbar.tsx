@@ -83,7 +83,7 @@ export function HighlightToolbar({
 
   return (
     <div
-      className="highlight-toolbar fixed z-50 flex items-center gap-2 p-2 rounded-full bg-white shadow-xl border border-gray-100 animate-in fade-in zoom-in-95 duration-200"
+      className="highlight-toolbar fixed z-50 flex items-center gap-2 p-2 rounded-full bg-background shadow-xl border border-border animate-in fade-in zoom-in-95 duration-200"
       style={{
         left: `${x}px`,
         top: `${y}px`,
