@@ -1,117 +1,17 @@
-/* ThemeSlider Component Styles */
+/* ThemeSlider Component Styles - Only non-Tailwind expressible styles */
 
-.theme-slider-container {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    width: 100%;
-}
-
-.theme-slider-wrapper {
-    position: relative;
-    flex: 1;
-    height: 3rem;
-    display: flex;
-    align-items: center;
-}
-
-/* The outer track (muted background) */
-.theme-slider-track {
-    position: absolute;
-    inset: 0;
-    background-color: var(--muted);
-    border-radius: 9999px;
-    overflow: visible;
-}
-
-/* The filled portion with internal padding */
+/* The filled portion width calculation with CSS variable */
 .theme-slider-fill {
-    position: absolute;
-    top: 0.25rem;
-    bottom: 0.25rem;
-    left: 0.25rem;
-    /*
-     * --fill-progress is a decimal value (0-1)
-     * We multiply by the available width to get the fill width
-     */
     width: calc(var(--fill-progress, 0) * (100% - 0.5rem));
-    min-width: 2.5rem;
-    max-width: calc(100% - 0.5rem);
-    background-color: var(--primary-foreground);
-    border-radius: 9999px;
-    transition: width 0.05s ease-out;
-    /* Add subtle shadow for depth */
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
-    /* For positioning the thumb at the end */
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
 }
 
-/* Thumb/handle at the end of the filled portion */
-.theme-slider-thumb {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translate(0%, -50%);
-    width: 2rem;
-    height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-}
-
-.theme-slider-thumb-icon {
-    width: 1rem;
-    height: 1rem;
-    color: var(--foreground);
-    opacity: 0.6;
-}
-
-/* Dot indicators */
-.theme-slider-dot {
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 0.375rem;
-    height: 0.375rem;
-    border-radius: 50%;
-    background-color: var(--foreground);
-    opacity: 0.4;
-    pointer-events: none;
-    z-index: 1;
-    transition: opacity 0.15s ease;
-}
-
-.theme-slider-dot[data-filled="true"] {
-    opacity: 0;
-}
-
-/* Native range input - invisible but handles interaction */
-.theme-slider-input {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    opacity: 0;
-    cursor: grab;
-    z-index: 10;
-}
-
-.theme-slider-input:active {
-    cursor: grabbing;
-}
-
-/* Thumb styling for webkit browsers */
+/* Native range input thumb styling for webkit browsers */
 .theme-slider-input::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 2rem;
     height: 2rem;
-    border-radius: 50%;
+    border-radius: 0.5rem;
     cursor: grab;
 }
 
@@ -123,26 +23,11 @@
 .theme-slider-input::-moz-range-thumb {
     width: 2rem;
     height: 2rem;
-    border-radius: 50%;
+    border-radius: 0.5rem;
     border: none;
     cursor: grab;
 }
 
 .theme-slider-input:active::-moz-range-thumb {
     cursor: grabbing;
-}
-
-/* Percentage label */
-.theme-slider-percentage {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--muted-foreground);
-    min-width: 3rem;
-    text-align: right;
-}
-
-/* Focus styles for accessibility */
-.theme-slider-input:focus-visible ~ .theme-slider-track .theme-slider-fill {
-    outline: 2px solid var(--ring);
-    outline-offset: 2px;
 }

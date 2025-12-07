@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { HandGrab } from "lucide-react";
 import "./theme-slider.css";
 
 export interface ThemeSliderProps
@@ -66,38 +65,13 @@ function ThemeSlider({
   }, [dotCount]);
 
   return (
-    <div className={cn("theme-slider-container", className)}>
-      <div className="theme-slider-wrapper">
-        <div className="theme-slider-track">
-          {/* Filled portion with padding */}
-          <div
-            className="theme-slider-fill"
-            style={
-              { "--fill-progress": decimalProgress } as React.CSSProperties
-            }
-          >
-            {/* Thumb/handle with grab icon */}
-            {/*<div className="theme-slider-thumb">
-              <HandGrab className="theme-slider-thumb-icon" />
-            </div>*/}
-          </div>
-
-          {/* Dot indicators */}
-          {dotPositions.map((pos, index) => (
-            <div
-              key={index}
-              className="theme-slider-dot"
-              style={{ left: `${pos}%` }}
-              data-filled={pos <= percentage}
-            />
-          ))}
-        </div>
-
-        {/* Native range input for interaction */}
+    <div className={cn("flex w-full items-center gap-4", className)}>
+      <div className="relative flex h-12 flex-1 items-center">
+        {/* Native range input for interaction - placed first for peer styling */}
         <input
           ref={inputRef}
           type="range"
-          className="theme-slider-input"
+          className="theme-slider-input peer absolute inset-0 z-10 m-0 h-full w-full cursor-grab p-0 opacity-0 active:cursor-grabbing"
           value={currentValue}
           min={min}
           max={max}
@@ -105,10 +79,38 @@ function ThemeSlider({
           onChange={handleChange}
           {...props}
         />
+
+        {/* The outer track (muted background) */}
+        <div className="absolute inset-0 overflow-visible rounded-lg bg-muted peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2">
+          {/* Filled portion with internal padding */}
+          <div
+            className="theme-slider-fill absolute bottom-1 left-1 top-1 flex min-w-10 items-center justify-end rounded-md bg-primary-foreground shadow-sm transition-[width] duration-[50ms] ease-out"
+            style={
+              { "--fill-progress": decimalProgress } as React.CSSProperties
+            }
+          >
+            {/* Thumb/handle - vertical line */}
+            <div className="pointer-events-none absolute right-0 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center">
+              <div className="h-4 w-0.5 rounded-full bg-foreground opacity-40" />
+            </div>
+          </div>
+
+          {/* Dot indicators */}
+          {dotPositions.map((pos, index) => (
+            <div
+              key={index}
+              className={cn(
+                "pointer-events-none absolute top-1/2 z-[1] h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground transition-opacity duration-150 ease-linear",
+                pos <= percentage ? "opacity-0" : "opacity-40",
+              )}
+              style={{ left: `${pos}%` }}
+            />
+          ))}
+        </div>
       </div>
 
       {showPercentage && (
-        <span className="theme-slider-percentage">
+        <span className="min-w-12 text-right text-sm font-medium text-muted-foreground">
           {Math.round(percentage)}%
         </span>
       )}
