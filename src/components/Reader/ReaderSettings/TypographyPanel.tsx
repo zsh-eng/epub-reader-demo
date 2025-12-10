@@ -135,7 +135,7 @@ export function TypographyPanel({
       </div>
 
       {/* Content Width */}
-      <div className="space-y-2">
+      <div className="space-y-2 hidden sm:block">
         <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
           Content Width
         </h4>
