@@ -4,10 +4,13 @@ import type {
   ContentWidth,
   FontFamily,
   ReaderSettings,
+  TextAlign,
 } from "@/types/reader.types";
 import {
+  AlignCenter,
   AlignJustify,
   AlignLeft,
+  AlignRight,
   MoveHorizontal,
   MoveVertical,
 } from "lucide-react";
@@ -171,16 +174,23 @@ export function TypographyPanel({
           type="single"
           value={settings.textAlign}
           onValueChange={(value) =>
-            value &&
-            onUpdateSettings({ textAlign: value as "left" | "justify" })
+            value && onUpdateSettings({ textAlign: value as TextAlign })
           }
-          className="justify-start"
+          className="w-full h-12"
         >
-          <ToggleGroupItem value="left" className="flex-1 text-xs">
+          <ToggleGroupItem value="left" className="flex-1 text-xs h-full">
             <AlignLeft className="h-4 w-4 mr-2" />
             Left
           </ToggleGroupItem>
-          <ToggleGroupItem value="justify" className="flex-1 text-xs">
+          <ToggleGroupItem value="center" className="flex-1 text-xs h-full">
+            <AlignCenter className="h-4 w-4 mr-2" />
+            Center
+          </ToggleGroupItem>
+          <ToggleGroupItem value="right" className="flex-1 text-xs h-full">
+            <AlignRight className="h-4 w-4 mr-2" />
+            Right
+          </ToggleGroupItem>
+          <ToggleGroupItem value="justify" className="flex-1 text-xs h-full">
             <AlignJustify className="h-4 w-4 mr-2" />
             Justify
           </ToggleGroupItem>

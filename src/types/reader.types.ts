@@ -86,12 +86,21 @@ export const FONT_STACKS: Record<FontFamily, string> = {
   inter: '"Inter", sans-serif',
 };
 
+export const TEXT_ALIGN = {
+  left: "left",
+  justify: "justify",
+  center: "center",
+  right: "right",
+} as const;
+
+export type TextAlign = (typeof TEXT_ALIGN)[keyof typeof TEXT_ALIGN];
+
 export interface ReaderSettings {
   fontSize: number; // percentage, e.g. 100
   lineHeight: number; // multiplier, e.g. 1.5
   fontFamily: FontFamily;
   theme: ReaderTheme;
-  textAlign: "left" | "justify";
+  textAlign: TextAlign;
   contentWidth: ContentWidth; // width of the reading area
 }
 
