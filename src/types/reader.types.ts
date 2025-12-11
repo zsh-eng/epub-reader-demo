@@ -60,6 +60,7 @@ export const FONT_CLASSES = [
 export type FontFamily = (typeof FONT_CLASSES)[number];
 
 export const CONTENT_WIDTH_CLASSES = [
+  "compact",
   "narrow",
   "medium",
   "wide",
@@ -68,6 +69,7 @@ export const CONTENT_WIDTH_CLASSES = [
 export type ContentWidth = (typeof CONTENT_WIDTH_CLASSES)[number];
 
 export const CONTENT_WIDTH_VALUES: Record<ContentWidth, string> = {
+  compact: "40rem", // 640px
   narrow: "48rem", // 768px
   medium: "56rem", // 896px
   wide: "64rem", // 1024px

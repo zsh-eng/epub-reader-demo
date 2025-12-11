@@ -48,6 +48,7 @@ export function TypographyPanel({
 
   const lineHeights = [1.2, 1.5, 1.8, 2.0];
   const contentWidths: { value: ContentWidth; label: string }[] = [
+    { value: "compact", label: "Compact" },
     { value: "narrow", label: "Narrow" },
     { value: "medium", label: "Medium" },
     { value: "wide", label: "Wide" },
