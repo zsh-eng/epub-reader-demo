@@ -2,10 +2,10 @@ import { HighlightToolbar } from "@/components/HighlightToolbar";
 import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
 import { NavigationButtons } from "@/components/Reader/NavigationButtons";
 import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
+import { SideNavigation } from "@/components/Reader/SideNavigation";
 import { TableOfContents } from "@/components/Reader/TableOfContents";
 import ReaderContent from "@/components/ReaderContent";
 import { ScrollRestoration } from "@/components/ScrollRestoration";
-import { Button } from "@/components/ui/button";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useChapterContent } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
@@ -20,7 +20,6 @@ import {
 } from "@/lib/highlight-utils";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
-import { ArrowLeft } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -197,7 +196,9 @@ export function Reader() {
       setCurrentChapterIndex,
     );
 
-  useKeyboardNavigation(goToPreviousChapter, goToNextChapter);
+  useKeyboardNavigation(goToPreviousChapter, goToNextChapter, () =>
+    navigate("/"),
+  );
 
   // Early returns
   if (isLoading) return <LoadingSpinner />;
@@ -215,15 +216,13 @@ export function Reader() {
   // Render
   return (
     <div className="flex flex-col min-h-screen">
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => navigate("/")}
-        aria-label="Back to library"
-        className="top-6 left-4 sticky"
-      >
-        <ArrowLeft className="h-5 w-5" />
-      </Button>
+      <SideNavigation
+        onBack={() => navigate("/")}
+        onPrevious={goToPreviousChapter}
+        onNext={goToNextChapter}
+        hasPreviousChapter={hasPreviousChapter}
+        hasNextChapter={hasNextChapter}
+      />
 
       <TableOfContents
         toc={book.toc}

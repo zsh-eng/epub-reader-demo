@@ -3,6 +3,7 @@ import { useEffect } from "react";
 export function useKeyboardNavigation(
   goToPreviousChapter: () => void,
   goToNextChapter: () => void,
+  goBack?: () => void,
 ): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -20,10 +21,13 @@ export function useKeyboardNavigation(
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
         goToNextChapter();
+      } else if (event.key === "Escape" && goBack) {
+        event.preventDefault();
+        goBack();
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goToPreviousChapter, goToNextChapter]);
+  }, [goToPreviousChapter, goToNextChapter, goBack]);
 }
