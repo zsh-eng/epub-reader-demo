@@ -1,5 +1,5 @@
 import { THEME_CLASSES, type ReaderSettings } from "@/types/reader.types";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "epub-reader-settings";
 
@@ -12,7 +12,12 @@ const DEFAULT_SETTINGS = {
   contentWidth: "narrow",
 } satisfies ReaderSettings;
 
+const THEME_TRANSITION_DURATION_MS = 500;
+
 export function useReaderSettings() {
+  // Track timeout for theme transition cleanup
+  const themeTransitionTimeoutRef = useRef<number | null>(null);
+
   // Initialize state from localStorage or defaults
   const [settings, setSettings] = useState<ReaderSettings>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
@@ -35,11 +40,33 @@ export function useReaderSettings() {
 
       // Manually handle theme switching since we removed next-themes
       const root = window.document.documentElement;
+
+      // Clear any existing timeout to ensure only the latest transition completes
+      if (themeTransitionTimeoutRef.current !== null) {
+        clearTimeout(themeTransitionTimeoutRef.current);
+      }
+
+      // Add transitioning class before theme change
+      root.classList.add("theme-transitioning");
+
       root.classList.remove(...THEME_CLASSES);
       root.classList.add(settings.theme);
+
+      // Remove transitioning class after transition completes
+      themeTransitionTimeoutRef.current = window.setTimeout(() => {
+        root.classList.remove("theme-transitioning");
+        themeTransitionTimeoutRef.current = null;
+      }, THEME_TRANSITION_DURATION_MS);
     } catch (error) {
       console.warn("Error saving settings to localStorage:", error);
     }
+
+    // Cleanup: clear timeout if component unmounts
+    return () => {
+      if (themeTransitionTimeoutRef.current !== null) {
+        clearTimeout(themeTransitionTimeoutRef.current);
+      }
+    };
   }, [settings]);
 
   const updateSettings = useCallback((newSettings: Partial<ReaderSettings>) => {

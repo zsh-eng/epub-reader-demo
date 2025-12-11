@@ -234,3 +234,11 @@
     --magenta-primary: hsl(329 54% 59%);
     --magenta-secondary: hsl(326 55% 41%);
 }
+
+@layer utilities {
+    /* Override transition-all during theme changes to ensure consistent 500ms duration */
+    .theme-transitioning .transition-all {
+        transition-property: background-color, color, border-color !important;
+        transition-duration: 500ms !important;
+    }
+}
