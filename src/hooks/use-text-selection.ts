@@ -47,10 +47,19 @@ export function useTextSelection(
       }
     };
 
-    // Use a small delay (100ms) to prevent flickering during drag selection
+    // Use a small delay to prevent flickering during drag selection
+    // Longer delay for touch devices to work with native selection UI
     let timeoutId: number;
+    const isTouchDevice =
+      "ontouchstart" in window || navigator.maxTouchPoints > 0;
+    const delay = isTouchDevice ? 300 : 100;
+
     const handleMouseUp = () => {
-      timeoutId = window.setTimeout(handleTextSelection, 100);
+      timeoutId = window.setTimeout(handleTextSelection, delay);
+    };
+
+    const handleTouchEnd = () => {
+      timeoutId = window.setTimeout(handleTextSelection, delay);
     };
 
     const handleSelectionChange = () => {
@@ -61,10 +70,12 @@ export function useTextSelection(
     };
 
     document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("touchend", handleTouchEnd);
     document.addEventListener("selectionchange", handleSelectionChange);
 
     return () => {
       document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchend", handleTouchEnd);
       document.removeEventListener("selectionchange", handleSelectionChange);
       if (timeoutId) {
         clearTimeout(timeoutId);
