@@ -1,5 +1,6 @@
 import { HighlightToolbar } from "@/components/HighlightToolbar";
 import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
+import { MobileReaderNav } from "@/components/Reader/MobileReaderNav";
 import { NavigationButtons } from "@/components/Reader/NavigationButtons";
 import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
 import { SideNavigation } from "@/components/Reader/SideNavigation";
@@ -11,6 +12,7 @@ import { useChapterContent } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useHighlights } from "@/hooks/use-highlights";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { type HighlightColor } from "@/lib/highlight-constants";
@@ -42,6 +44,9 @@ export function Reader() {
 
   // Refs
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Mobile detection
+  const isMobile = useIsMobile();
 
   // Local state (minimal)
   const [isTOCOpen, setIsTOCOpen] = useState(false);
@@ -216,13 +221,16 @@ export function Reader() {
   // Render
   return (
     <div className="flex flex-col min-h-screen">
-      <SideNavigation
-        onBack={() => navigate("/")}
-        onPrevious={goToPreviousChapter}
-        onNext={goToNextChapter}
-        hasPreviousChapter={hasPreviousChapter}
-        hasNextChapter={hasNextChapter}
-      />
+      {/* Desktop Navigation */}
+      {!isMobile && (
+        <SideNavigation
+          onBack={() => navigate("/")}
+          onPrevious={goToPreviousChapter}
+          onNext={goToNextChapter}
+          hasPreviousChapter={hasPreviousChapter}
+          hasNextChapter={hasNextChapter}
+        />
+      )}
 
       <TableOfContents
         toc={book.toc}
@@ -251,10 +259,26 @@ export function Reader() {
         </div>
       </ScrollRestoration>
 
-      <ReaderSettingsBar
-        settings={settings}
-        onUpdateSettings={updateSettings}
-      />
+      {/* Desktop Settings Bar */}
+      {!isMobile && (
+        <ReaderSettingsBar
+          settings={settings}
+          onUpdateSettings={updateSettings}
+        />
+      )}
+
+      {/* Mobile Navigation (includes settings drawer) */}
+      {isMobile && (
+        <MobileReaderNav
+          settings={settings}
+          onUpdateSettings={updateSettings}
+          onBack={() => navigate("/")}
+          onPrevious={goToPreviousChapter}
+          onNext={goToNextChapter}
+          hasPreviousChapter={hasPreviousChapter}
+          hasNextChapter={hasNextChapter}
+        />
+      )}
 
       {showHighlightToolbar && (
         <HighlightToolbar
@@ -276,14 +300,17 @@ export function Reader() {
         />
       )}
 
-      <NavigationButtons
-        currentChapterIndex={currentChapterIndex}
-        totalChapters={book.spine.length}
-        hasPreviousChapter={hasPreviousChapter}
-        hasNextChapter={hasNextChapter}
-        onPrevious={goToPreviousChapter}
-        onNext={goToNextChapter}
-      />
+      {/* Desktop Navigation Buttons */}
+      {!isMobile && (
+        <NavigationButtons
+          currentChapterIndex={currentChapterIndex}
+          totalChapters={book.spine.length}
+          hasPreviousChapter={hasPreviousChapter}
+          hasNextChapter={hasNextChapter}
+          onPrevious={goToPreviousChapter}
+          onNext={goToNextChapter}
+        />
+      )}
     </div>
   );
 }
