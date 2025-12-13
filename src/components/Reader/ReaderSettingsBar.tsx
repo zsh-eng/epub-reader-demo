@@ -36,7 +36,7 @@ export function ReaderSettingsBar({
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pb-4 ease-out",
+        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-transform duration-300 pb-4 ease-out",
         isVisible || activePanel !== null
           ? "translate-y-0"
           : "translate-y-[150%]",
@@ -49,7 +49,7 @@ export function ReaderSettingsBar({
         <PopoverAnchor>
           <div
             ref={menuRef}
-            className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-all hover:bg-background/95"
+            className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg md:transition-colors hover:bg-background/95"
           >
             {/* Font Size Controls */}
             <div className="flex items-center gap-3 sm:gap-2">
