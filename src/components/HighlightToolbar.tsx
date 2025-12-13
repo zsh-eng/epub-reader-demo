@@ -1,3 +1,4 @@
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   HIGHLIGHT_COLORS,
   type HighlightColor,
@@ -20,9 +21,13 @@ export function HighlightToolbar({
   currentColor,
   onDelete,
 }: HighlightToolbarProps) {
+  const isMobile = useIsMobile();
+
   // Calculate position directly to avoid layout thrashing/jumping
-  const toolbarWidth = 160; // Reduced width
-  const toolbarHeight = 48; // Reduced height
+  // Mobile: 4 buttons × 40px + 3 gaps × 12px + padding 16px = 212px width, 56px height
+  // Desktop: 4 buttons × 24px + 3 gaps × 8px + padding 16px = 136px width, 40px height
+  const toolbarWidth = isMobile ? 212 : 136;
+  const toolbarHeight = isMobile ? 56 : 40;
   const padding = 12;
 
   let x = position.x - toolbarWidth / 2;
