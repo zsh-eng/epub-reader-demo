@@ -152,7 +152,10 @@
         @apply border-border outline-ring/50;
     }
     body {
-        @apply bg-background text-foreground transition-colors duration-500;
+        @apply bg-background text-foreground;
+    }
+    :root.theme-transitioning body {
+        @apply transition-colors duration-500;
     }
 }
 
