@@ -24,6 +24,7 @@ interface MobileReaderNavProps {
   onNext: () => void;
   hasPreviousChapter: boolean;
   hasNextChapter: boolean;
+  isVisible: boolean;
 }
 
 export function MobileReaderNav({
@@ -34,9 +35,9 @@ export function MobileReaderNav({
   onNext,
   hasPreviousChapter,
   hasNextChapter,
+  isVisible,
 }: MobileReaderNavProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const isVisible = useScrollVisibility();
 
   return (
     <>

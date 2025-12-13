@@ -1,5 +1,6 @@
 import { HighlightToolbar } from "@/components/HighlightToolbar";
 import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
+import { MobileHighlightBar } from "@/components/Reader/MobileHighlightBar";
 import { MobileReaderNav } from "@/components/Reader/MobileReaderNav";
 import { NavigationButtons } from "@/components/Reader/NavigationButtons";
 import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
@@ -14,6 +15,7 @@ import { useHighlights } from "@/hooks/use-highlights";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
+import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { type HighlightColor } from "@/lib/highlight-constants";
 import {
@@ -204,6 +206,7 @@ export function Reader() {
   useKeyboardNavigation(goToPreviousChapter, goToNextChapter, () =>
     navigate("/"),
   );
+  const isVisible = useScrollVisibility();
 
   // Early returns
   if (isLoading) return <LoadingSpinner />;
@@ -270,6 +273,7 @@ export function Reader() {
       {/* Mobile Navigation (includes settings drawer) */}
       {isMobile && (
         <MobileReaderNav
+          isVisible={isVisible}
           settings={settings}
           onUpdateSettings={updateSettings}
           onBack={() => navigate("/")}
@@ -280,25 +284,45 @@ export function Reader() {
         />
       )}
 
-      {showHighlightToolbar && (
-        <HighlightToolbar
-          position={toolbarPosition}
-          onColorSelect={handleHighlightColorSelect}
-          onClose={handleCloseHighlightToolbar}
-        />
-      )}
+      {/* Highlight Toolbars - Mobile uses bottom bar, Desktop uses floating toolbar */}
+      {showHighlightToolbar &&
+        (isMobile ? (
+          <MobileHighlightBar
+            isNavVisible={isVisible}
+            onColorSelect={handleHighlightColorSelect}
+            onClose={handleCloseHighlightToolbar}
+          />
+        ) : (
+          <HighlightToolbar
+            position={toolbarPosition}
+            onColorSelect={handleHighlightColorSelect}
+            onClose={handleCloseHighlightToolbar}
+          />
+        ))}
 
-      {deletePopoverPosition && activeHighlight && (
-        <HighlightToolbar
-          position={deletePopoverPosition}
-          currentColor={activeHighlight.color}
-          onColorSelect={(color) =>
-            handleHighlightUpdate(activeHighlight.id, color)
-          }
-          onDelete={() => handleHighlightDelete(activeHighlight.id)}
-          onClose={handleCloseDeletePopover}
-        />
-      )}
+      {deletePopoverPosition &&
+        activeHighlight &&
+        (isMobile ? (
+          <MobileHighlightBar
+            isNavVisible={isVisible}
+            currentColor={activeHighlight.color}
+            onColorSelect={(color) =>
+              handleHighlightUpdate(activeHighlight.id, color)
+            }
+            onDelete={() => handleHighlightDelete(activeHighlight.id)}
+            onClose={handleCloseDeletePopover}
+          />
+        ) : (
+          <HighlightToolbar
+            position={deletePopoverPosition}
+            currentColor={activeHighlight.color}
+            onColorSelect={(color) =>
+              handleHighlightUpdate(activeHighlight.id, color)
+            }
+            onDelete={() => handleHighlightDelete(activeHighlight.id)}
+            onClose={handleCloseDeletePopover}
+          />
+        ))}
 
       {/* Desktop Navigation Buttons */}
       {!isMobile && (
