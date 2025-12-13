@@ -53,16 +53,15 @@ export function useReaderSettings() {
       // This is combined with the initial setting of the theme in index.html
       if (isInitialMount.current) {
         isInitialMount.current = false;
-      } else {
-        // Add transitioning class for smooth theme change animation
-        root.classList.add(THEME_TRANSITION_CLASS);
-
-        // Remove transitioning class after transition completes
-        themeTransitionTimeoutRef.current = window.setTimeout(() => {
-          root.classList.remove(THEME_TRANSITION_CLASS);
-          themeTransitionTimeoutRef.current = null;
-        }, THEME_TRANSITION_DURATION_MS);
+        return;
       }
+      // Add transitioning class for smooth theme change animation
+      root.classList.add(THEME_TRANSITION_CLASS);
+      // Remove transitioning class after transition completes
+      themeTransitionTimeoutRef.current = window.setTimeout(() => {
+        root.classList.remove(THEME_TRANSITION_CLASS);
+        themeTransitionTimeoutRef.current = null;
+      }, THEME_TRANSITION_DURATION_MS);
 
       root.classList.remove(...THEME_CLASSES);
       root.classList.add(settings.theme);
