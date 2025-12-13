@@ -155,7 +155,7 @@
         @apply bg-background text-foreground;
     }
     :root.theme-transitioning body {
-        @apply transition-colors duration-500;
+        @apply transition-colors duration-300;
     }
 }
 
@@ -239,9 +239,9 @@
 }
 
 @layer utilities {
-    /* Override transition-all during theme changes to ensure consistent 500ms duration */
+    /* Override transition-all during theme changes to ensure consistent 300ms duration */
     .theme-transitioning .transition-all {
         transition-property: background-color, color, border-color !important;
-        transition-duration: 500ms !important;
+        transition-duration: 300ms !important;
     }
 }
