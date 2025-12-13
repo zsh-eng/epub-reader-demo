@@ -3,6 +3,7 @@ import {
   type HighlightColor,
 } from "@/lib/highlight-constants";
 import { cn } from "@/lib/utils";
+import { motion } from "motion/react";
 
 interface MobileHighlightBarProps {
   onColorSelect: (color: HighlightColor) => void;
@@ -22,10 +23,14 @@ export function MobileHighlightBar({
   return (
     <>
       {/* Backdrop to close on tap outside */}
-      <div
+      <motion.div
         className="fixed inset-0 z-40"
         onPointerDown={onClose}
         aria-hidden="true"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15, ease: "easeInOut" }}
       />
 
       {/* Highlight bar */}
@@ -35,7 +40,16 @@ export function MobileHighlightBar({
           isNavVisible ? "bottom-18" : "bottom-4",
         )}
       >
-        <div className="flex items-center gap-3 p-3 rounded-full bg-background/80 dark:bg-input/30 backdrop-blur-md shadow-xl border border-border animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <motion.div
+          className="flex items-center gap-3 p-3 rounded-full bg-background/80 dark:bg-input/30 backdrop-blur-md shadow-xl border border-border"
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 8 }}
+          transition={{
+            opacity: { duration: 0.15, ease: "easeInOut" },
+            y: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+          }}
+        >
           {HIGHLIGHT_COLORS.map((color) => {
             const isCurrentColor = currentColor && color.name === currentColor;
 
@@ -57,7 +71,9 @@ export function MobileHighlightBar({
                   "border border-black/5 active:border-black/10",
                   isCurrentColor && "ring-2 ring-offset-2 ring-foreground/50",
                 )}
-                style={{ backgroundColor: `var(--${color.name}-secondary)` }}
+                style={{
+                  backgroundColor: `var(--${color.name}-secondary)`,
+                }}
                 aria-label={
                   isCurrentColor
                     ? "Delete highlight"
@@ -66,7 +82,7 @@ export function MobileHighlightBar({
               />
             );
           })}
-        </div>
+        </motion.div>
       </div>
     </>
   );

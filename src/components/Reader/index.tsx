@@ -24,6 +24,7 @@ import {
 } from "@/lib/highlight-utils";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
+import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -285,44 +286,48 @@ export function Reader() {
       )}
 
       {/* Highlight Toolbars - Mobile uses bottom bar, Desktop uses floating toolbar */}
-      {showHighlightToolbar &&
-        (isMobile ? (
-          <MobileHighlightBar
-            isNavVisible={isVisible}
-            onColorSelect={handleHighlightColorSelect}
-            onClose={handleCloseHighlightToolbar}
-          />
-        ) : (
-          <HighlightToolbar
-            position={toolbarPosition}
-            onColorSelect={handleHighlightColorSelect}
-            onClose={handleCloseHighlightToolbar}
-          />
-        ))}
+      <AnimatePresence>
+        {showHighlightToolbar &&
+          (isMobile ? (
+            <MobileHighlightBar
+              isNavVisible={isVisible}
+              onColorSelect={handleHighlightColorSelect}
+              onClose={handleCloseHighlightToolbar}
+            />
+          ) : (
+            <HighlightToolbar
+              position={toolbarPosition}
+              onColorSelect={handleHighlightColorSelect}
+              onClose={handleCloseHighlightToolbar}
+            />
+          ))}
+      </AnimatePresence>
 
-      {deletePopoverPosition &&
-        activeHighlight &&
-        (isMobile ? (
-          <MobileHighlightBar
-            isNavVisible={isVisible}
-            currentColor={activeHighlight.color}
-            onColorSelect={(color) =>
-              handleHighlightUpdate(activeHighlight.id, color)
-            }
-            onDelete={() => handleHighlightDelete(activeHighlight.id)}
-            onClose={handleCloseDeletePopover}
-          />
-        ) : (
-          <HighlightToolbar
-            position={deletePopoverPosition}
-            currentColor={activeHighlight.color}
-            onColorSelect={(color) =>
-              handleHighlightUpdate(activeHighlight.id, color)
-            }
-            onDelete={() => handleHighlightDelete(activeHighlight.id)}
-            onClose={handleCloseDeletePopover}
-          />
-        ))}
+      <AnimatePresence>
+        {deletePopoverPosition &&
+          activeHighlight &&
+          (isMobile ? (
+            <MobileHighlightBar
+              isNavVisible={isVisible}
+              currentColor={activeHighlight.color}
+              onColorSelect={(color) =>
+                handleHighlightUpdate(activeHighlight.id, color)
+              }
+              onDelete={() => handleHighlightDelete(activeHighlight.id)}
+              onClose={handleCloseDeletePopover}
+            />
+          ) : (
+            <HighlightToolbar
+              position={deletePopoverPosition}
+              currentColor={activeHighlight.color}
+              onColorSelect={(color) =>
+                handleHighlightUpdate(activeHighlight.id, color)
+              }
+              onDelete={() => handleHighlightDelete(activeHighlight.id)}
+              onClose={handleCloseDeletePopover}
+            />
+          ))}
+      </AnimatePresence>
 
       {/* Desktop Navigation Buttons */}
       {!isMobile && (
