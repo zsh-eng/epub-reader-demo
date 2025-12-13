@@ -5,7 +5,7 @@ import {
   GroupedTooltipTrigger,
   TooltipGroup,
 } from "@/components/ui/tooltip-group";
-import { ArrowLeft, ChevronDown, ChevronUp, X } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { Kbd } from "../ui/kbd";
 
 export interface SideNavigationProps {
@@ -35,7 +35,7 @@ export function SideNavigation({
 }: SideNavigationProps) {
   return (
     <TooltipGroup delayDuration={500} skipDelayDuration={300}>
-      <div className="fixed left-4 top-6 z-40 flex flex-col gap-2">
+      <div className="fixed left-4 top-6 z-40 flex gap-2">
         {/* Back to Library Button */}
         <GroupedTooltip id="back">
           <GroupedTooltipTrigger asChild>
@@ -44,12 +44,12 @@ export function SideNavigation({
               size="icon-lg"
               onClick={onBack}
               aria-label="Back to library"
-              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
+              className="w-24 rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
           </GroupedTooltipTrigger>
-          <GroupedTooltipContent side="right" sideOffset={8}>
+          <GroupedTooltipContent side="bottom" sideOffset={8}>
             <div className="flex items-center gap-2">
               <span>Back to library</span>
               <Kbd>Esc</Kbd>
@@ -68,10 +68,10 @@ export function SideNavigation({
               aria-label="Previous chapter"
               className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
-              <ChevronUp className="h-5 w-5" />
+              <ChevronLeft className="h-5 w-5" />
             </Button>
           </GroupedTooltipTrigger>
-          <GroupedTooltipContent side="right" sideOffset={8}>
+          <GroupedTooltipContent side="bottom" sideOffset={8}>
             <div className="flex items-center gap-2">
               <span>Previous chapter</span>
               <Kbd>←</Kbd>
@@ -90,10 +90,10 @@ export function SideNavigation({
               aria-label="Next chapter"
               className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
-              <ChevronDown className="h-5 w-5" />
+              <ChevronRight className="h-5 w-5" />
             </Button>
           </GroupedTooltipTrigger>
-          <GroupedTooltipContent side="right" sideOffset={8}>
+          <GroupedTooltipContent side="bottom" sideOffset={8}>
             <div className="flex items-center gap-2">
               <span>Next chapter</span>
               <Kbd>→</Kbd>
