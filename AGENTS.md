@@ -9,3 +9,5 @@ defined in the index.css file.
 If you do encounter other colours in the codebase, please feel free to refactor them to use the existing
 CSS theme variables.
 Please clarify with the user if you intend to add more colours and provide a justification for why.
+
+We have the `motion` animation library installed. Do use it for animations that are more complex than a basic CSS animation (or would require excessive amounts of CSS syntax).
