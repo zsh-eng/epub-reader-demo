@@ -44,7 +44,7 @@ export function SideNavigation({
               size="icon-lg"
               onClick={onBack}
               aria-label="Back to library"
-              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent"
+              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -66,7 +66,7 @@ export function SideNavigation({
               onClick={onPrevious}
               disabled={!hasPreviousChapter}
               aria-label="Previous chapter"
-              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50"
+              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
               <ChevronUp className="h-5 w-5" />
             </Button>
@@ -88,7 +88,7 @@ export function SideNavigation({
               onClick={onNext}
               disabled={!hasNextChapter}
               aria-label="Next chapter"
-              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50"
+              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
               <ChevronDown className="h-5 w-5" />
             </Button>
