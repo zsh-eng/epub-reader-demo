@@ -65,7 +65,7 @@ export function TypographyPanel({
         scrollContainerRef.current.querySelector('[data-state="on"]');
       if (selectedElement) {
         selectedElement.scrollIntoView({
-          behavior: "smooth",
+          behavior: "instant",
           block: "nearest",
           inline: "center",
         });
