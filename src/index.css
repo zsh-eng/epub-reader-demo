@@ -154,8 +154,12 @@
     body {
         @apply bg-background text-foreground;
     }
-    :root.theme-transitioning body {
-        @apply transition-colors duration-300;
+    /* Only apply theme transition on devices with hover (desktop/laptop) to avoid
+       staggered repainting on mobile browsers that struggle with many simultaneous transitions */
+    @media (hover: hover) {
+        :root.theme-transitioning body {
+            @apply transition-colors duration-300;
+        }
     }
 }
 
@@ -239,9 +243,13 @@
 }
 
 @layer utilities {
-    /* Override transition-all during theme changes to ensure consistent 300ms duration */
-    .theme-transitioning .transition-all {
-        transition-property: background-color, color, border-color !important;
-        transition-duration: 300ms !important;
+    /* Override transition-all during theme changes to ensure consistent 300ms duration
+       Only on desktop - mobile gets instant theme changes to avoid staggered repainting */
+    @media (hover: hover) {
+        .theme-transitioning .transition-all {
+            transition-property:
+                background-color, color, border-color !important;
+            transition-duration: 300ms !important;
+        }
     }
 }
