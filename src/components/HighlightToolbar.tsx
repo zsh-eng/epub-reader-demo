@@ -83,42 +83,49 @@ export function HighlightToolbar({
 
   return (
     <div
-      className="highlight-toolbar fixed z-50 flex items-center gap-2 p-2 rounded-full bg-background shadow-xl border border-border animate-in fade-in zoom-in-95 duration-200"
+      className="highlight-toolbar fixed z-50 flex items-center gap-3 md:gap-2 p-2 rounded-full bg-background shadow-xl border border-border animate-in fade-in zoom-in-95 duration-200"
       style={{
         left: `${x}px`,
         top: `${y}px`,
       }}
     >
-      {HIGHLIGHT_COLORS.map((color) => (
-        <button
-          key={color.name}
-          onClick={() => {
-            if (currentColor && color.name === currentColor && onDelete) {
-              onDelete();
-            } else {
-              onColorSelect(color.name);
+      {HIGHLIGHT_COLORS.map((color) => {
+        const handlePointerDown = () => {
+          const isRemoveExistingHighlight =
+            currentColor && color.name === currentColor && onDelete;
+          if (isRemoveExistingHighlight) {
+            onDelete();
+            return;
+          }
+
+          onColorSelect(color.name);
+        };
+
+        return (
+          <button
+            key={color.name}
+            onPointerDown={handlePointerDown}
+            className={cn(
+              "cursor-pointer w-10 h-10 md:w-6 md:h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
+              "border border-black/5 hover:border-black/10",
+              currentColor &&
+                color.name === currentColor &&
+                "ring-2 ring-offset-2 ring-gray-900",
+            )}
+            style={{ backgroundColor: `var(--${color.name}-secondary)` }}
+            aria-label={
+              currentColor && color.name === currentColor
+                ? "Delete highlight"
+                : `Highlight with ${color.name}`
             }
-          }}
-          className={cn(
-            "w-6 h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
-            "border border-black/5 hover:border-black/10",
-            currentColor &&
-              color.name === currentColor &&
-              "ring-2 ring-offset-2 ring-gray-900",
-          )}
-          style={{ backgroundColor: `var(--${color.name}-secondary)` }}
-          aria-label={
-            currentColor && color.name === currentColor
-              ? "Delete highlight"
-              : `Highlight with ${color.name}`
-          }
-          title={
-            currentColor && color.name === currentColor
-              ? "Delete highlight"
-              : `Highlight with ${color.name}`
-          }
-        />
-      ))}
+            title={
+              currentColor && color.name === currentColor
+                ? "Delete highlight"
+                : `Highlight with ${color.name}`
+            }
+          />
+        );
+      })}
     </div>
   );
 }
