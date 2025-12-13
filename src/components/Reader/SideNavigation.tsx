@@ -5,7 +5,7 @@ import {
   GroupedTooltipTrigger,
   TooltipGroup,
 } from "@/components/ui/tooltip-group";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, X } from "lucide-react";
 import { Kbd } from "../ui/kbd";
 
 export interface SideNavigationProps {
@@ -35,28 +35,7 @@ export function SideNavigation({
 }: SideNavigationProps) {
   return (
     <TooltipGroup delayDuration={500} skipDelayDuration={300}>
-      <div className="fixed left-4 top-6 z-40 flex gap-2">
-        {/* Back to Library Button */}
-        <GroupedTooltip id="back">
-          <GroupedTooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-lg"
-              onClick={onBack}
-              aria-label="Back to library"
-              className="w-24 rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-          </GroupedTooltipTrigger>
-          <GroupedTooltipContent side="bottom" sideOffset={8}>
-            <div className="flex items-center gap-2">
-              <span>Back to library</span>
-              <Kbd>Esc</Kbd>
-            </div>
-          </GroupedTooltipContent>
-        </GroupedTooltip>
-
+      <div className="fixed right-4 top-4 z-40 flex">
         {/* Previous Chapter Button */}
         <GroupedTooltip id="previous">
           <GroupedTooltipTrigger asChild>
@@ -66,9 +45,9 @@ export function SideNavigation({
               onClick={onPrevious}
               disabled={!hasPreviousChapter}
               aria-label="Previous chapter"
-              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
+              className="w-12 rounded-l-lg bg-background/80 backdrop-blur-sm border-l-0 border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
-              <ChevronLeft className="h-5 w-5" />
+              <ArrowLeft className="" />
             </Button>
           </GroupedTooltipTrigger>
           <GroupedTooltipContent side="bottom" sideOffset={8}>
@@ -88,15 +67,36 @@ export function SideNavigation({
               onClick={onNext}
               disabled={!hasNextChapter}
               aria-label="Next chapter"
-              className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
+              className="w-12 rounded-r-lg rounded-l-none bg-background/80 backdrop-blur-sm border-l-0 border border-border hover:bg-accent disabled:opacity-50 transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
             >
-              <ChevronRight className="h-5 w-5" />
+              <ArrowRight className="" />
             </Button>
           </GroupedTooltipTrigger>
           <GroupedTooltipContent side="bottom" sideOffset={8}>
             <div className="flex items-center gap-2">
               <span>Next chapter</span>
               <Kbd>→</Kbd>
+            </div>
+          </GroupedTooltipContent>
+        </GroupedTooltip>
+
+        {/* Back to Library Button */}
+        <GroupedTooltip id="back">
+          <GroupedTooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              onClick={onBack}
+              aria-label="Back to library"
+              className="rounded-lg ml-2 bg-background/80 backdrop-blur-sm hover:bg-accent transition-transform active:scale-95 active:duration-75 duration-150 ease-out"
+            >
+              <X className="h-5 w-5" />
+            </Button>
+          </GroupedTooltipTrigger>
+          <GroupedTooltipContent side="bottom" sideOffset={8}>
+            <div className="flex items-center gap-2">
+              <span>Back to library</span>
+              <Kbd>Esc</Kbd>
             </div>
           </GroupedTooltipContent>
         </GroupedTooltip>

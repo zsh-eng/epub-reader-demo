@@ -35,7 +35,7 @@ export function ReaderSettingsBar({
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-transform duration-300 pb-4 ease-out",
+        "fixed bottom-4 right-4 z-50 transition-transform duration-300 ease-out",
         isVisible || activePanel !== null
           ? "translate-y-0"
           : "translate-y-[150%]",
@@ -48,7 +48,7 @@ export function ReaderSettingsBar({
         <PopoverAnchor>
           <div
             ref={menuRef}
-            className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg md:transition-colors hover:bg-background/95"
+            className="flex items-center gap-1 p-2 rounded-xl bg-background/80 backdrop-blur-md border shadow-lg md:transition-colors hover:bg-background/95"
           >
             {/* Theme Button */}
             <Button
@@ -82,7 +82,7 @@ export function ReaderSettingsBar({
 
         <PopoverContent
           className="w-[95vw] mx-2 sm:w-md p-6 rounded-3xl bg-background/80 backdrop-blur-md border shadow-lg"
-          alignOffset={20}
+          sideOffset={8}
           onInteractOutside={(e) => {
             if (menuRef.current && menuRef.current.contains(e.target as Node)) {
               e.preventDefault();
