@@ -5,7 +5,7 @@ import {
   GroupedTooltipTrigger,
   TooltipGroup,
 } from "@/components/ui/tooltip-group";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, X } from "lucide-react";
 import { Kbd } from "../ui/kbd";
 
 export interface SideNavigationProps {
@@ -46,7 +46,7 @@ export function SideNavigation({
               aria-label="Back to library"
               className="rounded-lg bg-background/80 backdrop-blur-sm border border-border hover:bg-accent"
             >
-              <X className="h-5 w-5" />
+              <ArrowLeft className="h-5 w-5" />
             </Button>
           </GroupedTooltipTrigger>
           <GroupedTooltipContent side="right" sideOffset={8}>
