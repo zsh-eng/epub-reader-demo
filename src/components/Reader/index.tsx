@@ -238,22 +238,17 @@ export function Reader() {
         initialProgress={initialProgress}
         contentReady={!!chapterContent}
       >
-        {({ isRestoring }) => (
-          <div
-            className="transition-opacity duration-150"
-            style={{ opacity: isRestoring ? 0 : 1 }}
-          >
-            <ReaderContent
-              content={chapterContent}
-              chapterIndex={currentChapterIndex}
-              title={currentChapterTitle}
-              ref={contentRef}
-              onHighlightClick={handleHighlightClick}
-              activeHighlightId={activeHighlightId}
-              settings={settings}
-            />
-          </div>
-        )}
+        <div className="">
+          <ReaderContent
+            content={chapterContent}
+            chapterIndex={currentChapterIndex}
+            title={currentChapterTitle}
+            ref={contentRef}
+            onHighlightClick={handleHighlightClick}
+            activeHighlightId={activeHighlightId}
+            settings={settings}
+          />
+        </div>
       </ScrollRestoration>
 
       <ReaderSettingsBar
