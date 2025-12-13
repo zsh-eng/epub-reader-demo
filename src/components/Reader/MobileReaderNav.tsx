@@ -103,7 +103,7 @@ export function MobileReaderNav({
 
       {/* Settings Drawer */}
       <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <DrawerContent className="">
+        <DrawerContent className="pb-4">
           <Tabs defaultValue="typography" className="flex-1 flex flex-col mt-2">
             <div className="flex-1 overflow-y-auto px-4 mb-4">
               <TabsContent value="typography" className="mt-0">
