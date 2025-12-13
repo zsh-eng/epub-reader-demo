@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS = {
   contentWidth: "narrow",
 } satisfies ReaderSettings;
 
-const THEME_TRANSITION_DURATION_MS = 500;
+const THEME_TRANSITION_DURATION_MS = 300;
 
 export function useReaderSettings() {
   // Track timeout for theme transition cleanup
