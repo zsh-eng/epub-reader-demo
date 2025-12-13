@@ -222,6 +222,10 @@ export function Reader() {
   const hasPreviousChapter = currentChapterIndex > 0;
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
 
+  // Derived state for highlight toolbars
+  const isEditingHighlight = !!(deletePopoverPosition && activeHighlight);
+  const isCreatingHighlight = showHighlightToolbar && !isEditingHighlight;
+
   // Render
   return (
     <div className="flex flex-col min-h-screen">
@@ -286,48 +290,54 @@ export function Reader() {
       )}
 
       {/* Highlight Toolbars - Mobile uses bottom bar, Desktop uses floating toolbar */}
-      <AnimatePresence>
-        {showHighlightToolbar &&
-          (isMobile ? (
+      {isMobile ? (
+        <AnimatePresence>
+          {isEditingHighlight && (
+            <MobileHighlightBar
+              isNavVisible={isVisible}
+              currentColor={activeHighlight.color}
+              onColorSelect={(color) =>
+                handleHighlightUpdate(activeHighlight.id, color)
+              }
+              onDelete={() => handleHighlightDelete(activeHighlight.id)}
+              onClose={handleCloseDeletePopover}
+            />
+          )}
+          {isCreatingHighlight && (
             <MobileHighlightBar
               isNavVisible={isVisible}
               onColorSelect={handleHighlightColorSelect}
               onClose={handleCloseHighlightToolbar}
             />
-          ) : (
-            <HighlightToolbar
-              position={toolbarPosition}
-              onColorSelect={handleHighlightColorSelect}
-              onClose={handleCloseHighlightToolbar}
-            />
-          ))}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      ) : (
+        <>
+          <AnimatePresence>
+            {isCreatingHighlight && (
+              <HighlightToolbar
+                position={toolbarPosition}
+                onColorSelect={handleHighlightColorSelect}
+                onClose={handleCloseHighlightToolbar}
+              />
+            )}
+          </AnimatePresence>
 
-      <AnimatePresence>
-        {deletePopoverPosition &&
-          activeHighlight &&
-          (isMobile ? (
-            <MobileHighlightBar
-              isNavVisible={isVisible}
-              currentColor={activeHighlight.color}
-              onColorSelect={(color) =>
-                handleHighlightUpdate(activeHighlight.id, color)
-              }
-              onDelete={() => handleHighlightDelete(activeHighlight.id)}
-              onClose={handleCloseDeletePopover}
-            />
-          ) : (
-            <HighlightToolbar
-              position={deletePopoverPosition}
-              currentColor={activeHighlight.color}
-              onColorSelect={(color) =>
-                handleHighlightUpdate(activeHighlight.id, color)
-              }
-              onDelete={() => handleHighlightDelete(activeHighlight.id)}
-              onClose={handleCloseDeletePopover}
-            />
-          ))}
-      </AnimatePresence>
+          <AnimatePresence>
+            {isEditingHighlight && (
+              <HighlightToolbar
+                position={deletePopoverPosition}
+                currentColor={activeHighlight.color}
+                onColorSelect={(color) =>
+                  handleHighlightUpdate(activeHighlight.id, color)
+                }
+                onDelete={() => handleHighlightDelete(activeHighlight.id)}
+                onClose={handleCloseDeletePopover}
+              />
+            )}
+          </AnimatePresence>
+        </>
+      )}
 
       {/* Desktop Navigation Buttons */}
       {!isMobile && (
