@@ -4,11 +4,10 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from "@/components/ui/popover";
-import { Separator } from "@/components/ui/separator";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { cn } from "@/lib/utils";
 import type { ReaderSettings } from "@/types/reader.types";
-import { Minus, Palette, Plus, Type } from "lucide-react";
+import { Palette, Type } from "lucide-react";
 import { useRef, useState } from "react";
 import { ThemePanel } from "./ReaderSettings/ThemePanel";
 import { TypographyPanel } from "./ReaderSettings/TypographyPanel";
@@ -51,43 +50,6 @@ export function ReaderSettingsBar({
             ref={menuRef}
             className="flex items-center gap-1 p-2 rounded-full bg-background/80 backdrop-blur-md border shadow-lg md:transition-colors hover:bg-background/95"
           >
-            {/* Font Size Controls */}
-            <div className="flex items-center gap-3 sm:gap-2">
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                className="rounded-full"
-                onClick={() =>
-                  onUpdateSettings({
-                    fontSize: Math.max(50, settings.fontSize - 10),
-                  })
-                }
-                disabled={settings.fontSize <= 50}
-              >
-                <Minus className="size-5 sm:size-4" />
-                <span className="sr-only">Decrease font size</span>
-              </Button>
-              <span className="text-sm sm:text-xs font-medium text-center tabular-nums">
-                {settings.fontSize}%
-              </span>
-              <Button
-                variant="ghost"
-                size="icon-lg"
-                className="rounded-full"
-                onClick={() =>
-                  onUpdateSettings({
-                    fontSize: Math.min(200, settings.fontSize + 10),
-                  })
-                }
-                disabled={settings.fontSize >= 200}
-              >
-                <Plus className="size-5 sm:size-4" />
-                <span className="sr-only">Increase font size</span>
-              </Button>
-            </div>
-
-            <Separator orientation="vertical" className="h-6 mx-1" />
-
             {/* Theme Button */}
             <Button
               variant="ghost"

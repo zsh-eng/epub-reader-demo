@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type {
@@ -11,8 +12,10 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  Minus,
   MoveHorizontal,
   MoveVertical,
+  Plus,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -196,6 +199,46 @@ export function TypographyPanel({
             Justify
           </ToggleGroupItem>
         </ToggleGroup>
+      </div>
+
+      {/* Font Size */}
+      <div className="space-y-2">
+        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+          Font Size
+        </h4>
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-md"
+            onClick={() =>
+              onUpdateSettings({
+                fontSize: Math.max(50, settings.fontSize - 10),
+              })
+            }
+            disabled={settings.fontSize <= 50}
+          >
+            <Minus className="h-4 w-4" />
+            <span className="sr-only">Decrease font size</span>
+          </Button>
+          <span className="text-sm font-medium text-center tabular-nums min-w-[4rem]">
+            {settings.fontSize}%
+          </span>
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-md"
+            onClick={() =>
+              onUpdateSettings({
+                fontSize: Math.min(200, settings.fontSize + 10),
+              })
+            }
+            disabled={settings.fontSize >= 200}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="sr-only">Increase font size</span>
+          </Button>
+        </div>
       </div>
     </div>
   );
