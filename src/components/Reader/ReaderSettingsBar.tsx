@@ -36,7 +36,7 @@ export function ReaderSettingsBar({
   return (
     <div
       className={cn(
-        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-500 pb-4",
+        "fixed bottom-0 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 pb-4 ease-out",
         isVisible || activePanel !== null
           ? "translate-y-0"
           : "translate-y-[150%]",
