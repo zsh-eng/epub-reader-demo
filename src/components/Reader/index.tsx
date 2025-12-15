@@ -9,7 +9,10 @@ import { TableOfContents } from "@/components/Reader/TableOfContents";
 import ReaderContent from "@/components/ReaderContent";
 import { ScrollRestoration } from "@/components/ScrollRestoration";
 import { useBookLoader } from "@/hooks/use-book-loader";
-import { useChapterContent } from "@/hooks/use-chapter-content";
+import {
+  getManifestItemHref,
+  useChapterContent,
+} from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useHighlights } from "@/hooks/use-highlights";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
@@ -84,10 +87,10 @@ export function Reader() {
 
   const { settings, updateSettings } = useReaderSettings();
 
-  const { chapterContent } = useChapterContent(
-    book,
+  const manifestItemHref = getManifestItemHref(book, currentChapterIndex);
+  const { chapterContent, isLoading: isChapterLoading } = useChapterContent(
     bookId,
-    currentChapterIndex,
+    manifestItemHref,
   );
 
   // Sync highlights to the live DOM whenever content or highlights change.
@@ -210,7 +213,7 @@ export function Reader() {
   const isVisible = useScrollVisibility();
 
   // Early returns
-  if (isLoading) return <LoadingSpinner />;
+  if (isLoading || isChapterLoading) return <LoadingSpinner />;
   if (!book || !bookId) return null;
 
   // Derived state
