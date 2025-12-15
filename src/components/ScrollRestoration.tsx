@@ -1,5 +1,5 @@
-import { bookKeys } from "@/hooks/use-book-loader";
-import { saveReadingProgress, type ReadingProgress } from "@/lib/db";
+import { useProgressMutation } from "@/hooks/use-progress-mutation";
+import { type ReadingProgress } from "@/lib/db";
 import {
   calculateScrollPercentage,
   findVisibleScrollAnchor,
@@ -7,7 +7,6 @@ import {
   waitForContentStability,
   type ScrollAnchor,
 } from "@/lib/scroll-anchor";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export interface ScrollRestorationState {
@@ -59,12 +58,13 @@ export function ScrollRestoration({
   contentReady,
   children,
 }: ScrollRestorationProps) {
-  const queryClient = useQueryClient();
-
   const [state, setState] = useState<ScrollRestorationState>({
     isRestoring: true,
     hasRestored: false,
   });
+
+  // Use the extracted progress mutation hook
+  const saveProgressMutation = useProgressMutation(bookId);
 
   // Track the last saved values to avoid unnecessary saves
   const lastSavedRef = useRef<{
@@ -79,52 +79,6 @@ export function ScrollRestoration({
 
   // Track if we've already restored for this chapter
   const restoredChapterRef = useRef<number | null>(null);
-
-  /**
-   * Mutation for saving reading progress with optimistic updates
-   */
-  const saveProgressMutation = useMutation({
-    mutationFn: async (progress: ReadingProgress) => {
-      await saveReadingProgress(progress);
-      return progress;
-    },
-    onMutate: async (newProgress) => {
-      // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({
-        queryKey: bookKeys.progress(bookId),
-      });
-
-      // Snapshot the previous value
-      const previousProgress = queryClient.getQueryData<ReadingProgress | null>(
-        bookKeys.progress(bookId),
-      );
-
-      // Optimistically update to the new value
-      queryClient.setQueryData<ReadingProgress | null>(
-        bookKeys.progress(bookId),
-        newProgress,
-      );
-
-      // Return context with previous value for rollback
-      return { previousProgress };
-    },
-    onError: (err, _newProgress, context) => {
-      // Rollback to previous value on error
-      if (context?.previousProgress !== undefined) {
-        queryClient.setQueryData(
-          bookKeys.progress(bookId),
-          context.previousProgress,
-        );
-      }
-      console.error("Failed to save reading progress:", err);
-    },
-    onSettled: () => {
-      // Always refetch after error or success to ensure we have the latest data
-      queryClient.invalidateQueries({
-        queryKey: bookKeys.progress(bookId),
-      });
-    },
-  });
 
   /**
    * Saves the current reading progress to the database.
