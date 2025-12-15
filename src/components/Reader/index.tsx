@@ -102,9 +102,6 @@ export function Reader() {
     bookId,
     currentSpineItemId,
   );
-  // Sync highlights to DOM - reactive side effect of data changes
-  useHighlightDOMSync(contentRef, highlights);
-
   // Reader settings
   const { settings, updateSettings } = useReaderSettings();
 
@@ -114,6 +111,10 @@ export function Reader() {
     bookId,
     manifestItemHref,
   );
+  const contentReady = !!chapterContent;
+
+  // Sync highlights to DOM - reactive side effect of data changes
+  useHighlightDOMSync(contentRef, highlights, contentReady);
 
   // Text selection hook for creating new highlights
   const {
@@ -192,7 +193,7 @@ export function Reader() {
         chapterIndex={currentChapterIndex}
         contentRef={contentRef}
         initialProgress={initialProgress}
-        contentReady={!!chapterContent}
+        contentReady={contentReady}
       >
         <ReaderContent
           content={chapterContent}

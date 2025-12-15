@@ -15,14 +15,19 @@ import { useEffect, useRef } from "react";
  *
  * @param contentRef - Ref to the container element with the content
  * @param highlights - Array of highlights to sync to the DOM
+ * @param contentReady - Flag that changes when content changes (e.g., chapter content string).
+ *                     This ensures the effect re-runs when the DOM content is ready,
+ *                     ensuring that the highlights are applied to the DOM.
  */
 export function useHighlightDOMSync(
   contentRef: React.RefObject<HTMLElement | null>,
   highlights: Highlight[],
+  contentReady: boolean,
 ): void {
   const prevHighlightsRef = useRef<Highlight[]>([]);
 
   useEffect(() => {
+    // Early return if container is not yet available
     if (!contentRef.current) return;
 
     const container = contentRef.current;
@@ -71,5 +76,5 @@ export function useHighlightDOMSync(
 
     // Update the ref for the next comparison
     prevHighlightsRef.current = highlights;
-  }, [highlights, contentRef]);
+  }, [highlights, contentRef, contentReady]);
 }
