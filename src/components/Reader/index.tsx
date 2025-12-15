@@ -26,11 +26,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
-import { type HighlightColor } from "@/lib/highlight-constants";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import { AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 /**
@@ -116,49 +115,6 @@ export function Reader() {
     manifestItemHref,
   );
 
-  // Highlight handlers
-  const handleHighlightCreate = useCallback(
-    (highlight: Highlight) => {
-      addHighlightMutation.mutate(highlight);
-    },
-    [addHighlightMutation],
-  );
-
-  const handleHighlightDelete = useCallback(
-    (highlightId: string) => {
-      deleteHighlightMutation.mutate(highlightId);
-      setActiveHighlight(null);
-    },
-    [deleteHighlightMutation],
-  );
-
-  const handleHighlightUpdate = useCallback(
-    (highlightId: string, newColorName: HighlightColor) => {
-      updateHighlightMutation.mutate({
-        id: highlightId,
-        changes: { color: newColorName },
-      });
-    },
-    [updateHighlightMutation],
-  );
-
-  const handleHighlightClick = useCallback(
-    (highlightId: string, position: { x: number; y: number }) => {
-      // If clicking the same highlight, close the popover (toggle behavior)
-      if (activeHighlight?.id === highlightId) {
-        setActiveHighlight(null);
-      } else {
-        // Open popover for the clicked highlight
-        setActiveHighlight({ id: highlightId, position });
-      }
-    },
-    [activeHighlight?.id],
-  );
-
-  const handleClosePopover = useCallback(() => {
-    setActiveHighlight(null);
-  }, []);
-
   // Text selection hook for creating new highlights
   const {
     showHighlightToolbar,
@@ -169,7 +125,9 @@ export function Reader() {
     contentRef,
     bookId,
     currentSpineItemId,
-    handleHighlightCreate,
+    (highlight: Highlight) => {
+      addHighlightMutation.mutate(highlight);
+    },
   );
 
   // Chapter navigation
@@ -241,7 +199,15 @@ export function Reader() {
           chapterIndex={currentChapterIndex}
           title={currentChapterTitle}
           ref={contentRef}
-          onHighlightClick={handleHighlightClick}
+          onHighlightClick={(highlightId, position) => {
+            // If clicking the same highlight, close the popover (toggle behavior)
+            if (activeHighlight?.id === highlightId) {
+              setActiveHighlight(null);
+            } else {
+              // Open popover for the clicked highlight
+              setActiveHighlight({ id: highlightId, position });
+            }
+          }}
           activeHighlightId={activeHighlight?.id ?? null}
           settings={settings}
         />
@@ -277,10 +243,16 @@ export function Reader() {
               isNavVisible={isVisible}
               currentColor={activeHighlightData.color}
               onColorSelect={(color) =>
-                handleHighlightUpdate(activeHighlightData.id, color)
+                updateHighlightMutation.mutate({
+                  id: activeHighlightData.id,
+                  changes: { color },
+                })
               }
-              onDelete={() => handleHighlightDelete(activeHighlightData.id)}
-              onClose={handleClosePopover}
+              onDelete={() => {
+                deleteHighlightMutation.mutate(activeHighlightData.id);
+                setActiveHighlight(null);
+              }}
+              onClose={() => setActiveHighlight(null)}
             />
           )}
           {isCreatingHighlight && (
@@ -309,10 +281,16 @@ export function Reader() {
                 position={activeHighlight.position}
                 currentColor={activeHighlightData.color}
                 onColorSelect={(color) =>
-                  handleHighlightUpdate(activeHighlightData.id, color)
+                  updateHighlightMutation.mutate({
+                    id: activeHighlightData.id,
+                    changes: { color },
+                  })
                 }
-                onDelete={() => handleHighlightDelete(activeHighlightData.id)}
-                onClose={handleClosePopover}
+                onDelete={() => {
+                  deleteHighlightMutation.mutate(activeHighlightData.id);
+                  setActiveHighlight(null);
+                }}
+                onClose={() => setActiveHighlight(null)}
               />
             )}
           </AnimatePresence>
