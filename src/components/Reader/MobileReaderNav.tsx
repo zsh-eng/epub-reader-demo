@@ -59,9 +59,12 @@ export function MobileReaderNav({
       {/* Bottom Navigation Bar */}
       <div
         className={cn(
-          "fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-2 transition-transform duration-300 ease-out",
+          "fixed bottom-0 left-0 right-0 z-50 px-4 pt-2 transition-transform duration-300 ease-out",
           isVisible || isDrawerOpen ? "translate-y-0" : "translate-y-full",
         )}
+        style={{
+          paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
+        }}
       >
         <div className="flex items-center justify-between gap-3">
           {/* Previous Chapter Button - Circular */}
@@ -102,7 +105,12 @@ export function MobileReaderNav({
 
       {/* Settings Drawer */}
       <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <DrawerContent className="pb-4">
+        <DrawerContent
+          className="pb-4"
+          style={{
+            paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
+          }}
+        >
           <Tabs defaultValue="typography" className="flex-1 flex flex-col mt-2">
             <div className="flex-1 overflow-y-auto px-4 mb-4">
               <TabsContent value="typography" className="mt-0">
