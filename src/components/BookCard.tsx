@@ -1,15 +1,15 @@
-import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import type { Book } from "@/lib/db";
-import { getBookCoverUrl } from "@/lib/db";
-import { Trash2, Book as BookIcon, MoreVertical } from "lucide-react";
-import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { Book } from "@/lib/db";
+import { getBookCoverUrl } from "@/lib/db";
+import { Book as BookIcon, MoreVertical, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "./ui/button";
 
 interface BookCardProps {
   book: Book;
@@ -19,7 +19,8 @@ interface BookCardProps {
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
   const [coverUrl, setCoverUrl] = useState<string | undefined>(undefined);
-  const [imageLoaded, setImageLoaded] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_imageLoaded, setImageLoaded] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | undefined;
