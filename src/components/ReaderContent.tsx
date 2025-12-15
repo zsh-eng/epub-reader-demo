@@ -25,7 +25,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
     {
       content,
       chapterIndex,
-      title,
+      // title,
       onHighlightClick,
       activeHighlightId,
       settings,
@@ -140,14 +140,14 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         className="reader-content mx-auto px-6 pb-12 sm:px-8 sm:pb-16 md:px-12 md:pb-20 transition-all duration-300 ease-in-out"
         style={style}
       >
-        <header className="text-center select-none flex h-96 flex-col justify-center gap-0">
+        {/*<header className="text-center select-none flex h-96 flex-col justify-center gap-0">
           {title && (
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-foreground tracking-tight text-balance leading-tight">
               {title}
             </h1>
           )}
           <hr className="w-16 border-t-2 border-muted-foreground/20 mx-auto mt-0" />
-        </header>
+        </header>*/}
         <div dangerouslySetInnerHTML={{ __html: content }} />
       </div>
     );
