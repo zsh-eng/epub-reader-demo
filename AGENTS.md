@@ -13,3 +13,5 @@ Please clarify with the user if you intend to add more colours and provide a jus
 We have the `motion` animation library installed. Do use it for animations that are more complex than a basic CSS animation (or would require excessive amounts of CSS syntax).
 
 We have Tanstack React Query installed. Use it for managing data fetching and caching.
+
+Prefer using early returns / guard clauses to avoid nested conditionals and improve code readability.
