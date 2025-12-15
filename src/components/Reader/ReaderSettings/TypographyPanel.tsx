@@ -221,7 +221,7 @@ export function TypographyPanel({
             <Minus className="h-4 w-4" />
             <span className="sr-only">Decrease font size</span>
           </Button>
-          <span className="text-sm font-medium text-center tabular-nums min-w-[4rem]">
+          <span className="text-sm font-medium text-center tabular-nums min-w-[4rem] w-[50%]">
             {settings.fontSize}%
           </span>
           <Button
