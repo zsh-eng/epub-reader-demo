@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { cn } from "@/lib/utils";
 import type { ReaderSettings } from "@/types/reader.types";
 import {
@@ -121,7 +120,7 @@ export function MobileReaderNav({
               </TabsContent>
             </div>
 
-            <TabsList className="mx-auto mb-4 w-[85%] h-10 rounded-xl">
+            <TabsList className="mx-auto mb-4 w-[85%] h-10">
               <TabsTrigger value="typography" className="gap-2">
                 <Type className="h-4 w-4" />
                 Typography
