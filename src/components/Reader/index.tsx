@@ -14,22 +14,33 @@ import {
   useChapterContent,
 } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
-import { useHighlights } from "@/hooks/use-highlights";
+import { useHighlightDOMSync } from "@/hooks/use-highlight-dom-sync";
+import {
+  useAddHighlightMutation,
+  useDeleteHighlightMutation,
+  useHighlightsQuery,
+  useUpdateHighlightMutation,
+} from "@/hooks/use-highlights-query";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { type HighlightColor } from "@/lib/highlight-constants";
-import {
-  applyHighlightToLiveDOM,
-  removeHighlightFromLiveDOM,
-} from "@/lib/highlight-utils";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+/**
+ * Active highlight state - combines id and position into a single piece of state
+ * to prevent impossible states (id without position or vice versa)
+ */
+interface ActiveHighlightState {
+  id: string;
+  position: { x: number; y: number };
+}
 
 /**
  * Reader Component
@@ -54,17 +65,10 @@ export function Reader() {
   // Mobile detection
   const isMobile = useIsMobile();
 
-  // Local state (minimal)
+  // Local state
   const [isTOCOpen, setIsTOCOpen] = useState(false);
-
-  // Highlight delete popover state
-  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
-    null,
-  );
-  const [deletePopoverPosition, setDeletePopoverPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [activeHighlight, setActiveHighlight] =
+    useState<ActiveHighlightState | null>(null);
 
   // Load book and initial progress
   const { book, initialProgress, isLoading } = useBookLoader(bookId);
@@ -82,111 +86,80 @@ export function Reader() {
   // Get current spine item ID
   const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
 
-  const { highlights, addHighlight, deleteHighlight, updateHighlight } =
-    useHighlights(bookId, currentSpineItemId);
+  // Highlights - TanStack Query for data, mutations for CRUD
+  const { data: highlights = [] } = useHighlightsQuery(
+    bookId,
+    currentSpineItemId,
+  );
+  const addHighlightMutation = useAddHighlightMutation(
+    bookId,
+    currentSpineItemId,
+  );
+  const deleteHighlightMutation = useDeleteHighlightMutation(
+    bookId,
+    currentSpineItemId,
+  );
+  const updateHighlightMutation = useUpdateHighlightMutation(
+    bookId,
+    currentSpineItemId,
+  );
+  // Sync highlights to DOM - reactive side effect of data changes
+  useHighlightDOMSync(contentRef, highlights);
 
+  // Reader settings
   const { settings, updateSettings } = useReaderSettings();
 
+  // Chapter content
   const manifestItemHref = getManifestItemHref(book, currentChapterIndex);
   const { chapterContent, isLoading: isChapterLoading } = useChapterContent(
     bookId,
     manifestItemHref,
   );
 
-  // Sync highlights to the live DOM whenever content or highlights change.
-  // This is the single source of truth for highlight DOM state - all highlight
-  // appearance updates (new highlights, color changes, etc.) flow through here.
-  useEffect(() => {
-    if (!contentRef.current || !book || !chapterContent) return;
-
-    const currentSpineItemId = book.spine[currentChapterIndex]?.idref;
-    if (!currentSpineItemId) return;
-
-    const chapterHighlights = highlights.filter(
-      (h) => h.spineItemId === currentSpineItemId,
-    );
-
-    chapterHighlights.forEach((highlight) => {
-      const existingMark = contentRef.current?.querySelector(
-        `mark[data-highlight-id="${highlight.id}"]`,
-      );
-      if (!existingMark) {
-        // New highlight - apply it to the DOM
-        applyHighlightToLiveDOM(contentRef.current!, highlight);
-        return;
-      }
-
-      if (!(existingMark instanceof HTMLElement)) {
-        return;
-      }
-
-      if (existingMark.dataset.color === highlight.color) {
-        return;
-      }
-
-      // Existing highlight - sync the color in case it changed
-      const allMarkElementsForId = contentRef.current!.querySelectorAll(
-        `mark[data-highlight-id="${highlight.id}"]`,
-      );
-      allMarkElementsForId.forEach((mark) => {
-        if (mark instanceof HTMLElement) {
-          mark.dataset.color = highlight.color;
-        }
-      });
-    });
-  }, [chapterContent, highlights, book, currentChapterIndex]);
-
+  // Highlight handlers
   const handleHighlightCreate = useCallback(
     (highlight: Highlight) => {
-      addHighlight(highlight);
-      if (contentRef.current) {
-        applyHighlightToLiveDOM(contentRef.current, highlight);
-      }
+      addHighlightMutation.mutate(highlight);
     },
-    [addHighlight],
+    [addHighlightMutation],
   );
 
   const handleHighlightDelete = useCallback(
     (highlightId: string) => {
-      deleteHighlight(highlightId);
-      if (contentRef.current) {
-        removeHighlightFromLiveDOM(contentRef.current, highlightId);
-      }
-
-      setActiveHighlightId(null);
-      setDeletePopoverPosition(null);
+      deleteHighlightMutation.mutate(highlightId);
+      setActiveHighlight(null);
     },
-    [deleteHighlight],
+    [deleteHighlightMutation],
   );
 
   const handleHighlightUpdate = useCallback(
     (highlightId: string, newColorName: HighlightColor) => {
-      updateHighlight(highlightId, { color: newColorName });
+      updateHighlightMutation.mutate({
+        id: highlightId,
+        changes: { color: newColorName },
+      });
     },
-    [updateHighlight],
+    [updateHighlightMutation],
   );
 
   const handleHighlightClick = useCallback(
     (highlightId: string, position: { x: number; y: number }) => {
-      // If clicking the same highlight, close the popover
-      if (activeHighlightId === highlightId) {
-        setActiveHighlightId(null);
-        setDeletePopoverPosition(null);
+      // If clicking the same highlight, close the popover (toggle behavior)
+      if (activeHighlight?.id === highlightId) {
+        setActiveHighlight(null);
       } else {
         // Open popover for the clicked highlight
-        setActiveHighlightId(highlightId);
-        setDeletePopoverPosition(position);
+        setActiveHighlight({ id: highlightId, position });
       }
     },
-    [activeHighlightId],
+    [activeHighlight?.id],
   );
 
-  // Close delete popover
-  const handleCloseDeletePopover = useCallback(() => {
-    setActiveHighlightId(null);
-    setDeletePopoverPosition(null);
+  const handleClosePopover = useCallback(() => {
+    setActiveHighlight(null);
   }, []);
 
+  // Text selection hook for creating new highlights
   const {
     showHighlightToolbar,
     toolbarPosition,
@@ -199,6 +172,7 @@ export function Reader() {
     handleHighlightCreate,
   );
 
+  // Chapter navigation
   const { goToPreviousChapter, goToNextChapter, goToChapterByHref } =
     useChapterNavigation(
       book,
@@ -207,9 +181,12 @@ export function Reader() {
       setCurrentChapterIndex,
     );
 
+  // Keyboard navigation
   useKeyboardNavigation(goToPreviousChapter, goToNextChapter, () =>
     navigate("/"),
   );
+
+  // Scroll visibility for mobile nav
   const isVisible = useScrollVisibility();
 
   // Early returns
@@ -217,7 +194,9 @@ export function Reader() {
   if (!book || !bookId) return null;
 
   // Derived state
-  const activeHighlight = highlights.find((h) => h.id === activeHighlightId);
+  const activeHighlightData = highlights.find(
+    (h) => h.id === activeHighlight?.id,
+  );
   const currentChapterTitle = getChapterTitleFromSpine(
     book,
     currentChapterIndex,
@@ -226,7 +205,7 @@ export function Reader() {
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
 
   // Derived state for highlight toolbars
-  const isEditingHighlight = !!(deletePopoverPosition && activeHighlight);
+  const isEditingHighlight = !!(activeHighlight && activeHighlightData);
   const isCreatingHighlight = showHighlightToolbar && !isEditingHighlight;
 
   // Render
@@ -263,7 +242,7 @@ export function Reader() {
           title={currentChapterTitle}
           ref={contentRef}
           onHighlightClick={handleHighlightClick}
-          activeHighlightId={activeHighlightId}
+          activeHighlightId={activeHighlight?.id ?? null}
           settings={settings}
         />
       </ScrollRestoration>
@@ -296,12 +275,12 @@ export function Reader() {
           {isEditingHighlight && (
             <MobileHighlightBar
               isNavVisible={isVisible}
-              currentColor={activeHighlight.color}
+              currentColor={activeHighlightData.color}
               onColorSelect={(color) =>
-                handleHighlightUpdate(activeHighlight.id, color)
+                handleHighlightUpdate(activeHighlightData.id, color)
               }
-              onDelete={() => handleHighlightDelete(activeHighlight.id)}
-              onClose={handleCloseDeletePopover}
+              onDelete={() => handleHighlightDelete(activeHighlightData.id)}
+              onClose={handleClosePopover}
             />
           )}
           {isCreatingHighlight && (
@@ -327,13 +306,13 @@ export function Reader() {
           <AnimatePresence>
             {isEditingHighlight && (
               <HighlightToolbar
-                position={deletePopoverPosition}
-                currentColor={activeHighlight.color}
+                position={activeHighlight.position}
+                currentColor={activeHighlightData.color}
                 onColorSelect={(color) =>
-                  handleHighlightUpdate(activeHighlight.id, color)
+                  handleHighlightUpdate(activeHighlightData.id, color)
                 }
-                onDelete={() => handleHighlightDelete(activeHighlight.id)}
-                onClose={handleCloseDeletePopover}
+                onDelete={() => handleHighlightDelete(activeHighlightData.id)}
+                onClose={handleClosePopover}
               />
             )}
           </AnimatePresence>
