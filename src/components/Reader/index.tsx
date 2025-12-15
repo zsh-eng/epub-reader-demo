@@ -1,11 +1,9 @@
-import { HighlightToolbar } from "@/components/HighlightToolbar";
+import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
-import { MobileHighlightBar } from "@/components/Reader/MobileHighlightBar";
 import { MobileReaderNav } from "@/components/Reader/MobileReaderNav";
 import { NavigationButtons } from "@/components/Reader/NavigationButtons";
 import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
 import { SideNavigation } from "@/components/Reader/SideNavigation";
-import { TableOfContents } from "@/components/Reader/TableOfContents";
 import ReaderContent from "@/components/ReaderContent";
 import { ScrollRestoration } from "@/components/ScrollRestoration";
 import { useBookLoader } from "@/hooks/use-book-loader";
@@ -17,9 +15,7 @@ import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useHighlightDOMSync } from "@/hooks/use-highlight-dom-sync";
 import {
   useAddHighlightMutation,
-  useDeleteHighlightMutation,
   useHighlightsQuery,
-  useUpdateHighlightMutation,
 } from "@/hooks/use-highlights-query";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -28,15 +24,15 @@ import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
-import { AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { TableOfContents } from "./TableOfContents";
 
 /**
  * Active highlight state - combines id and position into a single piece of state
  * to prevent impossible states (id without position or vice versa)
  */
-interface ActiveHighlightState {
+export interface ActiveHighlightState {
   id: string;
   position: { x: number; y: number };
 }
@@ -94,14 +90,7 @@ export function Reader() {
     bookId,
     currentSpineItemId,
   );
-  const deleteHighlightMutation = useDeleteHighlightMutation(
-    bookId,
-    currentSpineItemId,
-  );
-  const updateHighlightMutation = useUpdateHighlightMutation(
-    bookId,
-    currentSpineItemId,
-  );
+
   // Reader settings
   const { settings, updateSettings } = useReaderSettings();
 
@@ -153,19 +142,12 @@ export function Reader() {
   if (!book || !bookId) return null;
 
   // Derived state
-  const activeHighlightData = highlights.find(
-    (h) => h.id === activeHighlight?.id,
-  );
   const currentChapterTitle = getChapterTitleFromSpine(
     book,
     currentChapterIndex,
   );
   const hasPreviousChapter = currentChapterIndex > 0;
   const hasNextChapter = currentChapterIndex < book.spine.length - 1;
-
-  // Derived state for highlight toolbars
-  const isEditingHighlight = !!(activeHighlight && activeHighlightData);
-  const isCreatingHighlight = showHighlightToolbar && !isEditingHighlight;
 
   // Render
   return (
@@ -181,12 +163,35 @@ export function Reader() {
         />
       )}
 
-      <TableOfContents
-        toc={book.toc}
-        isOpen={isTOCOpen}
-        onOpenChange={setIsTOCOpen}
-        onNavigate={goToChapterByHref}
-      />
+      {/* Desktop Settings Bar */}
+      {!isMobile && (
+        <ReaderSettingsBar
+          settings={settings}
+          onUpdateSettings={updateSettings}
+        />
+      )}
+
+      {/* Mobile Navigation (includes settings drawer) */}
+      {isMobile && (
+        <MobileReaderNav
+          isVisible={isVisible}
+          settings={settings}
+          onUpdateSettings={updateSettings}
+          onBack={() => navigate("/")}
+          onPrevious={goToPreviousChapter}
+          onNext={goToNextChapter}
+          hasPreviousChapter={hasPreviousChapter}
+          hasNextChapter={hasNextChapter}
+        />
+      )}
+      {
+        <TableOfContents
+          toc={book.toc}
+          isOpen={isTOCOpen}
+          onOpenChange={setIsTOCOpen}
+          onNavigate={goToChapterByHref}
+        />
+      }
 
       <ScrollRestoration
         bookId={bookId}
@@ -214,89 +219,18 @@ export function Reader() {
         />
       </ScrollRestoration>
 
-      {/* Desktop Settings Bar */}
-      {!isMobile && (
-        <ReaderSettingsBar
-          settings={settings}
-          onUpdateSettings={updateSettings}
-        />
-      )}
-
-      {/* Mobile Navigation (includes settings drawer) */}
-      {isMobile && (
-        <MobileReaderNav
-          isVisible={isVisible}
-          settings={settings}
-          onUpdateSettings={updateSettings}
-          onBack={() => navigate("/")}
-          onPrevious={goToPreviousChapter}
-          onNext={goToNextChapter}
-          hasPreviousChapter={hasPreviousChapter}
-          hasNextChapter={hasNextChapter}
-        />
-      )}
-
-      {/* Highlight Toolbars - Mobile uses bottom bar, Desktop uses floating toolbar */}
-      {isMobile ? (
-        <AnimatePresence>
-          {isEditingHighlight && (
-            <MobileHighlightBar
-              isNavVisible={isVisible}
-              currentColor={activeHighlightData.color}
-              onColorSelect={(color) =>
-                updateHighlightMutation.mutate({
-                  id: activeHighlightData.id,
-                  changes: { color },
-                })
-              }
-              onDelete={() => {
-                deleteHighlightMutation.mutate(activeHighlightData.id);
-                setActiveHighlight(null);
-              }}
-              onClose={() => setActiveHighlight(null)}
-            />
-          )}
-          {isCreatingHighlight && (
-            <MobileHighlightBar
-              isNavVisible={isVisible}
-              onColorSelect={handleHighlightColorSelect}
-              onClose={handleCloseHighlightToolbar}
-            />
-          )}
-        </AnimatePresence>
-      ) : (
-        <>
-          <AnimatePresence>
-            {isCreatingHighlight && (
-              <HighlightToolbar
-                position={toolbarPosition}
-                onColorSelect={handleHighlightColorSelect}
-                onClose={handleCloseHighlightToolbar}
-              />
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {isEditingHighlight && (
-              <HighlightToolbar
-                position={activeHighlight.position}
-                currentColor={activeHighlightData.color}
-                onColorSelect={(color) =>
-                  updateHighlightMutation.mutate({
-                    id: activeHighlightData.id,
-                    changes: { color },
-                  })
-                }
-                onDelete={() => {
-                  deleteHighlightMutation.mutate(activeHighlightData.id);
-                  setActiveHighlight(null);
-                }}
-                onClose={() => setActiveHighlight(null)}
-              />
-            )}
-          </AnimatePresence>
-        </>
-      )}
+      <HighlightToolbarContainer
+        bookId={bookId}
+        spineItemId={currentSpineItemId}
+        highlights={highlights}
+        isCreatingHighlight={showHighlightToolbar}
+        creationPosition={toolbarPosition}
+        onCreateColorSelect={handleHighlightColorSelect}
+        onCreateClose={handleCloseHighlightToolbar}
+        activeHighlight={activeHighlight}
+        onEditClose={() => setActiveHighlight(null)}
+        isNavVisible={isVisible}
+      />
 
       {/* Desktop Navigation Buttons */}
       {!isMobile && (
