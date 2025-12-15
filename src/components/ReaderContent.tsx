@@ -137,7 +137,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       <div
         key={chapterIndex}
         ref={ref}
-        className="reader-content mx-auto px-6 pb-12 sm:px-8 sm:pb-16 md:px-12 md:pb-20 transition-all duration-300 ease-in-out"
+        className="reader-content mx-auto px-6 py-12 sm:px-8 sm:pb-16 md:px-12 md:pb-20 transition-all duration-300 ease-in-out"
         style={style}
       >
         {/*<header className="text-center select-none flex h-96 flex-col justify-center gap-0">
