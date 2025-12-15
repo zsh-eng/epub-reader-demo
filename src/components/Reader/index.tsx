@@ -254,17 +254,15 @@ export function Reader() {
         initialProgress={initialProgress}
         contentReady={!!chapterContent}
       >
-        <div className="">
-          <ReaderContent
-            content={chapterContent}
-            chapterIndex={currentChapterIndex}
-            title={currentChapterTitle}
-            ref={contentRef}
-            onHighlightClick={handleHighlightClick}
-            activeHighlightId={activeHighlightId}
-            settings={settings}
-          />
-        </div>
+        <ReaderContent
+          content={chapterContent}
+          chapterIndex={currentChapterIndex}
+          title={currentChapterTitle}
+          ref={contentRef}
+          onHighlightClick={handleHighlightClick}
+          activeHighlightId={activeHighlightId}
+          settings={settings}
+        />
       </ScrollRestoration>
 
       {/* Desktop Settings Bar */}
