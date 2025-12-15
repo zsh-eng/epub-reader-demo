@@ -13,9 +13,15 @@ export default defineConfig({
     }),
     tailwindcss(),
   ],
+  build: {
+    outDir: "dist",
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+  },
+  server: {
+    allowedHosts: ["fe-dev.zsheng.app"],
   },
 });
