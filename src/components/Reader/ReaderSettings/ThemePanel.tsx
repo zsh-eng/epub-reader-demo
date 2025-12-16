@@ -19,7 +19,7 @@ const themes: ThemeConfig[] = [
   {
     value: "light",
     label: "Light",
-    themeClass: "",
+    themeClass: "light",
   },
   {
     value: "dark",
@@ -56,33 +56,33 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
                 "ring-2 ring-offset-2 ring-offset-background",
                 "focus:outline-none focus-visible:ring-ring",
                 "active:scale-[0.98]",
-                theme.themeClass,
                 "border-border",
-                isSelected
-                  ? "ring-primary"
-                  : "ring-transparent hover:border-muted-foreground/30",
+                isSelected ? "ring-primary" : "ring-transparent",
               )}
             >
-              {/* Preview area with sample text */}
-              <div
-                className="px-4 py-4 text-left h-full bg-background text-foreground"
-                style={{ fontFamily: settings.fontFamily }}
-              >
-                <p className="text-sm leading-relaxed line-clamp-2">
-                  {SAMPLE_TEXT}
-                </p>
-              </div>
+              {/* Theme preview wrapper - applies the theme class */}
+              <div className={cn("flex flex-col h-full", theme.themeClass)}>
+                {/* Preview area with sample text */}
+                <div
+                  className="px-4 py-4 text-left flex-1 bg-background text-foreground"
+                  style={{ fontFamily: settings.fontFamily }}
+                >
+                  <p className="text-sm leading-relaxed line-clamp-2">
+                    {SAMPLE_TEXT}
+                  </p>
+                </div>
 
-              {/* Label bar */}
-              <div className="flex items-center justify-between px-3 py-2 bg-background text-foreground border-t border-border">
-                <span className="text-tiny text-muted-foreground font-medium uppercase tracking-wide">
-                  {theme.label}
-                </span>
-                {isSelected && (
-                  <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground">
-                    <Check className="w-3 h-3" strokeWidth={3} />
+                {/* Label bar */}
+                <div className="flex items-center justify-between px-3 py-2 bg-background text-foreground border-t border-border">
+                  <span className="text-tiny text-muted-foreground font-medium uppercase tracking-wide">
+                    {theme.label}
                   </span>
-                )}
+                  {isSelected && (
+                    <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground">
+                      <Check className="w-3 h-3" strokeWidth={3} />
+                    </span>
+                  )}
+                </div>
               </div>
             </button>
           );
