@@ -4,6 +4,10 @@ import {
   type HighlightColor,
 } from "@/lib/highlight-constants";
 import { cn } from "@/lib/utils";
+import {
+  EPUB_HIGHLIGHT_CLASS,
+  HIGHLIGHT_TOOLBAR_CLASS,
+} from "@/types/reader.types";
 import { useEffect } from "react";
 
 interface HighlightToolbarProps {
@@ -56,8 +60,8 @@ export function HighlightToolbar({
       const target = e.target as HTMLElement;
       // Check if click is inside the toolbar or on an existing highlight (for edit mode)
       if (
-        !target.closest(".highlight-toolbar") &&
-        !target.closest(".epub-highlight")
+        !target.closest(`.${HIGHLIGHT_TOOLBAR_CLASS}`) &&
+        !target.closest(`.${EPUB_HIGHLIGHT_CLASS}`)
       ) {
         onClose();
       }

@@ -1,6 +1,7 @@
 // Utility functions for calculating text offsets and creating highlights
 
 import type { Highlight } from "@/types/highlight";
+import { EPUB_HIGHLIGHT_CLASS } from "@/types/reader.types";
 
 /**
  * Extracts text-only content from HTML, stripping all tags
@@ -187,7 +188,7 @@ export function createHighlightMark(
   highlight: Highlight,
 ): HTMLElement {
   const mark = doc.createElement("mark");
-  mark.className = "epub-highlight";
+  mark.className = EPUB_HIGHLIGHT_CLASS;
   mark.dataset.highlightId = highlight.id;
   mark.dataset.color = highlight.color;
   return mark;

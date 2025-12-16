@@ -1,5 +1,6 @@
 import {
   CONTENT_WIDTH_VALUES,
+  EPUB_HIGHLIGHT_ACTIVE_CLASS,
   EPUB_HIGHLIGHT_CLASS,
   EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
   EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
@@ -117,18 +118,20 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       if (!contentElement) return;
 
       // Remove active class from all highlights
-      const allHighlights = contentElement.querySelectorAll(".epub-highlight");
+      const allHighlights = contentElement.querySelectorAll(
+        `.${EPUB_HIGHLIGHT_CLASS}`,
+      );
       allHighlights.forEach((el) => {
-        el.classList.remove("epub-highlight-active");
+        el.classList.remove(EPUB_HIGHLIGHT_ACTIVE_CLASS);
       });
 
       // Add active class to the selected highlight
       if (activeHighlightId) {
         const activeHighlights = contentElement.querySelectorAll(
-          `[data-highlight-id="${activeHighlightId}"]`,
+          `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${activeHighlightId}"]`,
         );
         activeHighlights.forEach((el) => {
-          el.classList.add("epub-highlight-active");
+          el.classList.add(EPUB_HIGHLIGHT_ACTIVE_CLASS);
         });
       }
     }, [ref, activeHighlightId, content]);

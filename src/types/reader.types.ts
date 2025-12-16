@@ -107,5 +107,7 @@ export interface ReaderSettings {
 }
 
 export const EPUB_HIGHLIGHT_CLASS = "epub-highlight";
+export const EPUB_HIGHLIGHT_ACTIVE_CLASS = "epub-highlight-active";
 export const EPUB_HIGHLIGHT_GROUP_HOVER_CLASS = "epub-highlight-group-hover";
 export const EPUB_HIGHLIGHT_DATA_ATTRIBUTE = "data-highlight-id";
+export const HIGHLIGHT_TOOLBAR_CLASS = "highlight-toolbar";
