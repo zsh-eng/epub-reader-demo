@@ -4,7 +4,7 @@ import {
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 /**
  * Data returned from fetching chapter content
@@ -14,6 +14,8 @@ export interface ChapterContentData {
   content: string;
   /** The manifest item href that was loaded */
   manifestItemHref: string;
+  /** Map of resource paths to their object URLs for cleanup */
+  resourceUrlMap: Map<string, string>;
 }
 
 export interface UseChapterContentReturn {
@@ -43,9 +45,8 @@ export const chapterContentKeys = {
 async function fetchChapterContent(
   bookId: string,
   manifestItemHref: string,
-  resourceUrlMap: Map<string, string>,
 ): Promise<ChapterContentData> {
-  // Load the file content from the database
+  const resourceUrlMap = new Map<string, string>();
   const bookFile = await getBookFile(bookId, manifestItemHref);
 
   if (!bookFile) {
@@ -70,6 +71,7 @@ async function fetchChapterContent(
   return {
     content: doc.body.innerHTML,
     manifestItemHref,
+    resourceUrlMap,
   };
 }
 
@@ -83,6 +85,11 @@ async function fetchChapterContent(
  * - Race condition prevention via React Query's built-in mechanisms
  * - Resource URL cleanup when chapters are evicted from cache
  *
+ * Each chapter maintains its own resource URL map, ensuring that:
+ * - Navigating between chapters doesn't break cached images
+ * - Object URLs are only revoked when their specific chapter is evicted
+ * - No memory leaks occur (URLs are cleaned up on cache eviction)
+ *
  * @param bookId - The book's unique identifier
  * @param manifestItemHref - The href of the manifest item to load (from spine)
  * @returns Chapter content, loading state, and error information
@@ -92,22 +99,6 @@ export function useChapterContent(
   manifestItemHref: string | null,
 ): UseChapterContentReturn {
   const queryClient = useQueryClient();
-
-  // Store resource URLs for cleanup
-  // Using a ref to persist across renders without causing re-renders
-  const resourceUrlMapRef = useRef<Map<string, string>>(new Map());
-
-  // Clean up previous resource URLs when manifestItemHref changes
-  useEffect(() => {
-    const currentMap = resourceUrlMapRef.current;
-
-    return () => {
-      // Only cleanup if we're switching chapters
-      // The new chapter will create its own URLs
-      cleanupResourceUrls(currentMap);
-      resourceUrlMapRef.current = new Map();
-    };
-  }, [manifestItemHref]);
 
   // Set up cache eviction listener for resource URL cleanup
   useEffect(() => {
@@ -120,10 +111,14 @@ export function useChapterContent(
       }
 
       // When a chapter query is removed from cache, clean up its resource URLs
-      // Note: This is a defensive cleanup - the main cleanup happens in the effect above
-      const currentMap = resourceUrlMapRef.current;
-      cleanupResourceUrls(currentMap);
-      resourceUrlMapRef.current = new Map();
+      const queryData = event.query.state.data as
+        | ChapterContentData
+        | undefined;
+      if (!queryData?.resourceUrlMap) {
+        return;
+      }
+
+      cleanupResourceUrls(queryData.resourceUrlMap);
     });
 
     return unsubscribe;
@@ -131,12 +126,7 @@ export function useChapterContent(
 
   const query = useQuery({
     queryKey: chapterContentKeys.chapter(bookId ?? "", manifestItemHref ?? ""),
-    queryFn: () =>
-      fetchChapterContent(
-        bookId!,
-        manifestItemHref!,
-        resourceUrlMapRef.current,
-      ),
+    queryFn: () => fetchChapterContent(bookId!, manifestItemHref!),
     enabled: !!bookId && !!manifestItemHref,
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes after becoming unused
