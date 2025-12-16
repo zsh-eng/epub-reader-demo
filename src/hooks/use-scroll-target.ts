@@ -26,7 +26,7 @@ export interface UseScrollTargetReturn {
 function scrollToFragment(fragmentId: string): boolean {
   const fragment = document.getElementById(fragmentId);
   if (!fragment) return false;
-  fragment.scrollIntoView({ behavior: "instant" });
+  fragment.scrollIntoView({ behavior: "instant", block: "center" });
   return true;
 }
 
