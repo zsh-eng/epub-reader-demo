@@ -33,3 +33,7 @@ Future:
 - [ ] Quote sharing
 - [ ] Read articles
 - [ ] Read PDFs
+- [ ] LLM (ask questions)
+- [ ] Flashcard integration
+- [ ] Chinese learning (show pinyin, translation of words)
+- [ ] Desktop / Mobile App (Tauri)
