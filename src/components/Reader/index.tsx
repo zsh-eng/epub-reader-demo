@@ -5,7 +5,6 @@ import { NavigationButtons } from "@/components/Reader/NavigationButtons";
 import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
 import { SideNavigation } from "@/components/Reader/SideNavigation";
 import ReaderContent from "@/components/ReaderContent";
-import { ScrollRestoration } from "@/components/ScrollRestoration";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import {
   getManifestItemHref,
@@ -19,7 +18,9 @@ import {
 } from "@/hooks/use-highlights-query";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useProgressPersistence } from "@/hooks/use-progress-persistence";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
+import { useScrollTarget } from "@/hooks/use-scroll-target";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
@@ -46,7 +47,7 @@ export interface ActiveHighlightState {
  * - Chapter navigation
  * - Table of contents
  * - Text selection and highlighting
- * - Reading progress auto-save (via ScrollRestoration)
+ * - Reading progress auto-save (via useProgressPersistence)
  * - Keyboard navigation
  */
 export function Reader() {
@@ -71,25 +72,11 @@ export function Reader() {
   // Chapter index state - initialized from saved progress or defaults to 0
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
 
-  // Initialize chapter index from saved progress when it loads
-  useEffect(() => {
-    if (initialProgress) {
-      setCurrentChapterIndex(initialProgress.currentSpineIndex);
-    }
-  }, [initialProgress]);
+  // Track if we've initialized from saved progress
+  const hasInitializedRef = useRef(false);
 
   // Get current spine item ID
   const currentSpineItemId = book?.spine[currentChapterIndex]?.idref;
-
-  // Highlights - TanStack Query for data, mutations for CRUD
-  const { data: highlights = [] } = useHighlightsQuery(
-    bookId,
-    currentSpineItemId,
-  );
-  const addHighlightMutation = useAddHighlightMutation(
-    bookId,
-    currentSpineItemId,
-  );
 
   // Reader settings
   const { settings, updateSettings } = useReaderSettings();
@@ -101,6 +88,47 @@ export function Reader() {
     manifestItemHref,
   );
   const contentReady = !!chapterContent;
+
+  // Scroll target management - handles scrolling when content is ready
+  const { setScrollTarget, isScrolling } = useScrollTarget({
+    contentRef,
+    contentReady,
+  });
+
+  // Initialize chapter index and scroll target from saved progress
+  useEffect(() => {
+    if (!initialProgress || hasInitializedRef.current) return;
+
+    hasInitializedRef.current = true;
+    setCurrentChapterIndex(initialProgress.currentSpineIndex);
+
+    if (initialProgress.scrollProgress <= 0) {
+      return;
+    }
+    setScrollTarget({
+      type: "percentage",
+      value: initialProgress.scrollProgress,
+    });
+  }, [initialProgress, setScrollTarget]);
+
+  // Progress persistence - auto-saves reading progress
+  useProgressPersistence({
+    bookId: bookId ?? "",
+    chapterIndex: currentChapterIndex,
+    contentRef,
+    contentReady,
+    enabled: !isScrolling && !!bookId,
+  });
+
+  // Highlights - TanStack Query for data, mutations for CRUD
+  const { data: highlights = [] } = useHighlightsQuery(
+    bookId,
+    currentSpineItemId,
+  );
+  const addHighlightMutation = useAddHighlightMutation(
+    bookId,
+    currentSpineItemId,
+  );
 
   // Sync highlights to DOM - reactive side effect of data changes
   useHighlightDOMSync(contentRef, highlights, contentReady);
@@ -126,13 +154,12 @@ export function Reader() {
     goToNextChapter,
     goToChapterByHref,
     goToChapterWithFragment,
-    pendingFragmentRef,
-    clearPendingFragment,
   } = useChapterNavigation(
     book,
     bookId,
     currentChapterIndex,
     setCurrentChapterIndex,
+    setScrollTarget,
   );
 
   // Keyboard navigation
@@ -199,34 +226,24 @@ export function Reader() {
         />
       }
 
-      <ScrollRestoration
-        bookId={bookId}
+      <ReaderContent
+        content={chapterContent}
         chapterIndex={currentChapterIndex}
-        contentRef={contentRef}
-        initialProgress={initialProgress}
-        contentReady={contentReady}
-        pendingFragmentRef={pendingFragmentRef}
-        onFragmentScrolled={clearPendingFragment}
-      >
-        <ReaderContent
-          content={chapterContent}
-          chapterIndex={currentChapterIndex}
-          title={currentChapterTitle}
-          ref={contentRef}
-          onHighlightClick={(highlightId, position) => {
-            // If clicking the same highlight, close the popover (toggle behavior)
-            if (activeHighlight?.id === highlightId) {
-              setActiveHighlight(null);
-            } else {
-              // Open popover for the clicked highlight
-              setActiveHighlight({ id: highlightId, position });
-            }
-          }}
-          activeHighlightId={activeHighlight?.id ?? null}
-          settings={settings}
-          onInternalLinkClick={goToChapterWithFragment}
-        />
-      </ScrollRestoration>
+        title={currentChapterTitle}
+        ref={contentRef}
+        onHighlightClick={(highlightId, position) => {
+          // If clicking the same highlight, close the popover (toggle behavior)
+          if (activeHighlight?.id === highlightId) {
+            setActiveHighlight(null);
+          } else {
+            // Open popover for the clicked highlight
+            setActiveHighlight({ id: highlightId, position });
+          }
+        }}
+        activeHighlightId={activeHighlight?.id ?? null}
+        settings={settings}
+        onInternalLinkClick={goToChapterWithFragment}
+      />
 
       <HighlightToolbarContainer
         bookId={bookId}

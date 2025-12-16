@@ -80,7 +80,7 @@ function useReadingProgress(bookId: string | undefined) {
  * - Loading the initial reading progress
  * - Navigation/error handling if book not found
  *
- * Scroll restoration is handled separately by the ScrollRestoration component.
+ * Scroll restoration is handled separately by the useScrollTarget and useProgressPersistence hooks.
  */
 export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
   const navigate = useNavigate();
