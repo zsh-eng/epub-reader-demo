@@ -56,7 +56,7 @@ export function Reader() {
   const navigate = useNavigate();
 
   // Refs
-  const contentRef = useRef<HTMLDivElement>(null);
+  const readerContentRef = useRef<HTMLDivElement>(null);
 
   // Mobile detection
   const isMobile = useIsMobile();
@@ -91,7 +91,7 @@ export function Reader() {
 
   // Scroll target management - handles scrolling when content is ready
   const { setScrollTarget, isScrolling } = useScrollTarget({
-    contentRef,
+    contentRef: readerContentRef,
     contentReady,
   });
 
@@ -115,7 +115,7 @@ export function Reader() {
   useProgressPersistence({
     bookId: bookId ?? "",
     chapterIndex: currentChapterIndex,
-    contentRef,
+    contentRef: readerContentRef,
     contentReady,
     enabled: !isScrolling && !!bookId,
   });
@@ -131,7 +131,7 @@ export function Reader() {
   );
 
   // Sync highlights to DOM - reactive side effect of data changes
-  useHighlightDOMSync(contentRef, highlights, contentReady);
+  useHighlightDOMSync(readerContentRef, highlights, contentReady);
 
   // Text selection hook for creating new highlights
   const {
@@ -140,7 +140,7 @@ export function Reader() {
     handleHighlightColorSelect,
     handleCloseHighlightToolbar,
   } = useTextSelection(
-    contentRef,
+    readerContentRef,
     bookId,
     currentSpineItemId,
     (highlight: Highlight) => {
@@ -230,7 +230,7 @@ export function Reader() {
         content={chapterContent}
         chapterIndex={currentChapterIndex}
         title={currentChapterTitle}
-        ref={contentRef}
+        ref={readerContentRef}
         onHighlightClick={(highlightId, position) => {
           // If clicking the same highlight, close the popover (toggle behavior)
           if (activeHighlight?.id === highlightId) {
