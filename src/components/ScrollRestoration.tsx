@@ -7,7 +7,13 @@ import {
   waitForContentStability,
   type ScrollAnchor,
 } from "@/lib/scroll-anchor";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 export interface ScrollRestorationState {
   /** Whether scroll restoration is currently in progress */
@@ -31,6 +37,10 @@ export interface ScrollRestorationProps {
   children:
     | React.ReactNode
     | ((state: ScrollRestorationState) => React.ReactNode);
+  /** Ref containing a pending fragment ID to scroll to (takes precedence over percentage restoration) */
+  pendingFragmentRef?: RefObject<string | null>;
+  /** Callback to clear the pending fragment after scrolling */
+  onFragmentScrolled?: () => void;
 }
 
 /** How often to auto-save progress (in milliseconds) */
@@ -57,6 +67,8 @@ export function ScrollRestoration({
   initialProgress,
   contentReady,
   children,
+  pendingFragmentRef,
+  onFragmentScrolled,
 }: ScrollRestorationProps) {
   const [state, setState] = useState<ScrollRestorationState>({
     isRestoring: true,
@@ -128,9 +140,51 @@ export function ScrollRestoration({
   );
 
   /**
+   * Scrolls to a fragment (element ID) in the content.
+   * Returns true if the element was found and scrolled to.
+   */
+  const scrollToFragment = useCallback(
+    async (fragment: string): Promise<boolean> => {
+      console.log("pre-srolling to fragment", fragment);
+      if (!contentRef.current) return false;
+
+      // Wait for content to stabilize before trying to find the element
+      await waitForContentStability(contentRef.current);
+
+      console.log("scrolling to the fragment", fragment);
+      const element = document.getElementById(fragment);
+      if (element) {
+        element.scrollIntoView({ behavior: "instant" });
+        return true;
+      }
+      return false;
+    },
+    [contentRef],
+  );
+
+  /**
    * Restores scroll position from saved progress.
    */
   const restoreScrollPosition = useCallback(async () => {
+    // Check if there's a pending fragment to scroll to (takes precedence)
+    console.log("restoring scroll");
+    console.log("pendingFragmentRef.current:", pendingFragmentRef?.current);
+
+    if (pendingFragmentRef?.current) {
+      const fragment = pendingFragmentRef.current;
+      setState({ isRestoring: true, hasRestored: false });
+
+      if (!contentRef.current) {
+        setState({ isRestoring: false, hasRestored: true });
+        return;
+      }
+
+      await scrollToFragment(fragment);
+      onFragmentScrolled?.();
+      setState({ isRestoring: false, hasRestored: true });
+      return;
+    }
+
     if (!contentRef.current || !initialProgress) {
       setState({ isRestoring: false, hasRestored: true });
       return;
@@ -161,7 +215,14 @@ export function ScrollRestoration({
     }
 
     setState({ isRestoring: false, hasRestored: true });
-  }, [chapterIndex, contentRef, initialProgress]);
+  }, [
+    chapterIndex,
+    contentRef,
+    initialProgress,
+    pendingFragmentRef,
+    onFragmentScrolled,
+    scrollToFragment,
+  ]);
 
   /**
    * Effect: Restore scroll position when content becomes ready

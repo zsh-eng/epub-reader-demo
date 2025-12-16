@@ -4,10 +4,11 @@ import {
   EPUB_HIGHLIGHT_CLASS,
   EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
   EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+  EPUB_LINK,
   FONT_STACKS,
   type ReaderSettings,
 } from "@/types/reader.types";
-import { forwardRef, useEffect } from "react";
+import { forwardRef, useCallback, useEffect } from "react";
 
 interface ReaderContentProps {
   content: string;
@@ -19,6 +20,8 @@ interface ReaderContentProps {
   ) => void;
   activeHighlightId?: string | null;
   settings?: ReaderSettings;
+  /** Callback for internal EPUB link clicks */
+  onInternalLinkClick?: (href: string, fragment?: string) => void;
 }
 
 const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
@@ -30,6 +33,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       onHighlightClick,
       activeHighlightId,
       settings,
+      onInternalLinkClick,
     },
     ref,
   ) => {
@@ -111,6 +115,45 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         contentElement.removeEventListener("click", handleClick, true);
       };
     }, [ref, content, onHighlightClick]);
+
+    // Handle internal EPUB link clicks
+    const handleInternalLinkClick = useCallback(
+      (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (!onInternalLinkClick) return;
+
+        // Find the closest anchor element with epub-link attribute
+        const linkElement = target.closest(
+          `[${EPUB_LINK.linkAttribute}]`,
+        ) as HTMLElement | null;
+        if (!linkElement) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const href = linkElement.getAttribute(EPUB_LINK.hrefAttribute) || "";
+        const fragment =
+          linkElement.getAttribute(EPUB_LINK.fragmentAttribute) || undefined;
+
+        onInternalLinkClick(href, fragment);
+      },
+      [onInternalLinkClick],
+    );
+    // Internal links require a special handler for us to navigate properly
+    useEffect(() => {
+      const contentElement = typeof ref === "function" ? null : ref?.current;
+      if (!contentElement) return;
+
+      contentElement.addEventListener("click", handleInternalLinkClick, true);
+
+      return () => {
+        contentElement.removeEventListener(
+          "click",
+          handleInternalLinkClick,
+          true,
+        );
+      };
+    }, [ref, handleInternalLinkClick]);
 
     // Update active highlight class when activeHighlightId changes
     useEffect(() => {

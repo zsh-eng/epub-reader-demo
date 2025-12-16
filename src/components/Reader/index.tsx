@@ -121,13 +121,19 @@ export function Reader() {
   );
 
   // Chapter navigation
-  const { goToPreviousChapter, goToNextChapter, goToChapterByHref } =
-    useChapterNavigation(
-      book,
-      bookId,
-      currentChapterIndex,
-      setCurrentChapterIndex,
-    );
+  const {
+    goToPreviousChapter,
+    goToNextChapter,
+    goToChapterByHref,
+    goToChapterWithFragment,
+    pendingFragmentRef,
+    clearPendingFragment,
+  } = useChapterNavigation(
+    book,
+    bookId,
+    currentChapterIndex,
+    setCurrentChapterIndex,
+  );
 
   // Keyboard navigation
   useKeyboardNavigation(goToPreviousChapter, goToNextChapter, () =>
@@ -199,6 +205,8 @@ export function Reader() {
         contentRef={contentRef}
         initialProgress={initialProgress}
         contentReady={contentReady}
+        pendingFragmentRef={pendingFragmentRef}
+        onFragmentScrolled={clearPendingFragment}
       >
         <ReaderContent
           content={chapterContent}
@@ -216,6 +224,7 @@ export function Reader() {
           }}
           activeHighlightId={activeHighlight?.id ?? null}
           settings={settings}
+          onInternalLinkClick={goToChapterWithFragment}
         />
       </ScrollRestoration>
 

@@ -111,3 +111,12 @@ export const EPUB_HIGHLIGHT_ACTIVE_CLASS = "epub-highlight-active";
 export const EPUB_HIGHLIGHT_GROUP_HOVER_CLASS = "epub-highlight-group-hover";
 export const EPUB_HIGHLIGHT_DATA_ATTRIBUTE = "data-highlight-id";
 export const HIGHLIGHT_TOOLBAR_CLASS = "highlight-toolbar";
+
+export const EPUB_LINK = {
+  /** Data attribute name for marking internal EPUB links */
+  linkAttribute: "data-epub-link",
+  /** Data attribute name for the resolved href path */
+  hrefAttribute: "data-epub-href",
+  /** Data attribute name for the fragment identifier */
+  fragmentAttribute: "data-epub-fragment",
+} as const;

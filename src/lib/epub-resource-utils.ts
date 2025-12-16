@@ -2,6 +2,8 @@
  * Utility functions for handling EPUB resources and path resolution
  */
 
+import { EPUB_LINK } from "@/types/reader.types";
+
 /**
  * Returns the MIME type for parsing EPUB content
  * Always returns "text/html" to ensure consistent whitespace handling
@@ -121,8 +123,34 @@ export async function processEmbeddedResources(
 
     if (!resourcePath) continue;
 
-    // Skip certain hrefs (like anchors and external links)
-    if (element.tagName.toLowerCase() === "a" && href && href.startsWith("#")) {
+    // Handle anchor elements specially
+    if (element.tagName.toLowerCase() === "a" && href) {
+      // Pure same-page anchor links (e.g., #footnote1) - leave them as-is
+      if (href.startsWith("#")) {
+        continue;
+      }
+
+      // Skip external links
+      if (
+        href.startsWith("http") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:")
+      ) {
+        continue;
+      }
+
+      // This is an internal EPUB link - mark it with data attributes
+      const [pathPart, fragment] = href.split("#");
+      const resolvedHref = pathPart ? resolvePath(basePath, pathPart) : "";
+
+      element.setAttribute(EPUB_LINK.linkAttribute, "true");
+      element.setAttribute(EPUB_LINK.hrefAttribute, resolvedHref);
+      if (fragment) {
+        element.setAttribute(EPUB_LINK.fragmentAttribute, fragment);
+      }
+      // Prevent default navigation by setting href to javascript:void(0)
+      // Using # would cause scroll-to-top behavior
+      element.setAttribute("href", "javascript:void(0)");
       continue;
     }
 
