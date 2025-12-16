@@ -68,6 +68,7 @@ export function Reader() {
 
   // Load book and initial progress
   const { book, initialProgress, isLoading } = useBookLoader(bookId);
+  const bookTitle = book?.title;
 
   // Chapter index state - initialized from saved progress or defaults to 0
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
@@ -169,6 +170,15 @@ export function Reader() {
 
   // Scroll visibility for mobile nav
   const isVisible = useScrollVisibility();
+
+  // Set document title to book title
+  useEffect(() => {
+    if (!bookTitle) return;
+    document.title = bookTitle;
+    return () => {
+      document.title = "Reader";
+    };
+  }, [bookTitle]);
 
   // Early returns
   if (isLoading || isChapterLoading) return <LoadingSpinner />;
