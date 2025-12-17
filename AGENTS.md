@@ -15,3 +15,6 @@ We have the `motion` animation library installed. Do use it for animations that 
 We have Tanstack React Query installed. Use it for managing data fetching and caching.
 
 Prefer using early returns / guard clauses to avoid nested conditionals and improve code readability.
+
+We're using Hono with Cloudflare Workers for the backend.
+D1 Database with Drizzle ORM.
