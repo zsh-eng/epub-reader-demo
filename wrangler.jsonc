@@ -5,7 +5,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "reader",
-  "main": "worker/index.ts",
+  "main": "server/index.ts",
   "compatibility_date": "2025-10-11",
   "assets": {
     "not_found_handling": "single-page-application",
