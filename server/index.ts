@@ -1,4 +1,5 @@
 import { createAuth } from "@server/lib/auth";
+import { getActiveSessions } from "@server/lib/sessions";
 import type { Session, User } from "better-auth/types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -59,8 +60,20 @@ const route = app
     }
 
     return c.json({ user });
+  })
+  .get("/sessions", async (c) => {
+    const user = c.get("user");
+    const currentSession = c.get("session");
+
+    if (!user || !currentSession) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const activeSessions = await getActiveSessions(c.env, currentSession, user);
+
+    return c.json({ sessions: activeSessions });
   });
 
 export default app;
+
 // Export type for client-side type inference
 export type AppType = typeof route;
