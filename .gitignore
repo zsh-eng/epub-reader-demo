@@ -12,6 +12,7 @@ dist
 dev-dist
 dist-ssr
 *.local
+.wrangler
 
 # Editor directories and files
 .vscode/*
