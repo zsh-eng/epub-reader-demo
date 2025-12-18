@@ -1,6 +1,7 @@
 import { createAuth } from "@server/lib/auth";
 import type { Session, User } from "better-auth/types";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 
 // Define your environment bindings type
 type Bindings = Env;
@@ -13,13 +14,6 @@ const app = new Hono<{
   };
 }>();
 
-// Mount Better Auth handler
-app.on(["GET", "POST"], "/api/auth/*", (c) => {
-  const auth = createAuth(c.env);
-  return auth.handler(c.req.raw);
-});
-
-// Optional: Add middleware for session management
 app.use("*", async (c, next) => {
   const auth = createAuth(c.env);
   const session = await auth.api.getSession({
@@ -34,25 +28,38 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// https://www.better-auth.com/docs/integrations/hono#cors
+app.use(
+  "/api/auth/*", // or replace with "*" to enable cors for all routes
+  cors({
+    origin: "http://localhost:5173", // replace with your origin
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["POST", "GET", "OPTIONS"],
+    exposeHeaders: ["Content-Length"],
+    maxAge: 600,
+    credentials: true,
+  }),
+);
+
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+  const auth = createAuth(c.env);
+  return auth.handler(c.req.raw);
+});
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const route = app
   .basePath("/api")
   .get("/hello", (c) => {
     return c.json({ message: "Hello from backend!" });
   })
-  .get("/users/:id", (c) => {
-    const id = c.req.param("id");
-    return c.json({ userId: id });
+  .get("/protected-example", (c) => {
+    const user = c.get("user");
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    return c.json({ user });
   });
-
-app.get("/me", (c) => {
-  const user = c.get("user");
-  if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
-  }
-
-  return c.json({ user });
-});
 
 export default app;
 // Export type for client-side type inference

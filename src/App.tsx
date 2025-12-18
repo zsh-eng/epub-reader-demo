@@ -2,26 +2,12 @@ import "@/App.css";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
 import { Toaster } from "@/components/ui/sonner";
-import type { AppType } from "@server/index";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { hc } from "hono/client";
-import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 const queryClient = new QueryClient();
-const client = hc<AppType>(import.meta.env.BASE_URL);
 
 function App() {
-  useEffect(() => {
-    const getHello = async () => {
-      const response = await client.api.hello.$get();
-      const data = await response.json();
-      console.log(data);
-    };
-
-    getHello();
-  }, []);
-
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
