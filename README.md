@@ -40,7 +40,8 @@ Future:
 
 ## Notes on Env
 
-`VITE_BETTER_AUTH_URL` should be defined in `.env.developmen` and `.env.production`.
+`VITE_BETTER_AUTH_URL` should be defined in `.env.development` and `.env.production`.
 Other environment variables should be defined in `.dev.vars` or `wrangler.jsonc` (non-sensitive).
 
 You should manually add these environment variables to the cloudflare dashboard for the production build.
+The only environment variable that's updated locally is the `VITE_BETTER_AUTH_URL` variable.
