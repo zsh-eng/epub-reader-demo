@@ -22,11 +22,13 @@ import type { Book } from "@/lib/db";
 import {
   Library as LibraryIcon,
   LogOut,
+  Monitor,
   Plus,
   Search,
   Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 export function Library() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -304,6 +306,12 @@ export function Library() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/sessions">
+                      <Monitor className="mr-2 h-4 w-4" />
+                      <span>Sessions</span>
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Sign out</span>
