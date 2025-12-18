@@ -350,7 +350,7 @@ export function Library() {
 
         {/* Books Grid */}
         {filteredBooks.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12 fade-in animate-in duration-300">
             {filteredBooks.map((book) => (
               <BookCard key={book.id} book={book} onDelete={handleDeleteBook} />
             ))}
