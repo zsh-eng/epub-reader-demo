@@ -39,7 +39,18 @@
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
    */
-  "vars": {},
+  "vars": {
+    "BASE_URL": "http://localhost:5173",
+    "BETTER_AUTH_URL": "http://localhost:5173",
+  },
+  "env": {
+    "production": {
+      "vars": {
+        "BASE_URL": "https://reader.zsheng.app",
+        "BETTER_AUTH_URL": "https://reader.zsheng.app",
+      },
+    },
+  },
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/
