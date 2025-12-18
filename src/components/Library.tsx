@@ -191,10 +191,24 @@ export function Library() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".epub";
+    // WebKit browsers require the input to be in the DOM for the onchange event to fire
+    input.style.position = "absolute";
+    input.style.opacity = "0";
+    input.style.pointerEvents = "none";
+    document.body.appendChild(input);
+
     input.onchange = (e) => {
       const target = e.target as HTMLInputElement;
       handleFileSelect(target.files);
+      // Clean up the input element after selection
+      document.body.removeChild(input);
     };
+
+    // Also clean up if the user cancels the file picker (WebKit fires a cancel event)
+    input.addEventListener("cancel", () => {
+      document.body.removeChild(input);
+    });
+
     input.click();
   };
 
