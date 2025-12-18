@@ -13,11 +13,11 @@ export const createAuth = (env: Env) => {
     baseURL: env.BETTER_AUTH_URL,
     secret: env.BETTER_AUTH_SECRET,
 
-    // Your authentication options
-    emailAndPassword: {
-      enabled: true,
+    socialProviders: {
+      google: {
+        clientId: env.GOOGLE_CLIENT_ID as string,
+        clientSecret: env.GOOGLE_CLIENT_SECRET as string,
+      },
     },
-
-    // Add other options as needed
   });
 };
