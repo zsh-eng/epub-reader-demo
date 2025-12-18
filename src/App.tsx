@@ -1,12 +1,12 @@
+import "@/App.css";
+import { Library } from "@/components/Library";
+import { Reader } from "@/components/Reader";
+import { Toaster } from "@/components/ui/sonner";
+import type { AppType } from "@server/index";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { hc } from "hono/client";
 import { useEffect } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import type { AppType } from "../worker/index";
-import "./App.css";
-import { Library } from "./components/Library";
-import { Reader } from "./components/Reader";
-import { Toaster } from "./components/ui/sonner";
 
 const queryClient = new QueryClient();
 const client = hc<AppType>(import.meta.env.BASE_URL);
