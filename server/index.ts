@@ -32,14 +32,17 @@ app.use("*", async (c, next) => {
 // https://www.better-auth.com/docs/integrations/hono#cors
 app.use(
   "/api/auth/*", // or replace with "*" to enable cors for all routes
-  cors({
-    origin: "http://localhost:5173", // replace with your origin
-    allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
-  }),
+  async (c, next) => {
+    const corsMiddlewareHandler = cors({
+      origin: c.env.BASE_URL || "http://localhost:5173",
+      allowHeaders: ["Content-Type", "Authorization"],
+      allowMethods: ["POST", "GET", "OPTIONS"],
+      exposeHeaders: ["Content-Length"],
+      maxAge: 600,
+      credentials: true,
+    });
+    return corsMiddlewareHandler(c, next);
+  },
 );
 
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
