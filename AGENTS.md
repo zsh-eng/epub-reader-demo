@@ -17,4 +17,15 @@ We have Tanstack React Query installed. Use it for managing data fetching and ca
 Prefer using early returns / guard clauses to avoid nested conditionals and improve code readability.
 
 We're using Hono with Cloudflare Workers for the backend.
-D1 Database with Drizzle ORM.
+D1 Database with Drizzle ORM and BetterAuth for authentication.
+
+## Backend Structure
+
+- **Database Schema**: Auth tables in `server/db/auth-schema.ts`, custom tables in `server/db/schema.ts`
+- **API Client**: Use the typed Hono client from `src/lib/api.ts`:
+  ```ts
+  const res = await honoClient.posts.$get({
+    query: { id: '123' },
+  })
+  ```
+- **Protected Routes**: See `server/index.ts` for example using `c.get('user')` to check authentication
