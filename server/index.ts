@@ -1,11 +1,20 @@
+import { createAuth } from "@server/lib/auth";
 import { Hono } from "hono";
 
 // Define your environment bindings type
-type Bindings = {};
+type Bindings = Env;
 
 const app = new Hono<{
   Bindings: Bindings;
 }>();
+
+app.use("*", async (c, next) => {
+  const auth = createAuth(c.env);
+  const session = await auth.api.getSession({
+    headers: c.req.raw.headers,
+  });
+  await next();
+});
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const route = app
