@@ -110,7 +110,7 @@ export function Sessions() {
   const otherSessions = sessions?.filter((s) => !s.isCurrent) ?? [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background fade-in animate-in duration-300">
       <div className="max-w-2xl mx-auto px-4 py-6 md:px-6 md:py-10">
         {/* Header */}
         <header className="mb-8 flex flex-col">
@@ -148,15 +148,6 @@ export function Sessions() {
                 This Device
               </h2>
               <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
-                <SessionSkeleton />
-              </Card>
-            </div>
-            <div>
-              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-                Active Sessions
-              </h2>
-              <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
-                <SessionSkeleton />
                 <SessionSkeleton />
               </Card>
             </div>
