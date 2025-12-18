@@ -25,6 +25,34 @@
       "migrations_dir": "./drizzle/",
     },
   ],
+  "env": {
+    "production": {
+      "routes": [
+        {
+          "pattern": "reader.zsheng.app",
+          "zone_name": "zsheng.app",
+          "custom_domain": true,
+        },
+      ],
+      "vars": {
+        "BASE_URL": "https://reader.zsheng.app",
+        "BETTER_AUTH_URL": "https://reader.zsheng.app",
+      },
+    },
+  },
+  "routes": [
+    {
+      "pattern": "reader.zsheng.app",
+      "zone_name": "zsheng.app",
+      "custom_domain": true,
+    },
+  ],
+  "vars": {
+    "BASE_URL": "https://reader.zsheng.app",
+    "BETTER_AUTH_URL": "https://reader.zsheng.app",
+  },
+  "workers_dev": true,
+  "preview_urls": true,
   /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -40,10 +68,6 @@
    * Environment Variables
    * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
    */
-  "vars": {
-    "BASE_URL": "http://localhost:5173",
-    "BETTER_AUTH_URL": "http://localhost:5173",
-  },
   /**
    * Note: Use secrets to store sensitive data.
    * https://developers.cloudflare.com/workers/configuration/secrets/
