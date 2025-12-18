@@ -28,8 +28,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@server/*": ["./server/*"]
-    }
+      "@server/*": ["./server/*"],
+    },
   },
-  "include": ["src"]
+  "include": ["src", "worker-configuration.d.ts"],
 }
