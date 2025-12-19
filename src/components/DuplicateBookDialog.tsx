@@ -53,10 +53,12 @@ export function DuplicateBookDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="rounded-3xl">
         <DialogHeader>
-          <DialogTitle>Duplicate found</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">
+            Duplicate Found
+          </DialogTitle>
+          <DialogDescription className="text-sm text-muted-foreground">
             This book is already in your library.
           </DialogDescription>
         </DialogHeader>
@@ -67,7 +69,7 @@ export function DuplicateBookDialog({
               <img
                 src={coverUrl}
                 alt={existingBook.title}
-                className="h-24 rounded shadow-md"
+                className="h-24 rounded-md shadow-md"
               />
             </div>
           )}
@@ -76,10 +78,10 @@ export function DuplicateBookDialog({
             <h3 className="font-semibold text-lg line-clamp-2">
               {existingBook.title}
             </h3>
-            <p className="text-sm text-muted-foreground line-clamp-1 mb-2">
+            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
               {existingBook.author}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-2">
               Added{" "}
               {new Date(existingBook.dateAdded).toLocaleDateString(undefined, {
                 year: "numeric",
@@ -91,10 +93,16 @@ export function DuplicateBookDialog({
         </div>
 
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            className="rounded-xl"
+          >
             Close
           </Button>
-          <Button onClick={handleOpenBook}>Open Book</Button>
+          <Button onClick={handleOpenBook} className="rounded-xl">
+            Open Book
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
