@@ -12,10 +12,17 @@ export interface ParsedEPUB {
   files: BookFile[];
 }
 
+export interface ParseEPUBOptions {
+  fileHash: string;
+}
+
 /**
  * Extract and parse an EPUB file
  */
-export async function parseEPUB(file: File): Promise<ParsedEPUB> {
+export async function parseEPUB(
+  file: File,
+  options: ParseEPUBOptions,
+): Promise<ParsedEPUB> {
   const arrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
 
@@ -54,6 +61,7 @@ export async function parseEPUB(file: File): Promise<ParsedEPUB> {
   // Create Book object
   const book: Book = {
     id: bookId,
+    fileHash: options.fileHash,
     title: metadata.title || file.name.replace(".epub", ""),
     author: metadata.author || "Unknown Author",
     coverImagePath,

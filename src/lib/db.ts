@@ -1,9 +1,10 @@
-import Dexie, { type Table } from "dexie";
 import type { Highlight } from "@/types/highlight";
+import Dexie, { type Table } from "dexie";
 
 // Database interfaces matching the spec
 export interface Book {
   id: string; // Primary key (UUID)
+  fileHash: string; // xxhash 64-bit hex string (unique)
   title: string;
   author: string;
   coverImagePath?: string; // Path to cover image file within the EPUB
@@ -86,6 +87,15 @@ class EPUBReaderDB extends Dexie {
       readingSettings: "id",
       highlights: "id, bookId, spineItemId, createdAt",
     });
+
+    // Version 3: Add fileHash field with unique index
+    this.version(3).stores({
+      books: "id, &fileHash, title, author, dateAdded, lastOpened",
+      bookFiles: "id, bookId, path",
+      readingProgress: "id, bookId, lastRead",
+      readingSettings: "id",
+      highlights: "id, bookId, spineItemId, createdAt",
+    });
   }
 }
 
@@ -111,12 +121,20 @@ export async function deleteBook(id: string): Promise<void> {
     db.books,
     db.bookFiles,
     db.readingProgress,
+    db.highlights,
     async () => {
       await db.books.delete(id);
       await db.bookFiles.where("bookId").equals(id).delete();
       await db.readingProgress.delete(id);
+      await db.highlights.where("bookId").equals(id).delete();
     },
   );
+}
+
+export async function getBookByFileHash(
+  fileHash: string,
+): Promise<Book | undefined> {
+  return await db.books.where("fileHash").equals(fileHash).first();
 }
 
 export async function updateBookLastOpened(id: string): Promise<void> {
