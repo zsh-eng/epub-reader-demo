@@ -19,6 +19,9 @@ export default defineConfig({
       devOptions: {
         enabled: true,
       },
+      workbox: {
+        navigateFallbackDenylist: [/^\/api\//],
+      },
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
       manifest: {
         name: "Reader",
