@@ -59,16 +59,14 @@ function SessionItem({
         <DeviceIcon className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-foreground truncate text-sm text-left">
+          {title}
+        </h3>
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <h3 className="font-medium text-foreground truncate text-sm text-left">
-              {title}
-            </h3>
-            <p className="text-xs text-muted-foreground truncate mt-0.5 text-left">
-              {subtitle}
-            </p>
-          </div>
-          <span
+          <p className="text-xs text-muted-foreground truncate mt-0.5 text-left">
+            {subtitle}
+          </p>
+          <p
             className={`text-xs whitespace-nowrap ${
               session.isCurrent
                 ? "text-primary font-medium"
@@ -78,7 +76,7 @@ function SessionItem({
             {session.isCurrent
               ? "online"
               : formatSessionTime(session.updatedAt)}
-          </span>
+          </p>
         </div>
       </div>
     </div>
