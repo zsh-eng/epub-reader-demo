@@ -1,35 +1,22 @@
 import { SELF } from "cloudflare:test";
-import { describe, expect, it, beforeAll } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
+import { createTestUser } from "./helpers";
 
 describe("GET /api/me", () => {
-  let sessionCookie: string;
-  const testEmail = "metest@example.com";
-  const testPassword = "testpassword123";
-  const testName = "Me Test User";
+  let testUser: Awaited<ReturnType<typeof createTestUser>>;
 
   beforeAll(async () => {
-    // Sign up a test user via Better Auth's API
-    const signUpResponse = await SELF.fetch("http://example.com/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: testEmail,
-        password: testPassword,
-        name: testName,
-      }),
-    });
-
-    // Extract the session cookie from the response
-    const setCookie = signUpResponse.headers.get("set-cookie");
-    if (setCookie) {
-      sessionCookie = setCookie.split(";")[0]; // e.g., "better-auth.session_token=..."
-    }
+    testUser = await createTestUser(
+      "metest@example.com",
+      "testpassword123",
+      "Me Test User",
+    );
   });
 
   it("returns user data for authenticated requests", async () => {
     const response = await SELF.fetch("http://example.com/api/me", {
       headers: {
-        Cookie: sessionCookie,
+        Cookie: testUser.sessionCookie,
       },
     });
 
@@ -38,8 +25,8 @@ describe("GET /api/me", () => {
 
     const data = await response.json();
     expect(data.user).toBeDefined();
-    expect(data.user.email).toBe(testEmail);
-    expect(data.user.name).toBe(testName);
+    expect(data.user.email).toBe(testUser.email);
+    expect(data.user.name).toBe(testUser.name);
     expect(data.user.id).toBeDefined();
   });
 
