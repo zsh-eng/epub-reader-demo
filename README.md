@@ -45,3 +45,9 @@ Other environment variables should be defined in `.dev.vars` or `wrangler.jsonc`
 
 You should manually add these environment variables to the cloudflare dashboard for the production build.
 The only environment variable that's updated locally is the `VITE_BETTER_AUTH_URL` variable.
+
+## Notes on Dependencies
+
+Following the latest (as of 2025-12-20) Cloudflare Workers docs on using Vitest,
+which means only using Vitest 3.2.0 (instead of the latest version).
+See  [this link](https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/).

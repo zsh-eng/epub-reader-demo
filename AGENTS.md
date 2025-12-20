@@ -2,7 +2,7 @@
 
 This repository uses bun as the package manager and for running scripts.
 
-After you finish editing code, you do not need to generate a separate document as a summary, you can simply provide your brief summary within the conversation itself.
+After you finish editing code, you do not need to generate a separate document / README as a summary, you can simply provide your brief summary within the conversation itself.
 
 Avoid using new colours if possible. You should use the existing color palette and CSS variables
 defined in the index.css file.
@@ -29,3 +29,9 @@ D1 Database with Drizzle ORM and BetterAuth for authentication.
   })
   ```
 - **Protected Routes**: See `server/index.ts` for example using `c.get('user')` to check authentication
+
+Tests: see `test/hello.test.ts` for example of integration test with Cloudflare.
+There is no need for unit tests of the *endpoints* (though we may need unit tests for specific functionality in the backend).
+In general, we prefer integration tests that include the database.
+
+Run the tests using `bun run test test/me.test.ts`.
