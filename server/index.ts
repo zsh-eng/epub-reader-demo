@@ -1,7 +1,7 @@
+import * as schema from "@server/db/schema";
 import { createAuth } from "@server/lib/auth";
 import { deviceMiddleware } from "@server/lib/device-middleware";
 import { getActiveSessions } from "@server/lib/sessions";
-import * as schema from "@server/db/schema";
 import type { Session, User } from "better-auth/types";
 import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
@@ -88,7 +88,7 @@ const route = app
     const user = c.get("user");
     const currentDeviceId = c.get("deviceId");
 
-    if (!user) {
+    if (!user || !currentDeviceId) {
       return c.json({ error: "Unauthorized" }, 401);
     }
 
