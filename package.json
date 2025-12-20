@@ -13,7 +13,9 @@
     "auth:generate": "bun x @better-auth/cli generate --config ./better-auth.config.ts --output ./server/db/auth-schema.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply reader-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply reader-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply reader-db --remote",
+    "test": "vitest",
+    "test:watch": "vitest --watch"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -77,6 +79,7 @@
   "devDependencies": {
     "@better-auth/cli": "^1.4.7",
     "@cloudflare/vite-plugin": "^1.18.0",
+    "@cloudflare/vitest-pool-workers": "^0.11.1",
     "@eslint/js": "^9.36.0",
     "@types/node": "^24.8.1",
     "@types/react": "^19.1.16",
@@ -96,6 +99,7 @@
     "typescript-eslint": "^8.45.0",
     "vite": "npm:rolldown-vite@7.1.14",
     "vite-plugin-pwa": "^1.2.0",
+    "vitest": "~3.2.0",
     "workbox-window": "^7.4.0",
     "wrangler": "^4.55.0"
   },
