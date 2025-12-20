@@ -65,7 +65,7 @@ const route = app
   .get("/hello", (c) => {
     return c.json({ message: "Hello from backend!" });
   })
-  .get("/protected-example", (c) => {
+  .get("/me", (c) => {
     const user = c.get("user");
     if (!user) {
       return c.json({ error: "Unauthorized" }, 401);
