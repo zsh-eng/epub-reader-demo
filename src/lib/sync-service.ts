@@ -471,12 +471,89 @@ export class SyncService {
         retryCount: 0,
       });
 
-      // Upload EPUB file
-      await this.uploadEpub(book);
+      // Get all book files and reconstruct the EPUB
+      const bookFiles = await db.bookFiles
+        .where("bookId")
+        .equals(book.id)
+        .toArray();
 
-      // Upload cover if available
+      if (bookFiles.length === 0) {
+        throw new Error("No files found for book");
+      }
+
+      // Create a zip file from the book files using the same structure
+      const { zip } = await import("fflate");
+
+      // Convert book files to the format fflate expects
+      const fileEntries: Record<string, Uint8Array> = {};
+      for (const file of bookFiles) {
+        const arrayBuffer = await file.content.arrayBuffer();
+        fileEntries[file.path] = new Uint8Array(arrayBuffer);
+      }
+
+      // Zip synchronously (fflate is fast enough for this)
+      const zipped = await new Promise<Uint8Array>((resolve, reject) => {
+        zip(fileEntries, (err, data) => {
+          if (err) reject(err);
+          else resolve(data);
+        });
+      });
+
+      const epubBlob = new Blob([new Uint8Array(zipped)], {
+        type: "application/epub+zip",
+      });
+      const epubFile = new File([epubBlob], `${book.fileHash}.epub`, {
+        type: "application/epub+zip",
+      });
+
+      // Get cover file if available
+      let coverFile: File | undefined;
       if (book.coverImagePath) {
-        await this.uploadCover(book);
+        const coverBookFile = await db.bookFiles
+          .where("bookId")
+          .equals(book.id)
+          .and((f) => f.path === book.coverImagePath)
+          .first();
+
+        if (coverBookFile) {
+          // Determine file extension from path
+          const ext =
+            book.coverImagePath.split(".").pop()?.toLowerCase() || "jpg";
+          const mimeType =
+            ext === "png"
+              ? "image/png"
+              : ext === "gif"
+                ? "image/gif"
+                : ext === "webp"
+                  ? "image/webp"
+                  : "image/jpeg";
+
+          coverFile = new File(
+            [coverBookFile.content],
+            `${book.fileHash}.${ext}`,
+            { type: mimeType },
+          );
+        }
+      }
+
+      // Upload both files in a single request
+      const formData = new FormData();
+      formData.append("epub", epubFile);
+      if (coverFile) {
+        formData.append("cover", coverFile);
+      }
+
+      const response = await fetch(`/api/sync/books/${book.fileHash}/files`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `File upload failed: ${(errorData as { error?: string }).error ?? response.status}`,
+        );
       }
 
       // Mark as synced
@@ -485,7 +562,7 @@ export class SyncService {
         status: "synced",
         lastSyncedAt: new Date(),
         epubUploaded: true,
-        coverUploaded: !!book.coverImagePath,
+        coverUploaded: !!coverFile,
         retryCount: 0,
       });
 
@@ -511,107 +588,6 @@ export class SyncService {
       );
       throw error;
     }
-  }
-
-  /**
-   * Upload the EPUB file for a book
-   */
-  private async uploadEpub(book: Book): Promise<void> {
-    // Get all book files and reconstruct the EPUB
-    const bookFiles = await db.bookFiles
-      .where("bookId")
-      .equals(book.id)
-      .toArray();
-
-    if (bookFiles.length === 0) {
-      throw new Error("No files found for book");
-    }
-
-    // Create a zip file from the book files using the same structure
-    const { zip } = await import("fflate");
-
-    // Convert book files to the format fflate expects
-    const fileEntries: Record<string, Uint8Array> = {};
-    for (const file of bookFiles) {
-      const arrayBuffer = await file.content.arrayBuffer();
-      fileEntries[file.path] = new Uint8Array(arrayBuffer);
-    }
-
-    // Zip synchronously (fflate is fast enough for this)
-    const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-      zip(fileEntries, (err, data) => {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
-
-    const epubBlob = new Blob([new Uint8Array(zipped)], {
-      type: "application/epub+zip",
-    });
-    const epubFile = new File([epubBlob], `${book.fileHash}.epub`, {
-      type: "application/epub+zip",
-    });
-
-    // Upload via API (the server will handle R2 storage)
-    const formData = new FormData();
-    formData.append("file", epubFile);
-
-    // For now, we use a direct fetch since hono client doesn't support FormData easily
-    const response = await fetch(`/api/files/upload/epub/${book.fileHash}`, {
-      method: "POST",
-      body: formData,
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      throw new Error(`EPUB upload failed: ${response.status}`);
-    }
-
-    // Mark upload complete
-    await honoClient.api.sync.books[":fileHash"]["upload-complete"].$post({
-      param: { fileHash: book.fileHash },
-      json: { type: "epub" },
-    });
-  }
-
-  /**
-   * Upload the cover image for a book
-   */
-  private async uploadCover(book: Book): Promise<void> {
-    if (!book.coverImagePath) return;
-
-    const coverFile = await db.bookFiles
-      .where("bookId")
-      .equals(book.id)
-      .and((f) => f.path === book.coverImagePath)
-      .first();
-
-    if (!coverFile) {
-      console.warn(
-        `[SyncService] Cover file not found: ${book.coverImagePath}`,
-      );
-      return;
-    }
-
-    // Upload via API
-    const formData = new FormData();
-    formData.append("file", coverFile.content);
-
-    const response = await fetch(`/api/files/upload/cover/${book.fileHash}`, {
-      method: "POST",
-      body: formData,
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      throw new Error(`Cover upload failed: ${response.status}`);
-    }
-
-    // Mark upload complete
-    await honoClient.api.sync.books[":fileHash"]["upload-complete"].$post({
-      param: { fileHash: book.fileHash },
-      json: { type: "cover" },
-    });
   }
 
   /**

@@ -1,6 +1,11 @@
 import { SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { createTestUser, type TestUser } from "./helpers";
+import {
+  createTestEpubContent,
+  createTestImageContent,
+  createTestUser,
+  type TestUser,
+} from "./helpers";
 
 describe("Book Sync API", () => {
   let testUser: TestUser;
@@ -322,8 +327,8 @@ describe("Book Sync API", () => {
     });
   });
 
-  describe("POST /api/sync/books/:fileHash/upload-complete", () => {
-    it("marks epub upload as complete", async () => {
+  describe("POST /api/sync/books/:fileHash/files", () => {
+    it("uploads epub file", async () => {
       // Create a book first
       await SELF.fetch("http://example.com/api/sync/books", {
         method: "POST",
@@ -343,16 +348,21 @@ describe("Book Sync API", () => {
         }),
       });
 
-      // Mark upload as complete
+      // Upload epub file
+      const formData = new FormData();
+      const epubBlob = new Blob([createTestEpubContent()], {
+        type: "application/epub+zip",
+      });
+      formData.append("epub", epubBlob, "test.epub");
+
       const response = await SELF.fetch(
-        "http://example.com/api/sync/books/upload_test_123/upload-complete",
+        "http://example.com/api/sync/books/upload_test_123/files",
         {
           method: "POST",
           headers: {
             Cookie: testUser.sessionCookie,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ type: "epub" }),
+          body: formData,
         },
       );
 
@@ -360,7 +370,7 @@ describe("Book Sync API", () => {
       const data = await response.json();
       expect(data.success).toBe(true);
       expect(data.fileHash).toBe("upload_test_123");
-      expect(data.type).toBe("epub");
+      expect(data.epubR2Key).toBeDefined();
 
       // Verify the book now has the R2 key
       const syncResponse = await SELF.fetch(
@@ -380,7 +390,7 @@ describe("Book Sync API", () => {
       expect(uploadedBook.epubR2Key).toBeDefined();
     });
 
-    it("marks cover upload as complete", async () => {
+    it("uploads cover file", async () => {
       // Create a book first
       await SELF.fetch("http://example.com/api/sync/books", {
         method: "POST",
@@ -400,58 +410,115 @@ describe("Book Sync API", () => {
         }),
       });
 
-      // Mark cover upload as complete
+      // Upload cover file
+      const formData = new FormData();
+      const coverBlob = new Blob([createTestImageContent()], {
+        type: "image/jpeg",
+      });
+      formData.append("cover", coverBlob, "cover.jpg");
+
       const response = await SELF.fetch(
-        "http://example.com/api/sync/books/cover_test_123/upload-complete",
+        "http://example.com/api/sync/books/cover_test_123/files",
         {
           method: "POST",
           headers: {
             Cookie: testUser.sessionCookie,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ type: "cover" }),
+          body: formData,
         },
       );
 
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.success).toBe(true);
-      expect(data.type).toBe("cover");
+      expect(data.coverR2Key).toBeDefined();
     });
 
-    it("returns 400 for invalid upload type", async () => {
+    it("uploads both epub and cover together", async () => {
+      // Create a book first
+      await SELF.fetch("http://example.com/api/sync/books", {
+        method: "POST",
+        headers: {
+          Cookie: testUser.sessionCookie,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          books: [
+            {
+              fileHash: "both_files_test_123",
+              title: "Both Files Test",
+              author: "Test Author",
+              fileSize: 700000,
+            },
+          ],
+        }),
+      });
+
+      // Upload both files
+      const formData = new FormData();
+      const epubBlob = new Blob([createTestEpubContent()], {
+        type: "application/epub+zip",
+      });
+      const coverBlob = new Blob([createTestImageContent()], {
+        type: "image/jpeg",
+      });
+      formData.append("epub", epubBlob, "test.epub");
+      formData.append("cover", coverBlob, "cover.jpg");
+
       const response = await SELF.fetch(
-        "http://example.com/api/sync/books/some_hash/upload-complete",
+        "http://example.com/api/sync/books/both_files_test_123/files",
         {
           method: "POST",
           headers: {
             Cookie: testUser.sessionCookie,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ type: "invalid" }),
+          body: formData,
+        },
+      );
+
+      expect(response.status).toBe(200);
+      const data = await response.json();
+      expect(data.success).toBe(true);
+      expect(data.fileHash).toBe("both_files_test_123");
+      expect(data.epubR2Key).toBeDefined();
+      expect(data.coverR2Key).toBeDefined();
+    });
+
+    it("returns 400 when no files are provided", async () => {
+      const formData = new FormData();
+      const response = await SELF.fetch(
+        "http://example.com/api/sync/books/some_hash/files",
+        {
+          method: "POST",
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+          body: formData,
         },
       );
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      // zValidator wraps ZodError in { success: false, error: ZodError }
-      expect(data.success).toBe(false);
-      expect(data.error).toBeDefined();
-      expect(data.error.name).toBe("ZodError");
-      expect(data.error.message).toBeDefined();
-      expect(data.error.message.length).toBeGreaterThan(0);
+      expect(data.error).toBe(
+        "At least one file (epub or cover) must be provided",
+      );
     });
 
     it("returns 404 for non-existent book", async () => {
+      const formData = new FormData();
+      const epubBlob = new Blob([createTestEpubContent()], {
+        type: "application/epub+zip",
+      });
+      formData.append("epub", epubBlob, "test.epub");
+
       const response = await SELF.fetch(
-        "http://example.com/api/sync/books/nonexistent/upload-complete",
+        "http://example.com/api/sync/books/nonexistent/files",
         {
           method: "POST",
           headers: {
             Cookie: testUser.sessionCookie,
-            "Content-Type": "application/json",
           },
-          body: JSON.stringify({ type: "epub" }),
+          body: formData,
         },
       );
 

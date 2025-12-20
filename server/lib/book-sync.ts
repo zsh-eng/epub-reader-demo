@@ -25,18 +25,12 @@ export const syncBooksBodySchema = z.object({
   ),
 });
 
-export const uploadCompleteBodySchema = z.object({
-  type: z.enum(["epub", "cover"]),
-  r2Key: z.string().optional(),
-});
-
 export const fileHashParamSchema = z.object({
   fileHash: z.string().min(1),
 });
 
 export type SyncBooksQuery = z.infer<typeof syncBooksQuerySchema>;
 export type SyncBooksBody = z.infer<typeof syncBooksBodySchema>;
-export type UploadCompleteBody = z.infer<typeof uploadCompleteBodySchema>;
 
 export type BookSyncResult = {
   fileHash: string;
@@ -197,16 +191,23 @@ export async function syncBooks(
 }
 
 /**
- * Mark an upload (epub or cover) as complete.
+ * Upload EPUB and cover files to R2 storage.
+ * Updates the book record with the R2 keys.
  */
-export async function markUploadComplete(
+export async function uploadBookFiles(
   database: D1Database,
+  r2Storage: R2Bucket,
   userId: string,
   fileHash: string,
-  uploadType: "epub" | "cover",
-  r2Key?: string,
+  epubFile: File | null,
+  coverFile: File | null,
 ): Promise<
-  | { success: true; fileHash: string; type: string }
+  | {
+      success: true;
+      fileHash: string;
+      epubR2Key: string | null;
+      coverR2Key: string | null;
+    }
   | { error: string; status: number }
 > {
   const db = drizzle(database);
@@ -222,7 +223,34 @@ export async function markUploadComplete(
     return { error: "Book not found", status: 404 };
   }
 
-  // Update the R2 key based on upload type
+  let epubR2Key: string | null = null;
+  let coverR2Key: string | null = null;
+
+  // Upload EPUB file to R2 if provided
+  if (epubFile) {
+    epubR2Key = `epubs/${userId}/${fileHash}.epub`;
+    const epubArrayBuffer = await epubFile.arrayBuffer();
+    await r2Storage.put(epubR2Key, epubArrayBuffer, {
+      httpMetadata: {
+        contentType: "application/epub+zip",
+      },
+    });
+  }
+
+  // Upload cover file to R2 if provided
+  if (coverFile) {
+    // Determine file extension from the file name or type
+    const ext = coverFile.name.split(".").pop()?.toLowerCase() || "jpg";
+    coverR2Key = `covers/${userId}/${fileHash}.${ext}`;
+    const coverArrayBuffer = await coverFile.arrayBuffer();
+    await r2Storage.put(coverR2Key, coverArrayBuffer, {
+      httpMetadata: {
+        contentType: coverFile.type || "image/jpeg",
+      },
+    });
+  }
+
+  // Update the book record with R2 keys
   const updateData: {
     epubR2Key?: string;
     coverR2Key?: string;
@@ -231,10 +259,11 @@ export async function markUploadComplete(
     updatedAt: new Date(),
   };
 
-  if (uploadType === "epub") {
-    updateData.epubR2Key = r2Key ?? `epubs/${userId}/${fileHash}.epub`;
-  } else {
-    updateData.coverR2Key = r2Key ?? `covers/${userId}/${fileHash}`;
+  if (epubR2Key) {
+    updateData.epubR2Key = epubR2Key;
+  }
+  if (coverR2Key) {
+    updateData.coverR2Key = coverR2Key;
   }
 
   await db.update(book).set(updateData).where(eq(book.id, existingBook.id));
@@ -242,7 +271,8 @@ export async function markUploadComplete(
   return {
     success: true,
     fileHash,
-    type: uploadType,
+    epubR2Key,
+    coverR2Key,
   };
 }
 

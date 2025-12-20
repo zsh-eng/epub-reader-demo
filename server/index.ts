@@ -4,11 +4,10 @@ import {
   deleteBook,
   fileHashParamSchema,
   getBooks,
-  markUploadComplete,
   syncBooks,
   syncBooksBodySchema,
   syncBooksQuerySchema,
-  uploadCompleteBodySchema,
+  uploadBookFiles,
 } from "@server/lib/book-sync";
 import { getDevices } from "@server/lib/devices";
 import { extractDevice } from "@server/lib/middleware/extract-device";
@@ -117,21 +116,33 @@ const route = app
     },
   )
   .post(
-    "/sync/books/:fileHash/upload-complete",
+    "/sync/books/:fileHash/files",
     requireUser,
     zValidator("param", fileHashParamSchema),
-    zValidator("json", uploadCompleteBodySchema),
     async (c) => {
       const user = c.get("user")!;
       const { fileHash } = c.req.valid("param");
-      const { type, r2Key } = c.req.valid("json");
 
-      const result = await markUploadComplete(
+      // Parse multipart form data
+      const body = await c.req.parseBody();
+      const epubFile = body["epub"] as File | undefined;
+      const coverFile = body["cover"] as File | undefined;
+
+      // At least one file must be provided
+      if (!epubFile && !coverFile) {
+        return c.json(
+          { error: "At least one file (epub or cover) must be provided" },
+          400,
+        );
+      }
+
+      const result = await uploadBookFiles(
         c.env.DATABASE,
+        c.env.BOOK_STORAGE,
         user.id,
         fileHash,
-        type,
-        r2Key,
+        epubFile ?? null,
+        coverFile ?? null,
       );
 
       if ("error" in result) {
