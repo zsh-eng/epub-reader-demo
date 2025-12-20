@@ -1,10 +1,9 @@
-import * as schema from "@server/db/schema";
 import { createAuth } from "@server/lib/auth";
-import { deviceMiddleware } from "@server/lib/device-middleware";
+import { getDevices } from "@server/lib/devices";
+import { extractDevice } from "@server/lib/middleware/extract-device";
+import { requireAuth, requireUser } from "@server/lib/middleware/require-auth";
 import { getActiveSessions } from "@server/lib/sessions";
 import type { Session, User } from "better-auth/types";
-import { desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
@@ -35,7 +34,7 @@ app.use(
 
     await next();
   },
-  deviceMiddleware,
+  extractDevice,
 );
 
 // https://www.better-auth.com/docs/integrations/hono#cors
@@ -65,58 +64,21 @@ const route = app
   .get("/hello", (c) => {
     return c.json({ message: "Hello from backend!" });
   })
-  .get("/me", (c) => {
-    const user = c.get("user");
-    if (!user) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-
+  .get("/me", requireUser, (c) => {
+    const user = c.get("user")!;
     return c.json({ user });
   })
-  .get("/sessions", async (c) => {
-    const user = c.get("user");
-    const currentSession = c.get("session");
-
-    if (!user || !currentSession) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
+  .get("/sessions", requireUser, async (c) => {
+    const user = c.get("user")!;
+    const currentSession = c.get("session")!;
     const activeSessions = await getActiveSessions(c.env, currentSession, user);
-
     return c.json({ sessions: activeSessions });
   })
-  .get("/devices", async (c) => {
-    const user = c.get("user");
-    const currentDeviceId = c.get("deviceId");
-
-    if (!user || !currentDeviceId) {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-
-    const db = drizzle(c.env.DATABASE, { schema });
-
-    const devices = await db
-      .select({
-        id: schema.userDevice.id,
-        clientId: schema.userDevice.clientId,
-        deviceName: schema.userDevice.deviceName,
-        browser: schema.userDevice.browser,
-        os: schema.userDevice.os,
-        deviceType: schema.userDevice.deviceType,
-        lastActiveAt: schema.userDevice.lastActiveAt,
-        createdAt: schema.userDevice.createdAt,
-      })
-      .from(schema.userDevice)
-      .where(eq(schema.userDevice.userId, user.id))
-      .orderBy(desc(schema.userDevice.lastActiveAt));
-
-    const devicesWithCurrentFlag = devices.map((device) => ({
-      ...device,
-      isCurrent: device.clientId === currentDeviceId,
-      lastActiveAt: device.lastActiveAt?.toISOString(),
-      createdAt: device.createdAt.toISOString(),
-    }));
-
-    return c.json({ devices: devicesWithCurrentFlag });
+  .get("/devices", requireAuth, async (c) => {
+    const user = c.get("user")!;
+    const currentDeviceId = c.get("deviceId")!;
+    const devices = await getDevices(c.env.DATABASE, user.id, currentDeviceId);
+    return c.json({ devices });
   });
 
 export default app;

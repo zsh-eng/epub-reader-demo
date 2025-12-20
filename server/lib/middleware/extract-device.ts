@@ -11,7 +11,7 @@ import { UAParser } from "ua-parser-js";
  * The device is created with ON CONFLICT DO NOTHING semantics - we just ensure it exists.
  * We update lastActiveAt on each request to track device usage.
  */
-export const deviceMiddleware: MiddlewareHandler<{
+export const extractDevice: MiddlewareHandler<{
   Bindings: Env;
   Variables: {
     user: User | undefined;
