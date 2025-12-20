@@ -2,6 +2,8 @@
 
 This repository uses bun as the package manager and for running scripts.
 
+After you finish editing code, you do not need to generate a separate document as a summary, you can simply provide your brief summary within the conversation itself.
+
 Avoid using new colours if possible. You should use the existing color palette and CSS variables
 defined in the index.css file.
 If you do encounter other colours in the codebase, please feel free to refactor them to use the existing
