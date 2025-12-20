@@ -1,5 +1,6 @@
 import { useToast } from "@/hooks/use-toast";
 import {
+  getAllBooks,
   getBook,
   getReadingProgress,
   type Book,
@@ -23,9 +24,25 @@ export interface UseBookLoaderReturn {
  */
 export const bookKeys = {
   all: ["books"] as const,
+  list: () => [...bookKeys.all, "list"] as const,
   detail: (bookId: string) => [...bookKeys.all, bookId] as const,
   progress: (bookId: string) => [...bookKeys.all, bookId, "progress"] as const,
 };
+
+/**
+ * Hook for querying all books in the library
+ */
+export function useBooks() {
+  return useQuery({
+    queryKey: bookKeys.list(),
+    queryFn: async () => {
+      return await getAllBooks();
+    },
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+    refetchOnWindowFocus: false,
+  });
+}
 
 /**
  * Hook for querying book data

@@ -1,15 +1,31 @@
-import { unzip } from "fflate";
 import type {
   Book,
+  BookFile,
   ManifestItem,
   SpineItem,
   TOCItem,
-  BookFile,
 } from "@/lib/db";
+import { unzip } from "fflate";
 
 export interface ParsedEPUB {
   book: Book;
   files: BookFile[];
+}
+
+export interface ParsedEPUBMetadata {
+  title: string;
+  author: string;
+  manifest: ManifestItem[];
+  spine: SpineItem[];
+  toc: TOCItem[];
+  coverImagePath?: string;
+  metadata: {
+    publisher?: string;
+    language?: string;
+    isbn?: string;
+    description?: string;
+    publicationDate?: string;
+  };
 }
 
 export interface ParseEPUBOptions {
@@ -77,6 +93,7 @@ export async function parseEPUB(
       description: metadata.description,
       publicationDate: metadata.publicationDate,
     },
+    isDownloaded: 1, // Local file is always downloaded
   };
 
   // Create BookFile objects for all content files
@@ -467,4 +484,49 @@ function getMediaType(path: string, manifest: ManifestItem[]): string {
  */
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Parse EPUB metadata only (without creating Book/BookFile objects)
+ * Used for downloading remote books where we already have the files stored
+ */
+export async function parseEPUBMetadataOnly(
+  blob: Blob,
+): Promise<ParsedEPUBMetadata> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+
+  // Unzip the EPUB file
+  const unzipped = await unzipAsync(uint8Array);
+
+  // Parse container.xml to find the OPF file
+  const opfPath = await findOPFPath(unzipped);
+
+  if (!opfPath) {
+    throw new Error("Could not find OPF file in EPUB");
+  }
+
+  const opfContent = new TextDecoder().decode(unzipped[opfPath]);
+  const opfDoc = new DOMParser().parseFromString(opfContent, "text/xml");
+  const metadata = extractMetadata(opfDoc);
+  const manifest = extractManifest(opfDoc, opfPath);
+  const spine = extractSpine(opfDoc);
+  const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
+  const coverImagePath = extractCoverImagePath(opfDoc, manifest, unzipped);
+
+  return {
+    title: metadata.title || "Unknown Title",
+    author: metadata.author || "Unknown Author",
+    manifest,
+    spine,
+    toc,
+    coverImagePath,
+    metadata: {
+      publisher: metadata.publisher,
+      language: metadata.language,
+      isbn: metadata.isbn,
+      description: metadata.description,
+      publicationDate: metadata.publicationDate,
+    },
+  };
 }

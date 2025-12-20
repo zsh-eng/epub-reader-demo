@@ -12,29 +12,27 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import { useBooks } from "@/hooks/use-book-loader";
+import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
-import {
-  addBookFromFile,
-  DuplicateBookError,
-  getLibraryBooks,
-  removeBook,
-} from "@/lib/book-service";
+import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
 import type { Book } from "@/lib/db";
 import {
+  Cloud,
+  CloudOff,
   Library as LibraryIcon,
   LogOut,
   Monitor,
   Plus,
+  RefreshCw,
   Search,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 
 export function Library() {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -43,6 +41,8 @@ export function Library() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
+  const { data: books = [], isLoading, refetch: refetchBooks } = useBooks();
+  const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
   // Handle Google Sign In
   const handleGoogleSignIn = async () => {
     try {
@@ -95,26 +95,10 @@ export function Library() {
       .slice(0, 2);
   };
 
-  // Load books from database
+  // Refetch books when needed
   const loadBooks = useCallback(async () => {
-    try {
-      const allBooks = await getLibraryBooks();
-      setBooks(allBooks);
-    } catch (error) {
-      console.error("Error loading books:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load books from library",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    loadBooks();
-  }, [loadBooks]);
+    await refetchBooks();
+  }, [refetchBooks]);
 
   // Handle file selection
   const handleFileSelect = async (files: FileList | null) => {
@@ -184,20 +168,38 @@ export function Library() {
     await handleFileSelect(files);
   };
 
-  // Handle book deletion
+  // Handle book deletion (uses sync service when authenticated)
   const handleDeleteBook = async (bookId: string) => {
     try {
-      await removeBook(bookId);
+      await syncDeleteBook(bookId);
       toast({
         title: "Success",
         description: "Book removed from library",
       });
-      await loadBooks();
+      // Refetch is handled by query invalidation in sync service
     } catch (error) {
       console.error("Error deleting book:", error);
       toast({
         title: "Error",
         description: "Failed to remove book",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle manual sync trigger
+  const handleManualSync = async () => {
+    try {
+      await triggerSync();
+      toast({
+        title: "Sync complete",
+        description: "Your library has been synchronized",
+      });
+    } catch (error) {
+      console.error("Error syncing:", error);
+      toast({
+        title: "Sync failed",
+        description: "Failed to synchronize library",
         variant: "destructive",
       });
     }
@@ -313,6 +315,25 @@ export function Library() {
                 )}
                 <span className="hidden sm:inline">Add Book</span>
               </Button>
+
+              {/* Sync Status & Manual Sync Button (only when authenticated) */}
+              {isAuthenticated && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleManualSync}
+                  disabled={isSyncing}
+                  title={isSyncing ? "Syncing..." : "Sync library"}
+                >
+                  {isSyncing ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : navigator.onLine ? (
+                    <Cloud className="h-4 w-4" />
+                  ) : (
+                    <CloudOff className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              )}
 
               {/* Auth Section */}
               {isAuthLoading ? (

@@ -22,6 +22,46 @@ export interface Book {
     description?: string;
     publicationDate?: string;
   };
+  // Sync-related fields
+  isDownloaded: number; // Whether the EPUB file is stored locally
+  remoteEpubUrl?: string; // URL to download the EPUB from server (if not downloaded)
+  remoteCoverUrl?: string; // URL to the cover image on server (if not downloaded)
+}
+
+// Sync state tracking for each book
+export interface BookSyncState {
+  fileHash: string; // PK, matches Book.fileHash
+  status:
+    | "pending_upload"
+    | "uploading"
+    | "synced"
+    | "error"
+    | "pending_download";
+  lastSyncedAt?: Date; // When we last successfully synced
+  lastServerTimestamp?: number; // Server's updatedAt when we last synced
+  epubUploaded: boolean; // Whether the EPUB file is on R2
+  coverUploaded: boolean; // Whether the cover is on R2
+  errorMessage?: string;
+  retryCount: number;
+}
+
+// Sync log for debugging
+export interface SyncLog {
+  id: string; // UUID
+  timestamp: Date;
+  direction: "push" | "pull";
+  entityType: "book" | "progress" | "highlight";
+  entityId: string; // fileHash for books
+  action: "create" | "update" | "delete" | "download" | "upload";
+  status: "success" | "failure";
+  errorMessage?: string;
+  durationMs?: number;
+}
+
+// Cursor for pagination in sync
+export interface SyncCursor {
+  id: string; // 'books' | 'progress' | etc.
+  lastServerTimestamp: number; // The timestamp for pagination
 }
 
 export interface ManifestItem {
@@ -76,6 +116,10 @@ class EPUBReaderDB extends Dexie {
   readingProgress!: Table<ReadingProgress, string>;
   readingSettings!: Table<ReadingSettings, string>;
   highlights!: Table<Highlight, string>;
+  // Sync tables
+  bookSyncState!: Table<BookSyncState, string>;
+  syncLog!: Table<SyncLog, string>;
+  syncCursor!: Table<SyncCursor, string>;
 
   constructor() {
     super("epub-reader-db");
@@ -96,6 +140,30 @@ class EPUBReaderDB extends Dexie {
       readingSettings: "id",
       highlights: "id, bookId, spineItemId, createdAt",
     });
+
+    // Version 4: Add sync tables and isDownloaded field
+    this.version(4)
+      .stores({
+        books:
+          "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
+        bookFiles: "id, bookId, path",
+        readingProgress: "id, bookId, lastRead",
+        readingSettings: "id",
+        highlights: "id, bookId, spineItemId, createdAt",
+        // New sync tables
+        bookSyncState: "fileHash, status",
+        syncLog: "id, timestamp, entityType, status",
+        syncCursor: "id",
+      })
+      .upgrade((tx) => {
+        // Migrate existing books to have isDownloaded = true (they are local)
+        return tx
+          .table("books")
+          .toCollection()
+          .modify((book) => {
+            book.isDownloaded = 1;
+          });
+      });
   }
 }
 
@@ -116,17 +184,27 @@ export async function getAllBooks(): Promise<Book[]> {
 }
 
 export async function deleteBook(id: string): Promise<void> {
+  // Get the book first to find its fileHash for sync state cleanup
+  const book = await db.books.get(id);
+
   await db.transaction(
     "rw",
-    db.books,
-    db.bookFiles,
-    db.readingProgress,
-    db.highlights,
+    [
+      db.books,
+      db.bookFiles,
+      db.readingProgress,
+      db.highlights,
+      db.bookSyncState,
+    ],
     async () => {
       await db.books.delete(id);
       await db.bookFiles.where("bookId").equals(id).delete();
       await db.readingProgress.delete(id);
       await db.highlights.where("bookId").equals(id).delete();
+      // Also clean up sync state if we have the fileHash
+      if (book?.fileHash) {
+        await db.bookSyncState.delete(book.fileHash);
+      }
     },
   );
 }
@@ -236,4 +314,80 @@ export async function updateHighlight(
   changes: Partial<Highlight>,
 ): Promise<void> {
   await db.highlights.update(id, { ...changes, updatedAt: new Date() });
+}
+
+// Sync state operations
+export async function getBookSyncState(
+  fileHash: string,
+): Promise<BookSyncState | undefined> {
+  return await db.bookSyncState.get(fileHash);
+}
+
+export async function setBookSyncState(
+  syncState: BookSyncState,
+): Promise<void> {
+  await db.bookSyncState.put(syncState);
+}
+
+export async function getBooksSyncState(): Promise<BookSyncState[]> {
+  return await db.bookSyncState.toArray();
+}
+
+export async function getPendingUploadBooks(): Promise<BookSyncState[]> {
+  return await db.bookSyncState
+    .where("status")
+    .anyOf(["pending_upload", "error"])
+    .toArray();
+}
+
+export async function getSyncCursor(
+  id: string,
+): Promise<SyncCursor | undefined> {
+  return await db.syncCursor.get(id);
+}
+
+export async function setSyncCursor(cursor: SyncCursor): Promise<void> {
+  await db.syncCursor.put(cursor);
+}
+
+export async function addSyncLog(log: SyncLog): Promise<void> {
+  await db.syncLog.add(log);
+}
+
+export async function getRecentSyncLogs(limit = 100): Promise<SyncLog[]> {
+  return await db.syncLog.orderBy("timestamp").reverse().limit(limit).toArray();
+}
+
+export async function getLocalOnlyBooks(): Promise<Book[]> {
+  // Get all books that don't have a sync state yet (never synced)
+  const allBooks = await db.books.toArray();
+  const syncStates = await db.bookSyncState.toArray();
+  const syncedHashes = new Set(syncStates.map((s) => s.fileHash));
+  return allBooks.filter((book) => !syncedHashes.has(book.fileHash));
+}
+
+export async function getBooksNeedingUpload(): Promise<Book[]> {
+  // Books with sync state indicating they need upload
+  const pendingStates = await db.bookSyncState
+    .where("status")
+    .anyOf(["pending_upload", "error"])
+    .toArray();
+  const pendingHashes = pendingStates.map((s) => s.fileHash);
+  if (pendingHashes.length === 0) return [];
+  return await db.books.where("fileHash").anyOf(pendingHashes).toArray();
+}
+
+export async function getNotDownloadedBooks(): Promise<Book[]> {
+  return await db.books.where("isDownloaded").equals(0).toArray();
+}
+
+export async function markBookAsDownloaded(
+  bookId: string,
+  isDownloaded: number,
+): Promise<void> {
+  await db.books.update(bookId, { isDownloaded });
+}
+
+export async function deleteBookSyncState(fileHash: string): Promise<void> {
+  await db.bookSyncState.delete(fileHash);
 }
