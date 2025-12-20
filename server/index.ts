@@ -1,4 +1,15 @@
+import { zValidator } from "@hono/zod-validator";
 import { createAuth } from "@server/lib/auth";
+import {
+  deleteBook,
+  fileHashParamSchema,
+  getBooks,
+  markUploadComplete,
+  syncBooks,
+  syncBooksBodySchema,
+  syncBooksQuerySchema,
+  uploadCompleteBodySchema,
+} from "@server/lib/book-sync";
 import { getDevices } from "@server/lib/devices";
 import { extractDevice } from "@server/lib/middleware/extract-device";
 import { requireAuth, requireUser } from "@server/lib/middleware/require-auth";
@@ -79,7 +90,74 @@ const route = app
     const currentDeviceId = c.get("deviceId")!;
     const devices = await getDevices(c.env.DATABASE, user.id, currentDeviceId);
     return c.json({ devices });
-  });
+  })
+  // Book sync endpoints
+  .get(
+    "/sync/books",
+    requireUser,
+    zValidator("query", syncBooksQuerySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const { since } = c.req.valid("query");
+
+      const result = await getBooks(c.env.DATABASE, user.id, since);
+      return c.json(result);
+    },
+  )
+  .post(
+    "/sync/books",
+    requireUser,
+    zValidator("json", syncBooksBodySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const { books } = c.req.valid("json");
+
+      const result = await syncBooks(c.env.DATABASE, user.id, books);
+      return c.json(result);
+    },
+  )
+  .post(
+    "/sync/books/:fileHash/upload-complete",
+    requireUser,
+    zValidator("param", fileHashParamSchema),
+    zValidator("json", uploadCompleteBodySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const { fileHash } = c.req.valid("param");
+      const { type, r2Key } = c.req.valid("json");
+
+      const result = await markUploadComplete(
+        c.env.DATABASE,
+        user.id,
+        fileHash,
+        type,
+        r2Key,
+      );
+
+      if ("error" in result) {
+        return c.json({ error: result.error }, result.status as 404);
+      }
+
+      return c.json(result);
+    },
+  )
+  .delete(
+    "/sync/books/:fileHash",
+    requireUser,
+    zValidator("param", fileHashParamSchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const { fileHash } = c.req.valid("param");
+
+      const result = await deleteBook(c.env.DATABASE, user.id, fileHash);
+
+      if ("error" in result) {
+        return c.json({ error: result.error }, result.status as 404);
+      }
+
+      return c.json(result);
+    },
+  );
 
 export default app;
 
