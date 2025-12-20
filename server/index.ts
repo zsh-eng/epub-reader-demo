@@ -1,6 +1,10 @@
 import { createAuth } from "@server/lib/auth";
+import { deviceMiddleware } from "@server/lib/device-middleware";
 import { getActiveSessions } from "@server/lib/sessions";
+import * as schema from "@server/db/schema";
 import type { Session, User } from "better-auth/types";
+import { desc, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
@@ -12,22 +16,27 @@ const app = new Hono<{
   Variables: {
     user: User | undefined;
     session: Session | undefined;
+    deviceId: string | undefined;
   };
 }>();
 
-app.use("*", async (c, next) => {
-  const auth = createAuth(c.env);
-  const session = await auth.api.getSession({
-    headers: c.req.raw.headers,
-  });
+app.use(
+  "*",
+  async (c, next) => {
+    const auth = createAuth(c.env);
+    const session = await auth.api.getSession({
+      headers: c.req.raw.headers,
+    });
 
-  if (session) {
-    c.set("user", session.user);
-    c.set("session", session.session);
-  }
+    if (session) {
+      c.set("user", session.user);
+      c.set("session", session.session);
+    }
 
-  await next();
-});
+    await next();
+  },
+  deviceMiddleware,
+);
 
 // https://www.better-auth.com/docs/integrations/hono#cors
 app.use(
@@ -74,6 +83,40 @@ const route = app
     const activeSessions = await getActiveSessions(c.env, currentSession, user);
 
     return c.json({ sessions: activeSessions });
+  })
+  .get("/devices", async (c) => {
+    const user = c.get("user");
+    const currentDeviceId = c.get("deviceId");
+
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const db = drizzle(c.env.DATABASE, { schema });
+
+    const devices = await db
+      .select({
+        id: schema.userDevice.id,
+        clientId: schema.userDevice.clientId,
+        deviceName: schema.userDevice.deviceName,
+        browser: schema.userDevice.browser,
+        os: schema.userDevice.os,
+        deviceType: schema.userDevice.deviceType,
+        lastActiveAt: schema.userDevice.lastActiveAt,
+        createdAt: schema.userDevice.createdAt,
+      })
+      .from(schema.userDevice)
+      .where(eq(schema.userDevice.userId, user.id))
+      .orderBy(desc(schema.userDevice.lastActiveAt));
+
+    const devicesWithCurrentFlag = devices.map((device) => ({
+      ...device,
+      isCurrent: device.clientId === currentDeviceId,
+      lastActiveAt: device.lastActiveAt?.toISOString(),
+      createdAt: device.createdAt.toISOString(),
+    }));
+
+    return c.json({ devices: devicesWithCurrentFlag });
   });
 
 export default app;
