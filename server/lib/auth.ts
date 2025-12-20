@@ -19,5 +19,9 @@ export const createAuth = (env: Env) => {
         clientSecret: env.GOOGLE_CLIENT_SECRET as string,
       },
     },
+
+    emailAndPassword: {
+      enabled: true,
+    },
   });
 };
