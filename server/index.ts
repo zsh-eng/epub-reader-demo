@@ -157,7 +157,74 @@ const route = app
 
       return c.json(result);
     },
-  );
+  )
+  .get("/files/:userId/*", requireUser, async (c) => {
+    const user = c.get("user")!;
+    const requestedUserId = c.req.param("userId");
+
+    // Extract the file path from the full request path
+    const fullPath = c.req.path;
+    const prefix = `/api/files/${requestedUserId}/`;
+
+    if (!fullPath.startsWith(prefix)) {
+      return c.json({ error: "Invalid path" }, 400);
+    }
+
+    const filePath = fullPath.slice(prefix.length);
+
+    // Security: Only allow users to access their own files
+    if (user.id !== requestedUserId) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    if (!filePath) {
+      return c.json({ error: "File path is required" }, 400);
+    }
+
+    // Construct the full R2 key (e.g., "epubs/userId/hash.epub" or "covers/userId/hash")
+    const r2Key = filePath;
+
+    try {
+      const object = await c.env.BOOK_STORAGE.get(r2Key);
+
+      if (!object) {
+        return c.json({ error: "File not found" }, 404);
+      }
+
+      // Determine content type based on file extension
+      let contentType = "application/octet-stream";
+      if (r2Key.endsWith(".epub")) {
+        contentType = "application/epub+zip";
+      } else if (r2Key.match(/\.(jpg|jpeg)$/i)) {
+        contentType = "image/jpeg";
+      } else if (r2Key.endsWith(".png")) {
+        contentType = "image/png";
+      } else if (r2Key.endsWith(".webp")) {
+        contentType = "image/webp";
+      }
+
+      // Set cache control headers
+      // Cache-Control: private ensures CDN/proxies don't cache user-specific content
+      // max-age=31536000 (1 year) since files are content-addressed by hash
+      const headers = new Headers({
+        "Content-Type": contentType,
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "Content-Length": object.size.toString(),
+      });
+
+      // Add ETag if available
+      if (object.httpEtag) {
+        headers.set("ETag", object.httpEtag);
+      }
+
+      return new Response(object.body, {
+        headers,
+      });
+    } catch (error) {
+      console.error("Error fetching file from R2:", error);
+      return c.json({ error: "Failed to retrieve file" }, 500);
+    }
+  });
 
 export default app;
 

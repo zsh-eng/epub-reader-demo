@@ -26,7 +26,6 @@ describe("Book Sync API", () => {
       expect(data.books).toEqual([]);
       expect(data.serverTimestamp).toBeDefined();
       expect(typeof data.serverTimestamp).toBe("number");
-      expect(data.hasMore).toBe(false);
     });
 
     it("returns 401 for unauthenticated requests", async () => {

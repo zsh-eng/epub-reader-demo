@@ -80,21 +80,21 @@ export async function getBooks(
       metadata: b.metadata,
       epubR2Key: b.epubR2Key,
       coverR2Key: b.coverR2Key,
-      // TODO: Generate presigned URLs when R2 is integrated
-      coverUrl: b.coverR2Key ? null : null,
-      epubUrl: b.epubR2Key ? null : null,
+      coverUrl: b.coverR2Key ? `/api/files/${userId}/${b.coverR2Key}` : null,
+      epubUrl: b.epubR2Key ? `/api/files/${userId}/${b.epubR2Key}` : null,
       createdAt: b.createdAt?.getTime() ?? null,
       updatedAt: b.updatedAt?.getTime() ?? null,
       deletedAt: b.deletedAt?.getTime() ?? null,
     })),
     serverTimestamp,
-    hasMore: false,
   };
 }
 
 /**
  * Sync books from client to server using batched queries.
  * Uses a single SELECT to get existing books, then batches all INSERT/UPDATE operations.
+ *
+ * TODO: Combine the SELECT and the INSERT/UPDATE operations to avoid concurrency bugs?
  */
 export async function syncBooks(
   database: D1Database,
