@@ -30,6 +30,9 @@ D1 Database with Drizzle ORM and BetterAuth for authentication.
   ```
 - **Protected Routes**: See `server/index.ts` for example using `c.get('user')` to check authentication
 
+For backend APIs, the main logic should live in the `server/lib` directory.
+Only the parsing of query and parameters and returning of responses should live in the `server/index.ts` file.
+
 Tests: see `test/hello.test.ts` for example of integration test with Cloudflare.
 There is no need for unit tests of the *endpoints* (though we may need unit tests for specific functionality in the backend).
 In general, we prefer integration tests that include the database.
