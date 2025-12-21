@@ -19,8 +19,6 @@ interface BookCardProps {
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
   const [coverUrl, setCoverUrl] = useState<string | undefined>(undefined);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_imageLoaded, setImageLoaded] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | undefined;
@@ -83,7 +81,6 @@ export function BookCard({ book, onDelete }: BookCardProps) {
                 src={coverUrl}
                 alt={`Cover of ${book.title}`}
                 className={`h-full w-full object-cover`}
-                onLoad={() => setImageLoaded(true)}
                 loading="lazy"
               />
             ) : (
