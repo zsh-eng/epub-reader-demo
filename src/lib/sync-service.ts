@@ -111,9 +111,15 @@ export class SyncService {
   };
 
   /**
-   * Perform a full sync: pull then push
+   * Main sync method: pulls from server, pushes local changes, and optionally downloads cover images
+   *
+   * This syncs metadata only - actual file content (covers and EPUBs) are downloaded separately.
+   *
+   * @param downloadCovers If true, downloads cover images for books after pulling metadata.
+   *                       Recommended for initial sync or when you want to update the library view.
+   *                       Default: false (metadata only)
    */
-  async sync(): Promise<void> {
+  async sync(downloadCovers: boolean = true): Promise<void> {
     if (this.isSyncing) {
       console.log("[SyncService] Sync already in progress, skipping");
       return;
@@ -135,6 +141,11 @@ export class SyncService {
 
       // Then push local changes
       await this.push();
+
+      // Optionally download cover images for newly synced books
+      if (downloadCovers) {
+        await this.downloadCoverImages();
+      }
 
       console.log(
         `[SyncService] Sync completed in ${Date.now() - startTime}ms`,
@@ -593,8 +604,145 @@ export class SyncService {
   /**
    * Download the EPUB file for a remote book
    */
-  async downloadBook(bookId: string): Promise<void> {
-    const book = await db.books.get(bookId);
+  /**
+   * Downloads cover images for books that don't have them yet.
+   *
+   * This is a separate operation from metadata sync to allow for:
+   * - Bandwidth efficiency: Only download covers when needed for UI
+   * - Selective downloads: Download covers for specific books
+   * - Background operation: Can run after sync without blocking
+   *
+   * Call this after `pull()` to populate the library view with cover images.
+   *
+   * @param fileHashes Optional array of specific books to download covers for.
+   *                   If not provided, downloads all books that have a remoteCoverUrl but no local cover.
+   *
+   * @example
+   * // Download all missing covers
+   * await syncService.downloadCoverImages();
+   *
+   * // Download covers for specific books
+   * await syncService.downloadCoverImages(['hash1', 'hash2']);
+   */
+  async downloadCoverImages(fileHashes?: string[]): Promise<void> {
+    const startTime = Date.now();
+    console.log("[Sync] Starting cover image download...");
+
+    try {
+      const allBooks = await db.books.toArray();
+      const booksNeedingCovers = allBooks.filter((book) => {
+        const needsCover = !book.coverImagePath && !book.isDownloaded;
+        if (fileHashes) {
+          return needsCover && fileHashes.includes(book.fileHash);
+        }
+        return needsCover;
+      });
+
+      console.log(
+        `[Sync] Found ${booksNeedingCovers.length} books needing covers`,
+      );
+
+      for (const book of booksNeedingCovers) {
+        try {
+          console.log(`[Sync] Downloading cover for: ${book.title}`);
+
+          if (!book.remoteCoverUrl) {
+            console.error(`[Sync] No remote cover URL for ${book.title}`);
+            continue;
+          }
+
+          const response = await fetch(book.remoteCoverUrl, {
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            console.error(
+              `[Sync] Failed to download cover for ${book.title}:`,
+              response.statusText,
+            );
+            continue;
+          }
+
+          const coverBlob = await response.blob();
+
+          // Determine the media type from the blob
+          let mediaType = coverBlob.type;
+          if (!mediaType || mediaType === "application/octet-stream") {
+            // Try to infer from the first few bytes
+            const coverArrayBuffer = await coverBlob.arrayBuffer();
+            const coverContent = new Uint8Array(coverArrayBuffer);
+            if (coverContent[0] === 0xff && coverContent[1] === 0xd8) {
+              mediaType = "image/jpeg";
+            } else if (coverContent[0] === 0x89 && coverContent[1] === 0x50) {
+              mediaType = "image/png";
+            }
+          }
+
+          // Store the cover image in book_files
+          const coverPath = book.coverImagePath || "cover.jpg";
+          await db.bookFiles.put({
+            id: `${book.id}-${coverPath}`,
+            bookId: book.id,
+            path: coverPath,
+            content: coverBlob,
+            mediaType: mediaType,
+          });
+
+          // Update the book's coverImagePath if it wasn't set
+          // This ensures BookCard can find the cover
+          if (!book.coverImagePath) {
+            await db.books.update(book.id, { coverImagePath: coverPath });
+          }
+
+          console.log(
+            `[Sync] Successfully downloaded cover for: ${book.title}`,
+          );
+
+          // Invalidate queries so UI updates with the new cover
+          this.invalidateBookQueries(book.id);
+        } catch (error) {
+          console.error(
+            `[Sync] Error downloading cover for ${book.title}:`,
+            error,
+          );
+        }
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(`[Sync] Cover download completed in ${duration}ms`);
+    } catch (error) {
+      console.error("[Sync] Cover download failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Downloads the full EPUB content for a specific book.
+   *
+   * This is a heavy operation that downloads and extracts all EPUB files.
+   * Should ONLY be called on-demand when the user wants to read a book.
+   *
+   * The EPUB content is:
+   * - Downloaded from the remote server
+   * - Unzipped and extracted
+   * - Stored in IndexedDB for offline reading
+   * - Parsed to update book metadata (manifest, spine, TOC)
+   *
+   * @param fileHash The book's file hash
+   *
+   * @throws Error if book not found or download fails
+   *
+   * @example
+   * // Download book when user clicks "Read"
+   * try {
+   *   await syncService.downloadBook(book.fileHash);
+   *   // Now the book is available for offline reading
+   * } catch (error) {
+   *   console.error("Failed to download book:", error);
+   * }
+   */
+  async downloadBook(fileHash: string): Promise<void> {
+    const book = await db.books.where("fileHash").equals(fileHash).first();
     if (!book) {
       throw new Error("Book not found");
     }
