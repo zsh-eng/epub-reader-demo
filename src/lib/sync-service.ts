@@ -1,3 +1,17 @@
+/**
+ * Sync Service
+ *
+ * Core synchronization orchestrator for bidirectional sync between
+ * local IndexedDB and the server.
+ *
+ * Key responsibilities:
+ * - Pull: Fetch book changes from server since last sync
+ * - Push: Send local book changes to server
+ * - Coordinate upload and download operations
+ * - Invalidate TanStack Query cache when data changes
+ * - Periodic sync management
+ */
+
 import { bookKeys } from "@/hooks/use-book-loader";
 import { honoClient } from "@/lib/api";
 import {
@@ -11,41 +25,15 @@ import {
   type BookSyncState,
   type SyncLog,
 } from "@/lib/db";
-import type { QueryClient } from "@tanstack/react-query";
-
-// Types for server responses
-interface ServerBook {
-  id: string;
-  fileHash: string;
-  title: string;
-  author: string;
-  fileSize: number;
-  metadata: Record<string, unknown> | null;
-  epubR2Key: string | null;
-  coverR2Key: string | null;
-  coverUrl: string | null;
-  epubUrl: string | null;
-  createdAt: number | null;
-  updatedAt: number | null;
-  deletedAt: number | null;
-}
-
-interface SyncBooksResponse {
-  books: ServerBook[];
-  serverTimestamp: number;
-}
-
-interface BookSyncResult {
-  fileHash: string;
-  status: "created" | "updated" | "exists";
-  serverId: string;
-  epubUploadUrl: string | null;
-  coverUploadUrl: string | null;
-}
-
-interface PushBooksResponse {
-  results: BookSyncResult[];
-}
+import { type QueryClient } from "@tanstack/react-query";
+import { bookDownloadService } from "./sync/book-download-service";
+import { bookUploadService } from "./sync/book-upload-service";
+import type {
+  BookSyncResult,
+  PushBooksResponse,
+  ServerBook,
+  SyncBooksResponse,
+} from "./sync/types";
 
 // Sync cursor ID for books
 const BOOKS_SYNC_CURSOR_ID = "books";
@@ -53,13 +41,6 @@ const BOOKS_SYNC_CURSOR_ID = "books";
 /**
  * SyncService handles bidirectional synchronization of books between
  * the local IndexedDB and the server.
- *
- * Key responsibilities:
- * - Pull: Fetch book changes from server since last sync
- * - Push: Send local book changes to server
- * - Upload: Send EPUB and cover files to R2
- * - Download: Fetch EPUB files from R2 when needed
- * - Invalidate: Notify TanStack Query when data changes
  */
 export class SyncService {
   private queryClient: QueryClient | null = null;
@@ -71,6 +52,7 @@ export class SyncService {
    */
   setQueryClient(queryClient: QueryClient): void {
     this.queryClient = queryClient;
+    bookDownloadService.setQueryClient(queryClient);
   }
 
   /**
@@ -117,9 +99,9 @@ export class SyncService {
    *
    * @param downloadCovers If true, downloads cover images for books after pulling metadata.
    *                       Recommended for initial sync or when you want to update the library view.
-   *                       Default: false (metadata only)
+   *                       Default: true
    */
-  async sync(downloadCovers: boolean = true): Promise<void> {
+  async sync(downloadCovers = true): Promise<void> {
     if (this.isSyncing) {
       console.log("[SyncService] Sync already in progress, skipping");
       return;
@@ -136,15 +118,10 @@ export class SyncService {
     try {
       console.log("[SyncService] Starting sync...");
 
-      // Pull first to get latest server state
       await this.pull();
-
-      // Then push local changes
       await this.push();
-
-      // Optionally download cover images for newly synced books
       if (downloadCovers) {
-        await this.downloadCoverImages();
+        await bookDownloadService.downloadCoverImages();
       }
 
       console.log(
@@ -169,7 +146,6 @@ export class SyncService {
       const since = cursor?.lastServerTimestamp ?? 0;
 
       console.log(`[SyncService] Pulling books since ${since}`);
-
       const response = await honoClient.api.sync.books.$get({
         query: { since: since.toString() },
       });
@@ -179,17 +155,13 @@ export class SyncService {
       }
 
       const data: SyncBooksResponse = await response.json();
-
       if (data.books.length === 0) {
         console.log("[SyncService] No new books from server");
         return;
       }
 
       console.log(`[SyncService] Received ${data.books.length} books`);
-
       let hasChanges = false;
-
-      // Process each book from server
       for (const serverBook of data.books) {
         const changed = await this.processServerBook(serverBook);
         if (changed) {
@@ -237,45 +209,42 @@ export class SyncService {
   private async processServerBook(serverBook: ServerBook): Promise<boolean> {
     const existingBook = await getBookByFileHash(serverBook.fileHash);
 
-    // Handle deletion
-    if (serverBook.deletedAt) {
-      if (existingBook) {
-        // Delete local book and related data
-        await db.transaction(
-          "rw",
-          [
-            db.books,
-            db.bookFiles,
-            db.readingProgress,
-            db.highlights,
-            db.bookSyncState,
-          ],
-          async () => {
-            await db.books.delete(existingBook.id);
-            await db.bookFiles.where("bookId").equals(existingBook.id).delete();
-            await db.readingProgress.delete(existingBook.id);
-            await db.highlights
-              .where("bookId")
-              .equals(existingBook.id)
-              .delete();
-            await db.bookSyncState.delete(serverBook.fileHash);
-          },
-        );
-
-        console.log(`[SyncService] Deleted book: ${serverBook.title}`);
-        await this.logSync(
-          "pull",
-          "book",
-          serverBook.fileHash,
-          "delete",
-          "success",
-        );
-        return true;
-      }
+    const isServerBookDeleted = serverBook.deletedAt !== null;
+    if (isServerBookDeleted && !existingBook) {
       return false;
     }
 
-    // Handle new book from server (not downloaded locally yet)
+    if (isServerBookDeleted && existingBook) {
+      // Delete local book and related data
+      await db.transaction(
+        "rw",
+        [
+          db.books,
+          db.bookFiles,
+          db.readingProgress,
+          db.highlights,
+          db.bookSyncState,
+        ],
+        async () => {
+          await db.books.delete(existingBook.id);
+          await db.bookFiles.where("bookId").equals(existingBook.id).delete();
+          await db.readingProgress.delete(existingBook.id);
+          await db.highlights.where("bookId").equals(existingBook.id).delete();
+          await db.bookSyncState.delete(serverBook.fileHash);
+        },
+      );
+
+      console.log(`[SyncService] Deleted book: ${serverBook.title}`);
+      await this.logSync(
+        "pull",
+        "book",
+        serverBook.fileHash,
+        "delete",
+        "success",
+      );
+      return true;
+    }
+
     if (!existingBook) {
       const newBook: Book = {
         id: crypto.randomUUID(),
@@ -385,44 +354,7 @@ export class SyncService {
       const data: PushBooksResponse = await response.json();
 
       // Process results and upload files as needed
-      for (const result of data.results) {
-        const book = booksToSync.find((b) => b.fileHash === result.fileHash);
-        if (!book) continue;
-
-        if (result.status === "created" || result.status === "updated") {
-          // Mark as pending upload if we need to upload files
-          await setBookSyncState({
-            fileHash: result.fileHash,
-            status: "pending_upload",
-            lastSyncedAt: new Date(),
-            epubUploaded: false,
-            coverUploaded: false,
-            retryCount: 0,
-          });
-
-          // Upload files
-          await this.uploadBookFiles(book);
-        } else if (result.status === "exists") {
-          // Book already exists on server, mark as synced
-          await setBookSyncState({
-            fileHash: result.fileHash,
-            status: "synced",
-            lastSyncedAt: new Date(),
-            epubUploaded: true,
-            coverUploaded: true,
-            retryCount: 0,
-          });
-        }
-
-        await this.logSync(
-          "push",
-          "book",
-          result.fileHash,
-          result.status === "created" ? "create" : "update",
-          "success",
-        );
-      }
-
+      await this.processUploadResults(data.results, booksToSync);
       await this.logSync(
         "push",
         "book",
@@ -446,12 +378,68 @@ export class SyncService {
   }
 
   /**
+   * Process upload results and trigger file uploads as needed
+   */
+  private async processUploadResults(
+    results: BookSyncResult[],
+    booksToSync: Book[],
+  ): Promise<void> {
+    for (const result of results) {
+      const book = booksToSync.find((b) => b.fileHash === result.fileHash);
+      if (!book) continue;
+
+      if (result.status === "created" || result.status === "updated") {
+        // Mark as pending upload if we need to upload files
+        await setBookSyncState({
+          fileHash: result.fileHash,
+          status: "pending_upload",
+          lastSyncedAt: new Date(),
+          epubUploaded: false,
+          coverUploaded: false,
+          retryCount: 0,
+        });
+
+        // Upload files using upload service
+        const uploadResult = await bookUploadService.uploadBookFiles(book);
+
+        // Log the result
+        await this.logSync(
+          "push",
+          "book",
+          result.fileHash,
+          result.status === "created" ? "create" : "update",
+          uploadResult.success ? "success" : "failure",
+          undefined,
+          uploadResult.error,
+        );
+      } else if (result.status === "exists") {
+        // Book already exists on server, mark as synced
+        await setBookSyncState({
+          fileHash: result.fileHash,
+          status: "synced",
+          lastSyncedAt: new Date(),
+          epubUploaded: true,
+          coverUploaded: true,
+          retryCount: 0,
+        });
+
+        await this.logSync(
+          "push",
+          "book",
+          result.fileHash,
+          "update",
+          "success",
+        );
+      }
+    }
+  }
+
+  /**
    * Get books that need to be synced to server
    */
   private async getBooksToSync(): Promise<Book[]> {
     // Get all downloaded local books
     const allBooks = await db.books.where("isDownloaded").equals(1).toArray();
-    console.log("allbooks", allBooks);
 
     // Get sync states
     const syncStates = await db.bookSyncState.toArray();
@@ -468,434 +456,57 @@ export class SyncService {
   }
 
   /**
-   * Upload EPUB and cover files for a book
-   */
-  private async uploadBookFiles(book: Book): Promise<void> {
-    try {
-      // Update status to uploading
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "uploading",
-        lastSyncedAt: new Date(),
-        epubUploaded: false,
-        coverUploaded: false,
-        retryCount: 0,
-      });
-
-      // Get all book files and reconstruct the EPUB
-      const bookFiles = await db.bookFiles
-        .where("bookId")
-        .equals(book.id)
-        .toArray();
-
-      if (bookFiles.length === 0) {
-        throw new Error("No files found for book");
-      }
-
-      // Create a zip file from the book files using the same structure
-      const { zip } = await import("fflate");
-
-      // Convert book files to the format fflate expects
-      const fileEntries: Record<string, Uint8Array> = {};
-      for (const file of bookFiles) {
-        const arrayBuffer = await file.content.arrayBuffer();
-        fileEntries[file.path] = new Uint8Array(arrayBuffer);
-      }
-
-      // Zip synchronously (fflate is fast enough for this)
-      const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-        zip(fileEntries, (err, data) => {
-          if (err) reject(err);
-          else resolve(data);
-        });
-      });
-
-      const epubBlob = new Blob([new Uint8Array(zipped)], {
-        type: "application/epub+zip",
-      });
-      const epubFile = new File([epubBlob], `${book.fileHash}.epub`, {
-        type: "application/epub+zip",
-      });
-
-      // Get cover file if available
-      let coverFile: File | undefined;
-      if (book.coverImagePath) {
-        const coverBookFile = await db.bookFiles
-          .where("bookId")
-          .equals(book.id)
-          .and((f) => f.path === book.coverImagePath)
-          .first();
-
-        if (coverBookFile) {
-          // Determine file extension from path
-          const ext =
-            book.coverImagePath.split(".").pop()?.toLowerCase() || "jpg";
-          const mimeType =
-            ext === "png"
-              ? "image/png"
-              : ext === "gif"
-                ? "image/gif"
-                : ext === "webp"
-                  ? "image/webp"
-                  : "image/jpeg";
-
-          coverFile = new File(
-            [coverBookFile.content],
-            `${book.fileHash}.${ext}`,
-            { type: mimeType },
-          );
-        }
-      }
-
-      // Upload both files in a single request
-      const formData = new FormData();
-      formData.append("epub", epubFile);
-      if (coverFile) {
-        formData.append("cover", coverFile);
-      }
-
-      const response = await fetch(`/api/sync/books/${book.fileHash}/files`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          `File upload failed: ${(errorData as { error?: string }).error ?? response.status}`,
-        );
-      }
-
-      // Mark as synced
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "synced",
-        lastSyncedAt: new Date(),
-        epubUploaded: true,
-        coverUploaded: !!coverFile,
-        retryCount: 0,
-      });
-
-      console.log(`[SyncService] Uploaded files for: ${book.title}`);
-    } catch (error) {
-      // Get current state to increment retry count
-      const currentState = await db.bookSyncState.get(book.fileHash);
-      const retryCount = (currentState?.retryCount ?? 0) + 1;
-
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "error",
-        lastSyncedAt: new Date(),
-        epubUploaded: currentState?.epubUploaded ?? false,
-        coverUploaded: currentState?.coverUploaded ?? false,
-        errorMessage: error instanceof Error ? error.message : "Upload failed",
-        retryCount,
-      });
-
-      console.error(
-        `[SyncService] Failed to upload files for: ${book.title}`,
-        error,
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Download the EPUB file for a remote book
-   */
-  /**
-   * Downloads cover images for books that don't have them yet.
+   * Downloads cover images for books that need them.
+   * Delegates to BookDownloadService.
    *
-   * This is a separate operation from metadata sync to allow for:
-   * - Bandwidth efficiency: Only download covers when needed for UI
-   * - Selective downloads: Download covers for specific books
-   * - Background operation: Can run after sync without blocking
-   *
-   * Call this after `pull()` to populate the library view with cover images.
-   *
-   * @param fileHashes Optional array of specific books to download covers for.
-   *                   If not provided, downloads all books that have a remoteCoverUrl but no local cover.
-   *
-   * @example
-   * // Download all missing covers
-   * await syncService.downloadCoverImages();
-   *
-   * // Download covers for specific books
-   * await syncService.downloadCoverImages(['hash1', 'hash2']);
+   * @param fileHashes Optional array of file hashes to filter which covers to download
    */
   async downloadCoverImages(fileHashes?: string[]): Promise<void> {
-    const startTime = Date.now();
-    console.log("[Sync] Starting cover image download...");
-
-    try {
-      const allBooks = await db.books.toArray();
-      const booksNeedingCovers = allBooks.filter((book) => {
-        const needsCover = !book.coverImagePath && !book.isDownloaded;
-        if (fileHashes) {
-          return needsCover && fileHashes.includes(book.fileHash);
-        }
-        return needsCover;
-      });
-
-      console.log(
-        `[Sync] Found ${booksNeedingCovers.length} books needing covers`,
-      );
-
-      for (const book of booksNeedingCovers) {
-        try {
-          console.log(`[Sync] Downloading cover for: ${book.title}`);
-
-          if (!book.remoteCoverUrl) {
-            console.error(`[Sync] No remote cover URL for ${book.title}`);
-            continue;
-          }
-
-          const response = await fetch(book.remoteCoverUrl, {
-            credentials: "include",
-          });
-
-          if (!response.ok) {
-            console.error(
-              `[Sync] Failed to download cover for ${book.title}:`,
-              response.statusText,
-            );
-            continue;
-          }
-
-          const coverBlob = await response.blob();
-
-          // Determine the media type from the blob
-          let mediaType = coverBlob.type;
-          if (!mediaType || mediaType === "application/octet-stream") {
-            // Try to infer from the first few bytes
-            const coverArrayBuffer = await coverBlob.arrayBuffer();
-            const coverContent = new Uint8Array(coverArrayBuffer);
-            if (coverContent[0] === 0xff && coverContent[1] === 0xd8) {
-              mediaType = "image/jpeg";
-            } else if (coverContent[0] === 0x89 && coverContent[1] === 0x50) {
-              mediaType = "image/png";
-            }
-          }
-
-          // Store the cover image in book_files
-          const coverPath = book.coverImagePath || "cover.jpg";
-          await db.bookFiles.put({
-            id: `${book.id}-${coverPath}`,
-            bookId: book.id,
-            path: coverPath,
-            content: coverBlob,
-            mediaType: mediaType,
-          });
-
-          // Update the book's coverImagePath if it wasn't set
-          // This ensures BookCard can find the cover
-          if (!book.coverImagePath) {
-            await db.books.update(book.id, { coverImagePath: coverPath });
-          }
-
-          console.log(
-            `[Sync] Successfully downloaded cover for: ${book.title}`,
-          );
-
-          // Invalidate queries so UI updates with the new cover
-          this.invalidateBookQueries(book.id);
-        } catch (error) {
-          console.error(
-            `[Sync] Error downloading cover for ${book.title}:`,
-            error,
-          );
-        }
-      }
-
-      const duration = Date.now() - startTime;
-      console.log(`[Sync] Cover download completed in ${duration}ms`);
-    } catch (error) {
-      console.error("[Sync] Cover download failed:", error);
-      throw error;
-    }
+    await bookDownloadService.downloadCoverImages({ fileHashes });
   }
 
   /**
    * Downloads the full EPUB content for a specific book.
+   * Delegates to BookDownloadService.
    *
    * This is a heavy operation that downloads and extracts all EPUB files.
    * Should ONLY be called on-demand when the user wants to read a book.
    *
-   * The EPUB content is:
-   * - Downloaded from the remote server
-   * - Unzipped and extracted
-   * - Stored in IndexedDB for offline reading
-   * - Parsed to update book metadata (manifest, spine, TOC)
-   *
    * @param fileHash The book's file hash
-   *
    * @throws Error if book not found or download fails
-   *
-   * @example
-   * // Download book when user clicks "Read"
-   * try {
-   *   await syncService.downloadBook(book.fileHash);
-   *   // Now the book is available for offline reading
-   * } catch (error) {
-   *   console.error("Failed to download book:", error);
-   * }
    */
   async downloadBook(fileHash: string): Promise<void> {
-    // TODO: Sync service should handle already downloading the book
-    const book = await db.books.where("fileHash").equals(fileHash).first();
-    if (!book) {
-      throw new Error("Book not found");
-    }
-
-    if (book.isDownloaded) {
-      console.log(`[SyncService] Book already downloaded: ${book.title}`);
-      return;
-    }
-
-    if (!book.remoteEpubUrl) {
-      throw new Error("No remote EPUB URL available");
-    }
-
     const startTime = Date.now();
 
     try {
-      // Update sync state
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "pending_download",
-        epubUploaded: true,
-        coverUploaded: true,
-        retryCount: 0,
-      });
+      await bookDownloadService.downloadBook(fileHash);
 
-      console.log(`[SyncService] Downloading book: ${book.title}`);
-
-      // Fetch the EPUB from server
-      const response = await fetch(book.remoteEpubUrl, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to download EPUB: ${response.status}`);
-      }
-
-      const epubBlob = await response.blob();
-      const epubArrayBuffer = await epubBlob.arrayBuffer();
-      const epubUint8Array = new Uint8Array(epubArrayBuffer);
-
-      // Parse the EPUB and extract files using fflate
-      const { unzip } = await import("fflate");
-
-      const unzipped = await new Promise<Record<string, Uint8Array>>(
-        (resolve, reject) => {
-          unzip(epubUint8Array, (err, data) => {
-            if (err) reject(err);
-            else resolve(data);
-          });
-        },
-      );
-
-      // Extract and store all files
-      for (const [relativePath, content] of Object.entries(unzipped)) {
-        // Determine media type from extension
-        let mediaType = "application/octet-stream";
-        if (relativePath.endsWith(".xhtml") || relativePath.endsWith(".html")) {
-          mediaType = "application/xhtml+xml";
-        } else if (relativePath.endsWith(".xml")) {
-          mediaType = "application/xml";
-        } else if (relativePath.endsWith(".css")) {
-          mediaType = "text/css";
-        } else if (
-          relativePath.endsWith(".jpg") ||
-          relativePath.endsWith(".jpeg")
-        ) {
-          mediaType = "image/jpeg";
-        } else if (relativePath.endsWith(".png")) {
-          mediaType = "image/png";
-        } else if (relativePath.endsWith(".gif")) {
-          mediaType = "image/gif";
-        } else if (relativePath.endsWith(".svg")) {
-          mediaType = "image/svg+xml";
-        } else if (relativePath.endsWith(".ncx")) {
-          mediaType = "application/x-dtbncx+xml";
-        } else if (relativePath.endsWith(".opf")) {
-          mediaType = "application/oebps-package+xml";
-        }
-
-        await db.bookFiles.add({
-          id: crypto.randomUUID(),
-          bookId: book.id,
-          path: relativePath,
-          content: new Blob([new Uint8Array(content)]),
-          mediaType,
-        });
-      }
-
-      // Parse the EPUB to get manifest, spine, toc
-      const { parseEPUBMetadataOnly } = await import("@/lib/epub-parser");
-      const metadata = await parseEPUBMetadataOnly(epubBlob);
-
-      // Update book with full metadata and mark as downloaded
-      await db.books.update(book.id, {
-        manifest: metadata.manifest,
-        spine: metadata.spine,
-        toc: metadata.toc,
-        coverImagePath: metadata.coverImagePath,
-        isDownloaded: 1,
-      });
-
-      // Update sync state
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "synced",
-        lastSyncedAt: new Date(),
-        epubUploaded: true,
-        coverUploaded: true,
-        retryCount: 0,
-      });
-
-      console.log(`[SyncService] Downloaded book: ${book.title}`);
       await this.logSync(
         "pull",
         "book",
-        book.fileHash,
+        fileHash,
         "download",
         "success",
         Date.now() - startTime,
       );
-
-      // Invalidate queries
-      this.invalidateBookQueries(book.id);
     } catch (error) {
-      // Update sync state with error
-      const currentState = await db.bookSyncState.get(book.fileHash);
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "error",
-        epubUploaded: currentState?.epubUploaded ?? false,
-        coverUploaded: currentState?.coverUploaded ?? false,
-        errorMessage:
-          error instanceof Error ? error.message : "Download failed",
-        retryCount: (currentState?.retryCount ?? 0) + 1,
-      });
-
       await this.logSync(
         "pull",
         "book",
-        book.fileHash,
+        fileHash,
         "download",
         "failure",
         Date.now() - startTime,
         error instanceof Error ? error.message : "Unknown error",
       );
-
       throw error;
     }
   }
 
   /**
-   * Delete a book both locally and on server
+   * Deletes a book from both server and local storage
+   *
+   * @param bookId The book's ID
    */
   async deleteBook(bookId: string): Promise<void> {
     const book = await db.books.get(bookId);
