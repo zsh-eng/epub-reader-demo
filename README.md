@@ -13,10 +13,22 @@ Roadmap (v0.1):
 
 Roadmap (v0.2):
 
-- [ ] Login
-- [ ] Sync books
-- [ ] Sync highlights
+- [x] Login
+- [x] Sync books
 - [ ] Sync reading progress
+- [ ] Sync highlights
+- [ ] Sync log (for debugging)
+
+Testing:
+
+- Playwright tests for
+  - Adding books
+  - Deleting books
+  - Reading and navigating
+  - Changing settings
+  - Sync of books
+  - Sync of highlights
+  - Offline usage and support
 
 Roadmap (v0.3):
 
@@ -25,6 +37,7 @@ Roadmap (v0.3):
 - [ ] Reading stats over time
 - [ ] Book shelves (DNF, completed, etc.)
 - [ ] Full text search
+- [ ] Add multiple EPUBs at once
 
 Future:
 
@@ -37,6 +50,12 @@ Future:
 - [ ] Flashcard integration
 - [ ] Chinese learning (show pinyin, translation of words)
 - [ ] Desktop / Mobile App (Tauri)
+
+Not on roadmap:
+
+- Paginated view
+- RTL or Top to bottom layout
+- EPUB CFI for reading progress
 
 ## Notes on Env
 
