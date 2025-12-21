@@ -15,10 +15,14 @@
 import { bookKeys } from "@/hooks/use-book-loader";
 import { honoClient } from "@/lib/api";
 import {
+  addServerProgressEntries,
   addSyncLog,
   db,
   getBookByFileHash,
+  getMaxProgressServerSeq,
   getSyncCursor,
+  getUnsyncedProgressEntries,
+  markProgressEntriesSynced,
   setBookSyncState,
   setSyncCursor,
   type Book,
@@ -31,12 +35,15 @@ import { bookUploadService } from "./sync/book-upload-service";
 import type {
   BookSyncResult,
   PushBooksResponse,
+  PushProgressResponse,
   ServerBook,
   SyncBooksResponse,
+  SyncProgressResponse,
 } from "./sync/types";
 
-// Sync cursor ID for books
+// Sync cursor IDs
 const BOOKS_SYNC_CURSOR_ID = "books";
+const PROGRESS_SYNC_CURSOR_ID = "progress";
 
 /**
  * SyncService handles bidirectional synchronization of books between
@@ -118,11 +125,16 @@ export class SyncService {
     try {
       console.log("[SyncService] Starting sync...");
 
+      // Book metadata sync
       await this.pull();
       await this.push();
       if (downloadCovers) {
         await bookDownloadService.downloadCoverImages();
       }
+
+      // Reading progress sync
+      await this.pullProgress();
+      await this.pushProgress();
 
       console.log(
         `[SyncService] Sync completed in ${Date.now() - startTime}ms`,
@@ -224,6 +236,8 @@ export class SyncService {
           db.readingProgress,
           db.highlights,
           db.bookSyncState,
+          db.progressLog,
+          db.progressSeqCounter,
         ],
         async () => {
           await db.books.delete(existingBook.id);
@@ -231,6 +245,12 @@ export class SyncService {
           await db.readingProgress.delete(existingBook.id);
           await db.highlights.where("bookId").equals(existingBook.id).delete();
           await db.bookSyncState.delete(serverBook.fileHash);
+          // Delete progress log entries for this book
+          await db.progressLog
+            .where("fileHash")
+            .equals(serverBook.fileHash)
+            .delete();
+          await db.progressSeqCounter.delete(serverBook.fileHash);
         },
       );
 
@@ -638,6 +658,153 @@ export class SyncService {
    */
   get syncing(): boolean {
     return this.isSyncing;
+  }
+
+  /**
+   * Pull reading progress entries from server since last sync
+   */
+  async pullProgress(): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      // Get last sync cursor for progress
+      const cursor = await getSyncCursor(PROGRESS_SYNC_CURSOR_ID);
+      const since = cursor?.lastServerTimestamp ?? 0;
+
+      console.log(`[SyncService] Pulling progress since serverSeq ${since}`);
+      const response = await honoClient.api.sync.progress.$get({
+        query: { since: since.toString() },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to pull progress: ${response.status}`);
+      }
+
+      const data: SyncProgressResponse = await response.json();
+      if (data.entries.length === 0) {
+        console.log("[SyncService] No new progress entries from server");
+        return;
+      }
+
+      console.log(
+        `[SyncService] Received ${data.entries.length} progress entries`,
+      );
+
+      await addServerProgressEntries(data.entries);
+
+      // Update sync cursor with the highest serverSeq we received
+      const maxServerSeq = Math.max(...data.entries.map((e) => e.serverSeq));
+      await setSyncCursor({
+        id: PROGRESS_SYNC_CURSOR_ID,
+        lastServerTimestamp: maxServerSeq,
+      });
+
+      await this.logSync(
+        "pull",
+        "progress",
+        "sync",
+        "update",
+        "success",
+        Date.now() - startTime,
+      );
+    } catch (error) {
+      await this.logSync(
+        "pull",
+        "progress",
+        "sync",
+        "update",
+        "failure",
+        Date.now() - startTime,
+        error instanceof Error ? error.message : "Unknown error",
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Push local reading progress entries to server
+   */
+  async pushProgress(): Promise<void> {
+    const startTime = Date.now();
+
+    try {
+      // Get unsynced progress entries
+      const unsyncedEntries = await getUnsyncedProgressEntries();
+
+      if (unsyncedEntries.length === 0) {
+        console.log("[SyncService] No unsynced progress entries to push");
+        return;
+      }
+
+      console.log(
+        `[SyncService] Pushing ${unsyncedEntries.length} progress entries`,
+      );
+
+      // Transform entries for API
+      const entriesToSync = unsyncedEntries.map((entry) => ({
+        id: entry.id,
+        fileHash: entry.fileHash,
+        spineIndex: entry.spineIndex,
+        scrollProgress: entry.scrollProgress,
+        clientSeq: entry.clientSeq,
+        clientTimestamp: entry.clientTimestamp.getTime(),
+      }));
+
+      const response = await honoClient.api.sync.progress.$post({
+        json: { entries: entriesToSync },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to push progress: ${response.status}`);
+      }
+
+      const data: PushProgressResponse = await response.json();
+
+      // Mark entries as synced with their server-assigned sequence numbers
+      const updates = data.results
+        .filter((r) => r.status === "created")
+        .map((r) => ({
+          id: r.id,
+          serverSeq: r.serverSeq,
+        }));
+
+      if (updates.length > 0) {
+        await markProgressEntriesSynced(updates);
+      }
+
+      // Update the sync cursor to the highest serverSeq we know about
+      const maxServerSeq = await getMaxProgressServerSeq();
+      if (maxServerSeq > 0) {
+        await setSyncCursor({
+          id: PROGRESS_SYNC_CURSOR_ID,
+          lastServerTimestamp: maxServerSeq,
+        });
+      }
+
+      console.log(
+        `[SyncService] Pushed ${updates.length} new progress entries`,
+      );
+
+      await this.logSync(
+        "push",
+        "progress",
+        "sync",
+        "update",
+        "success",
+        Date.now() - startTime,
+      );
+    } catch (error) {
+      await this.logSync(
+        "push",
+        "progress",
+        "sync",
+        "update",
+        "failure",
+        Date.now() - startTime,
+        error instanceof Error ? error.message : "Unknown error",
+      );
+      throw error;
+    }
   }
 }
 

@@ -12,6 +12,12 @@ import {
 import { getDevices } from "@server/lib/devices";
 import { extractDevice } from "@server/lib/middleware/extract-device";
 import { requireAuth, requireUser } from "@server/lib/middleware/require-auth";
+import {
+  getProgressLogs,
+  syncProgressBodySchema,
+  syncProgressLogs,
+  syncProgressQuerySchema,
+} from "@server/lib/progress-sync";
 import { getActiveSessions } from "@server/lib/sessions";
 import type { Session, User } from "better-auth/types";
 import { Hono } from "hono";
@@ -161,6 +167,47 @@ const route = app
       const { fileHash } = c.req.valid("param");
 
       const result = await deleteBook(c.env.DATABASE, user.id, fileHash);
+
+      if ("error" in result) {
+        return c.json({ error: result.error }, result.status as 404);
+      }
+
+      return c.json(result);
+    },
+  )
+  // Reading progress sync endpoints
+  .get(
+    "/sync/progress",
+    requireAuth,
+    zValidator("query", syncProgressQuerySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const { since, fileHash } = c.req.valid("query");
+
+      const result = await getProgressLogs(
+        c.env.DATABASE,
+        user.id,
+        since,
+        fileHash,
+      );
+      return c.json(result);
+    },
+  )
+  .post(
+    "/sync/progress",
+    requireAuth,
+    zValidator("json", syncProgressBodySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const deviceId = c.get("deviceId")!;
+      const { entries } = c.req.valid("json");
+
+      const result = await syncProgressLogs(
+        c.env.DATABASE,
+        user.id,
+        deviceId,
+        entries,
+      );
 
       if ("error" in result) {
         return c.json({ error: result.error }, result.status as 404);

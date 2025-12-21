@@ -123,3 +123,54 @@ export class SyncError extends Error {
     this.retryable = retryable;
   }
 }
+
+/**
+ * Server progress entry from API
+ */
+export interface ServerProgressEntry {
+  id: string;
+  fileHash: string;
+  spineIndex: number;
+  scrollProgress: number;
+  clientSeq: number;
+  clientTimestamp: number;
+  serverSeq: number;
+  serverTimestamp: number;
+  deviceId: string;
+}
+
+/**
+ * Response from sync progress pull endpoint
+ */
+export interface SyncProgressResponse {
+  entries: ServerProgressEntry[];
+  serverTimestamp: number;
+}
+
+/**
+ * Result of pushing a single progress entry to server
+ */
+export interface ProgressSyncResult {
+  id: string;
+  serverSeq: number;
+  status: "created" | "duplicate";
+}
+
+/**
+ * Response from sync progress push endpoint
+ */
+export interface PushProgressResponse {
+  results: ProgressSyncResult[];
+}
+
+/**
+ * Progress entry to push to server
+ */
+export interface ProgressEntryToSync {
+  id: string;
+  fileHash: string;
+  spineIndex: number;
+  scrollProgress: number;
+  clientSeq: number;
+  clientTimestamp: number;
+}
