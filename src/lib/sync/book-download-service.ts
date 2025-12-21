@@ -7,17 +7,14 @@
  * - Download cover images for library view
  * - Handle download errors and retries
  * - Update sync state during downloads
+ * - Save original EPUB blob for potential re-upload
  */
 
-import { db, setBookSyncState, type Book, type BookFile } from "@/lib/db";
+import { db, setBookSyncState, saveEpubBlob, type Book } from "@/lib/db";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DownloadCoverOptions, DownloadResult } from "./types";
-import {
-  detectMediaTypeFromBlob,
-  getMediaTypeFromPath,
-  handleFetchError,
-  pLimit,
-} from "./utils";
+import { detectMediaTypeFromBlob, handleFetchError, pLimit } from "./utils";
+import { processEpubToBookFiles } from "./epub-processing";
 
 export class BookDownloadService {
   private queryClient: QueryClient | null = null;
@@ -156,6 +153,7 @@ export class BookDownloadService {
    *
    * The EPUB content is:
    * - Downloaded from the remote server
+   * - Stored as original EPUB blob (for potential re-upload)
    * - Unzipped and extracted
    * - Stored in IndexedDB for offline reading
    * - Parsed to update book metadata (manifest, spine, TOC)
@@ -202,35 +200,9 @@ export class BookDownloadService {
       }
 
       const epubBlob = await response.blob();
-      const epubArrayBuffer = await epubBlob.arrayBuffer();
-      const epubUint8Array = new Uint8Array(epubArrayBuffer);
-
-      // Parse the EPUB and extract files using fflate
-      const { unzip } = await import("fflate");
-
-      const unzipped = await new Promise<Record<string, Uint8Array>>(
-        (resolve, reject) => {
-          unzip(epubUint8Array, (err, data) => {
-            if (err) reject(err);
-            else resolve(data);
-          });
-        },
-      );
-
-      // Extract and store all files
-      const bookFiles: BookFile[] = [];
-      for (const [relativePath, content] of Object.entries(unzipped)) {
-        const mediaType = getMediaTypeFromPath(relativePath);
-        const contentBlob = new Blob([new Uint8Array(content)]);
-
-        bookFiles.push({
-          id: crypto.randomUUID(),
-          bookId: book.id,
-          path: relativePath,
-          content: contentBlob,
-          mediaType,
-        });
-      }
+      // Save the original EPUB blob for potential re-upload
+      await saveEpubBlob(book.fileHash, epubBlob);
+      const bookFiles = await processEpubToBookFiles(epubBlob, book.id);
 
       // Batch insert all files
       await db.bookFiles.bulkAdd(bookFiles);

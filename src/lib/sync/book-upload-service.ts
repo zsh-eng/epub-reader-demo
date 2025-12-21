@@ -3,20 +3,28 @@
  *
  * Handles uploading book files (EPUB and covers) to the server.
  * Responsibilities:
- * - Zip book files and upload to server
+ * - Upload stored EPUB blobs to server
  * - Extract cover images for upload
  * - Handle upload errors and retries
  * - Update sync state during uploads
+ * - Clean up EPUB blobs after successful upload
  */
 
-import { db, setBookSyncState, type Book } from "@/lib/db";
-import { getMediaTypeFromPath, handleFetchError } from "./utils";
+import {
+  db,
+  deleteEpubBlob,
+  getEpubBlob,
+  setBookSyncState,
+  type Book,
+} from "@/lib/db";
+import { createEpubFile } from "./epub-processing";
 import type { UploadResult } from "./types";
+import { getMediaTypeFromPath, handleFetchError } from "./utils";
 
 export class BookUploadService {
   /**
    * Uploads book files (EPUB + cover) to the server.
-   * Creates a zip from book files and sends via multipart form data.
+   * Uses the stored original EPUB blob instead of recreating it.
    *
    * @param book The book to upload
    * @returns Upload result with status
@@ -35,23 +43,15 @@ export class BookUploadService {
 
       console.log(`[BookUpload] Uploading files for: ${book.title}`);
 
-      // Get all book files and reconstruct the EPUB
-      const bookFiles = await db.bookFiles
-        .where("bookId")
-        .equals(book.id)
-        .toArray();
-
-      if (bookFiles.length === 0) {
-        throw new Error("No files found for book");
+      // Get the stored EPUB blob
+      const epubBlobRecord = await getEpubBlob(book.fileHash);
+      if (!epubBlobRecord) {
+        throw new Error("Original EPUB blob not found");
       }
 
-      // Create EPUB file
-      const epubFile = await this.createEpubFile(book, bookFiles);
-
-      // Get cover file if available
+      const epubFile = createEpubFile(epubBlobRecord.blob, book.fileHash);
       const coverFile = await this.extractCoverFile(book);
 
-      // Upload both files in a single request
       const formData = new FormData();
       formData.append("epub", epubFile);
       if (coverFile) {
@@ -78,6 +78,7 @@ export class BookUploadService {
         retryCount: 0,
       });
 
+      await deleteEpubBlob(book.fileHash);
       console.log(
         `[BookUpload] Successfully uploaded files for: ${book.title}`,
       );
@@ -116,39 +117,6 @@ export class BookUploadService {
         error: error instanceof Error ? error.message : "Upload failed",
       };
     }
-  }
-
-  /**
-   * Creates an EPUB file by zipping all book files
-   */
-  private async createEpubFile(
-    book: Book,
-    bookFiles: Array<{ path: string; content: Blob }>,
-  ): Promise<File> {
-    const { zip } = await import("fflate");
-
-    // Convert book files to the format fflate expects
-    const fileEntries: Record<string, Uint8Array> = {};
-    for (const file of bookFiles) {
-      const arrayBuffer = await file.content.arrayBuffer();
-      fileEntries[file.path] = new Uint8Array(arrayBuffer);
-    }
-
-    // Zip synchronously (fflate is fast enough for this)
-    const zipped = await new Promise<Uint8Array>((resolve, reject) => {
-      zip(fileEntries, (err, data) => {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
-
-    const epubBlob = new Blob([new Uint8Array(zipped)], {
-      type: "application/epub+zip",
-    });
-
-    return new File([epubBlob], `${book.fileHash}.epub`, {
-      type: "application/epub+zip",
-    });
   }
 
   /**

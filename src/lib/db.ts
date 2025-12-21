@@ -91,6 +91,12 @@ export interface BookFile {
   mediaType: string;
 }
 
+export interface EpubBlob {
+  fileHash: string; // Primary key (matches Book.fileHash)
+  blob: Blob; // The original EPUB file
+  dateStored: Date;
+}
+
 export interface ReadingProgress {
   id: string; // Primary key (matches Book.id)
   bookId: string; // Foreign key to Book
@@ -120,6 +126,7 @@ class EPUBReaderDB extends Dexie {
   bookSyncState!: Table<BookSyncState, string>;
   syncLog!: Table<SyncLog, string>;
   syncCursor!: Table<SyncCursor, string>;
+  epubBlobs!: Table<EpubBlob, string>;
 
   constructor() {
     super("epub-reader-db");
@@ -164,6 +171,20 @@ class EPUBReaderDB extends Dexie {
             book.isDownloaded = 1;
           });
       });
+
+    // Version 5: Add epubBlobs table for storing original EPUB files
+    this.version(5).stores({
+      books:
+        "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
+      bookFiles: "id, bookId, path",
+      readingProgress: "id, bookId, lastRead",
+      readingSettings: "id",
+      highlights: "id, bookId, spineItemId, createdAt",
+      bookSyncState: "fileHash, status",
+      syncLog: "id, timestamp, entityType, status",
+      syncCursor: "id",
+      epubBlobs: "fileHash, dateStored",
+    });
   }
 }
 
@@ -195,15 +216,17 @@ export async function deleteBook(id: string): Promise<void> {
       db.readingProgress,
       db.highlights,
       db.bookSyncState,
+      db.epubBlobs,
     ],
     async () => {
       await db.books.delete(id);
       await db.bookFiles.where("bookId").equals(id).delete();
       await db.readingProgress.delete(id);
       await db.highlights.where("bookId").equals(id).delete();
-      // Also clean up sync state if we have the fileHash
+      // Also clean up sync state and EPUB blob if we have the fileHash
       if (book?.fileHash) {
         await db.bookSyncState.delete(book.fileHash);
+        await db.epubBlobs.delete(book.fileHash);
       }
     },
   );
@@ -390,4 +413,31 @@ export async function markBookAsDownloaded(
 
 export async function deleteBookSyncState(fileHash: string): Promise<void> {
   await db.bookSyncState.delete(fileHash);
+}
+
+// EpubBlob operations
+export async function saveEpubBlob(
+  fileHash: string,
+  blob: Blob,
+): Promise<void> {
+  await db.epubBlobs.put({
+    fileHash,
+    blob,
+    dateStored: new Date(),
+  });
+}
+
+export async function getEpubBlob(
+  fileHash: string,
+): Promise<EpubBlob | undefined> {
+  return await db.epubBlobs.get(fileHash);
+}
+
+export async function deleteEpubBlob(fileHash: string): Promise<void> {
+  await db.epubBlobs.delete(fileHash);
+}
+
+export async function hasEpubBlob(fileHash: string): Promise<boolean> {
+  const blob = await db.epubBlobs.get(fileHash);
+  return !!blob;
 }

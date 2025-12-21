@@ -6,6 +6,8 @@ import {
   deleteBook,
   updateBookLastOpened,
   getBookByFileHash,
+  saveEpubBlob,
+  db,
 } from "@/lib/db";
 import type { Book } from "@/lib/db";
 import { hashFile } from "@/lib/file-hash";
@@ -31,10 +33,7 @@ export async function addBookFromFile(file: File): Promise<Book> {
   }
 
   try {
-    // Hash the file to detect duplicates
     const fileHash = await hashFile(file);
-
-    // Check if book already exists
     const existingBook = await getBookByFileHash(fileHash);
     if (existingBook) {
       throw new DuplicateBookError(
@@ -43,17 +42,13 @@ export async function addBookFromFile(file: File): Promise<Book> {
       );
     }
 
-    // Parse the EPUB file
     const { book, files } = await parseEPUB(file, { fileHash });
-
-    // Save book to database
     await addBook(book);
+    await db.bookFiles.bulkAdd(files);
 
-    // Save all book files to database
-    for (const bookFile of files) {
-      await addBookFile(bookFile);
-    }
-
+    // Save the original EPUB blob for future uploads
+    // This will be deleted after successful sync
+    await saveEpubBlob(fileHash, file);
     return book;
   } catch (error) {
     // Re-throw DuplicateBookError as-is
