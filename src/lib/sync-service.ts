@@ -742,6 +742,7 @@ export class SyncService {
    * }
    */
   async downloadBook(fileHash: string): Promise<void> {
+    // TODO: Sync service should handle already downloading the book
     const book = await db.books.where("fileHash").equals(fileHash).first();
     if (!book) {
       throw new Error("Book not found");

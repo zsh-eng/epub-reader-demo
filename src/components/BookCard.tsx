@@ -4,11 +4,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSync } from "@/hooks/use-sync";
 import type { Book } from "@/lib/db";
 import { getBookCoverUrl } from "@/lib/db";
-import { Book as BookIcon, MoreVertical, Trash2 } from "lucide-react";
+import {
+  Book as BookIcon,
+  CloudDownload,
+  MoreVertical,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Button } from "./ui/button";
 
 interface BookCardProps {
@@ -18,7 +25,9 @@ interface BookCardProps {
 
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
+  const { downloadBook } = useSync();
   const [coverUrl, setCoverUrl] = useState<string | undefined>(undefined);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   useEffect(() => {
     let objectUrl: string | undefined;
@@ -44,7 +53,33 @@ export function BookCard({ book, onDelete }: BookCardProps) {
     };
   }, [book.id, book.coverImagePath]);
 
-  const handleClick = () => {
+  const handleClick = async () => {
+    if (!book.isDownloaded) {
+      // TODO: handle isDownloading a little more cleanly - the sync service
+      // should handle it already, so all we need is a toast with ID.
+      if (isDownloading) {
+        return;
+      }
+
+      setIsDownloading(true);
+
+      try {
+        toast.promise(downloadBook(book.fileHash), {
+          loading: "Downloading book...",
+          success: `"${book.title}" is ready to read`,
+          error: (err) =>
+            err instanceof Error ? err.message : "Failed to download book",
+          action: {
+            label: "Open",
+            onClick: () => navigate(`/reader/${book.id}`),
+          },
+        });
+      } finally {
+        setIsDownloading(false);
+      }
+      return;
+    }
+
     navigate(`/reader/${book.id}`);
   };
 
@@ -94,6 +129,13 @@ export function BookCard({ book, onDelete }: BookCardProps) {
 
             {/* Glossy Overlay */}
             <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/10 pointer-events-none" />
+
+            {/* Cloud Download Icon for non-downloaded books */}
+            {!book.isDownloaded && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                <CloudDownload className="h-12 w-12 text-white/70" />
+              </div>
+            )}
           </div>
         </div>
 
