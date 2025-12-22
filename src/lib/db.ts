@@ -126,79 +126,15 @@ class EPUBReaderDB extends Dexie {
 
   constructor() {
     super("epub-reader-db");
-
-    // Version 2: Original schema
-    this.version(2).stores({
-      books: "id, title, author, dateAdded, lastOpened",
-      bookFiles: "id, bookId, path",
-      readingProgress: "id, bookId, lastRead",
-      readingSettings: "id",
-      highlights: "id, bookId, spineItemId, createdAt",
-    });
-
-    // Version 3: Add fileHash field with unique index
-    this.version(3).stores({
-      books: "id, &fileHash, title, author, dateAdded, lastOpened",
-      bookFiles: "id, bookId, path",
-      readingProgress: "id, bookId, lastRead",
-      readingSettings: "id",
-      highlights: "id, bookId, spineItemId, createdAt",
-    });
-
-    // Version 4: Add sync tables and isDownloaded field
-    this.version(4).stores({
-      books:
-        "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
-      bookFiles: "id, bookId, path",
-      readingProgress: "id, bookId, lastRead",
-      readingSettings: "id",
-      highlights: "id, bookId, spineItemId, createdAt",
-      bookSyncState: "fileHash, status",
-      syncLog: "id, timestamp, entityType, status",
-      syncCursor: "id",
-      epubBlobs: "fileHash, dateStored",
-    });
-
-    // Version 5: Add progress log tables
-    this.version(5).stores({
-      books:
-        "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
-      bookFiles: "id, bookId, path",
-      readingProgress: "id, bookId, lastRead",
-      readingSettings: "id",
-      highlights: "id, bookId, spineItemId, createdAt",
-      bookSyncState: "fileHash, status",
-      syncLog: "id, timestamp, entityType, status",
-      syncCursor: "id",
-      epubBlobs: "fileHash, dateStored",
-      progressLog: "id, fileHash, synced, clientSeq, serverSeq",
-      progressSeqCounter: "fileHash",
-    });
-
-    // Version 6: NEW SYNC ARCHITECTURE
-    // Remove old sync tables, add sync metadata to all synced tables
     const syncSchemas = generateDexieStores(SYNC_TABLES);
-
-    this.version(6)
-      .stores({
-        ...syncSchemas,
-        ...LOCAL_TABLES,
-        // Delete old sync-specific tables
-        bookSyncState: null,
-        syncCursor: null,
-        progressLog: null,
-        progressSeqCounter: null,
-      })
-      .upgrade(async () => {
-        // Migration logic: add sync metadata to existing records
-        // This will be handled by the middleware on first write
-        console.log("Upgraded to version 6: New sync architecture");
-      });
+    this.version(1).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
 
     // Initialize HLC service and middleware
     const hlc = createHLCService();
     const syncedTableNames = new Set(Object.keys(SYNC_TABLES));
-
     this.use(
       createSyncMiddleware({
         hlc,
@@ -403,6 +339,7 @@ export async function updateHighlight(
 // ============================================================================
 
 export async function addSyncLogs(logs: Omit<SyncLog, "id">[]) {
+  console.log("LOGS ARE", logs);
   return db.syncLog.bulkAdd(logs);
 }
 
