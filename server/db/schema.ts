@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   real,
   sqliteTable,
   text,
@@ -178,3 +179,47 @@ export const readingProgressLogRelations = relations(
     }),
   }),
 );
+
+/**
+ * Generic sync data table for HLC-based sync.
+ * Stores all synced entities with their HLC timestamps for last-write-wins resolution.
+ */
+export const syncData = sqliteTable(
+  "sync_data",
+  {
+    id: text("id").notNull(),
+    tableName: text("table_name").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    entityId: text("entity_id"), // For entity-scoped sync (e.g., bookId for highlights)
+    hlc: text("hlc").notNull(), // Hybrid Logical Clock timestamp
+    deviceId: text("device_id").notNull(), // Client device ID
+    isDeleted: integer("is_deleted", { mode: "boolean" })
+      .default(false)
+      .notNull(),
+    serverTimestamp: integer("server_timestamp", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsec') * 1000 as integer))`)
+      .notNull(),
+    data: text("data", { mode: "json" }).notNull(), // JSON blob of the entity data
+  },
+  (t) => [
+    primaryKey({ columns: [t.tableName, t.userId, t.id] }),
+    // Index for pulling changes
+    index("idx_sync_pull").on(t.tableName, t.userId, t.serverTimestamp),
+    // Index for entity-scoped pulls
+    index("idx_sync_entity").on(
+      t.tableName,
+      t.userId,
+      t.entityId,
+      t.serverTimestamp,
+    ),
+  ],
+);
+
+export const syncDataRelations = relations(syncData, ({ one }) => ({
+  user: one(user, {
+    fields: [syncData.userId],
+    references: [user.id],
+  }),
+}));
