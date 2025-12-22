@@ -149,21 +149,32 @@ export class SyncEngine {
       }
 
       const pushResult = await this.remote.push(table, pendingItems);
-      const acceptedItems = pushResult.results.filter((r) => r.accepted);
+      const acceptedResults = pushResult.results.filter((r) => r.accepted);
 
-      // TODO: change to batched
-      for (const result of acceptedItems) {
-        const localItem = await this.storage.getLocalItem(table, result.id);
-        if (localItem) {
-          // Update the _serverTimestamp to mark as synced
-          localItem._serverTimestamp = result.serverTimestamp;
+      if (acceptedResults.length > 0) {
+        // Get all accepted items in bulk
+        const acceptedIds = acceptedResults.map((r) => r.id);
+        const localItems = await Promise.all(
+          acceptedIds.map((id) => this.storage.getLocalItem(table, id)),
+        );
 
-          // Apply the update using applyRemoteChanges to maintain consistency
-          await this.storage.applyRemoteChanges(table, [localItem], (a, b) =>
+        // Update _serverTimestamp for all accepted items
+        const itemsToUpdate = localItems
+          .map((localItem, index) => {
+            if (!localItem) return null;
+
+            // Update the _serverTimestamp to mark as synced
+            localItem._serverTimestamp = acceptedResults[index].serverTimestamp;
+            return localItem;
+          })
+          .filter((item): item is NonNullable<typeof item> => item !== null);
+
+        // Apply all updates in one batch
+        if (itemsToUpdate.length > 0) {
+          await this.storage.applyRemoteChanges(table, itemsToUpdate, (a, b) =>
             this.hlc.compare(a, b),
           );
-
-          pushed++;
+          pushed = itemsToUpdate.length;
         }
       }
 
@@ -214,20 +225,33 @@ export class SyncEngine {
         return { pulled: 0, conflicts: 0, hasMore, errors: [] };
       }
 
-      // TODO: change to bulk operations
-      for (const remoteItem of pullResult.items) {
-        const localItem = await this.storage.getLocalItem(table, remoteItem.id);
+      // Get all local items in bulk for conflict detection and HLC updates
+      const localItemIds = pullResult.items.map((item) => item.id);
+      const localItems = await Promise.all(
+        localItemIds.map((id) => this.storage.getLocalItem(table, id)),
+      );
+
+      // Count conflicts and update HLC clock
+      let maxHlc = "";
+      pullResult.items.forEach((remoteItem, index) => {
+        const localItem = localItems[index];
 
         if (localItem) {
           const comparison = this.hlc.compare(remoteItem._hlc, localItem._hlc);
           if (comparison !== 0) {
             conflicts++;
           }
-
-          // TODO: just update the clock once to the max of all these items
-          // Update HLC clock based on remote timestamp
-          this.hlc.receive(remoteItem._hlc);
         }
+
+        // Track the maximum HLC to update clock once
+        if (!maxHlc || this.hlc.compare(remoteItem._hlc, maxHlc) > 0) {
+          maxHlc = remoteItem._hlc;
+        }
+      });
+
+      // Update HLC clock once with the maximum timestamp
+      if (maxHlc) {
+        this.hlc.receive(maxHlc);
       }
 
       // Apply all remote changes (conflict resolution is handled by storage adapter)

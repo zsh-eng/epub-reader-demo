@@ -185,39 +185,47 @@ export class DexieStorageAdapter implements StorageAdapter {
 
     const entityKey = this.entityKeys.get(table);
 
-    // TODO: change this to use dexie bulk put
-    for (const remoteItem of items) {
-      // Get local item for conflict resolution
-      const localRecord = await dexieTable.get(remoteItem.id);
+    // Use a transaction and bulk operations for efficiency
+    await dexieTable.db.transaction("rw", dexieTable, async () => {
+      const ids = items.map((item) => item.id);
+      const existingRecords = await dexieTable.bulkGet(ids);
+      const itemsToUpdate: Array<
+        Record<string, unknown> & { id: string } & SyncMetadata
+      > = [];
 
-      if (!localRecord) {
-        // No local version - just insert
-        await dexieTable.put(syncItemToRecord(remoteItem, entityKey));
-        continue;
+      items.forEach((remoteItem, index) => {
+        const localRecord = existingRecords[index];
+        if (!localRecord) {
+          itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          return;
+        }
+
+        const localItem = recordToSyncItem(
+          localRecord as Record<string, unknown> & {
+            id: string;
+          } & SyncMetadata,
+          entityKey,
+        );
+
+        const comparison = hlcCompare(remoteItem._hlc, localItem._hlc);
+        if (comparison > 0) {
+          // Remote is newer - add to update batch
+          itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+        } else if (comparison < 0) {
+          // Local is newer - keep local changes
+          // Skip this item, the next push will send our version
+        } else {
+          // HLCs are equal - this shouldn't happen in normal operation
+          // but if it does, prefer the remote version (server wins ties)
+          itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+        }
+      });
+
+      // 4. Batch write only the items that passed the check
+      if (itemsToUpdate.length > 0) {
+        await dexieTable.bulkPut(itemsToUpdate);
       }
-
-      const localItem = recordToSyncItem(
-        localRecord as Record<string, unknown> & { id: string } & SyncMetadata,
-        entityKey,
-      );
-
-      // Compare HLCs for conflict resolution (Last-Write-Wins)
-      const comparison = hlcCompare(remoteItem._hlc, localItem._hlc);
-
-      if (comparison > 0) {
-        // Remote is newer - apply remote changes
-        await dexieTable.put(syncItemToRecord(remoteItem, entityKey));
-      } else if (comparison < 0) {
-        // Local is newer - keep local changes
-        // But we need to preserve the fact that we've seen this remote version
-        // This is handled by not overwriting, the next push will send our version
-        continue;
-      } else {
-        // HLCs are equal - this shouldn't happen in normal operation
-        // but if it does, prefer the remote version (server wins ties)
-        await dexieTable.put(syncItemToRecord(remoteItem, entityKey));
-      }
-    }
+    });
   }
 
   async getLocalItem(table: string, id: string): Promise<SyncItem | null> {
