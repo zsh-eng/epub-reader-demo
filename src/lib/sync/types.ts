@@ -14,10 +14,10 @@ export interface ServerBook {
   author: string;
   fileSize: number;
   metadata: Record<string, unknown> | null;
-  epubR2Key: string | null;
-  coverR2Key: string | null;
-  coverUrl: string | null;
-  epubUrl: string | null;
+  /** Whether the server has the EPUB file in R2 storage */
+  hasEpub: boolean;
+  /** Whether the server has a cover image in R2 storage */
+  hasCover: boolean;
   createdAt: number | null;
   updatedAt: number | null;
   deletedAt: number | null;
@@ -47,31 +47,6 @@ export interface BookSyncResult {
  */
 export interface PushBooksResponse {
   results: BookSyncResult[];
-}
-
-/**
- * Options for downloading a book
- */
-export interface DownloadBookOptions {
-  fileHash: string;
-  remoteEpubUrl: string;
-  book: Book;
-}
-
-/**
- * Options for downloading cover images
- */
-export interface DownloadCoverOptions {
-  fileHashes?: string[];
-}
-
-/**
- * Result of a download operation
- */
-export interface DownloadResult {
-  success: boolean;
-  fileHash: string;
-  error?: string;
 }
 
 /**

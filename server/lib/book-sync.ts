@@ -72,10 +72,9 @@ export async function getBooks(
       author: b.author,
       fileSize: b.fileSize,
       metadata: b.metadata,
-      epubR2Key: b.epubR2Key,
-      coverR2Key: b.coverR2Key,
-      coverUrl: b.coverR2Key ? `/api/files/${userId}/${b.coverR2Key}` : null,
-      epubUrl: b.epubR2Key ? `/api/files/${userId}/${b.epubR2Key}` : null,
+      // Content-addressed: client uses fileHash to fetch files
+      hasEpub: !!b.epubR2Key,
+      hasCover: !!b.coverR2Key,
       createdAt: b.createdAt?.getTime() ?? null,
       updatedAt: b.updatedAt?.getTime() ?? null,
       deletedAt: b.deletedAt?.getTime() ?? null,

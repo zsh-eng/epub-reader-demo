@@ -4,12 +4,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useFileUrl } from "@/hooks/use-file-url";
 import { useSync } from "@/hooks/use-sync";
 import type { Book } from "@/lib/db";
 import { getBookCoverUrl } from "@/lib/db";
 import {
   Book as BookIcon,
   CloudDownload,
+  Loader2,
   MoreVertical,
   Trash2,
 } from "lucide-react";
@@ -26,37 +28,53 @@ interface BookCardProps {
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
   const { downloadBook } = useSync();
-  const [coverUrl, setCoverUrl] = useState<string | undefined>(undefined);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // For remote covers (synced from server), use FileManager
+  const { url: remoteCoverUrl, isLoading: isLoadingRemoteCover } = useFileUrl(
+    book.hasRemoteCover ? book.fileHash : undefined,
+    "cover",
+    { skip: !book.hasRemoteCover },
+  );
+
+  // For local covers (extracted from EPUB), use bookFiles
+  const [localCoverUrl, setLocalCoverUrl] = useState<string | undefined>(
+    undefined,
+  );
+
   useEffect(() => {
+    // Only load from bookFiles if we don't have a remote cover and book is downloaded
+    if (book.hasRemoteCover || !book.coverImagePath || !book.isDownloaded) {
+      return;
+    }
+
     let objectUrl: string | undefined;
 
-    async function loadCover() {
-      if (book.coverImagePath) {
-        try {
-          const url = await getBookCoverUrl(book.id, book.coverImagePath);
-          objectUrl = url;
-          setCoverUrl(url);
-        } catch (error) {
-          console.error("Failed to load cover:", error);
-        }
+    async function loadLocalCover() {
+      try {
+        const url = await getBookCoverUrl(book.id, book.coverImagePath!);
+        objectUrl = url;
+        setLocalCoverUrl(url);
+      } catch (error) {
+        console.error("Failed to load local cover:", error);
       }
     }
 
-    loadCover();
+    loadLocalCover();
 
     return () => {
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [book.id, book.coverImagePath]);
+  }, [book.id, book.coverImagePath, book.isDownloaded, book.hasRemoteCover]);
+
+  // Determine which cover URL to use
+  const coverUrl = remoteCoverUrl || localCoverUrl;
+  const isLoadingCover = book.hasRemoteCover && isLoadingRemoteCover;
 
   const handleClick = async () => {
     if (!book.isDownloaded) {
-      // TODO: handle isDownloading a little more cleanly - the sync service
-      // should handle it already, so all we need is a toast with ID.
       if (isDownloading) {
         return;
       }
@@ -115,9 +133,16 @@ export function BookCard({ book, onDelete }: BookCardProps) {
               <img
                 src={coverUrl}
                 alt={`Cover of ${book.title}`}
-                className={`h-full w-full object-cover`}
+                className="h-full w-full object-cover"
                 loading="lazy"
               />
+            ) : isLoadingCover ? (
+              <div className="flex h-full w-full flex-col items-center justify-center bg-secondary p-4 text-center">
+                <Loader2 className="mb-2 h-8 w-8 text-muted-foreground/50 animate-spin" />
+                <span className="text-xs font-medium text-muted-foreground line-clamp-3">
+                  {book.title}
+                </span>
+              </div>
             ) : (
               <div className="flex h-full w-full flex-col items-center justify-center bg-secondary p-4 text-center">
                 <BookIcon className="mb-2 h-8 w-8 text-muted-foreground/50" />

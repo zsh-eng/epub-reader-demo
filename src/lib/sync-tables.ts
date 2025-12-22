@@ -46,9 +46,15 @@ export const SYNC_TABLES = {
  */
 export const LOCAL_TABLES = {
   // Book files are local-only (large binary data)
+  // These are extracted EPUB contents for rendering
   bookFiles: "id, bookId, path",
 
+  // Generic file storage (content-addressed)
+  // Used for EPUBs, covers, and other files
+  files: "id, contentHash, fileType, [fileType+contentHash]",
+
   // EPUB blobs are local-only (large binary data)
+  // TODO: Migrate to files table and remove this
   epubBlobs: "fileHash, dateStored",
 
   // Sync log is for debugging (optional)

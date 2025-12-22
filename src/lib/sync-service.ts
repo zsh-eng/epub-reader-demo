@@ -236,6 +236,7 @@ class SyncService {
   // Initialization & Reset
   // ============================================================================
 
+  // TODO: this method should be removed entirely, we should always pull all the historical data
   async initializeSyncCursor(
     table: SyncTableName,
     entityId?: string,

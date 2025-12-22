@@ -2,19 +2,21 @@
  * Book Download Service
  *
  * Handles downloading books and cover images from the server.
+ * Uses the FileManager for all file operations, which handles:
+ * - Local caching in IndexedDB
+ * - Network fetching when not cached
+ * - Request deduplication
+ *
  * Responsibilities:
  * - Download full EPUB content and extract files
- * - Download cover images for library view
- * - Handle download errors and retries
- * - Update sync state during downloads
- * - Save original EPUB blob for potential re-upload
+ * - Handle download errors
+ * - Update book metadata after download
  */
 
-import { db, saveEpubBlob, type Book } from "@/lib/db";
+import { db, saveEpubBlob } from "@/lib/db";
+import { fileManager } from "@/lib/files";
 import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { QueryClient } from "@tanstack/react-query";
-import type { DownloadCoverOptions, DownloadResult } from "./types";
-import { detectMediaTypeFromBlob, handleFetchError, pLimit } from "./utils";
 import { processEpubToBookFiles } from "./epub-processing";
 
 export class BookDownloadService {
@@ -25,135 +27,13 @@ export class BookDownloadService {
   }
 
   /**
-   * Downloads cover images for books that need them.
-   * Uses parallel downloads with concurrency limit.
-   *
-   * @param options Options for filtering which covers to download
-   * @returns Array of download results
-   */
-  async downloadCoverImages(
-    options: DownloadCoverOptions = {},
-  ): Promise<DownloadResult[]> {
-    const startTime = Date.now();
-    console.log("[BookDownload] Starting cover image download...");
-
-    try {
-      const allBooks = await db.books.filter(isNotDeleted).toArray();
-      const booksNeedingCovers = allBooks.filter((book) => {
-        const needsCover = !book.coverImagePath && !book.isDownloaded;
-        if (options.fileHashes) {
-          return needsCover && options.fileHashes.includes(book.fileHash);
-        }
-        return needsCover;
-      });
-
-      console.log(
-        `[BookDownload] Found ${booksNeedingCovers.length} books needing covers`,
-      );
-
-      if (booksNeedingCovers.length === 0) {
-        return [];
-      }
-
-      // Download covers in parallel with concurrency limit
-      const results = await pLimit(
-        3, // Max 3 concurrent downloads
-        booksNeedingCovers,
-        (book) => this.downloadSingleCover(book),
-      );
-
-      const successCount = results.filter((r) => r.success).length;
-      const duration = Date.now() - startTime;
-      console.log(
-        `[BookDownload] Cover download completed: ${successCount}/${results.length} successful in ${duration}ms`,
-      );
-
-      return results;
-    } catch (error) {
-      console.error("[BookDownload] Cover download failed:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Downloads a single cover image for a book
-   */
-  private async downloadSingleCover(book: Book): Promise<DownloadResult> {
-    try {
-      console.log(`[BookDownload] Downloading cover for: ${book.title}`);
-
-      if (!book.remoteCoverUrl) {
-        return {
-          success: false,
-          fileHash: book.fileHash,
-          error: "No remote cover URL",
-        };
-      }
-
-      const response = await fetch(book.remoteCoverUrl, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        await handleFetchError(response);
-      }
-
-      const coverBlob = await response.blob();
-
-      // Determine media type
-      const mediaType =
-        (await detectMediaTypeFromBlob(coverBlob)) || "image/jpeg";
-
-      // Determine cover path
-      const ext = mediaType.split("/")[1] || "jpg";
-      const coverPath = book.coverImagePath || `cover.${ext}`;
-
-      // Store the cover image in book_files
-      await db.bookFiles.put({
-        id: `${book.id}-${coverPath}`,
-        bookId: book.id,
-        path: coverPath,
-        content: coverBlob,
-        mediaType: mediaType,
-      });
-
-      // Update the book's coverImagePath if it wasn't set
-      if (!book.coverImagePath) {
-        await db.books.update(book.id, { coverImagePath: coverPath });
-      }
-
-      console.log(
-        `[BookDownload] Successfully downloaded cover for: ${book.title}`,
-      );
-
-      // Invalidate queries so UI updates
-      this.invalidateBookQueries(book.id);
-
-      return {
-        success: true,
-        fileHash: book.fileHash,
-      };
-    } catch (error) {
-      console.error(
-        `[BookDownload] Error downloading cover for ${book.title}:`,
-        error,
-      );
-      return {
-        success: false,
-        fileHash: book.fileHash,
-        error: error instanceof Error ? error.message : "Unknown error",
-      };
-    }
-  }
-
-  /**
    * Downloads the full EPUB content for a specific book.
    *
    * This is a heavy operation that downloads and extracts all EPUB files.
    * Should ONLY be called on-demand when the user wants to read a book.
    *
    * The EPUB content is:
-   * - Downloaded from the remote server
+   * - Downloaded via FileManager (handles caching automatically)
    * - Stored as original EPUB blob (for potential re-upload)
    * - Unzipped and extracted
    * - Stored in IndexedDB for offline reading
@@ -173,8 +53,9 @@ export class BookDownloadService {
       return;
     }
 
-    if (!book.remoteEpubUrl) {
-      throw new Error("No remote EPUB URL available");
+    // Check if the book has a remote EPUB available
+    if (!book.hasRemoteEpub) {
+      throw new Error("No remote EPUB available for this book");
     }
 
     const startTime = Date.now();
@@ -182,18 +63,18 @@ export class BookDownloadService {
     try {
       console.log(`[BookDownload] Downloading book: ${book.title}`);
 
-      // Fetch the EPUB from server
-      const response = await fetch(book.remoteEpubUrl, {
-        credentials: "include",
-      });
+      // Fetch the EPUB via FileManager (handles caching)
+      const result = await fileManager.getFile(fileHash, "epub");
+      const epubBlob = result.blob;
 
-      if (!response.ok) {
-        await handleFetchError(response);
-      }
+      console.log(
+        `[BookDownload] EPUB fetched (fromCache: ${result.fromCache})`,
+      );
 
-      const epubBlob = await response.blob();
       // Save the original EPUB blob for potential re-upload
       await saveEpubBlob(book.fileHash, epubBlob);
+
+      // Process EPUB into individual book files for rendering
       const bookFiles = await processEpubToBookFiles(epubBlob, book.id);
 
       // Batch insert all files
@@ -226,6 +107,13 @@ export class BookDownloadService {
       );
       throw error;
     }
+  }
+
+  /**
+   * Check if a book's EPUB is available locally (already downloaded)
+   */
+  async isBookAvailableLocally(fileHash: string): Promise<boolean> {
+    return fileManager.hasLocal(fileHash, "epub");
   }
 
   /**

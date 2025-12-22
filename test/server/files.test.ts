@@ -1,4 +1,6 @@
-import { SELF } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
+import { book } from "@server/db/schema";
+import { drizzle } from "drizzle-orm/d1";
 import { beforeAll, describe, expect, it } from "vitest";
 import {
   createTestEpubContent,
@@ -211,6 +213,230 @@ describe("GET /api/files/:userId/*", () => {
 
     // Consume the response body
     await response.arrayBuffer();
+  });
+
+  describe("GET /api/files/:fileType/:contentHash (content-addressed)", () => {
+    let testUser: Awaited<ReturnType<typeof createTestUser>>;
+
+    beforeAll(async () => {
+      testUser = await createTestUser(
+        "contentaddressed@example.com",
+        "testpassword123",
+        "Content Addressed Test User",
+      );
+    });
+
+    it("returns 401 for unauthenticated requests", async () => {
+      const response = await SELF.fetch(
+        "http://example.com/api/files/epub/somehash123",
+      );
+
+      expect(response.status).toBe(401);
+      const data = (await response.json()) as { error: string };
+      expect(data.error).toBe("Unauthorized");
+    });
+
+    it("returns 400 for invalid file type", async () => {
+      const response = await SELF.fetch(
+        "http://example.com/api/files/invalid/somehash123",
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      expect(response.status).toBe(400);
+      const data = (await response.json()) as { error: string };
+      expect(data.error).toBe("Invalid file type. Must be 'epub' or 'cover'");
+    });
+
+    it("returns 404 when book does not exist", async () => {
+      const response = await SELF.fetch(
+        "http://example.com/api/files/epub/nonexistent-hash",
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      expect(response.status).toBe(404);
+      const data = (await response.json()) as { error: string };
+      expect(data.error).toBe("File not found");
+    });
+
+    it("returns 404 when book exists but has no R2 key", async () => {
+      const db = drizzle(env.DATABASE);
+      const fileHash = "no-r2-key-hash";
+
+      // Insert a book without R2 keys
+      await db.insert(book).values({
+        id: crypto.randomUUID(),
+        userId: testUser.userId,
+        fileHash,
+        title: "Test Book No R2",
+        author: "Test Author",
+        fileSize: 1000,
+      });
+
+      const response = await SELF.fetch(
+        `http://example.com/api/files/epub/${fileHash}`,
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      expect(response.status).toBe(404);
+      const data = (await response.json()) as { error: string };
+      expect(data.error).toBe("File not found");
+    });
+
+    it("returns EPUB file when book has R2 key", async () => {
+      const db = drizzle(env.DATABASE);
+      const fileHash = "content-addressed-epub-hash";
+      const r2Key = `epubs/${testUser.userId}/${fileHash}.epub`;
+      const epubContent = createTestEpubContent();
+
+      // Insert book with R2 key
+      await db.insert(book).values({
+        id: crypto.randomUUID(),
+        userId: testUser.userId,
+        fileHash,
+        title: "Test Book With R2",
+        author: "Test Author",
+        fileSize: epubContent.length,
+        epubR2Key: r2Key,
+      });
+
+      // Upload file to R2
+      await uploadTestFile(r2Key, epubContent, "application/epub+zip");
+
+      const response = await SELF.fetch(
+        `http://example.com/api/files/epub/${fileHash}`,
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("application/epub+zip");
+      expect(response.headers.get("cache-control")).toBe(
+        "private, max-age=31536000, immutable",
+      );
+
+      const body = await response.arrayBuffer();
+      expect(new Uint8Array(body)).toEqual(epubContent);
+    });
+
+    it("returns cover image when book has cover R2 key", async () => {
+      const db = drizzle(env.DATABASE);
+      const fileHash = "content-addressed-cover-hash";
+      const r2Key = `covers/${testUser.userId}/${fileHash}.png`;
+      const imageContent = createTestImageContent();
+
+      // Insert book with cover R2 key
+      await db.insert(book).values({
+        id: crypto.randomUUID(),
+        userId: testUser.userId,
+        fileHash,
+        title: "Test Book With Cover",
+        author: "Test Author",
+        fileSize: 1000,
+        coverR2Key: r2Key,
+      });
+
+      // Upload cover to R2
+      await uploadTestFile(r2Key, imageContent, "image/png");
+
+      const response = await SELF.fetch(
+        `http://example.com/api/files/cover/${fileHash}`,
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/png");
+
+      const body = await response.arrayBuffer();
+      expect(new Uint8Array(body)).toEqual(imageContent);
+    });
+
+    it("returns correct content-type for JPEG covers", async () => {
+      const db = drizzle(env.DATABASE);
+      const fileHash = "content-addressed-jpeg-cover";
+      const r2Key = `covers/${testUser.userId}/${fileHash}.jpg`;
+      const imageContent = new TextEncoder().encode("Mock JPEG content");
+
+      await db.insert(book).values({
+        id: crypto.randomUUID(),
+        userId: testUser.userId,
+        fileHash,
+        title: "Test Book JPEG Cover",
+        author: "Test Author",
+        fileSize: 1000,
+        coverR2Key: r2Key,
+      });
+
+      await uploadTestFile(r2Key, imageContent, "image/jpeg");
+
+      const response = await SELF.fetch(
+        `http://example.com/api/files/cover/${fileHash}`,
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toBe("image/jpeg");
+
+      await response.arrayBuffer();
+    });
+
+    it("does not allow accessing another user's files", async () => {
+      const db = drizzle(env.DATABASE);
+      const fileHash = "other-user-file-hash";
+
+      // Create another user
+      const otherUser = await createTestUser(
+        "otheruser-files@example.com",
+        "testpassword456",
+        "Other User",
+      );
+
+      // Insert book for other user
+      await db.insert(book).values({
+        id: crypto.randomUUID(),
+        userId: otherUser.userId,
+        fileHash,
+        title: "Other User Book",
+        author: "Other Author",
+        fileSize: 1000,
+        epubR2Key: `epubs/${otherUser.userId}/${fileHash}.epub`,
+      });
+
+      // Try to access with testUser's credentials - should not find it
+      const response = await SELF.fetch(
+        `http://example.com/api/files/epub/${fileHash}`,
+        {
+          headers: {
+            Cookie: testUser.sessionCookie,
+          },
+        },
+      );
+
+      // Should return 404 because the lookup is scoped to the authenticated user
+      expect(response.status).toBe(404);
+    });
   });
 
   it("handles files without extensions correctly", async () => {

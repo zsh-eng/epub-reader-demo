@@ -5,6 +5,7 @@
  * This version uses the new sync architecture with HLC timestamps and middleware.
  */
 
+import type { StoredFile } from "@/lib/files/types";
 import { createHLCService } from "@/lib/sync/hlc/hlc";
 import { createSyncMiddleware, isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
@@ -33,8 +34,11 @@ export interface Book {
   isDownloaded: number;
 
   coverImagePath?: string; // Path to cover image file within the EPUB
-  remoteEpubUrl?: string | null;
-  remoteCoverUrl?: string | null;
+
+  // Server file availability (derived from R2 key presence)
+  // TODO: update this
+  hasRemoteEpub?: boolean;
+  hasRemoteCover?: boolean;
 }
 
 export interface ManifestItem {
@@ -108,6 +112,9 @@ export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
 // Re-export Highlight type for convenience
 export type { Highlight };
 
+// Re-export StoredFile type for convenience
+export type { StoredFile };
+
 // ============================================================================
 // Database Class
 // ============================================================================
@@ -121,13 +128,24 @@ class EPUBReaderDB extends Dexie {
 
   // Local-only tables
   bookFiles!: Table<BookFile, string>;
+  files!: Table<StoredFile, string>;
   epubBlobs!: Table<EpubBlob, string>;
   syncLog!: Table<SyncLog, number>;
 
   constructor() {
     super("epub-reader-db");
     const syncSchemas = generateDexieStores(SYNC_TABLES);
+
+    // Version 1: Initial schema
     this.version(1).stores({
+      ...syncSchemas,
+      bookFiles: "id, bookId, path",
+      epubBlobs: "fileHash, dateStored",
+      syncLog: "++id, timestamp, type, table",
+    });
+
+    // Version 2: Add generic files table
+    this.version(2).stores({
       ...syncSchemas,
       ...LOCAL_TABLES,
     });
@@ -339,7 +357,6 @@ export async function updateHighlight(
 // ============================================================================
 
 export async function addSyncLogs(logs: Omit<SyncLog, "id">[]) {
-  console.log("LOGS ARE", logs);
   return db.syncLog.bulkAdd(logs);
 }
 
@@ -390,12 +407,12 @@ export async function getNotDownloadedBooks(): Promise<SyncedBook[]> {
 
 export async function markBookAsDownloaded(
   bookId: string,
-  remoteEpubUrl?: string,
-  remoteCoverUrl?: string,
+  hasRemoteEpub?: boolean,
+  hasRemoteCover?: boolean,
 ): Promise<void> {
   await db.books.update(bookId, {
     isDownloaded: 1,
-    remoteEpubUrl,
-    remoteCoverUrl,
+    hasRemoteEpub,
+    hasRemoteCover,
   });
 }

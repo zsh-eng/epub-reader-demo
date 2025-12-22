@@ -310,6 +310,7 @@ export class SyncEngine {
   /**
    * Initialize sync for a table by setting the cursor to the current server time.
    * This is useful when setting up sync for the first time to avoid pulling all historical data.
+   * TODO: this is wrong, we do want to pull all historical data
    *
    * @param table - Table name
    * @param entityId - Optional entity ID for scoped sync
