@@ -1,15 +1,14 @@
-import { parseEPUB } from "@/lib/epub-parser";
+import type { Book } from "@/lib/db";
 import {
   addBook,
-  addBookFile,
-  getAllBooks,
+  db,
   deleteBook,
-  updateBookLastOpened,
+  getAllBooks,
   getBookByFileHash,
   saveEpubBlob,
-  db,
+  updateBookLastOpened,
 } from "@/lib/db";
-import type { Book } from "@/lib/db";
+import { parseEPUB } from "@/lib/epub-parser";
 import { hashFile } from "@/lib/file-hash";
 
 export class DuplicateBookError extends Error {

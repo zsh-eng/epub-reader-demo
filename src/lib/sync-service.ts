@@ -64,7 +64,7 @@ class SyncService {
     this.queryClient = client;
   }
 
-  startPeriodicSync(): void {
+  startPeriodicSync(syncIntervalMs = SYNC_INTERVAL_MS): void {
     if (this.syncInterval !== null) {
       return; // Already started
     }
@@ -79,7 +79,7 @@ class SyncService {
           console.error("Periodic sync failed:", error);
         });
       }
-    }, SYNC_INTERVAL_MS);
+    }, syncIntervalMs);
 
     // Trigger initial sync
     if (this.isOnline) {

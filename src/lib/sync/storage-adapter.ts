@@ -166,7 +166,10 @@ export class DexieStorageAdapter implements StorageAdapter {
 
     const entityKey = this.entityKeys.get(table);
 
-    // Get all records where _serverTimestamp is null
+    // Get all records where _serverTimestamp is null (local changes not yet synced)
+    // Note: This intentionally includes deleted items (_isDeleted=1) because
+    // we need to sync deletions to the server. Application queries should
+    // filter deleted items using isNotDeleted() helper.
     const records = await dexieTable
       .where("_serverTimestamp")
       .equals(null as unknown as number)

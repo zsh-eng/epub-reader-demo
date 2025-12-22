@@ -10,13 +10,7 @@
  * - Clean up EPUB blobs after successful upload
  */
 
-import {
-  db,
-  deleteEpubBlob,
-  getEpubBlob,
-  setBookSyncState,
-  type Book,
-} from "@/lib/db";
+import { deleteEpubBlob, getEpubBlob, type Book } from "@/lib/db";
 import { createEpubFile } from "./epub-processing";
 import type { UploadResult } from "./types";
 import { getMediaTypeFromPath, handleFetchError } from "./utils";
@@ -31,16 +25,6 @@ export class BookUploadService {
    */
   async uploadBookFiles(book: Book): Promise<UploadResult> {
     try {
-      // Update status to uploading
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "uploading",
-        lastSyncedAt: new Date(),
-        epubUploaded: false,
-        coverUploaded: false,
-        retryCount: 0,
-      });
-
       console.log(`[BookUpload] Uploading files for: ${book.title}`);
 
       // Get the stored EPUB blob
@@ -68,16 +52,7 @@ export class BookUploadService {
         await handleFetchError(response);
       }
 
-      // Mark as synced
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "synced",
-        lastSyncedAt: new Date(),
-        epubUploaded: true,
-        coverUploaded: !!coverFile,
-        retryCount: 0,
-      });
-
+      // Clean up EPUB blob after successful upload
       await deleteEpubBlob(book.fileHash);
       console.log(
         `[BookUpload] Successfully uploaded files for: ${book.title}`,
@@ -90,20 +65,6 @@ export class BookUploadService {
         coverUploaded: !!coverFile,
       };
     } catch (error) {
-      // Get current state to increment retry count
-      const currentState = await db.bookSyncState.get(book.fileHash);
-      const retryCount = (currentState?.retryCount ?? 0) + 1;
-
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "error",
-        lastSyncedAt: new Date(),
-        epubUploaded: currentState?.epubUploaded ?? false,
-        coverUploaded: currentState?.coverUploaded ?? false,
-        errorMessage: error instanceof Error ? error.message : "Upload failed",
-        retryCount,
-      });
-
       console.error(
         `[BookUpload] Failed to upload files for: ${book.title}`,
         error,
@@ -127,6 +88,7 @@ export class BookUploadService {
       return undefined;
     }
 
+    const { db } = await import("@/lib/db");
     const coverBookFile = await db.bookFiles
       .where("bookId")
       .equals(book.id)

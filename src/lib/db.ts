@@ -21,15 +21,18 @@ export interface Book {
   id: string;
   fileHash: string;
   title: string;
-  author?: string | null;
+  author: string;
   fileSize: number;
   dateAdded: number;
   lastOpened?: number | null;
-  metadata?: Record<string, unknown>;
-  manifest?: ManifestItem[];
-  spine?: SpineItem[];
-  toc?: TOCItem[];
-  isDownloaded: boolean;
+  metadata: Record<string, unknown>;
+  manifest: ManifestItem[];
+  spine: SpineItem[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  toc: any[];
+  isDownloaded: number;
+
+  coverImagePath?: string; // Path to cover image file within the EPUB
   remoteEpubUrl?: string | null;
   remoteCoverUrl?: string | null;
 }
@@ -50,7 +53,7 @@ export interface SpineItem {
 export interface TOCItem {
   label: string;
   href: string;
-  children?: unknown[]; // Avoid recursive type for Dexie compatibility
+  children?: TOCItem[];
 }
 
 export interface ReadingProgress {
@@ -215,6 +218,14 @@ export const db = new EPUBReaderDB();
 // ============================================================================
 // Helper Functions (Book operations)
 // ============================================================================
+//
+// NOTE: All query helper functions in this file automatically filter out
+// soft-deleted records (where _isDeleted=1) using the isNotDeleted() helper.
+// This ensures application code only sees active records.
+//
+// For sync operations, the storage adapter intentionally does NOT filter
+// deleted records, as deletions need to be synced to the server.
+// ============================================================================
 
 export async function addBook(book: Book): Promise<string> {
   return db.books.add(book as SyncedBook);
@@ -334,14 +345,13 @@ export async function updateReadingSettings(
 // Helper Functions (Book Cover)
 // ============================================================================
 
-export async function getBookCoverUrl(bookId: string): Promise<string | null> {
-  const bookFile = await db.bookFiles
-    .where("bookId")
-    .equals(bookId)
-    .and((file) => file.path.includes("cover"))
-    .first();
-
-  return bookFile ? URL.createObjectURL(bookFile.content) : null;
+export async function getBookCoverUrl(
+  bookId: string,
+  coverPath: string,
+): Promise<string | undefined> {
+  const bookFile = await getBookFile(bookId, coverPath);
+  if (!bookFile) return undefined;
+  return URL.createObjectURL(bookFile.content);
 }
 
 // ============================================================================
@@ -447,7 +457,7 @@ export async function markBookAsDownloaded(
   remoteCoverUrl?: string,
 ): Promise<void> {
   await db.books.update(bookId, {
-    isDownloaded: true,
+    isDownloaded: 1,
     remoteEpubUrl,
     remoteCoverUrl,
   });

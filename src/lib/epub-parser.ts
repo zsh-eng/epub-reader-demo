@@ -81,7 +81,7 @@ export async function parseEPUB(
     title: metadata.title || file.name.replace(".epub", ""),
     author: metadata.author || "Unknown Author",
     coverImagePath,
-    dateAdded: new Date(),
+    dateAdded: new Date().getTime(),
     fileSize: file.size,
     manifest,
     spine,

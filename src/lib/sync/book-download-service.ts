@@ -10,7 +10,8 @@
  * - Save original EPUB blob for potential re-upload
  */
 
-import { db, setBookSyncState, saveEpubBlob, type Book } from "@/lib/db";
+import { db, saveEpubBlob, type Book } from "@/lib/db";
+import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { QueryClient } from "@tanstack/react-query";
 import type { DownloadCoverOptions, DownloadResult } from "./types";
 import { detectMediaTypeFromBlob, handleFetchError, pLimit } from "./utils";
@@ -37,7 +38,7 @@ export class BookDownloadService {
     console.log("[BookDownload] Starting cover image download...");
 
     try {
-      const allBooks = await db.books.toArray();
+      const allBooks = await db.books.filter(isNotDeleted).toArray();
       const booksNeedingCovers = allBooks.filter((book) => {
         const needsCover = !book.coverImagePath && !book.isDownloaded;
         if (options.fileHashes) {
@@ -163,7 +164,7 @@ export class BookDownloadService {
    */
   async downloadBook(fileHash: string): Promise<void> {
     const book = await db.books.where("fileHash").equals(fileHash).first();
-    if (!book) {
+    if (!book || !isNotDeleted(book)) {
       throw new Error("Book not found");
     }
 
@@ -179,15 +180,6 @@ export class BookDownloadService {
     const startTime = Date.now();
 
     try {
-      // Update sync state
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "pending_download",
-        epubUploaded: true,
-        coverUploaded: true,
-        retryCount: 0,
-      });
-
       console.log(`[BookDownload] Downloading book: ${book.title}`);
 
       // Fetch the EPUB from server
@@ -220,16 +212,6 @@ export class BookDownloadService {
         isDownloaded: 1,
       });
 
-      // Update sync state
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "synced",
-        lastSyncedAt: new Date(),
-        epubUploaded: true,
-        coverUploaded: true,
-        retryCount: 0,
-      });
-
       const duration = Date.now() - startTime;
       console.log(
         `[BookDownload] Downloaded book: ${book.title} in ${duration}ms`,
@@ -238,18 +220,6 @@ export class BookDownloadService {
       // Invalidate queries
       this.invalidateBookQueries(book.id);
     } catch (error) {
-      // Update sync state with error
-      const currentState = await db.bookSyncState.get(book.fileHash);
-      await setBookSyncState({
-        fileHash: book.fileHash,
-        status: "error",
-        epubUploaded: currentState?.epubUploaded ?? false,
-        coverUploaded: currentState?.coverUploaded ?? false,
-        errorMessage:
-          error instanceof Error ? error.message : "Download failed",
-        retryCount: (currentState?.retryCount ?? 0) + 1,
-      });
-
       console.error(
         `[BookDownload] Failed to download book: ${book.title}`,
         error,
