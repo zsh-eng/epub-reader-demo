@@ -2,6 +2,7 @@ import { zValidator } from "@hono/zod-validator";
 import { createAuth } from "@server/lib/auth";
 import { getDevices } from "@server/lib/devices";
 import { fileTypeSchema, lookupFileR2Key } from "@server/lib/file-lookup";
+import { uploadFile } from "@server/lib/file-upload";
 import { extractDevice } from "@server/lib/middleware/extract-device";
 import { requireAuth, requireUser } from "@server/lib/middleware/require-auth";
 import { getActiveSessions } from "@server/lib/sessions";
@@ -150,6 +151,55 @@ const route = app
     } catch (error) {
       console.error("Error fetching file from R2:", error);
       return c.json({ error: "Failed to retrieve file" }, 500);
+    }
+  })
+  // File upload endpoint
+  .post("/files/upload", requireUser, async (c) => {
+    const user = c.get("user")!;
+
+    try {
+      const body = await c.req.parseBody();
+
+      // Validate that file exists
+      const file = body["file"];
+      if (!file || typeof file === "string") {
+        return c.json(
+          { error: "No file provided or invalid file format" },
+          400,
+        );
+      }
+
+      // Validate fileType
+      const fileType = body["fileType"];
+      if (!fileType || typeof fileType !== "string" || fileType.trim() === "") {
+        return c.json({ error: "File type is required" }, 400);
+      }
+
+      const fileTypeResult = fileTypeSchema.safeParse(fileType);
+      if (!fileTypeResult.success) {
+        return c.json({ error: "Invalid file type" }, 400);
+      }
+
+      // Upload the file
+      const result = await uploadFile(
+        c.env.DATABASE,
+        c.env.BOOK_STORAGE,
+        user.id,
+        file,
+        fileTypeResult.data,
+      );
+
+      return c.json({
+        success: true,
+        contentHash: result.contentHash,
+        fileName: result.fileName,
+        fileSize: result.fileSize,
+        mimeType: result.mimeType,
+        alreadyExists: result.alreadyExists,
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      return c.json({ error: "Failed to upload file" }, 500);
     }
   })
   // Generic HLC-based sync endpoints
