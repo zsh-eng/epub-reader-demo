@@ -9,11 +9,12 @@ import type { SyncTableDef } from "@/lib/sync/hlc/schema";
 
 /**
  * Tables that are synced to the server
+ * TODO: add some kind of typescript typing that prevents duplicate keys appearing in indices and unique indices?
  */
 export const SYNC_TABLES = {
   books: {
     primaryKey: "id",
-    indices: ["fileHash", "dateAdded", "lastOpened"],
+    indices: ["dateAdded", "lastOpened"],
     uniqueIndices: ["fileHash"],
   } satisfies SyncTableDef,
 
