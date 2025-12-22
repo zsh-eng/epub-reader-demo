@@ -179,7 +179,6 @@ export async function addBook(book: Book): Promise<string> {
 export async function addBookWithFiles(
   book: Book,
   bookFiles: BookFile[],
-  files: StoredFile[],
 ): Promise<string> {
   return db.transaction("rw", [db.books, db.bookFiles, db.files], async () => {
     // Add book first
@@ -188,11 +187,6 @@ export async function addBookWithFiles(
     // Add book files (extracted EPUB content)
     if (bookFiles.length > 0) {
       await db.bookFiles.bulkAdd(bookFiles);
-    }
-
-    // Add stored files (EPUB + cover blobs)
-    if (files.length > 0) {
-      await db.files.bulkAdd(files);
     }
 
     return bookId;

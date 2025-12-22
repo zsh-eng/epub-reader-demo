@@ -53,7 +53,7 @@ export class HonoFileRemoteAdapter implements FileRemoteAdapter {
     const formData = new FormData();
     formData.append("file", blob);
     formData.append("fileType", fileType);
-    const url = `/api/files/${fileType}/${contentHash}`;
+    const url = `/api/files/upload`;
     const response = await fetch(url, {
       method: "POST",
       body: formData,

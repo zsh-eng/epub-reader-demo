@@ -83,9 +83,8 @@ export async function addBookFromFile(file: File): Promise<Book> {
       filesToStore.push(coverFile);
     }
 
-    // Add book, bookFiles, and files atomically in a single transaction
-    await addBookWithFiles(book, files, filesToStore);
-
+    // Add book, bookFiles atomically in a single transaction
+    await addBookWithFiles(book, files);
     return book;
   } catch (error) {
     // Re-throw DuplicateBookError as-is
