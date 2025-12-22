@@ -32,6 +32,14 @@ export interface HLCService {
   next(): string;
 
   /**
+   * Generate multiple HLC timestamps in batch for efficient bulk operations.
+   * All timestamps will be monotonically increasing.
+   * @param count - Number of timestamps to generate
+   * @returns Array of HLC strings
+   */
+  nextBatch(count: number): string[];
+
+  /**
    * Update HLC when receiving a remote timestamp.
    * Ensures monotonicity and causality by updating local state if remote is ahead.
    */
@@ -135,6 +143,37 @@ export function createHLCService(deviceId?: string): HLCService {
 
       saveState();
       return format(state);
+    },
+
+    nextBatch(count: number): string[] {
+      if (count <= 0) {
+        return [];
+      }
+
+      const results: string[] = [];
+      const now = Date.now();
+
+      // Initialize for the batch
+      if (now > state.timestamp) {
+        // Physical clock advanced - use new timestamp and reset counter
+        state.timestamp = now;
+        state.counter = 0;
+      } else {
+        // Physical clock hasn't advanced - start incrementing from current counter
+        state.counter++;
+      }
+
+      // Generate all timestamps in the batch
+      for (let i = 0; i < count; i++) {
+        results.push(format(state));
+        state.counter++;
+      }
+
+      // Adjust state to reflect the last generated timestamp
+      state.counter--;
+
+      saveState();
+      return results;
     },
 
     receive(remoteHlc: string): void {

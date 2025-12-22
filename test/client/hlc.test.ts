@@ -18,6 +18,162 @@ describe("HLC Service", () => {
     hlc = createHLCService(testDeviceId);
   });
 
+  describe("nextBatch()", () => {
+    it("should generate multiple valid HLC timestamps", () => {
+      const timestamps = hlc.nextBatch(5);
+
+      expect(timestamps).toHaveLength(5);
+
+      // All should be valid
+      timestamps.forEach((ts) => {
+        expect(isValidHLC(ts)).toBe(true);
+        expect(ts).toContain(testDeviceId);
+      });
+    });
+
+    it("should generate monotonically increasing timestamps", () => {
+      const timestamps = hlc.nextBatch(10);
+
+      // Each timestamp should be >= the previous one
+      for (let i = 1; i < timestamps.length; i++) {
+        const comparison = hlc.compare(timestamps[i - 1], timestamps[i]);
+        expect(comparison).toBe(-1); // Should be strictly less than (monotonically increasing)
+      }
+    });
+
+    it("should increment counter for each timestamp in the batch", () => {
+      const timestamps = hlc.nextBatch(5);
+
+      const states = timestamps.map((ts) => hlc.parse(ts));
+
+      // All timestamps in the batch should have the same physical timestamp
+      const firstTimestamp = states[0].timestamp;
+      states.forEach((state) => {
+        expect(state.timestamp).toBe(firstTimestamp);
+      });
+
+      // Counters should increment
+      for (let i = 1; i < states.length; i++) {
+        expect(states[i].counter).toBe(states[i - 1].counter + 1);
+      }
+    });
+
+    it("should handle empty batch request", () => {
+      const timestamps = hlc.nextBatch(0);
+      expect(timestamps).toEqual([]);
+    });
+
+    it("should handle negative count", () => {
+      const timestamps = hlc.nextBatch(-5);
+      expect(timestamps).toEqual([]);
+    });
+
+    it("should handle single item batch", () => {
+      const timestamps = hlc.nextBatch(1);
+      expect(timestamps).toHaveLength(1);
+      expect(isValidHLC(timestamps[0])).toBe(true);
+    });
+
+    it("should generate large batches efficiently", () => {
+      const count = 1000;
+      const timestamps = hlc.nextBatch(count);
+
+      expect(timestamps).toHaveLength(count);
+
+      // Verify monotonicity
+      for (let i = 1; i < timestamps.length; i++) {
+        expect(hlc.compare(timestamps[i - 1], timestamps[i])).toBe(-1);
+      }
+
+      // All should be unique
+      const uniqueSet = new Set(timestamps);
+      expect(uniqueSet.size).toBe(count);
+    });
+
+    it("should maintain monotonicity across batch and next() calls", () => {
+      const ts1 = hlc.next();
+      const batch = hlc.nextBatch(3);
+      const ts2 = hlc.next();
+
+      // ts1 < all batch timestamps
+      batch.forEach((ts) => {
+        expect(hlc.compare(ts1, ts)).toBe(-1);
+      });
+
+      // all batch timestamps < ts2
+      batch.forEach((ts) => {
+        expect(hlc.compare(ts, ts2)).toBe(-1);
+      });
+    });
+
+    it("should persist state after batch generation", () => {
+      const batch = hlc.nextBatch(5);
+      const lastBatchTs = batch[batch.length - 1];
+      const lastState = hlc.parse(lastBatchTs);
+
+      // Create a new HLC service (simulating page reload)
+      const hlc2 = createHLCService(testDeviceId);
+      const loadedState = hlc2.getState();
+
+      expect(loadedState.timestamp).toBe(lastState.timestamp);
+      expect(loadedState.counter).toBe(lastState.counter);
+    });
+
+    it("should continue from correct counter after batch", () => {
+      const batch = hlc.nextBatch(3);
+      const lastBatchState = hlc.parse(batch[batch.length - 1]);
+
+      const nextTs = hlc.next();
+      const nextState = hlc.parse(nextTs);
+
+      // Should continue incrementing counter
+      if (nextState.timestamp === lastBatchState.timestamp) {
+        expect(nextState.counter).toBe(lastBatchState.counter + 1);
+      }
+    });
+
+    it("should reset counter when physical time advances during batch", async () => {
+      // Generate initial batch
+      hlc.nextBatch(3);
+
+      // Wait for time to advance
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // Generate another batch
+      const batch2 = hlc.nextBatch(3);
+      const states = batch2.map((ts) => hlc.parse(ts));
+
+      // First item in new batch should have counter 0
+      expect(states[0].counter).toBe(0);
+
+      // Subsequent items should increment
+      for (let i = 1; i < states.length; i++) {
+        expect(states[i].counter).toBe(i);
+      }
+    });
+
+    it("should handle interleaved batch and single next() calls", () => {
+      const ts1 = hlc.next();
+      const batch1 = hlc.nextBatch(2);
+      const ts2 = hlc.next();
+      const batch2 = hlc.nextBatch(2);
+      const ts3 = hlc.next();
+
+      const allTimestamps = [ts1, ...batch1, ts2, ...batch2, ts3];
+
+      // All should be monotonically increasing
+      for (let i = 1; i < allTimestamps.length; i++) {
+        expect(hlc.compare(allTimestamps[i - 1], allTimestamps[i])).toBe(-1);
+      }
+    });
+
+    it("should generate unique timestamps in batch", () => {
+      const batch = hlc.nextBatch(100);
+      const uniqueSet = new Set(batch);
+      expect(uniqueSet.size).toBe(100);
+    });
+  });
+
   describe("next()", () => {
     it("should generate a valid HLC timestamp", () => {
       const timestamp = hlc.next();
