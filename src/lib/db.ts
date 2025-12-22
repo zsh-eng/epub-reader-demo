@@ -80,12 +80,6 @@ export interface BookFile {
   mediaType: string;
 }
 
-export interface EpubBlob {
-  fileHash: string; // Primary key (matches Book.fileHash)
-  blob: Blob; // The original EPUB file
-  dateStored: number;
-}
-
 export interface SyncLog {
   id?: number;
   timestamp: number;
@@ -123,7 +117,6 @@ class EPUBReaderDB extends Dexie {
   // Local-only tables
   bookFiles!: Table<BookFile, string>;
   files!: Table<StoredFile, string>;
-  epubBlobs!: Table<EpubBlob, string>;
   syncLog!: Table<SyncLog, number>;
 
   constructor() {
@@ -134,7 +127,6 @@ class EPUBReaderDB extends Dexie {
     this.version(1).stores({
       ...syncSchemas,
       bookFiles: "id, bookId, path",
-      epubBlobs: "fileHash, dateStored",
       syncLog: "++id, timestamp, type, table",
     });
 
@@ -200,7 +192,6 @@ export async function deleteBook(id: string): Promise<void> {
 
   // Clean up local-only data
   await db.bookFiles.where("bookId").equals(id).delete();
-  await db.epubBlobs.delete(book.fileHash);
   await db.readingProgress.where("bookId").equals(id).delete();
   await db.highlights.where("bookId").equals(id).delete();
 }
@@ -343,37 +334,6 @@ export async function addSyncLogs(logs: Omit<SyncLog, "id">[]) {
 
 export async function getRecentSyncLogs(limit = 20): Promise<SyncLog[]> {
   return db.syncLog.orderBy("timestamp").reverse().limit(limit).toArray();
-}
-
-// ============================================================================
-// Helper Functions (EPUB Blobs)
-// ============================================================================
-
-export async function saveEpubBlob(
-  fileHash: string,
-  blob: Blob,
-): Promise<string> {
-  await db.epubBlobs.put({
-    fileHash,
-    blob,
-    dateStored: Date.now(),
-  });
-  return fileHash;
-}
-
-export async function getEpubBlob(
-  fileHash: string,
-): Promise<EpubBlob | undefined> {
-  return db.epubBlobs.get(fileHash);
-}
-
-export async function deleteEpubBlob(fileHash: string): Promise<void> {
-  await db.epubBlobs.delete(fileHash);
-}
-
-export async function hasEpubBlob(fileHash: string): Promise<boolean> {
-  const blob = await db.epubBlobs.get(fileHash);
-  return !!blob;
 }
 
 // ============================================================================

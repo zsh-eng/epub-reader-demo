@@ -53,10 +53,6 @@ export const LOCAL_TABLES = {
   // Used for EPUBs, covers, and other files
   files: "id, contentHash, fileType, [fileType+contentHash]",
 
-  // EPUB blobs are local-only (large binary data)
-  // TODO: Migrate to files table and remove this
-  epubBlobs: "fileHash, dateStored",
-
   // Sync log is for debugging (optional)
   syncLog: "++id, timestamp, type, table",
 } as const;

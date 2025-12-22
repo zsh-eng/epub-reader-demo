@@ -5,11 +5,12 @@ import {
   deleteBook,
   getAllBooks,
   getBookByFileHash,
-  saveEpubBlob,
   updateBookLastOpened,
 } from "@/lib/db";
 import { parseEPUB } from "@/lib/epub-parser";
 import { hashFile } from "@/lib/file-hash";
+import { createFileId } from "@/lib/files/types";
+import type { StoredFile } from "@/lib/files/types";
 
 export class DuplicateBookError extends Error {
   existingBook: Book;
@@ -41,13 +42,41 @@ export async function addBookFromFile(file: File): Promise<Book> {
       );
     }
 
-    const { book, files } = await parseEPUB(file, { fileHash });
+    const { book, files, coverBlob, epubBlob } = await parseEPUB(file, {
+      fileHash,
+    });
+
+    // Store the epub file in the files table
+    const epubFile: StoredFile = {
+      id: createFileId("epub", fileHash),
+      contentHash: fileHash,
+      fileType: "epub",
+      blob: epubBlob,
+      mediaType: "application/epub+zip",
+      size: file.size,
+      storedAt: Date.now(),
+    };
+
+    // Store the cover file in the files table (if available)
+    const filesToStore: StoredFile[] = [epubFile];
+    if (coverBlob && book.coverContentHash) {
+      const coverFile: StoredFile = {
+        id: createFileId("cover", book.coverContentHash),
+        contentHash: book.coverContentHash,
+        fileType: "cover",
+        blob: coverBlob,
+        mediaType: coverBlob.type || "image/jpeg",
+        size: coverBlob.size,
+        storedAt: Date.now(),
+      };
+      filesToStore.push(coverFile);
+    }
+
+    // Add book and files to database
     await addBook(book);
     await db.bookFiles.bulkAdd(files);
+    await db.files.bulkAdd(filesToStore);
 
-    // Save the original EPUB blob for future uploads
-    // This will be deleted after successful sync
-    await saveEpubBlob(fileHash, file);
     return book;
   } catch (error) {
     // Re-throw DuplicateBookError as-is

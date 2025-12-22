@@ -11,6 +11,8 @@ import { unzip } from "fflate";
 export interface ParsedEPUB {
   book: Book;
   files: BookFile[];
+  coverBlob?: Blob;
+  epubBlob: Blob;
 }
 
 export interface ParsedEPUBMetadata {
@@ -70,8 +72,8 @@ export async function parseEPUB(
   // Extract table of contents
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
 
-  // Extract cover content hash
-  const { coverContentHash } = await extractCoverInfo(
+  // Extract cover content hash and blob
+  const { coverContentHash, coverBlob } = await extractCoverInfo(
     opfDoc,
     manifest,
     unzipped,
@@ -118,7 +120,12 @@ export async function parseEPUB(
     });
   }
 
-  return { book, files: bookFiles };
+  return {
+    book,
+    files: bookFiles,
+    coverBlob,
+    epubBlob: new Blob([arrayBuffer]),
+  };
 }
 
 /**
@@ -382,14 +389,18 @@ function parseTOCFromNCX(ncxDoc: Document, basePath: string): TOCItem[] {
 
 /**
  * Extract cover image path and compute content hash from EPUB
- * Returns both the path to the cover image file within the EPUB structure
- * and its content hash
+ * Returns both the path to the cover image file within the EPUB structure,
+ * its content hash, and the blob
  */
 async function extractCoverInfo(
   opfDoc: Document,
   manifest: ManifestItem[],
   files: Record<string, Uint8Array>,
-): Promise<{ coverImagePath?: string; coverContentHash?: string }> {
+): Promise<{
+  coverImagePath?: string;
+  coverContentHash?: string;
+  coverBlob?: Blob;
+}> {
   // Method 1: Look for cover in metadata
   const metaCover = opfDoc.querySelector('metadata meta[name="cover"]');
   if (metaCover) {
@@ -402,6 +413,7 @@ async function extractCoverInfo(
         return {
           coverImagePath: coverItem.href,
           coverContentHash: contentHash,
+          coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
         };
       }
     }
@@ -414,7 +426,11 @@ async function extractCoverInfo(
   if (coverItem && files[coverItem.href]) {
     const coverData = files[coverItem.href];
     const contentHash = await hashFileData(coverData);
-    return { coverImagePath: coverItem.href, coverContentHash: contentHash };
+    return {
+      coverImagePath: coverItem.href,
+      coverContentHash: contentHash,
+      coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+    };
   }
 
   // Method 3: Look for common cover file names
@@ -429,7 +445,11 @@ async function extractCoverInfo(
     if (commonCoverNames.includes(fileName) && files[item.href]) {
       const coverData = files[item.href];
       const contentHash = await hashFileData(coverData);
-      return { coverImagePath: item.href, coverContentHash: contentHash };
+      return {
+        coverImagePath: item.href,
+        coverContentHash: contentHash,
+        coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+      };
     }
   }
 
@@ -440,7 +460,11 @@ async function extractCoverInfo(
   if (firstImage && files[firstImage.href]) {
     const coverData = files[firstImage.href];
     const contentHash = await hashFileData(coverData);
-    return { coverImagePath: firstImage.href, coverContentHash: contentHash };
+    return {
+      coverImagePath: firstImage.href,
+      coverContentHash: contentHash,
+      coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+    };
   }
 
   return {};

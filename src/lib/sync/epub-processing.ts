@@ -7,28 +7,29 @@
  * - Extracting EPUB contents
  * - Creating File objects from blobs
  *
- * ## EPUB Blob Lifecycle
- *
- * The original EPUB file is preserved in IndexedDB until successfully synced:
- *
- * 1. **User adds book**: Original EPUB blob is stored in `epubBlobs` table
- *    - Stored alongside parsed book files for reading
- *    - Keyed by fileHash for easy lookup
- *
- * 2. **Upload to server**: Stored EPUB blob is used directly
- *    - No need to recreate EPUB from individual files
- *    - Preserves exact original file
- *
- * 3. **After successful upload**: EPUB blob is deleted
- *    - Saves storage space
- *    - Book files remain for offline reading
- *
- * 4. **Download from server**: Downloaded EPUB blob is stored
- *    - Enables potential re-upload to another device/account
- *    - Also extracted into book files for reading
- *
- * 5. **Book deletion**: Both book files AND EPUB blob are deleted
- *    - Complete cleanup of all related data
+ ## EPUB File Lifecycle
+
+  * The original EPUB file is preserved in IndexedDB until successfully synced:
+  *
+  * 1. **User adds book**: Original EPUB blob is stored in `files` table
+  *    - Stored alongside cover image (if available)
+  *    - Content-addressed by fileHash
+  *    - Also extracted into book files for reading
+  *
+  * 2. **Upload to server**: Stored EPUB blob is retrieved from `files` table
+  *    - No need to recreate EPUB from individual files
+  *    - Preserves exact original file
+  *
+  * 3. **After successful upload**: EPUB blob can be deleted from `files` table
+  *    - Saves storage space
+  *    - Book files remain for offline reading
+  *
+  * 4. **Download from server**: Downloaded EPUB blob is stored in `files` table
+  *    - Enables potential re-upload to another device/account
+  *    - Also extracted into book files for reading
+  *
+  * 5. **Book deletion**: Book files are deleted (EPUB and cover remain in `files` table)
+  *    - Files table entries can be cleaned up separately if not referenced
  */
 
 import type { BookFile } from "@/lib/db";
