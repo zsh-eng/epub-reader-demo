@@ -20,7 +20,7 @@ function newReadingProgress(
     bookId,
     currentSpineIndex,
     scrollProgress: 0,
-    lastRead: new Date(),
+    lastRead: new Date().getTime(),
   };
 }
 

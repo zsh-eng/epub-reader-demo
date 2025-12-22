@@ -268,6 +268,6 @@ export async function saveCurrentProgress(
     bookId,
     currentSpineIndex: currentChapterIndex,
     scrollProgress: validScrollProgress,
-    lastRead: new Date(),
+    lastRead: new Date().getTime(),
   });
 }
