@@ -19,6 +19,8 @@ Prefer using early returns / guard clauses to avoid nested conditionals and impr
 We're using Hono with Cloudflare Workers for the backend.
 D1 Database with Drizzle ORM and BetterAuth for authentication.
 
+Use `bun run build` for type-checking the project.
+
 ## Backend Structure
 
 - **Database Schema**: Auth tables in `server/db/auth-schema.ts`, custom tables in `server/db/schema.ts`
