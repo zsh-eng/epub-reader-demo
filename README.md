@@ -15,6 +15,7 @@ Roadmap (v0.2):
 
 - [x] Login
 - [x] Sync books
+- [ ] Sync Engine
 - [ ] Sync reading progress
 - [ ] Sync highlights
 - [ ] Sync log (for debugging)
