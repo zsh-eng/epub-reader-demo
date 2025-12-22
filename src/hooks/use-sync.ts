@@ -73,7 +73,7 @@ export function useSync(): UseSyncReturn {
     setSyncError(null);
 
     try {
-      await syncService.sync();
+      await syncService.syncAll();
       setLastSyncedAt(new Date());
     } catch (error) {
       console.error("[useSync] Sync failed:", error);
@@ -90,7 +90,8 @@ export function useSync(): UseSyncReturn {
         throw new Error("Must be authenticated to download books");
       }
 
-      await syncService.downloadBook(bookId);
+      // Sync the books table with specific entity filter
+      await syncService.syncTable("books", bookId);
     },
     [isAuthenticated],
   );
@@ -106,7 +107,12 @@ export function useSync(): UseSyncReturn {
         return;
       }
 
-      await syncService.deleteBook(bookId);
+      // Delete locally first
+      const { deleteBook: deleteBookFromDb } = await import("@/lib/db");
+      await deleteBookFromDb(bookId);
+
+      // Then sync to push the deletion to server
+      await syncService.syncTable("books");
     },
     [isAuthenticated],
   );
@@ -123,10 +129,14 @@ export function useSync(): UseSyncReturn {
 
 /**
  * Hook to get the sync state for a specific book
+ *
+ * Note: This hook is currently a stub. The sync service doesn't expose
+ * per-book sync state yet. To implement this, we'd need to track sync
+ * metadata at a more granular level.
  */
 export function useBookSyncState(fileHash: string | undefined) {
   const [status, setStatus] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (!fileHash) {
@@ -134,21 +144,10 @@ export function useBookSyncState(fileHash: string | undefined) {
       return;
     }
 
-    let mounted = true;
-
-    const loadState = async () => {
-      const state = await syncService.getBookSyncState(fileHash);
-      if (mounted) {
-        setStatus(state?.status ?? null);
-        setIsLoading(false);
-      }
-    };
-
-    loadState();
-
-    return () => {
-      mounted = false;
-    };
+    // TODO: Implement per-book sync state tracking
+    // For now, we just return null status
+    setStatus(null);
+    setIsLoading(false);
   }, [fileHash]);
 
   return { status, isLoading };
