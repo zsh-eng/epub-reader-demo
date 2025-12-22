@@ -5,6 +5,7 @@ import type {
   SpineItem,
   TOCItem,
 } from "@/lib/db";
+import { hashFileData } from "@/lib/file-hash";
 import { unzip } from "fflate";
 
 export interface ParsedEPUB {
@@ -19,6 +20,7 @@ export interface ParsedEPUBMetadata {
   spine: SpineItem[];
   toc: TOCItem[];
   coverImagePath?: string;
+  coverContentHash?: string;
   metadata: {
     publisher?: string;
     language?: string;
@@ -68,8 +70,12 @@ export async function parseEPUB(
   // Extract table of contents
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
 
-  // Extract cover image path
-  const coverImagePath = extractCoverImagePath(opfDoc, manifest, unzipped);
+  // Extract cover content hash
+  const { coverContentHash } = await extractCoverInfo(
+    opfDoc,
+    manifest,
+    unzipped,
+  );
 
   // Generate unique ID
   const bookId = generateId();
@@ -80,7 +86,7 @@ export async function parseEPUB(
     fileHash: options.fileHash,
     title: metadata.title || file.name.replace(".epub", ""),
     author: metadata.author || "Unknown Author",
-    coverImagePath,
+    coverContentHash,
     dateAdded: new Date().getTime(),
     fileSize: file.size,
     manifest,
@@ -375,14 +381,15 @@ function parseTOCFromNCX(ncxDoc: Document, basePath: string): TOCItem[] {
 }
 
 /**
- * Extract cover image path from EPUB
- * Returns the path to the cover image file within the EPUB structure
+ * Extract cover image path and compute content hash from EPUB
+ * Returns both the path to the cover image file within the EPUB structure
+ * and its content hash
  */
-function extractCoverImagePath(
+async function extractCoverInfo(
   opfDoc: Document,
   manifest: ManifestItem[],
   files: Record<string, Uint8Array>,
-): string | undefined {
+): Promise<{ coverImagePath?: string; coverContentHash?: string }> {
   // Method 1: Look for cover in metadata
   const metaCover = opfDoc.querySelector('metadata meta[name="cover"]');
   if (metaCover) {
@@ -390,7 +397,12 @@ function extractCoverImagePath(
     if (coverId) {
       const coverItem = manifest.find((item) => item.id === coverId);
       if (coverItem && files[coverItem.href]) {
-        return coverItem.href;
+        const coverData = files[coverItem.href];
+        const contentHash = await hashFileData(coverData);
+        return {
+          coverImagePath: coverItem.href,
+          coverContentHash: contentHash,
+        };
       }
     }
   }
@@ -400,7 +412,9 @@ function extractCoverImagePath(
     item.properties?.includes("cover-image"),
   );
   if (coverItem && files[coverItem.href]) {
-    return coverItem.href;
+    const coverData = files[coverItem.href];
+    const contentHash = await hashFileData(coverData);
+    return { coverImagePath: coverItem.href, coverContentHash: contentHash };
   }
 
   // Method 3: Look for common cover file names
@@ -413,7 +427,9 @@ function extractCoverImagePath(
   for (const item of manifest) {
     const fileName = item.href.split("/").pop()?.toLowerCase() || "";
     if (commonCoverNames.includes(fileName) && files[item.href]) {
-      return item.href;
+      const coverData = files[item.href];
+      const contentHash = await hashFileData(coverData);
+      return { coverImagePath: item.href, coverContentHash: contentHash };
     }
   }
 
@@ -422,10 +438,12 @@ function extractCoverImagePath(
     item.mediaType.startsWith("image/"),
   );
   if (firstImage && files[firstImage.href]) {
-    return firstImage.href;
+    const coverData = files[firstImage.href];
+    const contentHash = await hashFileData(coverData);
+    return { coverImagePath: firstImage.href, coverContentHash: contentHash };
   }
 
-  return undefined;
+  return {};
 }
 
 /**
@@ -512,7 +530,11 @@ export async function parseEPUBMetadataOnly(
   const manifest = extractManifest(opfDoc, opfPath);
   const spine = extractSpine(opfDoc);
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
-  const coverImagePath = extractCoverImagePath(opfDoc, manifest, unzipped);
+  const { coverImagePath, coverContentHash } = await extractCoverInfo(
+    opfDoc,
+    manifest,
+    unzipped,
+  );
 
   return {
     title: metadata.title || "Unknown Title",
@@ -521,6 +543,7 @@ export async function parseEPUBMetadataOnly(
     spine,
     toc,
     coverImagePath,
+    coverContentHash,
     metadata: {
       publisher: metadata.publisher,
       language: metadata.language,

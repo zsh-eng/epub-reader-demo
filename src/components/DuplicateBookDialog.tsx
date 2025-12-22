@@ -8,9 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { useFileUrl } from "@/hooks/use-file-url";
 import type { Book } from "@/lib/db";
-import { getBookCoverUrl } from "@/lib/db";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface DuplicateBookDialogProps {
@@ -25,63 +23,11 @@ export function DuplicateBookDialog({
   existingBook,
 }: DuplicateBookDialogProps) {
   const navigate = useNavigate();
-
-  // For remote covers (synced from server), use FileManager
-  const { url: remoteCoverUrl, isLoading: isLoadingRemoteCover } = useFileUrl(
-    existingBook.hasRemoteCover ? existingBook.fileHash : undefined,
+  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
+    existingBook.coverContentHash,
     "cover",
-    { skip: !open || !existingBook.hasRemoteCover },
+    { skip: !open || !existingBook.coverContentHash },
   );
-
-  // For local covers (extracted from EPUB), use bookFiles
-  const [localCoverUrl, setLocalCoverUrl] = useState<string | undefined>(
-    undefined,
-  );
-
-  useEffect(() => {
-    // Only load from bookFiles if we don't have a remote cover and book is downloaded
-    if (
-      !open ||
-      existingBook.hasRemoteCover ||
-      !existingBook.coverImagePath ||
-      !existingBook.isDownloaded
-    ) {
-      return;
-    }
-
-    let objectUrl: string | undefined;
-
-    async function loadLocalCover() {
-      try {
-        const url = await getBookCoverUrl(
-          existingBook.id,
-          existingBook.coverImagePath!,
-        );
-        objectUrl = url;
-        setLocalCoverUrl(url);
-      } catch (error) {
-        console.error("Failed to load local cover:", error);
-      }
-    }
-
-    loadLocalCover();
-
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [
-    open,
-    existingBook.id,
-    existingBook.coverImagePath,
-    existingBook.isDownloaded,
-    existingBook.hasRemoteCover,
-  ]);
-
-  // Determine which cover URL to use
-  const coverUrl = remoteCoverUrl || localCoverUrl;
-  const isLoadingCover = existingBook.hasRemoteCover && isLoadingRemoteCover;
 
   const handleOpenBook = () => {
     onOpenChange(false);

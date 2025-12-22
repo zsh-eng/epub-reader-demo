@@ -5,19 +5,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFileUrl } from "@/hooks/use-file-url";
-import { useSync } from "@/hooks/use-sync";
 import type { Book } from "@/lib/db";
-import { getBookCoverUrl } from "@/lib/db";
-import {
-  Book as BookIcon,
-  CloudDownload,
-  Loader2,
-  MoreVertical,
-  Trash2,
-} from "lucide-react";
-import { useEffect, useState } from "react";
+import { Book as BookIcon, Loader2, MoreVertical, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { Button } from "./ui/button";
 
 interface BookCardProps {
@@ -27,77 +17,16 @@ interface BookCardProps {
 
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
-  const { downloadBook } = useSync();
-  const [isDownloading, setIsDownloading] = useState(false);
 
-  // For remote covers (synced from server), use FileManager
-  const { url: remoteCoverUrl, isLoading: isLoadingRemoteCover } = useFileUrl(
-    book.hasRemoteCover ? book.fileHash : undefined,
+  // Use FileManager to get cover URL from content hash
+  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
+    book.coverContentHash,
     "cover",
-    { skip: !book.hasRemoteCover },
+    { skip: !book.coverContentHash },
   );
 
-  // For local covers (extracted from EPUB), use bookFiles
-  const [localCoverUrl, setLocalCoverUrl] = useState<string | undefined>(
-    undefined,
-  );
-
-  useEffect(() => {
-    // Only load from bookFiles if we don't have a remote cover and book is downloaded
-    if (book.hasRemoteCover || !book.coverImagePath || !book.isDownloaded) {
-      return;
-    }
-
-    let objectUrl: string | undefined;
-
-    async function loadLocalCover() {
-      try {
-        const url = await getBookCoverUrl(book.id, book.coverImagePath!);
-        objectUrl = url;
-        setLocalCoverUrl(url);
-      } catch (error) {
-        console.error("Failed to load local cover:", error);
-      }
-    }
-
-    loadLocalCover();
-
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-  }, [book.id, book.coverImagePath, book.isDownloaded, book.hasRemoteCover]);
-
-  // Determine which cover URL to use
-  const coverUrl = remoteCoverUrl || localCoverUrl;
-  const isLoadingCover = book.hasRemoteCover && isLoadingRemoteCover;
-
-  const handleClick = async () => {
-    if (!book.isDownloaded) {
-      if (isDownloading) {
-        return;
-      }
-
-      setIsDownloading(true);
-
-      try {
-        toast.promise(downloadBook(book.fileHash), {
-          loading: "Downloading book...",
-          success: `"${book.title}" is ready to read`,
-          error: (err) =>
-            err instanceof Error ? err.message : "Failed to download book",
-          action: {
-            label: "Open",
-            onClick: () => navigate(`/reader/${book.id}`),
-          },
-        });
-      } finally {
-        setIsDownloading(false);
-      }
-      return;
-    }
-
+  const handleClick = () => {
+    // Navigate to reader - the reader will handle downloading/processing if needed
     navigate(`/reader/${book.id}`);
   };
 
@@ -154,13 +83,6 @@ export function BookCard({ book, onDelete }: BookCardProps) {
 
             {/* Glossy Overlay */}
             <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/0 to-white/10 pointer-events-none" />
-
-            {/* Cloud Download Icon for non-downloaded books */}
-            {!book.isDownloaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-                <CloudDownload className="h-12 w-12 text-white/70" />
-              </div>
-            )}
           </div>
         </div>
 

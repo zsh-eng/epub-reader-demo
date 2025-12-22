@@ -11,6 +11,7 @@ import {
   useChapterContent,
 } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
+import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useHighlightDOMSync } from "@/hooks/use-highlight-dom-sync";
 import {
   useAddHighlightMutation,
@@ -69,6 +70,13 @@ export function Reader() {
   // Load book and initial progress
   const { book, initialProgress, isLoading } = useBookLoader(bookId);
   const bookTitle = book?.title;
+
+  // Ensure EPUB is processed (fetch and extract bookFiles if needed)
+  const {
+    isProcessing: isProcessingEpub,
+    isReady: isEpubReady,
+    error: epubProcessError,
+  } = useEpubProcessor(bookId, book?.fileHash);
 
   // Chapter index state - initialized from saved progress or defaults to 0
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
@@ -181,8 +189,45 @@ export function Reader() {
   }, [bookTitle]);
 
   // Early returns
-  if (isLoading || isChapterLoading) return <LoadingSpinner />;
+  if (isLoading) return <LoadingSpinner />;
   if (!book || !bookId) return null;
+
+  // Show loading while EPUB is being processed
+  if (isProcessingEpub) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center space-y-4">
+          <LoadingSpinner />
+          <p className="text-muted-foreground text-sm">
+            Preparing book for reading...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if EPUB processing failed
+  if (epubProcessError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center space-y-4">
+          <p className="text-destructive font-medium">Failed to load book</p>
+          <p className="text-muted-foreground text-sm">
+            {epubProcessError.message}
+          </p>
+          <button
+            onClick={() => navigate("/")}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Back to Library
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Wait for EPUB to be ready before showing chapter content
+  if (!isEpubReady || isChapterLoading) return <LoadingSpinner />;
 
   // Derived state
   const currentChapterTitle = getChapterTitleFromSpine(

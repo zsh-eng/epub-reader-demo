@@ -20,7 +20,7 @@ import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
 
 export interface Book {
   id: string;
-  fileHash: string;
+  fileHash: string; // Content hash of the EPUB file (also used to fetch via FileManager)
   title: string;
   author: string;
   fileSize: number;
@@ -31,14 +31,8 @@ export interface Book {
   spine: SpineItem[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   toc: any[];
-  isDownloaded: number;
-
-  coverImagePath?: string; // Path to cover image file within the EPUB
-
-  // Server file availability (derived from R2 key presence)
-  // TODO: update this
-  hasRemoteEpub?: boolean;
-  hasRemoteCover?: boolean;
+  isDownloaded: number; // Whether book files have been extracted locally
+  coverContentHash?: string; // Content hash of the cover image (used to fetch via FileManager)
 }
 
 export interface ManifestItem {
@@ -296,19 +290,6 @@ export async function updateReadingSettings(
 }
 
 // ============================================================================
-// Helper Functions (Book Cover)
-// ============================================================================
-
-export async function getBookCoverUrl(
-  bookId: string,
-  coverPath: string,
-): Promise<string | undefined> {
-  const bookFile = await getBookFile(bookId, coverPath);
-  if (!bookFile) return undefined;
-  return URL.createObjectURL(bookFile.content);
-}
-
-// ============================================================================
 // Helper Functions (Highlights)
 // ============================================================================
 
@@ -405,14 +386,8 @@ export async function getNotDownloadedBooks(): Promise<SyncedBook[]> {
     .toArray();
 }
 
-export async function markBookAsDownloaded(
-  bookId: string,
-  hasRemoteEpub?: boolean,
-  hasRemoteCover?: boolean,
-): Promise<void> {
+export async function markBookAsDownloaded(bookId: string): Promise<void> {
   await db.books.update(bookId, {
     isDownloaded: 1,
-    hasRemoteEpub,
-    hasRemoteCover,
   });
 }
