@@ -1,8 +1,9 @@
+import { fileStorage } from "@server/db/schema";
+import { computeContentHash } from "@server/lib/file-upload";
 import { env, SELF } from "cloudflare:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { beforeAll, describe, expect, it } from "vitest";
-import { fileStorage } from "../../server/db/schema";
 import {
   createTestImageContent,
   createTestUser,
@@ -430,6 +431,62 @@ describe("POST /api/files/upload", () => {
     expect(data.success).toBe(true);
     expect(data.mimeType).toBe("application/epub+zip");
     expect(data.fileName).toBe(fileName);
+  });
+
+  it("uploads and downloads file with matching content hash", async () => {
+    const fileContent = createTestImageContent();
+    const fileName = "round-trip-test.png";
+    const fileType = "cover";
+
+    // Compute the expected hash from original content
+    const expectedHash = await computeContentHash(fileContent);
+
+    // Upload the file
+    const formData = new FormData();
+    formData.append(
+      "file",
+      new File([fileContent], fileName, { type: "image/png" }),
+    );
+    formData.append("fileType", fileType);
+
+    const uploadResponse = await SELF.fetch(
+      "http://example.com/api/files/upload",
+      {
+        method: "POST",
+        headers: {
+          Cookie: testUser.sessionCookie,
+        },
+        body: formData,
+      },
+    );
+
+    expect(uploadResponse.status).toBe(200);
+    const uploadData = await uploadResponse.json();
+    expect(uploadData.success).toBe(true);
+    expect(uploadData.contentHash).toBe(expectedHash);
+
+    // Download the file back using the content hash
+    const downloadResponse = await SELF.fetch(
+      `http://example.com/api/files/${fileType}/${uploadData.contentHash}`,
+      {
+        headers: {
+          Cookie: testUser.sessionCookie,
+        },
+      },
+    );
+
+    expect(downloadResponse.status).toBe(200);
+
+    // Get the downloaded content and compute its hash
+    const downloadedContent = await downloadResponse.arrayBuffer();
+    const downloadedHash = await computeContentHash(downloadedContent);
+
+    // Verify the content hash matches
+    expect(downloadedHash).toBe(expectedHash);
+    expect(downloadedHash).toBe(uploadData.contentHash);
+
+    // Also verify the content is byte-for-byte identical
+    expect(new Uint8Array(downloadedContent)).toEqual(fileContent);
   });
 });
 

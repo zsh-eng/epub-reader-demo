@@ -37,7 +37,9 @@ async function getHasher() {
 /**
  * Compute xxhash64 for file content
  */
-async function computeContentHash(content: ArrayBuffer): Promise<string> {
+export async function computeContentHash(
+  content: ArrayBuffer,
+): Promise<string> {
   const hasher = await getHasher();
   const uint8Array = new Uint8Array(content);
   const hash = hasher.h64Raw(uint8Array);
