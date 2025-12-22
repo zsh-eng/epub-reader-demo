@@ -6,6 +6,12 @@
  */
 
 /**
+ * Sentinel value for _serverTimestamp to indicate records that haven't been synced to the server yet.
+ * We use -1 instead of null to avoid full table scans when querying for unsynced records.
+ */
+export const UNSYNCED_TIMESTAMP = -1;
+
+/**
  * Definition of a table to be synced
  */
 export interface SyncTableDef {
@@ -134,9 +140,9 @@ export interface SyncMetadata {
 
   /**
    * Server timestamp when this record was synced to server.
-   * null for local-only changes that haven't been synced yet.
+   * UNSYNCED_TIMESTAMP (-1) for local-only changes that haven't been synced yet.
    */
-  _serverTimestamp: number | null;
+  _serverTimestamp: number;
 
   /** Whether this record has been deleted (tombstone) - 0 or 1 for indexing support */
   _isDeleted: 0 | 1;

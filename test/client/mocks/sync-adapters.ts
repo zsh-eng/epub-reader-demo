@@ -15,6 +15,7 @@ import type {
   StorageAdapter,
   SyncItem,
 } from "@/lib/sync/storage-adapter";
+import { UNSYNCED_TIMESTAMP } from "@/lib/sync/hlc/schema";
 
 /**
  * Mock storage adapter with in-memory storage
@@ -57,7 +58,7 @@ export class MockStorageAdapter implements StorageAdapter {
 
     const pending: SyncItem[] = [];
     for (const item of Array.from(tableData.values())) {
-      if (item._serverTimestamp === null) {
+      if (item._serverTimestamp === UNSYNCED_TIMESTAMP) {
         pending.push({ ...item });
       }
     }
@@ -189,7 +190,10 @@ export class MockRemoteAdapter implements RemoteAdapter {
     // Filter items by timestamp and entityId
     const items: SyncItem[] = [];
     for (const item of Array.from(tableData.values())) {
-      if (item._serverTimestamp !== null && item._serverTimestamp > since) {
+      if (
+        item._serverTimestamp !== UNSYNCED_TIMESTAMP &&
+        item._serverTimestamp > since
+      ) {
         if (!entityId || item.entityId === entityId) {
           items.push({ ...item });
         }
@@ -198,8 +202,10 @@ export class MockRemoteAdapter implements RemoteAdapter {
 
     // Sort by server timestamp
     items.sort((a, b) => {
-      const aTime = a._serverTimestamp || 0;
-      const bTime = b._serverTimestamp || 0;
+      const aTime =
+        a._serverTimestamp === UNSYNCED_TIMESTAMP ? 0 : a._serverTimestamp;
+      const bTime =
+        b._serverTimestamp === UNSYNCED_TIMESTAMP ? 0 : b._serverTimestamp;
       return aTime - bTime;
     });
 
@@ -211,7 +217,13 @@ export class MockRemoteAdapter implements RemoteAdapter {
     // Calculate the server timestamp to return (the max timestamp of returned items)
     const serverTimestamp =
       resultItems.length > 0
-        ? Math.max(...resultItems.map((item) => item._serverTimestamp || 0))
+        ? Math.max(
+            ...resultItems.map((item) =>
+              item._serverTimestamp === UNSYNCED_TIMESTAMP
+                ? 0
+                : item._serverTimestamp,
+            ),
+          )
         : since;
 
     return {
@@ -256,7 +268,10 @@ export class MockRemoteAdapter implements RemoteAdapter {
         // Rejected - return existing server timestamp
         results.push({
           id: item.id,
-          serverTimestamp: existingItem!._serverTimestamp || this.serverTime,
+          serverTimestamp:
+            existingItem!._serverTimestamp === UNSYNCED_TIMESTAMP
+              ? this.serverTime
+              : existingItem!._serverTimestamp,
           accepted: false,
         });
       }

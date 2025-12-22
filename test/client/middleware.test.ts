@@ -4,6 +4,7 @@ import {
   createTombstone,
   generateDexieStores,
   isNotDeleted,
+  UNSYNCED_TIMESTAMP,
   type HLCService,
   type SyncMetadata,
 } from "@/lib/sync/hlc";
@@ -91,7 +92,7 @@ describe("Sync Middleware", () => {
       expect(stored).toBeDefined();
       expect(stored!._hlc).toBeDefined();
       expect(stored!._deviceId).toBe(testDeviceId);
-      expect(stored!._serverTimestamp).toBeNull();
+      expect(stored!._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
       expect(stored!._isDeleted).toBe(0);
     });
 
@@ -109,7 +110,7 @@ describe("Sync Middleware", () => {
       expect(stored).toBeDefined();
       expect(stored!._hlc).toBeDefined();
       expect(stored!._deviceId).toBe(testDeviceId);
-      expect(stored!._serverTimestamp).toBeNull();
+      expect(stored!._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
       expect(stored!._isDeleted).toBe(0);
     });
 
@@ -157,7 +158,7 @@ describe("Sync Middleware", () => {
       const updated = await db.highlights.get("test-5");
 
       expect(hlc.compare(first!._hlc, updated!._hlc)).toBeLessThan(0);
-      expect(updated!._serverTimestamp).toBeNull();
+      expect(updated!._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
       expect(updated!._isDeleted).toBe(0);
     });
 
@@ -180,7 +181,7 @@ describe("Sync Middleware", () => {
       stored.forEach((record) => {
         expect(record._hlc).toBeDefined();
         expect(record._deviceId).toBe(testDeviceId);
-        expect(record._serverTimestamp).toBeNull();
+        expect(record._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
         expect(record._isDeleted).toBe(0);
       });
     });

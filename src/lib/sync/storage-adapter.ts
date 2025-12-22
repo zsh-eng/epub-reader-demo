@@ -6,6 +6,7 @@
  */
 
 import type { SyncMetadata } from "@/lib/sync/hlc/schema";
+import { UNSYNCED_TIMESTAMP } from "@/lib/sync/hlc/schema";
 import type { Table } from "dexie";
 
 /**
@@ -17,7 +18,7 @@ export interface SyncItem {
   _hlc: string;
   _deviceId: string;
   _isDeleted: boolean;
-  _serverTimestamp: number | null;
+  _serverTimestamp: number;
   data: Record<string, unknown>;
 }
 
@@ -42,7 +43,7 @@ export interface ApplyRemoteResult {
 export interface StorageAdapter {
   /**
    * Get items that need to be synced to the server.
-   * Returns items where _serverTimestamp is null.
+   * Returns items where _serverTimestamp is UNSYNCED_TIMESTAMP.
    *
    * @param table - Table name
    * @param deviceId - Current device ID
@@ -169,19 +170,18 @@ export class DexieStorageAdapter implements StorageAdapter {
 
     const entityKey = this.entityKeys.get(table);
 
-    // Get all records where _serverTimestamp is null (local changes not yet synced)
+    // Get all records where _serverTimestamp is UNSYNCED_TIMESTAMP (local changes not yet synced)
     // Note: This intentionally includes deleted items (_isDeleted=1) because
     // we need to sync deletions to the server. Application queries should
     // filter deleted items using isNotDeleted() helper.
-    // Note: Dexie doesn't support .equals(null) for indexed queries, so we fetch all
-    // records and filter in memory. For large datasets, consider adding a separate
-    // index or using a sentinel value instead of null.
-    const allRecords = await dexieTable.toArray();
-    const records = allRecords.filter(
-      (record: Record<string, unknown> & SyncMetadata) =>
-        record._serverTimestamp === null &&
-        (!deviceId || record._deviceId === deviceId),
-    );
+    const records = await dexieTable
+      .where("_serverTimestamp")
+      .equals(UNSYNCED_TIMESTAMP)
+      .filter(
+        (record: Record<string, unknown> & SyncMetadata) =>
+          !deviceId || record._deviceId === deviceId,
+      )
+      .toArray();
 
     return records.map((record) =>
       recordToSyncItem(

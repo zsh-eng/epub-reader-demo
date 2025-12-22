@@ -6,6 +6,7 @@
  */
 
 import { createHLCService } from "@/lib/sync/hlc/hlc";
+import { UNSYNCED_TIMESTAMP } from "@/lib/sync/hlc/schema";
 import type { SyncItem } from "@/lib/sync/storage-adapter";
 import { createSyncEngine, type SyncEngine } from "@/lib/sync/sync-engine";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -39,7 +40,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null, // Pending sync
+          _serverTimestamp: UNSYNCED_TIMESTAMP, // Pending sync
           data: { text: "Highlight 1", color: "yellow" },
         },
         {
@@ -48,7 +49,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null, // Pending sync
+          _serverTimestamp: UNSYNCED_TIMESTAMP, // Pending sync
           data: { text: "Highlight 2", color: "blue" },
         },
       ];
@@ -65,13 +66,13 @@ describe("Sync Engine", () => {
       // Verify items are on the server
       const serverItems = remote.getServerItems("highlights");
       expect(serverItems).toHaveLength(2);
-      expect(serverItems[0]._serverTimestamp).not.toBeNull();
-      expect(serverItems[1]._serverTimestamp).not.toBeNull();
+      expect(serverItems[0]._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
+      expect(serverItems[1]._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
 
       // Verify local items are marked as synced
       const localItems = storage.getAllItems("highlights");
-      expect(localItems[0]._serverTimestamp).not.toBeNull();
-      expect(localItems[1]._serverTimestamp).not.toBeNull();
+      expect(localItems[0]._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
+      expect(localItems[1]._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
     });
 
     it("should ignore entityId for push", async () => {
@@ -82,7 +83,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "Book 1 highlight" },
         },
         {
@@ -91,7 +92,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "Book 2 highlight" },
         },
       ];
@@ -112,7 +113,7 @@ describe("Sync Engine", () => {
         _hlc: hlc.next(),
         _deviceId: "device-1",
         _isDeleted: false,
-        _serverTimestamp: null,
+        _serverTimestamp: UNSYNCED_TIMESTAMP,
         data: { text: `Highlight ${i}` },
       }));
 
@@ -135,7 +136,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: true, // Tombstone
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "Deleted highlight" },
         },
       ];
@@ -374,7 +375,7 @@ describe("Sync Engine", () => {
         _hlc: "1704067300000-0-device-1", // Newer timestamp
         _deviceId: "device-1",
         _isDeleted: false,
-        _serverTimestamp: null, // Not yet synced
+        _serverTimestamp: UNSYNCED_TIMESTAMP, // Not yet synced
         data: { text: "Local version", version: 2 },
       };
 
@@ -419,7 +420,7 @@ describe("Sync Engine", () => {
         _hlc: sameHlc,
         _deviceId: "device-1",
         _isDeleted: false,
-        _serverTimestamp: null,
+        _serverTimestamp: UNSYNCED_TIMESTAMP,
         data: { text: "Local version" },
       };
 
@@ -489,7 +490,7 @@ describe("Sync Engine", () => {
         _hlc: hlc.next(),
         _deviceId: "device-1",
         _isDeleted: false,
-        _serverTimestamp: null,
+        _serverTimestamp: UNSYNCED_TIMESTAMP,
         data: { text: "Local highlight" },
       };
 
@@ -536,7 +537,7 @@ describe("Sync Engine", () => {
           _hlc: "1704067300000-0-device-1", // Newer
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "Local wins", version: 2 },
         },
         {
@@ -545,7 +546,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "New local item" },
         },
       ];
@@ -601,7 +602,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "Highlight" },
         },
       ]);
@@ -612,7 +613,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { name: "Bookmark" },
         },
       ]);
@@ -686,7 +687,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "No entity" },
         },
       ];
@@ -732,7 +733,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: "Item" },
         },
       ];
@@ -764,7 +765,7 @@ describe("Sync Engine", () => {
           _hlc: hlc.next(),
           _deviceId: "device-1",
           _isDeleted: false,
-          _serverTimestamp: null,
+          _serverTimestamp: UNSYNCED_TIMESTAMP,
           data: { text: `Highlight ${i}`, index: i },
         }),
       );

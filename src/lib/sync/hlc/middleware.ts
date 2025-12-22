@@ -6,7 +6,7 @@
  * the presence of _serverTimestamp.
  *
  * Key behaviors:
- * - Local writes (no _serverTimestamp): Add _hlc, _deviceId, set _serverTimestamp=null, _isDeleted=0
+ * - Local writes (no _serverTimestamp): Add _hlc, _deviceId, set _serverTimestamp=UNSYNCED_TIMESTAMP, _isDeleted=0
  * - Remote writes (has _serverTimestamp): Pass through unchanged (preserve server metadata)
  * - Deletes: Blocked - must use put with _isDeleted=true instead
  *
@@ -17,6 +17,7 @@
 import type { DBCore, DBCoreTable } from "dexie";
 import type { HLCService } from "./hlc";
 import type { SyncMetadata } from "./schema";
+import { UNSYNCED_TIMESTAMP } from "./schema";
 
 /**
  * Options for creating the sync middleware
@@ -109,7 +110,7 @@ export function createSyncMiddleware(options: SyncMiddlewareOptions) {
                     ...value,
                     _hlc: hlcTimestamps[idx],
                     _deviceId: deviceId,
-                    _serverTimestamp: null,
+                    _serverTimestamp: UNSYNCED_TIMESTAMP,
                     _isDeleted: 0,
                   };
                   return enriched;

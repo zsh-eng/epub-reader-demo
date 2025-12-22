@@ -118,7 +118,7 @@ export class SyncEngine {
   /**
    * Push local changes to the server.
    *
-   * Gets all pending changes (where _serverTimestamp is null),
+   * Gets all pending changes (where _serverTimestamp is UNSYNCED_TIMESTAMP),
    * sends them to the server, and updates the local _serverTimestamp
    * on successful acceptance.
    *

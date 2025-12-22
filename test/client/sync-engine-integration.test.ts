@@ -25,6 +25,7 @@ import {
   createSyncConfig,
   createSyncMiddleware,
   generateDexieStores,
+  UNSYNCED_TIMESTAMP,
   type HLCService,
   type SyncMetadata,
 } from "@/lib/sync/hlc";
@@ -156,7 +157,7 @@ describe("Sync Engine Integration with DexieJS", () => {
 
       // Verify notes have sync metadata
       const storedNote1 = await db.notes.get("note-1");
-      expect(storedNote1?._serverTimestamp).toBeNull();
+      expect(storedNote1?._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
       expect(storedNote1?._hlc).toBeDefined();
       expect(storedNote1?._deviceId).toBe(deviceId);
 
@@ -169,13 +170,15 @@ describe("Sync Engine Integration with DexieJS", () => {
       // Verify items are on the server
       const serverItems = remote.getServerItems("notes");
       expect(serverItems).toHaveLength(2);
-      expect(serverItems.every((item) => item._serverTimestamp !== null)).toBe(
-        true,
-      );
+      expect(
+        serverItems.every(
+          (item) => item._serverTimestamp !== UNSYNCED_TIMESTAMP,
+        ),
+      ).toBe(true);
 
       // Verify local items have server timestamps now
       const updatedNote1 = await db.notes.get("note-1");
-      expect(updatedNote1?._serverTimestamp).not.toBeNull();
+      expect(updatedNote1?._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
     });
 
     it("should handle entity-scoped push for tasks", async () => {
@@ -233,7 +236,9 @@ describe("Sync Engine Integration with DexieJS", () => {
 
       // Verify all have server timestamps
       const allNotes = await db.notes.toArray();
-      expect(allNotes.every((n) => n._serverTimestamp !== null)).toBe(true);
+      expect(
+        allNotes.every((n) => n._serverTimestamp !== UNSYNCED_TIMESTAMP),
+      ).toBe(true);
     });
   });
 
@@ -416,7 +421,7 @@ describe("Sync Engine Integration with DexieJS", () => {
 
       // Verify local note has server timestamp
       const local = await db.notes.get("note-local");
-      expect(local?._serverTimestamp).not.toBeNull();
+      expect(local?._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
     });
   });
 
@@ -554,7 +559,7 @@ describe("Sync Engine Integration with DexieJS", () => {
       // Verify note is on server exactly once
       const serverItems = remote.getServerItems("notes");
       expect(serverItems).toHaveLength(1);
-      expect(serverItems[0]._serverTimestamp).not.toBeNull();
+      expect(serverItems[0]._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
     });
 
     it("should update HLC clock when receiving remote timestamps", async () => {

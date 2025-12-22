@@ -7,6 +7,7 @@ import {
   createTombstone,
   generateDexieStores,
   isNotDeleted,
+  UNSYNCED_TIMESTAMP,
   type HLCService,
   type MutationEvent,
   type SyncMetadata,
@@ -117,7 +118,7 @@ describe("HLC Sync Integration", () => {
       const stored = await db.highlights.get("h1");
       expect(stored!._hlc).toBeDefined();
       expect(stored!._deviceId).toBe(deviceId);
-      expect(stored!._serverTimestamp).toBeNull(); // Not synced yet
+      expect(stored!._serverTimestamp).toBe(UNSYNCED_TIMESTAMP); // Not synced yet
       expect(stored!._isDeleted).toBe(0);
 
       const localHlc = stored!._hlc;
@@ -132,7 +133,7 @@ describe("HLC Sync Integration", () => {
 
       // Verify server timestamp was preserved
       const synced = await db.highlights.get("h1");
-      expect(synced!._serverTimestamp).not.toBeNull();
+      expect(synced!._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
       expect(synced!._hlc).toBe(localHlc); // HLC unchanged
       expect(synced!._deviceId).toBe(deviceId);
     });
@@ -513,7 +514,10 @@ describe("HLC Sync Integration", () => {
       const all = await db.highlights.toArray();
       expect(all).toHaveLength(100);
       expect(
-        all.every((h) => h._hlc && h._deviceId && h._serverTimestamp === null),
+        all.every(
+          (h) =>
+            h._hlc && h._deviceId && h._serverTimestamp === UNSYNCED_TIMESTAMP,
+        ),
       ).toBe(true);
     });
 

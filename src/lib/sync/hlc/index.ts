@@ -54,6 +54,7 @@ export {
   validateSyncTableDefs,
   createSyncConfig,
   SYNC_INDICES,
+  UNSYNCED_TIMESTAMP,
   type SyncTableDef,
   type SyncMetadata,
   type WithSyncMetadata,
