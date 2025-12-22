@@ -45,6 +45,7 @@ export function useProgressPersistence({
 }: UseProgressPersistenceOptions): void {
   // Use the extracted progress mutation hook
   const saveProgressMutation = useProgressMutation(bookId);
+  const mutate = saveProgressMutation.mutate;
 
   // Track the last saved values to avoid unnecessary saves
   const lastSavedRef = useRef<{
@@ -98,9 +99,9 @@ export function useProgressPersistence({
       };
 
       // Use mutation instead of direct save
-      saveProgressMutation.mutate(progress);
+      mutate(progress);
     },
-    [bookId, chapterIndex, contentRef, saveProgressMutation],
+    [bookId, chapterIndex, contentRef, mutate],
   );
 
   /**
