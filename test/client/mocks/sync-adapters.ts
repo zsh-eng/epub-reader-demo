@@ -73,14 +73,8 @@ export class MockStorageAdapter implements StorageAdapter {
     const tableData = this.data.get(table) || new Map();
     const applied: string[] = [];
     const skipped: string[] = [];
-    let maxHlc: string | null = null;
 
     for (const remoteItem of items) {
-      // Track maximum HLC across all remote items
-      if (!maxHlc || hlcCompare(remoteItem._hlc, maxHlc) > 0) {
-        maxHlc = remoteItem._hlc;
-      }
-
       const localItem = tableData.get(remoteItem.id);
 
       if (!localItem) {
@@ -110,15 +104,7 @@ export class MockStorageAdapter implements StorageAdapter {
 
     this.data.set(table, tableData);
 
-    return { applied, skipped, maxHlc };
-  }
-
-  async getLocalItem(table: string, id: string): Promise<SyncItem | null> {
-    const tableData = this.data.get(table);
-    if (!tableData) return null;
-
-    const item = tableData.get(id);
-    return item ? { ...item } : null;
+    return { applied, skipped };
   }
 
   async getSyncCursor(table: string, entityId?: string): Promise<number> {

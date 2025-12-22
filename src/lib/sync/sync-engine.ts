@@ -152,22 +152,18 @@ export class SyncEngine {
       const acceptedResults = pushResult.results.filter((r) => r.accepted);
 
       if (acceptedResults.length > 0) {
-        // Get all accepted items in bulk
-        const acceptedIds = acceptedResults.map((r) => r.id);
-        const localItems = await Promise.all(
-          acceptedIds.map((id) => this.storage.getLocalItem(table, id)),
+        // Create a map of accepted IDs to their server timestamps
+        const acceptedMap = new Map(
+          acceptedResults.map((r) => [r.id, r.serverTimestamp]),
         );
 
-        // Update _serverTimestamp for all accepted items
-        const itemsToUpdate = localItems
-          .map((localItem, index) => {
-            if (!localItem) return null;
-
-            // Update the _serverTimestamp to mark as synced
-            localItem._serverTimestamp = acceptedResults[index].serverTimestamp;
-            return localItem;
-          })
-          .filter((item): item is NonNullable<typeof item> => item !== null);
+        // Filter the original pendingItems for accepted ones and update their server timestamps
+        const itemsToUpdate = pendingItems
+          .filter((item) => acceptedMap.has(item.id))
+          .map((item) => ({
+            ...item,
+            _serverTimestamp: acceptedMap.get(item.id)!,
+          }));
 
         // Apply all updates in one batch
         if (itemsToUpdate.length > 0) {
@@ -227,17 +223,23 @@ export class SyncEngine {
         return { pulled: 0, conflicts: 0, hasMore, errors: [] };
       }
 
+      // Find and receive the maximum HLC from pulled items
+      let maxHlc: string | null = null;
+      for (const item of pullResult.items) {
+        if (!maxHlc || this.hlc.compare(item._hlc, maxHlc) > 0) {
+          maxHlc = item._hlc;
+        }
+      }
+      if (maxHlc) {
+        this.hlc.receive(maxHlc);
+      }
+
       // Apply all remote changes - storage adapter handles conflict resolution
       const applyResult = await this.storage.applyRemoteChanges(
         table,
         pullResult.items,
         (a, b) => this.hlc.compare(a, b),
       );
-
-      // Update HLC clock with the maximum timestamp seen
-      if (applyResult.maxHlc) {
-        this.hlc.receive(applyResult.maxHlc);
-      }
 
       pulled = applyResult.applied.length;
       conflicts = applyResult.skipped.length;

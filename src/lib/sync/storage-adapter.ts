@@ -34,11 +34,6 @@ export interface ApplyRemoteResult {
    * IDs of items where local was kept (local was newer)
    */
   skipped: string[];
-
-  /**
-   * Maximum HLC timestamp seen across all remote items
-   */
-  maxHlc: string | null;
 }
 
 /**
@@ -69,15 +64,6 @@ export interface StorageAdapter {
     items: SyncItem[],
     hlcCompare: (a: string, b: string) => number,
   ): Promise<ApplyRemoteResult>;
-
-  /**
-   * Get a single item by ID for conflict resolution.
-   *
-   * @param table - Table name
-   * @param id - Item ID
-   * @returns The item if found, null otherwise
-   */
-  getLocalItem(table: string, id: string): Promise<SyncItem | null>;
 
   /**
    * Get the sync cursor (last synced server timestamp) for a table.
@@ -207,7 +193,6 @@ export class DexieStorageAdapter implements StorageAdapter {
     const entityKey = this.entityKeys.get(table);
     const applied: string[] = [];
     const skipped: string[] = [];
-    let maxHlc: string | null = null;
 
     // Use a transaction and bulk operations for efficiency
     await dexieTable.db.transaction("rw", dexieTable, async () => {
@@ -218,11 +203,6 @@ export class DexieStorageAdapter implements StorageAdapter {
       > = [];
 
       items.forEach((remoteItem, index) => {
-        // Track maximum HLC across all remote items
-        if (!maxHlc || hlcCompare(remoteItem._hlc, maxHlc) > 0) {
-          maxHlc = remoteItem._hlc;
-        }
-
         const localRecord = existingRecords[index];
         if (!localRecord) {
           // New item - insert it
@@ -261,26 +241,7 @@ export class DexieStorageAdapter implements StorageAdapter {
       }
     });
 
-    return { applied, skipped, maxHlc };
-  }
-
-  async getLocalItem(table: string, id: string): Promise<SyncItem | null> {
-    const dexieTable = this.tables.get(table);
-    if (!dexieTable) {
-      throw new Error(`Table ${table} not found in storage adapter`);
-    }
-
-    const entityKey = this.entityKeys.get(table);
-    const record = await dexieTable.get(id);
-
-    if (!record) {
-      return null;
-    }
-
-    return recordToSyncItem(
-      record as Record<string, unknown> & { id: string } & SyncMetadata,
-      entityKey,
-    );
+    return { applied, skipped };
   }
 
   async getSyncCursor(table: string, entityId?: string): Promise<number> {
