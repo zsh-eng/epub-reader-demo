@@ -354,7 +354,7 @@ describe("Sync Engine", () => {
       const result = await engine.pull("highlights");
 
       expect(result.pulled).toBe(1);
-      expect(result.conflicts).toBe(1); // Conflict detected
+      expect(result.conflicts).toBe(0); // Remote won, no conflict (item was applied)
 
       // Remote version should win
       const localItems = storage.getAllItems("highlights");
@@ -396,8 +396,8 @@ describe("Sync Engine", () => {
       // Pull should detect conflict
       const result = await engine.pull("highlights");
 
-      expect(result.pulled).toBe(1);
-      expect(result.conflicts).toBe(1); // Conflict detected
+      expect(result.pulled).toBe(0); // Nothing pulled (local won)
+      expect(result.conflicts).toBe(1); // Conflict detected (remote was skipped)
 
       // Local version should win (newer HLC)
       const localItems = storage.getAllItems("highlights");
@@ -579,7 +579,7 @@ describe("Sync Engine", () => {
       const result = await engine.sync("highlights");
 
       expect(result.pushed).toBe(2);
-      expect(result.pulled).toBe(2);
+      expect(result.pulled).toBe(1); // Only item-2 was pulled (item-1 local won)
 
       const finalLocal = storage.getAllItems("highlights");
       expect(finalLocal).toHaveLength(3);

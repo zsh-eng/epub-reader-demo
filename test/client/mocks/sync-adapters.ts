@@ -10,7 +10,11 @@ import type {
   PushResult,
   RemoteAdapter,
 } from "@/lib/sync/remote-adapter";
-import type { StorageAdapter, SyncItem } from "@/lib/sync/storage-adapter";
+import type {
+  ApplyRemoteResult,
+  StorageAdapter,
+  SyncItem,
+} from "@/lib/sync/storage-adapter";
 
 /**
  * Mock storage adapter with in-memory storage
@@ -65,15 +69,24 @@ export class MockStorageAdapter implements StorageAdapter {
     table: string,
     items: SyncItem[],
     hlcCompare: (a: string, b: string) => number,
-  ): Promise<void> {
+  ): Promise<ApplyRemoteResult> {
     const tableData = this.data.get(table) || new Map();
+    const applied: string[] = [];
+    const skipped: string[] = [];
+    let maxHlc: string | null = null;
 
     for (const remoteItem of items) {
+      // Track maximum HLC across all remote items
+      if (!maxHlc || hlcCompare(remoteItem._hlc, maxHlc) > 0) {
+        maxHlc = remoteItem._hlc;
+      }
+
       const localItem = tableData.get(remoteItem.id);
 
       if (!localItem) {
         // No local version - just insert
         tableData.set(remoteItem.id, { ...remoteItem });
+        applied.push(remoteItem.id);
         continue;
       }
 
@@ -83,16 +96,21 @@ export class MockStorageAdapter implements StorageAdapter {
       if (comparison > 0) {
         // Remote is newer - apply remote changes
         tableData.set(remoteItem.id, { ...remoteItem });
+        applied.push(remoteItem.id);
       } else if (comparison < 0) {
         // Local is newer - keep local changes
+        skipped.push(remoteItem.id);
         continue;
       } else {
         // HLCs are equal - prefer remote (server wins ties)
         tableData.set(remoteItem.id, { ...remoteItem });
+        applied.push(remoteItem.id);
       }
     }
 
     this.data.set(table, tableData);
+
+    return { applied, skipped, maxHlc };
   }
 
   async getLocalItem(table: string, id: string): Promise<SyncItem | null> {

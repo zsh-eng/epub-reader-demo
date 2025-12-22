@@ -171,10 +171,12 @@ export class SyncEngine {
 
         // Apply all updates in one batch
         if (itemsToUpdate.length > 0) {
-          await this.storage.applyRemoteChanges(table, itemsToUpdate, (a, b) =>
-            this.hlc.compare(a, b),
+          const applyResult = await this.storage.applyRemoteChanges(
+            table,
+            itemsToUpdate,
+            (a, b) => this.hlc.compare(a, b),
           );
-          pushed = itemsToUpdate.length;
+          pushed = applyResult.applied.length;
         }
       }
 
@@ -225,41 +227,21 @@ export class SyncEngine {
         return { pulled: 0, conflicts: 0, hasMore, errors: [] };
       }
 
-      // Get all local items in bulk for conflict detection and HLC updates
-      const localItemIds = pullResult.items.map((item) => item.id);
-      const localItems = await Promise.all(
-        localItemIds.map((id) => this.storage.getLocalItem(table, id)),
+      // Apply all remote changes - storage adapter handles conflict resolution
+      const applyResult = await this.storage.applyRemoteChanges(
+        table,
+        pullResult.items,
+        (a, b) => this.hlc.compare(a, b),
       );
 
-      // Count conflicts and update HLC clock
-      let maxHlc = "";
-      pullResult.items.forEach((remoteItem, index) => {
-        const localItem = localItems[index];
-
-        if (localItem) {
-          const comparison = this.hlc.compare(remoteItem._hlc, localItem._hlc);
-          if (comparison !== 0) {
-            conflicts++;
-          }
-        }
-
-        // Track the maximum HLC to update clock once
-        if (!maxHlc || this.hlc.compare(remoteItem._hlc, maxHlc) > 0) {
-          maxHlc = remoteItem._hlc;
-        }
-      });
-
-      // Update HLC clock once with the maximum timestamp
-      if (maxHlc) {
-        this.hlc.receive(maxHlc);
+      // Update HLC clock with the maximum timestamp seen
+      if (applyResult.maxHlc) {
+        this.hlc.receive(applyResult.maxHlc);
       }
 
-      // Apply all remote changes (conflict resolution is handled by storage adapter)
-      await this.storage.applyRemoteChanges(table, pullResult.items, (a, b) =>
-        this.hlc.compare(a, b),
-      );
+      pulled = applyResult.applied.length;
+      conflicts = applyResult.skipped.length;
 
-      pulled = pullResult.items.length;
       await this.storage.setSyncCursor(
         table,
         pullResult.serverTimestamp,

@@ -22,6 +22,26 @@ export interface SyncItem {
 }
 
 /**
+ * Result of applying remote changes
+ */
+export interface ApplyRemoteResult {
+  /**
+   * IDs of items where remote won (newer or new insert)
+   */
+  applied: string[];
+
+  /**
+   * IDs of items where local was kept (local was newer)
+   */
+  skipped: string[];
+
+  /**
+   * Maximum HLC timestamp seen across all remote items
+   */
+  maxHlc: string | null;
+}
+
+/**
  * Storage adapter interface for sync operations
  */
 export interface StorageAdapter {
@@ -42,12 +62,13 @@ export interface StorageAdapter {
    * @param table - Table name
    * @param items - Remote items to apply
    * @param hlcCompare - Function to compare HLC timestamps
+   * @returns Result containing applied/skipped IDs and max HLC
    */
   applyRemoteChanges(
     table: string,
     items: SyncItem[],
     hlcCompare: (a: string, b: string) => number,
-  ): Promise<void>;
+  ): Promise<ApplyRemoteResult>;
 
   /**
    * Get a single item by ID for conflict resolution.
@@ -177,13 +198,16 @@ export class DexieStorageAdapter implements StorageAdapter {
     table: string,
     items: SyncItem[],
     hlcCompare: (a: string, b: string) => number,
-  ): Promise<void> {
+  ): Promise<ApplyRemoteResult> {
     const dexieTable = this.tables.get(table);
     if (!dexieTable) {
       throw new Error(`Table ${table} not found in storage adapter`);
     }
 
     const entityKey = this.entityKeys.get(table);
+    const applied: string[] = [];
+    const skipped: string[] = [];
+    let maxHlc: string | null = null;
 
     // Use a transaction and bulk operations for efficiency
     await dexieTable.db.transaction("rw", dexieTable, async () => {
@@ -194,9 +218,16 @@ export class DexieStorageAdapter implements StorageAdapter {
       > = [];
 
       items.forEach((remoteItem, index) => {
+        // Track maximum HLC across all remote items
+        if (!maxHlc || hlcCompare(remoteItem._hlc, maxHlc) > 0) {
+          maxHlc = remoteItem._hlc;
+        }
+
         const localRecord = existingRecords[index];
         if (!localRecord) {
+          // New item - insert it
           itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          applied.push(remoteItem.id);
           return;
         }
 
@@ -211,21 +242,26 @@ export class DexieStorageAdapter implements StorageAdapter {
         if (comparison > 0) {
           // Remote is newer - add to update batch
           itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          applied.push(remoteItem.id);
         } else if (comparison < 0) {
           // Local is newer - keep local changes
           // Skip this item, the next push will send our version
+          skipped.push(remoteItem.id);
         } else {
           // HLCs are equal - this shouldn't happen in normal operation
           // but if it does, prefer the remote version (server wins ties)
           itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          applied.push(remoteItem.id);
         }
       });
 
-      // 4. Batch write only the items that passed the check
+      // Batch write only the items that passed the check
       if (itemsToUpdate.length > 0) {
         await dexieTable.bulkPut(itemsToUpdate);
       }
     });
+
+    return { applied, skipped, maxHlc };
   }
 
   async getLocalItem(table: string, id: string): Promise<SyncItem | null> {
