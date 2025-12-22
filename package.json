@@ -14,7 +14,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply reader-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply reader-db --remote",
-    "test": "vitest",
+    "test": "NODE_OPTIONS=\"--no-webstorage\" vitest",
     "test:watch": "vitest --watch"
   },
   "dependencies": {
