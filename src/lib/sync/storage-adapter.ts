@@ -158,7 +158,10 @@ export class DexieStorageAdapter implements StorageAdapter {
     this.entityKeys = entityKeys;
   }
 
-  async getPendingChanges(table: string): Promise<SyncItem[]> {
+  async getPendingChanges(
+    table: string,
+    deviceId?: string,
+  ): Promise<SyncItem[]> {
     const dexieTable = this.tables.get(table);
     if (!dexieTable) {
       throw new Error(`Table ${table} not found in storage adapter`);
@@ -170,10 +173,15 @@ export class DexieStorageAdapter implements StorageAdapter {
     // Note: This intentionally includes deleted items (_isDeleted=1) because
     // we need to sync deletions to the server. Application queries should
     // filter deleted items using isNotDeleted() helper.
-    const records = await dexieTable
-      .where("_serverTimestamp")
-      .equals(null as unknown as number)
-      .toArray();
+    // Note: Dexie doesn't support .equals(null) for indexed queries, so we fetch all
+    // records and filter in memory. For large datasets, consider adding a separate
+    // index or using a sentinel value instead of null.
+    const allRecords = await dexieTable.toArray();
+    const records = allRecords.filter(
+      (record: Record<string, unknown> & SyncMetadata) =>
+        record._serverTimestamp === null &&
+        (!deviceId || record._deviceId === deviceId),
+    );
 
     return records.map((record) =>
       recordToSyncItem(
