@@ -1,5 +1,5 @@
 import { syncData } from "@server/db/schema";
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, sql, ne } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { drizzle } from "drizzle-orm/d1";
 import { z } from "zod";
@@ -64,10 +64,12 @@ export type PushResult = {
  * Pull sync data for a specific table.
  * Returns items updated after the given serverTimestamp.
  * Optionally filtered by entityId for entity-scoped sync.
+ * Filters out data from the requesting device to avoid sending back its own changes.
  */
 export async function pullSyncData(
   database: D1Database,
   userId: string,
+  deviceId: string,
   tableName: string,
   since: number,
   entityId?: string,
@@ -80,6 +82,7 @@ export async function pullSyncData(
     eq(syncData.tableName, tableName),
     eq(syncData.userId, userId),
     gt(syncData.serverTimestamp, new Date(since)),
+    ne(syncData.deviceId, deviceId), // Filter out client's own device
   ];
 
   if (entityId) {
@@ -131,10 +134,13 @@ export async function pullSyncData(
  *
  * The server stores all writes and uses onConflictDoUpdate with a WHERE clause
  * to only accept writes with a greater HLC timestamp.
+ *
+ * @param deviceId - Device ID from request header, used to validate client-provided deviceId
  */
 export async function pushSyncData(
   database: D1Database,
   userId: string,
+  deviceId: string,
   tableName: string,
   items: SyncItem[],
 ): Promise<PushResult> {
@@ -150,6 +156,14 @@ export async function pushSyncData(
 
   for (const item of items) {
     const serverTimestamp = now;
+
+    // Validate that the client-provided deviceId matches the header deviceId
+    // This prevents clients from spoofing other devices
+    if (item._deviceId !== deviceId) {
+      throw new Error(
+        `Device ID mismatch: item has ${item._deviceId}, but request header has ${deviceId}`,
+      );
+    }
 
     // Use INSERT ... ON CONFLICT DO UPDATE with WHERE clause for LWW
     // The WHERE clause ensures we only update if the incoming HLC is greater

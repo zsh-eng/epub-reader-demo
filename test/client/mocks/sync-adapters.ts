@@ -120,6 +120,7 @@ export class MockStorageAdapter implements StorageAdapter {
 
 /**
  * Mock remote adapter with in-memory server storage
+ * TODO: add devices to the remote adapter such that we don't pull back the same data? (and the test cases reflect that as well)
  */
 export class MockRemoteAdapter implements RemoteAdapter {
   private serverData: Map<string, Map<string, SyncItem>> = new Map();

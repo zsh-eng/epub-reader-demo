@@ -297,12 +297,14 @@ const route = app
     zValidator("query", syncPullQuerySchema),
     async (c) => {
       const user = c.get("user")!;
+      const deviceId = c.get("deviceId")!;
       const table = c.req.param("table");
       const { since, entityId, limit } = c.req.valid("query");
 
       const result = await pullSyncData(
         c.env.DATABASE,
         user.id,
+        deviceId,
         table,
         since,
         entityId,
@@ -317,10 +319,17 @@ const route = app
     zValidator("json", syncPushBodySchema),
     async (c) => {
       const user = c.get("user")!;
+      const deviceId = c.get("deviceId")!;
       const table = c.req.param("table");
       const { items } = c.req.valid("json");
 
-      const result = await pushSyncData(c.env.DATABASE, user.id, table, items);
+      const result = await pushSyncData(
+        c.env.DATABASE,
+        user.id,
+        deviceId,
+        table,
+        items,
+      );
       return c.json(result);
     },
   )

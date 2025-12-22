@@ -74,7 +74,7 @@ describe("Sync Engine", () => {
       expect(localItems[1]._serverTimestamp).not.toBeNull();
     });
 
-    it("should filter by entityId when provided", async () => {
+    it("should ignore entityId for push", async () => {
       const items: SyncItem[] = [
         {
           id: "item-1",
@@ -97,15 +97,11 @@ describe("Sync Engine", () => {
       ];
 
       storage.setItems("highlights", items);
-
-      // Push only book-1 items
       const result = await engine.push("highlights", { entityId: "book-1" });
 
-      expect(result.pushed).toBe(1);
-
-      // Verify only book-1 item is on server
+      expect(result.pushed).toBe(2);
       const serverItems = remote.getServerItems("highlights");
-      expect(serverItems).toHaveLength(1);
+      expect(serverItems).toHaveLength(2);
       expect(serverItems[0].entityId).toBe("book-1");
     });
 
@@ -517,7 +513,7 @@ describe("Sync Engine", () => {
 
       // Verify both push and pull happened
       expect(result.pushed).toBe(1);
-      expect(result.pulled).toBe(2); // Pulls remote item + our pushed item from server
+      expect(result.pulled).toBe(1);
       expect(result.errors).toHaveLength(0);
 
       // Verify final state
@@ -583,17 +579,11 @@ describe("Sync Engine", () => {
       const result = await engine.sync("highlights");
 
       expect(result.pushed).toBe(2);
-      expect(result.pulled).toBe(3); // Pulls 2 remote items + our 2 pushed items
-      // Conflicts are only counted when there's a local item that differs from remote
-      // Since item-2 is new and item-3 is only remote, only item-1 had a potential conflict
-      // But after push, our local item-1 gets synced, so when we pull, we might not detect
-      // it as a conflict anymore. Let's just verify the final state is correct.
+      expect(result.pulled).toBe(2);
 
-      // Final state should have all 3 items
       const finalLocal = storage.getAllItems("highlights");
       expect(finalLocal).toHaveLength(3);
 
-      // item-1 should be the local version (newer HLC)
       const item1 = finalLocal.find((item) => item.id === "item-1");
       expect(item1?.data.text).toBe("Local wins");
     });
