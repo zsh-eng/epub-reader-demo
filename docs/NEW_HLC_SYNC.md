@@ -203,9 +203,10 @@ interface SyncEngineConfig {
 
 interface SyncEngine {
   // Manual sync triggers
-  pull(table?: string): Promise<void>;
+  pull(table?: string, entityId?: string): Promise<void>;
+  // We push everything, not just those matching the entity ID
   push(table?: string): Promise<void>;
-  sync(table?: string): Promise<void>;  // pull then push
+  sync(table?: string, entityId?: string): Promise<void>;  // pull then push
   
   // Change observation (for TanStack Query invalidation)
   onChange(
@@ -219,9 +220,11 @@ interface SyncEngine {
 }
 
 interface SyncStatus {
-  pendingPush: number;   // count of local changes to push
-  lastPulled: Date | null;
-  lastPushed: Date | null;
+  table: string;
+  pendingPush: number;   // count where _serverTimestamp === null
+
+  lastPulledAt: Date | null;  // when pull happened (for UI only)
+  lastPushedAt: Date | null;  // when push happened (for UI only)
   isSyncing: boolean;
 }
 ```
@@ -359,6 +362,7 @@ app.post('/api/sync/:table', async (c) => {
   const userId = c.get('user').id;
   const { items } = await c.req.json();
   
+  // TODO: this needs to change to use D1 batched updates + also check that the setWhere clause is added where hlc is greater.
   const results = await Promise.all(
     items.map(async (item) => {
       const serverTimestamp = Date.now();
