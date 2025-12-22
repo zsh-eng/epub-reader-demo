@@ -1,0 +1,290 @@
+/**
+ * Storage Adapter for Sync Engine
+ *
+ * Provides an abstraction over local storage (Dexie/IndexedDB) for sync operations.
+ * This adapter is used internally by the sync engine and is not meant for general application use.
+ */
+
+import type { SyncMetadata } from "@/lib/sync/hlc/schema";
+import type { Table } from "dexie";
+
+/**
+ * Item structure for sync operations
+ */
+export interface SyncItem {
+  id: string;
+  entityId?: string;
+  _hlc: string;
+  _deviceId: string;
+  _isDeleted: boolean;
+  _serverTimestamp: number | null;
+  data: Record<string, unknown>;
+}
+
+/**
+ * Storage adapter interface for sync operations
+ */
+export interface StorageAdapter {
+  /**
+   * Get items that need to be synced to the server.
+   * Returns items where _serverTimestamp is null.
+   *
+   * @param table - Table name
+   * @param deviceId - Current device ID
+   * @returns Array of items pending sync
+   */
+  getPendingChanges(table: string, deviceId: string): Promise<SyncItem[]>;
+
+  /**
+   * Apply remote changes from the server to local storage.
+   * Handles conflict resolution using HLC comparison.
+   *
+   * @param table - Table name
+   * @param items - Remote items to apply
+   * @param hlcCompare - Function to compare HLC timestamps
+   */
+  applyRemoteChanges(
+    table: string,
+    items: SyncItem[],
+    hlcCompare: (a: string, b: string) => number,
+  ): Promise<void>;
+
+  /**
+   * Get a single item by ID for conflict resolution.
+   *
+   * @param table - Table name
+   * @param id - Item ID
+   * @returns The item if found, null otherwise
+   */
+  getLocalItem(table: string, id: string): Promise<SyncItem | null>;
+
+  /**
+   * Get the sync cursor (last synced server timestamp) for a table.
+   *
+   * @param table - Table name
+   * @param entityId - Optional entity ID for scoped sync
+   * @returns Last synced server timestamp, or 0 if never synced
+   */
+  getSyncCursor(table: string, entityId?: string): Promise<number>;
+
+  /**
+   * Set the sync cursor for a table.
+   *
+   * @param table - Table name
+   * @param serverTimestamp - Server timestamp to save
+   * @param entityId - Optional entity ID for scoped sync
+   */
+  setSyncCursor(
+    table: string,
+    serverTimestamp: number,
+    entityId?: string,
+  ): Promise<void>;
+}
+
+/**
+ * Convert a database record to a SyncItem
+ */
+function recordToSyncItem(
+  record: Record<string, unknown> & { id: string } & SyncMetadata,
+  entityKey?: string,
+): SyncItem {
+  // Extract sync metadata
+  const { id, _hlc, _deviceId, _isDeleted, _serverTimestamp, ...data } = record;
+
+  // Extract entityId if entityKey is specified
+  const entityId = entityKey
+    ? (data[entityKey] as string | undefined)
+    : undefined;
+
+  // Remove entityKey from data if it exists (to avoid duplication)
+  if (entityKey && entityId) {
+    delete data[entityKey];
+  }
+
+  return {
+    id,
+    entityId,
+    _hlc,
+    _deviceId,
+    _isDeleted: _isDeleted === 1,
+    _serverTimestamp,
+    data,
+  };
+}
+
+/**
+ * Convert a SyncItem to a database record
+ */
+function syncItemToRecord(
+  item: SyncItem,
+  entityKey?: string,
+): Record<string, unknown> & { id: string } & SyncMetadata {
+  const record: Record<string, unknown> = {
+    id: item.id,
+    _hlc: item._hlc,
+    _deviceId: item._deviceId,
+    _isDeleted: item._isDeleted ? 1 : 0,
+    _serverTimestamp: item._serverTimestamp,
+    ...item.data,
+  };
+
+  // Add entityId to data if entityKey is specified
+  if (entityKey && item.entityId) {
+    record[entityKey] = item.entityId;
+  }
+
+  return record as Record<string, unknown> & { id: string } & SyncMetadata;
+}
+
+/**
+ * Dexie implementation of StorageAdapter
+ */
+export class DexieStorageAdapter implements StorageAdapter {
+  private tables: Map<string, Table>;
+  private entityKeys: Map<string, string | undefined>;
+
+  constructor(
+    tables: Map<string, Table>,
+    entityKeys: Map<string, string | undefined>,
+  ) {
+    this.tables = tables;
+    this.entityKeys = entityKeys;
+  }
+
+  async getPendingChanges(table: string): Promise<SyncItem[]> {
+    const dexieTable = this.tables.get(table);
+    if (!dexieTable) {
+      throw new Error(`Table ${table} not found in storage adapter`);
+    }
+
+    const entityKey = this.entityKeys.get(table);
+
+    // Get all records where _serverTimestamp is null
+    const records = await dexieTable
+      .where("_serverTimestamp")
+      .equals(null as unknown as number)
+      .toArray();
+
+    return records.map((record) =>
+      recordToSyncItem(
+        record as Record<string, unknown> & { id: string } & SyncMetadata,
+        entityKey,
+      ),
+    );
+  }
+
+  async applyRemoteChanges(
+    table: string,
+    items: SyncItem[],
+    hlcCompare: (a: string, b: string) => number,
+  ): Promise<void> {
+    const dexieTable = this.tables.get(table);
+    if (!dexieTable) {
+      throw new Error(`Table ${table} not found in storage adapter`);
+    }
+
+    const entityKey = this.entityKeys.get(table);
+
+    // TODO: change this to use dexie bulk put
+    for (const remoteItem of items) {
+      // Get local item for conflict resolution
+      const localRecord = await dexieTable.get(remoteItem.id);
+
+      if (!localRecord) {
+        // No local version - just insert
+        await dexieTable.put(syncItemToRecord(remoteItem, entityKey));
+        continue;
+      }
+
+      const localItem = recordToSyncItem(
+        localRecord as Record<string, unknown> & { id: string } & SyncMetadata,
+        entityKey,
+      );
+
+      // Compare HLCs for conflict resolution (Last-Write-Wins)
+      const comparison = hlcCompare(remoteItem._hlc, localItem._hlc);
+
+      if (comparison > 0) {
+        // Remote is newer - apply remote changes
+        await dexieTable.put(syncItemToRecord(remoteItem, entityKey));
+      } else if (comparison < 0) {
+        // Local is newer - keep local changes
+        // But we need to preserve the fact that we've seen this remote version
+        // This is handled by not overwriting, the next push will send our version
+        continue;
+      } else {
+        // HLCs are equal - this shouldn't happen in normal operation
+        // but if it does, prefer the remote version (server wins ties)
+        await dexieTable.put(syncItemToRecord(remoteItem, entityKey));
+      }
+    }
+  }
+
+  async getLocalItem(table: string, id: string): Promise<SyncItem | null> {
+    const dexieTable = this.tables.get(table);
+    if (!dexieTable) {
+      throw new Error(`Table ${table} not found in storage adapter`);
+    }
+
+    const entityKey = this.entityKeys.get(table);
+    const record = await dexieTable.get(id);
+
+    if (!record) {
+      return null;
+    }
+
+    return recordToSyncItem(
+      record as Record<string, unknown> & { id: string } & SyncMetadata,
+      entityKey,
+    );
+  }
+
+  async getSyncCursor(table: string, entityId?: string): Promise<number> {
+    // Sync cursors are stored in a special table or in-memory
+    // For now, we'll use localStorage for simplicity
+    const key = entityId
+      ? `sync-cursor:${table}:${entityId}`
+      : `sync-cursor:${table}`;
+
+    const stored = localStorage.getItem(key);
+    return stored ? parseInt(stored, 10) : 0;
+  }
+
+  async setSyncCursor(
+    table: string,
+    serverTimestamp: number,
+    entityId?: string,
+  ): Promise<void> {
+    const key = entityId
+      ? `sync-cursor:${table}:${entityId}`
+      : `sync-cursor:${table}`;
+
+    localStorage.setItem(key, serverTimestamp.toString());
+  }
+}
+
+/**
+ * Create a Dexie storage adapter from a database instance
+ *
+ * @param db - Dexie database instance
+ * @param tableConfigs - Map of table names to their entityKey (if any)
+ * @returns DexieStorageAdapter instance
+ */
+export function createDexieStorageAdapter(
+  db: { [key: string]: Table },
+  tableConfigs: Record<string, { entityKey?: string }>,
+): DexieStorageAdapter {
+  const tables = new Map<string, Table>();
+  const entityKeys = new Map<string, string | undefined>();
+
+  for (const [tableName, config] of Object.entries(tableConfigs)) {
+    const table = db[tableName];
+    if (!table) {
+      throw new Error(`Table ${tableName} not found in database`);
+    }
+    tables.set(tableName, table);
+    entityKeys.set(tableName, config.entityKey);
+  }
+
+  return new DexieStorageAdapter(tables, entityKeys);
+}
