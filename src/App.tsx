@@ -5,6 +5,7 @@ import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Sessions } from "@/components/Sessions";
 import { Toaster } from "@/components/ui/sonner";
 import { useSync } from "@/hooks/use-sync";
+import { useTransferQueue } from "@/hooks/use-transfer-queue";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
@@ -17,6 +18,8 @@ const queryClient = new QueryClient();
 function SyncInitializer({ children }: { children: React.ReactNode }) {
   // Initialize sync service - this starts periodic sync when authenticated
   useSync();
+  // Initialize transfer queue - this pauses/resumes based on auth state
+  useTransferQueue();
   return <>{children}</>;
 }
 

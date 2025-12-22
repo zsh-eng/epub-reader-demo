@@ -284,7 +284,7 @@ describe("Transfer Queue with Mock Adapter", () => {
     const mockBlob = new Blob(["cover image data"], { type: "image/jpeg" });
 
     // Pre-populate mock with a file
-    await mockAdapter.uploadFile(contentHash, fileType, mockBlob, "image/jpeg");
+    await mockAdapter.uploadFile(contentHash, fileType, mockBlob);
 
     // Queue download
     const taskId = await queue.queueDownload(contentHash, fileType, {
@@ -376,7 +376,7 @@ describe("Transfer Queue with Mock Adapter", () => {
     const blob = new Blob(["test"], { type: "image/png" });
 
     // Upload a file
-    await mockAdapter.uploadFile(contentHash, fileType, blob, "image/png");
+    await mockAdapter.uploadFile(contentHash, fileType, blob);
     expect(mockAdapter.hasFile(fileType, contentHash)).toBe(true);
 
     // Set some failure modes
@@ -392,7 +392,7 @@ describe("Transfer Queue with Mock Adapter", () => {
 
     // Should be able to upload again (failure mode cleared)
     await expect(
-      mockAdapter.uploadFile("new-hash", fileType, blob, "image/png"),
+      mockAdapter.uploadFile("new-hash", fileType, blob),
     ).resolves.not.toThrow();
   });
 });

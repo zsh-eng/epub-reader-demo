@@ -44,9 +44,51 @@ class TransferQueue {
   >();
   private processingTasks = new Set<string>();
   private isProcessing = false;
+  private isPaused = false;
 
   constructor(remoteAdapter: FileRemoteAdapter) {
     this.remoteAdapter = remoteAdapter;
+  }
+
+  /**
+   * Pause the transfer queue.
+   * Stops processing tasks until resume() is called.
+   * Useful when user logs out.
+   */
+  pause(): void {
+    this.isPaused = true;
+    console.log("[TransferQueue] Paused");
+  }
+
+  /**
+   * Resume the transfer queue.
+   * Resumes processing tasks if there are any pending.
+   * Useful when user logs in.
+   */
+  resume(): void {
+    if (!this.isPaused) {
+      return;
+    }
+
+    this.isPaused = false;
+    console.log("[TransferQueue] Resumed");
+
+    // Check if there are pending tasks and start processing
+    this.checkAndStartProcessing();
+  }
+
+  /**
+   * Check if there are pending tasks and start processing if not paused
+   */
+  private async checkAndStartProcessing(): Promise<void> {
+    if (this.isPaused) {
+      return;
+    }
+
+    const pendingCount = await this.getPendingCount();
+    if (pendingCount > 0) {
+      this.startProcessing();
+    }
   }
 
   /**
@@ -171,6 +213,13 @@ class TransferQueue {
    */
   private async processQueue(): Promise<void> {
     while (true) {
+      // Check if paused
+      if (this.isPaused) {
+        console.log("[TransferQueue] Processing paused");
+        this.isProcessing = false;
+        return;
+      }
+
       // Get next pending task (highest priority first)
       const task = await db.transferQueue
         .where("status")
@@ -269,7 +318,6 @@ class TransferQueue {
       task.contentHash,
       task.fileType,
       file.blob,
-      file.mediaType,
     );
   }
 
