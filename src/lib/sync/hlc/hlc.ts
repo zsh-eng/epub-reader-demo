@@ -74,7 +74,7 @@ export function createHLCService(deviceId?: string): HLCService {
   const _deviceId = deviceId || getOrCreateDeviceId();
 
   // Load or initialize state
-  let state = loadState(_deviceId);
+  const state = loadState(_deviceId);
 
   /**
    * Load HLC state from localStorage, or initialize with current time
