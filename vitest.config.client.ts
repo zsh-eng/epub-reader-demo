@@ -11,5 +11,6 @@ export default defineProject({
   test: {
     name: "client",
     environment: "happy-dom",
+    setupFiles: ["./test/setup/indexeddb.ts"],
   },
 });
