@@ -89,127 +89,7 @@ const route = app
     const devices = await getDevices(c.env.DATABASE, user.id, currentDeviceId);
     return c.json({ devices });
   })
-  // // Book sync endpoints
-  // .get(
-  //   "/sync/books",
-  //   requireUser,
-  //   zValidator("query", syncBooksQuerySchema),
-  //   async (c) => {
-  //     const user = c.get("user")!;
-  //     const { since } = c.req.valid("query");
-
-  //     const result = await getBooks(c.env.DATABASE, user.id, since);
-  //     return c.json(result);
-  //   },
-  // )
-  // .post(
-  //   "/sync/books",
-  //   requireUser,
-  //   zValidator("json", syncBooksBodySchema),
-  //   async (c) => {
-  //     const user = c.get("user")!;
-  //     const { books } = c.req.valid("json");
-
-  //     const result = await syncBooks(c.env.DATABASE, user.id, books);
-  //     return c.json(result);
-  //   },
-  // )
-  // .post(
-  //   "/sync/books/:fileHash/files",
-  //   requireUser,
-  //   zValidator("param", fileHashParamSchema),
-  //   async (c) => {
-  //     const user = c.get("user")!;
-  //     const { fileHash } = c.req.valid("param");
-
-  //     // Parse multipart form data
-  //     const body = await c.req.parseBody();
-  //     const epubFile = body["epub"] as File | undefined;
-  //     const coverFile = body["cover"] as File | undefined;
-
-  //     // At least one file must be provided
-  //     if (!epubFile && !coverFile) {
-  //       return c.json(
-  //         { error: "At least one file (epub or cover) must be provided" },
-  //         400,
-  //       );
-  //     }
-
-  //     const result = await uploadBookFiles(
-  //       c.env.DATABASE,
-  //       c.env.BOOK_STORAGE,
-  //       user.id,
-  //       fileHash,
-  //       epubFile ?? null,
-  //       coverFile ?? null,
-  //     );
-
-  //     if ("error" in result) {
-  //       return c.json({ error: result.error }, result.status as 404);
-  //     }
-
-  //     return c.json(result);
-  //   },
-  // )
-  // .delete(
-  //   "/sync/books/:fileHash",
-  //   requireUser,
-  //   zValidator("param", fileHashParamSchema),
-  //   async (c) => {
-  //     const user = c.get("user")!;
-  //     const { fileHash } = c.req.valid("param");
-
-  //     const result = await deleteBook(c.env.DATABASE, user.id, fileHash);
-
-  //     if ("error" in result) {
-  //       return c.json({ error: result.error }, result.status as 404);
-  //     }
-
-  //     return c.json(result);
-  //   },
-  // )
-  // // Reading progress sync endpoints
-  // .get(
-  //   "/sync/progress",
-  //   requireAuth,
-  //   zValidator("query", syncProgressQuerySchema),
-  //   async (c) => {
-  //     const user = c.get("user")!;
-  //     const { since, fileHash } = c.req.valid("query");
-
-  //     const result = await getProgressLogs(
-  //       c.env.DATABASE,
-  //       user.id,
-  //       since,
-  //       fileHash,
-  //     );
-  //     return c.json(result);
-  //   },
-  // )
-  // .post(
-  //   "/sync/progress",
-  //   requireAuth,
-  //   zValidator("json", syncProgressBodySchema),
-  //   async (c) => {
-  //     const user = c.get("user")!;
-  //     const deviceId = c.get("deviceId")!;
-  //     const { entries } = c.req.valid("json");
-
-  //     const result = await syncProgressLogs(
-  //       c.env.DATABASE,
-  //       user.id,
-  //       deviceId,
-  //       entries,
-  //     );
-
-  //     if ("error" in result) {
-  //       return c.json({ error: result.error }, result.status as 404);
-  //     }
-
-  //     return c.json(result);
-  //   },
-  // )
-  // New content-addressed file endpoint: /api/files/{fileType}/{contentHash}
+  // Content-addressed file endpoint: /api/files/{fileType}/{contentHash}
   // The server looks up the R2 key from the database based on auth + fileType + contentHash
   .get("/files/:fileType/:contentHash", requireUser, async (c) => {
     const user = c.get("user")!;
@@ -219,10 +99,7 @@ const route = app
     // Validate file type
     const fileTypeResult = fileTypeSchema.safeParse(fileTypeParam);
     if (!fileTypeResult.success) {
-      return c.json(
-        { error: "Invalid file type. Must be 'epub' or 'cover'" },
-        400,
-      );
+      return c.json({ error: "Invalid file type" }, 400);
     }
     const fileType = fileTypeResult.data;
 
@@ -257,7 +134,7 @@ const route = app
       // Cache-Control: private ensures CDN/proxies don't cache user-specific content
       // max-age=31536000 (1 year) since files are content-addressed by hash
       const headers = new Headers({
-        "Content-Type": lookupResult.contentType,
+        "Content-Type": lookupResult.mimeType,
         "Cache-Control": "private, max-age=31536000, immutable",
         "Content-Length": object.size.toString(),
       });
@@ -275,75 +152,6 @@ const route = app
       return c.json({ error: "Failed to retrieve file" }, 500);
     }
   })
-  // Legacy file endpoint for backwards compatibility
-  // TODO: Remove once all clients are updated
-  // .get("/files/:userId/*", requireUser, async (c) => {
-  //   const user = c.get("user")!;
-  //   const requestedUserId = c.req.param("userId");
-
-  //   // Extract the file path from the full request path
-  //   const fullPath = c.req.path;
-  //   const prefix = `/api/files/${requestedUserId}/`;
-
-  //   if (!fullPath.startsWith(prefix)) {
-  //     return c.json({ error: "Invalid path" }, 400);
-  //   }
-
-  //   const filePath = fullPath.slice(prefix.length);
-
-  //   // Security: Only allow users to access their own files
-  //   if (user.id !== requestedUserId) {
-  //     return c.json({ error: "Forbidden" }, 403);
-  //   }
-
-  //   if (!filePath) {
-  //     return c.json({ error: "File path is required" }, 400);
-  //   }
-
-  //   // Construct the full R2 key (e.g., "epubs/userId/hash.epub" or "covers/userId/hash")
-  //   const r2Key = filePath;
-
-  //   try {
-  //     const object = await c.env.BOOK_STORAGE.get(r2Key);
-
-  //     if (!object) {
-  //       return c.json({ error: "File not found" }, 404);
-  //     }
-
-  //     // Determine content type based on file extension
-  //     let contentType = "application/octet-stream";
-  //     if (r2Key.endsWith(".epub")) {
-  //       contentType = "application/epub+zip";
-  //     } else if (r2Key.match(/\.(jpg|jpeg)$/i)) {
-  //       contentType = "image/jpeg";
-  //     } else if (r2Key.endsWith(".png")) {
-  //       contentType = "image/png";
-  //     } else if (r2Key.endsWith(".webp")) {
-  //       contentType = "image/webp";
-  //     }
-
-  //     // Set cache control headers
-  //     // Cache-Control: private ensures CDN/proxies don't cache user-specific content
-  //     // max-age=31536000 (1 year) since files are content-addressed by hash
-  //     const headers = new Headers({
-  //       "Content-Type": contentType,
-  //       "Cache-Control": "private, max-age=31536000, immutable",
-  //       "Content-Length": object.size.toString(),
-  //     });
-
-  //     // Add ETag if available
-  //     if (object.httpEtag) {
-  //       headers.set("ETag", object.httpEtag);
-  //     }
-
-  //     return new Response(object.body, {
-  //       headers,
-  //     });
-  //   } catch (error) {
-  //     console.error("Error fetching file from R2:", error);
-  //     return c.json({ error: "Failed to retrieve file" }, 500);
-  //   }
-  // })
   // Generic HLC-based sync endpoints
   .get(
     "/sync/:table",
