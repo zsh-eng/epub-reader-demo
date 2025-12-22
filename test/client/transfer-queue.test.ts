@@ -5,8 +5,12 @@
  */
 
 import { db } from "@/lib/db";
+import {
+  createMockFileRemoteAdapter,
+  type MockFileRemoteAdapter,
+} from "@/lib/files/file-remote-adapter";
 import { fileStorage } from "@/lib/files/file-storage";
-import { transferQueue } from "@/lib/files/transfer-queue";
+import { TransferQueue, transferQueue } from "@/lib/files/transfer-queue";
 import type { TransferTask } from "@/lib/files/types";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -230,5 +234,165 @@ describe("Transfer Queue", () => {
 
     // Verify callback was removed (check internal state would require exposing private fields)
     // For now, just verify the function signature works
+  });
+});
+
+describe("Transfer Queue with Mock Adapter", () => {
+  let mockAdapter: MockFileRemoteAdapter;
+  let queue: TransferQueue;
+
+  beforeEach(async () => {
+    // Clear all tables before each test
+    await db.transferQueue.clear();
+    await db.files.clear();
+
+    // Create fresh mock adapter and queue for each test
+    mockAdapter = createMockFileRemoteAdapter();
+    queue = new TransferQueue(mockAdapter);
+  });
+
+  it("should successfully upload file using mock adapter", async () => {
+    const contentHash = "mock-upload-hash";
+    const fileType = "epub" as const;
+    const blob = new Blob(["test epub content"], {
+      type: "application/epub+zip",
+    });
+
+    // Queue upload
+    const taskId = await queue.queueUpload(contentHash, fileType, blob, {
+      priority: "high",
+    });
+
+    expect(taskId).toBeDefined();
+
+    // Wait for processing (with timeout)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify file was "uploaded" to mock
+    const uploadedFiles = mockAdapter.getUploadedFiles();
+    const uploadedFile = uploadedFiles.find(
+      (f) => f.contentHash === contentHash && f.fileType === fileType,
+    );
+
+    expect(uploadedFile).toBeDefined();
+    expect(uploadedFile?.mediaType).toBe("application/epub+zip");
+  });
+
+  it("should successfully download file using mock adapter", async () => {
+    const contentHash = "mock-download-hash";
+    const fileType = "cover" as const;
+    const mockBlob = new Blob(["cover image data"], { type: "image/jpeg" });
+
+    // Pre-populate mock with a file
+    await mockAdapter.uploadFile(contentHash, fileType, mockBlob, "image/jpeg");
+
+    // Queue download
+    const taskId = await queue.queueDownload(contentHash, fileType, {
+      priority: "normal",
+    });
+
+    expect(taskId).toBeDefined();
+    expect(taskId).not.toBe("already-downloaded");
+
+    // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Verify file was downloaded and stored locally
+    const hasLocal = await fileStorage.has(contentHash, fileType);
+    expect(hasLocal).toBe(true);
+
+    const localFile = await fileStorage.get(contentHash, fileType);
+    expect(localFile).toBeDefined();
+    expect(localFile?.mediaType).toBe("image/jpeg");
+  });
+
+  it("should handle upload failures with retry", async () => {
+    const contentHash = "fail-upload-hash";
+    const fileType = "epub" as const;
+    const blob = new Blob(["test content"], { type: "application/epub+zip" });
+
+    // Make adapter fail uploads
+    mockAdapter.setUploadFailure(true);
+
+    // Queue upload with max 2 retries
+    const taskId = await queue.queueUpload(contentHash, fileType, blob, {
+      maxRetries: 2,
+    });
+
+    // Wait for processing and retries
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    // Task should be failed after retries exhausted
+    const task = await db.transferQueue.get(taskId);
+    expect(task?.status).toBe("failed");
+    expect(task?.retryCount).toBe(2);
+    expect(task?.error).toContain("Mock upload failed");
+  });
+
+  it("should handle download 404 errors", async () => {
+    const contentHash = "missing-file-hash";
+    const fileType = "epub" as const;
+
+    // Queue download (file doesn't exist in mock)
+    const taskId = await queue.queueDownload(contentHash, fileType);
+
+    // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Task should be failed
+    const task = await db.transferQueue.get(taskId);
+    expect(task?.status).toBe("failed");
+    expect(task?.error).toContain("File not found on server");
+  });
+
+  it("should simulate slow uploads with delay", async () => {
+    const contentHash = "slow-upload-hash";
+    const fileType = "epub" as const;
+    const blob = new Blob(["slow upload"], { type: "application/epub+zip" });
+
+    // Set upload delay
+    mockAdapter.setUploadDelay(50);
+
+    const startTime = Date.now();
+
+    // Queue upload
+    await queue.queueUpload(contentHash, fileType, blob);
+
+    // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const elapsed = Date.now() - startTime;
+
+    // Should have taken at least 50ms due to delay
+    expect(elapsed).toBeGreaterThanOrEqual(50);
+
+    // Verify upload completed
+    expect(mockAdapter.hasFile(fileType, contentHash)).toBe(true);
+  });
+
+  it("should reset mock adapter state", async () => {
+    const contentHash = "reset-test-hash";
+    const fileType = "cover" as const;
+    const blob = new Blob(["test"], { type: "image/png" });
+
+    // Upload a file
+    await mockAdapter.uploadFile(contentHash, fileType, blob, "image/png");
+    expect(mockAdapter.hasFile(fileType, contentHash)).toBe(true);
+
+    // Set some failure modes
+    mockAdapter.setUploadFailure(true);
+    mockAdapter.setDownloadDelay(100);
+
+    // Reset
+    mockAdapter.reset();
+
+    // Everything should be cleared
+    expect(mockAdapter.hasFile(fileType, contentHash)).toBe(false);
+    expect(mockAdapter.getUploadedFiles()).toHaveLength(0);
+
+    // Should be able to upload again (failure mode cleared)
+    await expect(
+      mockAdapter.uploadFile("new-hash", fileType, blob, "image/png"),
+    ).resolves.not.toThrow();
   });
 });

@@ -10,6 +10,10 @@
  */
 
 import { db } from "@/lib/db";
+import {
+  createHonoFileRemoteAdapter,
+  type FileRemoteAdapter,
+} from "@/lib/files/file-remote-adapter";
 import { fileStorage } from "@/lib/files/file-storage";
 import type {
   FileType,
@@ -33,12 +37,17 @@ export interface QueueTransferOptions {
  * TransferQueue manages file upload and download tasks
  */
 class TransferQueue {
+  private remoteAdapter: FileRemoteAdapter;
   private progressCallbacks = new Map<
     string,
     Set<(progress: TransferProgress) => void>
   >();
   private processingTasks = new Set<string>();
   private isProcessing = false;
+
+  constructor(remoteAdapter: FileRemoteAdapter) {
+    this.remoteAdapter = remoteAdapter;
+  }
 
   /**
    * Queue a file for upload
@@ -255,48 +264,24 @@ class TransferQueue {
       );
     }
 
-    // Upload to server
-    const url = `/api/files/${task.fileType}/${task.contentHash}`;
-    const response = await fetch(url, {
-      method: "PUT",
-      headers: {
-        "Content-Type": file.mediaType,
-      },
-      body: file.blob,
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Upload failed: ${response.status} ${response.statusText}`,
-      );
-    }
+    // Upload to server via adapter
+    await this.remoteAdapter.uploadFile(
+      task.contentHash,
+      task.fileType,
+      file.blob,
+      file.mediaType,
+    );
   }
 
   /**
    * Process a download task
    */
   private async processDownload(task: TransferTask): Promise<void> {
-    // Download from server
-    const url = `/api/files/${task.fileType}/${task.contentHash}`;
-    const response = await fetch(url, {
-      credentials: "include",
-    });
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        throw new Error(
-          `File not found on server: ${task.fileType}:${task.contentHash}`,
-        );
-      }
-      throw new Error(
-        `Download failed: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const blob = await response.blob();
-    const mediaType =
-      response.headers.get("Content-Type") || "application/octet-stream";
+    // Download from server via adapter
+    const { blob, mediaType } = await this.remoteAdapter.downloadFile(
+      task.contentHash,
+      task.fileType,
+    );
 
     // Store locally
     await fileStorage.store(task.contentHash, task.fileType, blob, mediaType);
@@ -394,8 +379,8 @@ class TransferQueue {
   }
 }
 
-// Export singleton instance
-export const transferQueue = new TransferQueue();
+// Export singleton instance with Hono adapter
+export const transferQueue = new TransferQueue(createHonoFileRemoteAdapter());
 
 // Export class for testing
 export { TransferQueue };
