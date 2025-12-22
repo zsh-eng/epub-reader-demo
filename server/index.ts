@@ -19,6 +19,13 @@ import {
   syncProgressQuerySchema,
 } from "@server/lib/progress-sync";
 import { getActiveSessions } from "@server/lib/sessions";
+import {
+  getCurrentServerTimestamp,
+  pullSyncData,
+  pushSyncData,
+  syncPullQuerySchema,
+  syncPushBodySchema,
+} from "@server/lib/sync";
 import type { Session, User } from "better-auth/types";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -282,6 +289,43 @@ const route = app
       console.error("Error fetching file from R2:", error);
       return c.json({ error: "Failed to retrieve file" }, 500);
     }
+  })
+  // Generic HLC-based sync endpoints
+  .get(
+    "/sync/:table",
+    requireUser,
+    zValidator("query", syncPullQuerySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const table = c.req.param("table");
+      const { since, entityId, limit } = c.req.valid("query");
+
+      const result = await pullSyncData(
+        c.env.DATABASE,
+        user.id,
+        table,
+        since,
+        entityId,
+        limit,
+      );
+      return c.json(result);
+    },
+  )
+  .post(
+    "/sync/:table",
+    requireUser,
+    zValidator("json", syncPushBodySchema),
+    async (c) => {
+      const user = c.get("user")!;
+      const table = c.req.param("table");
+      const { items } = c.req.valid("json");
+
+      const result = await pushSyncData(c.env.DATABASE, user.id, table, items);
+      return c.json(result);
+    },
+  )
+  .get("/sync-timestamp", requireUser, (c) => {
+    return c.json({ serverTimestamp: getCurrentServerTimestamp() });
   });
 
 export default app;
