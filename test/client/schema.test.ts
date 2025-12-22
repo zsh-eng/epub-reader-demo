@@ -1,4 +1,3 @@
-import { describe, expect, it } from "vitest";
 import {
   createSyncConfig,
   generateDexieStores,
@@ -6,7 +5,8 @@ import {
   validateSyncTableDef,
   validateSyncTableDefs,
   type SyncTableDef,
-} from "../../src/lib/sync/hlc/schema";
+} from "@/lib/sync/hlc/schema";
+import { describe, expect, it } from "vitest";
 
 describe("Schema Generator", () => {
   describe("generateDexieStores()", () => {

@@ -1,5 +1,3 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Dexie from "dexie";
 import {
   createHLCService,
   createSyncMiddleware,
@@ -8,7 +6,9 @@ import {
   isNotDeleted,
   type HLCService,
   type SyncMetadata,
-} from "../../src/lib/sync/hlc";
+} from "@/lib/sync/hlc";
+import Dexie from "dexie";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";
 
 // Test database interface

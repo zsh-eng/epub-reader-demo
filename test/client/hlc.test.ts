@@ -4,7 +4,7 @@ import {
   getHLCTimestamp,
   isValidHLC,
   type HLCService,
-} from "../../src/lib/sync/hlc/hlc";
+} from "@/lib/sync/hlc/hlc";
 
 describe("HLC Service", () => {
   let hlc: HLCService;

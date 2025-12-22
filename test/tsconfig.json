@@ -3,6 +3,11 @@
   "compilerOptions": {
     "moduleResolution": "bundler",
     "types": ["@cloudflare/vitest-pool-workers"],
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@server/*": ["./server/*"],
+    },
   },
-  "include": ["./**/*.ts", "../worker-configuration.d.ts"],
+  "include": ["./**/*.ts", "../worker-configuration.d.ts", "../src/**/*.ts"],
 }

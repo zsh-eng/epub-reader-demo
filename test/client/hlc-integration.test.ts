@@ -10,7 +10,7 @@ import {
   type HLCService,
   type MutationEvent,
   type SyncMetadata,
-} from "../../src/lib/sync/hlc";
+} from "@/lib/sync/hlc";
 import { resetIndexedDB } from "../setup/indexeddb";
 
 // Test data interfaces
