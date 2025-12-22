@@ -74,7 +74,7 @@ describe("Sync Middleware", () => {
 
   afterEach(async () => {
     await db.delete();
-    await db.close();
+    db.close();
   });
 
   describe("Local writes (add/put)", () => {
@@ -453,7 +453,7 @@ describe("Sync Middleware", () => {
       const events: any[] = [];
 
       // Create new DB with mutation callback
-      await db.close();
+      db.close();
       await db.delete();
 
       db = new TestDatabase();
@@ -494,7 +494,7 @@ describe("Sync Middleware", () => {
     it("should distinguish between create and update events", async () => {
       const events: any[] = [];
 
-      await db.close();
+      db.close();
       await db.delete();
 
       db = new TestDatabase();

@@ -132,7 +132,7 @@ describe("Sync Engine Integration with DexieJS", () => {
 
   afterEach(async () => {
     if (db) {
-      await db.close();
+      db.close();
       await db.delete();
     }
   });

@@ -97,7 +97,7 @@ describe("HLC Sync Integration", () => {
 
   afterEach(async () => {
     await db.delete();
-    await db.close();
+    db.close();
   });
 
   describe("End-to-end sync workflow", () => {
