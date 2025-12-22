@@ -161,7 +161,6 @@ export class HonoRemoteAdapter implements RemoteAdapter {
 /**
  * Create a Hono remote adapter
  *
- * @param client - Hono client instance
  * @returns HonoRemoteAdapter instance
  */
 export function createHonoRemoteAdapter(): HonoRemoteAdapter {

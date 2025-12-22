@@ -5,34 +5,36 @@
  */
 
 export { SyncService, syncService } from "../sync-service";
-export {
-  BookDownloadService,
-  bookDownloadService,
-} from "./book-download-service";
-export { BookUploadService, bookUploadService } from "./book-upload-service";
 
-export type {
-  BookSyncResult,
-  DownloadBookOptions,
-  DownloadCoverOptions,
-  DownloadResult,
-  PushBooksResponse,
-  ServerBook,
-  SyncBooksResponse,
-  UploadBookOptions,
-  UploadResult,
-} from "./types";
+// TODO: Migrate these services to new sync architecture
+// export {
+//   BookDownloadService,
+//   bookDownloadService,
+// } from "./book-download-service";
+// export { BookUploadService, bookUploadService } from "./book-upload-service";
 
-export { SyncError, SyncErrorType } from "./types";
+// export type {
+//   BookSyncResult,
+//   DownloadBookOptions,
+//   DownloadCoverOptions,
+//   DownloadResult,
+//   PushBooksResponse,
+//   ServerBook,
+//   SyncBooksResponse,
+//   UploadBookOptions,
+//   UploadResult,
+// } from "./types";
 
-export {
-  detectMediaTypeFromBlob,
-  getMediaTypeFromPath,
-  handleFetchError,
-  isRetryableError,
-  pLimit,
-  retryWithBackoff,
-} from "./utils";
+// export { SyncError, SyncErrorType } from "./types";
+
+// export {
+//   detectMediaTypeFromBlob,
+//   getMediaTypeFromPath,
+//   handleFetchError,
+//   isRetryableError,
+//   pLimit,
+//   retryWithBackoff,
+// } from "./utils";
 
 // Sync Engine exports
 export { createSyncEngine, SyncEngine } from "./sync-engine";

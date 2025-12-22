@@ -1,812 +1,306 @@
 /**
  * Sync Service
  *
- * Core synchronization orchestrator for bidirectional sync between
- * local IndexedDB and the server.
- *
- * Key responsibilities:
- * - Pull: Fetch book changes from server since last sync
- * - Push: Send local book changes to server
- * - Coordinate upload and download operations
- * - Invalidate TanStack Query cache when data changes
- * - Periodic sync management
+ * Manages the lifecycle of synchronization between local storage and remote server.
+ * Handles:
+ * - Online/offline monitoring
+ * - Periodic sync scheduling
+ * - TanStack Query invalidation
+ * - Multi-table coordination
  */
 
-import { bookKeys } from "@/hooks/use-book-loader";
-import { honoClient } from "@/lib/api";
+import { addSyncLogs, db, type SyncLog } from "@/lib/db";
+import { createHLCService } from "@/lib/sync/hlc/hlc";
+import { createHonoRemoteAdapter } from "@/lib/sync/remote-adapter";
+import { createDexieStorageAdapter } from "@/lib/sync/storage-adapter";
 import {
-  addServerProgressEntries,
-  addSyncLog,
-  db,
-  getBookByFileHash,
-  getMaxProgressServerSeq,
-  getSyncCursor,
-  getUnsyncedProgressEntries,
-  markProgressEntriesSynced,
-  setBookSyncState,
-  setSyncCursor,
-  type Book,
-  type BookSyncState,
-  type SyncLog,
-} from "@/lib/db";
-import { type QueryClient } from "@tanstack/react-query";
-import { bookDownloadService } from "./sync/book-download-service";
-import { bookUploadService } from "./sync/book-upload-service";
-import type {
-  BookSyncResult,
-  PushBooksResponse,
-  PushProgressResponse,
-  ServerBook,
-  SyncBooksResponse,
-  SyncProgressResponse,
-} from "./sync/types";
+  createSyncEngine,
+  type SyncEngine,
+  type SyncResult,
+} from "@/lib/sync/sync-engine";
+import type { QueryClient } from "@tanstack/react-query";
+import type { Table } from "dexie";
+import { SYNC_TABLES, type SyncTableName } from "@/lib/sync-tables";
 
-// Sync cursor IDs
-const BOOKS_SYNC_CURSOR_ID = "books";
-const PROGRESS_SYNC_CURSOR_ID = "progress";
+const SYNC_INTERVAL_MS = 30_000; // 30 seconds
 
-/**
- * SyncService handles bidirectional synchronization of books between
- * the local IndexedDB and the server.
- */
-export class SyncService {
+class SyncService {
   private queryClient: QueryClient | null = null;
+  private syncEngine: SyncEngine;
   private isSyncing = false;
-  private syncInterval: ReturnType<typeof setInterval> | null = null;
+  private syncInterval: number | null = null;
+  private isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
 
-  /**
-   * Initialize the sync service with a QueryClient for cache invalidation
-   */
-  setQueryClient(queryClient: QueryClient): void {
-    this.queryClient = queryClient;
-    bookDownloadService.setQueryClient(queryClient);
+  constructor() {
+    // Initialize sync engine
+    const hlc = createHLCService();
+
+    const tableConfigs = Object.fromEntries(
+      Object.entries(SYNC_TABLES).map(([name, def]) => [
+        name,
+        { entityKey: "entityKey" in def ? def.entityKey : undefined },
+      ]),
+    );
+
+    const storage = createDexieStorageAdapter(
+      db as unknown as { [key: string]: Table },
+      tableConfigs,
+    );
+    const remote = createHonoRemoteAdapter();
+    this.syncEngine = createSyncEngine(storage, remote, hlc);
+
+    // Setup online/offline listeners
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", this.handleOnline);
+      window.addEventListener("offline", this.handleOffline);
+    }
   }
 
-  /**
-   * Start periodic sync (e.g., every 30 seconds when online)
-   */
-  startPeriodicSync(intervalMs = 30000): void {
-    if (this.syncInterval) {
-      return; // Already running
+  // ============================================================================
+  // Lifecycle Management
+  // ============================================================================
+
+  setQueryClient(client: QueryClient): void {
+    this.queryClient = client;
+  }
+
+  startPeriodicSync(): void {
+    if (this.syncInterval !== null) {
+      return; // Already started
     }
 
-    // Initial sync
-    this.sync();
+    if (typeof window === "undefined") {
+      return; // Don't start in SSR
+    }
 
-    // Set up periodic sync
-    this.syncInterval = setInterval(() => {
-      if (navigator.onLine) {
-        this.sync();
+    this.syncInterval = window.setInterval(() => {
+      if (this.isOnline && !this.isSyncing) {
+        this.syncAll().catch((error) => {
+          console.error("Periodic sync failed:", error);
+        });
       }
-    }, intervalMs);
+    }, SYNC_INTERVAL_MS);
 
-    // Listen for online events to trigger sync
-    window.addEventListener("online", this.handleOnline);
+    // Trigger initial sync
+    if (this.isOnline) {
+      this.syncAll().catch((error) => {
+        console.error("Initial sync failed:", error);
+      });
+    }
   }
 
-  /**
-   * Stop periodic sync
-   */
   stopPeriodicSync(): void {
-    if (this.syncInterval) {
+    if (this.syncInterval !== null) {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
     }
-    window.removeEventListener("online", this.handleOnline);
   }
 
   private handleOnline = (): void => {
-    this.sync();
+    this.isOnline = true;
+    console.log("Device is online, triggering sync");
+    this.syncAll().catch((error) => {
+      console.error("Online sync failed:", error);
+    });
   };
 
-  /**
-   * Main sync method: pulls from server, pushes local changes, and optionally downloads cover images
-   *
-   * This syncs metadata only - actual file content (covers and EPUBs) are downloaded separately.
-   *
-   * @param downloadCovers If true, downloads cover images for books after pulling metadata.
-   *                       Recommended for initial sync or when you want to update the library view.
-   *                       Default: true
-   */
-  async sync(downloadCovers = true): Promise<void> {
+  private handleOffline = (): void => {
+    this.isOnline = false;
+    console.log("Device is offline, sync paused");
+  };
+
+  get syncing(): boolean {
+    return this.isSyncing;
+  }
+
+  get online(): boolean {
+    return this.isOnline;
+  }
+
+  // ============================================================================
+  // Sync Operations
+  // ============================================================================
+
+  async syncAll(): Promise<Map<SyncTableName, SyncResult>> {
     if (this.isSyncing) {
-      console.log("[SyncService] Sync already in progress, skipping");
-      return;
+      console.log("Sync already in progress, skipping");
+      return new Map();
     }
 
-    if (!navigator.onLine) {
-      console.log("[SyncService] Offline, skipping sync");
-      return;
+    if (!this.isOnline) {
+      console.log("Device offline, skipping sync");
+      return new Map();
     }
 
     this.isSyncing = true;
     const startTime = Date.now();
 
     try {
-      console.log("[SyncService] Starting sync...");
+      const tables = Object.keys(SYNC_TABLES) as SyncTableName[];
+      const results = (await this.syncEngine.syncAll(tables)) as Map<
+        SyncTableName,
+        SyncResult
+      >;
 
-      // Book metadata sync
-      await this.pull();
-      await this.push();
-      if (downloadCovers) {
-        await bookDownloadService.downloadCoverImages();
+      // Log results
+      for (const [table, result] of results) {
+        await this.logSync("sync", table, result);
       }
 
-      // Reading progress sync
-      await this.pullProgress();
-      await this.pushProgress();
-
-      console.log(
-        `[SyncService] Sync completed in ${Date.now() - startTime}ms`,
+      // Invalidate queries if anything changed
+      const hasChanges = Array.from(results.values()).some(
+        (r) => r.pushed > 0 || r.pulled > 0,
       );
+
+      if (hasChanges && this.queryClient) {
+        await this.invalidateQueries();
+      }
+
+      const duration = Date.now() - startTime;
+      console.log(
+        `Sync completed in ${duration}ms`,
+        Object.fromEntries(results),
+      );
+
+      return results;
     } catch (error) {
-      console.error("[SyncService] Sync failed:", error);
+      console.error("Sync failed:", error);
+      throw error;
     } finally {
       this.isSyncing = false;
     }
   }
 
-  /**
-   * Pull changes from server since last sync
-   */
-  async pull(): Promise<void> {
-    const startTime = Date.now();
+  async syncTable(
+    table: SyncTableName,
+    entityId?: string,
+  ): Promise<SyncResult> {
+    if (!this.isOnline) {
+      throw new Error("Cannot sync while offline");
+    }
 
-    try {
-      // Get last sync cursor
-      const cursor = await getSyncCursor(BOOKS_SYNC_CURSOR_ID);
-      const since = cursor?.lastServerTimestamp ?? 0;
+    const result = await this.syncEngine.sync(table, { entityId });
+    await this.logSync("sync", table, result);
 
-      console.log(`[SyncService] Pulling books since ${since}`);
-      const response = await honoClient.api.sync.books.$get({
-        query: { since: since.toString() },
-      });
+    if (this.queryClient && (result.pushed > 0 || result.pulled > 0)) {
+      await this.invalidateQueries();
+    }
 
-      if (!response.ok) {
-        throw new Error(`Failed to pull books: ${response.status}`);
-      }
+    return result;
+  }
 
-      const data: SyncBooksResponse = await response.json();
-      if (data.books.length === 0) {
-        console.log("[SyncService] No new books from server");
-        return;
-      }
+  async pushTable(table: SyncTableName): Promise<void> {
+    if (!this.isOnline) {
+      throw new Error("Cannot push while offline");
+    }
 
-      console.log(`[SyncService] Received ${data.books.length} books`);
-      let hasChanges = false;
-      for (const serverBook of data.books) {
-        const changed = await this.processServerBook(serverBook);
-        if (changed) {
-          hasChanges = true;
-        }
-      }
+    const result = await this.syncEngine.push(table);
+    await this.logSync("push", table, result);
 
-      // Update sync cursor
-      await setSyncCursor({
-        id: BOOKS_SYNC_CURSOR_ID,
-        lastServerTimestamp: data.serverTimestamp,
-      });
-
-      // Invalidate queries if there were changes
-      if (hasChanges) {
-        this.invalidateBookQueries();
-      }
-
-      await this.logSync(
-        "pull",
-        "book",
-        "sync",
-        "update",
-        "success",
-        Date.now() - startTime,
-      );
-    } catch (error) {
-      await this.logSync(
-        "pull",
-        "book",
-        "sync",
-        "update",
-        "failure",
-        Date.now() - startTime,
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      throw error;
+    if (this.queryClient && result.pushed > 0) {
+      await this.invalidateQueries();
     }
   }
 
-  /**
-   * Process a single book from the server
-   * Returns true if a change was made locally
-   */
-  private async processServerBook(serverBook: ServerBook): Promise<boolean> {
-    const existingBook = await getBookByFileHash(serverBook.fileHash);
-
-    const isServerBookDeleted = serverBook.deletedAt !== null;
-    if (isServerBookDeleted && !existingBook) {
-      return false;
+  async pullTable(table: SyncTableName, entityId?: string): Promise<void> {
+    if (!this.isOnline) {
+      throw new Error("Cannot pull while offline");
     }
 
-    if (isServerBookDeleted && existingBook) {
-      // Delete local book and related data
-      await db.transaction(
-        "rw",
-        [
-          db.books,
-          db.bookFiles,
-          db.readingProgress,
-          db.highlights,
-          db.bookSyncState,
-          db.progressLog,
-          db.progressSeqCounter,
-        ],
-        async () => {
-          await db.books.delete(existingBook.id);
-          await db.bookFiles.where("bookId").equals(existingBook.id).delete();
-          await db.readingProgress.delete(existingBook.id);
-          await db.highlights.where("bookId").equals(existingBook.id).delete();
-          await db.bookSyncState.delete(serverBook.fileHash);
-          // Delete progress log entries for this book
-          await db.progressLog
-            .where("fileHash")
-            .equals(serverBook.fileHash)
-            .delete();
-          await db.progressSeqCounter.delete(serverBook.fileHash);
-        },
-      );
+    const result = await this.syncEngine.pull(table, { entityId });
+    await this.logSync("pull", table, result);
 
-      console.log(`[SyncService] Deleted book: ${serverBook.title}`);
-      await this.logSync(
-        "pull",
-        "book",
-        serverBook.fileHash,
-        "delete",
-        "success",
-      );
-      return true;
-    }
-
-    if (!existingBook) {
-      const newBook: Book = {
-        id: crypto.randomUUID(),
-        fileHash: serverBook.fileHash,
-        title: serverBook.title,
-        author: serverBook.author,
-        fileSize: serverBook.fileSize,
-        dateAdded: new Date(serverBook.createdAt ?? Date.now()),
-        metadata: (serverBook.metadata as Book["metadata"]) ?? {},
-        manifest: [],
-        spine: [],
-        toc: [],
-        isDownloaded: 0, // Not downloaded yet
-        remoteEpubUrl: serverBook.epubUrl ?? undefined,
-        remoteCoverUrl: serverBook.coverUrl ?? undefined,
-      };
-
-      await db.books.add(newBook);
-
-      // Set sync state as synced (metadata is synced, but epub not downloaded)
-      await setBookSyncState({
-        fileHash: serverBook.fileHash,
-        status: "synced",
-        lastSyncedAt: new Date(),
-        lastServerTimestamp: serverBook.updatedAt ?? undefined,
-        epubUploaded: !!serverBook.epubR2Key,
-        coverUploaded: !!serverBook.coverR2Key,
-        retryCount: 0,
-      });
-
-      console.log(
-        `[SyncService] Added remote book: ${serverBook.title} (not downloaded)`,
-      );
-      await this.logSync(
-        "pull",
-        "book",
-        serverBook.fileHash,
-        "create",
-        "success",
-      );
-      return true;
-    }
-
-    // Handle metadata update for existing book
-    const serverUpdatedAt = serverBook.updatedAt ?? 0;
-    const localUpdatedAt = existingBook.lastOpened?.getTime() ?? 0;
-
-    // Server is newer, update metadata
-    if (serverUpdatedAt > localUpdatedAt) {
-      await db.books.update(existingBook.id, {
-        title: serverBook.title,
-        author: serverBook.author,
-        metadata:
-          (serverBook.metadata as Book["metadata"]) ?? existingBook.metadata,
-        remoteEpubUrl: serverBook.epubUrl ?? existingBook.remoteEpubUrl,
-        remoteCoverUrl: serverBook.coverUrl ?? existingBook.remoteCoverUrl,
-      });
-
-      console.log(`[SyncService] Updated book metadata: ${serverBook.title}`);
-      await this.logSync(
-        "pull",
-        "book",
-        serverBook.fileHash,
-        "update",
-        "success",
-      );
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Push local changes to server
-   */
-  async push(): Promise<void> {
-    const startTime = Date.now();
-
-    try {
-      // Get all local books that need syncing
-      const booksToSync = await this.getBooksToSync();
-
-      if (booksToSync.length === 0) {
-        console.log("[SyncService] No books to push");
-        return;
-      }
-
-      console.log(`[SyncService] Pushing ${booksToSync.length} books`);
-
-      const response = await honoClient.api.sync.books.$post({
-        json: {
-          books: booksToSync.map((book) => ({
-            fileHash: book.fileHash,
-            title: book.title,
-            author: book.author,
-            fileSize: book.fileSize,
-            metadata: book.metadata,
-            localCreatedAt: book.dateAdded.getTime(),
-          })),
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to push books: ${response.status}`);
-      }
-
-      const data: PushBooksResponse = await response.json();
-
-      // Process results and upload files as needed
-      await this.processUploadResults(data.results, booksToSync);
-      await this.logSync(
-        "push",
-        "book",
-        "batch",
-        "update",
-        "success",
-        Date.now() - startTime,
-      );
-    } catch (error) {
-      await this.logSync(
-        "push",
-        "book",
-        "batch",
-        "update",
-        "failure",
-        Date.now() - startTime,
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      throw error;
+    if (this.queryClient && result.pulled > 0) {
+      await this.invalidateQueries();
     }
   }
 
-  /**
-   * Process upload results and trigger file uploads as needed
-   */
-  private async processUploadResults(
-    results: BookSyncResult[],
-    booksToSync: Book[],
+  // ============================================================================
+  // Query Invalidation
+  // ============================================================================
+
+  private async invalidateQueries(): Promise<void> {
+    if (!this.queryClient) return;
+
+    // Invalidate all book-related queries
+    await Promise.all([
+      this.queryClient.invalidateQueries({ queryKey: ["books"] }),
+      this.queryClient.invalidateQueries({ queryKey: ["book"] }),
+      this.queryClient.invalidateQueries({ queryKey: ["readingProgress"] }),
+      this.queryClient.invalidateQueries({ queryKey: ["highlights"] }),
+      this.queryClient.invalidateQueries({ queryKey: ["readingSettings"] }),
+    ]);
+  }
+
+  // ============================================================================
+  // Initialization & Reset
+  // ============================================================================
+
+  async initializeSyncCursor(
+    table: SyncTableName,
+    entityId?: string,
   ): Promise<void> {
-    for (const result of results) {
-      const book = booksToSync.find((b) => b.fileHash === result.fileHash);
-      if (!book) continue;
-
-      if (result.status === "created" || result.status === "updated") {
-        // Mark as pending upload if we need to upload files
-        await setBookSyncState({
-          fileHash: result.fileHash,
-          status: "pending_upload",
-          lastSyncedAt: new Date(),
-          epubUploaded: false,
-          coverUploaded: false,
-          retryCount: 0,
-        });
-
-        // Upload files using upload service
-        const uploadResult = await bookUploadService.uploadBookFiles(book);
-
-        // Log the result
-        await this.logSync(
-          "push",
-          "book",
-          result.fileHash,
-          result.status === "created" ? "create" : "update",
-          uploadResult.success ? "success" : "failure",
-          undefined,
-          uploadResult.error,
-        );
-      } else if (result.status === "exists") {
-        // Book already exists on server, mark as synced
-        await setBookSyncState({
-          fileHash: result.fileHash,
-          status: "synced",
-          lastSyncedAt: new Date(),
-          epubUploaded: true,
-          coverUploaded: true,
-          retryCount: 0,
-        });
-
-        await this.logSync(
-          "push",
-          "book",
-          result.fileHash,
-          "update",
-          "success",
-        );
-      }
-    }
+    await this.syncEngine.initializeSyncCursor(table, entityId);
   }
 
-  /**
-   * Get books that need to be synced to server
-   */
-  private async getBooksToSync(): Promise<Book[]> {
-    // Get all downloaded local books
-    const allBooks = await db.books.where("isDownloaded").equals(1).toArray();
-
-    // Get sync states
-    const syncStates = await db.bookSyncState.toArray();
-    const syncStateMap = new Map(syncStates.map((s) => [s.fileHash, s]));
-
-    // Filter to books that haven't been synced or have errors
-    return allBooks.filter((book) => {
-      const state = syncStateMap.get(book.fileHash);
-      if (!state) return true; // Never synced
-      if (state.status === "error" && state.retryCount < 3) return true; // Retry errors
-      if (state.status === "pending_upload") return true; // Pending upload
-      return false;
-    });
+  async resetSyncCursor(
+    table: SyncTableName,
+    entityId?: string,
+  ): Promise<void> {
+    await this.syncEngine.resetSyncCursor(table, entityId);
   }
 
-  /**
-   * Downloads cover images for books that need them.
-   * Delegates to BookDownloadService.
-   *
-   * @param fileHashes Optional array of file hashes to filter which covers to download
-   */
-  async downloadCoverImages(fileHashes?: string[]): Promise<void> {
-    await bookDownloadService.downloadCoverImages({ fileHashes });
+  async getSyncCursor(
+    table: SyncTableName,
+    entityId?: string,
+  ): Promise<number> {
+    return this.syncEngine.getSyncCursor(table, entityId);
   }
 
-  /**
-   * Downloads the full EPUB content for a specific book.
-   * Delegates to BookDownloadService.
-   *
-   * This is a heavy operation that downloads and extracts all EPUB files.
-   * Should ONLY be called on-demand when the user wants to read a book.
-   *
-   * @param fileHash The book's file hash
-   * @throws Error if book not found or download fails
-   */
-  async downloadBook(fileHash: string): Promise<void> {
-    const startTime = Date.now();
+  // ============================================================================
+  // Logging
+  // ============================================================================
 
-    try {
-      await bookDownloadService.downloadBook(fileHash);
-
-      await this.logSync(
-        "pull",
-        "book",
-        fileHash,
-        "download",
-        "success",
-        Date.now() - startTime,
-      );
-    } catch (error) {
-      await this.logSync(
-        "pull",
-        "book",
-        fileHash,
-        "download",
-        "failure",
-        Date.now() - startTime,
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Deletes a book from both server and local storage
-   *
-   * @param bookId The book's ID
-   */
-  async deleteBook(bookId: string): Promise<void> {
-    const book = await db.books.get(bookId);
-    if (!book) {
-      throw new Error("Book not found");
-    }
-
-    try {
-      // Delete on server first (soft delete)
-      const response = await honoClient.api.sync.books[":fileHash"].$delete({
-        param: { fileHash: book.fileHash },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        // If it's 404, the book doesn't exist on server, which is fine
-        if (response.status !== 404) {
-          throw new Error(
-            `Failed to delete book on server: ${(errorData as { error?: string }).error ?? response.status}`,
-          );
-        }
-      }
-
-      // Delete locally
-      await db.transaction(
-        "rw",
-        [
-          db.books,
-          db.bookFiles,
-          db.readingProgress,
-          db.highlights,
-          db.bookSyncState,
-        ],
-        async () => {
-          await db.books.delete(bookId);
-          await db.bookFiles.where("bookId").equals(bookId).delete();
-          await db.readingProgress.delete(bookId);
-          await db.highlights.where("bookId").equals(bookId).delete();
-          await db.bookSyncState.delete(book.fileHash);
-        },
-      );
-
-      await this.logSync("push", "book", book.fileHash, "delete", "success");
-
-      // Invalidate queries
-      this.invalidateBookQueries();
-
-      console.log(`[SyncService] Deleted book: ${book.title}`);
-    } catch (error) {
-      await this.logSync(
-        "push",
-        "book",
-        book.fileHash,
-        "delete",
-        "failure",
-        undefined,
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Invalidate TanStack Query book-related queries
-   */
-  private invalidateBookQueries(bookId?: string): void {
-    if (!this.queryClient) {
-      console.warn("[SyncService] QueryClient not set, skipping invalidation");
-      return;
-    }
-
-    if (bookId) {
-      // Invalidate specific book
-      this.queryClient.invalidateQueries({
-        queryKey: bookKeys.detail(bookId),
-      });
-      this.queryClient.invalidateQueries({
-        queryKey: bookKeys.progress(bookId),
-      });
-    }
-
-    // Always invalidate the book list and all books queries
-    this.queryClient.invalidateQueries({
-      queryKey: bookKeys.list(),
-    });
-    this.queryClient.invalidateQueries({
-      queryKey: bookKeys.all,
-    });
-  }
-
-  /**
-   * Log a sync operation for debugging
-   */
   private async logSync(
-    direction: SyncLog["direction"],
-    entityType: SyncLog["entityType"],
-    entityId: string,
-    action: SyncLog["action"],
-    status: SyncLog["status"],
-    durationMs?: number,
-    errorMessage?: string,
+    type: "push" | "pull" | "sync",
+    table: string,
+    result:
+      | SyncResult
+      | { pushed: number }
+      | { pulled: number; conflicts: number },
   ): Promise<void> {
-    try {
-      await addSyncLog({
-        id: crypto.randomUUID(),
-        timestamp: new Date(),
-        direction,
-        entityType,
-        entityId,
-        action,
-        status,
-        durationMs,
-        errorMessage,
-      });
-    } catch (error) {
-      console.error("[SyncService] Failed to write sync log:", error);
+    const log: Omit<SyncLog, "id"> = {
+      timestamp: Date.now(),
+      type,
+      table,
+    };
+
+    if ("pushed" in result) log.pushed = result.pushed;
+    if ("pulled" in result) log.pulled = result.pulled;
+    if ("conflicts" in result) log.conflicts = result.conflicts;
+    if ("errors" in result && result.errors.length > 0) {
+      log.errors = result.errors;
     }
+
+    // TODO: change to logging all at once
+    await addSyncLogs([log]);
   }
 
-  /**
-   * Get the current sync state for a book
-   */
-  async getBookSyncState(fileHash: string): Promise<BookSyncState | undefined> {
-    return await db.bookSyncState.get(fileHash);
-  }
+  // ============================================================================
+  // Cleanup
+  // ============================================================================
 
-  /**
-   * Check if the sync service is currently syncing
-   */
-  get syncing(): boolean {
-    return this.isSyncing;
-  }
-
-  /**
-   * Pull reading progress entries from server since last sync
-   */
-  async pullProgress(): Promise<void> {
-    const startTime = Date.now();
-
-    try {
-      // Get last sync cursor for progress
-      const cursor = await getSyncCursor(PROGRESS_SYNC_CURSOR_ID);
-      const since = cursor?.lastServerTimestamp ?? 0;
-
-      console.log(`[SyncService] Pulling progress since serverSeq ${since}`);
-      const response = await honoClient.api.sync.progress.$get({
-        query: { since: since.toString() },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to pull progress: ${response.status}`);
-      }
-
-      const data: SyncProgressResponse = await response.json();
-      if (data.entries.length === 0) {
-        console.log("[SyncService] No new progress entries from server");
-        return;
-      }
-
-      console.log(
-        `[SyncService] Received ${data.entries.length} progress entries`,
-      );
-
-      await addServerProgressEntries(data.entries);
-
-      // Update sync cursor with the highest serverSeq we received
-      const maxServerSeq = Math.max(...data.entries.map((e) => e.serverSeq));
-      await setSyncCursor({
-        id: PROGRESS_SYNC_CURSOR_ID,
-        lastServerTimestamp: maxServerSeq,
-      });
-
-      await this.logSync(
-        "pull",
-        "progress",
-        "sync",
-        "update",
-        "success",
-        Date.now() - startTime,
-      );
-    } catch (error) {
-      await this.logSync(
-        "pull",
-        "progress",
-        "sync",
-        "update",
-        "failure",
-        Date.now() - startTime,
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Push local reading progress entries to server
-   */
-  async pushProgress(): Promise<void> {
-    const startTime = Date.now();
-
-    try {
-      // Get unsynced progress entries
-      const unsyncedEntries = await getUnsyncedProgressEntries();
-
-      if (unsyncedEntries.length === 0) {
-        console.log("[SyncService] No unsynced progress entries to push");
-        return;
-      }
-
-      console.log(
-        `[SyncService] Pushing ${unsyncedEntries.length} progress entries`,
-      );
-
-      // Transform entries for API
-      const entriesToSync = unsyncedEntries.map((entry) => ({
-        id: entry.id,
-        fileHash: entry.fileHash,
-        spineIndex: entry.spineIndex,
-        scrollProgress: entry.scrollProgress,
-        clientSeq: entry.clientSeq,
-        clientTimestamp: entry.clientTimestamp.getTime(),
-      }));
-
-      const response = await honoClient.api.sync.progress.$post({
-        json: { entries: entriesToSync },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to push progress: ${response.status}`);
-      }
-
-      const data: PushProgressResponse = await response.json();
-
-      // Mark entries as synced with their server-assigned sequence numbers
-      const updates = data.results
-        .filter((r) => r.status === "created")
-        .map((r) => ({
-          id: r.id,
-          serverSeq: r.serverSeq,
-        }));
-
-      if (updates.length > 0) {
-        await markProgressEntriesSynced(updates);
-      }
-
-      // Update the sync cursor to the highest serverSeq we know about
-      const maxServerSeq = await getMaxProgressServerSeq();
-      if (maxServerSeq > 0) {
-        await setSyncCursor({
-          id: PROGRESS_SYNC_CURSOR_ID,
-          lastServerTimestamp: maxServerSeq,
-        });
-      }
-
-      console.log(
-        `[SyncService] Pushed ${updates.length} new progress entries`,
-      );
-
-      await this.logSync(
-        "push",
-        "progress",
-        "sync",
-        "update",
-        "success",
-        Date.now() - startTime,
-      );
-    } catch (error) {
-      await this.logSync(
-        "push",
-        "progress",
-        "sync",
-        "update",
-        "failure",
-        Date.now() - startTime,
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      throw error;
+  destroy(): void {
+    this.stopPeriodicSync();
+    if (typeof window !== "undefined") {
+      window.removeEventListener("online", this.handleOnline);
+      window.removeEventListener("offline", this.handleOffline);
     }
   }
 }
 
-// Export singleton instance
+// Singleton instance
 export const syncService = new SyncService();
+
+// Export class for advanced use cases
+export { SyncService };

@@ -1,67 +1,37 @@
+/**
+ * Database Layer
+ *
+ * Local database using Dexie (IndexedDB wrapper) with sync metadata.
+ * This version uses the new sync architecture with HLC timestamps and middleware.
+ */
+
+import { createHLCService } from "@/lib/sync/hlc/hlc";
+import { createSyncMiddleware, isNotDeleted } from "@/lib/sync/hlc/middleware";
+import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
+import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
 import Dexie, { type Table } from "dexie";
+import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
 
-// Database interfaces matching the spec
+// ============================================================================
+// Type Definitions
+// ============================================================================
+
 export interface Book {
-  id: string; // Primary key (UUID)
-  fileHash: string; // xxhash 64-bit hex string (unique)
+  id: string;
+  fileHash: string;
   title: string;
-  author: string;
-  coverImagePath?: string; // Path to cover image file within the EPUB
-  dateAdded: Date;
-  lastOpened?: Date;
+  author?: string | null;
   fileSize: number;
-  manifest: ManifestItem[];
-  spine: SpineItem[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  toc: any[]; // TOCItem[] - using any to avoid Dexie recursive type issues
-  metadata: {
-    publisher?: string;
-    language?: string;
-    isbn?: string;
-    description?: string;
-    publicationDate?: string;
-  };
-  // Sync-related fields
-  isDownloaded: number; // Whether the EPUB file is stored locally
-  remoteEpubUrl?: string; // URL to download the EPUB from server (if not downloaded)
-  remoteCoverUrl?: string; // URL to the cover image on server (if not downloaded)
-}
-
-// Sync state tracking for each book
-export interface BookSyncState {
-  fileHash: string; // PK, matches Book.fileHash
-  status:
-    | "pending_upload"
-    | "uploading"
-    | "synced"
-    | "error"
-    | "pending_download";
-  lastSyncedAt?: Date; // When we last successfully synced
-  lastServerTimestamp?: number; // Server's updatedAt when we last synced
-  epubUploaded: boolean; // Whether the EPUB file is on R2
-  coverUploaded: boolean; // Whether the cover is on R2
-  errorMessage?: string;
-  retryCount: number;
-}
-
-// Sync log for debugging
-export interface SyncLog {
-  id: string; // UUID
-  timestamp: Date;
-  direction: "push" | "pull";
-  entityType: "book" | "progress" | "highlight";
-  entityId: string; // fileHash for books
-  action: "create" | "update" | "delete" | "download" | "upload";
-  status: "success" | "failure";
-  errorMessage?: string;
-  durationMs?: number;
-}
-
-// Cursor for pagination in sync
-export interface SyncCursor {
-  id: string; // 'books' | 'progress' | etc.
-  lastServerTimestamp: number; // The timestamp for pagination
+  dateAdded: number;
+  lastOpened?: number | null;
+  metadata?: Record<string, unknown>;
+  manifest?: ManifestItem[];
+  spine?: SpineItem[];
+  toc?: TOCItem[];
+  isDownloaded: boolean;
+  remoteEpubUrl?: string | null;
+  remoteCoverUrl?: string | null;
 }
 
 export interface ManifestItem {
@@ -80,9 +50,27 @@ export interface SpineItem {
 export interface TOCItem {
   label: string;
   href: string;
-  children?: TOCItem[];
+  children?: unknown[]; // Avoid recursive type for Dexie compatibility
 }
 
+export interface ReadingProgress {
+  id: string; // Primary key (matches Book.id)
+  bookId: string; // Foreign key to Book
+  currentSpineIndex: number; // Current position in spine
+  scrollProgress: number; // 0-1 for scroll mode
+  pageNumber?: number; // For paginated mode
+  lastRead: number;
+}
+
+export interface ReadingSettings {
+  id: string; // Primary key (single record, use 'default')
+  fontSize: number; // In pixels (16-24)
+  lineHeight: number; // Multiplier (1.2-2.0)
+  mode: "scroll" | "paginated";
+  theme?: "light" | "dark" | "sepia";
+}
+
+// Local-only tables (no sync)
 export interface BookFile {
   id: string; // Primary key (matches Book.id)
   bookId: string; // Foreign key to Book
@@ -94,81 +82,49 @@ export interface BookFile {
 export interface EpubBlob {
   fileHash: string; // Primary key (matches Book.fileHash)
   blob: Blob; // The original EPUB file
-  dateStored: Date;
+  dateStored: number;
 }
 
-export interface ReadingProgress {
-  id: string; // Primary key (matches Book.id)
-  bookId: string; // Foreign key to Book
-  currentSpineIndex: number; // Current position in spine
-  scrollProgress: number; // 0-1 for scroll mode
-  pageNumber?: number; // For paginated mode
-  lastRead: Date;
+export interface SyncLog {
+  id?: number;
+  timestamp: number;
+  type: "push" | "pull" | "sync";
+  table: string;
+  pushed?: number;
+  pulled?: number;
+  conflicts?: number;
+  errors?: string[];
 }
 
-/**
- * Append-only log entry for reading progress sync.
- * Each entry represents a "reading position snapshot" from this device.
- *
- * This structure mirrors the server's readingProgressLog table and supports:
- * - Per-device ordering via clientSeq (monotonic per book)
- * - Global ordering via serverSeq (assigned by server, null until synced)
- * - Bidirectional sync with conflict resolution
- */
-export interface ReadingProgressLogEntry {
-  id: string; // UUID generated by client
-  fileHash: string; // Book identifier (for sync, not local bookId)
-  spineIndex: number; // Position in spine
-  scrollProgress: number; // 0.0-1.0
+// Add sync metadata to synced types
+export type SyncedBook = WithSyncMetadata<Book>;
+export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
+export type SyncedHighlight = WithSyncMetadata<Highlight>;
+export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
 
-  // Client-side ordering - monotonic per device per book
-  clientSeq: number;
-  clientTimestamp: Date; // When the user actually read to this position
+// Re-export Highlight type for convenience
+export type { Highlight };
 
-  // Server-side ordering (null until synced)
-  serverSeq?: number; // Assigned by server on insert
-  serverTimestamp?: Date; // When server received this entry
+// ============================================================================
+// Database Class
+// ============================================================================
 
-  // Sync status
-  synced: number; // 0 = pending sync, 1 = synced (using number for indexing)
-}
-
-/**
- * Tracks the highest clientSeq per book for generating new sequence numbers.
- */
-export interface ProgressSeqCounter {
-  fileHash: string; // Primary key
-  lastClientSeq: number; // Last used client sequence number
-}
-
-// TODO: Update the reading settings types to reflect the current settings
-export interface ReadingSettings {
-  id: string; // Primary key (single record, use 'default')
-  fontSize: number; // In pixels (16-24)
-  lineHeight: number; // Multiplier (1.2-2.0)
-  mode: "scroll" | "paginated";
-  theme?: "light" | "dark" | "sepia";
-}
-
-// Database class
 class EPUBReaderDB extends Dexie {
-  books!: Table<Book, string>;
+  // Synced tables (with metadata)
+  books!: Table<SyncedBook, string>;
+  readingProgress!: Table<SyncedReadingProgress, string>;
+  highlights!: Table<SyncedHighlight, string>;
+  readingSettings!: Table<SyncedReadingSettings, string>;
+
+  // Local-only tables
   bookFiles!: Table<BookFile, string>;
-  readingProgress!: Table<ReadingProgress, string>;
-  readingSettings!: Table<ReadingSettings, string>;
-  highlights!: Table<Highlight, string>;
-  // Sync tables
-  bookSyncState!: Table<BookSyncState, string>;
-  syncLog!: Table<SyncLog, string>;
-  syncCursor!: Table<SyncCursor, string>;
   epubBlobs!: Table<EpubBlob, string>;
-  // Progress sync tables
-  progressLog!: Table<ReadingProgressLogEntry, string>;
-  progressSeqCounter!: Table<ProgressSeqCounter, string>;
+  syncLog!: Table<SyncLog, number>;
 
   constructor() {
     super("epub-reader-db");
 
+    // Version 2: Original schema
     this.version(2).stores({
       books: "id, title, author, dateAdded, lastOpened",
       bookFiles: "id, bookId, path",
@@ -187,30 +143,20 @@ class EPUBReaderDB extends Dexie {
     });
 
     // Version 4: Add sync tables and isDownloaded field
-    this.version(4)
-      .stores({
-        books:
-          "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
-        bookFiles: "id, bookId, path",
-        readingProgress: "id, bookId, lastRead",
-        readingSettings: "id",
-        highlights: "id, bookId, spineItemId, createdAt",
-        // New sync tables
-        bookSyncState: "fileHash, status",
-        syncLog: "id, timestamp, entityType, status",
-        syncCursor: "id",
-      })
-      .upgrade((tx) => {
-        // Migrate existing books to have isDownloaded = true (they are local)
-        return tx
-          .table("books")
-          .toCollection()
-          .modify((book) => {
-            book.isDownloaded = 1;
-          });
-      });
+    this.version(4).stores({
+      books:
+        "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
+      bookFiles: "id, bookId, path",
+      readingProgress: "id, bookId, lastRead",
+      readingSettings: "id",
+      highlights: "id, bookId, spineItemId, createdAt",
+      bookSyncState: "fileHash, status",
+      syncLog: "id, timestamp, entityType, status",
+      syncCursor: "id",
+      epubBlobs: "fileHash, dateStored",
+    });
 
-    // Version 5: Add epubBlobs table for storing original EPUB files
+    // Version 5: Add progress log tables
     this.version(5).stores({
       books:
         "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
@@ -222,95 +168,108 @@ class EPUBReaderDB extends Dexie {
       syncLog: "id, timestamp, entityType, status",
       syncCursor: "id",
       epubBlobs: "fileHash, dateStored",
-    });
-
-    // Version 6: Add progress log tables for reading progress sync
-    this.version(6).stores({
-      books:
-        "id, &fileHash, title, author, dateAdded, lastOpened, isDownloaded",
-      bookFiles: "id, bookId, path",
-      readingProgress: "id, bookId, lastRead",
-      readingSettings: "id",
-      highlights: "id, bookId, spineItemId, createdAt",
-      bookSyncState: "fileHash, status",
-      syncLog: "id, timestamp, entityType, status",
-      syncCursor: "id",
-      epubBlobs: "fileHash, dateStored",
-      // Progress sync tables
-      progressLog:
-        "id, fileHash, clientSeq, serverSeq, synced, [fileHash+clientSeq]",
+      progressLog: "id, fileHash, synced, clientSeq, serverSeq",
       progressSeqCounter: "fileHash",
     });
+
+    // Version 6: NEW SYNC ARCHITECTURE
+    // Remove old sync tables, add sync metadata to all synced tables
+    const syncSchemas = generateDexieStores(SYNC_TABLES);
+
+    this.version(6)
+      .stores({
+        ...syncSchemas,
+        ...LOCAL_TABLES,
+        // Delete old sync-specific tables
+        bookSyncState: null,
+        syncCursor: null,
+        progressLog: null,
+        progressSeqCounter: null,
+      })
+      .upgrade(async () => {
+        // Migration logic: add sync metadata to existing records
+        // This will be handled by the middleware on first write
+        console.log("Upgraded to version 6: New sync architecture");
+      });
+
+    // Initialize HLC service and middleware
+    const hlc = createHLCService();
+    const syncedTableNames = new Set(Object.keys(SYNC_TABLES));
+
+    this.use(
+      createSyncMiddleware({
+        hlc,
+        syncedTables: syncedTableNames,
+        onMutation: (event) => {
+          // Optional: Can be used to trigger immediate sync
+          // For now, we'll rely on periodic sync
+          console.debug("Mutation:", event);
+        },
+      }),
+    );
   }
 }
 
-// Create and export database instance
 export const db = new EPUBReaderDB();
 
-// Helper functions for common operations
+// ============================================================================
+// Helper Functions (Book operations)
+// ============================================================================
+
 export async function addBook(book: Book): Promise<string> {
-  return await db.books.add(book);
+  return db.books.add(book as SyncedBook);
 }
 
-export async function getBook(id: string): Promise<Book | undefined> {
-  return await db.books.get(id);
+export async function getBook(id: string): Promise<SyncedBook | undefined> {
+  const book = await db.books.get(id);
+  return book && isNotDeleted(book) ? book : undefined;
 }
 
-export async function getAllBooks(): Promise<Book[]> {
-  return await db.books.orderBy("dateAdded").reverse().toArray();
+export async function getAllBooks(): Promise<SyncedBook[]> {
+  return db.books.filter(isNotDeleted).toArray();
 }
 
 export async function deleteBook(id: string): Promise<void> {
-  // Get the book first to find its fileHash for sync state cleanup
   const book = await db.books.get(id);
+  if (!book) return;
 
-  await db.transaction(
-    "rw",
-    [
-      db.books,
-      db.bookFiles,
-      db.readingProgress,
-      db.highlights,
-      db.bookSyncState,
-      db.epubBlobs,
-      db.progressLog,
-      db.progressSeqCounter,
-    ],
-    async () => {
-      await db.books.delete(id);
-      await db.bookFiles.where("bookId").equals(id).delete();
-      await db.readingProgress.delete(id);
-      await db.highlights.where("bookId").equals(id).delete();
-      // Also clean up sync state, EPUB blob, and progress log if we have the fileHash
-      if (book?.fileHash) {
-        await db.bookSyncState.delete(book.fileHash);
-        await db.epubBlobs.delete(book.fileHash);
-        await db.progressLog.where("fileHash").equals(book.fileHash).delete();
-        await db.progressSeqCounter.delete(book.fileHash);
-      }
-    },
-  );
+  // Mark as deleted (tombstone) instead of hard delete
+  await db.books.put({
+    ...book,
+    _isDeleted: 1,
+  });
+
+  // Clean up local-only data
+  await db.bookFiles.where("bookId").equals(id).delete();
+  await db.epubBlobs.delete(book.fileHash);
+  await db.readingProgress.where("bookId").equals(id).delete();
+  await db.highlights.where("bookId").equals(id).delete();
 }
 
 export async function getBookByFileHash(
   fileHash: string,
-): Promise<Book | undefined> {
-  return await db.books.where("fileHash").equals(fileHash).first();
+): Promise<SyncedBook | undefined> {
+  const book = await db.books.where("fileHash").equals(fileHash).first();
+  return book && isNotDeleted(book) ? book : undefined;
 }
 
 export async function updateBookLastOpened(id: string): Promise<void> {
-  await db.books.update(id, { lastOpened: new Date() });
+  await db.books.update(id, { lastOpened: Date.now() });
 }
 
+// ============================================================================
+// Helper Functions (Book Files)
+// ============================================================================
+
 export async function addBookFile(bookFile: BookFile): Promise<string> {
-  return await db.bookFiles.add(bookFile);
+  return db.bookFiles.add(bookFile);
 }
 
 export async function getBookFile(
   bookId: string,
   path: string,
 ): Promise<BookFile | undefined> {
-  return await db.bookFiles
+  return db.bookFiles
     .where("bookId")
     .equals(bookId)
     .and((file) => file.path === path)
@@ -318,179 +277,149 @@ export async function getBookFile(
 }
 
 export async function getBookFiles(bookId: string): Promise<BookFile[]> {
-  return await db.bookFiles.where("bookId").equals(bookId).toArray();
+  return db.bookFiles.where("bookId").equals(bookId).toArray();
 }
+
+// ============================================================================
+// Helper Functions (Reading Progress)
+// ============================================================================
 
 export async function saveReadingProgress(
   progress: ReadingProgress,
-): Promise<void> {
-  await db.readingProgress.put(progress);
+): Promise<string> {
+  return db.readingProgress.put(progress as SyncedReadingProgress);
 }
 
 export async function getReadingProgress(
   bookId: string,
-): Promise<ReadingProgress | undefined> {
-  return await db.readingProgress.get(bookId);
+): Promise<SyncedReadingProgress | undefined> {
+  const progress = await db.readingProgress.get(bookId);
+  return progress && isNotDeleted(progress) ? progress : undefined;
 }
 
-export async function getReadingSettings(): Promise<ReadingSettings> {
+// ============================================================================
+// Helper Functions (Reading Settings)
+// ============================================================================
+
+export async function getReadingSettings(): Promise<SyncedReadingSettings> {
   const settings = await db.readingSettings.get("default");
-  if (!settings) {
-    // Return default settings
-    const defaultSettings: ReadingSettings = {
-      id: "default",
-      fontSize: 18,
-      lineHeight: 1.6,
-      mode: "scroll",
-      theme: "light",
-    };
-    await db.readingSettings.put(defaultSettings);
-    return defaultSettings;
+
+  if (settings && isNotDeleted(settings)) {
+    return settings;
   }
-  return settings;
+
+  const defaultSettings: ReadingSettings = {
+    id: "default",
+    fontSize: 18,
+    lineHeight: 1.6,
+    mode: "scroll",
+    theme: "light",
+  };
+
+  await db.readingSettings.add(defaultSettings as SyncedReadingSettings);
+  return (await db.readingSettings.get("default"))!;
 }
 
 export async function updateReadingSettings(
   settings: Partial<ReadingSettings>,
 ): Promise<void> {
   const current = await getReadingSettings();
-  await db.readingSettings.put({ ...current, ...settings });
+  await db.readingSettings.put({
+    ...current,
+    ...settings,
+  });
 }
 
-/**
- * Get the cover image blob URL for a book
- * Creates a fresh blob URL from stored BookFile data
- */
-export async function getBookCoverUrl(
-  bookId: string,
-  coverPath: string,
-): Promise<string | undefined> {
-  const bookFile = await getBookFile(bookId, coverPath);
-  if (!bookFile) {
-    return undefined;
-  }
-  return URL.createObjectURL(bookFile.content);
+// ============================================================================
+// Helper Functions (Book Cover)
+// ============================================================================
+
+export async function getBookCoverUrl(bookId: string): Promise<string | null> {
+  const bookFile = await db.bookFiles
+    .where("bookId")
+    .equals(bookId)
+    .and((file) => file.path.includes("cover"))
+    .first();
+
+  return bookFile ? URL.createObjectURL(bookFile.content) : null;
 }
 
-// Highlight operations
+// ============================================================================
+// Helper Functions (Highlights)
+// ============================================================================
+
 export async function addHighlight(highlight: Highlight): Promise<string> {
-  return await db.highlights.add(highlight);
+  return db.highlights.add(highlight as SyncedHighlight);
 }
 
 export async function getHighlights(
   bookId: string,
   spineItemId: string,
-): Promise<Highlight[]> {
-  return await db.highlights
+): Promise<SyncedHighlight[]> {
+  return db.highlights
     .where("bookId")
     .equals(bookId)
-    .and((h) => h.spineItemId === spineItemId)
+    .and((h) => h.spineItemId === spineItemId && isNotDeleted(h))
     .toArray();
 }
 
 export async function deleteHighlight(id: string): Promise<void> {
-  await db.highlights.delete(id);
+  const highlight = await db.highlights.get(id);
+  if (!highlight) return;
+
+  // Mark as deleted (tombstone)
+  await db.highlights.put({
+    ...highlight,
+    _isDeleted: 1,
+  });
 }
 
 export async function updateHighlight(
   id: string,
   changes: Partial<Highlight>,
 ): Promise<void> {
-  await db.highlights.update(id, { ...changes, updatedAt: new Date() });
+  const highlight = await db.highlights.get(id);
+  if (!highlight || isNotDeleted(highlight) === false) return;
+
+  await db.highlights.put({
+    ...highlight,
+    ...changes,
+    updatedAt: new Date(),
+  });
 }
 
-// Sync state operations
-export async function getBookSyncState(
-  fileHash: string,
-): Promise<BookSyncState | undefined> {
-  return await db.bookSyncState.get(fileHash);
+// ============================================================================
+// Helper Functions (Sync Log)
+// ============================================================================
+
+export async function addSyncLogs(logs: Omit<SyncLog, "id">[]) {
+  return db.syncLog.bulkAdd(logs);
 }
 
-export async function setBookSyncState(
-  syncState: BookSyncState,
-): Promise<void> {
-  await db.bookSyncState.put(syncState);
+export async function getRecentSyncLogs(limit = 20): Promise<SyncLog[]> {
+  return db.syncLog.orderBy("timestamp").reverse().limit(limit).toArray();
 }
 
-export async function getBooksSyncState(): Promise<BookSyncState[]> {
-  return await db.bookSyncState.toArray();
-}
+// ============================================================================
+// Helper Functions (EPUB Blobs)
+// ============================================================================
 
-export async function getPendingUploadBooks(): Promise<BookSyncState[]> {
-  return await db.bookSyncState
-    .where("status")
-    .anyOf(["pending_upload", "error"])
-    .toArray();
-}
-
-export async function getSyncCursor(
-  id: string,
-): Promise<SyncCursor | undefined> {
-  return await db.syncCursor.get(id);
-}
-
-export async function setSyncCursor(cursor: SyncCursor): Promise<void> {
-  await db.syncCursor.put(cursor);
-}
-
-export async function addSyncLog(log: SyncLog): Promise<void> {
-  await db.syncLog.add(log);
-}
-
-export async function getRecentSyncLogs(limit = 100): Promise<SyncLog[]> {
-  return await db.syncLog.orderBy("timestamp").reverse().limit(limit).toArray();
-}
-
-export async function getLocalOnlyBooks(): Promise<Book[]> {
-  // Get all books that don't have a sync state yet (never synced)
-  const allBooks = await db.books.toArray();
-  const syncStates = await db.bookSyncState.toArray();
-  const syncedHashes = new Set(syncStates.map((s) => s.fileHash));
-  return allBooks.filter((book) => !syncedHashes.has(book.fileHash));
-}
-
-export async function getBooksNeedingUpload(): Promise<Book[]> {
-  // Books with sync state indicating they need upload
-  const pendingStates = await db.bookSyncState
-    .where("status")
-    .anyOf(["pending_upload", "error"])
-    .toArray();
-  const pendingHashes = pendingStates.map((s) => s.fileHash);
-  if (pendingHashes.length === 0) return [];
-  return await db.books.where("fileHash").anyOf(pendingHashes).toArray();
-}
-
-export async function getNotDownloadedBooks(): Promise<Book[]> {
-  return await db.books.where("isDownloaded").equals(0).toArray();
-}
-
-export async function markBookAsDownloaded(
-  bookId: string,
-  isDownloaded: number,
-): Promise<void> {
-  await db.books.update(bookId, { isDownloaded });
-}
-
-export async function deleteBookSyncState(fileHash: string): Promise<void> {
-  await db.bookSyncState.delete(fileHash);
-}
-
-// EpubBlob operations
 export async function saveEpubBlob(
   fileHash: string,
   blob: Blob,
-): Promise<void> {
+): Promise<string> {
   await db.epubBlobs.put({
     fileHash,
     blob,
-    dateStored: new Date(),
+    dateStored: Date.now(),
   });
+  return fileHash;
 }
 
 export async function getEpubBlob(
   fileHash: string,
 ): Promise<EpubBlob | undefined> {
-  return await db.epubBlobs.get(fileHash);
+  return db.epubBlobs.get(fileHash);
 }
 
 export async function deleteEpubBlob(fileHash: string): Promise<void> {
@@ -502,193 +431,24 @@ export async function hasEpubBlob(fileHash: string): Promise<boolean> {
   return !!blob;
 }
 
-// Progress log operations
+// ============================================================================
+// Helper Functions (Book Queries - Compatibility)
+// ============================================================================
 
-/**
- * Get the next client sequence number for a book.
- * Atomically increments the counter.
- */
-export async function getNextClientSeq(fileHash: string): Promise<number> {
-  return await db.transaction("rw", db.progressSeqCounter, async () => {
-    const counter = await db.progressSeqCounter.get(fileHash);
-    const nextSeq = (counter?.lastClientSeq ?? 0) + 1;
-    await db.progressSeqCounter.put({ fileHash, lastClientSeq: nextSeq });
-    return nextSeq;
-  });
-}
-
-/**
- * Add a new progress log entry.
- * Automatically assigns the next client sequence number.
- */
-export async function addProgressLogEntry(
-  fileHash: string,
-  spineIndex: number,
-  scrollProgress: number,
-): Promise<ReadingProgressLogEntry> {
-  const clientSeq = await getNextClientSeq(fileHash);
-  const entry: ReadingProgressLogEntry = {
-    id: crypto.randomUUID(),
-    fileHash,
-    spineIndex,
-    scrollProgress,
-    clientSeq,
-    clientTimestamp: new Date(),
-    synced: 0,
-  };
-  await db.progressLog.add(entry);
-  return entry;
-}
-
-/**
- * Get all unsynced progress log entries.
- */
-export async function getUnsyncedProgressEntries(): Promise<
-  ReadingProgressLogEntry[]
-> {
-  return await db.progressLog.where("synced").equals(0).toArray();
-}
-
-/**
- * Get unsynced progress log entries for a specific book.
- */
-export async function getUnsyncedProgressEntriesForBook(
-  fileHash: string,
-): Promise<ReadingProgressLogEntry[]> {
-  return await db.progressLog
-    .where("[fileHash+clientSeq]")
-    .between([fileHash, Dexie.minKey], [fileHash, Dexie.maxKey])
-    .and((entry) => entry.synced === 0)
+export async function getNotDownloadedBooks(): Promise<SyncedBook[]> {
+  return db.books
+    .filter((book) => !book.isDownloaded && isNotDeleted(book))
     .toArray();
 }
 
-/**
- * Mark progress log entries as synced with server-assigned values.
- * TODO: change this to a batch operation?
- */
-export async function markProgressEntriesSynced(
-  updates: Array<{
-    id: string;
-    serverSeq: number;
-    serverTimestamp?: number;
-  }>,
+export async function markBookAsDownloaded(
+  bookId: string,
+  remoteEpubUrl?: string,
+  remoteCoverUrl?: string,
 ): Promise<void> {
-  await db.transaction("rw", db.progressLog, async () => {
-    for (const update of updates) {
-      await db.progressLog.update(update.id, {
-        serverSeq: update.serverSeq,
-        serverTimestamp: update.serverTimestamp
-          ? new Date(update.serverTimestamp)
-          : new Date(),
-        synced: 1,
-      });
-    }
+  await db.books.update(bookId, {
+    isDownloaded: true,
+    remoteEpubUrl,
+    remoteCoverUrl,
   });
-}
-
-/**
- * Get the latest progress entry for a book (by clientSeq).
- * This represents the current local reading position.
- */
-export async function getLatestProgressEntry(
-  fileHash: string,
-): Promise<ReadingProgressLogEntry | undefined> {
-  return await db.progressLog
-    .where("[fileHash+clientSeq]")
-    .between([fileHash, Dexie.minKey], [fileHash, Dexie.maxKey])
-    .last();
-}
-
-/**
- * Get all progress log entries for a book, ordered by clientSeq.
- */
-export async function getProgressEntriesForBook(
-  fileHash: string,
-): Promise<ReadingProgressLogEntry[]> {
-  return await db.progressLog
-    .where("[fileHash+clientSeq]")
-    .between([fileHash, Dexie.minKey], [fileHash, Dexie.maxKey])
-    .toArray();
-}
-
-/**
- * Add progress entries received from the server (during pull).
- * These entries have serverSeq and are already synced.
- */
-export async function addServerProgressEntries(
-  entries: Array<{
-    id: string;
-    fileHash: string;
-    spineIndex: number;
-    scrollProgress: number;
-    clientSeq: number;
-    clientTimestamp: number;
-    serverSeq: number;
-    serverTimestamp: number;
-  }>,
-): Promise<void> {
-  await db.transaction(
-    "rw",
-    [db.progressLog, db.progressSeqCounter],
-    async () => {
-      for (const entry of entries) {
-        // Check if entry already exists
-        const existing = await db.progressLog.get(entry.id);
-        if (existing) continue;
-
-        // Add the entry
-        await db.progressLog.put({
-          id: entry.id,
-          fileHash: entry.fileHash,
-          spineIndex: entry.spineIndex,
-          scrollProgress: entry.scrollProgress,
-          clientSeq: entry.clientSeq,
-          clientTimestamp: new Date(entry.clientTimestamp),
-          serverSeq: entry.serverSeq,
-          serverTimestamp: new Date(entry.serverTimestamp),
-          synced: 1,
-        });
-
-        // Update the sequence counter if this entry has a higher clientSeq
-        // (from another device)
-        const counter = await db.progressSeqCounter.get(entry.fileHash);
-        if (!counter || counter.lastClientSeq < entry.clientSeq) {
-          await db.progressSeqCounter.put({
-            fileHash: entry.fileHash,
-            lastClientSeq: entry.clientSeq,
-          });
-        }
-      }
-    },
-  );
-}
-
-/**
- * Get the highest serverSeq we've seen for progress entries.
- * Used as the sync cursor for pulling new entries.
- */
-export async function getMaxProgressServerSeq(): Promise<number> {
-  const entry = await db.progressLog
-    .where("serverSeq")
-    .above(0)
-    .reverse()
-    .first();
-  return entry?.serverSeq ?? 0;
-}
-
-/**
- * Delete all progress log entries for a book.
- * Used when deleting a book.
- */
-export async function deleteProgressEntriesForBook(
-  fileHash: string,
-): Promise<void> {
-  await db.transaction(
-    "rw",
-    [db.progressLog, db.progressSeqCounter],
-    async () => {
-      await db.progressLog.where("fileHash").equals(fileHash).delete();
-      await db.progressSeqCounter.delete(fileHash);
-    },
-  );
 }
