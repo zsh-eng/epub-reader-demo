@@ -9,13 +9,17 @@
  * - Fetching from network if not cached
  * - Storing fetched files locally for future access
  * - Deduplicating in-flight requests
+ * - Managing uploads and downloads via transfer queue
  */
 
 import { fileStorage } from "@/lib/files/file-storage";
+import { transferQueue } from "@/lib/files/transfer-queue";
 import type {
   FileFetchResult,
   FileGetOptions,
   FileType,
+  Priority,
+  TransferProgress,
 } from "@/lib/files/types";
 
 /**
@@ -130,6 +134,40 @@ class FileManager {
   ): Promise<string> {
     const result = await this.getFile(contentHash, fileType, options);
     return URL.createObjectURL(result.blob);
+  }
+
+  /**
+   * Queue a file for upload
+   */
+  async queueUpload(
+    contentHash: string,
+    fileType: FileType,
+    blob: Blob,
+    options?: { priority?: Priority },
+  ): Promise<string> {
+    return transferQueue.queueUpload(contentHash, fileType, blob, options);
+  }
+
+  /**
+   * Queue a file for download
+   */
+  async queueDownload(
+    contentHash: string,
+    fileType: FileType,
+    options?: { priority?: Priority },
+  ): Promise<string> {
+    return transferQueue.queueDownload(contentHash, fileType, options);
+  }
+
+  /**
+   * Subscribe to transfer progress
+   */
+  onProgress(
+    contentHash: string,
+    fileType: FileType,
+    callback: (progress: TransferProgress) => void,
+  ): () => void {
+    return transferQueue.onProgress(contentHash, fileType, callback);
   }
 
   /**

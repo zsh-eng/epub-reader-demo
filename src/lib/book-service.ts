@@ -1,7 +1,6 @@
 import type { Book } from "@/lib/db";
 import {
-  addBook,
-  db,
+  addBookWithFiles,
   deleteBook,
   getAllBooks,
   getBookByFileHash,
@@ -9,6 +8,7 @@ import {
 } from "@/lib/db";
 import { parseEPUB } from "@/lib/epub-parser";
 import { hashFile } from "@/lib/file-hash";
+import { fileManager } from "@/lib/files/file-manager";
 import { createFileId } from "@/lib/files/types";
 import type { StoredFile } from "@/lib/files/types";
 
@@ -46,7 +46,19 @@ export async function addBookFromFile(file: File): Promise<Book> {
       fileHash,
     });
 
-    // Store the epub file in the files table
+    // Queue the EPUB file for upload via FileManager
+    await fileManager.queueUpload(fileHash, "epub", epubBlob, {
+      priority: "normal",
+    });
+
+    // Queue the cover file for upload (if available)
+    if (coverBlob && book.coverContentHash) {
+      await fileManager.queueUpload(book.coverContentHash, "cover", coverBlob, {
+        priority: "normal",
+      });
+    }
+
+    // Prepare stored files for local storage
     const epubFile: StoredFile = {
       id: createFileId("epub", fileHash),
       contentHash: fileHash,
@@ -57,7 +69,6 @@ export async function addBookFromFile(file: File): Promise<Book> {
       storedAt: Date.now(),
     };
 
-    // Store the cover file in the files table (if available)
     const filesToStore: StoredFile[] = [epubFile];
     if (coverBlob && book.coverContentHash) {
       const coverFile: StoredFile = {
@@ -72,10 +83,8 @@ export async function addBookFromFile(file: File): Promise<Book> {
       filesToStore.push(coverFile);
     }
 
-    // Add book and files to database
-    await addBook(book);
-    await db.bookFiles.bulkAdd(files);
-    await db.files.bulkAdd(filesToStore);
+    // Add book, bookFiles, and files atomically in a single transaction
+    await addBookWithFiles(book, files, filesToStore);
 
     return book;
   } catch (error) {

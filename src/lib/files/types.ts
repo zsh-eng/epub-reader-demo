@@ -10,6 +10,65 @@
 export type FileType = "epub" | "cover";
 
 /**
+ * Transfer direction
+ */
+export type TransferDirection = "upload" | "download";
+
+/**
+ * Transfer task status
+ */
+export type TransferStatus = "pending" | "processing" | "completed" | "failed";
+
+/**
+ * Priority levels for transfer tasks
+ */
+export type Priority = "low" | "normal" | "high";
+
+/**
+ * A transfer task in the queue
+ */
+export interface TransferTask {
+  /** UUID */
+  id: string;
+  /** Transfer direction */
+  direction: TransferDirection;
+  /** Content hash (fileHash for books) */
+  contentHash: string;
+  /** Type of file */
+  fileType: FileType;
+  /** Current status */
+  status: TransferStatus;
+  /** Priority (higher = more urgent) */
+  priority: number;
+  /** Creation timestamp */
+  createdAt: number;
+  /** Retry count */
+  retryCount: number;
+  /** Maximum retries */
+  maxRetries: number;
+  /** Last attempt timestamp */
+  lastAttempt?: number;
+  /** Error message if failed */
+  error?: string;
+  /** Bytes transferred (for progress tracking) */
+  bytesTransferred?: number;
+  /** Total bytes (for progress tracking) */
+  totalBytes?: number;
+}
+
+/**
+ * Progress callback data
+ */
+export interface TransferProgress {
+  contentHash: string;
+  fileType: FileType;
+  status: TransferStatus;
+  bytesTransferred?: number;
+  totalBytes?: number;
+  error?: string;
+}
+
+/**
  * A stored file in local IndexedDB
  */
 export interface StoredFile {
@@ -65,4 +124,29 @@ export function parseFileId(
     return null;
   }
   return { fileType: fileType as FileType, contentHash };
+}
+
+/**
+ * Convert priority string to number
+ */
+export function priorityToNumber(priority: Priority): number {
+  switch (priority) {
+    case "low":
+      return 1;
+    case "normal":
+      return 5;
+    case "high":
+      return 10;
+  }
+}
+
+/**
+ * Create a composite key for transfer tasks
+ */
+export function createTransferKey(
+  direction: TransferDirection,
+  contentHash: string,
+  fileType: FileType,
+): string {
+  return `${direction}:${fileType}:${contentHash}`;
 }

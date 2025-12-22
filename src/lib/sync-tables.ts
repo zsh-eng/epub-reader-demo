@@ -53,6 +53,10 @@ export const LOCAL_TABLES = {
   // Used for EPUBs, covers, and other files
   files: "id, contentHash, fileType, [fileType+contentHash]",
 
+  // Transfer queue for managing file uploads/downloads
+  transferQueue:
+    "id, status, priority, createdAt, [status+priority], [contentHash+fileType+direction]",
+
   // Sync log is for debugging (optional)
   syncLog: "++id, timestamp, type, table",
 } as const;

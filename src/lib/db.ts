@@ -5,7 +5,7 @@
  * This version uses the new sync architecture with HLC timestamps and middleware.
  */
 
-import type { StoredFile } from "@/lib/files/types";
+import type { StoredFile, TransferTask } from "@/lib/files/types";
 import { createHLCService } from "@/lib/sync/hlc/hlc";
 import { createSyncMiddleware, isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
@@ -101,7 +101,7 @@ export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
 export type { Highlight };
 
 // Re-export StoredFile type for convenience
-export type { StoredFile };
+export type { StoredFile, TransferTask };
 
 // ============================================================================
 // Database Class
@@ -117,6 +117,7 @@ class EPUBReaderDB extends Dexie {
   // Local-only tables
   bookFiles!: Table<BookFile, string>;
   files!: Table<StoredFile, string>;
+  transferQueue!: Table<TransferTask, string>;
   syncLog!: Table<SyncLog, number>;
 
   constructor() {
@@ -169,6 +170,33 @@ export const db = new EPUBReaderDB();
 
 export async function addBook(book: Book): Promise<string> {
   return db.books.add(book as SyncedBook);
+}
+
+/**
+ * Add a book with its files atomically in a single transaction
+ * This ensures all related data is stored together or not at all
+ */
+export async function addBookWithFiles(
+  book: Book,
+  bookFiles: BookFile[],
+  files: StoredFile[],
+): Promise<string> {
+  return db.transaction("rw", [db.books, db.bookFiles, db.files], async () => {
+    // Add book first
+    const bookId = await db.books.add(book as SyncedBook);
+
+    // Add book files (extracted EPUB content)
+    if (bookFiles.length > 0) {
+      await db.bookFiles.bulkAdd(bookFiles);
+    }
+
+    // Add stored files (EPUB + cover blobs)
+    if (files.length > 0) {
+      await db.files.bulkAdd(files);
+    }
+
+    return bookId;
+  });
 }
 
 export async function getBook(id: string): Promise<SyncedBook | undefined> {
