@@ -4,6 +4,7 @@ import {
   createTombstone,
   generateDexieStores,
   isNotDeleted,
+  markAsRemoteWrite,
   UNSYNCED_TIMESTAMP,
   type HLCService,
   type SyncMetadata,
@@ -217,7 +218,7 @@ describe("Sync Middleware", () => {
         _isDeleted: 0,
       };
 
-      await db.highlights.put(remoteRecord);
+      await db.highlights.put(markAsRemoteWrite(remoteRecord));
 
       const stored = await db.highlights.get("remote-1");
       expect(stored).toBeDefined();
@@ -240,7 +241,7 @@ describe("Sync Middleware", () => {
         _isDeleted: 0,
       };
 
-      await db.highlights.put(remoteRecord);
+      await db.highlights.put(markAsRemoteWrite(remoteRecord));
 
       const stored = await db.highlights.get("remote-2");
       expect(stored!._hlc).toBe(remoteHlc);
@@ -258,7 +259,7 @@ describe("Sync Middleware", () => {
         _isDeleted: 1,
       };
 
-      await db.highlights.put(remoteTombstone);
+      await db.highlights.put(markAsRemoteWrite(remoteTombstone));
 
       // Tombstone should be stored and accessible (no automatic filtering)
       const all = await db.highlights.toArray();

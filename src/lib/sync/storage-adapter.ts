@@ -7,6 +7,7 @@
 
 import type { SyncMetadata } from "@/lib/sync/hlc/schema";
 import { UNSYNCED_TIMESTAMP } from "@/lib/sync/hlc/schema";
+import { markAsRemoteWrite } from "@/lib/sync/hlc/middleware";
 import type { Table } from "dexie";
 
 /**
@@ -217,7 +218,9 @@ export class DexieStorageAdapter implements StorageAdapter {
         const localRecord = existingRecords[index];
         if (!localRecord) {
           // New item - insert it
-          itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          itemsToUpdate.push(
+            markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
+          );
           applied.push(remoteItem.id);
           return;
         }
@@ -232,7 +235,9 @@ export class DexieStorageAdapter implements StorageAdapter {
         const comparison = hlcCompare(remoteItem._hlc, localItem._hlc);
         if (comparison > 0) {
           // Remote is newer - add to update batch
-          itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          itemsToUpdate.push(
+            markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
+          );
           applied.push(remoteItem.id);
         } else if (comparison < 0) {
           // Local is newer - keep local changes
@@ -241,7 +246,9 @@ export class DexieStorageAdapter implements StorageAdapter {
         } else {
           // HLCs are equal - this shouldn't happen in normal operation
           // but if it does, prefer the remote version (server wins ties)
-          itemsToUpdate.push(syncItemToRecord(remoteItem, entityKey));
+          itemsToUpdate.push(
+            markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
+          );
           applied.push(remoteItem.id);
         }
       });

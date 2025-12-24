@@ -1,5 +1,3 @@
-import Dexie from "dexie";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createHLCService,
   createSyncConfig,
@@ -7,11 +5,14 @@ import {
   createTombstone,
   generateDexieStores,
   isNotDeleted,
+  markAsRemoteWrite,
   UNSYNCED_TIMESTAMP,
   type HLCService,
   type MutationEvent,
   type SyncMetadata,
 } from "@/lib/sync/hlc";
+import Dexie from "dexie";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";
 
 // Test data interfaces
@@ -129,7 +130,7 @@ describe("HLC Sync Integration", () => {
         _serverTimestamp: Date.now(),
       };
 
-      await db.highlights.put(syncedHighlight);
+      await db.highlights.put(markAsRemoteWrite(syncedHighlight));
 
       // Verify server timestamp was preserved
       const synced = await db.highlights.get("h1");
@@ -170,7 +171,7 @@ describe("HLC Sync Integration", () => {
 
       // Apply remote (winner due to later HLC)
       if (hlc.compare(local!._hlc, remoteHighlight._hlc) < 0) {
-        await db.highlights.put(remoteHighlight);
+        await db.highlights.put(markAsRemoteWrite(remoteHighlight));
       }
 
       const resolved = await db.highlights.get("conflict-test");
@@ -285,7 +286,7 @@ describe("HLC Sync Integration", () => {
 
       // Device 1 receives device 2's highlight
       hlc.receive(device2Highlight._hlc);
-      await db.highlights.put(device2Highlight);
+      await db.highlights.put(markAsRemoteWrite(device2Highlight));
 
       // Both highlights should exist (filter for active only)
       const all = await db.highlights.toArray();
@@ -481,7 +482,7 @@ describe("HLC Sync Integration", () => {
         _isDeleted: false,
       };
 
-      await db.highlights.put(remoteHighlight);
+      await db.highlights.put(markAsRemoteWrite(remoteHighlight));
 
       // Should not emit mutation event for remote writes
       // (to avoid infinite sync loops)

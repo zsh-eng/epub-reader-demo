@@ -537,6 +537,111 @@ describe("Sync Engine Integration with DexieJS", () => {
     });
   });
 
+  describe("Local modifications of synced records", () => {
+    it("should detect local modifications of previously synced records", async () => {
+      const serverTime = Date.now();
+
+      // Step 1: Pull a remote note (simulating initial sync)
+      const remoteNote: SyncItem = {
+        id: "note-from-server",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "other-device",
+        _isDeleted: false,
+        _serverTimestamp: serverTime,
+        data: {
+          content: "Original content from server",
+          createdAt: serverTime,
+        },
+      };
+
+      remote.setServerItems("notes", [remoteNote]);
+      const pullResult = await engine.pull("notes");
+      expect(pullResult.pulled).toBe(1);
+
+      // Verify the note was saved with server timestamp
+      let localNote = await db.notes.get("note-from-server");
+      expect(localNote).toBeDefined();
+      expect(localNote!.content).toBe("Original content from server");
+      expect(localNote!._serverTimestamp).toBe(serverTime);
+
+      // Step 2: Modify the note locally (read-modify-write pattern)
+      localNote!.content = "Modified locally";
+      await db.notes.put(localNote!);
+
+      // Step 3: Check that the modification is detected as pending
+      // This is where the bug occurs - the middleware sees _serverTimestamp
+      // and thinks it's a remote write, so it doesn't update sync metadata
+      const updatedNote = await db.notes.get("note-from-server");
+      expect(updatedNote).toBeDefined();
+      expect(updatedNote!.content).toBe("Modified locally");
+
+      // BUG: This should be UNSYNCED_TIMESTAMP but it's still serverTime
+      // because middleware didn't detect this as a local write
+      expect(updatedNote!._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
+
+      // The HLC should also be updated to a new local timestamp
+      expect(updatedNote!._hlc).not.toBe(remoteNote._hlc);
+      expect(updatedNote!._deviceId).toBe(deviceId);
+
+      // Step 4: Verify it appears in pending changes
+      const pushResult = await engine.push("notes");
+      expect(pushResult.pushed).toBe(1);
+
+      const serverItems = remote.getServerItems("notes");
+      const pushedNote = serverItems.find(
+        (item) => item.id === "note-from-server",
+      );
+      expect(pushedNote).toBeDefined();
+      expect(pushedNote!.data.content).toBe("Modified locally");
+    });
+
+    it("should handle creating tombstone for synced record", async () => {
+      const serverTime = Date.now();
+
+      // Step 1: Pull a remote note
+      const remoteNote: SyncItem = {
+        id: "note-to-delete",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "other-device",
+        _isDeleted: false,
+        _serverTimestamp: serverTime,
+        data: {
+          content: "Will be deleted",
+          createdAt: serverTime,
+        },
+      };
+
+      remote.setServerItems("notes", [remoteNote]);
+      await engine.pull("notes");
+
+      // Step 2: Delete it locally (read and mark as deleted)
+      const localNote = await db.notes.get("note-to-delete");
+      expect(localNote).toBeDefined();
+
+      const tombstone = { ...localNote!, _isDeleted: 1 };
+      await db.notes.put(tombstone);
+
+      // Step 3: Verify deletion is tracked for sync
+      const deletedNote = await db.notes.get("note-to-delete");
+      expect(deletedNote).toBeDefined();
+      expect(deletedNote!._isDeleted).toBe(1);
+      expect(deletedNote!._serverTimestamp).toBe(UNSYNCED_TIMESTAMP);
+
+      // Step 4: Verify it's pushed to server
+      const pushResult = await engine.push("notes");
+      expect(pushResult.pushed).toBe(1);
+
+      const serverItems = remote.getServerItems("notes");
+      const deletedOnServer = serverItems.find(
+        (item) => item.id === "note-to-delete",
+      );
+      expect(deletedOnServer).toBeDefined();
+      expect(deletedOnServer!._isDeleted).toBe(true);
+    });
+  });
+
   describe("Edge cases", () => {
     it("should handle rapid successive syncs", async () => {
       const serverTime = Date.now();

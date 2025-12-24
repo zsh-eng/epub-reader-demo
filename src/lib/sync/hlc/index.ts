@@ -67,6 +67,8 @@ export {
   createTombstone,
   isNotDeleted,
   whereNotDeleted,
+  markAsRemoteWrite,
   type SyncMiddlewareOptions,
   type MutationEvent,
+  type RemoteWriteMarker,
 } from "./middleware";
