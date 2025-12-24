@@ -109,7 +109,7 @@ export function createSyncMiddleware(options: SyncMiddlewareOptions) {
             ...table,
 
             // Intercept mutate operations (add, put, delete)
-            mutate(req) {
+            async mutate(req) {
               // Block direct delete operations
               if (req.type === "delete" || req.type === "deleteRange") {
                 throw new Error(

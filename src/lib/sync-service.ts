@@ -22,7 +22,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { Table } from "dexie";
 import { SYNC_TABLES, type SyncTableName } from "@/lib/sync-tables";
 
-const SYNC_INTERVAL_MS = 30_000; // 30 seconds
+// TODO: how to handle the sync throttling for entity id (e.g. test case - quickly open
+// the reading progress for one book, closing, opening another book - should sync quickly).
+// TODO: how to prevent concurrency bugs when double syncing (by right should be ok because of idempotency)
+// Sync all follows its own cadence, it's not throttled
+const SYNC_ALL_INTERVAL_MS = 30_000; // 30 seconds
+const MIN_SYNC_INTERVAL_MS = 5_000; // 5 seconds - minimum time between syncs for same table
 
 class SyncService {
   private queryClient: QueryClient | null = null;
@@ -30,6 +35,7 @@ class SyncService {
   private isSyncing = false;
   private syncInterval: number | null = null;
   private isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+  private lastSyncTime = new Map<SyncTableName, number>();
 
   constructor() {
     // Initialize sync engine
@@ -64,7 +70,7 @@ class SyncService {
     this.queryClient = client;
   }
 
-  startPeriodicSync(syncIntervalMs = SYNC_INTERVAL_MS): void {
+  startPeriodicSync(syncIntervalMs = SYNC_ALL_INTERVAL_MS): void {
     if (this.syncInterval !== null) {
       return; // Already started
     }
@@ -171,14 +177,31 @@ class SyncService {
     }
   }
 
-  async syncTable(
+  /**
+   * Throttle wrapper for sync operations
+   * Prevents excessive syncs by enforcing minimum time between operations
+   */
+  private async withThrottle<T>(
+    key: string,
+    fn: () => Promise<T>,
+    emptyResult: T,
+  ): Promise<T> {
+    const now = Date.now();
+    const lastSync = this.lastSyncTime.get(key as SyncTableName) ?? 0;
+
+    if (now - lastSync < MIN_SYNC_INTERVAL_MS) {
+      console.log(`Throttling sync for ${key}, too soon since last sync`);
+      return emptyResult;
+    }
+
+    this.lastSyncTime.set(key as SyncTableName, now);
+    return fn();
+  }
+
+  private async syncTableImpl(
     table: SyncTableName,
     entityId?: string,
   ): Promise<SyncResult> {
-    if (!this.isOnline) {
-      throw new Error("Cannot sync while offline");
-    }
-
     const result = await this.syncEngine.sync(table, { entityId });
     await this.logSync("sync", table, result);
 
@@ -187,6 +210,29 @@ class SyncService {
     }
 
     return result;
+  }
+
+  async syncTable(
+    table: SyncTableName,
+    entityId?: string,
+  ): Promise<SyncResult> {
+    if (!this.isOnline) {
+      throw new Error("Cannot sync while offline");
+    }
+
+    const emptyResult: SyncResult = {
+      pushed: 0,
+      pulled: 0,
+      conflicts: 0,
+      hasMore: false,
+      errors: [],
+    };
+
+    return this.withThrottle(
+      table,
+      () => this.syncTableImpl(table, entityId),
+      emptyResult,
+    );
   }
 
   async pushTable(table: SyncTableName): Promise<void> {
