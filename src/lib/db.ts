@@ -12,7 +12,7 @@ import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
 import Dexie, { type Table } from "dexie";
-import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
+import { LOCAL_TABLES, SYNC_TABLES, type SyncTableName } from "./sync-tables";
 
 // ============================================================================
 // Type Definitions
@@ -144,10 +144,14 @@ class EPUBReaderDB extends Dexie {
       createSyncMiddleware({
         hlc,
         syncedTables: syncedTableNames,
-        onMutation: (event) => {
-          // Optional: Can be used to trigger immediate sync
-          // For now, we'll rely on periodic sync
-          console.debug("Mutation:", event);
+        onLocalMutation: (table) => {
+          // Trigger sync for this table after local mutations
+          // This is throttled by the sync service to prevent excessive syncs
+          import("./sync-service").then(({ syncService }) => {
+            syncService.syncTable(table as SyncTableName).catch((error) => {
+              console.error(`Failed to sync table ${table}:`, error);
+            });
+          });
         },
       }),
     );

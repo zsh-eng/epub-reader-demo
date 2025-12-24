@@ -8,7 +8,6 @@ import {
   markAsRemoteWrite,
   UNSYNCED_TIMESTAMP,
   type HLCService,
-  type MutationEvent,
   type SyncMetadata,
 } from "@/lib/sync/hlc";
 import Dexie from "dexie";
@@ -49,14 +48,14 @@ class SyncedDatabase extends Dexie {
 describe("HLC Sync Integration", () => {
   let db: SyncedDatabase;
   let hlc: HLCService;
-  let mutationEvents: MutationEvent[];
+  let mutatedTables: string[];
   const deviceId = "integration-test-device";
 
   beforeEach(async () => {
     // Clear state
     resetIndexedDB();
     localStorage.clear();
-    mutationEvents = [];
+    mutatedTables = [];
 
     // Create HLC service
     hlc = createHLCService(deviceId);
@@ -89,7 +88,7 @@ describe("HLC Sync Integration", () => {
       createSyncMiddleware({
         hlc,
         syncedTables: new Set(Object.keys(syncConfig.tables)),
-        onMutation: (event) => mutationEvents.push(event),
+        onLocalMutation: (table) => mutatedTables.push(table),
       }),
     );
 
@@ -249,9 +248,9 @@ describe("HLC Sync Integration", () => {
       expect(hlc.compare(h!._hlc, p!._hlc)).toBeLessThanOrEqual(0);
 
       // Both should emit mutation events
-      expect(mutationEvents).toHaveLength(2);
-      expect(mutationEvents[0].table).toBe("highlights");
-      expect(mutationEvents[1].table).toBe("readingProgress");
+      expect(mutatedTables).toHaveLength(2);
+      expect(mutatedTables[0]).toBe("highlights");
+      expect(mutatedTables[1]).toBe("readingProgress");
     });
   });
 
@@ -436,7 +435,7 @@ describe("HLC Sync Integration", () => {
 
   describe("Mutation event tracking", () => {
     it("should track all mutations for sync trigger", async () => {
-      mutationEvents = [];
+      mutatedTables = [];
 
       // Create
       await db.highlights.add({
@@ -448,25 +447,25 @@ describe("HLC Sync Integration", () => {
         createdAt: Date.now(),
       } as HighlightWithSync);
 
-      expect(mutationEvents).toHaveLength(1);
-      expect(mutationEvents[0].type).toBe("create");
+      expect(mutatedTables).toHaveLength(1);
+      expect(mutatedTables[0]).toBe("highlights");
 
       // Update
       await db.highlights.put({
         id: "track-1",
         bookId: "book-1",
-        text: "Updated",
-        color: "blue",
+        text: "Updated text",
+        color: "green",
         cfiRange: "/6/4[chap01]!/4/2/1:0",
         createdAt: Date.now(),
       } as HighlightWithSync);
 
-      expect(mutationEvents).toHaveLength(2);
-      expect(mutationEvents[1].type).toBe("update");
+      expect(mutatedTables).toHaveLength(2);
+      expect(mutatedTables[1]).toBe("highlights");
     });
 
     it("should not emit events for remote writes", async () => {
-      mutationEvents = [];
+      mutatedTables = [];
 
       // Remote write (has _serverTimestamp)
       const remoteHighlight: HighlightWithSync = {
@@ -476,17 +475,17 @@ describe("HLC Sync Integration", () => {
         color: "yellow",
         cfiRange: "/6/4[chap01]!/4/2/1:0",
         createdAt: Date.now(),
-        _hlc: "1000-0-remote-device",
-        _deviceId: "remote-device",
+        _hlc: hlc.next(),
+        _deviceId: "other-device",
         _serverTimestamp: Date.now(),
-        _isDeleted: false,
+        _isDeleted: 0,
       };
 
       await db.highlights.put(markAsRemoteWrite(remoteHighlight));
 
       // Should not emit mutation event for remote writes
       // (to avoid infinite sync loops)
-      expect(mutationEvents).toHaveLength(0);
+      expect(mutatedTables).toHaveLength(0);
     });
   });
 

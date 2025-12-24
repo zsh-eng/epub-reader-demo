@@ -451,7 +451,7 @@ describe("Sync Middleware", () => {
 
   describe("Mutation events", () => {
     it("should emit mutation events for local writes", async () => {
-      const events: any[] = [];
+      const mutatedTables: string[] = [];
 
       // Create new DB with mutation callback
       db.close();
@@ -470,7 +470,7 @@ describe("Sync Middleware", () => {
         createSyncMiddleware({
           hlc,
           syncedTables: new Set(["highlights"]),
-          onMutation: (event) => events.push(event),
+          onLocalMutation: (table) => mutatedTables.push(table),
         }),
       );
 
@@ -485,15 +485,12 @@ describe("Sync Middleware", () => {
 
       await db.highlights.add(record as TestRecordWithSync);
 
-      expect(events).toHaveLength(1);
-      expect(events[0].table).toBe("highlights");
-      expect(events[0].type).toBe("create");
-      expect(events[0].key).toBe("event-test");
-      expect(events[0].value).toBeDefined();
+      expect(mutatedTables).toHaveLength(1);
+      expect(mutatedTables[0]).toBe("highlights");
     });
 
-    it("should distinguish between create and update events", async () => {
-      const events: any[] = [];
+    it("should batch mutations per operation", async () => {
+      const mutatedTables: string[] = [];
 
       db.close();
       await db.delete();
@@ -508,28 +505,39 @@ describe("Sync Middleware", () => {
         createSyncMiddleware({
           hlc,
           syncedTables: new Set(["highlights"]),
-          onMutation: (event) => events.push(event),
+          onLocalMutation: (table) => mutatedTables.push(table),
         }),
       );
 
       await db.open();
 
-      const record: TestRecord = {
-        id: "mutation-test",
-        bookId: "book-1",
-        content: "Original",
-        createdAt: Date.now(),
-      };
+      // Bulk add multiple records
+      const records: TestRecord[] = [
+        {
+          id: "bulk-1",
+          bookId: "book-1",
+          content: "First",
+          createdAt: Date.now(),
+        },
+        {
+          id: "bulk-2",
+          bookId: "book-1",
+          content: "Second",
+          createdAt: Date.now(),
+        },
+        {
+          id: "bulk-3",
+          bookId: "book-1",
+          content: "Third",
+          createdAt: Date.now(),
+        },
+      ];
 
-      await db.highlights.add(record as TestRecordWithSync);
-      await db.highlights.put({
-        ...record,
-        content: "Updated",
-      } as TestRecordWithSync);
+      await db.highlights.bulkAdd(records as TestRecordWithSync[]);
 
-      expect(events).toHaveLength(2);
-      expect(events[0].type).toBe("create");
-      expect(events[1].type).toBe("update");
+      // Should only emit ONE event for the entire bulkAdd operation
+      expect(mutatedTables).toHaveLength(1);
+      expect(mutatedTables[0]).toBe("highlights");
     });
   });
 

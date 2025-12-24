@@ -69,6 +69,5 @@ export {
   whereNotDeleted,
   markAsRemoteWrite,
   type SyncMiddlewareOptions,
-  type MutationEvent,
   type RemoteWriteMarker,
 } from "./middleware";

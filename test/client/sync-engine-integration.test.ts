@@ -108,7 +108,7 @@ describe("Sync Engine Integration with DexieJS", () => {
       createSyncMiddleware({
         hlc,
         syncedTables: new Set(Object.keys(syncConfig.tables)),
-        onMutation: () => {}, // Not needed for these tests
+        onLocalMutation: () => {}, // Not needed for these tests
       }),
     );
 

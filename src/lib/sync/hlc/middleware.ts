@@ -42,25 +42,8 @@ export interface SyncMiddlewareOptions {
   /** Set of table names that should have sync metadata injected */
   syncedTables: Set<string>;
 
-  /** Optional callback for mutation events (useful for triggering sync) */
-  onMutation?: (event: MutationEvent) => void;
-}
-
-/**
- * Event emitted when a mutation occurs on a synced table
- */
-export interface MutationEvent {
-  /** Table name */
-  table: string;
-
-  /** Type of mutation */
-  type: "create" | "update" | "delete";
-
-  /** Primary key of the mutated record */
-  key: unknown;
-
-  /** The mutated value (undefined for deletes) */
-  value?: unknown;
+  /** Optional callback for local mutations (useful for triggering sync push) */
+  onLocalMutation?: (table: string) => void;
 }
 
 /**
@@ -88,7 +71,7 @@ function isRemoteWrite(value: unknown): boolean {
  * Create the sync middleware for Dexie
  */
 export function createSyncMiddleware(options: SyncMiddlewareOptions) {
-  const { hlc, syncedTables, onMutation } = options;
+  const { hlc, syncedTables, onLocalMutation } = options;
 
   return {
     stack: "dbcore" as const,
@@ -144,28 +127,11 @@ export function createSyncMiddleware(options: SyncMiddlewareOptions) {
                   return enriched;
                 });
 
-                // TODO: the mutation events might need to be batched to work correctly
-                // Emit mutation events only for local writes
-                if (onMutation && localWrites.length > 0) {
+                // Emit mutation event for local writes (batched per operation)
+                if (onLocalMutation && localWrites.length > 0) {
                   return table.mutate(req).then((result) => {
-                    // Keys are available in the result after mutation
-                    if (result.results) {
-                      result.results.forEach((key, resultIdx) => {
-                        // Check if this index corresponds to a local write
-                        if (localWrites.includes(resultIdx)) {
-                          const value = req.values?.[resultIdx];
-                          const eventType =
-                            req.type === "add" ? "create" : "update";
-
-                          onMutation({
-                            table: tableName,
-                            type: eventType,
-                            key,
-                            value,
-                          });
-                        }
-                      });
-                    }
+                    // Trigger sync for this table after successful mutation
+                    onLocalMutation(tableName);
                     return result;
                   });
                 }
