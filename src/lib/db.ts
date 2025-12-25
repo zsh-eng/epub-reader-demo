@@ -151,7 +151,10 @@ class EPUBReaderDB extends Dexie {
 
         if (progressRecords.length > 0) {
           // Clear existing records
-          await tx.table("readingProgress").clear();
+          const deletedRecords = progressRecords.map((record) => ({
+            ...record,
+            _deleted: 1,
+          }));
 
           // Re-insert with new UUIDs and createdAt field
           const migratedRecords = progressRecords.map((record) => ({
@@ -160,7 +163,8 @@ class EPUBReaderDB extends Dexie {
             createdAt: record.lastRead || Date.now(), // Use lastRead as createdAt
           }));
 
-          await tx.table("readingProgress").bulkAdd(migratedRecords);
+          await tx.table("readingProgress").bulkPut(migratedRecords);
+          await tx.table("readingProgress").bulkPut(deletedRecords);
         }
       });
 
