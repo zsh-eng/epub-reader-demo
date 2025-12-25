@@ -1,4 +1,5 @@
 import "@/App.css";
+import { Highlights } from "@/components/Highlights";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
@@ -32,6 +33,7 @@ function App() {
             <Route path="/" element={<Library />} />
             <Route path="/reader/:bookId" element={<Reader />} />
             <Route path="/sessions" element={<Sessions />} />
+            <Route path="/highlights" element={<Highlights />} />
           </Routes>
           <Toaster />
           <ReloadPrompt />

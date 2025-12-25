@@ -401,6 +401,10 @@ export async function updateHighlight(
   });
 }
 
+export async function getAllHighlights(): Promise<SyncedHighlight[]> {
+  return db.highlights.filter(isNotDeleted).toArray();
+}
+
 // ============================================================================
 // Helper Functions (Sync Log)
 // ============================================================================

@@ -21,6 +21,7 @@ import type { Book, SyncedBook } from "@/lib/db";
 import {
   Cloud,
   CloudOff,
+  Highlighter,
   Library as LibraryIcon,
   LogOut,
   Monitor,
@@ -324,7 +325,13 @@ export function Library() {
                 />
               </div>
             </div>
-            <div className="md:flex-1 flex justify-end gap-4 items-center">
+            <div className="md:flex-1 flex justify-end gap-2 items-center">
+              {/* Highlights Link */}
+              <Link to="/highlights">
+                <Button variant="ghost" size="icon-lg" title="View highlights">
+                  <Highlighter className="size-5" />
+                </Button>
+              </Link>
               {/* Sync Status & Manual Sync Button (only when authenticated) */}
               {isAuthenticated && (
                 <Button
