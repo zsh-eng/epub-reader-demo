@@ -25,7 +25,7 @@ export function NavigationButtons({
   onNext,
 }: NavigationButtonsProps) {
   return (
-    <div className="flex items-center justify-between px-4 py-4 border-t border-border bg-background mt-auto animate-in slide-in-from-bottom duration-300">
+    <div className="flex items-center justify-between px-4 py-4 border-t border-border bg-muted mt-auto animate-in slide-in-from-bottom duration-300">
       <Button
         variant="outline"
         onClick={onPrevious}

@@ -289,7 +289,8 @@ export function Library() {
               <Button
                 onClick={handleAddBookClick}
                 disabled={isProcessing}
-                className="gap-2 transition-all active:scale-95 h-10 rounded-md"
+                size={"icon-lg"}
+                className="gap-2 transition-all active:scale-95 rounded-md"
                 variant={"ghost"}
               >
                 {isProcessing ? (
@@ -317,14 +318,13 @@ export function Library() {
                   onClick={handleManualSync}
                   disabled={isSyncing}
                   title={isSyncing ? "Syncing..." : "Sync library"}
-                  className="h-10"
                 >
                   {isSyncing ? (
                     <RefreshCw className="size-5 animate-spin" />
                   ) : navigator.onLine ? (
-                    <Cloud className="size-5" />
+                    <Cloud className="size-5 translate-y-0.5" />
                   ) : (
-                    <CloudOff className="size-5 text-muted-foreground" />
+                    <CloudOff className="size-5 text-muted-foreground translate-y-0.5" />
                   )}
                 </Button>
               )}
@@ -339,9 +339,10 @@ export function Library() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="relative h-8 w-8 rounded-full"
+                      className="relative"
+                      size={"icon-lg"}
                     >
-                      <Avatar className="h-8 w-8">
+                      <Avatar className="size-7">
                         <AvatarImage
                           src={user.image || undefined}
                           alt={user.name || "User"}
