@@ -12,16 +12,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
-import {
-  categorizeBooksByStatus,
-  useAllReadingStatuses,
-} from "@/hooks/use-all-reading-statuses";
-import { useBooks } from "@/hooks/use-book-loader";
+import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
-import type { Book } from "@/lib/db";
+import type { Book, SyncedBook } from "@/lib/db";
 import {
   Cloud,
   CloudOff,
@@ -45,8 +41,11 @@ export function Library() {
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const { data: books = [], isLoading, refetch: refetchBooks } = useBooks();
-  const { data: readingStatuses = new Map() } = useAllReadingStatuses();
+  const {
+    data: booksData,
+    isLoading,
+    refetch: refetchBooks,
+  } = useBooksWithStatuses();
   const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
   // Handle Google Sign In
   const handleGoogleSignIn = async () => {
@@ -235,33 +234,23 @@ export function Library() {
     input.click();
   };
 
-  const filteredBooks = books.filter(
-    (book) =>
-      book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.author.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  // Filter books by search query
+  const filterBySearch = (book: SyncedBook) =>
+    book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    book.author.toLowerCase().includes(searchQuery.toLowerCase());
 
-  // Categorize books by reading status
-  const allBookIds = filteredBooks.map((book) => book.id);
-  const { reading, library, finished } = categorizeBooksByStatus(
-    readingStatuses,
-    allBookIds,
-  );
-
-  // Create book lookup for efficient rendering
-  const bookById = new Map(filteredBooks.map((book) => [book.id, book]));
-
-  // Get books for each section
-  const continueReadingBooks = reading
-    .map((id) => bookById.get(id))
-    .filter(Boolean) as typeof filteredBooks;
-  const libraryBooks = library
-    .map((id) => bookById.get(id))
-    .filter(Boolean) as typeof filteredBooks;
-  // Finished books are only shown when searching
-  const finishedBooks = searchQuery
-    ? (finished.map((id) => bookById.get(id)).filter(Boolean) as typeof filteredBooks)
-    : [];
+  // Get categorized and filtered books
+  const continueReadingBooks =
+    booksData?.categorized.continueReading.filter(filterBySearch) ?? [];
+  const libraryBooks =
+    booksData?.categorized.library.filter(filterBySearch) ?? [];
+  const finishedBooks =
+    booksData?.categorized.finished.filter(filterBySearch) ?? [];
+  const filteredBooks = [
+    ...continueReadingBooks,
+    ...libraryBooks,
+    ...finishedBooks,
+  ];
 
   if (isLoading) {
     return (
@@ -470,7 +459,7 @@ export function Library() {
                 </section>
               )}
 
-              {/* Finished Section (only shown in search) */}
+              {/* Finished Section - shown at the bottom */}
               {finishedBooks.length > 0 && (
                 <section>
                   <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
