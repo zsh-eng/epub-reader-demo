@@ -33,7 +33,7 @@ function App() {
             <Route path="/reader/:bookId" element={<Reader />} />
             <Route path="/sessions" element={<Sessions />} />
           </Routes>
-          <Toaster />
+          <Toaster position="top-center" />
           <ReloadPrompt />
         </BrowserRouter>
       </SyncInitializer>

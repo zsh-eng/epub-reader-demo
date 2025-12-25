@@ -192,8 +192,7 @@ export function Library() {
     try {
       await triggerSync();
       toast({
-        title: "Sync complete",
-        description: "Your library has been synchronized",
+        title: "Library synced",
       });
     } catch (error) {
       console.error("Error syncing:", error);
