@@ -233,6 +233,13 @@ class SyncService {
     return result;
   }
 
+  /**
+   * Syncs a table with the server. Throttled to prevent excessive syncs.
+   *
+   * @param table
+   * @param entityId
+   * @returns
+   */
   async syncTable(
     table: SyncTableName,
     entityId?: string,
