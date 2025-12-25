@@ -270,6 +270,9 @@ export function Reader() {
           onNext={goToNextChapter}
           hasPreviousChapter={hasPreviousChapter}
           hasNextChapter={hasNextChapter}
+          toc={book.toc}
+          currentChapterHref={manifestItemHref || ""}
+          onNavigateToChapter={goToChapterByHref}
         />
       )}
       {
