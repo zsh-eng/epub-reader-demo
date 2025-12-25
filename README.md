@@ -15,10 +15,10 @@ Roadmap (v0.2):
 
 - [x] Login
 - [x] Sync books
-- [ ] Sync Engine
-- [ ] Sync reading progress
-- [ ] Sync highlights
-- [ ] Sync log (for debugging)
+- [x] Sync Engine
+- [x] Sync reading progress
+- [x] Sync highlights
+- [x] Sync log (for debugging)
 
 Testing:
 
