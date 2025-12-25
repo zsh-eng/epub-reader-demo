@@ -12,6 +12,7 @@ import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
+import type { ReadingState } from "@/types/reading-state";
 import Dexie, { type Table } from "dexie";
 import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
 
@@ -98,9 +99,11 @@ export type SyncedBook = WithSyncMetadata<Book>;
 export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
 export type SyncedHighlight = WithSyncMetadata<Highlight>;
 export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
+export type SyncedReadingState = WithSyncMetadata<ReadingState>;
 
 // Re-export Highlight type for convenience
 export type { Highlight };
+export type { ReadingState, ReadingStatus } from "@/types/reading-state";
 
 // Re-export StoredFile type for convenience
 export type { StoredFile, TransferTask };
@@ -115,6 +118,7 @@ class EPUBReaderDB extends Dexie {
   readingProgress!: Table<SyncedReadingProgress, string>;
   highlights!: Table<SyncedHighlight, string>;
   readingSettings!: Table<SyncedReadingSettings, string>;
+  readingState!: Table<SyncedReadingState, string>;
 
   // Local-only tables
   bookFiles!: Table<BookFile, string>;
@@ -167,6 +171,12 @@ class EPUBReaderDB extends Dexie {
           await tx.table("readingProgress").bulkPut(deletedRecords);
         }
       });
+
+    // Version 4: Add readingState table for tracking reading status history
+    this.version(4).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
 
     // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
@@ -401,6 +411,70 @@ export async function addSyncLogs(logs: Omit<SyncLog, "id">[]) {
 
 export async function getRecentSyncLogs(limit = 20): Promise<SyncLog[]> {
   return db.syncLog.orderBy("timestamp").reverse().limit(limit).toArray();
+}
+
+// ============================================================================
+// Helper Functions (Reading State)
+// ============================================================================
+
+export async function setReadingStatus(
+  bookId: string,
+  status: ReadingState["status"],
+): Promise<string> {
+  const entry: ReadingState = {
+    id: crypto.randomUUID(),
+    bookId,
+    status,
+    timestamp: Date.now(),
+    createdAt: Date.now(),
+  };
+  return db.readingState.add(entry as SyncedReadingState);
+}
+
+export async function getReadingStatus(
+  bookId: string,
+): Promise<ReadingState["status"] | null> {
+  const latest = await db.readingState
+    .where("[bookId+timestamp]")
+    .between([bookId, Dexie.minKey], [bookId, Dexie.maxKey])
+    .filter(isNotDeleted)
+    .reverse()
+    .first();
+
+  return latest?.status ?? null;
+}
+
+export async function getAllReadingStatuses(): Promise<
+  Map<string, ReadingState["status"]>
+> {
+  // Get all reading state entries, grouped by bookId, return latest per book
+  const allEntries = await db.readingState.filter(isNotDeleted).toArray();
+
+  // Group by bookId and find latest for each
+  const latestByBook = new Map<string, SyncedReadingState>();
+  for (const entry of allEntries) {
+    const existing = latestByBook.get(entry.bookId);
+    if (!existing || entry.timestamp > existing.timestamp) {
+      latestByBook.set(entry.bookId, entry);
+    }
+  }
+
+  // Convert to status-only map
+  const result = new Map<string, ReadingState["status"]>();
+  for (const [bookId, entry] of latestByBook) {
+    result.set(bookId, entry.status);
+  }
+  return result;
+}
+
+export async function getReadingHistory(
+  bookId: string,
+): Promise<SyncedReadingState[]> {
+  return db.readingState
+    .where("bookId")
+    .equals(bookId)
+    .filter(isNotDeleted)
+    .sortBy("timestamp");
 }
 
 // ============================================================================

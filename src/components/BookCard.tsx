@@ -2,11 +2,26 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useFileUrl } from "@/hooks/use-file-url";
-import type { Book } from "@/lib/db";
-import { Book as BookIcon, Loader2, MoreVertical, Trash2 } from "lucide-react";
+import { useReadingStatus } from "@/hooks/use-reading-status";
+import { useToast } from "@/hooks/use-toast";
+import type { Book, ReadingStatus } from "@/lib/db";
+import {
+  Book as BookIcon,
+  BookMarked,
+  BookOpen,
+  CheckCircle,
+  Loader2,
+  MoreVertical,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 
@@ -17,6 +32,8 @@ interface BookCardProps {
 
 export function BookCard({ book, onDelete }: BookCardProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { status, setStatus, isUpdating } = useReadingStatus(book.id);
 
   // Use FileManager to get cover URL from content hash
   const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
@@ -39,6 +56,22 @@ export function BookCard({ book, onDelete }: BookCardProps) {
     ) {
       onDelete(book.id);
     }
+  };
+
+  const handleSetStatus = (newStatus: ReadingStatus) => {
+    setStatus(newStatus, {
+      onSuccess: () => {
+        const statusLabels: Record<ReadingStatus, string> = {
+          "want-to-read": "Want to Read",
+          reading: "Reading",
+          finished: "Finished",
+          dnf: "Did Not Finish",
+        };
+        toast({
+          title: `Marked as ${statusLabels[newStatus]}`,
+        });
+      },
+    });
   };
 
   return (
@@ -99,12 +132,54 @@ export function BookCard({ book, onDelete }: BookCardProps) {
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger
+                  className="cursor-pointer"
+                  disabled={isUpdating}
+                >
+                  <BookMarked className="mr-2 h-4 w-4" />
+                  Set Status
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => handleSetStatus("reading")}
+                  >
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    Reading
+                    {status === "reading" && (
+                      <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => handleSetStatus("finished")}
+                  >
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Finished
+                    {status === "finished" && (
+                      <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => handleSetStatus("dnf")}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Did Not Finish
+                    {status === "dnf" && (
+                      <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                className="cursor-pointer"
+                className="cursor-pointer text-destructive focus:text-destructive"
                 onClick={handleDelete}
               >
-                <Trash2 className="mr-1 h-4 w-4" />
+                <Trash2 className="mr-2 h-4 w-4" />
                 Remove Book
               </DropdownMenuItem>
             </DropdownMenuContent>

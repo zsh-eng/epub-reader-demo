@@ -42,6 +42,16 @@ export const SYNC_TABLES = {
     primaryKey: "id",
     indices: [],
   } satisfies SyncTableDef,
+
+  readingState: {
+    primaryKey: "id",
+    indices: ["bookId", "timestamp"],
+    compoundIndices: [
+      ["bookId", "timestamp"], // Get latest state per book
+      ["bookId", "_hlc"], // For sync
+    ],
+    entityKey: "bookId",
+  } satisfies SyncTableDef,
 } as const;
 
 /**

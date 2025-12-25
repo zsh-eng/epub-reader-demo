@@ -21,6 +21,7 @@ import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useProgressPersistence } from "@/hooks/use-progress-persistence";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
+import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useScrollTarget } from "@/hooks/use-scroll-target";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
@@ -28,6 +29,7 @@ import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import { TableOfContents } from "./TableOfContents";
 
 /**
@@ -89,6 +91,9 @@ export function Reader() {
 
   // Reader settings
   const { settings, updateSettings } = useReaderSettings();
+
+  // Reading status for toast prompt
+  const { status: readingStatus, setStatusAsync } = useReadingStatus(bookId);
 
   // Chapter content
   const manifestItemHref = getManifestItemHref(book, currentChapterIndex);
@@ -187,6 +192,32 @@ export function Reader() {
       document.title = "Reader";
     };
   }, [bookTitle]);
+
+  // Show toast prompt when opening a book with no reading status
+  const hasShownReadingToastRef = useRef(false);
+  useEffect(() => {
+    if (
+      !bookId ||
+      !isEpubReady ||
+      hasShownReadingToastRef.current ||
+      readingStatus !== null
+    ) {
+      return;
+    }
+    hasShownReadingToastRef.current = true;
+
+    toast("Started reading?", {
+      description: "Track your reading progress",
+      action: {
+        label: "Mark as Reading",
+        onClick: async () => {
+          await setStatusAsync("reading");
+          toast.success("Marked as Reading");
+        },
+      },
+      duration: 8000,
+    });
+  }, [bookId, isEpubReady, readingStatus, setStatusAsync]);
 
   // Early returns
   if (isLoading) return <LoadingSpinner />;
@@ -325,6 +356,13 @@ export function Reader() {
           hasNextChapter={hasNextChapter}
           onPrevious={goToPreviousChapter}
           onNext={goToNextChapter}
+          showMarkAsFinished={readingStatus !== "finished"}
+          onMarkAsFinished={async () => {
+            await setStatusAsync("finished");
+            toast.success("Marked as Finished", {
+              description: "Congratulations on completing this book!",
+            });
+          }}
         />
       )}
     </div>

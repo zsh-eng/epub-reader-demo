@@ -12,6 +12,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  categorizeBooksByStatus,
+  useAllReadingStatuses,
+} from "@/hooks/use-all-reading-statuses";
 import { useBooks } from "@/hooks/use-book-loader";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -42,6 +46,7 @@ export function Library() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
   const { data: books = [], isLoading, refetch: refetchBooks } = useBooks();
+  const { data: readingStatuses = new Map() } = useAllReadingStatuses();
   const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
   // Handle Google Sign In
   const handleGoogleSignIn = async () => {
@@ -236,6 +241,28 @@ export function Library() {
       book.author.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  // Categorize books by reading status
+  const allBookIds = filteredBooks.map((book) => book.id);
+  const { reading, library, finished } = categorizeBooksByStatus(
+    readingStatuses,
+    allBookIds,
+  );
+
+  // Create book lookup for efficient rendering
+  const bookById = new Map(filteredBooks.map((book) => [book.id, book]));
+
+  // Get books for each section
+  const continueReadingBooks = reading
+    .map((id) => bookById.get(id))
+    .filter(Boolean) as typeof filteredBooks;
+  const libraryBooks = library
+    .map((id) => bookById.get(id))
+    .filter(Boolean) as typeof filteredBooks;
+  // Finished books are only shown when searching
+  const finishedBooks = searchQuery
+    ? (finished.map((id) => bookById.get(id)).filter(Boolean) as typeof filteredBooks)
+    : [];
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
@@ -406,14 +433,60 @@ export function Library() {
 
           {/* Books Grid */}
           {filteredBooks.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12 fade-in animate-in duration-300">
-              {filteredBooks.map((book) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  onDelete={handleDeleteBook}
-                />
-              ))}
+            <div className="space-y-12 fade-in animate-in duration-300">
+              {/* Continue Reading Section */}
+              {continueReadingBooks.length > 0 && (
+                <section>
+                  <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
+                    Continue Reading
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
+                    {continueReadingBooks.map((book) => (
+                      <BookCard
+                        key={book.id}
+                        book={book}
+                        onDelete={handleDeleteBook}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Books Section */}
+              {libraryBooks.length > 0 && (
+                <section>
+                  <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
+                    Books
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
+                    {libraryBooks.map((book) => (
+                      <BookCard
+                        key={book.id}
+                        book={book}
+                        onDelete={handleDeleteBook}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Finished Section (only shown in search) */}
+              {finishedBooks.length > 0 && (
+                <section>
+                  <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
+                    Finished
+                  </h2>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
+                    {finishedBooks.map((book) => (
+                      <BookCard
+                        key={book.id}
+                        book={book}
+                        onDelete={handleDeleteBook}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-24 text-center">
