@@ -6,7 +6,7 @@
  */
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
-import { createHLCService } from "@/lib/sync/hlc/hlc";
+import { getHLCService } from "@/lib/sync/hlc/hlc";
 import { createSyncMiddleware, isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
@@ -137,8 +137,9 @@ class EPUBReaderDB extends Dexie {
       ...LOCAL_TABLES,
     });
 
-    // Initialize HLC service and middleware
-    const hlc = createHLCService();
+    // Use singleton HLC service to ensure consistency across the application
+    // (shared with sync-service.ts and other components)
+    const hlc = getHLCService();
     const syncedTableNames = new Set(Object.keys(SYNC_TABLES));
     this.use(
       createSyncMiddleware({

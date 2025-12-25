@@ -40,11 +40,11 @@
 
 // HLC Service
 export {
-  createHLCService,
   isValidHLC,
   getHLCTimestamp,
   type HLCService,
   type HLCState,
+  getHLCService,
 } from "./hlc";
 
 // Schema Generator

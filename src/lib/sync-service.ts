@@ -10,7 +10,7 @@
  */
 
 import { addSyncLogs, db, type SyncLog } from "@/lib/db";
-import { createHLCService } from "@/lib/sync/hlc/hlc";
+import { getHLCService } from "@/lib/sync/hlc/hlc";
 import { createHonoRemoteAdapter } from "@/lib/sync/remote-adapter";
 import { createDexieStorageAdapter } from "@/lib/sync/storage-adapter";
 import {
@@ -38,8 +38,9 @@ class SyncService {
   private lastSyncTime = new Map<SyncTableName, number>();
 
   constructor() {
-    // Initialize sync engine
-    const hlc = createHLCService();
+    // Use singleton HLC service to ensure consistency across the application
+    // (shared with db.ts middleware and other components)
+    const hlc = getHLCService();
 
     const tableConfigs = Object.fromEntries(
       Object.entries(SYNC_TABLES).map(([name, def]) => [

@@ -75,6 +75,8 @@ const HLC_STATE_KEY = "epub-reader-hlc-state";
  * The HLC state is persisted to localStorage to maintain monotonicity
  * across browser sessions.
  *
+ * Note: should not be used directly outside of tests. Prefer the singleton `getHLCService` instead.
+ *
  * @param deviceId - Optional device ID (defaults to getOrCreateDeviceId())
  * @returns An HLCService instance
  */
@@ -269,4 +271,36 @@ export function getHLCTimestamp(hlc: string): number {
     throw new Error(`Invalid HLC format: ${hlc}`);
   }
   return parseInt(parts[0], 10);
+}
+
+/**
+ * Singleton HLC service instance.
+ *
+ * This ensures that all parts of the application (middleware, sync engine, etc.)
+ * share the same HLC state, preventing:
+ * - Duplicate timestamps
+ * - Counter conflicts
+ * - Loss of causality
+ *
+ * The singleton is lazily initialized on first access.
+ */
+let _hlcServiceInstance: HLCService | null = null;
+
+/**
+ * Get the singleton HLC service instance.
+ * Creates it on first access.
+ */
+export function getHLCService(): HLCService {
+  if (!_hlcServiceInstance) {
+    _hlcServiceInstance = createHLCService();
+  }
+  return _hlcServiceInstance;
+}
+
+/**
+ * Reset the singleton instance (primarily for testing).
+ * @internal
+ */
+export function _resetHLCService(): void {
+  _hlcServiceInstance = null;
 }

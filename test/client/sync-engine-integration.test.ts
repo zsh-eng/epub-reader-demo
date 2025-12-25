@@ -21,7 +21,6 @@
  */
 
 import {
-  createHLCService,
   createSyncConfig,
   createSyncMiddleware,
   generateDexieStores,
@@ -29,6 +28,7 @@ import {
   type HLCService,
   type SyncMetadata,
 } from "@/lib/sync/hlc";
+import { createHLCService } from "@/lib/sync";
 import type { SyncItem } from "@/lib/sync/storage-adapter";
 import { createDexieStorageAdapter } from "@/lib/sync/storage-adapter";
 import { createSyncEngine, type SyncEngine } from "@/lib/sync/sync-engine";

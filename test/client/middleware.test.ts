@@ -1,5 +1,4 @@
 import {
-  createHLCService,
   createSyncMiddleware,
   createTombstone,
   generateDexieStores,
@@ -12,6 +11,7 @@ import {
 import Dexie from "dexie";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";
+import { createHLCService } from "@/lib/sync";
 
 // Test database interface
 interface TestRecord {

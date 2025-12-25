@@ -1,5 +1,5 @@
+import { createHLCService } from "@/lib/sync";
 import {
-  createHLCService,
   createSyncConfig,
   createSyncMiddleware,
   createTombstone,
