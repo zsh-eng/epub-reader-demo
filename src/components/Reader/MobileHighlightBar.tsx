@@ -37,8 +37,12 @@ export function MobileHighlightBar({
       <div
         className={cn(
           "fixed left-0 right-0 z-50 flex justify-center px-4 transition-all duration-300 ease-out",
-          isNavVisible ? "bottom-18" : "bottom-4",
         )}
+        style={{
+          bottom: isNavVisible
+            ? `calc(4.5rem + env(safe-area-inset-bottom))`
+            : "calc(1rem + env(safe-area-inset-bottom))",
+        }}
       >
         <motion.div
           className="flex items-center gap-3 p-3 rounded-full bg-background/80 dark:bg-input/30 backdrop-blur-md shadow-xl border border-border"
