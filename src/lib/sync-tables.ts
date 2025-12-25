@@ -21,7 +21,10 @@ export const SYNC_TABLES = {
   readingProgress: {
     primaryKey: "id",
     indices: ["bookId", "lastRead"],
-    compoundIndices: [["bookId", "lastRead"]],
+    compoundIndices: [
+      ["bookId", "lastRead"],
+      ["bookId", "_hlc"],
+    ],
     entityKey: "bookId", // For scoped sync by book
   } satisfies SyncTableDef,
 

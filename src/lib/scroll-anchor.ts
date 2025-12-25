@@ -264,7 +264,6 @@ export async function saveCurrentProgress(
   const validScrollProgress = isNaN(scrollProgress) ? 0 : scrollProgress;
 
   await saveReadingProgress({
-    id: bookId,
     bookId,
     currentSpineIndex: currentChapterIndex,
     scrollProgress: validScrollProgress,

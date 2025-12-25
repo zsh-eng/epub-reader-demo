@@ -90,8 +90,7 @@ export function useProgressPersistence({
       };
 
       // Build the progress object
-      const progress: ReadingProgress = {
-        id: bookId,
+      const progress: Omit<ReadingProgress, "id" | "createdAt"> = {
         bookId,
         currentSpineIndex: chapterIndex,
         scrollProgress: scrollPercentage,

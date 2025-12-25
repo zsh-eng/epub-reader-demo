@@ -56,12 +56,13 @@ export interface TOCItem {
 }
 
 export interface ReadingProgress {
-  id: string; // Primary key (matches Book.id)
+  id: string; // Primary key (auto-generated UUID)
   bookId: string; // Foreign key to Book
   currentSpineIndex: number; // Current position in spine
   scrollProgress: number; // 0-1 for scroll mode
   pageNumber?: number; // For paginated mode
-  lastRead: number;
+  lastRead: number; // Timestamp when this progress was recorded
+  createdAt: number; // When this record was created
 }
 
 export interface ReadingSettings {
@@ -137,6 +138,31 @@ class EPUBReaderDB extends Dexie {
       ...syncSchemas,
       ...LOCAL_TABLES,
     });
+
+    // Version 3: Migrate readingProgress to use UUID primary keys for historical tracking
+    this.version(3)
+      .stores({
+        ...syncSchemas,
+        ...LOCAL_TABLES,
+      })
+      .upgrade(async (tx) => {
+        // Migrate existing readingProgress records to use UUID instead of bookId as primary key
+        const progressRecords = await tx.table("readingProgress").toArray();
+
+        if (progressRecords.length > 0) {
+          // Clear existing records
+          await tx.table("readingProgress").clear();
+
+          // Re-insert with new UUIDs and createdAt field
+          const migratedRecords = progressRecords.map((record) => ({
+            ...record,
+            id: crypto.randomUUID(), // Generate new UUID for id
+            createdAt: record.lastRead || Date.now(), // Use lastRead as createdAt
+          }));
+
+          await tx.table("readingProgress").bulkAdd(migratedRecords);
+        }
+      });
 
     // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
@@ -245,16 +271,43 @@ export async function getBookFiles(bookId: string): Promise<BookFile[]> {
 // ============================================================================
 
 export async function saveReadingProgress(
-  progress: ReadingProgress,
+  progress: Omit<ReadingProgress, "id" | "createdAt">,
 ): Promise<string> {
-  return db.readingProgress.put(progress as SyncedReadingProgress);
+  const record: ReadingProgress = {
+    ...progress,
+    id: crypto.randomUUID(),
+    createdAt: Date.now(),
+  };
+  return db.readingProgress.add(record as SyncedReadingProgress);
 }
 
 export async function getReadingProgress(
   bookId: string,
 ): Promise<SyncedReadingProgress | undefined> {
-  const progress = await db.readingProgress.get(bookId);
-  return progress && isNotDeleted(progress) ? progress : undefined;
+  const latestProgress = await db.readingProgress
+    .where("[bookId+lastRead]")
+    .between([bookId, Dexie.minKey], [bookId, Dexie.maxKey])
+    .filter(isNotDeleted)
+    .reverse()
+    .first();
+
+  return latestProgress;
+}
+
+export async function getReadingProgressHistory(
+  bookId: string,
+  limit?: number,
+): Promise<SyncedReadingProgress[]> {
+  // Get all progress history for a book, sorted by lastRead timestamp (oldest to newest)
+  const results = await db.readingProgress
+    .where("bookId")
+    .equals(bookId)
+    .filter(isNotDeleted)
+    .sortBy("lastRead");
+
+  // Reverse to get newest first (descending order by lastRead)
+  const reversed = results.reverse();
+  return limit ? reversed.slice(0, limit) : reversed;
 }
 
 // ============================================================================

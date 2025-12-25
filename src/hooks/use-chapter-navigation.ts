@@ -14,9 +14,8 @@ export interface UseChapterNavigationReturn {
 function newReadingProgress(
   bookId: string,
   currentSpineIndex: number,
-): ReadingProgress {
+): Omit<ReadingProgress, "id" | "createdAt"> {
   return {
-    id: bookId,
     bookId,
     currentSpineIndex,
     scrollProgress: 0,
