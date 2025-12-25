@@ -283,54 +283,48 @@ export function Library() {
 
         <div className="max-w-[1400px] mx-auto px-6 py-8 md:px-10 md:py-12">
           {/* Header */}
-          <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground mb-2">
-                Library
-              </h1>
-              <p className="text-muted-foreground text-lg">
-                {books.length} {books.length === 1 ? "book" : "books"}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-4 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search books..."
-                  className="pl-9 bg-secondary/50 border-transparent focus:bg-background transition-all"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
+          <header className="flex items-center gap-4 w-full md:w-auto mb-8 md:mb-12">
+            <div className="flex-1 hidden md:block"></div>
+            <div className="flex gap-2 w-full md:w-max">
               <Button
                 onClick={handleAddBookClick}
                 disabled={isProcessing}
-                className="gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95"
+                className="gap-2 transition-all active:scale-95 h-10 rounded-md"
+                variant={"ghost"}
               >
                 {isProcessing ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                 ) : (
                   <Plus className="h-4 w-4" />
                 )}
-                <span className="hidden sm:inline">Add Book</span>
               </Button>
-
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search books..."
+                  className="pl-9 transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="md:flex-1 flex justify-end gap-4 items-center">
               {/* Sync Status & Manual Sync Button (only when authenticated) */}
               {isAuthenticated && (
                 <Button
                   variant="ghost"
-                  size="icon"
+                  size="icon-lg"
                   onClick={handleManualSync}
                   disabled={isSyncing}
                   title={isSyncing ? "Syncing..." : "Sync library"}
+                  className="h-10"
                 >
                   {isSyncing ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <RefreshCw className="size-5 animate-spin" />
                   ) : navigator.onLine ? (
-                    <Cloud className="h-4 w-4" />
+                    <Cloud className="size-5" />
                   ) : (
-                    <CloudOff className="h-4 w-4 text-muted-foreground" />
+                    <CloudOff className="size-5 text-muted-foreground" />
                   )}
                 </Button>
               )}
@@ -356,7 +350,7 @@ export function Library() {
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuContent align="end" className="w-60">
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
                         <p className="text-sm font-medium leading-none">

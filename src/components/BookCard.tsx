@@ -93,18 +93,18 @@ export function BookCard({ book, onDelete }: BookCardProps) {
               <Button
                 variant="secondary"
                 size="icon"
-                className="h-8 w-8 rounded-full bg-white/90 backdrop-blur-sm shadow-sm hover:bg-white"
+                className="h-8 w-8 rounded-full backdrop-blur-sm"
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreVertical className="h-4 w-4 text-gray-700" />
+                <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               <DropdownMenuItem
-                className="text-destructive focus:text-destructive cursor-pointer"
+                className="cursor-pointer"
                 onClick={handleDelete}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-1 h-4 w-4" />
                 Remove Book
               </DropdownMenuItem>
             </DropdownMenuContent>
