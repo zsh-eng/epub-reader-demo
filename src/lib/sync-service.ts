@@ -7,10 +7,14 @@
  * - Periodic sync scheduling
  * - TanStack Query invalidation
  * - Multi-table coordination
+ *
+ * Note: This module registers the sync middleware on the db singleton to avoid
+ * circular imports (db.ts -> sync-service.ts -> db.ts).
  */
 
 import { addSyncLogs, db, type SyncLog } from "@/lib/db";
 import { getHLCService } from "@/lib/sync/hlc/hlc";
+import { createSyncMiddleware } from "@/lib/sync/hlc/middleware";
 import { createHonoRemoteAdapter } from "@/lib/sync/remote-adapter";
 import { createDexieStorageAdapter } from "@/lib/sync/storage-adapter";
 import {
@@ -39,8 +43,24 @@ class SyncService {
 
   constructor() {
     // Use singleton HLC service to ensure consistency across the application
-    // (shared with db.ts middleware and other components)
     const hlc = getHLCService();
+
+    // Register sync middleware on the db singleton
+    // This is done here to avoid circular imports (db.ts importing sync-service.ts)
+    const syncedTableNames = new Set(Object.keys(SYNC_TABLES));
+    db.use(
+      createSyncMiddleware({
+        hlc,
+        syncedTables: syncedTableNames,
+        onLocalMutation: (table) => {
+          // Trigger sync for this table after local mutations
+          // This is throttled to prevent excessive syncs
+          this.syncTable(table as SyncTableName).catch((error) => {
+            console.error(`Failed to sync table ${table}:`, error);
+          });
+        },
+      }),
+    );
 
     const tableConfigs = Object.fromEntries(
       Object.entries(SYNC_TABLES).map(([name, def]) => [

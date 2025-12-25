@@ -3,16 +3,17 @@
  *
  * Local database using Dexie (IndexedDB wrapper) with sync metadata.
  * This version uses the new sync architecture with HLC timestamps and middleware.
+ *
+ * Note: The sync middleware is registered by sync-service.ts to avoid circular imports.
  */
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
-import { getHLCService } from "@/lib/sync/hlc/hlc";
-import { createSyncMiddleware, isNotDeleted } from "@/lib/sync/hlc/middleware";
+import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
 import Dexie, { type Table } from "dexie";
-import { LOCAL_TABLES, SYNC_TABLES, type SyncTableName } from "./sync-tables";
+import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
 
 // ============================================================================
 // Type Definitions
@@ -137,25 +138,7 @@ class EPUBReaderDB extends Dexie {
       ...LOCAL_TABLES,
     });
 
-    // Use singleton HLC service to ensure consistency across the application
-    // (shared with sync-service.ts and other components)
-    const hlc = getHLCService();
-    const syncedTableNames = new Set(Object.keys(SYNC_TABLES));
-    this.use(
-      createSyncMiddleware({
-        hlc,
-        syncedTables: syncedTableNames,
-        onLocalMutation: (table) => {
-          // Trigger sync for this table after local mutations
-          // This is throttled by the sync service to prevent excessive syncs
-          import("./sync-service").then(({ syncService }) => {
-            syncService.syncTable(table as SyncTableName).catch((error) => {
-              console.error(`Failed to sync table ${table}:`, error);
-            });
-          });
-        },
-      }),
-    );
+    // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
 }
 

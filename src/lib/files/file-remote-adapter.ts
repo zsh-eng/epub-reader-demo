@@ -46,7 +46,7 @@ export interface FileRemoteAdapter {
  */
 export class HonoFileRemoteAdapter implements FileRemoteAdapter {
   async uploadFile(
-    contentHash: string,
+    _contentHash: string,
     fileType: FileType,
     blob: Blob,
   ): Promise<void> {
