@@ -1,9 +1,7 @@
+import { DesktopControlIsland } from "@/components/Reader/DesktopControlIsland";
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { LoadingSpinner } from "@/components/Reader/LoadingSpinner";
 import { MobileReaderNav } from "@/components/Reader/MobileReaderNav";
-import { NavigationButtons } from "@/components/Reader/NavigationButtons";
-import { ReaderSettingsBar } from "@/components/Reader/ReaderSettingsBar";
-import { SideNavigation } from "@/components/Reader/SideNavigation";
 import ReaderContent from "@/components/ReaderContent";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import {
@@ -271,22 +269,29 @@ export function Reader() {
   // Render
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Desktop Navigation */}
+      {/* Desktop Control Island */}
       {!isMobile && (
-        <SideNavigation
+        <DesktopControlIsland
           onBack={() => navigate("/")}
           onPrevious={goToPreviousChapter}
           onNext={goToNextChapter}
           hasPreviousChapter={hasPreviousChapter}
           hasNextChapter={hasNextChapter}
-        />
-      )}
-
-      {/* Desktop Settings Bar */}
-      {!isMobile && (
-        <ReaderSettingsBar
+          currentChapterIndex={currentChapterIndex}
+          totalChapters={book.spine.length}
+          currentChapterTitle={currentChapterTitle}
+          toc={book.toc}
+          currentChapterHref={manifestItemHref || ""}
+          onNavigateToChapter={goToChapterByHref}
           settings={settings}
           onUpdateSettings={updateSettings}
+          readingStatus={readingStatus}
+          onMarkAsFinished={async () => {
+            await setStatusAsync("finished");
+            toast.success("Marked as Finished", {
+              description: "Congratulations on completing this book!",
+            });
+          }}
         />
       )}
 
@@ -347,24 +352,7 @@ export function Reader() {
         isNavVisible={isVisible}
       />
 
-      {/* Desktop Navigation Buttons */}
-      {!isMobile && (
-        <NavigationButtons
-          currentChapterIndex={currentChapterIndex}
-          totalChapters={book.spine.length}
-          hasPreviousChapter={hasPreviousChapter}
-          hasNextChapter={hasNextChapter}
-          onPrevious={goToPreviousChapter}
-          onNext={goToNextChapter}
-          showMarkAsFinished={readingStatus !== "finished"}
-          onMarkAsFinished={async () => {
-            await setStatusAsync("finished");
-            toast.success("Marked as Finished", {
-              description: "Congratulations on completing this book!",
-            });
-          }}
-        />
-      )}
+
     </div>
   );
 }
