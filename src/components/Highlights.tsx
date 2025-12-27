@@ -42,24 +42,7 @@ function ColorFilterBar({
   onToggleColor: (color: HighlightColor) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground mr-1">Filter:</span>
-      {HIGHLIGHT_COLORS.map(({ name }) => {
-        const isSelected =
-          selectedColors.length === 0 || selectedColors.includes(name);
-        return (
-          <button
-            key={name}
-            onClick={() => onToggleColor(name)}
-            className={`
-              w-6 h-6 rounded-full transition-all
-              ${colorButtonStyles[name]}
-              ${isSelected ? "ring-2 ring-offset-2 ring-offset-background ring-foreground/50 scale-110" : "opacity-40"}
-            `}
-            title={`${name} ${isSelected ? "(showing)" : "(hidden)"}`}
-          />
-        );
-      })}
+    <div className="flex justify-center gap-3 ml-auto mr-2">
       {selectedColors.length > 0 && (
         <button
           onClick={() => selectedColors.forEach(onToggleColor)}
@@ -68,6 +51,22 @@ function ColorFilterBar({
           Clear
         </button>
       )}
+      {HIGHLIGHT_COLORS.map(({ name }) => {
+        const isSelected =
+          selectedColors.length === 0 || selectedColors.includes(name);
+        return (
+          <button
+            key={name}
+            onClick={() => onToggleColor(name)}
+            className={`
+              w-7 h-7 rounded-full transition-all
+              ${colorButtonStyles[name]}
+              ${isSelected ? "ring-2 ring-offset-2 ring-offset-background ring-foreground/50" : "opacity-40"}
+            `}
+            title={`${name} ${isSelected ? "(showing)" : "(hidden)"}`}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -123,11 +122,11 @@ function HighlightGroupContainer({
       {/* Book Header - sticky */}
       <div
         className="sticky z-10 bg-muted/80 backdrop-blur-md shadow-lg py-2 px-3 border mb-2 rounded-xl min-w-64 self-center max-w-[80%] cursor-pointer"
-        style={{ top: headerHeight + 180 }}
+        style={{ top: headerHeight + 132 }}
       >
         <div className="flex items-center gap-3">
           <BookCoverThumbnail coverContentHash={group.book.coverContentHash} />
-          <div className="min-w-0 flex-1 flex-col items-center justify-between gap-2">
+          <div className="min-w-0 flex-1 flex-col items-center justify-between gap-0">
             <h2 className="font-medium text-foreground truncate text-sm">
               {group.book.title}
             </h2>
@@ -221,7 +220,7 @@ export function Highlights() {
       >
         <div className="max-w-3xl mx-auto px-4 py-4">
           {/* Top row: back button and title */}
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-2">
             <Link to="/">
               <Button variant="ghost" size="icon" className="rounded-full">
                 <ArrowLeft className="h-5 w-5" />
@@ -235,10 +234,16 @@ export function Highlights() {
                 {filteredGroups.length !== 1 ? "s" : ""}
               </p>*/}
             </div>
+
+            {/* Color filters */}
+            <ColorFilterBar
+              selectedColors={selectedColors}
+              onToggleColor={handleToggleColor}
+            />
           </div>
 
           {/* Search bar */}
-          <div className="relative mb-3">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search highlights..."
@@ -247,12 +252,6 @@ export function Highlights() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-
-          {/* Color filters */}
-          <ColorFilterBar
-            selectedColors={selectedColors}
-            onToggleColor={handleToggleColor}
-          />
         </div>
       </header>
 
