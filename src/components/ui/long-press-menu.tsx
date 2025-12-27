@@ -1,10 +1,92 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+
+// ============================================================================
+// Inject styles once (self-contained CSS for popover + anchor positioning)
+// ============================================================================
+
+const STYLES_ID = "long-press-menu-styles";
+
+function injectStyles() {
+  if (typeof document === "undefined") return;
+  if (document.getElementById(STYLES_ID)) return;
+
+  const style = document.createElement("style");
+  style.id = STYLES_ID;
+  style.textContent = `
+    /* Popover base - reset browser defaults */
+    .long-press-popover {
+      border: none;
+      padding: 0;
+      background: transparent;
+      margin: 0;
+      overflow: visible;
+
+      /* Entry animation */
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      transition:
+        opacity 0.2s ease-out,
+        transform 0.2s ease-out,
+        overlay 0.2s ease-out allow-discrete,
+        display 0.2s ease-out allow-discrete;
+    }
+
+    /* Starting state for entry animation */
+    @starting-style {
+      .long-press-popover:popover-open {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.96);
+      }
+    }
+
+    /* Exit animation - when popover is closing */
+    .long-press-popover:not(:popover-open) {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.96);
+    }
+
+    /* Trigger animations */
+    .long-press-trigger {
+      touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+    }
+
+    .long-press-trigger[data-pressing="true"] {
+      transform: scale(0.97);
+    }
+
+    .long-press-trigger[data-open="true"] {
+      position: relative;
+      z-index: 60;
+      transform: scale(1.03);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Backdrop styling */
+    .long-press-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      animation: long-press-fade-in 0.2s ease-out;
+    }
+
+    @keyframes long-press-fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 // ============================================================================
 // Context
@@ -17,6 +99,7 @@ interface LongPressMenuContextValue {
   close: () => void;
   anchorName: string;
   setIsPressing: (pressing: boolean) => void;
+  popoverRef: React.RefObject<HTMLDivElement | null>;
 }
 
 const LongPressMenuContext = createContext<LongPressMenuContextValue | null>(
@@ -58,20 +141,42 @@ function LongPressMenu({
 }: LongPressMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
-  // Generate a stable anchor name for this menu instance
   const anchorNameRef = useRef<string>(generateAnchorName());
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Inject styles on mount
+  useEffect(() => {
+    injectStyles();
+  }, []);
 
   const open = React.useCallback(() => {
     if (hapticFeedback && navigator.vibrate) {
       navigator.vibrate(10);
     }
     setIsOpen(true);
-    setIsPressing(false); // No longer pressing once menu opens
+    setIsPressing(false);
+    // Show the popover
+    popoverRef.current?.showPopover();
   }, [hapticFeedback]);
 
   const close = React.useCallback(() => {
     setIsOpen(false);
+    popoverRef.current?.hidePopover();
   }, []);
+
+  // Handle escape key (popover="manual" doesn't auto-dismiss)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        close();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, close]);
 
   return (
     <LongPressMenuContext.Provider
@@ -82,6 +187,7 @@ function LongPressMenu({
         close,
         anchorName: anchorNameRef.current,
         setIsPressing,
+        popoverRef,
       }}
     >
       <LongPressMenuInner pressDelay={pressDelay}>
@@ -99,7 +205,7 @@ function LongPressMenuInner({
   children: React.ReactNode;
   pressDelay: number;
 }) {
-  const { isOpen, open, close, setIsPressing } = useLongPressMenu();
+  const { open, setIsPressing } = useLongPressMenu();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPressingRef = useRef(false);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -113,20 +219,6 @@ function LongPressMenuInner({
     };
   }, []);
 
-  // Handle escape key
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, close]);
-
   const handlePressStart = (
     e: React.TouchEvent | React.MouseEvent,
     element: HTMLElement,
@@ -136,17 +228,14 @@ function LongPressMenuInner({
 
     isPressingRef.current = true;
     triggerRef.current = element;
-    setIsPressing(true); // Start visual feedback
+    setIsPressing(true);
 
     timerRef.current = setTimeout(() => {
       if (isPressingRef.current && triggerRef.current) {
-        // Smooth scroll the element into view
-        triggerRef.current.scrollIntoView({
-          behavior: "smooth",
-          block: "center",
-        });
-
-        // Open menu - CSS anchor positioning handles the rest!
+        // triggerRef.current.scrollIntoView({
+        //   behavior: "smooth",
+        //   block: "center",
+        // });
         open();
       }
     }, pressDelay);
@@ -159,6 +248,7 @@ function LongPressMenuInner({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    // NOTE: Do NOT close the menu here - menu stays open until backdrop click or escape
   };
 
   const handlePressCancel = () => {
@@ -173,7 +263,6 @@ function LongPressMenuInner({
   // Clone children and pass down handlers
   const childrenWithHandlers = React.Children.map(children, (child) => {
     if (React.isValidElement(child)) {
-      // Check if this is a LongPressMenuTrigger
       if (
         (child.type as React.ComponentType)?.displayName ===
         "LongPressMenuTrigger"
@@ -201,7 +290,6 @@ function LongPressMenuInner({
 interface LongPressMenuTriggerProps {
   children: React.ReactNode;
   className?: string;
-  asChild?: boolean;
   // Internal props passed by LongPressMenuInner
   onPressStart?: (
     e: React.TouchEvent | React.MouseEvent,
@@ -228,7 +316,6 @@ function LongPressMenuTrigger({
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    // Only handle left click
     if (e.button !== 0) return;
     if (ref.current && onPressStart) {
       onPressStart(e, ref.current);
@@ -236,35 +323,18 @@ function LongPressMenuTrigger({
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
-    // Prevent default context menu on long-press
     e.preventDefault();
-  };
-
-  // Determine transform based on state
-  const getTransform = () => {
-    if (isOpen) return "scale(1.05)";
-    if (isPressing) return "scale(0.97)";
-    return undefined;
   };
 
   return (
     <div
       ref={ref}
-      className={cn(
-        "touch-none select-none transition-transform duration-200",
-        className,
-      )}
+      className={cn("long-press-trigger", className)}
+      data-pressing={isPressing}
+      data-open={isOpen}
       style={
         {
-          // Disable iOS long-press callout menu
-          WebkitTouchCallout: "none",
-          WebkitUserSelect: "none",
-          // CSS Anchor Positioning: register this element as an anchor
           anchorName: anchorName,
-          // When open, lift the element with z-index and scale
-          position: isOpen ? "relative" : undefined,
-          zIndex: isOpen ? 60 : undefined,
-          transform: getTransform(),
         } as React.CSSProperties
       }
       onTouchStart={handleTouchStart}
@@ -282,86 +352,43 @@ function LongPressMenuTrigger({
 LongPressMenuTrigger.displayName = "LongPressMenuTrigger";
 
 // ============================================================================
-// Content (Overlay via portal + Menu using CSS Anchor Positioning)
+// Content (uses native popover + CSS anchor positioning + manual backdrop)
 // ============================================================================
 
 interface LongPressMenuContentProps {
   children: React.ReactNode;
   className?: string;
-  /** Preferred placement: "above" or "below" the trigger. Default: "below" */
-  preferredPlacement?: "above" | "below";
 }
 
 function LongPressMenuContent({
   children,
   className,
-  preferredPlacement = "below",
 }: LongPressMenuContentProps) {
-  const { isOpen, close, anchorName } = useLongPressMenu();
-
-  if (typeof document === "undefined") return null;
-
-  // Calculate position-area based on preferred placement
-  // "bottom span-all" = positioned below anchor, centered horizontally
-  // "top span-all" = positioned above anchor, centered horizontally
-  const positionArea = preferredPlacement === "below" ? "bottom" : "top";
-
-  // Backdrop is portaled to cover everything
-  const backdrop = createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-          onClick={close}
-        />
-      )}
-    </AnimatePresence>,
-    document.body,
-  );
-
-  // Menu content is portaled and uses CSS anchor positioning
-  const menu = createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: preferredPlacement === "below" ? -8 : 8,
-          }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{
-            opacity: 0,
-            y: preferredPlacement === "below" ? -8 : 8,
-          }}
-          transition={{ duration: 0.15 }}
-          className={cn("z-[70]", className)}
-          style={
-            {
-              // CSS Anchor Positioning
-              position: "fixed",
-              positionAnchor: anchorName,
-              positionArea: "bottom span-right",
-              positionTryFallbacks: "flip-block",
-              marginTop: "20px",
-              marginLeft: "-4px",
-            } as React.CSSProperties
-          }
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>,
-    document.body,
-  );
+  const { isOpen, close, anchorName, popoverRef } = useLongPressMenu();
 
   return (
     <>
-      {backdrop}
-      {menu}
+      {/* Manual backdrop since popover="manual" doesn't support ::backdrop */}
+      {isOpen && <div className="long-press-backdrop" onClick={close} />}
+
+      {/* Popover content */}
+      <div
+        ref={popoverRef}
+        popover="manual"
+        className={cn("long-press-popover", className)}
+        style={
+          {
+            // CSS Anchor Positioning
+            positionAnchor: anchorName,
+            positionArea: "bottom span-right",
+            positionTryFallbacks: "flip-block",
+            marginTop: "12px",
+            marginLeft: "-4px",
+          } as React.CSSProperties
+        }
+      >
+        {children}
+      </div>
     </>
   );
 }
@@ -398,7 +425,7 @@ function LongPressMenuItem({
       disabled={disabled}
       className={cn(
         "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm transition-colors",
-        "bg-popover hover:bg-accent active:bg-accent",
+        "bg-popover text-popover-foreground hover:bg-accent active:bg-accent",
         destructive && "text-destructive hover:text-destructive",
         disabled && "opacity-50 pointer-events-none",
         className,
@@ -423,7 +450,7 @@ function LongPressMenuItems({ children, className }: LongPressMenuItemsProps) {
   return (
     <div
       className={cn(
-        "w-[220px] overflow-hidden rounded-xl bg-popover p-1 shadow-lg ring-1 ring-border",
+        "w-[220px] overflow-hidden rounded-xl bg-popover text-popover-foreground p-1 shadow-lg ring-1 ring-border",
         className,
       )}
     >
