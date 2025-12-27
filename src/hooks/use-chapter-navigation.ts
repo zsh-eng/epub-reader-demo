@@ -1,5 +1,9 @@
 import { useProgressMutation } from "@/hooks/use-progress-mutation";
-import { type Book, type ReadingProgress } from "@/lib/db";
+import {
+  type Book,
+  type ProgressTriggerType,
+  type ReadingProgress,
+} from "@/lib/db";
 import { findSpineIndexByHref } from "@/lib/toc-utils";
 import { type ScrollTarget } from "@/types/scroll-target";
 import { useCallback } from "react";
@@ -15,14 +19,19 @@ export interface UseChapterNavigationReturn {
 function newReadingProgress(
   bookId: string,
   currentSpineIndex: number,
+  triggerType: ProgressTriggerType,
+  targetElementId?: string,
 ): Omit<ReadingProgress, "id" | "createdAt"> {
   return {
     bookId,
     currentSpineIndex,
     scrollProgress: 0,
     lastRead: new Date().getTime(),
+    triggerType,
+    targetElementId,
   };
 }
+
 
 export function useChapterNavigation(
   book: Book | null,
@@ -42,7 +51,7 @@ export function useChapterNavigation(
     setCurrentChapterIndex(newIndex);
     setScrollTarget({ type: "top" });
 
-    const progress = newReadingProgress(bookId, newIndex);
+    const progress = newReadingProgress(bookId, newIndex, "manual-chapter");
     saveProgressMutation.mutate(progress);
   }, [
     currentChapterIndex,
@@ -61,7 +70,7 @@ export function useChapterNavigation(
     setCurrentChapterIndex(newIndex);
     setScrollTarget({ type: "top" });
 
-    const progress = newReadingProgress(bookId, newIndex);
+    const progress = newReadingProgress(bookId, newIndex, "manual-chapter");
     saveProgressMutation.mutate(progress);
   }, [
     book,
@@ -84,7 +93,7 @@ export function useChapterNavigation(
       setScrollTarget({ type: "top" });
 
       // Save progress immediately on chapter change
-      const progress = newReadingProgress(bookId, spineIndex);
+      const progress = newReadingProgress(bookId, spineIndex, "toc-navigation");
       saveProgressMutation.mutate(progress);
     },
     [
@@ -117,7 +126,12 @@ export function useChapterNavigation(
       );
 
       // Save progress immediately on chapter change
-      const progress = newReadingProgress(bookId, spineIndex);
+      const progress = newReadingProgress(
+        bookId,
+        spineIndex,
+        "fragment-link",
+        fragment,
+      );
       saveProgressMutation.mutate(progress);
     },
     [
@@ -151,7 +165,12 @@ export function useChapterNavigation(
       setScrollTarget({ type: "highlight", highlightId });
 
       // Save progress
-      const progress = newReadingProgress(bookId, spineIndex);
+      const progress = newReadingProgress(
+        bookId,
+        spineIndex,
+        "highlight-jump",
+        highlightId,
+      );
       saveProgressMutation.mutate(progress);
     },
     [

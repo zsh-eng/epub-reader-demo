@@ -95,6 +95,7 @@ export function useProgressPersistence({
         currentSpineIndex: chapterIndex,
         scrollProgress: scrollPercentage,
         lastRead: new Date().getTime(),
+        triggerType: "periodic",
       };
 
       // Use mutation instead of direct save
