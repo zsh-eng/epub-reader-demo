@@ -56,6 +56,18 @@ export interface TOCItem {
   children?: TOCItem[];
 }
 
+/**
+ * Types of navigation that trigger reading progress saves.
+ * Only "hop" triggers create meaningful jump-back points.
+ */
+export type ProgressTriggerType =
+  | "periodic" // Normal interval save (default for old records)
+  | "toc-navigation" // Used table of contents
+  | "highlight-jump" // Jumped to highlight
+  | "fragment-link" // Clicked internal book link
+  | "manual-chapter" // Prev/next chapter buttons
+  | "session-start"; // Opening the book
+
 export interface ReadingProgress {
   id: string; // Primary key (auto-generated UUID)
   bookId: string; // Foreign key to Book
@@ -64,7 +76,13 @@ export interface ReadingProgress {
   pageNumber?: number; // For paginated mode
   lastRead: number; // Timestamp when this progress was recorded
   createdAt: number; // When this record was created
+  /** What triggered this progress save (for filtering jump-back history) */
+  triggerType?: ProgressTriggerType;
+  /** Fragment or highlight ID for precise scroll restoration */
+  targetElementId?: string;
 }
+
+
 
 export interface ReadingSettings {
   id: string; // Primary key (single record, use 'default')
