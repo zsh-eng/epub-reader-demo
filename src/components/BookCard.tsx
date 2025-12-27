@@ -126,7 +126,7 @@ export function BookCard({ book, onDelete }: BookCardProps) {
           dnf: "Did Not Finish",
         };
         toast({
-          title: `Marked as ${statusLabels[newStatus]}`,
+          title: `Marked ${book.title} as ${statusLabels[newStatus]}`,
         });
       },
     });
