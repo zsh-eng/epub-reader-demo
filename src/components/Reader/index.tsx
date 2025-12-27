@@ -28,7 +28,6 @@ import type { Highlight } from "@/types/highlight";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { TableOfContents } from "./TableOfContents";
 
 /**
  * Active highlight state - combines id and position into a single piece of state
@@ -56,7 +55,7 @@ export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   // Read navigation state for scroll-to-highlight
   const navigationState = location.state as {
     scrollToHighlight?: { spineItemId: string; highlightId: string };
@@ -68,8 +67,6 @@ export function Reader() {
   // Mobile detection
   const isMobile = useIsMobile();
 
-  // Local state
-  const [isTOCOpen, setIsTOCOpen] = useState(false);
   const [activeHighlight, setActiveHighlight] =
     useState<ActiveHighlightState | null>(null);
 
@@ -192,10 +189,10 @@ export function Reader() {
       return;
     }
     hasHandledScrollToHighlightRef.current = true;
-    
+
     const { spineItemId, highlightId } = navigationState.scrollToHighlight;
     goToHighlight(spineItemId, highlightId);
-    
+
     // Clear the navigation state to prevent re-navigation
     window.history.replaceState({}, document.title);
   }, [navigationState, book, goToHighlight]);
@@ -337,14 +334,6 @@ export function Reader() {
           onNavigateToChapter={goToChapterByHref}
         />
       )}
-      {
-        <TableOfContents
-          toc={book.toc}
-          isOpen={isTOCOpen}
-          onOpenChange={setIsTOCOpen}
-          onNavigate={goToChapterByHref}
-        />
-      }
 
       <ReaderContent
         content={chapterContent}
@@ -377,8 +366,6 @@ export function Reader() {
         onEditClose={() => setActiveHighlight(null)}
         isNavVisible={isVisible}
       />
-
-
     </div>
   );
 }
