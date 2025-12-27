@@ -1,13 +1,13 @@
 /**
  * HighlightCard Component
  *
- * Displays a single highlight with color-coded border, text, timestamp,
- * and action icons that appear on click.
+ * Displays a single highlight as a compact messaging-style bubble
+ * with color dot, text, and inline timestamp.
  */
 
 import { Button } from "@/components/ui/button";
+import { formatHighlightTime } from "@/lib/date-utils";
 import type { SyncedHighlight } from "@/lib/db";
-import { formatDistanceToNow } from "date-fns";
 import { BookOpen, Pencil, Trash2, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
@@ -19,11 +19,12 @@ interface HighlightCardProps {
   onEdit?: (highlightId: string) => void;
 }
 
-const colorClasses: Record<string, string> = {
-  yellow: "border-l-yellow-secondary",
-  green: "border-l-green-secondary",
-  blue: "border-l-blue-secondary",
-  magenta: "border-l-magenta-secondary",
+// Color dot classes for highlight indicator
+const colorDotClasses: Record<string, string> = {
+  yellow: "bg-yellow-secondary",
+  green: "bg-green-secondary",
+  blue: "bg-blue-secondary",
+  magenta: "bg-magenta-secondary",
 };
 
 export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProps) {
@@ -36,7 +37,6 @@ export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProp
 
   const handleNavigate = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Navigate to reader with scroll-to-highlight state
     navigate(`/reader/${highlight.bookId}`, {
       state: {
         scrollToHighlight: {
@@ -64,88 +64,101 @@ export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProp
     setIsExpanded(false);
   };
 
-  const colorClass = colorClasses[highlight.color] ?? "border-l-muted-foreground";
-  const relativeTime = formatDistanceToNow(new Date(highlight.createdAt), { addSuffix: true });
+  const colorDotClass = colorDotClasses[highlight.color] ?? "bg-muted-foreground";
+  const formattedTime = formatHighlightTime(highlight.createdAt);
 
   return (
     <motion.div
       layout
       onClick={handleCardClick}
-      className={`
-        relative p-4 rounded-lg bg-card border border-border
-        border-l-4 ${colorClass}
-        cursor-pointer transition-colors
-        hover:bg-accent/50
-      `}
+      className="relative inline-block max-w-full"
     >
-      {/* Highlight text */}
-      <p className="text-sm text-foreground leading-relaxed line-clamp-3">
-        "{highlight.selectedText}"
-      </p>
+      <div
+        className={`
+          relative px-3 py-2 rounded-xl bg-card border border-border
+          cursor-pointer transition-colors
+          hover:bg-accent/50
+        `}
+      >
+        {/* Highlight text with inline timestamp */}
+        <div className="flex flex-col gap-1">
+          <p className="text-sm text-foreground leading-relaxed line-clamp-3 break-words">
+            "{highlight.selectedText}"
+          </p>
 
-      {/* Note preview (if exists) */}
-      {highlight.note && (
-        <p className="mt-2 text-xs text-muted-foreground italic line-clamp-2">
-          💬 {highlight.note}
-        </p>
-      )}
+          {/* Note preview (if exists) */}
+          {highlight.note && (
+            <p className="text-xs text-muted-foreground italic line-clamp-2">
+              💬 {highlight.note}
+            </p>
+          )}
 
-      {/* Timestamp */}
-      <p className="mt-2 text-xs text-muted-foreground">{relativeTime}</p>
+          {/* Timestamp with color dot - bottom right */}
+          <div className="flex items-center justify-end gap-1.5 mt-0.5">
+            <span
+              className={`w-2 h-2 rounded-full ${colorDotClass}`}
+              aria-label={`${highlight.color} highlight`}
+            />
+            <span className="text-[11px] text-muted-foreground">
+              {formattedTime}
+            </span>
+          </div>
+        </div>
 
-      {/* Action buttons (shown when expanded) */}
-      <AnimatePresence>
-        {isExpanded && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-2 right-2 flex items-center gap-1"
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
-              onClick={handleNavigate}
-              title="Go to highlight"
+        {/* Action buttons (shown when expanded) */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+              className="absolute top-2 right-2 flex items-center gap-1"
             >
-              <BookOpen className="h-4 w-4" />
-            </Button>
-            {onEdit && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
-                onClick={handleEdit}
-                title="Edit note"
+                onClick={handleNavigate}
+                title="Go to highlight"
               >
-                <Pencil className="h-4 w-4" />
+                <BookOpen className="h-4 w-4" />
               </Button>
-            )}
-            {onDelete && (
+              {onEdit && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
+                  onClick={handleEdit}
+                  title="Edit note"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm text-destructive hover:text-destructive"
+                  onClick={handleDelete}
+                  title="Delete highlight"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm text-destructive hover:text-destructive"
-                onClick={handleDelete}
-                title="Delete highlight"
+                className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
+                onClick={handleClose}
+                title="Close"
               >
-                <Trash2 className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
-              onClick={handleClose}
-              title="Close"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }

@@ -2,7 +2,7 @@
  * Highlights Page
  *
  * Displays all highlights across all books, grouped by book,
- * with search and color filtering.
+ * with search and color filtering. Uses messaging-style UI.
  */
 
 import { HighlightCard } from "@/components/HighlightCard";
@@ -16,7 +16,10 @@ import {
   type BookHighlightGroup,
 } from "@/hooks/use-all-highlights-query";
 import { deleteHighlight as deleteHighlightFromDb } from "@/lib/db";
-import { HIGHLIGHT_COLORS, type HighlightColor } from "@/lib/highlight-constants";
+import {
+  HIGHLIGHT_COLORS,
+  type HighlightColor,
+} from "@/lib/highlight-constants";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowLeft, Highlighter, Search } from "lucide-react";
@@ -42,7 +45,8 @@ function ColorFilterBar({
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground mr-1">Filter:</span>
       {HIGHLIGHT_COLORS.map(({ name }) => {
-        const isSelected = selectedColors.length === 0 || selectedColors.includes(name);
+        const isSelected =
+          selectedColors.length === 0 || selectedColors.includes(name);
         return (
           <button
             key={name}
@@ -68,15 +72,19 @@ function ColorFilterBar({
   );
 }
 
-function BookCoverThumbnail({ coverContentHash }: { coverContentHash?: string }) {
+function BookCoverThumbnail({
+  coverContentHash,
+}: {
+  coverContentHash?: string;
+}) {
   const { url: coverUrl } = useFileUrl(coverContentHash, "cover", {
     skip: !coverContentHash,
   });
 
   if (!coverUrl) {
     return (
-      <div className="w-12 h-16 bg-secondary rounded flex items-center justify-center flex-shrink-0">
-        <Highlighter className="w-5 h-5 text-muted-foreground" />
+      <div className="w-6 h-8 bg-secondary rounded-md flex items-center justify-center flex-shrink-0">
+        <Highlighter className="w-4 h-4 text-muted-foreground" />
       </div>
     );
   }
@@ -85,12 +93,22 @@ function BookCoverThumbnail({ coverContentHash }: { coverContentHash?: string })
     <img
       src={coverUrl}
       alt="Book cover"
-      className="w-12 h-16 object-cover rounded flex-shrink-0"
+      className="w-10 h-14 object-cover rounded-md flex-shrink-0"
     />
   );
 }
 
-function BookSection({ group, headerHeight }: { group: BookHighlightGroup; headerHeight: number }) {
+/**
+ * Container for a group of highlights from the same book
+ * with a sticky header showing book info
+ */
+function HighlightGroupContainer({
+  group,
+  headerHeight,
+}: {
+  group: BookHighlightGroup;
+  headerHeight: number;
+}) {
   const queryClient = useQueryClient();
 
   const deleteMutation = useMutation({
@@ -101,25 +119,28 @@ function BookSection({ group, headerHeight }: { group: BookHighlightGroup; heade
   });
 
   return (
-    <section className="mb-8">
-      {/* Book Header - sticky on mobile */}
-      <div 
-        className="sticky md:static z-10 bg-background/95 backdrop-blur-sm py-3 -mx-4 px-4 md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none border-b md:border-none border-border mb-4"
-        style={{ top: headerHeight }}
+    <section className="mb-6 relative flex flex-col">
+      {/* Book Header - sticky */}
+      <div
+        className="sticky z-10 bg-muted/80 backdrop-blur-md shadow-lg py-2 px-3 border mb-2 rounded-xl min-w-64 self-center max-w-[80%] cursor-pointer"
+        style={{ top: headerHeight + 180 }}
       >
         <div className="flex items-center gap-3">
           <BookCoverThumbnail coverContentHash={group.book.coverContentHash} />
-          <div className="min-w-0 flex-1">
-            <h2 className="font-semibold text-foreground truncate">{group.book.title}</h2>
-            <p className="text-sm text-muted-foreground truncate">
-              {group.book.author} • {group.highlights.length} highlight{group.highlights.length !== 1 ? "s" : ""}
-            </p>
+          <div className="min-w-0 flex-1 flex-col items-center justify-between gap-2">
+            <h2 className="font-medium text-foreground truncate text-sm">
+              {group.book.title}
+            </h2>
+            <span className="text-xs text-muted-foreground flex-shrink-0">
+              {group.highlights.length}{" "}
+              {group.highlights.length === 1 ? "highlight" : "highlights"}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Highlights */}
-      <div className="space-y-3 overflow-hidden">
+      {/* Highlights - tighter spacing for messaging feel */}
+      <div className="space-y-1.5 pl-1">
         <AnimatePresence initial={false}>
           {group.highlights.map((highlight) => (
             <motion.div
@@ -163,7 +184,7 @@ export function Highlights() {
 
   const handleToggleColor = (color: HighlightColor) => {
     setSelectedColors((prev) =>
-      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color]
+      prev.includes(color) ? prev.filter((c) => c !== color) : [...prev, color],
     );
   };
 
@@ -175,7 +196,10 @@ export function Highlights() {
     return result;
   }, [groups, selectedColors, searchQuery]);
 
-  const totalHighlights = filteredGroups.reduce((sum, g) => sum + g.highlights.length, 0);
+  // const totalHighlights = filteredGroups.reduce(
+  //   (sum, g) => sum + g.highlights.length,
+  //   0,
+  // );
 
   if (isLoading) {
     return (
@@ -191,7 +215,10 @@ export function Highlights() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header - sticky */}
-      <header ref={headerRef} className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border">
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border"
+      >
         <div className="max-w-3xl mx-auto px-4 py-4">
           {/* Top row: back button and title */}
           <div className="flex items-center gap-3 mb-4">
@@ -202,9 +229,11 @@ export function Highlights() {
             </Link>
             <div className="text-left">
               <h1 className="text-lg font-semibold">Highlights</h1>
-              <p className="text-xs text-muted-foreground">
-                {totalHighlights} highlight{totalHighlights !== 1 ? "s" : ""} across {filteredGroups.length} book{filteredGroups.length !== 1 ? "s" : ""}
-              </p>
+              {/*<p className="text-xs text-muted-foreground">
+                {totalHighlights} highlight{totalHighlights !== 1 ? "s" : ""}{" "}
+                across {filteredGroups.length} book
+                {filteredGroups.length !== 1 ? "s" : ""}
+              </p>*/}
             </div>
           </div>
 
@@ -220,12 +249,15 @@ export function Highlights() {
           </div>
 
           {/* Color filters */}
-          <ColorFilterBar selectedColors={selectedColors} onToggleColor={handleToggleColor} />
+          <ColorFilterBar
+            selectedColors={selectedColors}
+            onToggleColor={handleToggleColor}
+          />
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-3xl mx-auto px-4 py-6 overflow-hidden">
+      <main className="max-w-3xl mx-auto px-4 py-4">
         {filteredGroups.length > 0 ? (
           <AnimatePresence initial={false}>
             {filteredGroups.map((group) => (
@@ -236,7 +268,10 @@ export function Highlights() {
                 exit={{ opacity: 0, height: 0 }}
                 transition={{ duration: 0.2 }}
               >
-                <BookSection group={group} headerHeight={headerHeight} />
+                <HighlightGroupContainer
+                  group={group}
+                  headerHeight={headerHeight}
+                />
               </motion.div>
             ))}
           </AnimatePresence>
@@ -246,7 +281,9 @@ export function Highlights() {
               <Highlighter className="h-12 w-12 text-muted-foreground/50" />
             </div>
             <h3 className="text-xl font-semibold text-foreground mb-2">
-              {searchQuery || selectedColors.length > 0 ? "No highlights found" : "No highlights yet"}
+              {searchQuery || selectedColors.length > 0
+                ? "No highlights found"
+                : "No highlights yet"}
             </h3>
             <p className="text-muted-foreground max-w-sm mx-auto">
               {searchQuery || selectedColors.length > 0
