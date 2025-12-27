@@ -226,9 +226,6 @@ export function MobileReaderNav({
             paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
           }}
         >
-          <DrawerHeader>
-            <DrawerTitle>Table of Contents</DrawerTitle>
-          </DrawerHeader>
           <div className="overflow-y-auto px-4 max-h-[60vh]">
             {flatTOC && flatTOC.length > 0 ? (
               <div className="space-y-1">
