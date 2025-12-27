@@ -45,7 +45,7 @@ function BookCoverVisual({
   isLoadingCover,
   title,
 }: {
-  coverUrl: string | null;
+  coverUrl: string | null | undefined;
   isLoadingCover: boolean;
   title: string;
 }) {
