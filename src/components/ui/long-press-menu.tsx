@@ -3,14 +3,7 @@
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 // ============================================================================
@@ -19,11 +12,13 @@ import { createPortal } from "react-dom";
 
 interface LongPressMenuContextValue {
   isOpen: boolean;
+  isPressing: boolean;
   open: () => void;
   close: () => void;
   triggerRect: DOMRect | null;
   setTriggerRect: (rect: DOMRect | null) => void;
-  layoutId: string;
+  triggerRef: React.MutableRefObject<HTMLElement | null>;
+  setIsPressing: (pressing: boolean) => void;
 }
 
 const LongPressMenuContext = createContext<LongPressMenuContextValue | null>(
@@ -46,7 +41,7 @@ function useLongPressMenu() {
 
 interface LongPressMenuProps {
   children: React.ReactNode;
-  /** Duration in ms before long-press triggers. Default: 500ms */
+  /** Duration in ms before long-press triggers. Default: 300ms */
   pressDelay?: number;
   /** Whether to trigger haptic feedback. Default: true */
   hapticFeedback?: boolean;
@@ -58,14 +53,16 @@ function LongPressMenu({
   hapticFeedback = true,
 }: LongPressMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isPressing, setIsPressing] = useState(false);
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
-  const layoutId = useId();
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   const open = React.useCallback(() => {
     if (hapticFeedback && navigator.vibrate) {
       navigator.vibrate(10);
     }
     setIsOpen(true);
+    setIsPressing(false); // No longer pressing once menu opens
   }, [hapticFeedback]);
 
   const close = React.useCallback(() => {
@@ -74,7 +71,16 @@ function LongPressMenu({
 
   return (
     <LongPressMenuContext.Provider
-      value={{ isOpen, open, close, triggerRect, setTriggerRect, layoutId }}
+      value={{
+        isOpen,
+        isPressing,
+        open,
+        close,
+        triggerRect,
+        setTriggerRect,
+        triggerRef,
+        setIsPressing,
+      }}
     >
       <LongPressMenuInner pressDelay={pressDelay}>
         {children}
@@ -91,9 +97,9 @@ function LongPressMenuInner({
   children: React.ReactNode;
   pressDelay: number;
 }) {
-  const { isOpen, open, close, setTriggerRect } = useLongPressMenu();
+  const { isOpen, open, close, setTriggerRect, triggerRef, setIsPressing } =
+    useLongPressMenu();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
   const isPressingRef = useRef(false);
 
   // Cleanup timer on unmount
@@ -128,9 +134,17 @@ function LongPressMenuInner({
 
     isPressingRef.current = true;
     triggerRef.current = element;
+    setIsPressing(true); // Start visual feedback
 
     timerRef.current = setTimeout(() => {
       if (isPressingRef.current && triggerRef.current) {
+        // Smooth scroll the element into view
+        triggerRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+
+        // Get rect and open menu immediately
         const rect = triggerRef.current.getBoundingClientRect();
         setTriggerRect(rect);
         open();
@@ -140,6 +154,7 @@ function LongPressMenuInner({
 
   const handlePressEnd = () => {
     isPressingRef.current = false;
+    setIsPressing(false);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -148,6 +163,7 @@ function LongPressMenuInner({
 
   const handlePressCancel = () => {
     isPressingRef.current = false;
+    setIsPressing(false);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
@@ -203,7 +219,7 @@ function LongPressMenuTrigger({
   onPressCancel,
 }: LongPressMenuTriggerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const { isOpen, layoutId } = useLongPressMenu();
+  const { isOpen, isPressing } = useLongPressMenu();
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (ref.current && onPressStart) {
@@ -224,10 +240,29 @@ function LongPressMenuTrigger({
     e.preventDefault();
   };
 
+  // Determine transform based on state
+  const getTransform = () => {
+    if (isOpen) return "scale(1.05)";
+    if (isPressing) return "scale(0.97)";
+    return undefined;
+  };
+
   return (
     <div
       ref={ref}
-      className={cn("touch-none select-none", className)}
+      className={cn(
+        "touch-none select-none transition-transform duration-200",
+        className,
+      )}
+      style={{
+        // Disable iOS long-press callout menu
+        WebkitTouchCallout: "none",
+        WebkitUserSelect: "none",
+        // When open, lift the element with z-index and scale
+        position: isOpen ? "relative" : undefined,
+        zIndex: isOpen ? 60 : undefined,
+        transform: getTransform(),
+      }}
       onTouchStart={handleTouchStart}
       onTouchEnd={onPressEnd}
       onTouchCancel={onPressCancel}
@@ -236,28 +271,14 @@ function LongPressMenuTrigger({
       onMouseLeave={onPressCancel}
       onContextMenu={handleContextMenu}
     >
-      {/* When closed, show the content with layoutId for shared element animation */}
-      {/* Exit animation uses this element's transition - fast ease-out */}
-      {!isOpen && (
-        <motion.div
-          layoutId={layoutId}
-          transition={{
-            duration: 0.2,
-            ease: [0.32, 0.72, 0, 1], // Custom ease-out curve
-          }}
-        >
-          {children}
-        </motion.div>
-      )}
-      {/* When open, keep a placeholder to maintain layout */}
-      {isOpen && <div style={{ visibility: "hidden" }}>{children}</div>}
+      {children}
     </div>
   );
 }
 LongPressMenuTrigger.displayName = "LongPressMenuTrigger";
 
 // ============================================================================
-// Content (Overlay + Cloned Content + Menu)
+// Content (Overlay via portal + Menu rendered relative to trigger)
 // ============================================================================
 
 interface LongPressMenuContentProps {
@@ -269,77 +290,64 @@ function LongPressMenuContent({
   children,
   className,
 }: LongPressMenuContentProps) {
-  const { isOpen, close, triggerRect } = useLongPressMenu();
+  const { isOpen, close, triggerRef } = useLongPressMenu();
+  const [placement, setPlacement] = useState<"above" | "below">("below");
+
+  // Determine placement based on trigger position in viewport
+  useEffect(() => {
+    if (!isOpen || !triggerRef.current) return;
+
+    const rect = triggerRef.current.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const menuHeight = 200; // Approximate
+    const gap = 12;
+
+    const spaceBelow = viewportHeight - rect.bottom;
+    setPlacement(spaceBelow >= menuHeight + gap ? "below" : "above");
+  }, [isOpen, triggerRef]);
 
   if (typeof document === "undefined") return null;
 
-  return createPortal(
+  // Backdrop is portaled to cover everything
+  const backdrop = createPortal(
     <AnimatePresence>
-      {isOpen && triggerRect && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xl"
-            onClick={close}
-          />
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
+          onClick={close}
+        />
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
 
-          {/* Content container - centered */}
+  // Menu is rendered relative to the trigger (not portaled)
+  // This means it scrolls with the trigger naturally
+  return (
+    <>
+      {backdrop}
+      <AnimatePresence>
+        {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 1 }}
-            animate={{ opacity: 1, scale: 1.1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: placement === "below" ? -8 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: placement === "below" ? -8 : 8 }}
             transition={{ duration: 0.15 }}
             className={cn(
-              "fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2",
-              "flex flex-col items-center gap-3",
+              "absolute z-[70] left-1/2 -translate-x-1/2",
+              placement === "below" ? "top-full mt-3" : "bottom-full mb-3",
               className,
             )}
           >
             {children}
           </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body,
-  );
-}
-
-// ============================================================================
-// Preview - renders a preview of the trigger content with shared layoutId
-// ============================================================================
-
-interface LongPressMenuPreviewProps {
-  children: React.ReactNode;
-  className?: string;
-}
-
-function LongPressMenuPreview({
-  children,
-  className,
-}: LongPressMenuPreviewProps) {
-  const { triggerRect, layoutId } = useLongPressMenu();
-
-  if (!triggerRect) return null;
-
-  return (
-    <motion.div
-      layoutId={layoutId}
-      className={cn("pointer-events-none", className)}
-      style={{
-        width: triggerRect.width,
-      }}
-      transition={{
-        type: "spring",
-        damping: 26, // Lower damping = more bounce/overshoot
-        stiffness: 400, // Higher stiffness = faster
-      }}
-    >
-      {children}
-    </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
@@ -370,16 +378,8 @@ function LongPressMenuItem({
   };
 
   return (
-    <motion.button
-      variants={{
-        hidden: { opacity: 0, y: 8 },
-        visible: { opacity: 1, y: 0 },
-      }}
-      transition={{
-        type: "spring",
-        damping: 20,
-        stiffness: 400,
-      }}
+    <button
+      type="button"
       disabled={disabled}
       className={cn(
         "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm transition-colors",
@@ -391,12 +391,12 @@ function LongPressMenuItem({
       onClick={handleClick}
     >
       {children}
-    </motion.button>
+    </button>
   );
 }
 
 // ============================================================================
-// Items Container - groups menu items with staggered animation
+// Items Container
 // ============================================================================
 
 interface LongPressMenuItemsProps {
@@ -406,35 +406,14 @@ interface LongPressMenuItemsProps {
 
 function LongPressMenuItems({ children, className }: LongPressMenuItemsProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.9 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{
-        type: "spring",
-        damping: 15, // Lower damping = bouncy overshoot
-        stiffness: 400,
-      }}
+    <div
       className={cn(
-        "w-full min-w-[200px] overflow-hidden rounded-xl bg-popover p-1 shadow-lg ring-1 ring-border",
+        "w-[220px] overflow-hidden rounded-xl bg-popover p-1 shadow-lg ring-1 ring-border",
         className,
       )}
     >
-      <motion.div
-        initial="hidden"
-        animate="visible"
-        variants={{
-          hidden: {},
-          visible: {
-            transition: {
-              staggerChildren: 0.03,
-              delayChildren: 0.05,
-            },
-          },
-        }}
-      >
-        {children}
-      </motion.div>
-    </motion.div>
+      {children}
+    </div>
   );
 }
 
@@ -455,7 +434,6 @@ export {
   LongPressMenuContent,
   LongPressMenuItem,
   LongPressMenuItems,
-  LongPressMenuPreview,
   LongPressMenuSeparator,
   LongPressMenuTrigger,
 };

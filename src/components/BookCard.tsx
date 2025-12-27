@@ -13,7 +13,6 @@ import {
   LongPressMenuContent,
   LongPressMenuItem,
   LongPressMenuItems,
-  LongPressMenuPreview,
   LongPressMenuSeparator,
   LongPressMenuTrigger,
 } from "@/components/ui/long-press-menu";
@@ -241,17 +240,6 @@ export function BookCard({ book, onDelete }: BookCardProps) {
 
       {/* Long Press Menu Content */}
       <LongPressMenuContent>
-        {/* Preview of the book cover */}
-        <LongPressMenuPreview>
-          <div className="aspect-[2/3] w-full">
-            <BookCoverVisual
-              coverUrl={coverUrl}
-              isLoadingCover={isLoadingCover}
-              title={book.title}
-            />
-          </div>
-        </LongPressMenuPreview>
-
         {/* Context Menu Items */}
         <LongPressMenuItems>
           <LongPressMenuItem onClick={() => handleSetStatus("reading")}>
