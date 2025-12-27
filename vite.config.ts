@@ -66,6 +66,6 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ["fe-dev.zsheng.app"],
+    allowedHosts: ["fe-dev.zsheng.app", "pc.zsheng.app"],
   },
 });
