@@ -2,6 +2,7 @@ import {
   restoreScrollFromPercentage,
   waitForContentStability,
 } from "@/lib/scroll-anchor";
+import { EPUB_HIGHLIGHT_DATA_ATTRIBUTE } from "@/types/reader.types";
 import { type ScrollTarget } from "@/types/scroll-target";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -27,6 +28,15 @@ function scrollToFragment(fragmentId: string): boolean {
   const fragment = document.getElementById(fragmentId);
   if (!fragment) return false;
   fragment.scrollIntoView({ behavior: "instant", block: "center" });
+  return true;
+}
+
+function scrollToHighlight(highlightId: string): boolean {
+  const highlight = document.querySelector(
+    `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlightId}"]`,
+  );
+  if (!highlight) return false;
+  highlight.scrollIntoView({ behavior: "instant", block: "center" });
   return true;
 }
 
@@ -97,6 +107,10 @@ export function useScrollTarget({
             // 0% means top of page
             window.scrollTo({ top: 0, behavior: "instant" });
           }
+          break;
+
+        case "highlight":
+          scrollToHighlight(scrollTarget.highlightId);
           break;
       }
 

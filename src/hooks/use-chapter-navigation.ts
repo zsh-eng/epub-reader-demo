@@ -9,6 +9,7 @@ export interface UseChapterNavigationReturn {
   goToNextChapter: () => void;
   goToChapterByHref: (href: string) => void;
   goToChapterWithFragment: (href: string, fragment?: string) => void;
+  goToHighlight: (spineItemId: string, highlightId: string) => void;
 }
 
 function newReadingProgress(
@@ -129,10 +130,45 @@ export function useChapterNavigation(
     ],
   );
 
+  const goToHighlight = useCallback(
+    (spineItemId: string, highlightId: string) => {
+      if (!book || !bookId) return;
+
+      // Find spine index by spineItemId (idref)
+      const spineIndex = book.spine.findIndex(
+        (item) => item.idref === spineItemId,
+      );
+      if (spineIndex === -1) return;
+
+      // Same chapter - just scroll to the highlight
+      if (spineIndex === currentChapterIndex) {
+        setScrollTarget({ type: "highlight", highlightId });
+        return;
+      }
+
+      // Navigate to chapter with highlight scroll target
+      setCurrentChapterIndex(spineIndex);
+      setScrollTarget({ type: "highlight", highlightId });
+
+      // Save progress
+      const progress = newReadingProgress(bookId, spineIndex);
+      saveProgressMutation.mutate(progress);
+    },
+    [
+      book,
+      bookId,
+      currentChapterIndex,
+      setCurrentChapterIndex,
+      setScrollTarget,
+      saveProgressMutation,
+    ],
+  );
+
   return {
     goToPreviousChapter,
     goToNextChapter,
     goToChapterByHref,
     goToChapterWithFragment,
+    goToHighlight,
   };
 }

@@ -26,7 +26,7 @@ import { useTextSelection } from "@/hooks/use-text-selection";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { TableOfContents } from "./TableOfContents";
 
@@ -52,9 +52,15 @@ export interface ActiveHighlightState {
  * - Keyboard navigation
  */
 export function Reader() {
-  // Route params
+  // Route params and navigation
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Read navigation state for scroll-to-highlight
+  const navigationState = location.state as {
+    scrollToHighlight?: { spineItemId: string; highlightId: string };
+  } | null;
 
   // Refs
   const readerContentRef = useRef<HTMLDivElement>(null);
@@ -166,6 +172,7 @@ export function Reader() {
     goToNextChapter,
     goToChapterByHref,
     goToChapterWithFragment,
+    goToHighlight,
   } = useChapterNavigation(
     book,
     bookId,
@@ -173,6 +180,25 @@ export function Reader() {
     setCurrentChapterIndex,
     setScrollTarget,
   );
+
+  // Handle scroll-to-highlight navigation state
+  const hasHandledScrollToHighlightRef = useRef(false);
+  useEffect(() => {
+    if (
+      !navigationState?.scrollToHighlight ||
+      hasHandledScrollToHighlightRef.current ||
+      !book
+    ) {
+      return;
+    }
+    hasHandledScrollToHighlightRef.current = true;
+    
+    const { spineItemId, highlightId } = navigationState.scrollToHighlight;
+    goToHighlight(spineItemId, highlightId);
+    
+    // Clear the navigation state to prevent re-navigation
+    window.history.replaceState({}, document.title);
+  }, [navigationState, book, goToHighlight]);
 
   // Keyboard navigation
   useKeyboardNavigation(goToPreviousChapter, goToNextChapter, () =>

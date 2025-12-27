@@ -36,9 +36,15 @@ export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProp
 
   const handleNavigate = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Navigate to reader at this book
-    // TODO: Deep link to specific chapter/position when available
-    navigate(`/reader/${highlight.bookId}`);
+    // Navigate to reader with scroll-to-highlight state
+    navigate(`/reader/${highlight.bookId}`, {
+      state: {
+        scrollToHighlight: {
+          spineItemId: highlight.spineItemId,
+          highlightId: highlight.id,
+        },
+      },
+    });
   };
 
   const handleEdit = (e: React.MouseEvent) => {
