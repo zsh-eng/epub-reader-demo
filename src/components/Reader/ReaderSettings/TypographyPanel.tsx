@@ -17,6 +17,7 @@ import {
   MoveVertical,
   Plus,
 } from "lucide-react";
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { useEffect, useRef } from "react";
 
 interface TypographyPanelProps {
@@ -222,7 +223,7 @@ export function TypographyPanel({
             <span className="sr-only">Decrease font size</span>
           </Button>
           <span className="text-sm font-medium text-center tabular-nums min-w-[4rem] w-[50%]">
-            {settings.fontSize}%
+            <AnimatedNumber value={settings.fontSize} format={(v) => `${Math.round(v)}%`} />
           </span>
           <Button
             variant="outline"
