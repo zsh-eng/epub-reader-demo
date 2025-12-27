@@ -15,9 +15,7 @@ interface LongPressMenuContextValue {
   isPressing: boolean;
   open: () => void;
   close: () => void;
-  triggerRect: DOMRect | null;
-  setTriggerRect: (rect: DOMRect | null) => void;
-  triggerRef: React.MutableRefObject<HTMLElement | null>;
+  anchorName: string;
   setIsPressing: (pressing: boolean) => void;
 }
 
@@ -33,6 +31,12 @@ function useLongPressMenu() {
     );
   }
   return context;
+}
+
+// Generate unique anchor name for each menu instance
+let anchorCounter = 0;
+function generateAnchorName() {
+  return `--long-press-menu-anchor-${++anchorCounter}`;
 }
 
 // ============================================================================
@@ -54,8 +58,8 @@ function LongPressMenu({
 }: LongPressMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
-  const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null);
-  const triggerRef = useRef<HTMLElement | null>(null);
+  // Generate a stable anchor name for this menu instance
+  const anchorNameRef = useRef<string>(generateAnchorName());
 
   const open = React.useCallback(() => {
     if (hapticFeedback && navigator.vibrate) {
@@ -76,9 +80,7 @@ function LongPressMenu({
         isPressing,
         open,
         close,
-        triggerRect,
-        setTriggerRect,
-        triggerRef,
+        anchorName: anchorNameRef.current,
         setIsPressing,
       }}
     >
@@ -97,10 +99,10 @@ function LongPressMenuInner({
   children: React.ReactNode;
   pressDelay: number;
 }) {
-  const { isOpen, open, close, setTriggerRect, triggerRef, setIsPressing } =
-    useLongPressMenu();
+  const { isOpen, open, close, setIsPressing } = useLongPressMenu();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPressingRef = useRef(false);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -144,9 +146,7 @@ function LongPressMenuInner({
           block: "center",
         });
 
-        // Get rect and open menu immediately
-        const rect = triggerRef.current.getBoundingClientRect();
-        setTriggerRect(rect);
+        // Open menu - CSS anchor positioning handles the rest!
         open();
       }
     }, pressDelay);
@@ -219,7 +219,7 @@ function LongPressMenuTrigger({
   onPressCancel,
 }: LongPressMenuTriggerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const { isOpen, isPressing } = useLongPressMenu();
+  const { isOpen, isPressing, anchorName } = useLongPressMenu();
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (ref.current && onPressStart) {
@@ -254,15 +254,19 @@ function LongPressMenuTrigger({
         "touch-none select-none transition-transform duration-200",
         className,
       )}
-      style={{
-        // Disable iOS long-press callout menu
-        WebkitTouchCallout: "none",
-        WebkitUserSelect: "none",
-        // When open, lift the element with z-index and scale
-        position: isOpen ? "relative" : undefined,
-        zIndex: isOpen ? 60 : undefined,
-        transform: getTransform(),
-      }}
+      style={
+        {
+          // Disable iOS long-press callout menu
+          WebkitTouchCallout: "none",
+          WebkitUserSelect: "none",
+          // CSS Anchor Positioning: register this element as an anchor
+          anchorName: anchorName,
+          // When open, lift the element with z-index and scale
+          position: isOpen ? "relative" : undefined,
+          zIndex: isOpen ? 60 : undefined,
+          transform: getTransform(),
+        } as React.CSSProperties
+      }
       onTouchStart={handleTouchStart}
       onTouchEnd={onPressEnd}
       onTouchCancel={onPressCancel}
@@ -278,35 +282,29 @@ function LongPressMenuTrigger({
 LongPressMenuTrigger.displayName = "LongPressMenuTrigger";
 
 // ============================================================================
-// Content (Overlay via portal + Menu rendered relative to trigger)
+// Content (Overlay via portal + Menu using CSS Anchor Positioning)
 // ============================================================================
 
 interface LongPressMenuContentProps {
   children: React.ReactNode;
   className?: string;
+  /** Preferred placement: "above" or "below" the trigger. Default: "below" */
+  preferredPlacement?: "above" | "below";
 }
 
 function LongPressMenuContent({
   children,
   className,
+  preferredPlacement = "below",
 }: LongPressMenuContentProps) {
-  const { isOpen, close, triggerRef } = useLongPressMenu();
-  const [placement, setPlacement] = useState<"above" | "below">("below");
-
-  // Determine placement based on trigger position in viewport
-  useEffect(() => {
-    if (!isOpen || !triggerRef.current) return;
-
-    const rect = triggerRef.current.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const menuHeight = 200; // Approximate
-    const gap = 12;
-
-    const spaceBelow = viewportHeight - rect.bottom;
-    setPlacement(spaceBelow >= menuHeight + gap ? "below" : "above");
-  }, [isOpen, triggerRef]);
+  const { isOpen, close, anchorName } = useLongPressMenu();
 
   if (typeof document === "undefined") return null;
+
+  // Calculate position-area based on preferred placement
+  // "bottom span-all" = positioned below anchor, centered horizontally
+  // "top span-all" = positioned above anchor, centered horizontally
+  const positionArea = preferredPlacement === "below" ? "bottom" : "top";
 
   // Backdrop is portaled to cover everything
   const backdrop = createPortal(
@@ -325,28 +323,45 @@ function LongPressMenuContent({
     document.body,
   );
 
-  // Menu is rendered relative to the trigger (not portaled)
-  // This means it scrolls with the trigger naturally
+  // Menu content is portaled and uses CSS anchor positioning
+  const menu = createPortal(
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{
+            opacity: 0,
+            y: preferredPlacement === "below" ? -8 : 8,
+          }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{
+            opacity: 0,
+            y: preferredPlacement === "below" ? -8 : 8,
+          }}
+          transition={{ duration: 0.15 }}
+          className={cn("z-[70]", className)}
+          style={
+            {
+              // CSS Anchor Positioning
+              position: "fixed",
+              positionAnchor: anchorName,
+              positionArea: "bottom span-right",
+              positionTryFallbacks: "flip-block",
+              marginTop: "20px",
+              marginLeft: "-4px",
+            } as React.CSSProperties
+          }
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+
   return (
     <>
       {backdrop}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: placement === "below" ? -8 : 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: placement === "below" ? -8 : 8 }}
-            transition={{ duration: 0.15 }}
-            className={cn(
-              "absolute z-[70] left-1/2 -translate-x-1/2",
-              placement === "below" ? "top-full mt-3" : "bottom-full mb-3",
-              className,
-            )}
-          >
-            {children}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {menu}
     </>
   );
 }
