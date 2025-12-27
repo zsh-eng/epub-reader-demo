@@ -35,7 +35,14 @@ function App() {
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
           </Routes>
-          <Toaster />
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              classNames: {
+                toast: "!rounded-2xl",
+              },
+            }}
+          />
           <ReloadPrompt />
         </BrowserRouter>
       </SyncInitializer>
