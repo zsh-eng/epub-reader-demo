@@ -90,7 +90,8 @@ export function TOCPopover({
             asChild
             side="top"
             sideOffset={12}
-            align="center"
+            alignOffset={-8}
+            align="end"
             className="p-0 w-[320px]"
           >
             <motion.div

@@ -46,8 +46,9 @@ export function SettingsPopover({
           <PopoverContent
             asChild
             side="top"
-            sideOffset={12}
             align="end"
+            sideOffset={12}
+            alignOffset={-8}
             className="p-0 w-lg"
           >
             <motion.div
@@ -61,7 +62,7 @@ export function SettingsPopover({
               className="rounded-xl bg-background/95 backdrop-blur-md border shadow-lg overflow-hidden"
             >
               <Tabs defaultValue="typography" className="flex flex-col">
-                <div className="p-4 max-h-[50vh]">
+                <div className="p-4 pb-2 overflow-y-auto">
                   <TabsContent value="typography" className="mt-0">
                     <TypographyPanel
                       settings={settings}
