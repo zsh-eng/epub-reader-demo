@@ -17,72 +17,120 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = STYLES_ID;
   style.textContent = `
-    /* Popover base - reset browser defaults */
+    /* Popover container - positions both clone and menu */
     .long-press-popover {
       border: none;
       padding: 0;
       background: transparent;
       margin: 0;
       overflow: visible;
+      /* Remove default positioning - we handle it manually */
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      pointer-events: none;
+    }
 
+    /* Allow pointer events on children */
+    .long-press-popover > * {
+      pointer-events: auto;
+    }
+
+    /* Native backdrop - covers entire viewport including dynamic island */
+    .long-press-popover::backdrop {
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+
+      /* Entry animation */
+      opacity: 1;
+      transition:
+        opacity 0.25s ease-out,
+        overlay 0.25s ease-out allow-discrete,
+        display 0.25s ease-out allow-discrete;
+    }
+
+    @starting-style {
+      .long-press-popover:popover-open::backdrop {
+        opacity: 0;
+      }
+    }
+
+    /* Exit animation for backdrop */
+    .long-press-popover:not(:popover-open)::backdrop {
+      opacity: 0;
+    }
+
+    /* Cloned element container - positioned at original element's location */
+    .long-press-clone-container {
+      position: absolute;
+      pointer-events: none;
+      /* Entry animation - scale up from pressed state */
+      transform: scale(1);
+      opacity: 1;
+      transition: transform 0.15s ease-out, opacity 0.15s ease-out;
+    }
+
+    @starting-style {
+      .long-press-clone-container {
+        transform: scale(0.96);
+        opacity: 0.8;
+      }
+    }
+
+    /* Clone wrapper to add shadow */
+    .long-press-clone-wrapper {
+      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.3);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    /* Menu container - anchored below the clone */
+    .long-press-menu-container {
+      position: absolute;
       /* Entry animation */
       opacity: 1;
       transform: translateY(0) scale(1);
       transition:
         opacity 0.2s ease-out,
-        transform 0.2s ease-out,
-        overlay 0.2s ease-out allow-discrete,
-        display 0.2s ease-out allow-discrete;
+        transform 0.2s ease-out;
     }
 
-    /* Starting state for entry animation */
     @starting-style {
-      .long-press-popover:popover-open {
+      .long-press-menu-container {
         opacity: 0;
         transform: translateY(-8px) scale(0.96);
       }
     }
 
-    /* Exit animation - when popover is closing */
-    .long-press-popover:not(:popover-open) {
-      opacity: 0;
-      transform: translateY(-8px) scale(0.96);
-    }
-
-    /* Trigger animations */
+    /* Trigger animations - uses CSS custom property for press duration */
     .long-press-trigger {
       touch-action: none;
       user-select: none;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
-      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+      /* Default press duration, overridden by inline style */
+      --press-duration: 400ms;
     }
 
+    /* Press down - slow, synced with long press delay */
     .long-press-trigger[data-pressing="true"] {
-      transform: scale(0.97);
+      transform: scale(0.96);
+      transition: transform var(--press-duration) ease-out;
     }
 
+    /* When menu is open, hide the original (clone is visible in popover) */
     .long-press-trigger[data-open="true"] {
-      position: relative;
-      z-index: 60;
-      transform: scale(1.03);
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      visibility: hidden;
     }
 
-    /* Backdrop styling */
-    .long-press-backdrop {
-      position: fixed;
-      inset: 0;
-      z-index: 50;
-      background: rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(4px);
-      -webkit-backdrop-filter: blur(4px);
-      animation: long-press-fade-in 0.2s ease-out;
-    }
-
-    @keyframes long-press-fade-in {
-      from { opacity: 0; }
-      to { opacity: 1; }
+    /* Default state - fast recovery */
+    .long-press-trigger:not([data-pressing="true"]):not([data-open="true"]) {
+      transform: scale(1);
+      transition: transform 0.15s ease-out;
     }
   `;
   document.head.appendChild(style);
@@ -92,14 +140,23 @@ function injectStyles() {
 // Context
 // ============================================================================
 
+interface TriggerRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
 interface LongPressMenuContextValue {
   isOpen: boolean;
   isPressing: boolean;
-  open: () => void;
+  open: (triggerElement: HTMLElement) => void;
   close: () => void;
-  anchorName: string;
+  pressDelay: number;
   setIsPressing: (pressing: boolean) => void;
   popoverRef: React.RefObject<HTMLDivElement | null>;
+  triggerRect: TriggerRect | null;
+  triggerElement: HTMLElement | null;
 }
 
 const LongPressMenuContext = createContext<LongPressMenuContextValue | null>(
@@ -116,19 +173,13 @@ function useLongPressMenu() {
   return context;
 }
 
-// Generate unique anchor name for each menu instance
-let anchorCounter = 0;
-function generateAnchorName() {
-  return `--long-press-menu-anchor-${++anchorCounter}`;
-}
-
 // ============================================================================
 // Root
 // ============================================================================
 
 interface LongPressMenuProps {
   children: React.ReactNode;
-  /** Duration in ms before long-press triggers. Default: 300ms */
+  /** Duration in ms before long-press triggers. Default: 400ms */
   pressDelay?: number;
   /** Whether to trigger haptic feedback. Default: true */
   hapticFeedback?: boolean;
@@ -136,12 +187,15 @@ interface LongPressMenuProps {
 
 function LongPressMenu({
   children,
-  pressDelay = 300,
+  pressDelay = 400,
   hapticFeedback = true,
 }: LongPressMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
-  const anchorNameRef = useRef<string>(generateAnchorName());
+  const [triggerRect, setTriggerRect] = useState<TriggerRect | null>(null);
+  const [triggerElement, setTriggerElement] = useState<HTMLElement | null>(
+    null,
+  );
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Inject styles on mount
@@ -149,34 +203,59 @@ function LongPressMenu({
     injectStyles();
   }, []);
 
-  const open = React.useCallback(() => {
-    if (hapticFeedback && navigator.vibrate) {
-      navigator.vibrate(10);
-    }
-    setIsOpen(true);
-    setIsPressing(false);
-    // Show the popover
-    popoverRef.current?.showPopover();
-  }, [hapticFeedback]);
+  const open = React.useCallback(
+    (element: HTMLElement) => {
+      if (hapticFeedback && navigator.vibrate) {
+        navigator.vibrate(10);
+      }
+
+      // Capture trigger position and store element reference
+      const rect = element.getBoundingClientRect();
+      setTriggerRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+
+      // Store reference to trigger element for cloning
+      setTriggerElement(element);
+
+      setIsOpen(true);
+      setIsPressing(false);
+
+      // Show the popover
+      popoverRef.current?.showPopover();
+    },
+    [hapticFeedback],
+  );
 
   const close = React.useCallback(() => {
     setIsOpen(false);
+    setTriggerRect(null);
+    setTriggerElement(null);
+    // With popover="auto", hidePopover is optional but calling it ensures sync
     popoverRef.current?.hidePopover();
   }, []);
 
-  // Handle escape key (popover="manual" doesn't auto-dismiss)
+  // Sync React state with native popover toggle events (for light-dismiss)
   useEffect(() => {
-    if (!isOpen) return;
+    const popover = popoverRef.current;
+    if (!popover) return;
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close();
+    const handleToggle = (e: Event) => {
+      const toggleEvent = e as ToggleEvent;
+      if (toggleEvent.newState === "closed") {
+        setIsOpen(false);
+        setIsPressing(false);
+        setTriggerRect(null);
+        setTriggerElement(null);
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, close]);
+    popover.addEventListener("toggle", handleToggle);
+    return () => popover.removeEventListener("toggle", handleToggle);
+  }, []);
 
   return (
     <LongPressMenuContext.Provider
@@ -185,9 +264,11 @@ function LongPressMenu({
         isPressing,
         open,
         close,
-        anchorName: anchorNameRef.current,
+        pressDelay,
         setIsPressing,
         popoverRef,
+        triggerRect,
+        triggerElement,
       }}
     >
       <LongPressMenuInner pressDelay={pressDelay}>
@@ -232,11 +313,7 @@ function LongPressMenuInner({
 
     timerRef.current = setTimeout(() => {
       if (isPressingRef.current && triggerRef.current) {
-        // triggerRef.current.scrollIntoView({
-        //   behavior: "smooth",
-        //   block: "center",
-        // });
-        open();
+        open(triggerRef.current);
       }
     }, pressDelay);
   };
@@ -307,7 +384,7 @@ function LongPressMenuTrigger({
   onPressCancel,
 }: LongPressMenuTriggerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const { isOpen, isPressing, anchorName } = useLongPressMenu();
+  const { isOpen, isPressing, pressDelay } = useLongPressMenu();
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (ref.current && onPressStart) {
@@ -334,7 +411,7 @@ function LongPressMenuTrigger({
       data-open={isOpen}
       style={
         {
-          anchorName: anchorName,
+          "--press-duration": `${pressDelay}ms`,
         } as React.CSSProperties
       }
       onTouchStart={handleTouchStart}
@@ -352,7 +429,7 @@ function LongPressMenuTrigger({
 LongPressMenuTrigger.displayName = "LongPressMenuTrigger";
 
 // ============================================================================
-// Content (uses native popover + CSS anchor positioning + manual backdrop)
+// Content (uses native popover=auto + cloned element + native backdrop)
 // ============================================================================
 
 interface LongPressMenuContentProps {
@@ -364,32 +441,76 @@ function LongPressMenuContent({
   children,
   className,
 }: LongPressMenuContentProps) {
-  const { isOpen, close, anchorName, popoverRef } = useLongPressMenu();
+  const { popoverRef, triggerRect, triggerElement } = useLongPressMenu();
+  const cloneContainerRef = useRef<HTMLDivElement>(null);
+
+  // Clone the trigger element using native DOM methods
+  useEffect(() => {
+    const container = cloneContainerRef.current;
+    if (!container || !triggerElement) return;
+
+    // Clear any existing clone
+    container.innerHTML = "";
+
+    // Clone the trigger element's content
+    const clone = triggerElement.cloneNode(true) as HTMLElement;
+
+    // Remove data attributes and event-related classes from clone
+    clone.removeAttribute("data-pressing");
+    clone.removeAttribute("data-open");
+    clone.classList.remove("long-press-trigger");
+
+    // Reset any transforms on the clone
+    clone.style.transform = "none";
+    clone.style.visibility = "visible";
+
+    container.appendChild(clone);
+
+    // Cleanup on unmount or when trigger changes
+    return () => {
+      container.innerHTML = "";
+    };
+  }, [triggerElement]);
+
+  // Calculate menu position (below the clone)
+  const menuTop = triggerRect ? triggerRect.top + triggerRect.height + 12 : 0;
+  const menuLeft = triggerRect ? triggerRect.left : 0;
 
   return (
-    <>
-      {/* Manual backdrop since popover="manual" doesn't support ::backdrop */}
-      {isOpen && <div className="long-press-backdrop" onClick={close} />}
+    <div
+      ref={popoverRef}
+      popover="auto"
+      className={cn("long-press-popover", className)}
+      style={{
+        top: triggerRect ? triggerRect.top : 0,
+        left: triggerRect ? triggerRect.left : 0,
+      }}
+    >
+      {/* Cloned element container - content added via useEffect */}
+      {triggerRect && (
+        <div
+          ref={cloneContainerRef}
+          className="long-press-clone-container"
+          style={{
+            width: triggerRect.width,
+            height: triggerRect.height,
+          }}
+        />
+      )}
 
-      {/* Popover content */}
-      <div
-        ref={popoverRef}
-        popover="manual"
-        className={cn("long-press-popover", className)}
-        style={
-          {
-            // CSS Anchor Positioning
-            positionAnchor: anchorName,
-            positionArea: "bottom span-right",
-            positionTryFallbacks: "flip-block",
-            marginTop: "12px",
-            marginLeft: "-4px",
-          } as React.CSSProperties
-        }
-      >
-        {children}
-      </div>
-    </>
+      {/* Menu - positioned below the clone */}
+      {triggerRect && (
+        <div
+          className="long-press-menu-container"
+          style={{
+            top: menuTop,
+            left: menuLeft,
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 
