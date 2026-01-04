@@ -1,14 +1,14 @@
 import {
   HIGHLIGHT_COLORS,
-  type HighlightColor,
+  type AnnotationColor,
 } from "@/lib/highlight-constants";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 
 interface MobileHighlightBarProps {
-  onColorSelect: (color: HighlightColor) => void;
+  onColorSelect: (color: AnnotationColor) => void;
   onClose: () => void;
-  currentColor?: HighlightColor;
+  currentColor?: AnnotationColor;
   onDelete?: () => void;
   isNavVisible: boolean;
 }

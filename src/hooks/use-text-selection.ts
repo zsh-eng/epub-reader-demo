@@ -1,14 +1,20 @@
-import { getSelectionPosition } from "@/lib/highlight-utils";
-import { createHighlightFromSelection } from "@/lib/highlight-utils";
-import type { Highlight, HighlightColor } from "@/types/highlight";
+import type { AnnotationColor } from "@/lib/highlight-constants";
+import {
+  createHighlightFromSelection,
+  getSelectionPosition,
+} from "@/lib/highlight-utils";
+import type { Highlight } from "@/types/highlight";
+import type { Note } from "@/types/note";
 import { useEffect, useState } from "react";
 
 export interface UseTextSelectionReturn {
   showHighlightToolbar: boolean;
   toolbarPosition: { x: number; y: number };
   currentSelection: Selection | null;
-  handleHighlightColorSelect: (color: HighlightColor) => void;
+  handleHighlightColorSelect: (color: AnnotationColor) => void;
   handleCloseHighlightToolbar: () => void;
+  /** Creates an invisible annotation with a note attached */
+  handleNoteSubmit: (content: string) => void;
 }
 
 export function useTextSelection(
@@ -16,6 +22,7 @@ export function useTextSelection(
   bookId: string | undefined,
   spineItemId: string | undefined,
   onHighlightCreate?: (highlight: Highlight) => void,
+  onNoteCreate?: (highlight: Highlight, note: Note) => void,
 ): UseTextSelectionReturn {
   const [showHighlightToolbar, setShowHighlightToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ x: 0, y: 0 });
@@ -83,7 +90,7 @@ export function useTextSelection(
     };
   }, [contentRef]);
 
-  const handleHighlightColorSelect = (color: HighlightColor) => {
+  const handleHighlightColorSelect = (color: AnnotationColor) => {
     if (!currentSelection || !contentRef.current || !bookId || !spineItemId) {
       setShowHighlightToolbar(false);
       return;
@@ -135,11 +142,59 @@ export function useTextSelection(
     setCurrentSelection(null);
   };
 
+  /**
+   * Handle note submission - creates an invisible annotation with a note
+   */
+  const handleNoteSubmit = (content: string) => {
+    if (!currentSelection || !contentRef.current || !bookId || !spineItemId) {
+      setShowHighlightToolbar(false);
+      return;
+    }
+
+    const highlightData = createHighlightFromSelection(
+      currentSelection,
+      contentRef.current,
+    );
+
+    if (highlightData) {
+      const highlightId = crypto.randomUUID();
+      const highlight: Highlight = {
+        id: highlightId,
+        bookId,
+        spineItemId,
+        startOffset: highlightData.startOffset,
+        endOffset: highlightData.endOffset,
+        selectedText: highlightData.selectedText,
+        textBefore: highlightData.textBefore,
+        textAfter: highlightData.textAfter,
+        color: "invisible", // Note-only annotation
+        createdAt: new Date(),
+      };
+
+      const note: Note = {
+        id: crypto.randomUUID(),
+        annotationId: highlightId,
+        annotationType: "highlight",
+        bookId,
+        spineItemId,
+        content,
+        createdAt: new Date(),
+      };
+
+      onNoteCreate?.(highlight, note);
+    }
+
+    currentSelection.removeAllRanges();
+    setShowHighlightToolbar(false);
+    setCurrentSelection(null);
+  };
+
   return {
     showHighlightToolbar,
     toolbarPosition,
     currentSelection,
     handleHighlightColorSelect,
     handleCloseHighlightToolbar,
+    handleNoteSubmit,
   };
 }

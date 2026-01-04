@@ -5,7 +5,7 @@ import {
   useUpdateHighlightMutation,
 } from "@/hooks/use-highlights-query";
 import { useIsMobile } from "@/hooks/use-mobile";
-import type { HighlightColor } from "@/lib/highlight-constants";
+import type { AnnotationColor } from "@/lib/highlight-constants";
 import type { Highlight } from "@/types/highlight";
 import { AnimatePresence } from "motion/react";
 import type { ActiveHighlightState } from ".";
@@ -18,8 +18,10 @@ interface HighlightToolbarContainerProps {
   // For creating new highlights (text selection mode)
   isCreatingHighlight: boolean;
   creationPosition: { x: number; y: number };
-  onCreateColorSelect: (color: HighlightColor) => void;
+  onCreateColorSelect: (color: AnnotationColor) => void;
   onCreateClose: () => void;
+  /** Called when user submits a note from the toolbar */
+  onCreateNoteSubmit?: (content: string) => void;
 
   // For editing existing highlights
   activeHighlight: ActiveHighlightState | null;
@@ -37,6 +39,7 @@ export function HighlightToolbarContainer({
   creationPosition,
   onCreateColorSelect,
   onCreateClose,
+  onCreateNoteSubmit,
   activeHighlight,
   onEditClose,
   isNavVisible = false,
@@ -60,7 +63,7 @@ export function HighlightToolbarContainer({
   const isEditingHighlight = !!activeHighlightData;
 
   // Handlers for editing mode
-  const handleEditColorSelect = (color: HighlightColor) => {
+  const handleEditColorSelect = (color: AnnotationColor) => {
     if (!activeHighlightData) return;
 
     updateHighlightMutation.mutate({
@@ -109,6 +112,7 @@ export function HighlightToolbarContainer({
             position={creationPosition}
             onColorSelect={onCreateColorSelect}
             onClose={onCreateClose}
+            onNoteSubmit={onCreateNoteSubmit}
           />
         )}
       </AnimatePresence>

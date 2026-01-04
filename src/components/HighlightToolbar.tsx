@@ -1,21 +1,24 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   HIGHLIGHT_COLORS,
-  type HighlightColor,
+  type AnnotationColor,
 } from "@/lib/highlight-constants";
 import { cn } from "@/lib/utils";
 import {
   EPUB_HIGHLIGHT_CLASS,
   HIGHLIGHT_TOOLBAR_CLASS,
 } from "@/types/reader.types";
-import { useEffect } from "react";
+import { Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 interface HighlightToolbarProps {
   position: { x: number; y: number };
-  onColorSelect: (color: HighlightColor) => void;
+  onColorSelect: (color: AnnotationColor) => void;
   onClose: () => void;
-  currentColor?: HighlightColor;
+  currentColor?: AnnotationColor;
   onDelete?: () => void;
+  /** Called when user submits a note (creates invisible annotation + note) */
+  onNoteSubmit?: (content: string) => void;
 }
 
 export function HighlightToolbar({
@@ -24,14 +27,18 @@ export function HighlightToolbar({
   onClose,
   currentColor,
   onDelete,
+  onNoteSubmit,
 }: HighlightToolbarProps) {
   const isMobile = useIsMobile();
+  const [noteText, setNoteText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Calculate position directly to avoid layout thrashing/jumping
-  // Mobile: 4 buttons × 40px + 3 gaps × 12px + padding 16px = 212px width, 56px height
-  // Desktop: 4 buttons × 24px + 3 gaps × 8px + padding 16px = 136px width, 40px height
-  const toolbarWidth = isMobile ? 212 : 136;
-  const toolbarHeight = isMobile ? 56 : 40;
+  // Vertical layout: colors on top, input bar below
+  // Desktop: ~200px width, ~88px height (colors row + input row)
+  // Mobile: ~260px width, ~120px height
+  const toolbarWidth = isMobile ? 260 : 220;
+  const toolbarHeight = isMobile ? 120 : 88;
   const padding = 12;
 
   let x = position.x - toolbarWidth / 2;
@@ -90,51 +97,99 @@ export function HighlightToolbar({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  const handleNoteSubmit = () => {
+    if (noteText.trim() && onNoteSubmit) {
+      onNoteSubmit(noteText.trim());
+      setNoteText("");
+      onClose();
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleNoteSubmit();
+    }
+  };
+
   return (
     <div
-      className="highlight-toolbar fixed z-50 flex items-center gap-3 md:gap-2 p-2 rounded-full bg-background shadow-xl border border-border animate-in fade-in zoom-in-95 duration-200"
+      className="highlight-toolbar fixed z-50 flex flex-col gap-2 p-2 rounded-2xl bg-background shadow-xl border border-border animate-in fade-in zoom-in-95 duration-200"
       style={{
         left: `${x}px`,
         top: `${y}px`,
+        width: `${toolbarWidth}px`,
       }}
     >
-      {HIGHLIGHT_COLORS.map((color) => {
-        const handlePointerDown = () => {
-          const isRemoveExistingHighlight =
-            currentColor && color.name === currentColor && onDelete;
-          if (isRemoveExistingHighlight) {
-            onDelete();
-            return;
-          }
+      {/* Color buttons row */}
+      <div className="flex items-center justify-center gap-3 md:gap-2">
+        {HIGHLIGHT_COLORS.map((color) => {
+          const handlePointerDown = () => {
+            const isRemoveExistingHighlight =
+              currentColor && color.name === currentColor && onDelete;
+            if (isRemoveExistingHighlight) {
+              onDelete();
+              return;
+            }
 
-          onColorSelect(color.name);
-        };
+            onColorSelect(color.name);
+          };
 
-        return (
-          <button
-            key={color.name}
-            onPointerDown={handlePointerDown}
-            className={cn(
-              "cursor-pointer w-10 h-10 md:w-6 md:h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
-              "border border-black/5 hover:border-black/10",
-              currentColor &&
+          return (
+            <button
+              key={color.name}
+              onPointerDown={handlePointerDown}
+              className={cn(
+                "cursor-pointer w-10 h-10 md:w-6 md:h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
+                "border border-black/5 hover:border-black/10",
+                currentColor &&
                 color.name === currentColor &&
                 "ring-2 ring-offset-2 ring-gray-900",
-            )}
-            style={{ backgroundColor: `var(--${color.name}-secondary)` }}
-            aria-label={
-              currentColor && color.name === currentColor
-                ? "Delete highlight"
-                : `Highlight with ${color.name}`
-            }
-            title={
-              currentColor && color.name === currentColor
-                ? "Delete highlight"
-                : `Highlight with ${color.name}`
-            }
+              )}
+              style={{ backgroundColor: `var(--${color.name}-secondary)` }}
+              aria-label={
+                currentColor && color.name === currentColor
+                  ? "Delete highlight"
+                  : `Highlight with ${color.name}`
+              }
+              title={
+                currentColor && color.name === currentColor
+                  ? "Delete highlight"
+                  : `Highlight with ${color.name}`
+              }
+            />
+          );
+        })}
+      </div>
+
+      {/* Note input row */}
+      {onNoteSubmit && (
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            onKeyDown={handleKeyPress}
+            placeholder="Add a note..."
+            className="flex-1 px-3 py-1.5 text-sm rounded-full bg-muted border-0 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
-        );
-      })}
+          <button
+            onPointerDown={handleNoteSubmit}
+            disabled={!noteText.trim()}
+            className={cn(
+              "p-2 rounded-full transition-all",
+              noteText.trim()
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "bg-muted text-muted-foreground cursor-not-allowed",
+            )}
+            aria-label="Send note"
+            title="Add note (creates annotation)"
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

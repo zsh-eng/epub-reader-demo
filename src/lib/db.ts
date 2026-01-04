@@ -12,6 +12,7 @@ import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
+import type { Note } from "@/types/note";
 import type { ReadingState } from "@/types/reading-state";
 import Dexie, { type Table } from "dexie";
 import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
@@ -118,9 +119,11 @@ export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
 export type SyncedHighlight = WithSyncMetadata<Highlight>;
 export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
 export type SyncedReadingState = WithSyncMetadata<ReadingState>;
+export type SyncedNote = WithSyncMetadata<Note>;
 
-// Re-export Highlight type for convenience
+// Re-export Highlight and Note types for convenience
 export type { Highlight };
+export type { Note };
 export type { ReadingState, ReadingStatus } from "@/types/reading-state";
 
 // Re-export StoredFile type for convenience
@@ -137,6 +140,7 @@ class EPUBReaderDB extends Dexie {
   highlights!: Table<SyncedHighlight, string>;
   readingSettings!: Table<SyncedReadingSettings, string>;
   readingState!: Table<SyncedReadingState, string>;
+  notes!: Table<SyncedNote, string>;
 
   // Local-only tables
   bookFiles!: Table<BookFile, string>;
@@ -192,6 +196,12 @@ class EPUBReaderDB extends Dexie {
 
     // Version 4: Add readingState table for tracking reading status history
     this.version(4).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
+
+    // Version 5: Add notes table for threaded annotations
+    this.version(5).stores({
       ...syncSchemas,
       ...LOCAL_TABLES,
     });
@@ -421,6 +431,63 @@ export async function updateHighlight(
 
 export async function getAllHighlights(): Promise<SyncedHighlight[]> {
   return db.highlights.filter(isNotDeleted).toArray();
+}
+
+// ============================================================================
+// Helper Functions (Notes)
+// ============================================================================
+
+export async function addNote(note: Note): Promise<string> {
+  return db.notes.add(note as SyncedNote);
+}
+
+export async function getNotesByAnnotation(
+  annotationId: string,
+): Promise<SyncedNote[]> {
+  return db.notes
+    .where("annotationId")
+    .equals(annotationId)
+    .filter(isNotDeleted)
+    .sortBy("createdAt");
+}
+
+export async function getChapterNotes(
+  bookId: string,
+  spineItemId: string,
+): Promise<SyncedNote[]> {
+  return db.notes
+    .where("[bookId+spineItemId]")
+    .equals([bookId, spineItemId])
+    .filter((n) => n.annotationType === "chapter" && isNotDeleted(n))
+    .sortBy("createdAt");
+}
+
+export async function updateNote(
+  id: string,
+  content: string,
+): Promise<void> {
+  const note = await db.notes.get(id);
+  if (!note || !isNotDeleted(note)) return;
+
+  await db.notes.put({
+    ...note,
+    content,
+    updatedAt: new Date(),
+  });
+}
+
+export async function deleteNote(id: string): Promise<void> {
+  const note = await db.notes.get(id);
+  if (!note) return;
+
+  await db.notes.put({
+    ...note,
+    _isDeleted: 1,
+  });
+}
+
+export async function getAllNotes(): Promise<SyncedNote[]> {
+  return db.notes.filter(isNotDeleted).toArray();
 }
 
 // ============================================================================

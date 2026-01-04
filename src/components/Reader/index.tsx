@@ -17,6 +17,7 @@ import {
 } from "@/hooks/use-highlights-query";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAddNoteMutation } from "@/hooks/use-notes-query";
 import { useProgressPersistence } from "@/hooks/use-progress-persistence";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useReadingStatus } from "@/hooks/use-reading-status";
@@ -24,7 +25,6 @@ import { useScrollTarget } from "@/hooks/use-scroll-target";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
-import type { Highlight } from "@/types/highlight";
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -144,6 +144,7 @@ export function Reader() {
     bookId,
     currentSpineItemId,
   );
+  const addNoteMutation = useAddNoteMutation(undefined); // Initial annotation ID unknown
 
   // Sync highlights to DOM - reactive side effect of data changes
   useHighlightDOMSync(readerContentRef, highlights, contentReady);
@@ -154,12 +155,18 @@ export function Reader() {
     toolbarPosition,
     handleHighlightColorSelect,
     handleCloseHighlightToolbar,
+    handleNoteSubmit,
   } = useTextSelection(
     readerContentRef,
     bookId,
     currentSpineItemId,
-    (highlight: Highlight) => {
+    (highlight) => {
       addHighlightMutation.mutate(highlight);
+    },
+    (highlight, note) => {
+      // Create invisible annotation and note together
+      addHighlightMutation.mutate(highlight);
+      addNoteMutation.mutate(note);
     },
   );
 
@@ -362,6 +369,7 @@ export function Reader() {
         creationPosition={toolbarPosition}
         onCreateColorSelect={handleHighlightColorSelect}
         onCreateClose={handleCloseHighlightToolbar}
+        onCreateNoteSubmit={handleNoteSubmit}
         activeHighlight={activeHighlight}
         onEditClose={() => setActiveHighlight(null)}
         isNavVisible={isVisible}

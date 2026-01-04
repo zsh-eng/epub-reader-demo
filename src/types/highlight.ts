@@ -5,9 +5,9 @@
  * context for fallback matching, and styling information.
  */
 
-import type { HighlightColor } from "@/lib/highlight-constants";
+import type { AnnotationColor } from "@/lib/highlight-constants";
 
-export type { HighlightColor };
+export type { AnnotationColor };
 
 export interface Highlight {
   // Identity
@@ -25,10 +25,8 @@ export interface Highlight {
   textAfter: string; // ~50 chars after highlight (for context)
 
   // Styling
-  color: HighlightColor; // Predefined color names
-
-  // Optional annotation
-  note?: string; // User's notes on this highlight
+  // 'invisible' = annotation with notes but no visual highlight
+  color: AnnotationColor;
 
   // Metadata
   createdAt: Date;

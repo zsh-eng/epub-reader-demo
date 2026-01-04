@@ -52,6 +52,16 @@ export const SYNC_TABLES = {
     ],
     entityKey: "bookId",
   } satisfies SyncTableDef,
+
+  notes: {
+    primaryKey: "id",
+    indices: ["annotationId", "bookId", "createdAt"],
+    compoundIndices: [
+      ["annotationId", "createdAt"], // Thread ordering
+      ["bookId", "spineItemId"], // Chapter notes lookup
+    ],
+    entityKey: "bookId",
+  } satisfies SyncTableDef,
 } as const;
 
 /**
