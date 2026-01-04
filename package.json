@@ -17,7 +17,10 @@
     "test": "NODE_OPTIONS=\"--no-webstorage\" vitest",
     "test:client": "NODE_OPTIONS=\"--no-webstorage\" vitest test/client/**",
     "test:server": "NODE_OPTIONS=\"--no-webstorage\" vitest test/server/**",
-    "test:watch": "vitest --watch"
+    "test:watch": "vitest --watch",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.7.6",
@@ -84,6 +87,7 @@
     "@cloudflare/vite-plugin": "^1.18.0",
     "@cloudflare/vitest-pool-workers": "^0.11.1",
     "@eslint/js": "^9.36.0",
+    "@playwright/test": "^1.57.0",
     "@types/node": "^24.8.1",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
