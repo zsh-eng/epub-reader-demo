@@ -1,13 +1,24 @@
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
+    "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["@cloudflare/vitest-pool-workers"],
+    "types": [
+      "@cloudflare/vitest-pool-workers"
+    ],
     "baseUrl": "..",
     "paths": {
-      "@/*": ["./src/*"],
-      "@server/*": ["./server/*"],
-    },
+      "@/*": [
+        "./src/*"
+      ],
+      "@server/*": [
+        "./server/*"
+      ]
+    }
   },
-  "include": ["./**/*.ts", "../worker-configuration.d.ts", "../src/**/*.ts"],
+  "include": [
+    "./**/*.ts",
+    "../worker-configuration.d.ts",
+    "../src/**/*.ts"
+  ]
 }

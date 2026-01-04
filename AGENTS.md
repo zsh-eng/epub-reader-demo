@@ -36,6 +36,12 @@ This repository uses **bun** as the package manager and for running scripts.
 - See `test/hello.test.ts` for example
 - Run tests: `bun run test test/me.test.ts`
 
+For UI tests:
+
+bun run test:e2e          # Run all tests
+bun run test:e2e:ui       # Interactive UI mode
+bun run test:e2e:headed   # Visible browser
+
 ---
 
 ## Sync Architecture
