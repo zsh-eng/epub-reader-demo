@@ -106,41 +106,94 @@ export function Library() {
     await refetchBooks();
   }, [refetchBooks]);
 
-  // Handle file selection
+  // Handle file selection (supports multiple files)
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
+    // Filter to only .epub files
+    const allFiles = Array.from(files);
+    const epubFiles = allFiles.filter((file) =>
+      file.name.toLowerCase().endsWith(".epub")
+    );
+    const nonEpubCount = allFiles.length - epubFiles.length;
+
+    if (epubFiles.length === 0) {
+      toast({
+        title: "Invalid files",
+        description: "Please select EPUB files only",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
 
-    try {
-      const file = files[0];
-      const book = await addBookFromFile(file);
+    let successCount = 0;
+    let duplicateCount = 0;
+    let errorCount = 0;
+    let lastDuplicateBook: Book | null = null;
 
-      toast({
-        title: "Success",
-        description: `"${book.title}" has been added to your library`,
-      });
+    for (const file of epubFiles) {
+      try {
+        await addBookFromFile(file);
+        successCount++;
+      } catch (error) {
+        console.error("Error adding book:", error);
 
-      // Reload books
-      await loadBooks();
-    } catch (error) {
-      console.error("Error adding book:", error);
-
-      // Handle duplicate book error
-      if (error instanceof DuplicateBookError) {
-        setDuplicateBook(error.existingBook);
-        setShowDuplicateDialog(true);
-      } else {
-        toast({
-          title: "Error",
-          description:
-            error instanceof Error ? error.message : "Failed to add book",
-          variant: "destructive",
-        });
+        if (error instanceof DuplicateBookError) {
+          duplicateCount++;
+          lastDuplicateBook = error.existingBook;
+        } else {
+          errorCount++;
+        }
       }
-    } finally {
-      setIsProcessing(false);
     }
+
+    // Build summary message
+    const parts: string[] = [];
+    if (successCount > 0) {
+      parts.push(
+        `${successCount} book${successCount > 1 ? "s" : ""} added`
+      );
+    }
+    if (duplicateCount > 0) {
+      parts.push(
+        `${duplicateCount} skipped (already in library)`
+      );
+    }
+    if (errorCount > 0) {
+      parts.push(`${errorCount} failed`);
+    }
+    if (nonEpubCount > 0) {
+      parts.push(
+        `${nonEpubCount} non-EPUB file${nonEpubCount > 1 ? "s" : ""} ignored`
+      );
+    }
+
+    // Show appropriate toast
+    if (successCount > 0) {
+      toast({
+        title: "Import complete",
+        description: parts.join(" · "),
+      });
+    } else if (duplicateCount > 0 && epubFiles.length === 1 && lastDuplicateBook) {
+      // Single duplicate file - show the dialog for better UX
+      setDuplicateBook(lastDuplicateBook);
+      setShowDuplicateDialog(true);
+    } else {
+      toast({
+        title: "Import failed",
+        description: parts.join(" · "),
+        variant: "destructive",
+      });
+    }
+
+    // Reload books if any were added
+    if (successCount > 0) {
+      await loadBooks();
+    }
+
+    setIsProcessing(false);
   };
 
   // Handle drag and drop
@@ -215,6 +268,7 @@ export function Library() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".epub";
+    input.multiple = true;
     // WebKit browsers require the input to be in the DOM for the onchange event to fire
     input.style.position = "absolute";
     input.style.opacity = "0";
