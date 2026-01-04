@@ -1,4 +1,5 @@
 import { BookCard } from "@/components/BookCard";
+import { ContinueReadingCarousel } from "@/components/ContinueReadingCarousel";
 import { DuplicateBookDialog } from "@/components/DuplicateBookDialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -430,28 +431,17 @@ export function Library() {
           {/* Books Grid */}
           {filteredBooks.length > 0 ? (
             <div className="space-y-12 fade-in animate-in duration-300">
-              {/* Continue Reading Section */}
+              {/* Continue Reading Carousel */}
               {continueReadingBooks.length > 0 && (
-                <section>
-                  <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
-                    Continue Reading
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
-                    {continueReadingBooks.map((book) => (
-                      <BookCard
-                        key={book.id}
-                        book={book}
-                        onDelete={handleDeleteBook}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <ContinueReadingCarousel
+                  books={continueReadingBooks}
+                />
               )}
 
               {/* Books Section */}
               {libraryBooks.length > 0 && (
                 <section>
-                  <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
+                  <h2 className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-3 -mx-6 px-6 md:-mx-10 md:px-10 text-xs font-medium uppercase tracking-tight text-muted-foreground mb-3">
                     Books
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
@@ -469,7 +459,7 @@ export function Library() {
               {/* Finished Section - shown at the bottom */}
               {finishedBooks.length > 0 && (
                 <section>
-                  <h2 className="text-xs font-medium uppercase tracking-tight text-muted-foreground mb-6">
+                  <h2 className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-3 -mx-6 px-6 md:-mx-10 md:px-10 text-xs font-medium uppercase tracking-tight text-muted-foreground mb-3">
                     Finished
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
@@ -486,21 +476,48 @@ export function Library() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-24 text-center">
-              <div className="bg-secondary/50 p-6 rounded-full mb-6">
-                <LibraryIcon className="h-12 w-12 text-muted-foreground/50" />
+              {/* Animated floating books illustration */}
+              <div className="relative mb-8">
+                {/* Background glow */}
+                <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full scale-150" />
+
+                {/* Floating book stack */}
+                <div className="relative">
+                  {/* Back book */}
+                  <div
+                    className="absolute -left-3 -top-2 w-16 h-24 rounded-r-md rounded-l-sm bg-gradient-to-br from-muted to-muted-foreground/20 shadow-lg transform -rotate-12 animate-[float_3s_ease-in-out_infinite]"
+                    style={{ animationDelay: "-0.5s" }}
+                  >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-r from-black/10 to-transparent" />
+                  </div>
+
+                  {/* Middle book */}
+                  <div
+                    className="absolute left-2 top-1 w-16 h-24 rounded-r-md rounded-l-sm bg-gradient-to-br from-secondary to-secondary-foreground/10 shadow-lg transform rotate-6 animate-[float_3s_ease-in-out_infinite]"
+                    style={{ animationDelay: "-1s" }}
+                  >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-r from-black/10 to-transparent" />
+                  </div>
+
+                  {/* Front book with icon */}
+                  <div className="relative w-20 h-28 rounded-r-md rounded-l-sm bg-gradient-to-br from-primary/10 to-primary/5 shadow-xl ring-1 ring-primary/10 animate-[float_3s_ease-in-out_infinite] flex items-center justify-center">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-r from-black/15 to-transparent rounded-l-sm" />
+                    <LibraryIcon className="h-8 w-8 text-muted-foreground/40" />
+                  </div>
+                </div>
               </div>
+
               <h3 className="text-xl font-semibold text-foreground mb-2">
                 {searchQuery ? "No books found" : "Your library is empty"}
               </h3>
               <p className="text-muted-foreground max-w-sm mx-auto mb-8">
                 {searchQuery
                   ? `No results for "${searchQuery}"`
-                  : "Drag and drop an EPUB file here, or click the button above to add your first book."}
+                  : "Drag and drop an EPUB file here, or click the button below to add your first book."}
               </p>
               {!searchQuery && (
                 <Button
                   onClick={handleAddBookClick}
-                  variant="outline"
                   className="gap-2"
                 >
                   <Upload className="h-4 w-4" />
