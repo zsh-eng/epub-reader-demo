@@ -19,6 +19,7 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
   const navigate = useNavigate();
   const imgRef = useRef<HTMLImageElement>(null);
   const [gradientColor, setGradientColor] = useState<string>("rgba(0,0,0,0.8)");
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
   // Get cover URL from content hash
   const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
@@ -26,6 +27,26 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
     "cover",
     { skip: !book.coverContentHash },
   );
+
+  // Detect and track dark mode changes
+  useEffect(() => {
+    const checkDarkMode = () => {
+      const isDark = document.documentElement.classList.contains("dark");
+      setIsDarkMode(isDark);
+    };
+
+    // Initial check
+    checkDarkMode();
+
+    // Watch for theme changes
+    const observer = new MutationObserver(checkDarkMode);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Extract dominant color from cover image for gradient background
   useEffect(() => {
@@ -62,16 +83,25 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
         g = Math.round(g / samples.length);
         b = Math.round(b / samples.length);
 
-        // Make the color darker for better text contrast
-        const darkenFactor = 0.4;
-        r = Math.round(r * darkenFactor);
-        g = Math.round(g * darkenFactor);
-        b = Math.round(b * darkenFactor);
+        // Adjust color based on theme for better text contrast
+        if (isDarkMode) {
+          // Make the color darker for dark mode (white text)
+          const darkenFactor = 0.4;
+          r = Math.round(r * darkenFactor);
+          g = Math.round(g * darkenFactor);
+          b = Math.round(b * darkenFactor);
+        } else {
+          // Make the color lighter for light mode (dark text)
+          const lightenFactor = 0.3;
+          r = Math.round(r + (255 - r) * (1 - lightenFactor));
+          g = Math.round(g + (255 - g) * (1 - lightenFactor));
+          b = Math.round(b + (255 - b) * (1 - lightenFactor));
+        }
 
         setGradientColor(`rgb(${r}, ${g}, ${b})`);
       } catch {
         // CORS or other error - use fallback
-        setGradientColor("rgba(0,0,0,0.8)");
+        setGradientColor(isDarkMode ? "rgba(0,0,0,0.8)" : "rgba(200,200,200,0.9)");
       }
     };
 
@@ -80,7 +110,7 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
     } else {
       img.onload = extractColor;
     }
-  }, [coverUrl]);
+  }, [coverUrl, isDarkMode]);
 
   const handleClick = () => {
     navigate(`/reader/${book.id}`);
@@ -167,18 +197,18 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
           </div>
         </div>
 
-        <div className="flex flex-col justify-center min-w-0 text-white">
-          <p className="text-[10px] md:text-xs font-medium text-white/60 uppercase tracking-wider mb-1 md:mb-2">
+        <div className="flex flex-col justify-center min-w-0">
+          <p className="text-[10px] md:text-xs font-medium text-gray-600 dark:text-white/60 uppercase tracking-wider mb-1 md:mb-2">
             Continue Reading
           </p>
-          <h3 className="text-base md:text-xl font-bold leading-tight line-clamp-2 mb-1 md:mb-2 text-white drop-shadow-sm">
+          <h3 className="text-base md:text-xl font-bold leading-tight line-clamp-2 mb-1 md:mb-2 text-gray-900 dark:text-white drop-shadow-sm">
             {book.title}
           </h3>
-          <p className="text-xs md:text-sm text-white/70 line-clamp-1 mb-2 md:mb-3">
+          <p className="text-xs md:text-sm text-gray-600 dark:text-white/70 line-clamp-1 mb-2 md:mb-3">
             {book.author}
           </p>
           {book.lastOpened && (
-            <p className="text-xs text-white/50">
+            <p className="text-xs text-gray-500 dark:text-white/50">
               Last read {getLastReadText()}
             </p>
           )}
