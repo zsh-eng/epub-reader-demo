@@ -14,10 +14,14 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Kbd } from "../../ui/kbd";
 import { ChapterTitle } from "./ChapterTitle";
+import { SearchPopover } from "./SearchPopover";
 import { SettingsPopover } from "./SettingsPopover";
 import { TOCPopover } from "./TOCPopover";
 
 export interface DesktopControlIslandProps {
+  // Book info
+  bookId: string | undefined;
+
   // Navigation
   onBack: () => void;
   onPrevious: () => void;
@@ -34,6 +38,9 @@ export interface DesktopControlIslandProps {
   toc: TOCItem[];
   currentChapterHref: string;
   onNavigateToChapter: (href: string) => void;
+
+  // Search
+  onNavigateToSearchResult: (chapterPath: string, position: number) => void;
 
   // Settings
   settings: ReaderSettings;
@@ -129,6 +136,7 @@ function useControlIslandVisibility(threshold = 100) {
  * - Grouped tooltips with keyboard shortcuts
  */
 export function DesktopControlIsland({
+  bookId,
   onBack,
   onPrevious,
   onNext,
@@ -140,6 +148,7 @@ export function DesktopControlIsland({
   toc,
   currentChapterHref,
   onNavigateToChapter,
+  onNavigateToSearchResult,
   settings,
   onUpdateSettings,
   readingStatus,
@@ -271,6 +280,12 @@ export function DesktopControlIsland({
                 toc={toc}
                 currentChapterHref={currentChapterHref}
                 onNavigateToChapter={onNavigateToChapter}
+              />
+
+              {/* Search Popover */}
+              <SearchPopover
+                bookId={bookId}
+                onNavigateToMatch={onNavigateToSearchResult}
               />
 
               {/* Settings Popover */}

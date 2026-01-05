@@ -302,6 +302,7 @@ export function Reader() {
       {/* Desktop Control Island */}
       {!isMobile && (
         <DesktopControlIsland
+          bookId={bookId}
           onBack={() => navigate("/")}
           onPrevious={goToPreviousChapter}
           onNext={goToNextChapter}
@@ -313,6 +314,11 @@ export function Reader() {
           toc={book.toc}
           currentChapterHref={manifestItemHref || ""}
           onNavigateToChapter={goToChapterByHref}
+          onNavigateToSearchResult={(chapterPath, _position) => {
+            // Navigate to the chapter containing the search result
+            // TODO: Implement scroll-to-position once text position mapping is available
+            goToChapterByHref(chapterPath);
+          }}
           settings={settings}
           onUpdateSettings={updateSettings}
           readingStatus={readingStatus}

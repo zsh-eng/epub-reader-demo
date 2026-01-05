@@ -85,6 +85,57 @@ export function createHighlightFromSelection(
 }
 
 /**
+ * Creates highlight data from a Range object (useful when Selection is no longer valid)
+ */
+export function createHighlightFromRange(
+  range: Range,
+  containerElement: HTMLElement,
+): {
+  startOffset: number;
+  endOffset: number;
+  selectedText: string;
+  textBefore: string;
+  textAfter: string;
+} | null {
+  const selectedText = range.toString().trim();
+
+  if (!selectedText) return null;
+
+  // Get the full text content
+  const fullText = containerElement.textContent || "";
+
+  // Calculate offsets
+  const startOffset = getTextOffset(
+    containerElement,
+    range.startContainer,
+    range.startOffset,
+  );
+  const endOffset = getTextOffset(
+    containerElement,
+    range.endContainer,
+    range.endOffset,
+  );
+
+  // Extract context (50 chars before and after)
+  const textBefore = fullText.substring(
+    Math.max(0, startOffset - 50),
+    startOffset,
+  );
+  const textAfter = fullText.substring(
+    endOffset,
+    Math.min(fullText.length, endOffset + 50),
+  );
+
+  return {
+    startOffset,
+    endOffset,
+    selectedText,
+    textBefore,
+    textAfter,
+  };
+}
+
+/**
  * Gets the position of a selection for positioning the toolbar
  */
 export function getSelectionPosition(selection: Selection): {

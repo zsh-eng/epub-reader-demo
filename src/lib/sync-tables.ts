@@ -82,6 +82,9 @@ export const LOCAL_TABLES = {
 
   // Sync log is for debugging (optional)
   syncLog: "++id, timestamp, type, table",
+
+  // Cached plain text extracted from book chapters for search
+  bookTextCache: "bookId",
 } as const;
 
 export type SyncTableName = keyof typeof SYNC_TABLES;

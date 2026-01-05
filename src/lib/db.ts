@@ -113,6 +113,22 @@ export interface SyncLog {
   errors?: string[];
 }
 
+/**
+ * Cached plain text extracted from book chapters for full-text search.
+ * This is local-only (not synced) since it can be regenerated from BookFile.
+ */
+export interface BookTextCache {
+  bookId: string; // Primary key
+  chapters: {
+    path: string; // Matches BookFile.path
+    title: string; // Chapter title from TOC (for display)
+    plainText: string; // Extracted text content
+    startOffset: number; // Cumulative character offset in book
+  }[];
+  totalCharacters: number;
+  extractedAt: number; // For cache invalidation if needed
+}
+
 // Add sync metadata to synced types
 export type SyncedBook = WithSyncMetadata<Book>;
 export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
@@ -147,6 +163,7 @@ class EPUBReaderDB extends Dexie {
   files!: Table<StoredFile, string>;
   transferQueue!: Table<TransferTask, string>;
   syncLog!: Table<SyncLog, number>;
+  bookTextCache!: Table<BookTextCache, string>;
 
   constructor() {
     super("epub-reader-db");
@@ -202,6 +219,12 @@ class EPUBReaderDB extends Dexie {
 
     // Version 5: Add notes table for threaded annotations
     this.version(5).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
+
+    // Version 6: Add bookTextCache table for full-text search
+    this.version(6).stores({
       ...syncSchemas,
       ...LOCAL_TABLES,
     });
