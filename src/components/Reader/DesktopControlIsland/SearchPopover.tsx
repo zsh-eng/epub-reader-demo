@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { useBookSearch } from "@/hooks/use-book-search";
 import type { SearchMatch, ChapterSearchResult } from "@/lib/book-search";
+import { cn } from "@/lib/utils";
 import { Loader2, Search, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -85,7 +86,10 @@ export function SearchPopover({
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full"
+          className={cn(
+            "rounded-full",
+            isOpen && "bg-accent text-accent-foreground"
+          )}
           aria-label="Search in book"
         >
           <Search className="size-4" />
@@ -97,8 +101,7 @@ export function SearchPopover({
             asChild
             side="top"
             sideOffset={12}
-            alignOffset={-8}
-            align="end"
+            align="center"
             className="p-0 w-md"
           >
             <motion.div

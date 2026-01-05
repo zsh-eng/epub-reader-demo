@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ReaderSettings } from "@/types/reader.types";
+import { cn } from "@/lib/utils";
 import { Palette, Settings, Type } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
@@ -35,7 +36,10 @@ export function SettingsPopover({
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full"
+          className={cn(
+            "rounded-full",
+            isOpen && "bg-accent text-accent-foreground",
+          )}
           aria-label="Settings"
         >
           <Settings className="size-4" />
@@ -48,7 +52,7 @@ export function SettingsPopover({
             side="top"
             align="end"
             sideOffset={12}
-            alignOffset={-8}
+            alignOffset={-40}
             className="p-0 w-lg"
           >
             <motion.div

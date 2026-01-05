@@ -78,7 +78,10 @@ export function TOCPopover({
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-full"
+          className={cn(
+            "rounded-full",
+            isOpen && "bg-accent text-accent-foreground"
+          )}
           aria-label="Table of Contents"
         >
           <List className="size-4" />
@@ -90,8 +93,7 @@ export function TOCPopover({
             asChild
             side="top"
             sideOffset={12}
-            alignOffset={-8}
-            align="end"
+            align="center"
             className="p-0 w-[320px]"
           >
             <motion.div
