@@ -33,7 +33,6 @@ export function SearchPopover({
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const {
     searchResults,
@@ -54,26 +53,14 @@ export function SearchPopover({
     }
   }, [isOpen]);
 
-  // Debounced search
+  // Search immediately on query/option change
   useEffect(() => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-
     if (!query.trim()) {
       clearSearch();
       return;
     }
 
-    debounceRef.current = setTimeout(() => {
-      search(query, { caseSensitive, wholeWord });
-    }, 200);
-
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
+    search(query, { caseSensitive, wholeWord });
   }, [query, caseSensitive, wholeWord, search, clearSearch]);
 
   const handleClear = useCallback(() => {
@@ -112,7 +99,7 @@ export function SearchPopover({
             sideOffset={12}
             alignOffset={-8}
             align="end"
-            className="p-0 w-[360px]"
+            className="p-0 w-md"
           >
             <motion.div
               initial={{ opacity: 0, y: 8, scale: 0.98 }}
