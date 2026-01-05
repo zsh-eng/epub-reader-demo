@@ -4,8 +4,13 @@
  * Groups highlights by book and sorts by most recent activity.
  */
 
-import { getAllBooks, getAllHighlights, type SyncedBook, type SyncedHighlight } from "@/lib/db";
-import type { HighlightColor } from "@/types/highlight";
+import {
+  getAllBooks,
+  getAllHighlights,
+  type SyncedBook,
+  type SyncedHighlight,
+} from "@/lib/db";
+import type { AnnotationColor } from "@/types/highlight";
 import { useQuery } from "@tanstack/react-query";
 
 export interface HighlightWithBook extends SyncedHighlight {
@@ -66,7 +71,9 @@ function groupHighlightsByBook(
   }
 
   // Sort groups by most recent highlight (most recent first)
-  groups.sort((a, b) => b.mostRecentHighlight.getTime() - a.mostRecentHighlight.getTime());
+  groups.sort(
+    (a, b) => b.mostRecentHighlight.getTime() - a.mostRecentHighlight.getTime(),
+  );
 
   return groups;
 }
@@ -76,7 +83,7 @@ function groupHighlightsByBook(
  */
 export function filterByColors(
   groups: BookHighlightGroup[],
-  selectedColors: HighlightColor[],
+  selectedColors: AnnotationColor[],
 ): BookHighlightGroup[] {
   if (selectedColors.length === 0) {
     return groups; // No filter = show all
@@ -85,7 +92,9 @@ export function filterByColors(
   return groups
     .map((group) => ({
       ...group,
-      highlights: group.highlights.filter((h) => selectedColors.includes(h.color)),
+      highlights: group.highlights.filter((h) =>
+        selectedColors.includes(h.color),
+      ),
     }))
     .filter((group) => group.highlights.length > 0);
 }
@@ -114,11 +123,9 @@ export function filterBySearch(
         return group; // Return all highlights if book matches
       }
 
-      // Filter highlights by text content and notes
-      const filteredHighlights = group.highlights.filter(
-        (h) =>
-          h.selectedText.toLowerCase().includes(lowerQuery) ||
-          (h.note && h.note.toLowerCase().includes(lowerQuery)),
+      // Filter highlights by text content
+      const filteredHighlights = group.highlights.filter((h) =>
+        h.selectedText.toLowerCase().includes(lowerQuery),
       );
 
       return {

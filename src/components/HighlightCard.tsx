@@ -86,12 +86,7 @@ export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProp
             "{highlight.selectedText}"
           </p>
 
-          {/* Note preview (if exists) */}
-          {highlight.note && (
-            <p className="text-xs text-muted-foreground italic line-clamp-2">
-              💬 {highlight.note}
-            </p>
-          )}
+          {/* Note: Notes are now stored in a separate table. Use useNotesQuery to fetch notes for a highlight. */}
 
           {/* Timestamp with color dot - bottom right */}
           <div className="flex items-center justify-end gap-1.5 mt-0.5">
