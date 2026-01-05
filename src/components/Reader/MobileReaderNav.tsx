@@ -103,7 +103,7 @@ export function MobileReaderNav({
           aria-label="Back to library"
           className={cn(
             "h-10 w-10 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-[transform,opacity] active:scale-95 active:duration-75 duration-150 ease-out",
-            isVisible ? "opacity-100" : "opacity-0",
+            isVisible ? "opacity-100" : "opacity-0 pointer-events-none",
           )}
         >
           <X className="size-4" />
@@ -115,7 +115,7 @@ export function MobileReaderNav({
           aria-label="Settings"
           className={cn(
             "h-10 w-10 rounded-full bg-background/80 backdrop-blur-md border shadow-lg transition-[transform,opacity] active:scale-95 active:duration-75 duration-150 ease-out",
-            isVisible ? "opacity-100" : "opacity-0",
+            isVisible ? "opacity-100" : "opacity-0 pointer-events-none",
           )}
         >
           <Settings className="size-4" />
