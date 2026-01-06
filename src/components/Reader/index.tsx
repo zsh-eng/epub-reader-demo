@@ -18,14 +18,16 @@ import {
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAddNoteMutation } from "@/hooks/use-notes-query";
+import { useProgressMutation } from "@/hooks/use-progress-mutation";
 import { useProgressPersistence } from "@/hooks/use-progress-persistence";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useScrollTarget } from "@/hooks/use-scroll-target";
 import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
+import { calculateScrollPercentage } from "@/lib/scroll-anchor";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -204,9 +206,28 @@ export function Reader() {
     window.history.replaceState({}, document.title);
   }, [navigationState, book, goToHighlight]);
 
+  // Progress mutation for explicit saves (e.g., before navigating away)
+  const saveProgressMutation = useProgressMutation(bookId ?? "");
+
+  // Handler for navigating back to library - saves progress first
+  const handleBackNavigation = useCallback(async () => {
+    if (bookId) {
+      await saveProgressMutation.mutateAsync({
+        bookId,
+        currentSpineIndex: currentChapterIndex,
+        scrollProgress: calculateScrollPercentage(),
+        lastRead: Date.now(),
+        triggerType: "manual-chapter",
+      });
+    }
+    navigate("/");
+  }, [bookId, currentChapterIndex, navigate, saveProgressMutation]);
+
   // Keyboard navigation
-  useKeyboardNavigation(goToPreviousChapter, goToNextChapter, () =>
-    navigate("/"),
+  useKeyboardNavigation(
+    goToPreviousChapter,
+    goToNextChapter,
+    handleBackNavigation,
   );
 
   // Scroll visibility for mobile nav
@@ -303,7 +324,7 @@ export function Reader() {
       {!isMobile && (
         <DesktopControlIsland
           bookId={bookId}
-          onBack={() => navigate("/")}
+          onBack={handleBackNavigation}
           onPrevious={goToPreviousChapter}
           onNext={goToNextChapter}
           hasPreviousChapter={hasPreviousChapter}
@@ -337,7 +358,7 @@ export function Reader() {
           isVisible={isVisible}
           settings={settings}
           onUpdateSettings={updateSettings}
-          onBack={() => navigate("/")}
+          onBack={handleBackNavigation}
           onPrevious={goToPreviousChapter}
           onNext={goToNextChapter}
           hasPreviousChapter={hasPreviousChapter}

@@ -66,7 +66,7 @@ export type ProgressTriggerType =
   | "toc-navigation" // Used table of contents
   | "highlight-jump" // Jumped to highlight
   | "fragment-link" // Clicked internal book link
-  | "manual-chapter" // Prev/next chapter buttons
+  | "manual-chapter" // Prev/next chapter buttons, escape key, or close button
   | "session-start"; // Opening the book
 
 export interface ReadingProgress {
@@ -82,8 +82,6 @@ export interface ReadingProgress {
   /** Fragment or highlight ID for precise scroll restoration */
   targetElementId?: string;
 }
-
-
 
 export interface ReadingSettings {
   id: string; // Primary key (single record, use 'default')
@@ -485,10 +483,7 @@ export async function getChapterNotes(
     .sortBy("createdAt");
 }
 
-export async function updateNote(
-  id: string,
-  content: string,
-): Promise<void> {
+export async function updateNote(id: string, content: string): Promise<void> {
   const note = await db.notes.get(id);
   if (!note || !isNotDeleted(note)) return;
 
