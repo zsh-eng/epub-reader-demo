@@ -26,7 +26,7 @@ This repository uses **bun** as the package manager and for running scripts.
 - **API Logic**: Main logic lives in `server/lib/`. Route handlers in `server/index.ts` should only parse params and return responses
 - **API Client**: Use the typed Hono client from `src/lib/api.ts`:
   ```ts
-  const res = await honoClient.posts.$get({ query: { id: '123' } })
+  const res = await honoClient.posts.$get({ query: { id: "123" } });
   ```
 - **Protected Routes**: See `server/index.ts` for examples using `c.get('user')`
 
@@ -38,9 +38,9 @@ This repository uses **bun** as the package manager and for running scripts.
 
 For UI tests:
 
-bun run test:e2e          # Run all tests
-bun run test:e2e:ui       # Interactive UI mode
-bun run test:e2e:headed   # Visible browser
+bun run test:e2e # Run all tests
+bun run test:e2e:ui # Interactive UI mode
+bun run test:e2e:headed # Visible browser
 
 ---
 
@@ -67,12 +67,14 @@ The HLC service is a singleton (`getHLCService()`) to ensure consistency across 
 Defines which entities are synced vs local-only:
 
 **Synced tables** (metadata synced to server) - non-exhaustive list:
+
 - `books` - Book metadata (title, author, fileHash, etc.)
 - `readingProgress` - Per-book reading position (scoped by bookId)
 - `highlights` - User annotations (scoped by bookId)
 - `readingSettings` - Global user preferences
 
 **Local-only tables** (never synced) - non-exhaustive list:
+
 - `bookFiles` - Extracted EPUB contents for rendering
 - `files` - Generic file storage (content-addressed)
 - `transferQueue` - Upload/download queue management
@@ -85,12 +87,14 @@ Each synced table has sync metadata fields: `_hlc`, `_deviceId`, `_isDeleted`, `
 The sync system uses adapters to abstract storage and network operations:
 
 **StorageAdapter** (`src/lib/sync/storage-adapter.ts`):
+
 - Abstracts local IndexedDB operations
 - `getPendingChanges()` - Get items with `_serverTimestamp = UNSYNCED_TIMESTAMP`
 - `applyRemoteChanges()` - Apply server changes with conflict resolution
 - `getSyncCursor()` / `setSyncCursor()` - Track sync progress per table
 
 **RemoteAdapter** (`src/lib/sync/remote-adapter.ts`):
+
 - Abstracts server API calls
 - `pull(table, since, entityId?, limit?)` - Fetch changes since timestamp
 - `push(table, items)` - Send local changes to server
@@ -129,11 +133,13 @@ Files (EPUBs, covers) are stored separately from metadata and use a content-addr
 ### Architecture
 
 **FileStorage** (`src/lib/files/file-storage.ts`):
+
 - Low-level IndexedDB wrapper for blob storage
 - Content-addressed by `fileType:contentHash` (e.g., `epub:abc123`)
 - Stores: blob, mediaType, size, storedAt
 
 **FileManager** (`src/lib/files/file-manager.ts`):
+
 - High-level facade for file access
 - **Cache-first**: Check local IndexedDB before fetching from server
 - **Deduplication**: Prevents duplicate in-flight requests
@@ -149,17 +155,17 @@ Files (EPUBs, covers) are stored separately from metadata and use a content-addr
 
 ```ts
 // Get file (checks local, fetches from server if needed)
-const result = await fileManager.getFile(contentHash, 'epub');
+const result = await fileManager.getFile(contentHash, "epub");
 
 // Get object URL for rendering
-const url = await fileManager.getFileUrl(contentHash, 'cover');
+const url = await fileManager.getFileUrl(contentHash, "cover");
 // Remember to URL.revokeObjectURL() when done!
 
 // Check if locally available
-const hasLocal = await fileManager.hasLocal(contentHash, 'epub');
+const hasLocal = await fileManager.hasLocal(contentHash, "epub");
 
 // Queue for background download
-await fileManager.queueDownload(contentHash, 'epub', { priority: 'high' });
+await fileManager.queueDownload(contentHash, "epub", { priority: "high" });
 ```
 
 ---
@@ -169,6 +175,7 @@ await fileManager.queueDownload(contentHash, 'epub', { priority: 'high' });
 To add a new entity type that syncs:
 
 1. **Define table** in `src/lib/sync-tables.ts`:
+
    ```ts
    newEntity: {
      primaryKey: 'id',
@@ -188,6 +195,7 @@ To add a new entity type that syncs:
 ### Sync Metadata Fields
 
 Every synced record must have:
+
 - `id` - Unique identifier (typically UUID)
 - `_hlc` - Hybrid Logical Clock timestamp
 - `_deviceId` - Device that made the change

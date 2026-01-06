@@ -70,4 +70,4 @@ The only environment variable that's updated locally is the `VITE_BETTER_AUTH_UR
 
 Following the latest (as of 2025-12-20) Cloudflare Workers docs on using Vitest,
 which means only using Vitest 3.2.0 (instead of the latest version).
-See  [this link](https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/).
+See [this link](https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/).
