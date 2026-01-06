@@ -113,7 +113,7 @@ export function Library() {
     // Filter to only .epub files
     const allFiles = Array.from(files);
     const epubFiles = allFiles.filter((file) =>
-      file.name.toLowerCase().endsWith(".epub")
+      file.name.toLowerCase().endsWith(".epub"),
     );
     const nonEpubCount = allFiles.length - epubFiles.length;
 
@@ -152,21 +152,17 @@ export function Library() {
     // Build summary message
     const parts: string[] = [];
     if (successCount > 0) {
-      parts.push(
-        `${successCount} book${successCount > 1 ? "s" : ""} added`
-      );
+      parts.push(`${successCount} book${successCount > 1 ? "s" : ""} added`);
     }
     if (duplicateCount > 0) {
-      parts.push(
-        `${duplicateCount} skipped (already in library)`
-      );
+      parts.push(`${duplicateCount} skipped (already in library)`);
     }
     if (errorCount > 0) {
       parts.push(`${errorCount} failed`);
     }
     if (nonEpubCount > 0) {
       parts.push(
-        `${nonEpubCount} non-EPUB file${nonEpubCount > 1 ? "s" : ""} ignored`
+        `${nonEpubCount} non-EPUB file${nonEpubCount > 1 ? "s" : ""} ignored`,
       );
     }
 
@@ -176,7 +172,11 @@ export function Library() {
         title: "Import complete",
         description: parts.join(" · "),
       });
-    } else if (duplicateCount > 0 && epubFiles.length === 1 && lastDuplicateBook) {
+    } else if (
+      duplicateCount > 0 &&
+      epubFiles.length === 1 &&
+      lastDuplicateBook
+    ) {
       // Single duplicate file - show the dialog for better UX
       setDuplicateBook(lastDuplicateBook);
       setShowDuplicateDialog(true);
@@ -487,9 +487,7 @@ export function Library() {
             <div className="space-y-12 fade-in animate-in duration-300">
               {/* Continue Reading Carousel */}
               {continueReadingBooks.length > 0 && (
-                <ContinueReadingCarousel
-                  books={continueReadingBooks}
-                />
+                <ContinueReadingCarousel books={continueReadingBooks} />
               )}
 
               {/* Books Section */}
@@ -570,10 +568,7 @@ export function Library() {
                   : "Drag and drop an EPUB file here, or click the button below to add your first book."}
               </p>
               {!searchQuery && (
-                <Button
-                  onClick={handleAddBookClick}
-                  className="gap-2"
-                >
+                <Button onClick={handleAddBookClick} className="gap-2">
                   <Upload className="h-4 w-4" />
                   Import EPUB
                 </Button>

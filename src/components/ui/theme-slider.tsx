@@ -4,8 +4,10 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import "./theme-slider.css";
 
-export interface ThemeSliderProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+export interface ThemeSliderProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  "type"
+> {
   /** Current value (controlled) */
   value?: number;
   /** Default value (uncontrolled) */

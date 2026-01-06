@@ -101,7 +101,9 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
         setGradientColor(`rgb(${r}, ${g}, ${b})`);
       } catch {
         // CORS or other error - use fallback
-        setGradientColor(isDarkMode ? "rgba(0,0,0,0.8)" : "rgba(200,200,200,0.9)");
+        setGradientColor(
+          isDarkMode ? "rgba(0,0,0,0.8)" : "rgba(200,200,200,0.9)",
+        );
       }
     };
 

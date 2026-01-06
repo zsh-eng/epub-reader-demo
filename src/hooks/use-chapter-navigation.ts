@@ -32,7 +32,6 @@ function newReadingProgress(
   };
 }
 
-
 export function useChapterNavigation(
   book: Book | null,
   bookId: string | undefined,

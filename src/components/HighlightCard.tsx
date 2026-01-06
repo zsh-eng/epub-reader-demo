@@ -27,7 +27,11 @@ const colorDotClasses: Record<string, string> = {
   magenta: "bg-magenta-secondary",
 };
 
-export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProps) {
+export function HighlightCard({
+  highlight,
+  onDelete,
+  onEdit,
+}: HighlightCardProps) {
   const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -64,7 +68,8 @@ export function HighlightCard({ highlight, onDelete, onEdit }: HighlightCardProp
     setIsExpanded(false);
   };
 
-  const colorDotClass = colorDotClasses[highlight.color] ?? "bg-muted-foreground";
+  const colorDotClass =
+    colorDotClasses[highlight.color] ?? "bg-muted-foreground";
   const formattedTime = formatHighlightTime(highlight.createdAt);
 
   return (

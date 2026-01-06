@@ -49,7 +49,7 @@ interface UseFileUrlOptions {
 export function useFileUrl(
   contentHash: string | undefined,
   fileType: FileType,
-  options: UseFileUrlOptions = {}
+  options: UseFileUrlOptions = {},
 ): UseFileUrlState {
   const { skip = false, localOnly = false } = options;
 
@@ -133,7 +133,7 @@ export function useFileUrl(
  */
 export function useHasLocalFile(
   contentHash: string | undefined,
-  fileType: FileType
+  fileType: FileType,
 ): { hasLocal: boolean | undefined; isChecking: boolean } {
   const [hasLocal, setHasLocal] = useState<boolean | undefined>(undefined);
   const [isChecking, setIsChecking] = useState(false);

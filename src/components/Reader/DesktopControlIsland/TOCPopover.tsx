@@ -80,7 +80,7 @@ export function TOCPopover({
           size="icon"
           className={cn(
             "rounded-full",
-            isOpen && "bg-accent text-accent-foreground"
+            isOpen && "bg-accent text-accent-foreground",
           )}
           aria-label="Table of Contents"
         >

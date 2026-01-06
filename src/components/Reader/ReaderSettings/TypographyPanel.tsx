@@ -223,7 +223,10 @@ export function TypographyPanel({
             <span className="sr-only">Decrease font size</span>
           </Button>
           <span className="text-sm font-medium text-center tabular-nums min-w-[4rem] w-[50%]">
-            <AnimatedNumber value={settings.fontSize} format={(v) => `${Math.round(v)}%`} />
+            <AnimatedNumber
+              value={settings.fontSize}
+              format={(v) => `${Math.round(v)}%`}
+            />
           </span>
           <Button
             variant="outline"

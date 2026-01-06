@@ -7,19 +7,19 @@
  */
 
 export interface Note {
-    // Identity
-    id: string; // UUID
-    annotationId: string; // FK to Highlight.id or chapter annotation ID
-    annotationType: "highlight" | "chapter";
+  // Identity
+  id: string; // UUID
+  annotationId: string; // FK to Highlight.id or chapter annotation ID
+  annotationType: "highlight" | "chapter";
 
-    // Location (denormalized for efficient querying)
-    bookId: string;
-    spineItemId: string;
+  // Location (denormalized for efficient querying)
+  bookId: string;
+  spineItemId: string;
 
-    // Content
-    content: string;
+  // Content
+  content: string;
 
-    // Metadata
-    createdAt: Date;
-    updatedAt?: Date;
+  // Metadata
+  createdAt: Date;
+  updatedAt?: Date;
 }

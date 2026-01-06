@@ -75,7 +75,9 @@ export function arePositionsSimilar(
   b: { spineIndex: number; scrollProgress: number },
 ): boolean {
   if (a.spineIndex !== b.spineIndex) return false;
-  return Math.abs(a.scrollProgress - b.scrollProgress) < SCROLL_PROXIMITY_THRESHOLD;
+  return (
+    Math.abs(a.scrollProgress - b.scrollProgress) < SCROLL_PROXIMITY_THRESHOLD
+  );
 }
 
 /**

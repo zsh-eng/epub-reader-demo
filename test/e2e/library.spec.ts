@@ -7,93 +7,115 @@
  * - Book display and search
  */
 
-import { test, expect, waitForLibraryLoaded, clearIndexedDB, SAMPLE_EPUB_PATH } from './helpers/fixtures';
+import {
+  clearIndexedDB,
+  expect,
+  SAMPLE_EPUB_PATH,
+  test,
+  waitForLibraryLoaded,
+} from "./helpers/fixtures";
 
-test.describe('Library', () => {
-    test.beforeEach(async ({ page }) => {
-        // Clear IndexedDB to ensure clean state
-        await page.goto('/');
-        await clearIndexedDB(page);
-        // Reload after clearing to get fresh state
-        await page.reload();
-        await waitForLibraryLoaded(page);
+test.describe("Library", () => {
+  test.beforeEach(async ({ page }) => {
+    // Clear IndexedDB to ensure clean state
+    await page.goto("/");
+    await clearIndexedDB(page);
+    // Reload after clearing to get fresh state
+    await page.reload();
+    await waitForLibraryLoaded(page);
+  });
+
+  test("should display empty library initially", async ({ page }) => {
+    await expect(page.getByText("Your library is empty")).toBeVisible();
+    await expect(
+      page.getByText("Drag and drop an EPUB file here"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Import EPUB" }),
+    ).toBeVisible();
+  });
+
+  test("should add a book via file picker", async ({ page }) => {
+    // Trigger file picker by clicking the Import EPUB button
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import EPUB" }).click();
+
+    // Upload the sample EPUB
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(SAMPLE_EPUB_PATH);
+
+    // Wait for success toast
+    await expect(page.getByText("Import complete")).toBeVisible({
+      timeout: 30000,
     });
 
-    test('should display empty library initially', async ({ page }) => {
-        await expect(page.getByText('Your library is empty')).toBeVisible();
-        await expect(page.getByText('Drag and drop an EPUB file here')).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Import EPUB' })).toBeVisible();
+    // Wait for toast to disappear, then check the library
+    await page.waitForTimeout(2000);
+
+    // Library should no longer show empty state
+    await expect(page.getByText("Your library is empty")).not.toBeVisible();
+
+    // Book card should be visible - use the heading role which is more specific
+    await expect(
+      page.getByRole("heading", { name: /Alice.*Adventures.*Wonderland/i }),
+    ).toBeVisible();
+  });
+
+  test("should search books by title", async ({ page }) => {
+    // Add a book first (inline, not using fixture)
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import EPUB" }).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(SAMPLE_EPUB_PATH);
+    await expect(page.getByText("Import complete")).toBeVisible({
+      timeout: 30000,
     });
+    await page.waitForTimeout(2000);
 
-    test('should add a book via file picker', async ({ page }) => {
-        // Trigger file picker by clicking the Import EPUB button
-        const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByRole('button', { name: 'Import EPUB' }).click();
-
-        // Upload the sample EPUB
-        const fileChooser = await fileChooserPromise;
-        await fileChooser.setFiles(SAMPLE_EPUB_PATH);
-
-        // Wait for success toast
-        await expect(page.getByText('has been added to your library')).toBeVisible({ timeout: 30000 });
-
-        // Wait for toast to disappear, then check the library
-        await page.waitForTimeout(2000);
-
-        // Library should no longer show empty state
-        await expect(page.getByText('Your library is empty')).not.toBeVisible();
-
-        // Book card should be visible - use the heading role which is more specific
-        await expect(page.getByRole('heading', { name: /Alice.*Adventures.*Wonderland/i })).toBeVisible();
+    // Verify book heading is visible
+    const bookHeading = page.getByRole("heading", {
+      name: /Alice.*Adventures.*Wonderland/i,
     });
+    await expect(bookHeading).toBeVisible();
 
-    test('should search books by title', async ({ page }) => {
-        // Add a book first (inline, not using fixture)
-        const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByRole('button', { name: 'Import EPUB' }).click();
-        const fileChooser = await fileChooserPromise;
-        await fileChooser.setFiles(SAMPLE_EPUB_PATH);
-        await expect(page.getByText('has been added to your library')).toBeVisible({ timeout: 30000 });
-        await page.waitForTimeout(2000);
+    // Search for the book
+    const searchInput = page.getByPlaceholder("Search books...");
+    await searchInput.fill("Alice");
 
-        // Verify book heading is visible
-        const bookHeading = page.getByRole('heading', { name: /Alice.*Adventures.*Wonderland/i });
-        await expect(bookHeading).toBeVisible();
+    // Book should still be visible
+    await expect(bookHeading).toBeVisible();
 
-        // Search for the book
-        const searchInput = page.getByPlaceholder('Search books...');
-        await searchInput.fill('Alice');
+    // Search for something that doesn't exist
+    await searchInput.fill("Nonexistent Book");
 
-        // Book should still be visible
-        await expect(bookHeading).toBeVisible();
+    // Should show "No books found"
+    await expect(page.getByText("No books found")).toBeVisible();
+    await expect(bookHeading).not.toBeVisible();
 
-        // Search for something that doesn't exist
-        await searchInput.fill('Nonexistent Book');
+    // Clear search
+    await searchInput.fill("");
 
-        // Should show "No books found"
-        await expect(page.getByText('No books found')).toBeVisible();
-        await expect(bookHeading).not.toBeVisible();
+    // Book should be visible again
+    await expect(bookHeading).toBeVisible();
+  });
 
-        // Clear search
-        await searchInput.fill('');
-
-        // Book should be visible again
-        await expect(bookHeading).toBeVisible();
+  test("should open a book from library", async ({ page }) => {
+    // Add a book first (inline, not using fixture)
+    const fileChooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Import EPUB" }).click();
+    const fileChooser = await fileChooserPromise;
+    await fileChooser.setFiles(SAMPLE_EPUB_PATH);
+    await expect(page.getByText("Import complete")).toBeVisible({
+      timeout: 30000,
     });
+    await page.waitForTimeout(2000);
 
-    test('should open a book from library', async ({ page }) => {
-        // Add a book first (inline, not using fixture)
-        const fileChooserPromise = page.waitForEvent('filechooser');
-        await page.getByRole('button', { name: 'Import EPUB' }).click();
-        const fileChooser = await fileChooserPromise;
-        await fileChooser.setFiles(SAMPLE_EPUB_PATH);
-        await expect(page.getByText('has been added to your library')).toBeVisible({ timeout: 30000 });
-        await page.waitForTimeout(2000);
+    // Click on the book heading (more specific than getByText)
+    await page
+      .getByRole("heading", { name: /Alice.*Adventures.*Wonderland/i })
+      .click();
 
-        // Click on the book heading (more specific than getByText)
-        await page.getByRole('heading', { name: /Alice.*Adventures.*Wonderland/i }).click();
-
-        // Should navigate to reader page
-        await expect(page).toHaveURL(/\/reader\/.+/);
-    });
+    // Should navigate to reader page
+    await expect(page).toHaveURL(/\/reader\/.+/);
+  });
 });

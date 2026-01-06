@@ -8,11 +8,11 @@
  */
 
 import {
-  test,
-  expect,
-  waitForLibraryLoaded,
   clearIndexedDB,
+  expect,
   SAMPLE_EPUB_PATH,
+  test,
+  waitForLibraryLoaded,
 } from "./helpers/fixtures";
 
 test.describe("Reader", () => {

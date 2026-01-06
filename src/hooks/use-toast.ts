@@ -1,18 +1,18 @@
-import { toast as sonnerToast } from 'sonner';
+import { toast as sonnerToast } from "sonner";
 
 interface ToastOptions {
   title?: string;
   description?: string;
-  variant?: 'default' | 'destructive';
+  variant?: "default" | "destructive";
   duration?: number;
 }
 
 export function useToast() {
   const toast = ({ title, description, variant, duration }: ToastOptions) => {
-    const message = title || '';
-    const descriptionText = description || '';
+    const message = title || "";
+    const descriptionText = description || "";
 
-    if (variant === 'destructive') {
+    if (variant === "destructive") {
       sonnerToast.error(message, {
         description: descriptionText,
         duration: duration || 4000,

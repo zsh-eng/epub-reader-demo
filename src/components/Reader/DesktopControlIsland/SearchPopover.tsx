@@ -88,7 +88,7 @@ export function SearchPopover({
           size="icon"
           className={cn(
             "rounded-full",
-            isOpen && "bg-accent text-accent-foreground"
+            isOpen && "bg-accent text-accent-foreground",
           )}
           aria-label="Search in book"
         >

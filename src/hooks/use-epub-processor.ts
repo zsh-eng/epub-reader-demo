@@ -94,9 +94,7 @@ export function useEpubProcessor(
         console.error("[useEpubProcessor] Error processing EPUB:", err);
         if (!isCancelled) {
           setError(
-            err instanceof Error
-              ? err
-              : new Error("Failed to process EPUB"),
+            err instanceof Error ? err : new Error("Failed to process EPUB"),
           );
           setIsProcessing(false);
         }

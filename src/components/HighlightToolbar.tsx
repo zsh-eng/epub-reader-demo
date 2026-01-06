@@ -143,8 +143,8 @@ export function HighlightToolbar({
                 "cursor-pointer w-10 h-10 md:w-6 md:h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
                 "border border-black/5 hover:border-black/10",
                 currentColor &&
-                color.name === currentColor &&
-                "ring-2 ring-offset-2 ring-gray-900",
+                  color.name === currentColor &&
+                  "ring-2 ring-offset-2 ring-gray-900",
               )}
               style={{ backgroundColor: `var(--${color.name}-secondary)` }}
               aria-label={
