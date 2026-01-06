@@ -45,7 +45,7 @@ export const test = base.extend<{
             await fileChooser.setFiles(SAMPLE_EPUB_PATH);
 
             // Wait for book processing - look for toast
-            await page.waitForSelector('text="has been added to your library"', { timeout: 30000 });
+            await page.waitForSelector('text="Import complete"', { timeout: 30000 });
 
             // Wait for toast to disappear before returning
             await page.waitForTimeout(2000);
