@@ -67,7 +67,8 @@ export type ProgressTriggerType =
   | "highlight-jump" // Jumped to highlight
   | "fragment-link" // Clicked internal book link
   | "manual-chapter" // Prev/next chapter buttons, escape key, or close button
-  | "session-start"; // Opening the book
+  | "session-start" // Opening the book
+  | "search-result-jump"; // Jumped to search result
 
 export interface ReadingProgress {
   id: string; // Primary key (auto-generated UUID)

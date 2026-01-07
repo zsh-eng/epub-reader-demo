@@ -6,4 +6,5 @@ export type ScrollTarget =
   | { type: "top" }
   | { type: "fragment"; id: string }
   | { type: "percentage"; value: number }
-  | { type: "highlight"; highlightId: string };
+  | { type: "highlight"; highlightId: string }
+  | { type: "textOffset"; offset: number };

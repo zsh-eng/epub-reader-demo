@@ -179,6 +179,7 @@ export function Reader() {
     goToChapterByHref,
     goToChapterWithFragment,
     goToHighlight,
+    goToSearchResult,
   } = useChapterNavigation(
     book,
     bookId,
@@ -335,10 +336,8 @@ export function Reader() {
           toc={book.toc}
           currentChapterHref={manifestItemHref || ""}
           onNavigateToChapter={goToChapterByHref}
-          onNavigateToSearchResult={(chapterPath, _position) => {
-            // Navigate to the chapter containing the search result
-            // TODO: Implement scroll-to-position once text position mapping is available
-            goToChapterByHref(chapterPath);
+          onNavigateToSearchResult={(chapterPath, position) => {
+            goToSearchResult(chapterPath, position);
           }}
           settings={settings}
           onUpdateSettings={updateSettings}

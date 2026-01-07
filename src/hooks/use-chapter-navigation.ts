@@ -14,6 +14,7 @@ export interface UseChapterNavigationReturn {
   goToChapterByHref: (href: string) => void;
   goToChapterWithFragment: (href: string, fragment?: string) => void;
   goToHighlight: (spineItemId: string, highlightId: string) => void;
+  goToSearchResult: (chapterPath: string, textOffset: number) => void;
 }
 
 function newReadingProgress(
@@ -182,11 +183,48 @@ export function useChapterNavigation(
     ],
   );
 
+  const goToSearchResult = useCallback(
+    (chapterPath: string, textOffset: number) => {
+      if (!book || !bookId) return;
+
+      // Find the spine index for this chapter path
+      const spineIndex = findSpineIndexByHref(book, chapterPath);
+      if (spineIndex === null) return;
+
+      // Same chapter - just scroll to the text offset
+      if (spineIndex === currentChapterIndex) {
+        setScrollTarget({ type: "textOffset", offset: textOffset });
+        return;
+      }
+
+      // Navigate to chapter with text offset scroll target
+      setCurrentChapterIndex(spineIndex);
+      setScrollTarget({ type: "textOffset", offset: textOffset });
+
+      // Save progress
+      const progress = newReadingProgress(
+        bookId,
+        spineIndex,
+        "search-result-jump",
+      );
+      saveProgressMutation.mutate(progress);
+    },
+    [
+      book,
+      bookId,
+      currentChapterIndex,
+      setCurrentChapterIndex,
+      setScrollTarget,
+      saveProgressMutation,
+    ],
+  );
+
   return {
     goToPreviousChapter,
     goToNextChapter,
     goToChapterByHref,
     goToChapterWithFragment,
     goToHighlight,
+    goToSearchResult,
   };
 }

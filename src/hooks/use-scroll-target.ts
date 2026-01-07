@@ -41,6 +41,69 @@ function scrollToHighlight(highlightId: string): boolean {
 }
 
 /**
+ * Scrolls to a specific text character offset within the content container.
+ * Walks through DOM text nodes counting characters until reaching the target offset,
+ * then scrolls that position into view.
+ */
+function scrollToTextOffset(
+  contentRef: React.RefObject<HTMLElement | null>,
+  offset: number,
+): boolean {
+  const container = contentRef.current;
+  if (!container) return false;
+
+  // Walk text nodes and count characters
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    null,
+  );
+
+  let currentOffset = 0;
+  let node: Text | null;
+
+  while ((node = walker.nextNode() as Text | null)) {
+    // Get normalized text content (matching how plain text was extracted)
+    const nodeText = node.textContent || "";
+    // Skip whitespace-only nodes that would be collapsed
+    const normalizedLength = nodeText.replace(/\s+/g, " ").trim().length;
+    if (normalizedLength === 0) continue;
+
+    const nodeLength = normalizedLength;
+
+    if (currentOffset + nodeLength > offset) {
+      // Found the node containing our offset
+      try {
+        // Create a range at the start of this text node
+        const range = document.createRange();
+        range.setStart(node, 0);
+        range.setEnd(node, Math.min(1, node.length));
+
+        // Get bounding rect and scroll to center
+        const rect = range.getBoundingClientRect();
+        const targetY = window.scrollY + rect.top - window.innerHeight / 2;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: "instant" });
+
+        return true;
+      } catch {
+        // If range creation fails, fall back to scrolling the parent element
+        const parent = node.parentElement;
+        if (parent) {
+          parent.scrollIntoView({ behavior: "instant", block: "center" });
+          return true;
+        }
+      }
+    }
+
+    currentOffset += nodeLength;
+  }
+
+  // If we couldn't find the exact offset, scroll to top as fallback
+  window.scrollTo({ top: 0, behavior: "instant" });
+  return false;
+}
+
+/**
  * Hook for managing scroll target state and executing scrolls when content is ready.
  *
  * This hook decouples the concept of "where to scroll" from navigation logic.
@@ -111,6 +174,10 @@ export function useScrollTarget({
 
         case "highlight":
           scrollToHighlight(scrollTarget.highlightId);
+          break;
+
+        case "textOffset":
+          scrollToTextOffset(contentRef, scrollTarget.offset);
           break;
       }
 
