@@ -8,6 +8,7 @@ import {
   type ReadingStatus,
 } from "@/lib/db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { bookKeys } from "./use-book-loader";
 
 /**
  * Query key factory for reading status queries
@@ -47,6 +48,11 @@ export function useReadingStatus(bookId: string | undefined) {
       });
       queryClient.invalidateQueries({
         queryKey: readingStatusKeys.allStatuses(),
+      });
+      // Also invalidate books list to refresh useBooksWithStatuses
+      // (which has a combined query key that includes both books and statuses)
+      queryClient.invalidateQueries({
+        queryKey: bookKeys.list(),
       });
     },
   });
