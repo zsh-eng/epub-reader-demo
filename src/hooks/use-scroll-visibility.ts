@@ -9,9 +9,20 @@ export function useScrollVisibility(threshold = 100) {
 
     const updateVisibility = () => {
       const currentScrollY = window.scrollY;
+      const documentHeight = document.documentElement.scrollHeight;
+      const windowHeight = window.innerHeight;
+      const distanceFromBottom = documentHeight - (currentScrollY + windowHeight);
 
       // Always show at the very top
       if (currentScrollY < threshold) {
+        setIsVisible(true);
+        setLastScrollY(currentScrollY);
+        ticking = false;
+        return;
+      }
+
+      // Always show at the very bottom (stricter threshold)
+      if (distanceFromBottom < 50) {
         setIsVisible(true);
         setLastScrollY(currentScrollY);
         ticking = false;
