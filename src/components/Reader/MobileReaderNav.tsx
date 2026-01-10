@@ -221,7 +221,7 @@ export function MobileReaderNav({
             paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
           }}
         >
-          <div className="overflow-y-auto px-4 max-h-[60vh]">
+          <div className="overflow-y-auto px-4 max-h-[60vh]" data-vaul-no-drag>
             {flatTOC && flatTOC.length > 0 ? (
               <div className="space-y-1">
                 {flatTOC.map((item, index) => {
