@@ -703,3 +703,238 @@ describe("Sync Engine Integration with DexieJS", () => {
     });
   });
 });
+
+/**
+ * Separate test suite for books table with unique fileHash constraint
+ *
+ * Tests that the sync engine correctly handles deduplication of books
+ * based on fileHash to prevent unique constraint violations.
+ */
+interface Book {
+  id: string;
+  fileHash: string;
+  title: string;
+  author: string;
+}
+
+type BookWithSync = Book & SyncMetadata;
+
+class BooksTestDatabase extends Dexie {
+  books!: Dexie.Table<BookWithSync, string>;
+
+  constructor() {
+    super("BooksTestDatabase");
+  }
+}
+
+describe("Sync Engine - Books fileHash deduplication", () => {
+  let db: BooksTestDatabase;
+  let hlc: HLCService;
+  let remote: MockRemoteAdapter;
+  let engine: SyncEngine;
+  const deviceId = "test-device-1";
+
+  beforeEach(async () => {
+    resetIndexedDB();
+    localStorage.clear();
+
+    hlc = createHLCService(deviceId);
+
+    // Define sync configuration with unique fileHash index
+    const syncConfig = createSyncConfig({
+      books: {
+        primaryKey: "id",
+        indices: [],
+        uniqueIndices: ["fileHash"],
+      },
+    });
+
+    const schemas = generateDexieStores(syncConfig.tables);
+
+    db = new BooksTestDatabase();
+    db.version(1).stores(schemas);
+
+    db.use(
+      createSyncMiddleware({
+        hlc,
+        syncedTables: new Set(["books"]),
+        onLocalMutation: () => {},
+      }),
+    );
+
+    await db.open();
+
+    const storage = createDexieStorageAdapter(
+      db as unknown as { [key: string]: Dexie.Table },
+      { books: {} },
+    );
+
+    remote = createMockRemoteAdapter();
+    engine = createSyncEngine(storage, remote, hlc);
+  });
+
+  afterEach(async () => {
+    if (db) {
+      db.close();
+      await db.delete();
+    }
+  });
+
+  it("should skip remote books with duplicate fileHash", async () => {
+    const serverTime = Date.now();
+    remote.setServerTime(serverTime);
+
+    // Create a local book
+    const localBook: Book = {
+      id: "book-local",
+      fileHash: "hash-123",
+      title: "Local Book",
+      author: "Local Author",
+    };
+    await db.books.add(localBook as BookWithSync);
+
+    // Create remote books - one has the same fileHash as local
+    const remoteBooks: SyncItem[] = [
+      {
+        id: "book-remote-1",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "other-device",
+        _isDeleted: false,
+        _serverTimestamp: serverTime,
+        data: {
+          fileHash: "hash-123", // Same as local book - should be skipped
+          title: "Remote Book 1 (duplicate hash)",
+          author: "Remote Author 1",
+        },
+      },
+      {
+        id: "book-remote-2",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "other-device",
+        _isDeleted: false,
+        _serverTimestamp: serverTime + 1,
+        data: {
+          fileHash: "hash-456", // Different hash - should be applied
+          title: "Remote Book 2",
+          author: "Remote Author 2",
+        },
+      },
+    ];
+
+    remote.setServerItems("books", remoteBooks);
+
+    // Pull should not throw and should skip the duplicate
+    const result = await engine.pull("books");
+
+    // Only 1 book should be applied (the one with unique fileHash)
+    // result.pulled counts applied items, not processed items
+    expect(result.pulled).toBe(1); // Only book-remote-2 was applied
+
+    const allBooks = await db.books.toArray();
+    expect(allBooks).toHaveLength(2); // local + one remote
+
+    // Verify local book is still there
+    const localResult = await db.books.get("book-local");
+    expect(localResult).toBeDefined();
+    expect(localResult?.title).toBe("Local Book");
+
+    // Verify the unique remote book was added
+    const remote2 = await db.books.get("book-remote-2");
+    expect(remote2).toBeDefined();
+    expect(remote2?.fileHash).toBe("hash-456");
+
+    // Verify the duplicate was NOT added
+    const remote1 = await db.books.get("book-remote-1");
+    expect(remote1).toBeUndefined();
+  });
+
+  it("should skip multiple remote books with same fileHash among themselves", async () => {
+    const serverTime = Date.now();
+    remote.setServerTime(serverTime);
+
+    // Create remote books where multiple have the same fileHash
+    const remoteBooks: SyncItem[] = [
+      {
+        id: "book-1",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "device-a",
+        _isDeleted: false,
+        _serverTimestamp: serverTime,
+        data: {
+          fileHash: "same-hash",
+          title: "Book from Device A",
+          author: "Author A",
+        },
+      },
+      {
+        id: "book-2",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "device-b",
+        _isDeleted: false,
+        _serverTimestamp: serverTime + 1,
+        data: {
+          fileHash: "same-hash", // Same hash - should be skipped
+          title: "Book from Device B",
+          author: "Author B",
+        },
+      },
+      {
+        id: "book-3",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "device-c",
+        _isDeleted: false,
+        _serverTimestamp: serverTime + 2,
+        data: {
+          fileHash: "same-hash", // Same hash - should be skipped
+          title: "Book from Device C",
+          author: "Author C",
+        },
+      },
+      {
+        id: "book-4",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "device-d",
+        _isDeleted: false,
+        _serverTimestamp: serverTime + 3,
+        data: {
+          fileHash: "different-hash",
+          title: "Book from Device D",
+          author: "Author D",
+        },
+      },
+    ];
+
+    remote.setServerItems("books", remoteBooks);
+
+    // Pull should not throw
+    const result = await engine.pull("books");
+    // result.pulled counts applied items: book-1 (first with "same-hash") + book-4 (unique "different-hash")
+    expect(result.pulled).toBe(2);
+
+    // Only 2 books should be in the database (first of each unique fileHash)
+    const allBooks = await db.books.toArray();
+    expect(allBooks).toHaveLength(2);
+
+    // Verify the first book with "same-hash" was added
+    const book1 = await db.books.get("book-1");
+    expect(book1).toBeDefined();
+    expect(book1?.fileHash).toBe("same-hash");
+
+    // Verify duplicates were NOT added
+    const book2 = await db.books.get("book-2");
+    expect(book2).toBeUndefined();
+    const book3 = await db.books.get("book-3");
+    expect(book3).toBeUndefined();
+
+    // Verify the unique hash book was added
+    const book4 = await db.books.get("book-4");
+    expect(book4).toBeDefined();
+    expect(book4?.fileHash).toBe("different-hash");
+  });
+});

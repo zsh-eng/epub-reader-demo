@@ -210,18 +210,22 @@ export class DexieStorageAdapter implements StorageAdapter {
     await dexieTable.db.transaction("rw", dexieTable, async () => {
       const ids = items.map((item) => item.id);
       const existingRecords = await dexieTable.bulkGet(ids);
+
+      // Track items to update and their corresponding IDs for error reconciliation
       const itemsToUpdate: Array<
         Record<string, unknown> & { id: string } & SyncMetadata
       > = [];
+      const pendingIds: string[] = []; // IDs of items we're attempting to insert/update
 
       items.forEach((remoteItem, index) => {
         const localRecord = existingRecords[index];
+
         if (!localRecord) {
           // New item - insert it
           itemsToUpdate.push(
             markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
           );
-          applied.push(remoteItem.id);
+          pendingIds.push(remoteItem.id);
           return;
         }
 
@@ -238,7 +242,7 @@ export class DexieStorageAdapter implements StorageAdapter {
           itemsToUpdate.push(
             markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
           );
-          applied.push(remoteItem.id);
+          pendingIds.push(remoteItem.id);
         } else if (comparison < 0) {
           // Local is newer - keep local changes
           // Skip this item, the next push will send our version
@@ -249,13 +253,41 @@ export class DexieStorageAdapter implements StorageAdapter {
           itemsToUpdate.push(
             markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
           );
-          applied.push(remoteItem.id);
+          pendingIds.push(remoteItem.id);
         }
       });
 
-      // Batch write only the items that passed the check
+      // Batch write with constraint error handling
+      // Dexie's bulkPut allows partial success - items that succeed are committed,
+      // items that fail due to constraints (e.g., unique index violations) are skipped
       if (itemsToUpdate.length > 0) {
-        await dexieTable.bulkPut(itemsToUpdate);
+        try {
+          await dexieTable.bulkPut(itemsToUpdate);
+          // All items succeeded
+          applied.push(...pendingIds);
+        } catch (error) {
+          // Check if this is a BulkError (partial failure)
+          if (error && typeof error === "object" && "failures" in error) {
+            const bulkError = error as {
+              failures: Error[];
+              failuresByPos: Record<number, Error>;
+            };
+
+            // Reconcile which items succeeded vs failed
+            for (let i = 0; i < pendingIds.length; i++) {
+              if (bulkError.failuresByPos[i]) {
+                // This item failed (likely due to unique constraint violation)
+                skipped.push(pendingIds[i]);
+              } else {
+                // This item succeeded
+                applied.push(pendingIds[i]);
+              }
+            }
+          } else {
+            // Unknown error - re-throw
+            throw error;
+          }
+        }
       }
     });
 
