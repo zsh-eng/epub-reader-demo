@@ -24,6 +24,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\""
   },
   "dependencies": {
+    "text-highlighter": "file:./packages/text-highlighter",
     "@hono/zod-validator": "^0.7.6",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.12",

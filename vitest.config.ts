@@ -18,6 +18,13 @@ export default defineConfig({
         },
         extends: "./vitest.config.client.ts",
       },
+      {
+        test: {
+          name: "text-highlighter",
+          include: ["packages/text-highlighter/test/**/*.test.ts"],
+        },
+        extends: "./vitest.config.client.ts",
+      },
     ],
   },
 });
