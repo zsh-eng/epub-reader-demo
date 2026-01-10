@@ -638,9 +638,9 @@ export function Library() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="flex flex-col items-center justify-center py-16 sm:py-20 md:py-24 lg:py-32 xl:py-40 2xl:py-48 text-center">
               {/* Animated floating books illustration */}
-              <div className="relative mb-8">
+              <div className="relative mb-6 sm:mb-8 md:mb-10 lg:mb-12 xl:mb-14 2xl:mb-16">
                 {/* Background glow */}
                 <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full scale-150" />
 
@@ -648,39 +648,39 @@ export function Library() {
                 <div className="relative">
                   {/* Back book */}
                   <div
-                    className="absolute -left-3 -top-2 w-16 h-24 rounded-r-md rounded-l-sm bg-gradient-to-br from-muted to-muted-foreground/20 shadow-lg transform -rotate-12 animate-[float_3s_ease-in-out_infinite]"
+                    className="absolute -left-2 sm:-left-3 md:-left-4 lg:-left-5 xl:-left-6 2xl:-left-8 -top-1.5 sm:-top-2 md:-top-3 lg:-top-4 xl:-top-5 2xl:-top-6 w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-30 lg:w-24 lg:h-36 xl:w-28 xl:h-42 2xl:w-36 2xl:h-54 rounded-r-md rounded-l-sm bg-gradient-to-br from-muted to-muted-foreground/20 shadow-lg transform -rotate-12 animate-[float_3s_ease-in-out_infinite]"
                     style={{ animationDelay: "-0.5s" }}
                   >
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-r from-black/10 to-transparent" />
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 sm:w-1 md:w-1.5 bg-gradient-to-r from-black/10 to-transparent" />
                   </div>
 
                   {/* Middle book */}
                   <div
-                    className="absolute left-2 top-1 w-16 h-24 rounded-r-md rounded-l-sm bg-gradient-to-br from-secondary to-secondary-foreground/10 shadow-lg transform rotate-6 animate-[float_3s_ease-in-out_infinite]"
+                    className="absolute left-1.5 sm:left-2 md:left-3 lg:left-4 xl:left-5 2xl:left-6 top-0.5 sm:top-1 md:top-1.5 lg:top-2 xl:top-3 2xl:top-4 w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-30 lg:w-24 lg:h-36 xl:w-28 xl:h-42 2xl:w-36 2xl:h-54 rounded-r-md rounded-l-sm bg-gradient-to-br from-secondary to-secondary-foreground/10 shadow-lg transform rotate-6 animate-[float_3s_ease-in-out_infinite]"
                     style={{ animationDelay: "-1s" }}
                   >
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-r from-black/10 to-transparent" />
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 sm:w-1 md:w-1.5 bg-gradient-to-r from-black/10 to-transparent" />
                   </div>
 
                   {/* Front book with icon */}
-                  <div className="relative w-20 h-28 rounded-r-md rounded-l-sm bg-gradient-to-br from-primary/10 to-primary/5 shadow-xl ring-1 ring-primary/10 animate-[float_3s_ease-in-out_infinite] flex items-center justify-center">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-r from-black/15 to-transparent rounded-l-sm" />
-                    <LibraryIcon className="h-8 w-8 text-muted-foreground/40" />
+                  <div className="relative w-16 h-22 sm:w-20 sm:h-28 md:w-24 md:h-36 lg:w-32 lg:h-44 xl:w-36 xl:h-52 2xl:w-48 2xl:h-68 rounded-r-md rounded-l-sm bg-gradient-to-br from-primary/10 to-primary/5 shadow-xl ring-1 ring-primary/10 animate-[float_3s_ease-in-out_infinite] flex items-center justify-center">
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 sm:w-1 md:w-1.5 bg-gradient-to-r from-black/15 to-transparent rounded-l-sm" />
+                    <LibraryIcon className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 lg:h-12 lg:w-12 xl:h-14 xl:w-14 2xl:h-18 2xl:w-18 text-muted-foreground/40" />
                   </div>
                 </div>
               </div>
 
-              <h3 className="text-xl font-semibold text-foreground mb-2">
-                {searchQuery ? "No books found" : "Your library is empty"}
+              <h3 className="font-serif italic text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl text-foreground mb-2 md:mb-3 lg:mb-4">
+                {searchQuery ? "Nothing on these shelves" : "Your library is empty"}
               </h3>
-              <p className="text-muted-foreground max-w-sm mx-auto mb-8">
+              <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl 2xl:text-3xl text-muted-foreground max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl mx-auto mb-6 sm:mb-8 md:mb-10 lg:mb-12">
                 {searchQuery
                   ? `No results for "${searchQuery}"`
                   : "Drag and drop an EPUB file here, or click the button below to add your first book."}
               </p>
               {!searchQuery && (
-                <Button onClick={handleAddBookClick} className="gap-2">
-                  <Upload className="h-4 w-4" />
+                <Button onClick={handleAddBookClick} className="gap-2 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl h-9 sm:h-10 md:h-12 lg:h-14 xl:h-16 px-4 sm:px-5 md:px-6 lg:px-8 xl:px-10">
+                  <Upload className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 lg:h-7 lg:w-7 xl:h-8 xl:w-8" />
                   Import EPUB
                 </Button>
               )}
