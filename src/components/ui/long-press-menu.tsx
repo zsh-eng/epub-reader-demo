@@ -382,13 +382,6 @@ function LongPressMenuTrigger({
     }
   };
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return;
-    if (ref.current && onPressStart) {
-      onPressStart(e, ref.current);
-    }
-  };
-
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
   };
@@ -408,10 +401,6 @@ function LongPressMenuTrigger({
       onTouchMove={onPressMove}
       onTouchEnd={onPressEnd}
       onTouchCancel={onPressCancel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={onPressMove}
-      onMouseUp={onPressEnd}
-      onMouseLeave={onPressCancel}
       onContextMenu={handleContextMenu}
     >
       {children}
