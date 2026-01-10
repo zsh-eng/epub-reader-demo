@@ -9,13 +9,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  LongPressMenu,
-  LongPressMenuContent,
-  LongPressMenuItem,
-  LongPressMenuItems,
-  LongPressMenuSeparator,
-  LongPressMenuTrigger,
-} from "@/components/ui/long-press-menu";
+  ResponsiveContextMenu,
+  ResponsiveContextMenuContent,
+  ResponsiveContextMenuItem,
+  ResponsiveContextMenuSeparator,
+  ResponsiveContextMenuTrigger,
+} from "@/components/ui/responsive-context-menu";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
@@ -133,8 +132,8 @@ export function BookCard({ book, onDelete }: BookCardProps) {
   };
 
   return (
-    <LongPressMenu>
-      <LongPressMenuTrigger>
+    <ResponsiveContextMenu>
+      <ResponsiveContextMenuTrigger>
         <div className="group relative flex flex-col gap-3 w-full">
           {/* Book Cover Container */}
           <div
@@ -236,40 +235,46 @@ export function BookCard({ book, onDelete }: BookCardProps) {
             )}
           </div>
         </div>
-      </LongPressMenuTrigger>
+      </ResponsiveContextMenuTrigger>
 
-      {/* Long Press Menu Content */}
-      <LongPressMenuContent>
-        {/* Context Menu Items */}
-        <LongPressMenuItems>
-          <LongPressMenuItem onClick={() => handleSetStatus("reading")}>
-            <BookOpen className="h-4 w-4" />
-            Reading
-            {status === "reading" && (
-              <CheckCircle className="ml-auto h-4 w-4 text-primary" />
-            )}
-          </LongPressMenuItem>
-          <LongPressMenuItem onClick={() => handleSetStatus("finished")}>
-            <CheckCircle className="h-4 w-4" />
-            Finished
-            {status === "finished" && (
-              <CheckCircle className="ml-auto h-4 w-4 text-primary" />
-            )}
-          </LongPressMenuItem>
-          <LongPressMenuItem onClick={() => handleSetStatus("dnf")}>
-            <XCircle className="h-4 w-4" />
-            Did Not Finish
-            {status === "dnf" && (
-              <CheckCircle className="ml-auto h-4 w-4 text-primary" />
-            )}
-          </LongPressMenuItem>
-          <LongPressMenuSeparator />
-          <LongPressMenuItem destructive onClick={handleDelete}>
-            <Trash2 className="h-4 w-4" />
-            Remove Book
-          </LongPressMenuItem>
-        </LongPressMenuItems>
-      </LongPressMenuContent>
-    </LongPressMenu>
+      {/* Context Menu Content */}
+      <ResponsiveContextMenuContent>
+        <ResponsiveContextMenuItem
+          icon={<BookOpen className="h-4 w-4" />}
+          onClick={() => handleSetStatus("reading")}
+        >
+          Reading
+          {status === "reading" && (
+            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+          )}
+        </ResponsiveContextMenuItem>
+        <ResponsiveContextMenuItem
+          icon={<CheckCircle className="h-4 w-4" />}
+          onClick={() => handleSetStatus("finished")}
+        >
+          Finished
+          {status === "finished" && (
+            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+          )}
+        </ResponsiveContextMenuItem>
+        <ResponsiveContextMenuItem
+          icon={<XCircle className="h-4 w-4" />}
+          onClick={() => handleSetStatus("dnf")}
+        >
+          Did Not Finish
+          {status === "dnf" && (
+            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+          )}
+        </ResponsiveContextMenuItem>
+        <ResponsiveContextMenuSeparator />
+        <ResponsiveContextMenuItem
+          icon={<Trash2 className="h-4 w-4" />}
+          destructive
+          onClick={handleDelete}
+        >
+          Remove Book
+        </ResponsiveContextMenuItem>
+      </ResponsiveContextMenuContent>
+    </ResponsiveContextMenu>
   );
 }

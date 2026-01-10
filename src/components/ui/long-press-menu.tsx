@@ -101,7 +101,7 @@ function injectStyles() {
 }
 
 // ============================================================================
-// Context
+// Context (simplified for mobile-only long-press)
 // ============================================================================
 
 interface LongPressMenuContextValue {
@@ -143,7 +143,7 @@ const SLOP_THRESHOLD = 10;
 
 interface LongPressMenuProps {
   children: React.ReactNode;
-  /** Duration in ms before long-press triggers. Default: 300ms */
+  /** Duration in ms before long-press triggers. Default: 500ms */
   pressDelay?: number;
   /** Whether to trigger haptic feedback. Default: true */
   hapticFeedback?: boolean;
@@ -188,7 +188,6 @@ function LongPressMenu({
     }
     setIsOpen(true);
     setIsPressing(false);
-    // Show the popover
     popoverRef.current?.showPopover();
   }, [hapticFeedback]);
 
@@ -253,20 +252,13 @@ function LongPressMenuInner({
     };
   }, []);
 
-  const handlePressStart = (
-    e: React.TouchEvent | React.MouseEvent,
-    element: HTMLElement,
-  ) => {
-    // Only handle touch events on touch devices, mouse for desktop
-    if ("touches" in e && e.touches.length > 1) return;
+  const handlePressStart = (e: React.TouchEvent, element: HTMLElement) => {
+    // Only handle single touch
+    if (e.touches.length > 1) return;
 
     // Track initial touch position for slop threshold
-    if ("touches" in e) {
-      const touch = e.touches[0];
-      startPosRef.current = { x: touch.clientX, y: touch.clientY };
-    } else {
-      startPosRef.current = { x: e.clientX, y: e.clientY };
-    }
+    const touch = e.touches[0];
+    startPosRef.current = { x: touch.clientX, y: touch.clientY };
 
     isPressingRef.current = true;
     triggerRef.current = element;
@@ -279,23 +271,12 @@ function LongPressMenuInner({
     }, pressDelay);
   };
 
-  const handlePressMove = (e: React.TouchEvent | React.MouseEvent) => {
+  const handlePressMove = (e: React.TouchEvent) => {
     if (!startPosRef.current || !isPressingRef.current) return;
 
-    let currentX: number;
-    let currentY: number;
-
-    if ("touches" in e) {
-      const touch = e.touches[0];
-      currentX = touch.clientX;
-      currentY = touch.clientY;
-    } else {
-      currentX = e.clientX;
-      currentY = e.clientY;
-    }
-
-    const deltaX = Math.abs(currentX - startPosRef.current.x);
-    const deltaY = Math.abs(currentY - startPosRef.current.y);
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - startPosRef.current.x);
+    const deltaY = Math.abs(touch.clientY - startPosRef.current.y);
 
     // If movement exceeds slop threshold, cancel long-press and allow scroll
     if (deltaX > SLOP_THRESHOLD || deltaY > SLOP_THRESHOLD) {
@@ -356,11 +337,8 @@ interface LongPressMenuTriggerProps {
   children: React.ReactNode;
   className?: string;
   // Internal props passed by LongPressMenuInner
-  onPressStart?: (
-    e: React.TouchEvent | React.MouseEvent,
-    element: HTMLElement,
-  ) => void;
-  onPressMove?: (e: React.TouchEvent | React.MouseEvent) => void;
+  onPressStart?: (e: React.TouchEvent, element: HTMLElement) => void;
+  onPressMove?: (e: React.TouchEvent) => void;
   onPressEnd?: () => void;
   onPressCancel?: () => void;
 }
@@ -382,6 +360,7 @@ function LongPressMenuTrigger({
     }
   };
 
+  // Prevent default context menu on mobile
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
   };
@@ -410,7 +389,7 @@ function LongPressMenuTrigger({
 LongPressMenuTrigger.displayName = "LongPressMenuTrigger";
 
 // ============================================================================
-// Content (uses native popover + CSS anchor positioning + manual backdrop)
+// Content (uses native popover + CSS anchor positioning + backdrop)
 // ============================================================================
 
 interface LongPressMenuContentProps {
@@ -426,17 +405,16 @@ function LongPressMenuContent({
 
   return (
     <>
-      {/* Manual backdrop since popover="manual" doesn't support ::backdrop */}
+      {/* Backdrop - always shown for mobile long-press */}
       {isOpen && <div className="long-press-backdrop" onClick={close} />}
 
-      {/* Popover content */}
+      {/* Popover content with CSS Anchor Positioning */}
       <div
         ref={popoverRef}
         popover="manual"
         className={cn("long-press-popover", className)}
         style={
           {
-            // CSS Anchor Positioning
             positionAnchor: anchorName,
             positionArea: "bottom span-right",
             positionTryFallbacks: "flip-block",
