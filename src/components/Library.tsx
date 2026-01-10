@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
@@ -24,8 +25,10 @@ import {
   Library as LibraryIcon,
   LogOut,
   Monitor,
+  Moon,
   Plus,
   RefreshCw,
+  Sun,
   Upload,
 } from "lucide-react";
 import { useCallback, useState } from "react";
@@ -46,6 +49,26 @@ export function Library() {
     refetch: refetchBooks,
   } = useBooksWithStatuses();
   const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
+  const { settings, updateSettings } = useReaderSettings();
+
+  // Determine if current theme is dark
+  const isDarkTheme =
+    settings.theme === "dark" || settings.theme === "flexoki-dark";
+
+  // Handle theme toggle: flexoki-light <-> flexoki-dark, light <-> dark
+  const handleThemeToggle = () => {
+    const themeMap: Record<string, string> = {
+      "flexoki-light": "flexoki-dark",
+      "flexoki-dark": "flexoki-light",
+      light: "dark",
+      dark: "light",
+    };
+    const newTheme =
+      themeMap[settings.theme] || (isDarkTheme ? "light" : "dark");
+    updateSettings({
+      theme: newTheme as "light" | "dark" | "flexoki-light" | "flexoki-dark",
+    });
+  };
 
   // Handle Google Sign In
   const handleGoogleSignIn = async () => {
@@ -379,6 +402,21 @@ export function Library() {
             </Button>
           </Link>
 
+          {/* Theme Toggle */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 rounded-full"
+            onClick={handleThemeToggle}
+            title={isDarkTheme ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {isDarkTheme ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+          </Button>
+
           {/* Sync (only when authenticated) */}
           {isAuthenticated && (
             <Button
@@ -512,6 +550,19 @@ export function Library() {
                   <Highlighter className="h-4 w-4" />
                 </Button>
               </Link>
+              {/* Theme Toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9"
+                onClick={handleThemeToggle}
+              >
+                {isDarkTheme ? (
+                  <Sun className="h-4 w-4" />
+                ) : (
+                  <Moon className="h-4 w-4" />
+                )}
+              </Button>
               {isAuthenticated && (
                 <Button
                   variant="ghost"
