@@ -135,7 +135,7 @@ export function BookCard({ book, onDelete }: BookCardProps) {
   return (
     <LongPressMenu>
       <LongPressMenuTrigger>
-        <div className="group relative flex flex-col gap-3 w-full max-w-[180px] mx-auto">
+        <div className="group relative flex flex-col gap-3 w-full">
           {/* Book Cover Container */}
           <div
             onClick={handleClick}

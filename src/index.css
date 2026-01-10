@@ -4,6 +4,10 @@
 @custom-variant dark (&:is(.dark *, .flexoki-dark *));
 
 @theme inline {
+    /* Font families */
+    --font-serif: "EB Garamond", "Garamond", serif;
+    --font-sans: "Inter", system-ui, sans-serif;
+
     /* Custom CSS for this reader app */
     --text-tiny: 0.625rem;
 
@@ -262,5 +266,46 @@
         50% {
             transform: translateY(-8px) rotate(var(--tw-rotate, 0deg));
         }
+    }
+
+    /* Section divider with decorative flair */
+    .section-divider {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-block: 2.5rem;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: linear-gradient(
+            to var(--direction, right),
+            transparent,
+            var(--color-border) 20%,
+            var(--color-border) 80%,
+            transparent
+        );
+    }
+
+    .section-divider::before {
+        --direction: right;
+        margin-right: 1rem;
+    }
+
+    .section-divider::after {
+        --direction: left;
+        margin-left: 1rem;
+    }
+
+    .section-divider-flair {
+        font-family: var(--font-serif);
+        font-size: 1.25rem;
+        color: var(--color-muted-foreground);
+        opacity: 0.6;
+        user-select: none;
     }
 }
