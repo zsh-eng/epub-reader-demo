@@ -2,7 +2,7 @@ import type { AnnotationColor } from "@/lib/highlight-constants";
 import {
   createHighlightFromSelection,
   getSelectionPosition,
-} from "@/lib/highlight-utils";
+} from "text-highlighter";
 import type { Highlight } from "@/types/highlight";
 import type { Note } from "@/types/note";
 import { useEffect, useState } from "react";

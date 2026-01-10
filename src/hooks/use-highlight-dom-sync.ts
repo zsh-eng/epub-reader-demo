@@ -1,8 +1,9 @@
-import {
-  applyHighlightToLiveDOM,
-  removeHighlightFromLiveDOM,
-} from "@/lib/highlight-utils";
+import { applyHighlight, removeHighlightById } from "text-highlighter";
 import type { Highlight } from "@/types/highlight";
+import {
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+} from "@/types/reader.types";
 import { useEffect, useRef } from "react";
 
 /**
@@ -38,19 +39,25 @@ export function useHighlightDOMSync(
     // Remove highlights that no longer exist (e.g., deleted or rolled back)
     for (const prevH of prevHighlights) {
       if (!currentIds.has(prevH.id)) {
-        removeHighlightFromLiveDOM(container, prevH.id);
+        removeHighlightById(container, prevH.id);
       }
     }
 
     // Add new highlights and update existing ones
     for (const highlight of highlights) {
       const existingMark = container.querySelector(
-        `mark[data-highlight-id="${highlight.id}"]`,
+        `mark[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlight.id}"]`,
       );
 
       if (!existingMark) {
         // New highlight - apply it to the DOM
-        applyHighlightToLiveDOM(container, highlight);
+        applyHighlight(container, highlight, {
+          className: EPUB_HIGHLIGHT_CLASS,
+          attributes: {
+            [EPUB_HIGHLIGHT_DATA_ATTRIBUTE]: highlight.id,
+            "data-color": highlight.color,
+          },
+        });
         continue;
       }
 
@@ -65,7 +72,7 @@ export function useHighlightDOMSync(
 
       // Sync the color in case it changed
       const allMarkElementsForId = container.querySelectorAll(
-        `mark[data-highlight-id="${highlight.id}"]`,
+        `mark[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlight.id}"]`,
       );
       allMarkElementsForId.forEach((mark) => {
         if (mark instanceof HTMLElement) {

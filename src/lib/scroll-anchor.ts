@@ -1,4 +1,4 @@
-import { findRangeByTextOffset } from "@/lib/highlight-utils";
+import { findRangeByTextOffset } from "text-highlighter";
 import { saveReadingProgress } from "@/lib/db";
 
 /**
