@@ -51,7 +51,8 @@ function injectStyles() {
 
     /* Trigger animations */
     .long-press-trigger {
-      touch-action: none;
+      /* Allow touch scrolling - slop threshold handles long-press vs scroll */
+      touch-action: pan-y pan-x;
       user-select: none;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
@@ -132,6 +133,9 @@ let anchorCounter = 0;
 function generateAnchorName() {
   return `--long-press-menu-anchor-${++anchorCounter}`;
 }
+
+// Slop threshold in pixels - matches iOS UILongPressGestureRecognizer default
+const SLOP_THRESHOLD = 10;
 
 // ============================================================================
 // Root
@@ -238,6 +242,7 @@ function LongPressMenuInner({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPressingRef = useRef(false);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const startPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Cleanup timer on unmount
   useEffect(() => {
@@ -255,23 +260,52 @@ function LongPressMenuInner({
     // Only handle touch events on touch devices, mouse for desktop
     if ("touches" in e && e.touches.length > 1) return;
 
+    // Track initial touch position for slop threshold
+    if ("touches" in e) {
+      const touch = e.touches[0];
+      startPosRef.current = { x: touch.clientX, y: touch.clientY };
+    } else {
+      startPosRef.current = { x: e.clientX, y: e.clientY };
+    }
+
     isPressingRef.current = true;
     triggerRef.current = element;
     setIsPressing(true);
 
     timerRef.current = setTimeout(() => {
       if (isPressingRef.current && triggerRef.current) {
-        // triggerRef.current.scrollIntoView({
-        //   behavior: "smooth",
-        //   block: "center",
-        // });
         open();
       }
     }, pressDelay);
   };
 
+  const handlePressMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!startPosRef.current || !isPressingRef.current) return;
+
+    let currentX: number;
+    let currentY: number;
+
+    if ("touches" in e) {
+      const touch = e.touches[0];
+      currentX = touch.clientX;
+      currentY = touch.clientY;
+    } else {
+      currentX = e.clientX;
+      currentY = e.clientY;
+    }
+
+    const deltaX = Math.abs(currentX - startPosRef.current.x);
+    const deltaY = Math.abs(currentY - startPosRef.current.y);
+
+    // If movement exceeds slop threshold, cancel long-press and allow scroll
+    if (deltaX > SLOP_THRESHOLD || deltaY > SLOP_THRESHOLD) {
+      handlePressCancel();
+    }
+  };
+
   const handlePressEnd = () => {
     isPressingRef.current = false;
+    startPosRef.current = null;
     setIsPressing(false);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -282,6 +316,7 @@ function LongPressMenuInner({
 
   const handlePressCancel = () => {
     isPressingRef.current = false;
+    startPosRef.current = null;
     setIsPressing(false);
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -300,6 +335,7 @@ function LongPressMenuInner({
           child as React.ReactElement<LongPressMenuTriggerProps>,
           {
             onPressStart: handlePressStart,
+            onPressMove: handlePressMove,
             onPressEnd: handlePressEnd,
             onPressCancel: handlePressCancel,
           },
@@ -324,6 +360,7 @@ interface LongPressMenuTriggerProps {
     e: React.TouchEvent | React.MouseEvent,
     element: HTMLElement,
   ) => void;
+  onPressMove?: (e: React.TouchEvent | React.MouseEvent) => void;
   onPressEnd?: () => void;
   onPressCancel?: () => void;
 }
@@ -332,6 +369,7 @@ function LongPressMenuTrigger({
   children,
   className,
   onPressStart,
+  onPressMove,
   onPressEnd,
   onPressCancel,
 }: LongPressMenuTriggerProps) {
@@ -367,9 +405,11 @@ function LongPressMenuTrigger({
         } as React.CSSProperties
       }
       onTouchStart={handleTouchStart}
+      onTouchMove={onPressMove}
       onTouchEnd={onPressEnd}
       onTouchCancel={onPressCancel}
       onMouseDown={handleMouseDown}
+      onMouseMove={onPressMove}
       onMouseUp={onPressEnd}
       onMouseLeave={onPressCancel}
       onContextMenu={handleContextMenu}
