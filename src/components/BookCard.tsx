@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
 import {
   Book as BookIcon,
+  BookMarked,
   BookOpen,
   CheckCircle,
   Loader2,
@@ -159,6 +160,15 @@ export function BookCard({ book, onDelete }: BookCardProps) {
 
       {/* Context Menu Content */}
       <ResponsiveContextMenuContent>
+        <ResponsiveContextMenuItem
+          icon={<BookMarked className="h-4 w-4" />}
+          onClick={() => handleSetStatus("want-to-read")}
+        >
+          Want to Read
+          {status === "want-to-read" && (
+            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+          )}
+        </ResponsiveContextMenuItem>
         <ResponsiveContextMenuItem
           icon={<BookOpen className="h-4 w-4" />}
           onClick={() => handleSetStatus("reading")}
