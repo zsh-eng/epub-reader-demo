@@ -304,14 +304,14 @@ export function ContinueReadingCarousel({
           loop: false,
         }}
         setApi={setApi}
-        className="w-full -mx-2 px-2 overflow-visible"
+        className="w-full overflow-visible"
       >
-        <CarouselContent className="-ml-4 py-2">
+        <CarouselContent className="py-2">
           {/* All books as hero cards */}
           {sortedBooks.map((book) => (
             <CarouselItem
               key={book.id}
-              className="pl-4 basis-[85%] sm:basis-[70%] md:basis-[60%] lg:basis-[50%]"
+              className="basis-[85%] sm:basis-[70%] md:basis-[60%] lg:basis-[50%] first:ml-4 last:mr-4 md:first:ml-10 md:last:mr-10"
             >
               <HeroBookCard book={book} />
             </CarouselItem>

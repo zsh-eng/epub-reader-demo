@@ -352,9 +352,9 @@ export function Library() {
           </div>
         )}
 
-        <div className="max-w-[1400px] mx-auto px-6 py-8 md:px-10 md:py-12">
+        <div className="max-w-[1400px] mx-auto py-8 md:py-12">
           {/* Header */}
-          <header className="flex items-center gap-4 w-full md:w-auto mb-8 md:mb-12">
+          <header className="flex items-center gap-4 w-full md:w-auto mb-8 md:mb-12 px-6 md:px-10">
             <div className="flex-1 hidden md:block"></div>
             <div className="flex gap-2 w-full md:w-max">
               <Button
@@ -492,8 +492,8 @@ export function Library() {
 
               {/* Books Section */}
               {libraryBooks.length > 0 && (
-                <section>
-                  <h2 className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-3 -mx-6 px-6 md:-mx-10 md:px-10 text-xs font-medium uppercase tracking-tight text-muted-foreground mb-3">
+                <section className="px-6 md:px-10">
+                  <h2 className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-3 text-xs font-medium uppercase tracking-tight text-muted-foreground mb-3">
                     Books
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
@@ -510,8 +510,8 @@ export function Library() {
 
               {/* Finished Section - shown at the bottom */}
               {finishedBooks.length > 0 && (
-                <section>
-                  <h2 className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-3 -mx-6 px-6 md:-mx-10 md:px-10 text-xs font-medium uppercase tracking-tight text-muted-foreground mb-3">
+                <section className="px-6 md:px-10">
+                  <h2 className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm py-3 text-xs font-medium uppercase tracking-tight text-muted-foreground mb-3">
                     Finished
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-x-8 gap-y-12">
