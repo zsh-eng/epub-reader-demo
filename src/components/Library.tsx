@@ -722,7 +722,9 @@ export function Library() {
               </div>
 
               <h3 className="font-serif italic text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl text-foreground mb-2 md:mb-3 lg:mb-4">
-                {searchQuery ? "Nothing on these shelves" : "Your library is empty"}
+                {searchQuery
+                  ? "Nothing on these shelves"
+                  : "Your library is empty"}
               </h3>
               <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl 2xl:text-3xl text-muted-foreground max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl mx-auto mb-6 sm:mb-8 md:mb-10 lg:mb-12">
                 {searchQuery
@@ -730,7 +732,10 @@ export function Library() {
                   : "Drag and drop an EPUB file here, or click the button below to add your first book."}
               </p>
               {!searchQuery && (
-                <Button onClick={handleAddBookClick} className="gap-2 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl h-9 sm:h-10 md:h-12 lg:h-14 xl:h-16 px-4 sm:px-5 md:px-6 lg:px-8 xl:px-10">
+                <Button
+                  onClick={handleAddBookClick}
+                  className="gap-2 text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl h-9 sm:h-10 md:h-12 lg:h-14 xl:h-16 px-4 sm:px-5 md:px-6 lg:px-8 xl:px-10"
+                >
                   <Upload className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6 lg:h-7 lg:w-7 xl:h-8 xl:w-8" />
                   Import EPUB
                 </Button>

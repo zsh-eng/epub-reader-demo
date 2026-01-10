@@ -30,7 +30,7 @@ function useIsTouchDevice() {
         "ontouchstart" in window ||
           navigator.maxTouchPoints > 0 ||
           // @ts-expect-error - msMaxTouchPoints is IE-specific
-          navigator.msMaxTouchPoints > 0
+          navigator.msMaxTouchPoints > 0,
       );
     };
 
@@ -223,7 +223,9 @@ interface ResponsiveContextMenuContentProps {
   children: React.ReactNode;
 }
 
-function ResponsiveContextMenuContent(_props: ResponsiveContextMenuContentProps) {
+function ResponsiveContextMenuContent(
+  _props: ResponsiveContextMenuContentProps,
+) {
   // This is a declarative component - its children are extracted by the Root
   return null;
 }
