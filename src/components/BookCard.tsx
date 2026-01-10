@@ -41,7 +41,7 @@ function BookCoverVisual({
       <div className="absolute inset-0 rounded-md bg-black/20 blur-md translate-y-2 scale-[0.95]" />
 
       {/* Main Cover */}
-      <div className="relative h-full w-full overflow-hidden rounded-r-md rounded-l-sm bg-white shadow-sm ring-1 ring-black/5">
+      <div className="relative h-full w-full overflow-hidden rounded-r-md rounded-l-sm bg-white shadow-sm">
         {/* Spine Effect */}
         <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-gradient-to-r from-black/20 to-transparent z-10" />
         <div className="absolute left-[4px] top-0 bottom-0 w-[1px] bg-white/30 z-10" />
