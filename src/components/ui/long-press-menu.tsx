@@ -25,7 +25,7 @@ function injectStyles() {
       margin: 0;
       overflow: visible;
 
-      /* Entry animation */
+      /* Entry animation - matches trigger scale-up timing */
       opacity: 1;
       transform: translateY(0) scale(1);
       transition:
@@ -35,18 +35,18 @@ function injectStyles() {
         display 0.2s ease-out allow-discrete;
     }
 
-    /* Starting state for entry animation */
+    /* Starting state for entry animation - scale up with fade */
     @starting-style {
       .long-press-popover:popover-open {
         opacity: 0;
-        transform: translateY(-8px) scale(0.96);
+        transform: translateY(-8px) scale(0.92);
       }
     }
 
     /* Exit animation - when popover is closing */
     .long-press-popover:not(:popover-open) {
       opacity: 0;
-      transform: translateY(-8px) scale(0.96);
+      transform: translateY(-8px) scale(0.92);
     }
 
     /* Trigger animations */
@@ -55,18 +55,29 @@ function injectStyles() {
       user-select: none;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
+      /* Default: ease-out for scale-up (releasing) */
       transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
     }
 
+    /* Linear timing for scale-down (pressing) */
     .long-press-trigger[data-pressing="true"] {
-      transform: scale(0.97);
+      transform: scale(0.96);
+      transition: transform 0.45s linear, box-shadow 0.45s linear;
     }
 
+    /* Ease-out for scale-up (open state) */
     .long-press-trigger[data-open="true"] {
       position: relative;
       z-index: 60;
-      transform: scale(1.03);
+      transform: scale(1.05);
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+    }
+
+    /* Scroll lock when menu is open */
+    body.long-press-menu-open {
+      overflow: hidden;
+      touch-action: none;
     }
 
     /* Backdrop styling */
@@ -132,12 +143,15 @@ interface LongPressMenuProps {
   pressDelay?: number;
   /** Whether to trigger haptic feedback. Default: true */
   hapticFeedback?: boolean;
+  /** Whether to lock scroll when menu is open. Default: true */
+  lockScroll?: boolean;
 }
 
 function LongPressMenu({
   children,
-  pressDelay = 300,
+  pressDelay = 500,
   hapticFeedback = true,
+  lockScroll = true,
 }: LongPressMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
@@ -148,6 +162,21 @@ function LongPressMenu({
   useEffect(() => {
     injectStyles();
   }, []);
+
+  // Handle scroll locking
+  useEffect(() => {
+    if (!lockScroll) return;
+
+    if (isOpen) {
+      document.body.classList.add("long-press-menu-open");
+    } else {
+      document.body.classList.remove("long-press-menu-open");
+    }
+
+    return () => {
+      document.body.classList.remove("long-press-menu-open");
+    };
+  }, [isOpen, lockScroll]);
 
   const open = React.useCallback(() => {
     if (hapticFeedback && navigator.vibrate) {
