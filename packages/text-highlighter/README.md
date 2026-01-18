@@ -141,6 +141,7 @@ const manager = createHighlightInteractionManager(container, {
 
 // Set active highlight programmatically
 manager.setActiveHighlight("highlight-1");
+// You may need to store the manager in a ref to synchronise state with external components
 
 // Clean up when done
 manager.destroy();

@@ -137,16 +137,18 @@ export function createHighlightInteractionManager(
     };
 
     /**
-     * Set the active highlight and update classes accordingly
+     * Set the active highlight and update classes accordingly.
+     * Clears ALL active highlights first to ensure clean state when
+     * active highlight is managed by external state.
      */
     const setActiveHighlight = (id: string | null): void => {
-        // Remove active class from previous highlight
-        if (activeHighlightId) {
-            const prevElements = getHighlightElements(activeHighlightId);
-            prevElements.forEach((el) => {
-                el.classList.remove(activeClass);
-            });
-        }
+        // Remove active class from ALL highlights (not just tracked one)
+        // This handles external state management where we may not know
+        // which highlights currently have the active class
+        const allHighlights = container.querySelectorAll(`.${highlightClass}`);
+        allHighlights.forEach((el) => {
+            el.classList.remove(activeClass);
+        });
 
         // Add active class to new highlight
         if (id) {
