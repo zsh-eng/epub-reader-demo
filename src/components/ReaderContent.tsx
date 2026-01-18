@@ -8,7 +8,11 @@ import {
   FONT_STACKS,
   type ReaderSettings,
 } from "@/types/reader.types";
-import { forwardRef, useCallback, useEffect } from "react";
+import {
+  createHighlightInteractionManager,
+  type HighlightInteractionManager,
+} from "@zsh-eng/text-highlighter";
+import { forwardRef, useCallback, useEffect, useRef } from "react";
 
 interface ReaderContentProps {
   content: string;
@@ -47,74 +51,34 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         }
       : undefined;
 
+    // Store manager ref for active highlight updates
+    const managerRef = useRef<HighlightInteractionManager | null>(null);
+
+    // Set up highlight interaction manager
     useEffect(() => {
       const contentElement = typeof ref === "function" ? null : ref?.current;
       if (!contentElement) return;
 
-      const handleMouseEnter = (event: Event) => {
-        const target = event.target as HTMLElement;
-        if (!target.classList.contains(EPUB_HIGHLIGHT_CLASS)) return;
+      const manager = createHighlightInteractionManager(contentElement, {
+        highlightClass: EPUB_HIGHLIGHT_CLASS,
+        idAttribute: EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+        hoverClass: EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+        activeClass: EPUB_HIGHLIGHT_ACTIVE_CLASS,
+        onHighlightClick: onHighlightClick,
+      });
 
-        const highlightId = target.getAttribute(EPUB_HIGHLIGHT_DATA_ATTRIBUTE);
-        if (!highlightId) return;
-
-        const relatedHighlights = contentElement.querySelectorAll(
-          `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlightId}"]`,
-        );
-        relatedHighlights.forEach((el) => {
-          el.classList.add(EPUB_HIGHLIGHT_GROUP_HOVER_CLASS);
-        });
-      };
-
-      const handleMouseLeave = (event: Event) => {
-        const target = event.target as HTMLElement;
-        if (!target.classList.contains(EPUB_HIGHLIGHT_CLASS)) return;
-
-        const highlightId = target.getAttribute(EPUB_HIGHLIGHT_DATA_ATTRIBUTE);
-        if (!highlightId) return;
-
-        const relatedHighlights = contentElement.querySelectorAll(
-          `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${highlightId}"]`,
-        );
-        relatedHighlights.forEach((el) => {
-          el.classList.remove(EPUB_HIGHLIGHT_GROUP_HOVER_CLASS);
-        });
-      };
-
-      const handleClick = (event: Event) => {
-        const target = event.target as HTMLElement;
-        if (!target.classList.contains(EPUB_HIGHLIGHT_CLASS)) return;
-
-        const highlightId = target.getAttribute(EPUB_HIGHLIGHT_DATA_ATTRIBUTE);
-        if (!highlightId || !onHighlightClick) return;
-
-        // Get position of the clicked highlight element
-        const rect = target.getBoundingClientRect();
-        const position = {
-          x: rect.left + rect.width / 2,
-          y: rect.bottom + 5, // Position below the highlight
-        };
-        onHighlightClick(highlightId, position);
-      };
-
-      contentElement.addEventListener("mouseenter", handleMouseEnter, true);
-      contentElement.addEventListener("mouseleave", handleMouseLeave, true);
-      contentElement.addEventListener("click", handleClick, true);
+      managerRef.current = manager;
 
       return () => {
-        contentElement.removeEventListener(
-          "mouseenter",
-          handleMouseEnter,
-          true,
-        );
-        contentElement.removeEventListener(
-          "mouseleave",
-          handleMouseLeave,
-          true,
-        );
-        contentElement.removeEventListener("click", handleClick, true);
+        manager.destroy();
+        managerRef.current = null;
       };
     }, [ref, content, onHighlightClick]);
+
+    // Update active highlight when it changes
+    useEffect(() => {
+      managerRef.current?.setActiveHighlight(activeHighlightId ?? null);
+    }, [activeHighlightId]);
 
     // Handle internal EPUB link clicks
     const handleInternalLinkClick = useCallback(
@@ -139,6 +103,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       },
       [onInternalLinkClick],
     );
+
     // Internal links require a special handler for us to navigate properly
     useEffect(() => {
       const contentElement = typeof ref === "function" ? null : ref?.current;
@@ -154,30 +119,6 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         );
       };
     }, [ref, handleInternalLinkClick]);
-
-    // Update active highlight class when activeHighlightId changes
-    useEffect(() => {
-      const contentElement = typeof ref === "function" ? null : ref?.current;
-      if (!contentElement) return;
-
-      // Remove active class from all highlights
-      const allHighlights = contentElement.querySelectorAll(
-        `.${EPUB_HIGHLIGHT_CLASS}`,
-      );
-      allHighlights.forEach((el) => {
-        el.classList.remove(EPUB_HIGHLIGHT_ACTIVE_CLASS);
-      });
-
-      // Add active class to the selected highlight
-      if (activeHighlightId) {
-        const activeHighlights = contentElement.querySelectorAll(
-          `[${EPUB_HIGHLIGHT_DATA_ATTRIBUTE}="${activeHighlightId}"]`,
-        );
-        activeHighlights.forEach((el) => {
-          el.classList.add(EPUB_HIGHLIGHT_ACTIVE_CLASS);
-        });
-      }
-    }, [ref, activeHighlightId, content]);
 
     return (
       <div

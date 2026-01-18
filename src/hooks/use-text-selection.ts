@@ -1,10 +1,10 @@
 import type { AnnotationColor } from "@/lib/highlight-constants";
+import type { Highlight } from "@/types/highlight";
+import type { Note } from "@/types/note";
 import {
   createHighlightFromSelection,
   getSelectionPosition,
-} from "text-highlighter";
-import type { Highlight } from "@/types/highlight";
-import type { Note } from "@/types/note";
+} from "@zsh-eng/text-highlighter";
 import { useEffect, useState } from "react";
 
 export interface UseTextSelectionReturn {

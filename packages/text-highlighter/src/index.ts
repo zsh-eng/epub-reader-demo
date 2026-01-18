@@ -7,27 +7,42 @@
 
 // Types
 export type {
-  TextHighlight,
   ApplyHighlightOptions,
   CreateHighlightResult,
   SelectionPosition,
+  TextHighlight,
 } from "./types";
 
+// Constants
+export { HIGHLIGHT_DEFAULTS } from "./constants";
+export type { HighlightDefaults } from "./constants";
+
 // Offset utilities
-export { getTextOffset, findRangeByTextOffset, verifyRangeText } from "./offsets";
+export {
+  findRangeByTextOffset,
+  getTextOffset,
+  verifyRangeText,
+} from "./offsets";
 
 // Selection utilities
 export {
-  createHighlightFromSelection,
   createHighlightFromRange,
+  createHighlightFromSelection,
   getSelectionPosition,
 } from "./selection";
 
 // DOM manipulation
 export {
-  wrapRangeWithHighlight,
   applyHighlight,
   applyHighlights,
   removeHighlight,
   removeHighlightById,
+  wrapRangeWithHighlight,
 } from "./dom";
+
+// Interaction management
+export { createHighlightInteractionManager } from "./interaction";
+export type {
+  HighlightInteractionManager,
+  HighlightInteractionOptions,
+} from "./interaction";

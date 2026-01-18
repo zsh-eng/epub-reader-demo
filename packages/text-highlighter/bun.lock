@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "text-highlighter",
+      "dependencies": {
+        "@zsh-eng/text-highlighter": "^0.1.0",
+      },
       "devDependencies": {
         "tsup": "^8.5.1",
         "typescript": "^5.0.0",
@@ -125,6 +128,8 @@
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.55.1", "", { "os": "win32", "cpu": "x64" }, "sha512-SPEpaL6DX4rmcXtnhdrQYgzQ5W2uW3SCJch88lB2zImhJRhIIK44fkUrgIV/Q8yUNfw5oyZ5vkeQsZLhCb06lw=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
+
+    "@zsh-eng/text-highlighter": ["@zsh-eng/text-highlighter@0.1.0", "", { "peerDependencies": { "typescript": ">=5.0.0" } }, "sha512-tHCMjGp1awfWxKWymP0tCBUE86QBpOZfzXl9KB03E/UARYBUhSoB89xdbY7ip9SLh2cQzWIT+vhoxz+e/2Y8eA=="],
 
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 

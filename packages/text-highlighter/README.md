@@ -116,6 +116,36 @@ document.addEventListener("mouseup", () => {
 });
 ```
 
+### Managing highlight interactions
+
+Handle hover, click, and active states with a single manager:
+
+```ts
+import { createHighlightInteractionManager } from "@zsh-eng/text-highlighter";
+
+const container = document.getElementById("content")!;
+
+const manager = createHighlightInteractionManager(container, {
+  highlightClass: "highlight",
+  idAttribute: "data-highlight-id",
+  hoverClass: "highlight-hover",
+  activeClass: "highlight-active",
+  onHighlightClick: (id, position) => {
+    console.log(`Clicked highlight ${id} at`, position);
+    showToolbar(id, position);
+  },
+  onHighlightHover: (id, isHovering) => {
+    console.log(`Highlight ${id} hover:`, isHovering);
+  },
+});
+
+// Set active highlight programmatically
+manager.setActiveHighlight("highlight-1");
+
+// Clean up when done
+manager.destroy();
+```
+
 ## API Reference
 
 ### Types

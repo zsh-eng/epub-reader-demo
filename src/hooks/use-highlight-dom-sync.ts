@@ -1,9 +1,9 @@
-import { applyHighlight, removeHighlightById } from "text-highlighter";
 import type { Highlight } from "@/types/highlight";
 import {
   EPUB_HIGHLIGHT_CLASS,
   EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
 } from "@/types/reader.types";
+import { applyHighlight, removeHighlightById } from "@zsh-eng/text-highlighter";
 import { useEffect, useRef } from "react";
 
 /**

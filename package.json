@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -54,7 +57,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/react-query": "^5.90.12",
-    "@zsh-eng/text-highlighter": "^0.1.0",
+    "@zsh-eng/text-highlighter": "workspace:*",
     "better-auth": "^1.4.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

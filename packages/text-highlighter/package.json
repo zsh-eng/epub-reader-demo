@@ -49,5 +49,8 @@
     "url": "https://github.com/zsh-eng/epub-reader-demo",
     "directory": "packages/text-highlighter"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "dependencies": {
+    "@zsh-eng/text-highlighter": "^0.1.0"
+  }
 }

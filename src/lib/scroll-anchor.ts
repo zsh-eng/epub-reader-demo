@@ -1,4 +1,4 @@
-import { findRangeByTextOffset } from "text-highlighter";
+import { findRangeByTextOffset } from "@zsh-eng/text-highlighter";
 import { saveReadingProgress } from "@/lib/db";
 
 /**
