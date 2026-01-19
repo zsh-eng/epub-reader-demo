@@ -21,7 +21,7 @@ const DEFAULT_CONTEXT_LENGTH = 50;
 export function createHighlightFromSelection(
   selection: Selection,
   containerElement: HTMLElement,
-  contextLength: number = DEFAULT_CONTEXT_LENGTH
+  contextLength: number = DEFAULT_CONTEXT_LENGTH,
 ): CreateHighlightResult | null {
   if (!selection.rangeCount) return null;
 
@@ -41,7 +41,7 @@ export function createHighlightFromSelection(
 export function createHighlightFromRange(
   range: Range,
   containerElement: HTMLElement,
-  contextLength: number = DEFAULT_CONTEXT_LENGTH
+  contextLength: number = DEFAULT_CONTEXT_LENGTH,
 ): CreateHighlightResult | null {
   const selectedText = range.toString().trim();
 
@@ -54,22 +54,22 @@ export function createHighlightFromRange(
   const startOffset = getTextOffset(
     containerElement,
     range.startContainer,
-    range.startOffset
+    range.startOffset,
   );
   const endOffset = getTextOffset(
     containerElement,
     range.endContainer,
-    range.endOffset
+    range.endOffset,
   );
 
   // Extract context
   const textBefore = fullText.substring(
     Math.max(0, startOffset - contextLength),
-    startOffset
+    startOffset,
   );
   const textAfter = fullText.substring(
     endOffset,
-    Math.min(fullText.length, endOffset + contextLength)
+    Math.min(fullText.length, endOffset + contextLength),
   );
 
   return {
@@ -88,7 +88,9 @@ export function createHighlightFromRange(
  * @param selection - The browser Selection object
  * @returns Position coordinates or null if selection is invalid
  */
-export function getSelectionPosition(selection: Selection): SelectionPosition | null {
+export function getSelectionPosition(
+  selection: Selection,
+): SelectionPosition | null {
   if (!selection.rangeCount) return null;
 
   const range = selection.getRangeAt(0);

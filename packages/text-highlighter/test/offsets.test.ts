@@ -145,12 +145,12 @@ describe("round-trip: getTextOffset <-> findRangeByTextOffset", () => {
     const start = getTextOffset(
       container,
       originalRange.startContainer,
-      originalRange.startOffset
+      originalRange.startOffset,
     );
     const end = getTextOffset(
       container,
       originalRange.endContainer,
-      originalRange.endOffset
+      originalRange.endOffset,
     );
 
     expect(start).toBe(6);
@@ -177,13 +177,17 @@ describe("round-trip: getTextOffset <-> findRangeByTextOffset", () => {
     const range = findRangeByTextOffset(
       container,
       startIdx,
-      startIdx + searchText.length
+      startIdx + searchText.length,
     )!;
 
     expect(range.toString()).toBe(searchText);
 
     // Round-trip
-    const start = getTextOffset(container, range.startContainer, range.startOffset);
+    const start = getTextOffset(
+      container,
+      range.startContainer,
+      range.startOffset,
+    );
     const end = getTextOffset(container, range.endContainer, range.endOffset);
     const restored = findRangeByTextOffset(container, start, end)!;
 

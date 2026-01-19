@@ -11,13 +11,6 @@ import {
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import {
-  EPUB_HIGHLIGHT_ACTIVE_CLASS,
-  EPUB_HIGHLIGHT_CLASS,
-  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
-} from "@/types/reader.types";
-import { useHighlighter } from "@zsh-eng/text-highlighter/react";
-import {
   useAddHighlightMutation,
   useHighlightsQuery,
 } from "@/hooks/use-highlights-query";
@@ -33,6 +26,13 @@ import { useScrollVisibility } from "@/hooks/use-scroll-visibility";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { calculateScrollPercentage } from "@/lib/scroll-anchor";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
+import {
+  EPUB_HIGHLIGHT_ACTIVE_CLASS,
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+} from "@/types/reader.types";
+import { useHighlighter } from "@zsh-eng/text-highlighter/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";

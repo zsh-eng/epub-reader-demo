@@ -196,19 +196,19 @@ function ReaderPage({ highlights }: { highlights: MyHighlight[] }) {
 
 ### `UseHighlighterOptions`
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `containerRef` | `RefObject<HTMLElement>` | Ref to the container element |
-| `highlights` | `T[]` | Array of highlights to sync to the DOM |
-| `contentReady` | `boolean` | Set to true when container content is loaded |
-| `className` | `string` | CSS class for highlight elements (default: `'text-highlight'`) |
-| `idAttribute` | `string` | Data attribute for highlight ID (default: `'data-highlight-id'`) |
-| `tagName` | `string` | HTML tag for highlight elements (default: `'mark'`) |
-| `hoverClass` | `string` | Class added on hover to all segments of a highlight |
-| `activeClass` | `string` | Class added when a highlight is active/selected |
-| `getAttributes` | `(h: T) => Record<string, string>` | Map a highlight to additional DOM attributes |
-| `onHighlightClick` | `(id, position) => void` | Called when a highlight is clicked |
-| `onHighlightHover` | `(id, isHovering) => void` | Called when hover state changes |
+| Option             | Type                               | Description                                                      |
+| ------------------ | ---------------------------------- | ---------------------------------------------------------------- |
+| `containerRef`     | `RefObject<HTMLElement>`           | Ref to the container element                                     |
+| `highlights`       | `T[]`                              | Array of highlights to sync to the DOM                           |
+| `contentReady`     | `boolean`                          | Set to true when container content is loaded                     |
+| `className`        | `string`                           | CSS class for highlight elements (default: `'text-highlight'`)   |
+| `idAttribute`      | `string`                           | Data attribute for highlight ID (default: `'data-highlight-id'`) |
+| `tagName`          | `string`                           | HTML tag for highlight elements (default: `'mark'`)              |
+| `hoverClass`       | `string`                           | Class added on hover to all segments of a highlight              |
+| `activeClass`      | `string`                           | Class added when a highlight is active/selected                  |
+| `getAttributes`    | `(h: T) => Record<string, string>` | Map a highlight to additional DOM attributes                     |
+| `onHighlightClick` | `(id, position) => void`           | Called when a highlight is clicked                               |
+| `onHighlightHover` | `(id, isHovering) => void`         | Called when hover state changes                                  |
 
 ### `getAttributes` for Dynamic Updates
 
@@ -216,7 +216,7 @@ The `getAttributes` function is called for each highlight when syncing to the DO
 
 ```tsx
 // When highlight.color changes, the data-color attribute is updated
-getAttributes: (h) => ({ "data-color": h.color })
+getAttributes: (h) => ({ "data-color": h.color });
 ```
 
 ## API Reference

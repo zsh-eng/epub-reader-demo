@@ -31,7 +31,9 @@ describe("createHighlightFromRange", () => {
   });
 
   test("captures context before and after", () => {
-    const container = createContainer("<p>The quick brown fox jumps over the lazy dog</p>");
+    const container = createContainer(
+      "<p>The quick brown fox jumps over the lazy dog</p>",
+    );
     const range = findRangeByTextOffset(container, 16, 19)!; // "fox"
 
     const result = createHighlightFromRange(range, container);
@@ -43,7 +45,9 @@ describe("createHighlightFromRange", () => {
   });
 
   test("limits context to specified length", () => {
-    const container = createContainer("<p>The quick brown fox jumps over the lazy dog</p>");
+    const container = createContainer(
+      "<p>The quick brown fox jumps over the lazy dog</p>",
+    );
     const range = findRangeByTextOffset(container, 16, 19)!; // "fox"
 
     const result = createHighlightFromRange(range, container, 10);

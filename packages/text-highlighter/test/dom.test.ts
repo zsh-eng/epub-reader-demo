@@ -29,7 +29,7 @@ function createMockHighlight(
   startOffset: number,
   endOffset: number,
   selectedText: string,
-  id?: string
+  id?: string,
 ): TextHighlight & { id?: string } {
   return {
     startOffset,

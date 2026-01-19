@@ -5,11 +5,11 @@
  */
 
 // Main hook
-export { useHighlighter } from './useHighlighter';
+export { useHighlighter } from "./useHighlighter";
 
 // Types
 export type {
-    SyncableHighlight,
-    UseHighlighterOptions,
-    UseHighlighterReturn,
-} from './types';
+  SyncableHighlight,
+  UseHighlighterOptions,
+  UseHighlighterReturn,
+} from "./types";

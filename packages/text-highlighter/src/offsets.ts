@@ -15,7 +15,7 @@
 export function getTextOffset(
   container: Node,
   targetNode: Node,
-  targetOffset: number
+  targetOffset: number,
 ): number {
   const range = document.createRange();
   range.selectNodeContents(container);
@@ -36,7 +36,7 @@ export function getTextOffset(
 export function findRangeByTextOffset(
   container: Node,
   startOffset: number,
-  endOffset: number
+  endOffset: number,
 ): Range | null {
   const range = document.createRange();
   let currentOffset = 0;
@@ -44,7 +44,7 @@ export function findRangeByTextOffset(
   const walker = document.createTreeWalker(
     container,
     NodeFilter.SHOW_TEXT,
-    null
+    null,
   );
 
   let startNode: Node | null = null;
