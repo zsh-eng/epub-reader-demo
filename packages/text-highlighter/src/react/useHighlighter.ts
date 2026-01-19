@@ -59,6 +59,18 @@ export function useHighlighter<T extends SyncableHighlight>({
   // Track interaction manager instance
   const managerRef = useRef<HighlightInteractionManager | null>(null);
 
+  // Refs for callbacks (prevents effect re-runs on callback identity changes)
+  const onClickRef = useRef(onHighlightClick);
+  const onHoverRef = useRef(onHighlightHover);
+  const getAttributesRef = useRef(getAttributes);
+
+  // Sync refs every render (no deps = runs every render, intentional)
+  useEffect(() => {
+    onClickRef.current = onHighlightClick;
+    onHoverRef.current = onHighlightHover;
+    getAttributesRef.current = getAttributes;
+  });
+
   // --- DOM Synchronization Effect ---
   // Handles adding, removing, and updating highlight elements
   useEffect(() => {
@@ -84,7 +96,7 @@ export function useHighlighter<T extends SyncableHighlight>({
         // Build attributes: always include ID, plus any from getAttributes
         const attributes: Record<string, string> = {
           [idAttribute]: highlight.id,
-          ...(getAttributes?.(highlight) ?? {}),
+          ...(getAttributesRef.current?.(highlight) ?? {}),
         };
 
         applyHighlight(container, highlight, {
@@ -96,8 +108,8 @@ export function useHighlighter<T extends SyncableHighlight>({
       }
 
       // Update existing marks if attributes changed
-      if (getAttributes) {
-        const newAttrs = getAttributes(highlight);
+      if (getAttributesRef.current) {
+        const newAttrs = getAttributesRef.current(highlight);
         const marks = container.querySelectorAll(selector);
 
         marks.forEach((mark) => {
@@ -125,7 +137,6 @@ export function useHighlighter<T extends SyncableHighlight>({
     highlights,
     containerRef,
     contentReady,
-    getAttributes,
     className,
     idAttribute,
     tagName,
@@ -142,8 +153,8 @@ export function useHighlighter<T extends SyncableHighlight>({
       idAttribute,
       hoverClass,
       activeClass,
-      onHighlightClick,
-      onHighlightHover,
+      onHighlightClick: (id, pos) => onClickRef.current?.(id, pos),
+      onHighlightHover: (id, pos) => onHoverRef.current?.(id, pos),
     });
 
     managerRef.current = manager;
@@ -158,8 +169,6 @@ export function useHighlighter<T extends SyncableHighlight>({
     idAttribute,
     hoverClass,
     activeClass,
-    onHighlightClick,
-    onHighlightHover,
     // Recreate when content changes to re-attach listeners
     contentReady,
   ]);
