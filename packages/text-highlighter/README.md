@@ -116,7 +116,7 @@ document.addEventListener("mouseup", () => {
 });
 ```
 
-### Managing highlight interactions
+### Managing highlight interactions (vanilla JS)
 
 Handle hover, click, and active states with a single manager:
 
@@ -141,10 +141,82 @@ const manager = createHighlightInteractionManager(container, {
 
 // Set active highlight programmatically
 manager.setActiveHighlight("highlight-1");
-// You may need to store the manager in a ref to synchronise state with external components
 
 // Clean up when done
 manager.destroy();
+```
+
+## React Integration
+
+For React applications, use the `useHighlighter` hook from the `/react` subpath. This hook provides a unified API for:
+
+- Syncing highlight data to the DOM (adding, removing, updating marks)
+- Managing hover states (grouping multi-segment highlights)
+- Managing active/selected states
+- Click and hover event callbacks
+
+### Basic Usage
+
+```tsx
+import { useRef, useState, useEffect } from "react";
+import { useHighlighter } from "@zsh-eng/text-highlighter/react";
+import type { SyncableHighlight } from "@zsh-eng/text-highlighter/react";
+
+// Extend SyncableHighlight with your app-specific fields
+interface MyHighlight extends SyncableHighlight {
+  color: string;
+}
+
+function ReaderPage({ highlights }: { highlights: MyHighlight[] }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  const { setActiveHighlight } = useHighlighter({
+    containerRef: contentRef,
+    highlights,
+    contentReady: true, // Set to true when content is loaded
+    className: "highlight",
+    hoverClass: "highlight-hover",
+    activeClass: "highlight-active",
+    getAttributes: (h) => ({ "data-color": h.color }),
+    onHighlightClick: (id, position) => {
+      // Toggle active state on click
+      setActiveId((prev) => (prev === id ? null : id));
+    },
+  });
+
+  // Sync external active state to DOM
+  useEffect(() => {
+    setActiveHighlight(activeId);
+  }, [activeId, setActiveHighlight]);
+
+  return <div ref={contentRef} dangerouslySetInnerHTML={{ __html: content }} />;
+}
+```
+
+### `UseHighlighterOptions`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `containerRef` | `RefObject<HTMLElement>` | Ref to the container element |
+| `highlights` | `T[]` | Array of highlights to sync to the DOM |
+| `contentReady` | `boolean` | Set to true when container content is loaded |
+| `className` | `string` | CSS class for highlight elements (default: `'text-highlight'`) |
+| `idAttribute` | `string` | Data attribute for highlight ID (default: `'data-highlight-id'`) |
+| `tagName` | `string` | HTML tag for highlight elements (default: `'mark'`) |
+| `hoverClass` | `string` | Class added on hover to all segments of a highlight |
+| `activeClass` | `string` | Class added when a highlight is active/selected |
+| `getAttributes` | `(h: T) => Record<string, string>` | Map a highlight to additional DOM attributes |
+| `onHighlightClick` | `(id, position) => void` | Called when a highlight is clicked |
+| `onHighlightHover` | `(id, isHovering) => void` | Called when hover state changes |
+
+### `getAttributes` for Dynamic Updates
+
+The `getAttributes` function is called for each highlight when syncing to the DOM. When the returned attributes change (e.g., after a color update), the DOM elements are automatically updated:
+
+```tsx
+// When highlight.color changes, the data-color attribute is updated
+getAttributes: (h) => ({ "data-color": h.color })
 ```
 
 ## API Reference

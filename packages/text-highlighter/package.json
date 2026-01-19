@@ -16,6 +16,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.cts",
+        "default": "./dist/react/index.cjs"
+      }
     }
   },
   "scripts": {
@@ -25,11 +35,18 @@
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {
+    "@types/react": "^18.0.0",
     "tsup": "^8.5.1",
     "typescript": "^5.0.0"
   },
   "peerDependencies": {
+    "react": ">=18.0.0",
     "typescript": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "files": [
     "dist"
@@ -40,7 +57,8 @@
     "text-selection",
     "dom",
     "epub",
-    "text-offset"
+    "text-offset",
+    "react"
   ],
   "author": "zsh-eng",
   "license": "MIT",
@@ -49,8 +67,5 @@
     "url": "https://github.com/zsh-eng/epub-reader-demo",
     "directory": "packages/text-highlighter"
   },
-  "sideEffects": false,
-  "dependencies": {
-    "@zsh-eng/text-highlighter": "^0.1.0"
-  }
+  "sideEffects": false
 }

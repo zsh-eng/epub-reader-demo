@@ -10,7 +10,13 @@ import {
 } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
-import { useHighlightDOMSync } from "@/hooks/use-highlight-dom-sync";
+import {
+  EPUB_HIGHLIGHT_ACTIVE_CLASS,
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+} from "@/types/reader.types";
+import { useHighlighter } from "@zsh-eng/text-highlighter/react";
 import {
   useAddHighlightMutation,
   useHighlightsQuery,
@@ -148,8 +154,30 @@ export function Reader() {
   );
   const addNoteMutation = useAddNoteMutation(undefined); // Initial annotation ID unknown
 
-  // Sync highlights to DOM - reactive side effect of data changes
-  useHighlightDOMSync(readerContentRef, highlights, contentReady);
+  // Unified highlight manager - syncs data to DOM and handles interactions
+  const { setActiveHighlight: setActiveHighlightDOM } = useHighlighter({
+    containerRef: readerContentRef,
+    highlights,
+    contentReady,
+    className: EPUB_HIGHLIGHT_CLASS,
+    idAttribute: EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+    hoverClass: EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+    activeClass: EPUB_HIGHLIGHT_ACTIVE_CLASS,
+    getAttributes: (h) => ({ "data-color": h.color }),
+    onHighlightClick: (id, position) => {
+      // Toggle behavior: close if clicking same highlight
+      if (activeHighlight?.id === id) {
+        setActiveHighlight(null);
+      } else {
+        setActiveHighlight({ id, position });
+      }
+    },
+  });
+
+  // Sync active highlight state to DOM (for external state changes)
+  useEffect(() => {
+    setActiveHighlightDOM(activeHighlight?.id ?? null);
+  }, [activeHighlight, setActiveHighlightDOM]);
 
   // Text selection hook for creating new highlights
   const {
@@ -373,16 +401,6 @@ export function Reader() {
         chapterIndex={currentChapterIndex}
         title={currentChapterTitle}
         ref={readerContentRef}
-        onHighlightClick={(highlightId, position) => {
-          // If clicking the same highlight, close the popover (toggle behavior)
-          if (activeHighlight?.id === highlightId) {
-            setActiveHighlight(null);
-          } else {
-            // Open popover for the clicked highlight
-            setActiveHighlight({ id: highlightId, position });
-          }
-        }}
-        activeHighlightId={activeHighlight?.id ?? null}
         settings={settings}
         onInternalLinkClick={goToChapterWithFragment}
       />

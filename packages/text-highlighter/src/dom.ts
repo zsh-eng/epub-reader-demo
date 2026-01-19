@@ -16,7 +16,7 @@ const DEFAULT_OPTIONS: Required<ApplyHighlightOptions> = {
  */
 function createHighlightElement(
   doc: Document,
-  options: Required<ApplyHighlightOptions>
+  options: Required<ApplyHighlightOptions>,
 ): HTMLElement {
   const element = doc.createElement(options.tagName);
   if (options.className) {
@@ -48,12 +48,13 @@ function wrapTextNode(node: Text, wrapper: HTMLElement): void {
 export function wrapRangeWithHighlight(
   range: Range,
   doc: Document,
-  options: ApplyHighlightOptions = {}
+  options: ApplyHighlightOptions = {},
 ): void {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   // Get all text nodes that intersect with the range
-  const textNodes: { node: Text; startOffset: number; endOffset: number }[] = [];
+  const textNodes: { node: Text; startOffset: number; endOffset: number }[] =
+    [];
 
   const walker = doc.createTreeWalker(
     range.commonAncestorContainer,
@@ -74,7 +75,7 @@ export function wrapRangeWithHighlight(
         }
         return NodeFilter.FILTER_REJECT;
       },
-    }
+    },
   );
 
   let textNode: Node | null;
@@ -149,7 +150,8 @@ export function wrapRangeWithHighlight(
     const { node, startOffset, endOffset } = textNodes[i];
 
     // Skip whitespace-only highlights
-    const textToHighlight = node.textContent?.substring(startOffset, endOffset) || "";
+    const textToHighlight =
+      node.textContent?.substring(startOffset, endOffset) || "";
     if (textToHighlight.trim().length === 0) {
       continue;
     }
@@ -193,13 +195,13 @@ export function wrapRangeWithHighlight(
 export function applyHighlight(
   container: HTMLElement,
   highlight: TextHighlight,
-  options: ApplyHighlightOptions = {}
+  options: ApplyHighlightOptions = {},
 ): boolean {
   try {
     const range = findRangeByTextOffset(
       container,
       highlight.startOffset,
-      highlight.endOffset
+      highlight.endOffset,
     );
 
     if (!range) {
@@ -230,7 +232,7 @@ export function applyHighlight(
 export function applyHighlights(
   container: HTMLElement,
   highlights: Array<TextHighlight & { id?: string }>,
-  options: ApplyHighlightOptions = {}
+  options: ApplyHighlightOptions = {},
 ): string[] {
   const applied: string[] = [];
   const sorted = [...highlights].sort((a, b) => a.startOffset - b.startOffset);
@@ -264,7 +266,10 @@ export function applyHighlights(
  * @param container - The container element
  * @param selector - CSS selector for highlight elements (e.g., '[data-highlight-id="abc"]')
  */
-export function removeHighlight(container: HTMLElement, selector: string): void {
+export function removeHighlight(
+  container: HTMLElement,
+  selector: string,
+): void {
   try {
     const elements = container.querySelectorAll(selector);
 
@@ -293,10 +298,12 @@ export function removeHighlight(container: HTMLElement, selector: string): void 
  *
  * @param container - The container element
  * @param highlightId - The highlight ID to remove
+ * @param idAttribute - The attribute name for the ID (default: 'data-highlight-id')
  */
 export function removeHighlightById(
   container: HTMLElement,
-  highlightId: string
+  highlightId: string,
+  idAttribute: string = "data-highlight-id",
 ): void {
-  removeHighlight(container, `[data-highlight-id="${highlightId}"]`);
+  removeHighlight(container, `[${idAttribute}="${highlightId}"]`);
 }
