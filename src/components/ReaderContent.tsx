@@ -4,7 +4,7 @@ import {
   FONT_STACKS,
   type ReaderSettings,
 } from "@/types/reader.types";
-import { forwardRef, useCallback, useEffect, useRef } from "react";
+import { forwardRef, useCallback } from "react";
 
 interface ReaderContentProps {
   content: string;
@@ -33,28 +33,12 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         }
       : undefined;
 
-    // Internal ref for attaching event listeners
-    const internalRef = useRef<HTMLDivElement>(null);
-
-    // Combine refs: forward to parent and keep internal ref for event handling
-    const setRefs = useCallback(
-      (element: HTMLDivElement | null) => {
-        (internalRef as React.RefObject<HTMLDivElement | null>).current =
-          element;
-        if (typeof ref === "function") {
-          ref(element);
-        } else if (ref) {
-          ref.current = element;
-        }
-      },
-      [ref],
-    );
-
-    // Handle internal EPUB link clicks
-    const handleInternalLinkClick = useCallback(
-      (event: MouseEvent) => {
-        const target = event.target as HTMLElement;
+    // Handle internal EPUB link clicks via React event
+    const handleClick = useCallback(
+      (event: React.MouseEvent) => {
         if (!onInternalLinkClick) return;
+
+        const target = event.target as HTMLElement;
 
         // Find the closest anchor element with epub-link attribute
         const linkElement = target.closest(
@@ -74,26 +58,11 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       [onInternalLinkClick],
     );
 
-    // Attach internal link click handler
-    useEffect(() => {
-      const contentElement = internalRef.current;
-      if (!contentElement) return;
-
-      contentElement.addEventListener("click", handleInternalLinkClick, true);
-
-      return () => {
-        contentElement.removeEventListener(
-          "click",
-          handleInternalLinkClick,
-          true,
-        );
-      };
-    }, [handleInternalLinkClick]);
-
     return (
       <div
         key={chapterIndex}
-        ref={setRefs}
+        ref={ref}
+        onClick={handleClick}
         className="reader-content mx-auto px-6 pt-12 pb-24 sm:px-8 sm:pb-16 md:px-12 md:pb-20 transition-all duration-300 ease-in-out"
         style={style}
       >
