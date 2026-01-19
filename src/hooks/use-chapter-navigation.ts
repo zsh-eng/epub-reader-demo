@@ -41,7 +41,9 @@ export function useChapterNavigation(
   setScrollTarget: (target: ScrollTarget) => void,
 ): UseChapterNavigationReturn {
   // Use the progress mutation hook for saving progress
-  const saveProgressMutation = useProgressMutation(bookId ?? "");
+  // Extract mutate for stable reference - the mutation object changes each render,
+  // but mutate is stable and won't cause useCallback dependencies to change
+  const { mutate: saveProgress } = useProgressMutation(bookId ?? "");
 
   const goToPreviousChapter = useCallback(() => {
     if (!bookId) return;
@@ -52,13 +54,13 @@ export function useChapterNavigation(
     setScrollTarget({ type: "top" });
 
     const progress = newReadingProgress(bookId, newIndex, "manual-chapter");
-    saveProgressMutation.mutate(progress);
+    saveProgress(progress);
   }, [
     currentChapterIndex,
     bookId,
     setCurrentChapterIndex,
     setScrollTarget,
-    saveProgressMutation,
+    saveProgress,
   ]);
 
   const goToNextChapter = useCallback(() => {
@@ -71,14 +73,14 @@ export function useChapterNavigation(
     setScrollTarget({ type: "top" });
 
     const progress = newReadingProgress(bookId, newIndex, "manual-chapter");
-    saveProgressMutation.mutate(progress);
+    saveProgress(progress);
   }, [
     book,
     currentChapterIndex,
     bookId,
     setCurrentChapterIndex,
     setScrollTarget,
-    saveProgressMutation,
+    saveProgress,
   ]);
 
   const goToChapterByHref = useCallback(
@@ -94,15 +96,9 @@ export function useChapterNavigation(
 
       // Save progress immediately on chapter change
       const progress = newReadingProgress(bookId, spineIndex, "toc-navigation");
-      saveProgressMutation.mutate(progress);
+      saveProgress(progress);
     },
-    [
-      book,
-      bookId,
-      setCurrentChapterIndex,
-      setScrollTarget,
-      saveProgressMutation,
-    ],
+    [book, bookId, setCurrentChapterIndex, setScrollTarget, saveProgress],
   );
 
   const goToChapterWithFragment = useCallback(
@@ -132,7 +128,7 @@ export function useChapterNavigation(
         "fragment-link",
         fragment,
       );
-      saveProgressMutation.mutate(progress);
+      saveProgress(progress);
     },
     [
       book,
@@ -140,7 +136,7 @@ export function useChapterNavigation(
       currentChapterIndex,
       setCurrentChapterIndex,
       setScrollTarget,
-      saveProgressMutation,
+      saveProgress,
     ],
   );
 
@@ -171,7 +167,7 @@ export function useChapterNavigation(
         "highlight-jump",
         highlightId,
       );
-      saveProgressMutation.mutate(progress);
+      saveProgress(progress);
     },
     [
       book,
@@ -179,7 +175,7 @@ export function useChapterNavigation(
       currentChapterIndex,
       setCurrentChapterIndex,
       setScrollTarget,
-      saveProgressMutation,
+      saveProgress,
     ],
   );
 
@@ -207,7 +203,7 @@ export function useChapterNavigation(
         spineIndex,
         "search-result-jump",
       );
-      saveProgressMutation.mutate(progress);
+      saveProgress(progress);
     },
     [
       book,
@@ -215,7 +211,7 @@ export function useChapterNavigation(
       currentChapterIndex,
       setCurrentChapterIndex,
       setScrollTarget,
-      saveProgressMutation,
+      saveProgress,
     ],
   );
 

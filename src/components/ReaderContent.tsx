@@ -58,8 +58,6 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
       [onInternalLinkClick],
     );
 
-    console.log("re-rendering");
-
     return (
       <div
         key={chapterIndex}
