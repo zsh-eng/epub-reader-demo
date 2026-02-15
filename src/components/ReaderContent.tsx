@@ -36,8 +36,6 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
     // Handle internal EPUB link clicks via React event
     const handleClick = useCallback(
       (event: React.MouseEvent) => {
-        if (!onInternalLinkClick) return;
-
         const target = event.target as HTMLElement;
 
         // Find the closest anchor element with epub-link attribute
@@ -48,6 +46,8 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
 
         event.preventDefault();
         event.stopPropagation();
+
+        if (!onInternalLinkClick) return;
 
         const href = linkElement.getAttribute(EPUB_LINK.hrefAttribute) || "";
         const fragment =

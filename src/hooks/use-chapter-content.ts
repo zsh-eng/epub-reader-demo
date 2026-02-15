@@ -68,8 +68,10 @@ async function fetchChapterContent(
     resourceUrlMap,
   });
 
+  const bodyElement = doc.querySelector("body");
+
   return {
-    content: doc.body.innerHTML,
+    content: bodyElement?.innerHTML ?? "",
     manifestItemHref,
     resourceUrlMap,
   };

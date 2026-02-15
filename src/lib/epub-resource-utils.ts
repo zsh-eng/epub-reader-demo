@@ -5,14 +5,64 @@
 import { EPUB_LINK } from "@/types/reader.types";
 
 /**
- * Returns the MIME type for parsing EPUB content
- * Always returns "text/html" to ensure consistent whitespace handling
- * across the entire content processing pipeline, regardless of whether
- * the source was XHTML or HTML.
+ * Returns the MIME type for parsing EPUB content.
+ * XHTML content must be parsed as XML to correctly handle self-closing tags.
  * @returns The MIME type to use with DOMParser
  */
-export function getMimeTypeForContent(): DOMParserSupportedType {
+export function getMimeTypeForContent(
+  mediaType: string,
+  content: string,
+): DOMParserSupportedType {
+  const normalizedType = mediaType.toLowerCase();
+
+  if (
+    normalizedType.includes("xhtml") ||
+    normalizedType.includes("xml") ||
+    content.trimStart().startsWith("<?xml")
+  ) {
+    return "application/xhtml+xml";
+  }
+
   return "text/html";
+}
+
+/**
+ * Remove active content from EPUB chapters. EPUB JavaScript should never run.
+ */
+function sanitizeDocument(doc: Document): void {
+  // Remove active elements entirely
+  doc.querySelectorAll("script, iframe, object, embed").forEach((el) => {
+    el.remove();
+  });
+
+  // Remove inline handlers and dangerous URL schemes from all elements
+  const allElements = doc.querySelectorAll("*");
+  for (const element of Array.from(allElements)) {
+    for (const { name } of Array.from(element.attributes)) {
+      if (name.toLowerCase().startsWith("on")) {
+        element.removeAttribute(name);
+      }
+    }
+
+    const href = element.getAttribute("href");
+    if (href && /^\s*(javascript|vbscript):/i.test(href)) {
+      element.removeAttribute("href");
+    }
+
+    const src = element.getAttribute("src");
+    if (src && /^\s*(javascript|vbscript):/i.test(src)) {
+      element.removeAttribute("src");
+    }
+
+    const xlinkHref =
+      element.getAttribute("xlink:href") ||
+      element.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+
+    if (xlinkHref && /^\s*(javascript|vbscript):/i.test(xlinkHref)) {
+      element.removeAttribute("xlink:href");
+      element.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
+    }
+  }
 }
 
 /**
@@ -94,18 +144,17 @@ export interface ProcessResourcesResult {
 export async function processEmbeddedResources(
   options: ProcessResourcesOptions,
 ): Promise<ProcessResourcesResult> {
-  const { content, basePath, loadResource, resourceUrlMap } = options;
-  // Note: mediaType is kept in the interface for compatibility but not used here
-  // We always parse as "text/html" for consistent whitespace handling
+  const { content, mediaType, basePath, loadResource, resourceUrlMap } =
+    options;
 
   // Use provided map or create a new one
   const resourceUrls = resourceUrlMap || new Map<string, string>();
 
   // Parse the HTML/XHTML to find all resource references
-  // Always use text/html for consistent whitespace handling
   const parser = new DOMParser();
-  const mimeType = getMimeTypeForContent();
+  const mimeType = getMimeTypeForContent(mediaType, content);
   const doc = parser.parseFromString(content, mimeType);
+  sanitizeDocument(doc);
 
   // Find all elements with src, href, or xlink:href attributes
   const resourceElements = doc.querySelectorAll("[src], [href], [*|href]");
@@ -148,9 +197,8 @@ export async function processEmbeddedResources(
       if (fragment) {
         element.setAttribute(EPUB_LINK.fragmentAttribute, fragment);
       }
-      // Prevent default navigation by setting href to javascript:void(0)
-      // Using # would cause scroll-to-top behavior
-      element.setAttribute("href", "javascript:void(0)");
+      // Prevent native navigation; handled by ReaderContent click handler.
+      element.setAttribute("href", "#");
       continue;
     }
 
