@@ -59,6 +59,8 @@ export interface ActiveHighlightState {
  * - Keyboard navigation
  */
 export function Reader() {
+  const READING_PROGRESS_TOAST_ID = "reading-progress-prompt";
+
   // Route params and navigation
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -272,19 +274,18 @@ export function Reader() {
   }, [bookTitle]);
 
   // Show toast prompt when opening a book with no reading status
-  const hasShownReadingToastRef = useRef(false);
   useEffect(() => {
-    if (
-      !bookId ||
-      !isEpubReady ||
-      hasShownReadingToastRef.current ||
-      readingStatus !== null
-    ) {
+    if (!bookId || !isEpubReady) {
       return;
     }
-    hasShownReadingToastRef.current = true;
+
+    if (readingStatus !== null) {
+      toast.dismiss(READING_PROGRESS_TOAST_ID);
+      return;
+    }
 
     toast("Started reading?", {
+      id: READING_PROGRESS_TOAST_ID,
       description: "Track your reading progress",
       action: {
         label: "Mark as Reading",
