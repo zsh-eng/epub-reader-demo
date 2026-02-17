@@ -23,15 +23,23 @@ interface ReaderContentProps {
  */
 const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
   ({ content, chapterIndex, settings, onInternalLinkClick }, ref) => {
+    // Safari/WebKit can size this flex item to max-content width when EPUB content
+    // includes large fixed-size media. Keep the reader column constrained to viewport width.
+    const baseStyle = {
+      width: "100%",
+      minWidth: 0,
+    };
+
     const style = settings
       ? {
+          ...baseStyle,
           fontSize: `${settings.fontSize}%`,
           lineHeight: settings.lineHeight,
           fontFamily: FONT_STACKS[settings.fontFamily],
           textAlign: settings.textAlign,
           maxWidth: CONTENT_WIDTH_VALUES[settings.contentWidth],
         }
-      : undefined;
+      : baseStyle;
 
     // Handle internal EPUB link clicks via React event
     const handleClick = useCallback(
