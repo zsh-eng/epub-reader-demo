@@ -2,6 +2,7 @@ import "@/App.css";
 import { Highlights } from "@/components/Highlights";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
+import { ReaderPrototype } from "@/components/ReaderPrototype";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Sessions } from "@/components/Sessions";
 import { Toaster } from "@/components/ui/sonner";
@@ -32,6 +33,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Library />} />
             <Route path="/reader/:bookId" element={<Reader />} />
+            <Route path="/reader-prototype/:bookId" element={<ReaderPrototype />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
           </Routes>
