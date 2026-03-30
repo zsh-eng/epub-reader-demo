@@ -7,19 +7,18 @@ import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { getBookFile, type Book } from "@/lib/db";
 import { cleanupResourceUrls, processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
-    layoutPages,
-    parseChapterHtml,
-    prepareBlocks,
-    type Block,
+    usePagination,
     type FontConfig,
     type LayoutTheme,
     type PageSlice,
+    type ChapterInput,
 } from "@/lib/pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { useQuery } from "@tanstack/react-query";
 import {
+    useCallback,
     useEffect,
     useMemo,
     useRef,
@@ -37,11 +36,6 @@ interface ChapterEntry {
 interface LoadedChapter extends ChapterEntry {
   html: string;
   resourceUrlMap: Map<string, string>;
-}
-
-interface StageResult<TValue> {
-  value: TValue;
-  computeMs: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -215,9 +209,7 @@ export function ReaderPrototype() {
   const isMobile = useIsMobile();
   const { settings } = useReaderSettings();
 
-  const [currentPage, setCurrentPage] = useState(1);
   const [jumpInput, setJumpInput] = useState("1");
-  const [manualRecomputeVersion, setManualRecomputeVersion] = useState(0);
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
 
   const previousChaptersRef = useRef<LoadedChapter[] | null>(null);
@@ -279,61 +271,29 @@ export function ReaderPrototype() {
   const fontConfig = useMemo(() => buildFontConfig(settings), [settings]);
   const layoutTheme = useMemo(() => buildLayoutTheme(settings), [settings]);
 
-  // Stage 1: parse HTML into blocks (only re-runs when chapters change)
-  const stage1Result = useMemo<StageResult<Block[]>>(() => {
-    const startedAt = performance.now();
-    const loadedChapters = allChaptersQuery.data;
-    if (!loadedChapters || loadedChapters.length === 0) {
-      return { value: [], computeMs: 0 };
-    }
-
-    const result: Block[] = [];
-    loadedChapters.forEach((chapter, index) => {
-      result.push(...parseChapterHtml(chapter.html));
-      if (index < loadedChapters.length - 1) {
-        result.push({ type: "page-break", id: `page-break-${chapter.index + 1}` });
-      }
-    });
-
-    return {
-      value: result,
-      computeMs: performance.now() - startedAt,
-    };
+  // Convert loaded chapters to ChapterInput[] for the pagination hook
+  const chapterInputs = useMemo<ChapterInput[] | undefined>(() => {
+    const data = allChaptersQuery.data;
+    if (!data || data.length === 0) return undefined;
+    return data.map((ch) => ({ index: ch.index, html: ch.html }));
   }, [allChaptersQuery.data]);
 
-  const blocks = stage1Result.value;
+  const pagination = usePagination({
+    chapters: chapterInputs,
+    fontConfig,
+    layoutTheme,
+    viewport,
+  });
 
-  // Stage 2: prepare blocks with font measurement (re-runs on font change)
-  const stage2Result = useMemo<StageResult<ReturnType<typeof prepareBlocks>>>(() => {
-    const startedAt = performance.now();
-    if (blocks.length === 0) {
-      return { value: [], computeMs: 0 };
-    }
-
-    return {
-      value: prepareBlocks(blocks, fontConfig),
-      computeMs: performance.now() - startedAt,
-    };
-  }, [blocks, fontConfig]);
-
-  const prepared = stage2Result.value;
-
-  // Stage 3: layout pages (re-runs on resize, cheap)
-  const paginationResult = useMemo(() => {
-    return layoutPages(prepared, viewport.width, viewport.height, layoutTheme);
-  }, [prepared, viewport.width, viewport.height, layoutTheme, manualRecomputeVersion]);
-
-  const totalPages = paginationResult.pages.length;
+  const displayTotalPages = pagination.totalPages ?? pagination.estimatedTotalPages ?? 0;
 
   useEffect(() => {
-    setCurrentPage((prev) =>
-      clamp(prev, 1, Math.max(1, totalPages)),
-    );
-  }, [totalPages]);
+    setJumpInput(String(pagination.currentPage));
+  }, [pagination.currentPage]);
 
-  useEffect(() => {
-    setJumpInput(String(currentPage));
-  }, [currentPage]);
+  // Keyboard navigation
+  const paginationRef = useRef(pagination);
+  paginationRef.current = pagination;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -352,36 +312,26 @@ export function ReaderPrototype() {
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        setCurrentPage((pageNumber) => Math.max(1, pageNumber - 1));
+        paginationRef.current.prevPage();
         return;
       }
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        setCurrentPage((pageNumber) =>
-          Math.min(totalPages, pageNumber + 1),
-        );
+        paginationRef.current.nextPage();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [totalPages]);
+  }, []);
 
-  const page =
-    paginationResult.pages[
-      clamp(currentPage - 1, 0, paginationResult.pages.length - 1)
-    ];
-
-  const canGoPrevious = currentPage > 1;
-  const canGoNext = currentPage < totalPages;
-
-  const handleJumpToPage = () => {
+  const handleJumpToPage = useCallback(() => {
     const parsed = Number.parseInt(jumpInput, 10);
     if (!Number.isFinite(parsed)) return;
-    const clamped = clamp(parsed, 1, totalPages);
-    setCurrentPage(clamped);
-  };
+    const clamped = clamp(parsed, 1, displayTotalPages);
+    pagination.goToPage(clamped);
+  }, [jumpInput, displayTotalPages, pagination]);
 
   if (isBookLoading) {
     return (
@@ -466,31 +416,33 @@ export function ReaderPrototype() {
             <p className="truncate text-sm font-medium">{book.title}</p>
             <p className="text-xs text-muted-foreground">
               Pretext prototype · Whole book ({allChaptersQuery.data.length} chapters)
+              {pagination.status === "partial" && " · Preparing..."}
             </p>
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage((pageNumber) => pageNumber - 1)}
-            disabled={!canGoPrevious}
+            onClick={pagination.prevPage}
+            disabled={pagination.currentPage <= 1}
           >
             Prev
           </Button>
           <div className="min-w-[132px] text-center text-sm tabular-nums">
-            Page {currentPage} / {totalPages}
+            Page {pagination.currentPage} / {displayTotalPages}
+            {pagination.status === "partial" && "~"}
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage((pageNumber) => pageNumber + 1)}
-            disabled={!canGoNext}
+            onClick={pagination.nextPage}
+            disabled={pagination.currentPage >= displayTotalPages}
           >
             Next
           </Button>
           <Input
             type="number"
             min={1}
-            max={totalPages}
+            max={displayTotalPages}
             value={jumpInput}
             onChange={(event) => setJumpInput(event.target.value)}
             className="h-9 w-24 rounded-md"
@@ -498,25 +450,20 @@ export function ReaderPrototype() {
           <Button variant="secondary" size="sm" onClick={handleJumpToPage}>
             Jump
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setManualRecomputeVersion((value) => value + 1)}
-          >
-            Recompute
-          </Button>
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
         <p className="mb-3 text-xs text-muted-foreground">
-          Stage 1 (HTML → blocks): {stage1Result.computeMs.toFixed(1)}ms · Stage 2
-          (prepare): {stage2Result.computeMs.toFixed(1)}ms · Stage 3 (layout):{" "}
-          {paginationResult.diagnostics.computeMs.toFixed(1)}ms · Blocks:{" "}
-          {paginationResult.diagnostics.blockCount} · Lines:{" "}
-          {paginationResult.diagnostics.lineCount} · Viewport:{" "}
-          {Math.round(viewport.width)}×{Math.round(viewport.height)} · Keyboard:
-          ← / →
+          Status: {pagination.status}
+          {pagination.diagnostics && (
+            <>
+              {" "}· Blocks: {pagination.diagnostics.blockCount}
+              {" "}· Lines: {pagination.diagnostics.lineCount}
+            </>
+          )}
+          {" "}· Viewport: {Math.round(viewport.width)}x{Math.round(viewport.height)}
+          {" "}· Keyboard: ← / →
         </p>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
@@ -528,7 +475,13 @@ export function ReaderPrototype() {
             }}
           >
             <div className="h-full w-full overflow-hidden">
-              {page?.slices.map((slice, i) => renderPageSlice(slice, i))}
+              {pagination.status === "loading" && pagination.slices.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+                </div>
+              ) : (
+                pagination.slices.map((slice, i) => renderPageSlice(slice, i))
+              )}
             </div>
           </div>
         </div>

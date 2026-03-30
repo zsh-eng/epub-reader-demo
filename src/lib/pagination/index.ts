@@ -4,6 +4,20 @@ export { layoutPages } from "./layout-pages";
 export { layoutTextLines, layoutPreWrapLines } from "./layout-text-lines";
 export { headingScale, getBlockSpacing, getLineHeight } from "./spacing";
 export { measureCollapsedSpaceWidth, measureSingleLineWidth } from "./measure";
+export { usePagination } from "./use-pagination";
+
+export type {
+  ChapterInput,
+  UsePaginationOptions,
+  UsePaginationResult,
+  PaginationStatus,
+} from "./use-pagination";
+
+export type {
+  ContentAnchor,
+  PaginationCommand,
+  PaginationEvent,
+} from "./engine-types";
 
 export type {
   // Stage 1
