@@ -39,6 +39,11 @@ interface LoadedChapter extends ChapterEntry {
   resourceUrlMap: Map<string, string>;
 }
 
+interface StageResult<TValue> {
+  value: TValue;
+  computeMs: number;
+}
+
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -275,9 +280,12 @@ export function ReaderPrototype() {
   const layoutTheme = useMemo(() => buildLayoutTheme(settings), [settings]);
 
   // Stage 1: parse HTML into blocks (only re-runs when chapters change)
-  const blocks = useMemo(() => {
+  const stage1Result = useMemo<StageResult<Block[]>>(() => {
+    const startedAt = performance.now();
     const loadedChapters = allChaptersQuery.data;
-    if (!loadedChapters || loadedChapters.length === 0) return [] as Block[];
+    if (!loadedChapters || loadedChapters.length === 0) {
+      return { value: [], computeMs: 0 };
+    }
 
     const result: Block[] = [];
     loadedChapters.forEach((chapter, index) => {
@@ -286,14 +294,29 @@ export function ReaderPrototype() {
         result.push({ type: "page-break", id: `page-break-${chapter.index + 1}` });
       }
     });
-    return result;
+
+    return {
+      value: result,
+      computeMs: performance.now() - startedAt,
+    };
   }, [allChaptersQuery.data]);
 
+  const blocks = stage1Result.value;
+
   // Stage 2: prepare blocks with font measurement (re-runs on font change)
-  const prepared = useMemo(() => {
-    if (blocks.length === 0) return [];
-    return prepareBlocks(blocks, fontConfig);
+  const stage2Result = useMemo<StageResult<ReturnType<typeof prepareBlocks>>>(() => {
+    const startedAt = performance.now();
+    if (blocks.length === 0) {
+      return { value: [], computeMs: 0 };
+    }
+
+    return {
+      value: prepareBlocks(blocks, fontConfig),
+      computeMs: performance.now() - startedAt,
+    };
   }, [blocks, fontConfig]);
+
+  const prepared = stage2Result.value;
 
   // Stage 3: layout pages (re-runs on resize, cheap)
   const paginationResult = useMemo(() => {
@@ -487,11 +510,13 @@ export function ReaderPrototype() {
 
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
         <p className="mb-3 text-xs text-muted-foreground">
-          Blocks: {paginationResult.diagnostics.blockCount} · Lines:{" "}
-          {paginationResult.diagnostics.lineCount} · Recompute:{" "}
-          {paginationResult.diagnostics.computeMs.toFixed(1)}ms · Viewport:{" "}
-          {Math.round(viewport.width)}×{Math.round(viewport.height)} ·
-          Keyboard: ← / →
+          Stage 1 (HTML → blocks): {stage1Result.computeMs.toFixed(1)}ms · Stage 2
+          (prepare): {stage2Result.computeMs.toFixed(1)}ms · Stage 3 (layout):{" "}
+          {paginationResult.diagnostics.computeMs.toFixed(1)}ms · Blocks:{" "}
+          {paginationResult.diagnostics.blockCount} · Lines:{" "}
+          {paginationResult.diagnostics.lineCount} · Viewport:{" "}
+          {Math.round(viewport.width)}×{Math.round(viewport.height)} · Keyboard:
+          ← / →
         </p>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
