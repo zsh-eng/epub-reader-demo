@@ -94,10 +94,12 @@ The single-table design where all entities are stored as JSON blobs with `(id, t
 ### HLC Service (`src/lib/sync/hlc/hlc.ts`)
 
 **Current coupling:**
+
 - Imports `getOrCreateDeviceId` from `@/lib/device` (hardcoded device ID source)
 - Hardcoded localStorage key `epub-reader-hlc-state`
 
 **Changes needed:**
+
 - Accept `deviceId` (or a `() => string` factory) as a config parameter
 - Accept a `storageKey` string or a generic `{ get(): HLCState | null, set(state: HLCState): void }` persistence interface
 - Remove the app-specific import
@@ -106,7 +108,7 @@ The single-table design where all entities are stored as JSON blobs with `(id, t
 // Before
 export function createHLCService(): HLCService {
   const deviceId = getOrCreateDeviceId();
-  const saved = localStorage.getItem('epub-reader-hlc-state');
+  const saved = localStorage.getItem("epub-reader-hlc-state");
   // ...
 }
 
@@ -126,18 +128,22 @@ export function createHLCService(config: HLCConfig): HLCService {
 ### DexieStorageAdapter (`src/lib/sync/storage-adapter.ts`)
 
 **Current coupling:**
+
 - Stores sync cursors in `localStorage` with hardcoded key format `sync-cursor:{table}`
 
 **Changes needed:**
+
 - Accept cursor storage strategy as a config option (default to localStorage, allow IndexedDB or custom)
 - This is minor because the cursor storage is a small, isolated concern
 
 ### HonoRemoteAdapter (`src/lib/sync/remote-adapter.ts`)
 
 **Current coupling:**
+
 - Imports the typed `honoClient` from `@/lib/api`
 
 **Changes needed:**
+
 - Replace with a generic `FetchRemoteAdapter` that accepts:
   - `baseUrl: string`
   - `getHeaders: () => Record<string, string>` (for auth tokens, device ID)
@@ -146,21 +152,22 @@ export function createHLCService(config: HLCConfig): HLCService {
 ```ts
 // Library ships this
 export class FetchRemoteAdapter implements RemoteAdapter {
-  constructor(private config: {
-    baseUrl: string;
-    getHeaders: () => HeadersInit;
-    // Optional: custom endpoint paths
-    paths?: { pull?: string; push?: string; timestamp?: string };
-  }) {}
+  constructor(
+    private config: {
+      baseUrl: string;
+      getHeaders: () => HeadersInit;
+      // Optional: custom endpoint paths
+      paths?: { pull?: string; push?: string; timestamp?: string };
+    },
+  ) {}
 
   async pull(table, since, entityId?, limit?) {
     const params = new URLSearchParams({ since: String(since) });
-    if (entityId) params.set('entityId', entityId);
-    if (limit) params.set('limit', String(limit));
-    const res = await fetch(
-      `${this.config.baseUrl}/sync/${table}?${params}`,
-      { headers: this.config.getHeaders() }
-    );
+    if (entityId) params.set("entityId", entityId);
+    if (limit) params.set("limit", String(limit));
+    const res = await fetch(`${this.config.baseUrl}/sync/${table}?${params}`, {
+      headers: this.config.getHeaders(),
+    });
     return res.json();
   }
   // ...
@@ -196,8 +203,8 @@ export interface SyncLibraryConfig<TTables extends string = string> {
   hlcPersistence?: { get(): HLCState | null; set(state: HLCState): void };
 
   // Lifecycle
-  periodicSyncInterval?: number;    // default: 30_000
-  throttleInterval?: number;         // default: 5_000
+  periodicSyncInterval?: number; // default: 30_000
+  throttleInterval?: number; // default: 5_000
 
   // Extension points
   onSyncComplete?: (results: Map<TTables, SyncResult>) => void;
@@ -205,7 +212,9 @@ export interface SyncLibraryConfig<TTables extends string = string> {
   logger?: (entry: SyncLogEntry) => void;
 }
 
-export function createSyncLibrary<T extends string>(config: SyncLibraryConfig<T>) {
+export function createSyncLibrary<T extends string>(
+  config: SyncLibraryConfig<T>,
+) {
   // Returns a SyncService instance wired with the provided config
 }
 ```
@@ -250,14 +259,14 @@ The user owns their Dexie instance, types, and schema migrations.
 
 ## What Would NOT Be Part of the Library
 
-| Component | Reason |
-|---|---|
-| React hooks (`use-sync.ts`) | Framework-specific; provide as optional `@local-sync/react` package |
-| Domain types (Book, Highlight, etc.) | App-specific |
-| File storage system | Separate concern (content-addressed blobs ≠ metadata sync) |
-| Transfer queue | Separate concern, though could be a companion library |
-| Server framework integration (Hono routes) | Provide reference implementation + docs, not a library |
-| Auth/device management | Consumer's responsibility |
+| Component                                  | Reason                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------- |
+| React hooks (`use-sync.ts`)                | Framework-specific; provide as optional `@local-sync/react` package |
+| Domain types (Book, Highlight, etc.)       | App-specific                                                        |
+| File storage system                        | Separate concern (content-addressed blobs ≠ metadata sync)          |
+| Transfer queue                             | Separate concern, though could be a companion library               |
+| Server framework integration (Hono routes) | Provide reference implementation + docs, not a library              |
+| Auth/device management                     | Consumer's responsibility                                           |
 
 ---
 
@@ -296,44 +305,44 @@ The user owns their Dexie instance, types, and schema migrations.
 ### Initialisation
 
 ```ts
-import { createSyncLibrary } from '@local-sync/core';
+import { createSyncLibrary } from "@local-sync/core";
 
 const sync = createSyncLibrary({
   db: myDexieInstance,
   tables: {
-    todos: { primaryKey: 'id', indices: ['listId'] },
-    lists: { primaryKey: 'id' },
+    todos: { primaryKey: "id", indices: ["listId"] },
+    lists: { primaryKey: "id" },
   },
   remoteAdapter: new FetchRemoteAdapter({
-    baseUrl: 'https://api.myapp.com',
+    baseUrl: "https://api.myapp.com",
     getHeaders: () => ({ Authorization: `Bearer ${token}` }),
   }),
   deviceId: getDeviceId(),
   onSyncComplete: (results) => {
     // Invalidate your own caches here
-    queryClient.invalidateQueries({ queryKey: ['todos'] });
+    queryClient.invalidateQueries({ queryKey: ["todos"] });
   },
 });
 
-sync.start();   // Begin periodic sync
-sync.stop();    // Stop periodic sync
+sync.start(); // Begin periodic sync
+sync.stop(); // Stop periodic sync
 sync.destroy(); // Full cleanup
 ```
 
 ### Manual Sync
 
 ```ts
-await sync.syncAll();                          // Sync all tables
-await sync.syncTable('todos');                 // Sync one table
-await sync.syncTable('todos', { entityId: listId }); // Scoped sync
-await sync.pushTable('todos');                 // Push only
-await sync.pullTable('todos');                 // Pull only
+await sync.syncAll(); // Sync all tables
+await sync.syncTable("todos"); // Sync one table
+await sync.syncTable("todos", { entityId: listId }); // Scoped sync
+await sync.pushTable("todos"); // Push only
+await sync.pullTable("todos"); // Pull only
 ```
 
 ### Querying (User's Dexie)
 
 ```ts
-import { isNotDeleted } from '@local-sync/core';
+import { isNotDeleted } from "@local-sync/core";
 
 // User queries their own Dexie tables, filtering tombstones
 const todos = await db.todos.filter(isNotDeleted).toArray();
@@ -342,7 +351,7 @@ const todos = await db.todos.filter(isNotDeleted).toArray();
 ### Soft Deletes
 
 ```ts
-import { createTombstone } from '@local-sync/core';
+import { createTombstone } from "@local-sync/core";
 
 // Library provides the tombstone helper
 await db.todos.put(createTombstone(existingTodo));
@@ -351,17 +360,17 @@ await db.todos.put(createTombstone(existingTodo));
 ### Server Setup (Reference)
 
 ```ts
-import { createSyncHandlers } from '@local-sync/server';
+import { createSyncHandlers } from "@local-sync/server";
 
 const { handlePull, handlePush } = createSyncHandlers({
-  getDb: (c) => c.get('db'),
-  getUserId: (c) => c.get('user').id,
-  getDeviceId: (c) => c.req.header('X-Device-ID'),
+  getDb: (c) => c.get("db"),
+  getUserId: (c) => c.get("user").id,
+  getDeviceId: (c) => c.req.header("X-Device-ID"),
 });
 
-app.get('/api/sync/:table', handlePull);
-app.post('/api/sync/:table', handlePush);
-app.get('/api/sync-timestamp', (c) => c.json({ serverTimestamp: Date.now() }));
+app.get("/api/sync/:table", handlePull);
+app.post("/api/sync/:table", handlePush);
+app.get("/api/sync-timestamp", (c) => c.json({ serverTimestamp: Date.now() }));
 ```
 
 ---

@@ -2,17 +2,46 @@ import type { Block, BlockTag, InlineRun, TextBlock } from "./types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
 
 const BLOCK_TAGS = new Set<string>([
-  "p", "h1", "h2", "h3", "h4", "h5", "h6",
-  "li", "blockquote", "pre", "figcaption",
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "blockquote",
+  "pre",
+  "figcaption",
 ]);
 
 const CONTAINER_TAGS = new Set<string>([
-  "div", "section", "article", "figure", "ul", "ol",
-  "header", "footer", "nav", "main", "aside", "details", "summary",
-  "dl", "dd", "dt", "span", "hgroup",
+  "div",
+  "section",
+  "article",
+  "figure",
+  "ul",
+  "ol",
+  "header",
+  "footer",
+  "nav",
+  "main",
+  "aside",
+  "details",
+  "summary",
+  "dl",
+  "dd",
+  "dt",
+  "span",
+  "hgroup",
 ]);
 
-const IGNORE_TAGS = new Set<string>(["script", "style", "noscript", "template"]);
+const IGNORE_TAGS = new Set<string>([
+  "script",
+  "style",
+  "noscript",
+  "template",
+]);
 
 interface InlineContext {
   bold: boolean;
@@ -132,8 +161,10 @@ export function parseChapterHtml(html: string): Block[] {
         id: `image-${counter.value++}`,
         src,
         alt: node.getAttribute("alt") || undefined,
-        intrinsicWidth: parseNumeric(node.getAttribute("width")) ?? DEFAULT_INTRINSIC_WIDTH,
-        intrinsicHeight: parseNumeric(node.getAttribute("height")) ?? DEFAULT_INTRINSIC_HEIGHT,
+        intrinsicWidth:
+          parseNumeric(node.getAttribute("width")) ?? DEFAULT_INTRINSIC_WIDTH,
+        intrinsicHeight:
+          parseNumeric(node.getAttribute("height")) ?? DEFAULT_INTRINSIC_HEIGHT,
       });
       return;
     }
@@ -144,7 +175,11 @@ export function parseChapterHtml(html: string): Block[] {
     }
 
     if (BLOCK_TAGS.has(tag)) {
-      const block = createTextBlock(node, tag as BlockTag, `text-${counter.value++}`);
+      const block = createTextBlock(
+        node,
+        tag as BlockTag,
+        `text-${counter.value++}`,
+      );
       if (block) blocks.push(block);
       return;
     }

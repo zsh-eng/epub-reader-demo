@@ -1,7 +1,4 @@
-import {
-  layoutNextLine,
-  prepareWithSegments,
-} from "@chenglou/pretext";
+import { layoutNextLine, prepareWithSegments } from "@chenglou/pretext";
 import type {
   Block,
   FontConfig,
@@ -15,11 +12,7 @@ import { LINE_START_CURSOR, measureCollapsedSpaceWidth } from "./measure";
 
 const UNBOUNDED_WIDTH = 100_000;
 
-function resolveFont(
-  run: InlineRun,
-  tag: string,
-  fonts: FontConfig,
-): string {
+function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   const scale = headingScale(tag);
   const isHeading = scale > 1;
 
@@ -65,7 +58,11 @@ function prepareTextBlock(
     if (!trimmedText) continue;
 
     const prepared = prepareWithSegments(trimmedText, font);
-    const wholeLine = layoutNextLine(prepared, LINE_START_CURSOR, UNBOUNDED_WIDTH);
+    const wholeLine = layoutNextLine(
+      prepared,
+      LINE_START_CURSOR,
+      UNBOUNDED_WIDTH,
+    );
     if (!wholeLine) continue;
 
     items.push({
@@ -94,7 +91,10 @@ function prepareTextBlock(
   };
 }
 
-export function prepareBlocks(blocks: Block[], fonts: FontConfig): PreparedBlock[] {
+export function prepareBlocks(
+  blocks: Block[],
+  fonts: FontConfig,
+): PreparedBlock[] {
   const result: PreparedBlock[] = [];
 
   for (const block of blocks) {

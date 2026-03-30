@@ -133,14 +133,7 @@ export function useHighlighter<T extends SyncableHighlight>({
     }
 
     prevHighlightsRef.current = highlights;
-  }, [
-    highlights,
-    containerRef,
-    contentReady,
-    className,
-    idAttribute,
-    tagName,
-  ]);
+  }, [highlights, containerRef, contentReady, className, idAttribute, tagName]);
 
   // --- Interaction Manager Effect ---
   // Handles hover, click, and active states

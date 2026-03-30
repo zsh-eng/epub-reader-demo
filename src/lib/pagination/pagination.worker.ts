@@ -26,7 +26,7 @@ function flush() {
 
 /**
  * Keep only the last occurrence of each supersedable command type.
- * Non-supersedable commands (e.g. `load`) are always kept, in order.
+ * Non-supersedable commands (e.g. `init`, `addChapter`) are always kept, in order.
  */
 function coalesce(commands: PaginationCommand[]): PaginationCommand[] {
   // Walk backwards to find the last index of each supersedable type
