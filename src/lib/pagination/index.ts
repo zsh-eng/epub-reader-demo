@@ -7,7 +7,6 @@ export { measureCollapsedSpaceWidth, measureSingleLineWidth } from "./measure";
 export { usePagination } from "./use-pagination";
 
 export type {
-  ChapterInput,
   UsePaginationOptions,
   UsePaginationResult,
   PaginationStatus,

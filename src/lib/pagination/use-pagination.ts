@@ -1,26 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type {
-    ContentAnchor,
-    PaginationCommand,
-    PaginationEvent,
+  ContentAnchor,
+  PaginationCommand,
+  PaginationEvent,
 } from "./engine-types";
 import { parseChapterHtml } from "./parse-html";
 import type {
-    Block,
-    FontConfig,
-    LayoutTheme,
-    PageSlice,
-    PaginationDiagnostics,
+  FontConfig,
+  LayoutTheme,
+  PageSlice,
+  PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-export interface ChapterInput {
-  index: number;
-  html: string;
-}
 
 export type PaginationStatus = "idle" | "loading" | "partial" | "ready";
 
@@ -33,16 +27,18 @@ export interface UsePaginationResult {
   nextPage: () => void;
   prevPage: () => void;
   goToPage: (page: number) => void;
+  addChapter: (chapterIndex: number, html: string) => void;
 
   status: PaginationStatus;
   diagnostics: PaginationDiagnostics | null;
 }
 
 export interface UsePaginationOptions {
-  chapters: ChapterInput[] | undefined;
+  totalChapters: number;
   fontConfig: FontConfig;
   layoutTheme: LayoutTheme;
   viewport: { width: number; height: number };
+  initialChapterIndex?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,15 +49,27 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function usePagination(options: UsePaginationOptions): UsePaginationResult {
-  const { chapters, fontConfig, layoutTheme, viewport } = options;
+export function usePagination(
+  options: UsePaginationOptions,
+): UsePaginationResult {
+  const {
+    totalChapters,
+    fontConfig,
+    layoutTheme,
+    viewport,
+    initialChapterIndex,
+  } = options;
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
-  const [estimatedTotalPages, setEstimatedTotalPages] = useState<number | null>(null);
+  const [estimatedTotalPages, setEstimatedTotalPages] = useState<number | null>(
+    null,
+  );
   const [status, setStatus] = useState<PaginationStatus>("idle");
-  const [diagnostics, setDiagnostics] = useState<PaginationDiagnostics | null>(null);
+  const [diagnostics, setDiagnostics] = useState<PaginationDiagnostics | null>(
+    null,
+  );
 
   const workerRef = useRef<Worker | null>(null);
   const chapterPageOffsetsRef = useRef<number[]>([]);
@@ -73,7 +81,8 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
   totalPagesRef.current = totalPages;
 
   // Track previous values to detect changes
-  const prevChaptersRef = useRef<ChapterInput[] | undefined>(undefined);
+  const prevTotalChaptersRef = useRef<number | null>(null);
+  const prevInitialChapterIndexRef = useRef<number | null>(null);
   const prevFontConfigRef = useRef<FontConfig>(fontConfig);
   const prevViewportRef = useRef(viewport);
   const prevLayoutThemeRef = useRef<LayoutTheme>(layoutTheme);
@@ -89,98 +98,104 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
     return lastAnchorRef.current;
   }, []);
 
-  const updateAnchorFromSlices = useCallback((pageSlices: PageSlice[], page: number) => {
-    if (pageSlices.length === 0) return;
-    const offsets = chapterPageOffsetsRef.current;
-    const pageIndex = page - 1;
+  const updateAnchorFromSlices = useCallback(
+    (pageSlices: PageSlice[], page: number) => {
+      if (pageSlices.length === 0) return;
+      const offsets = chapterPageOffsetsRef.current;
+      const pageIndex = page - 1;
 
-    // Find which chapter this page belongs to
-    let chapterIndex = 0;
-    for (let i = offsets.length - 1; i >= 0; i--) {
-      if (pageIndex >= (offsets[i] ?? 0)) {
-        chapterIndex = i;
-        break;
+      // Find which chapter this page belongs to
+      let chapterIndex = 0;
+      for (let i = offsets.length - 1; i >= 0; i--) {
+        if (pageIndex >= (offsets[i] ?? 0)) {
+          chapterIndex = i;
+          break;
+        }
       }
-    }
 
-    const firstSlice = pageSlices[0];
-    if (firstSlice) {
-      lastAnchorRef.current = {
-        chapterIndex,
-        blockId: firstSlice.blockId,
-      };
-    }
-  }, []);
+      const firstSlice = pageSlices[0];
+      if (firstSlice) {
+        lastAnchorRef.current = {
+          chapterIndex,
+          blockId: firstSlice.blockId,
+        };
+      }
+    },
+    [],
+  );
 
   // Handle worker events
-  const handleEvent = useCallback((event: PaginationEvent) => {
-    switch (event.type) {
-      case "ready": {
-        chapterPageOffsetsRef.current = event.chapterPageOffsets;
-        setTotalPages(event.totalPages);
-        setEstimatedTotalPages(null);
-        setDiagnostics(event.diagnostics);
-        setStatus("ready");
+  const handleEvent = useCallback(
+    (event: PaginationEvent) => {
+      switch (event.type) {
+        case "ready": {
+          chapterPageOffsetsRef.current = event.chapterPageOffsets;
+          setTotalPages(event.totalPages);
+          setEstimatedTotalPages(null);
+          setDiagnostics(event.diagnostics);
+          setStatus("ready");
 
-        if (event.anchorPage !== null) {
-          const clamped = clamp(event.anchorPage, 1, event.totalPages);
-          setCurrentPage(clamped);
-          setSlices(event.slices);
-          updateAnchorFromSlices(event.slices, clamped);
-        } else {
-          // Clamp current page to new total
-          setCurrentPage((prev) => {
-            const clamped = clamp(prev, 1, event.totalPages);
-            if (clamped === 1 && event.slices.length > 0) {
+          if (event.anchorPage !== null) {
+            const clamped = clamp(event.anchorPage, 1, event.totalPages);
+            setCurrentPage(clamped);
+            setSlices(event.slices);
+            updateAnchorFromSlices(event.slices, clamped);
+          } else {
+            // Clamp current page to new total
+            setCurrentPage((prev) => {
+              const clamped = clamp(prev, 1, event.totalPages);
+              if (clamped === 1 && event.slices.length > 0) {
+                setSlices(event.slices);
+                updateAnchorFromSlices(event.slices, 1);
+              } else if (clamped !== 1) {
+                // Request the correct page
+                postCommand({ type: "getPage", globalPage: clamped });
+              }
+              return clamped;
+            });
+
+            // If page is 1, use the provided slices
+            if (currentPageRef.current === 1) {
               setSlices(event.slices);
               updateAnchorFromSlices(event.slices, 1);
-            } else if (clamped !== 1) {
-              // Request the correct page
-              postCommand({ type: "getPage", globalPage: clamped });
             }
-            return clamped;
-          });
-
-          // If page is 1, use the provided slices
-          if (currentPageRef.current === 1) {
-            setSlices(event.slices);
-            updateAnchorFromSlices(event.slices, 1);
           }
+          break;
         }
-        break;
-      }
 
-      case "pageContent": {
-        setSlices(event.slices);
-        updateAnchorFromSlices(event.slices, event.globalPage);
-        break;
-      }
-
-      case "partialReady": {
-        chapterPageOffsetsRef.current = event.chapterPageOffsets;
-        setEstimatedTotalPages(event.estimatedTotalPages);
-        setStatus("partial");
-
-        if (event.anchorPage !== null) {
-          setCurrentPage(event.anchorPage);
+        case "pageContent": {
           setSlices(event.slices);
-          updateAnchorFromSlices(event.slices, event.anchorPage);
+          updateAnchorFromSlices(event.slices, event.globalPage);
+          break;
         }
-        break;
-      }
 
-      case "progress": {
-        chapterPageOffsetsRef.current = event.chapterPageOffsets;
-        setEstimatedTotalPages(event.runningTotalPages);
-        break;
-      }
+        case "partialReady": {
+          chapterPageOffsetsRef.current = event.chapterPageOffsets;
+          setEstimatedTotalPages(event.estimatedTotalPages);
+          setStatus("partial");
 
-      case "error": {
-        console.error("[pagination worker]", event.message);
-        break;
+          if (event.anchorPage !== null) {
+            setCurrentPage(event.anchorPage);
+            setSlices(event.slices);
+            updateAnchorFromSlices(event.slices, event.anchorPage);
+          }
+          break;
+        }
+
+        case "progress": {
+          chapterPageOffsetsRef.current = event.chapterPageOffsets;
+          setEstimatedTotalPages(event.runningTotalPages);
+          break;
+        }
+
+        case "error": {
+          console.error("[pagination worker]", event.message);
+          break;
+        }
       }
-    }
-  }, [postCommand, updateAnchorFromSlices]);
+    },
+    [postCommand, updateAnchorFromSlices],
+  );
 
   // Create and manage worker
   useEffect(() => {
@@ -205,40 +220,69 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
     };
   }, [handleEvent]);
 
-  // Send load command when chapters change
+  // Send init command when chapter count changes
   useEffect(() => {
-    if (!chapters || chapters.length === 0) {
-      prevChaptersRef.current = chapters;
+    const nextInitialChapterIndex = initialChapterIndex ?? 0;
+
+    if (totalChapters <= 0) {
+      prevTotalChaptersRef.current = totalChapters;
+      prevInitialChapterIndexRef.current = nextInitialChapterIndex;
       return;
     }
 
-    if (chapters === prevChaptersRef.current) return;
-    prevChaptersRef.current = chapters;
+    const shouldInit =
+      prevTotalChaptersRef.current !== totalChapters ||
+      prevInitialChapterIndexRef.current !== nextInitialChapterIndex;
+
+    if (!shouldInit) return;
 
     setStatus("loading");
+    setSlices([]);
+    setCurrentPage(1);
     setTotalPages(null);
     setEstimatedTotalPages(null);
-
-    // Parse HTML on main thread (DOMParser not available in worker)
-    const blocksByChapter: Block[][] = chapters.map((ch) => parseChapterHtml(ch.html));
+    setDiagnostics(null);
+    chapterPageOffsetsRef.current = [];
+    lastAnchorRef.current = null;
 
     postCommand({
-      type: "load",
-      blocksByChapter,
+      type: "init",
+      totalChapters,
       fontConfig,
       layoutTheme,
       viewport,
+      initialChapterIndex: nextInitialChapterIndex,
     });
 
-    // Update prev refs so we don't re-send config changes
+    prevTotalChaptersRef.current = totalChapters;
+    prevInitialChapterIndexRef.current = nextInitialChapterIndex;
+
+    // Update prev refs so we don't immediately re-send config changes
     prevFontConfigRef.current = fontConfig;
     prevViewportRef.current = viewport;
     prevLayoutThemeRef.current = layoutTheme;
-  }, [chapters, fontConfig, layoutTheme, viewport, postCommand]);
+  }, [
+    totalChapters,
+    fontConfig,
+    layoutTheme,
+    viewport,
+    initialChapterIndex,
+    postCommand,
+  ]);
+
+  const addChapter = useCallback(
+    (chapterIndex: number, html: string) => {
+      if (totalChapters <= 0) return;
+
+      const blocks = parseChapterHtml(html);
+      postCommand({ type: "addChapter", chapterIndex, blocks });
+    },
+    [postCommand, totalChapters],
+  );
 
   // Send font config changes
   useEffect(() => {
-    if (!chapters || chapters.length === 0) return;
+    if (totalChapters <= 0) return;
     if (fontConfig === prevFontConfigRef.current) return;
     prevFontConfigRef.current = fontConfig;
 
@@ -248,27 +292,27 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
       fontConfig,
       anchor: getContentAnchor(),
     });
-  }, [fontConfig, chapters, postCommand, getContentAnchor]);
+  }, [fontConfig, totalChapters, postCommand, getContentAnchor]);
 
   // Send viewport changes
   useEffect(() => {
-    if (!chapters || chapters.length === 0) return;
+    if (totalChapters <= 0) return;
     const prev = prevViewportRef.current;
-    if (viewport.width === prev.width && viewport.height === prev.height) return;
+    if (viewport.width === prev.width && viewport.height === prev.height)
+      return;
     prevViewportRef.current = viewport;
 
-    console.log("Viewport changed to", viewport);
     postCommand({
       type: "setViewport",
       width: viewport.width,
       height: viewport.height,
       anchor: getContentAnchor(),
     });
-  }, [viewport, chapters, postCommand, getContentAnchor]);
+  }, [viewport, totalChapters, postCommand, getContentAnchor]);
 
   // Send layout theme changes
   useEffect(() => {
-    if (!chapters || chapters.length === 0) return;
+    if (totalChapters <= 0) return;
     if (layoutTheme === prevLayoutThemeRef.current) return;
     prevLayoutThemeRef.current = layoutTheme;
 
@@ -277,7 +321,7 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
       layoutTheme,
       anchor: getContentAnchor(),
     });
-  }, [layoutTheme, chapters, postCommand, getContentAnchor]);
+  }, [layoutTheme, totalChapters, postCommand, getContentAnchor]);
 
   // Navigation
   const nextPage = useCallback(() => {
@@ -301,12 +345,15 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
     });
   }, [postCommand]);
 
-  const goToPage = useCallback((page: number) => {
-    const max = totalPagesRef.current ?? 1;
-    const clamped = clamp(page, 1, max);
-    setCurrentPage(clamped);
-    postCommand({ type: "getPage", globalPage: clamped });
-  }, [postCommand]);
+  const goToPage = useCallback(
+    (page: number) => {
+      const max = totalPagesRef.current ?? 1;
+      const clamped = clamp(page, 1, max);
+      setCurrentPage(clamped);
+      postCommand({ type: "getPage", globalPage: clamped });
+    },
+    [postCommand],
+  );
 
   return {
     slices,
@@ -316,6 +363,7 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
     nextPage,
     prevPage,
     goToPage,
+    addChapter,
     status,
     diagnostics,
   };

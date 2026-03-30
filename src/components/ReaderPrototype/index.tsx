@@ -5,25 +5,26 @@ import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { getBookFile, type Book } from "@/lib/db";
-import { cleanupResourceUrls, processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
-    usePagination,
-    type FontConfig,
-    type LayoutTheme,
-    type PageSlice,
-    type ChapterInput,
+  cleanupResourceUrls,
+  processEmbeddedResources,
+} from "@/lib/epub-resource-utils";
+import {
+  usePagination,
+  type FontConfig,
+  type LayoutTheme,
+  type PageSlice,
 } from "@/lib/pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
-import { useQuery } from "@tanstack/react-query";
 import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-    type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -31,11 +32,6 @@ interface ChapterEntry {
   index: number;
   href: string;
   title: string;
-}
-
-interface LoadedChapter extends ChapterEntry {
-  html: string;
-  resourceUrlMap: Map<string, string>;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -88,7 +84,9 @@ function buildChapterEntries(book: Book | null): ChapterEntry[] {
     .map((_, index) => {
       const spineItem = book.spine[index];
       if (!spineItem) return null;
-      const manifestItem = book.manifest.find((item) => item.id === spineItem.idref);
+      const manifestItem = book.manifest.find(
+        (item) => item.id === spineItem.idref,
+      );
       if (!manifestItem?.href) return null;
 
       return {
@@ -100,45 +98,33 @@ function buildChapterEntries(book: Book | null): ChapterEntry[] {
     .filter((chapter): chapter is ChapterEntry => Boolean(chapter));
 }
 
-async function loadAllChapterContents(
+async function loadSingleChapter(
   bookId: string,
-  chapters: ChapterEntry[],
-): Promise<LoadedChapter[]> {
-  const loaded: LoadedChapter[] = [];
-
-  for (const chapter of chapters) {
-    const chapterFile = await getBookFile(bookId, chapter.href);
-    if (!chapterFile) continue;
-
-    const text = await chapterFile.content.text();
-    const resourceUrlMap = new Map<string, string>();
-
-    const { document: chapterDoc } = await processEmbeddedResources({
-      content: text,
-      mediaType: chapterFile.mediaType,
-      basePath: chapter.href,
-      loadResource: async (path: string) => {
-        const resourceFile = await getBookFile(bookId, path);
-        return resourceFile?.content || null;
-      },
-      resourceUrlMap,
-    });
-
-    loaded.push({
-      ...chapter,
-      html: chapterDoc.querySelector("body")?.innerHTML ?? "",
-      resourceUrlMap,
-    });
+  chapter: ChapterEntry,
+): Promise<{ html: string; resourceUrlMap: Map<string, string> }> {
+  const chapterFile = await getBookFile(bookId, chapter.href);
+  if (!chapterFile) {
+    return { html: "", resourceUrlMap: new Map() };
   }
 
-  return loaded;
-}
+  const text = await chapterFile.content.text();
+  const resourceUrlMap = new Map<string, string>();
 
-function cleanupChapterResources(chapters: LoadedChapter[] | null): void {
-  if (!chapters) return;
-  for (const chapter of chapters) {
-    cleanupResourceUrls(chapter.resourceUrlMap);
-  }
+  const { document: chapterDoc } = await processEmbeddedResources({
+    content: text,
+    mediaType: chapterFile.mediaType,
+    basePath: chapter.href,
+    loadResource: async (path: string) => {
+      const resourceFile = await getBookFile(bookId, path);
+      return resourceFile?.content || null;
+    },
+    resourceUrlMap,
+  });
+
+  return {
+    html: chapterDoc.querySelector("body")?.innerHTML ?? "",
+    resourceUrlMap,
+  };
 }
 
 function renderPageSlice(slice: PageSlice, sliceIndex: number): ReactElement {
@@ -181,7 +167,9 @@ function renderPageSlice(slice: PageSlice, sliceIndex: number): ReactElement {
               key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
               style={{
                 marginLeft:
-                  fragment.leadingGap > 0 ? `${fragment.leadingGap}px` : undefined,
+                  fragment.leadingGap > 0
+                    ? `${fragment.leadingGap}px`
+                    : undefined,
                 font: fragment.font,
               }}
               className={cn({
@@ -198,11 +186,6 @@ function renderPageSlice(slice: PageSlice, sliceIndex: number): ReactElement {
   );
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
-}
-
 export function ReaderPrototype() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -211,8 +194,7 @@ export function ReaderPrototype() {
 
   const [jumpInput, setJumpInput] = useState("1");
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
-
-  const previousChaptersRef = useRef<LoadedChapter[] | null>(null);
+  const resourceMapRef = useRef<Map<number, Map<string, string>>>(new Map());
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -222,36 +204,6 @@ export function ReaderPrototype() {
   } = useEpubProcessor(bookId, book?.fileHash);
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
-  const chapterKey = useMemo(
-    () => chapterEntries.map((chapter) => chapter.href).join("|"),
-    [chapterEntries],
-  );
-
-  const allChaptersQuery = useQuery({
-    queryKey: ["reader-prototype-book-chapters", bookId ?? "", chapterKey],
-    queryFn: () => loadAllChapterContents(bookId!, chapterEntries),
-    enabled: !!bookId && !!book && isEpubReady && chapterEntries.length > 0,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    staleTime: 0,
-    gcTime: 0,
-    retry: 1,
-  });
-
-  useEffect(() => {
-    const previousChapters = previousChaptersRef.current;
-    if (previousChapters && previousChapters !== allChaptersQuery.data) {
-      cleanupChapterResources(previousChapters);
-    }
-    previousChaptersRef.current = allChaptersQuery.data ?? null;
-  }, [allChaptersQuery.data]);
-
-  useEffect(() => {
-    return () => {
-      cleanupChapterResources(previousChaptersRef.current);
-      previousChaptersRef.current = null;
-    };
-  }, []);
 
   useEffect(() => {
     const onResize = () => {
@@ -271,21 +223,81 @@ export function ReaderPrototype() {
   const fontConfig = useMemo(() => buildFontConfig(settings), [settings]);
   const layoutTheme = useMemo(() => buildLayoutTheme(settings), [settings]);
 
-  // Convert loaded chapters to ChapterInput[] for the pagination hook
-  const chapterInputs = useMemo<ChapterInput[] | undefined>(() => {
-    const data = allChaptersQuery.data;
-    if (!data || data.length === 0) return undefined;
-    return data.map((ch) => ({ index: ch.index, html: ch.html }));
-  }, [allChaptersQuery.data]);
-
   const pagination = usePagination({
-    chapters: chapterInputs,
+    totalChapters: chapterEntries.length,
     fontConfig,
     layoutTheme,
     viewport,
+    initialChapterIndex: 0,
   });
 
-  const displayTotalPages = pagination.totalPages ?? pagination.estimatedTotalPages ?? 0;
+  useEffect(() => {
+    if (!bookId || !isEpubReady || chapterEntries.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const cleanupAllResources = () => {
+      for (const resourceMap of resourceMapRef.current.values()) {
+        cleanupResourceUrls(resourceMap);
+      }
+      resourceMapRef.current.clear();
+    };
+
+    const loadIncrementally = async () => {
+      try {
+        cleanupAllResources();
+
+        const initialChapter = chapterEntries[0];
+        if (!initialChapter) return;
+
+        const initialLoaded = await loadSingleChapter(bookId, initialChapter);
+        if (cancelled) {
+          cleanupResourceUrls(initialLoaded.resourceUrlMap);
+          return;
+        }
+        resourceMapRef.current.set(0, initialLoaded.resourceUrlMap);
+        pagination.addChapter(0, initialLoaded.html);
+
+        for (let i = 1; i < chapterEntries.length; i++) {
+          const chapter = chapterEntries[i];
+          if (!chapter) continue;
+
+          const loaded = await loadSingleChapter(bookId, chapter);
+          if (cancelled) {
+            cleanupResourceUrls(loaded.resourceUrlMap);
+            return;
+          }
+
+          const previousResourceMap = resourceMapRef.current.get(i);
+          if (previousResourceMap) {
+            cleanupResourceUrls(previousResourceMap);
+          }
+
+          resourceMapRef.current.set(i, loaded.resourceUrlMap);
+          pagination.addChapter(i, loaded.html);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error(
+            "[ReaderPrototype] Failed to stream chapter content",
+            error,
+          );
+        }
+      }
+    };
+
+    void loadIncrementally();
+
+    return () => {
+      cancelled = true;
+      cleanupAllResources();
+    };
+  }, [bookId, isEpubReady, chapterEntries, pagination.addChapter]);
+
+  const displayTotalPages =
+    pagination.totalPages ?? pagination.estimatedTotalPages ?? 0;
 
   useEffect(() => {
     setJumpInput(String(pagination.currentPage));
@@ -359,12 +371,7 @@ export function ReaderPrototype() {
     );
   }
 
-  if (
-    isProcessingEpub ||
-    !isEpubReady ||
-    allChaptersQuery.isLoading ||
-    allChaptersQuery.isFetching
-  ) {
+  if (isProcessingEpub || !isEpubReady) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="space-y-3 text-center">
@@ -377,13 +384,7 @@ export function ReaderPrototype() {
     );
   }
 
-  if (
-    epubError ||
-    allChaptersQuery.error ||
-    chapterEntries.length === 0 ||
-    !allChaptersQuery.data ||
-    allChaptersQuery.data.length === 0
-  ) {
+  if (epubError || chapterEntries.length === 0) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="space-y-3 text-center max-w-md px-4">
@@ -391,11 +392,7 @@ export function ReaderPrototype() {
             Failed to build prototype pagination
           </p>
           <p className="text-sm text-muted-foreground">
-            {epubError
-              ? epubError.message
-              : allChaptersQuery.error
-                ? getErrorMessage(allChaptersQuery.error)
-                : "No readable chapters were found."}
+            {epubError ? epubError.message : "No readable chapters were found."}
           </p>
           <Button variant="outline" onClick={() => navigate("/")}>
             Back to Library
@@ -415,7 +412,7 @@ export function ReaderPrototype() {
           <div className="mr-auto min-w-[180px]">
             <p className="truncate text-sm font-medium">{book.title}</p>
             <p className="text-xs text-muted-foreground">
-              Pretext prototype · Whole book ({allChaptersQuery.data.length} chapters)
+              Pretext prototype · Whole book ({chapterEntries.length} chapters)
               {pagination.status === "partial" && " · Preparing..."}
             </p>
           </div>
@@ -458,12 +455,13 @@ export function ReaderPrototype() {
           Status: {pagination.status}
           {pagination.diagnostics && (
             <>
-              {" "}· Blocks: {pagination.diagnostics.blockCount}
-              {" "}· Lines: {pagination.diagnostics.lineCount}
+              {" "}
+              · Blocks: {pagination.diagnostics.blockCount} · Lines:{" "}
+              {pagination.diagnostics.lineCount}
             </>
-          )}
-          {" "}· Viewport: {Math.round(viewport.width)}x{Math.round(viewport.height)}
-          {" "}· Keyboard: ← / →
+          )}{" "}
+          · Viewport: {Math.round(viewport.width)}x{Math.round(viewport.height)}{" "}
+          · Keyboard: ← / →
         </p>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
@@ -475,7 +473,8 @@ export function ReaderPrototype() {
             }}
           >
             <div className="h-full w-full overflow-hidden">
-              {pagination.status === "loading" && pagination.slices.length === 0 ? (
+              {pagination.status === "loading" &&
+              pagination.slices.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
                   <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
                 </div>

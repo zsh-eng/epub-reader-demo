@@ -19,13 +19,19 @@ export interface ContentAnchor {
 // Commands (main thread → worker)
 // ---------------------------------------------------------------------------
 
-export interface LoadCommand {
-  type: "load";
-  blocksByChapter: Block[][];
+export interface InitCommand {
+  type: "init";
+  totalChapters: number;
   fontConfig: FontConfig;
   layoutTheme: LayoutTheme;
   viewport: { width: number; height: number };
-  initialChapterIndex?: number;
+  initialChapterIndex: number;
+}
+
+export interface AddChapterCommand {
+  type: "addChapter";
+  chapterIndex: number;
+  blocks: Block[];
 }
 
 export interface SetFontConfigCommand {
@@ -53,7 +59,8 @@ export interface GetPageCommand {
 }
 
 export type PaginationCommand =
-  | LoadCommand
+  | InitCommand
+  | AddChapterCommand
   | SetFontConfigCommand
   | SetViewportCommand
   | SetLayoutThemeCommand
