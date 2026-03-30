@@ -1,9 +1,9 @@
 import {
-  layoutNextLine,
-  layoutWithLines,
-  prepareWithSegments,
-  type LayoutCursor,
-  type PreparedTextWithSegments,
+    layoutNextLine,
+    layoutWithLines,
+    prepareWithSegments,
+    type LayoutCursor,
+    type PreparedTextWithSegments,
 } from "@chenglou/pretext";
 
 type WhiteSpaceMode = "normal" | "pre-wrap";
@@ -43,10 +43,16 @@ export interface PaginationSpacerBlock {
   height: number;
 }
 
+export interface PaginationPageBreakBlock {
+  id: string;
+  type: "page-break";
+}
+
 export type PaginationBlock =
   | PaginationTextBlock
   | PaginationImageBlock
-  | PaginationSpacerBlock;
+  | PaginationSpacerBlock
+  | PaginationPageBreakBlock;
 
 export interface PageTextFragment {
   text: string;
@@ -744,6 +750,13 @@ export function paginateBlocksWithPretext(input: PaginationInput): PaginationRes
   };
 
   for (const block of blocks) {
+    if (block.type === "page-break") {
+      if (currentPage.slices.length > 0) {
+        pushCurrentPage();
+      }
+      continue;
+    }
+
     if (block.type === "spacer") {
       addSpacerSlice(block.id, block.height);
       continue;

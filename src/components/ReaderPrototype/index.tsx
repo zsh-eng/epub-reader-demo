@@ -1,37 +1,47 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useBookLoader } from "@/hooks/use-book-loader";
-import {
-    getManifestItemHref,
-    useChapterContent,
-} from "@/hooks/use-chapter-content";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
+import { getBookFile, type Book } from "@/lib/db";
+import { cleanupResourceUrls, processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
     extractPaginationBlocksFromHtml,
     paginateBlocksWithPretext,
     type ChapterTypography,
     type PageSlice,
+    type PaginationBlock,
 } from "@/lib/pagination/pretext-pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
-import type { ReaderSettings } from "@/types/reader.types";
+import type { FontFamily, ReaderSettings } from "@/types/reader.types";
+import { useQuery } from "@tanstack/react-query";
 import {
     useEffect,
     useMemo,
     useRef,
     useState,
-    type ChangeEvent,
     type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+
+interface ChapterEntry {
+  index: number;
+  href: string;
+  title: string;
+}
+
+interface LoadedChapter extends ChapterEntry {
+  html: string;
+  resourceUrlMap: Map<string, string>;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function getNamedBodyFont(fontFamily: string): string {
+function getNamedBodyFont(fontFamily: FontFamily): string {
   switch (fontFamily) {
     case "sans-serif":
     case "inter":
@@ -50,9 +60,7 @@ function getNamedBodyFont(fontFamily: string): string {
   }
 }
 
-function buildChapterTypography(
-  settings: ReaderSettings,
-): ChapterTypography {
+function buildChapterTypography(settings: ReaderSettings): ChapterTypography {
   const baseFontSizePx = 16 * (settings.fontSize / 100);
   return {
     baseFontSizePx,
@@ -62,6 +70,66 @@ function buildChapterTypography(
     headingFontFamily: `"EB Garamond", Georgia, serif`,
     codeFontFamily: `"Courier New", Menlo, Monaco, monospace`,
   };
+}
+
+function buildChapterEntries(book: Book | null): ChapterEntry[] {
+  if (!book) return [];
+
+  return book.spine
+    .map((_, index) => {
+      const spineItem = book.spine[index];
+      if (!spineItem) return null;
+      const manifestItem = book.manifest.find((item) => item.id === spineItem.idref);
+      if (!manifestItem?.href) return null;
+
+      return {
+        index,
+        href: manifestItem.href,
+        title: getChapterTitleFromSpine(book, index) || `Chapter ${index + 1}`,
+      };
+    })
+    .filter((chapter): chapter is ChapterEntry => Boolean(chapter));
+}
+
+async function loadAllChapterContents(
+  bookId: string,
+  chapters: ChapterEntry[],
+): Promise<LoadedChapter[]> {
+  const loaded: LoadedChapter[] = [];
+
+  for (const chapter of chapters) {
+    const chapterFile = await getBookFile(bookId, chapter.href);
+    if (!chapterFile) continue;
+
+    const text = await chapterFile.content.text();
+    const resourceUrlMap = new Map<string, string>();
+
+    const { document: chapterDoc } = await processEmbeddedResources({
+      content: text,
+      mediaType: chapterFile.mediaType,
+      basePath: chapter.href,
+      loadResource: async (path: string) => {
+        const resourceFile = await getBookFile(bookId, path);
+        return resourceFile?.content || null;
+      },
+      resourceUrlMap,
+    });
+
+    loaded.push({
+      ...chapter,
+      html: chapterDoc.querySelector("body")?.innerHTML ?? "",
+      resourceUrlMap,
+    });
+  }
+
+  return loaded;
+}
+
+function cleanupChapterResources(chapters: LoadedChapter[] | null): void {
+  if (!chapters) return;
+  for (const chapter of chapters) {
+    cleanupResourceUrls(chapter.resourceUrlMap);
+  }
 }
 
 function renderPageSlice(slice: PageSlice): ReactElement {
@@ -119,18 +187,23 @@ function renderPageSlice(slice: PageSlice): ReactElement {
   );
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 export function ReaderPrototype() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { settings } = useReaderSettings();
 
-  const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [jumpInput, setJumpInput] = useState("1");
   const [manualRecomputeVersion, setManualRecomputeVersion] = useState(0);
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
-  const initializedBookIdRef = useRef<string | null>(null);
+
+  const previousChaptersRef = useRef<LoadedChapter[] | null>(null);
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -139,50 +212,37 @@ export function ReaderPrototype() {
     error: epubError,
   } = useEpubProcessor(bookId, book?.fileHash);
 
+  const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
+  const chapterKey = useMemo(
+    () => chapterEntries.map((chapter) => chapter.href).join("|"),
+    [chapterEntries],
+  );
+
+  const allChaptersQuery = useQuery({
+    queryKey: ["reader-prototype-book-chapters", bookId ?? "", chapterKey],
+    queryFn: () => loadAllChapterContents(bookId!, chapterEntries),
+    enabled: !!bookId && !!book && isEpubReady && chapterEntries.length > 0,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    staleTime: 0,
+    gcTime: 0,
+    retry: 1,
+  });
+
   useEffect(() => {
-    if (!book) return;
-    if (initializedBookIdRef.current === book.id) return;
-    initializedBookIdRef.current = book.id;
-
-    const preferredIndex = book.spine.length > 1 ? 1 : 0;
-    const preferredHref = getManifestItemHref(book, preferredIndex);
-    if (preferredHref) {
-      setCurrentChapterIndex(preferredIndex);
-      return;
+    const previousChapters = previousChaptersRef.current;
+    if (previousChapters && previousChapters !== allChaptersQuery.data) {
+      cleanupChapterResources(previousChapters);
     }
+    previousChaptersRef.current = allChaptersQuery.data ?? null;
+  }, [allChaptersQuery.data]);
 
-    const firstAvailableIndex = book.spine.findIndex((_, index) =>
-      Boolean(getManifestItemHref(book, index)),
-    );
-    setCurrentChapterIndex(firstAvailableIndex >= 0 ? firstAvailableIndex : 0);
-  }, [book]);
-
-  const chapterHref = getManifestItemHref(book, currentChapterIndex);
-  const {
-    chapterContent,
-    isLoading: isChapterLoading,
-    error: chapterError,
-  } = useChapterContent(bookId, chapterHref);
-
-  const chapterOptions = useMemo(() => {
-    if (!book) return [];
-
-    return book.spine
-      .map((_, index) => {
-        const href = getManifestItemHref(book, index);
-        if (!href) return null;
-
-        const title = getChapterTitleFromSpine(book, index) || `Chapter ${index + 1}`;
-        return {
-          index,
-          href,
-          title,
-        };
-      })
-      .filter((option): option is { index: number; href: string; title: string } =>
-        Boolean(option),
-      );
-  }, [book]);
+  useEffect(() => {
+    return () => {
+      cleanupChapterResources(previousChaptersRef.current);
+      previousChaptersRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     const onResize = () => {
@@ -202,9 +262,32 @@ export function ReaderPrototype() {
   const typography = useMemo(() => buildChapterTypography(settings), [settings]);
 
   const blocks = useMemo(() => {
-    if (!chapterContent) return [];
-    return extractPaginationBlocksFromHtml(chapterContent, typography, viewport.width);
-  }, [chapterContent, typography, viewport.width]);
+    const loadedChapters = allChaptersQuery.data;
+    if (!loadedChapters || loadedChapters.length === 0) {
+      return [] as PaginationBlock[];
+    }
+
+    const nextBlocks: PaginationBlock[] = [];
+
+    loadedChapters.forEach((chapter, index) => {
+      nextBlocks.push(
+        ...extractPaginationBlocksFromHtml(
+          chapter.html,
+          typography,
+          viewport.width,
+        ),
+      );
+
+      if (index < loadedChapters.length - 1) {
+        nextBlocks.push({
+          id: `page-break-${chapter.index + 1}`,
+          type: "page-break",
+        });
+      }
+    });
+
+    return nextBlocks;
+  }, [allChaptersQuery.data, typography, viewport.width]);
 
   const paginationResult = useMemo(() => {
     return paginateBlocksWithPretext({
@@ -213,11 +296,6 @@ export function ReaderPrototype() {
       pageHeight: viewport.height,
     });
   }, [blocks, viewport.height, viewport.width, manualRecomputeVersion]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-    setJumpInput("1");
-  }, [currentChapterIndex]);
 
   useEffect(() => {
     setCurrentPage((prev) =>
@@ -229,8 +307,43 @@ export function ReaderPrototype() {
     setJumpInput(String(currentPage));
   }, [currentPage]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target) {
+        const tagName = target.tagName.toLowerCase();
+        if (
+          tagName === "input" ||
+          tagName === "textarea" ||
+          tagName === "select" ||
+          target.isContentEditable
+        ) {
+          return;
+        }
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setCurrentPage((pageNumber) => Math.max(1, pageNumber - 1));
+        return;
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setCurrentPage((pageNumber) =>
+          Math.min(paginationResult.totalPages, pageNumber + 1),
+        );
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [paginationResult.totalPages]);
+
   const page =
-    paginationResult.pages[clamp(currentPage - 1, 0, paginationResult.pages.length - 1)];
+    paginationResult.pages[
+      clamp(currentPage - 1, 0, paginationResult.pages.length - 1)
+    ];
 
   const canGoPrevious = currentPage > 1;
   const canGoNext = currentPage < paginationResult.totalPages;
@@ -240,12 +353,6 @@ export function ReaderPrototype() {
     if (!Number.isFinite(parsed)) return;
     const clamped = clamp(parsed, 1, paginationResult.totalPages);
     setCurrentPage(clamped);
-  };
-
-  const handleChapterSelect = (event: ChangeEvent<HTMLSelectElement>) => {
-    const parsedIndex = Number.parseInt(event.target.value, 10);
-    if (!Number.isFinite(parsedIndex)) return;
-    setCurrentChapterIndex(parsedIndex);
   };
 
   if (isBookLoading) {
@@ -274,7 +381,12 @@ export function ReaderPrototype() {
     );
   }
 
-  if (isProcessingEpub || !isEpubReady || isChapterLoading) {
+  if (
+    isProcessingEpub ||
+    !isEpubReady ||
+    allChaptersQuery.isLoading ||
+    allChaptersQuery.isFetching
+  ) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="space-y-3 text-center">
@@ -287,7 +399,13 @@ export function ReaderPrototype() {
     );
   }
 
-  if (epubError || chapterError || !chapterHref) {
+  if (
+    epubError ||
+    allChaptersQuery.error ||
+    chapterEntries.length === 0 ||
+    !allChaptersQuery.data ||
+    allChaptersQuery.data.length === 0
+  ) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
         <div className="space-y-3 text-center max-w-md px-4">
@@ -295,7 +413,11 @@ export function ReaderPrototype() {
             Failed to build prototype pagination
           </p>
           <p className="text-sm text-muted-foreground">
-            {epubError?.message || chapterError?.message || "Chapter data is missing."}
+            {epubError
+              ? epubError.message
+              : allChaptersQuery.error
+                ? getErrorMessage(allChaptersQuery.error)
+                : "No readable chapters were found."}
           </p>
           <Button variant="outline" onClick={() => navigate("/")}>
             Back to Library
@@ -315,35 +437,24 @@ export function ReaderPrototype() {
           <div className="mr-auto min-w-[180px]">
             <p className="truncate text-sm font-medium">{book.title}</p>
             <p className="text-xs text-muted-foreground">
-              Pretext prototype · Chapter {currentChapterIndex + 1} ({chapterHref})
+              Pretext prototype · Whole book ({allChaptersQuery.data.length} chapters)
             </p>
           </div>
-          <select
-            value={currentChapterIndex}
-            onChange={handleChapterSelect}
-            className="h-9 max-w-[240px] rounded-md border border-input bg-background px-2 text-sm"
-          >
-            {chapterOptions.map((option) => (
-              <option key={option.href} value={option.index}>
-                {option.index + 1}. {option.title}
-              </option>
-            ))}
-          </select>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage((pageNum) => pageNum - 1)}
+            onClick={() => setCurrentPage((pageNumber) => pageNumber - 1)}
             disabled={!canGoPrevious}
           >
             Prev
           </Button>
-          <div className="min-w-[112px] text-center text-sm tabular-nums">
+          <div className="min-w-[132px] text-center text-sm tabular-nums">
             Page {currentPage} / {paginationResult.totalPages}
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setCurrentPage((pageNum) => pageNum + 1)}
+            onClick={() => setCurrentPage((pageNumber) => pageNumber + 1)}
             disabled={!canGoNext}
           >
             Next
@@ -374,7 +485,8 @@ export function ReaderPrototype() {
           Blocks: {paginationResult.diagnostics.blockCount} · Lines:{" "}
           {paginationResult.diagnostics.lineCount} · Recompute:{" "}
           {paginationResult.diagnostics.recomputeMs.toFixed(1)}ms · Viewport:{" "}
-          {Math.round(viewport.width)}×{Math.round(viewport.height)}
+          {Math.round(viewport.width)}×{Math.round(viewport.height)} ·
+          Keyboard: ← / →
         </p>
 
         <div className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
