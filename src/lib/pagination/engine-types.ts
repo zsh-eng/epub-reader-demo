@@ -25,6 +25,7 @@ export interface LoadCommand {
   fontConfig: FontConfig;
   layoutTheme: LayoutTheme;
   viewport: { width: number; height: number };
+  initialChapterIndex?: number;
 }
 
 export interface SetFontConfigCommand {

@@ -35,7 +35,7 @@ export class PaginationEngine {
     try {
       switch (cmd.type) {
         case "load":
-          this.load(cmd.blocksByChapter, cmd.fontConfig, cmd.layoutTheme, cmd.viewport);
+          this.load(cmd.blocksByChapter, cmd.fontConfig, cmd.layoutTheme, cmd.viewport, cmd.initialChapterIndex ?? 0);
           break;
         case "setFontConfig":
           this.setFontConfig(cmd.fontConfig, cmd.anchor);
@@ -63,6 +63,7 @@ export class PaginationEngine {
     fontConfig: FontConfig,
     layoutTheme: LayoutTheme,
     viewport: { width: number; height: number },
+    initialChapterIndex: number,
   ): void {
     this.blocksByChapter = blocksByChapter;
     this.fontConfig = fontConfig;
@@ -73,15 +74,46 @@ export class PaginationEngine {
     this.preparedByChapter = new Array(chapterCount).fill(null);
     this.pagesByChapter = new Array(chapterCount).fill(null);
 
-    const diagnostics: PaginationDiagnostics = { blockCount: 0, lineCount: 0, computeMs: 0 };
-    const startedAt = performance.now();
+    if (chapterCount === 0) {
+      this.recomputeOffsets();
+      this.emit({
+        type: "ready",
+        totalPages: 1,
+        anchorPage: null,
+        slices: [],
+        diagnostics: { blockCount: 0, lineCount: 0, computeMs: 0 },
+        chapterPageOffsets: [],
+      });
+      return;
+    }
 
+    // Progressive: prepare the initial chapter first so the UI has content immediately
+    const anchorChapter = Math.min(initialChapterIndex, chapterCount - 1);
+    this.prepareAndLayoutChapter(anchorChapter);
+    this.recomputeOffsets();
+
+    const anchorPage = (this.chapterPageOffsets[anchorChapter] ?? 0) + 1;
+    const estimatedTotal = this.estimateTotalPages(anchorChapter);
+
+    this.emit({
+      type: "partialReady",
+      chapterIndex: anchorChapter,
+      chapterPageCount: this.pagesByChapter[anchorChapter]?.length ?? 0,
+      estimatedTotalPages: estimatedTotal,
+      anchorPage,
+      slices: this.getSlicesForGlobalPage(anchorPage),
+      chapterPageOffsets: [...this.chapterPageOffsets],
+    });
+
+    // Prepare remaining chapters
     for (let i = 0; i < chapterCount; i++) {
+      if (i === anchorChapter) continue;
       this.prepareAndLayoutChapter(i);
+      this.recomputeOffsets();
 
       this.emit({
         type: "progress",
-        chaptersCompleted: i + 1,
+        chaptersCompleted: this.countPreparedChapters(),
         totalChapters: chapterCount,
         runningTotalPages: this.getTotalPages(),
         chapterPageOffsets: [...this.chapterPageOffsets],
@@ -89,25 +121,13 @@ export class PaginationEngine {
     }
 
     this.recomputeOffsets();
-    const totalPages = this.getTotalPages();
-
-    diagnostics.computeMs = performance.now() - startedAt;
-    diagnostics.blockCount = blocksByChapter.reduce((sum, ch) => sum + ch.length, 0);
-    for (const pages of this.pagesByChapter) {
-      if (!pages) continue;
-      for (const page of pages) {
-        for (const slice of page.slices) {
-          if (slice.type === "text") diagnostics.lineCount += slice.lines.length;
-        }
-      }
-    }
 
     this.emit({
       type: "ready",
-      totalPages,
-      anchorPage: null,
-      slices: this.getSlicesForGlobalPage(1),
-      diagnostics,
+      totalPages: this.getTotalPages(),
+      anchorPage,
+      slices: this.getSlicesForGlobalPage(anchorPage),
+      diagnostics: this.buildDiagnostics(),
       chapterPageOffsets: [...this.chapterPageOffsets],
     });
   }
