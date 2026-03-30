@@ -7,12 +7,14 @@ import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { getBookFile, type Book } from "@/lib/db";
 import { cleanupResourceUrls, processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
-    extractPaginationBlocksFromHtml,
-    paginateBlocksWithPretext,
-    type ChapterTypography,
+    layoutPages,
+    parseChapterHtml,
+    prepareBlocks,
+    type Block,
+    type FontConfig,
+    type LayoutTheme,
     type PageSlice,
-    type PaginationBlock,
-} from "@/lib/pagination/pretext-pagination";
+} from "@/lib/pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
@@ -60,15 +62,23 @@ function getNamedBodyFont(fontFamily: FontFamily): string {
   }
 }
 
-function buildChapterTypography(settings: ReaderSettings): ChapterTypography {
-  const baseFontSizePx = 16 * (settings.fontSize / 100);
+function buildFontConfig(settings: ReaderSettings): FontConfig {
   return {
-    baseFontSizePx,
-    baseLineHeight: baseFontSizePx * settings.lineHeight,
+    bodyFamily: getNamedBodyFont(settings.fontFamily),
+    headingFamily: `"EB Garamond", Georgia, serif`,
+    codeFamily: `"Courier New", Menlo, Monaco, monospace`,
+    baseSizePx: 16 * (settings.fontSize / 100),
+  };
+}
+
+function buildLayoutTheme(settings: ReaderSettings): LayoutTheme {
+  return {
+    baseFontSizePx: 16 * (settings.fontSize / 100),
+    lineHeightFactor: settings.lineHeight,
+    paragraphSpacingFactor: 1.2,
+    headingSpaceAbove: 1.5,
+    headingSpaceBelow: 0.7,
     textAlign: settings.textAlign,
-    bodyFontFamily: getNamedBodyFont(settings.fontFamily),
-    headingFontFamily: `"EB Garamond", Georgia, serif`,
-    codeFontFamily: `"Courier New", Menlo, Monaco, monospace`,
   };
 }
 
@@ -132,14 +142,16 @@ function cleanupChapterResources(chapters: LoadedChapter[] | null): void {
   }
 }
 
-function renderPageSlice(slice: PageSlice): ReactElement {
+function renderPageSlice(slice: PageSlice, sliceIndex: number): ReactElement {
+  const key = `${slice.blockId}-${sliceIndex}`;
+
   if (slice.type === "spacer") {
-    return <div key={slice.id} style={{ height: `${slice.height}px` }} />;
+    return <div key={key} style={{ height: `${slice.height}px` }} />;
   }
 
   if (slice.type === "image") {
     return (
-      <div key={slice.id} className="flex justify-center">
+      <div key={key} className="flex justify-center">
         <img
           src={slice.src}
           alt={slice.alt || "Chapter image"}
@@ -154,10 +166,10 @@ function renderPageSlice(slice: PageSlice): ReactElement {
   }
 
   return (
-    <div key={slice.id}>
+    <div key={key}>
       {slice.lines.map((line, lineIndex) => (
         <div
-          key={`${slice.id}-line-${lineIndex}`}
+          key={`${key}-line-${lineIndex}`}
           className="overflow-hidden whitespace-nowrap"
           style={{
             height: `${slice.lineHeight}px`,
@@ -167,7 +179,7 @@ function renderPageSlice(slice: PageSlice): ReactElement {
         >
           {line.fragments.map((fragment, fragmentIndex) => (
             <span
-              key={`${slice.id}-line-${lineIndex}-fragment-${fragmentIndex}`}
+              key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
               style={{
                 marginLeft:
                   fragment.leadingGap > 0 ? `${fragment.leadingGap}px` : undefined,
@@ -259,49 +271,42 @@ export function ReaderPrototype() {
     return () => window.removeEventListener("resize", onResize);
   }, [isMobile]);
 
-  const typography = useMemo(() => buildChapterTypography(settings), [settings]);
+  const fontConfig = useMemo(() => buildFontConfig(settings), [settings]);
+  const layoutTheme = useMemo(() => buildLayoutTheme(settings), [settings]);
 
+  // Stage 1: parse HTML into blocks (only re-runs when chapters change)
   const blocks = useMemo(() => {
     const loadedChapters = allChaptersQuery.data;
-    if (!loadedChapters || loadedChapters.length === 0) {
-      return [] as PaginationBlock[];
-    }
+    if (!loadedChapters || loadedChapters.length === 0) return [] as Block[];
 
-    const nextBlocks: PaginationBlock[] = [];
-
+    const result: Block[] = [];
     loadedChapters.forEach((chapter, index) => {
-      nextBlocks.push(
-        ...extractPaginationBlocksFromHtml(
-          chapter.html,
-          typography,
-          viewport.width,
-        ),
-      );
-
+      result.push(...parseChapterHtml(chapter.html));
       if (index < loadedChapters.length - 1) {
-        nextBlocks.push({
-          id: `page-break-${chapter.index + 1}`,
-          type: "page-break",
-        });
+        result.push({ type: "page-break", id: `page-break-${chapter.index + 1}` });
       }
     });
+    return result;
+  }, [allChaptersQuery.data]);
 
-    return nextBlocks;
-  }, [allChaptersQuery.data, typography, viewport.width]);
+  // Stage 2: prepare blocks with font measurement (re-runs on font change)
+  const prepared = useMemo(() => {
+    if (blocks.length === 0) return [];
+    return prepareBlocks(blocks, fontConfig);
+  }, [blocks, fontConfig]);
 
+  // Stage 3: layout pages (re-runs on resize, cheap)
   const paginationResult = useMemo(() => {
-    return paginateBlocksWithPretext({
-      blocks,
-      pageWidth: viewport.width,
-      pageHeight: viewport.height,
-    });
-  }, [blocks, viewport.height, viewport.width, manualRecomputeVersion]);
+    return layoutPages(prepared, viewport.width, viewport.height, layoutTheme);
+  }, [prepared, viewport.width, viewport.height, layoutTheme, manualRecomputeVersion]);
+
+  const totalPages = paginationResult.pages.length;
 
   useEffect(() => {
     setCurrentPage((prev) =>
-      clamp(prev, 1, Math.max(1, paginationResult.totalPages)),
+      clamp(prev, 1, Math.max(1, totalPages)),
     );
-  }, [paginationResult.totalPages]);
+  }, [totalPages]);
 
   useEffect(() => {
     setJumpInput(String(currentPage));
@@ -331,14 +336,14 @@ export function ReaderPrototype() {
       if (event.key === "ArrowRight") {
         event.preventDefault();
         setCurrentPage((pageNumber) =>
-          Math.min(paginationResult.totalPages, pageNumber + 1),
+          Math.min(totalPages, pageNumber + 1),
         );
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [paginationResult.totalPages]);
+  }, [totalPages]);
 
   const page =
     paginationResult.pages[
@@ -346,12 +351,12 @@ export function ReaderPrototype() {
     ];
 
   const canGoPrevious = currentPage > 1;
-  const canGoNext = currentPage < paginationResult.totalPages;
+  const canGoNext = currentPage < totalPages;
 
   const handleJumpToPage = () => {
     const parsed = Number.parseInt(jumpInput, 10);
     if (!Number.isFinite(parsed)) return;
-    const clamped = clamp(parsed, 1, paginationResult.totalPages);
+    const clamped = clamp(parsed, 1, totalPages);
     setCurrentPage(clamped);
   };
 
@@ -449,7 +454,7 @@ export function ReaderPrototype() {
             Prev
           </Button>
           <div className="min-w-[132px] text-center text-sm tabular-nums">
-            Page {currentPage} / {paginationResult.totalPages}
+            Page {currentPage} / {totalPages}
           </div>
           <Button
             variant="outline"
@@ -462,7 +467,7 @@ export function ReaderPrototype() {
           <Input
             type="number"
             min={1}
-            max={paginationResult.totalPages}
+            max={totalPages}
             value={jumpInput}
             onChange={(event) => setJumpInput(event.target.value)}
             className="h-9 w-24 rounded-md"
@@ -484,7 +489,7 @@ export function ReaderPrototype() {
         <p className="mb-3 text-xs text-muted-foreground">
           Blocks: {paginationResult.diagnostics.blockCount} · Lines:{" "}
           {paginationResult.diagnostics.lineCount} · Recompute:{" "}
-          {paginationResult.diagnostics.recomputeMs.toFixed(1)}ms · Viewport:{" "}
+          {paginationResult.diagnostics.computeMs.toFixed(1)}ms · Viewport:{" "}
           {Math.round(viewport.width)}×{Math.round(viewport.height)} ·
           Keyboard: ← / →
         </p>
@@ -498,7 +503,7 @@ export function ReaderPrototype() {
             }}
           >
             <div className="h-full w-full overflow-hidden">
-              {page?.slices.map((slice) => renderPageSlice(slice))}
+              {page?.slices.map((slice, i) => renderPageSlice(slice, i))}
             </div>
           </div>
         </div>
