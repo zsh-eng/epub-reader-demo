@@ -133,6 +133,8 @@ export interface ProcessResourcesOptions {
   resourceUrlMap?: Map<string, string>;
   /** Skip loading <img> resources and mark them for deferred loading */
   skipImages?: boolean;
+  /** Whether linked resources (CSS/fonts/etc.) should be loaded and blob-URL rewritten */
+  loadLinkedResources?: boolean;
 }
 
 /**
@@ -168,6 +170,7 @@ export async function processEmbeddedResources(
     loadResource,
     resourceUrlMap,
     skipImages = false,
+    loadLinkedResources = true,
   } = options;
 
   // Use provided map or create a new one
@@ -238,6 +241,10 @@ export async function processEmbeddedResources(
 
     if (skipImages && src && element.tagName.toLowerCase() === "img") {
       element.setAttribute("src", createDeferredEpubImageSrc(resolvedPath));
+      continue;
+    }
+
+    if (!loadLinkedResources) {
       continue;
     }
 

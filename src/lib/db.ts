@@ -330,6 +330,26 @@ export async function getBookFiles(bookId: string): Promise<BookFile[]> {
   return db.bookFiles.where("bookId").equals(bookId).toArray();
 }
 
+export async function getBookFilesByPaths(
+  bookId: string,
+  paths: string[],
+): Promise<Map<string, BookFile>> {
+  if (paths.length === 0) {
+    return new Map<string, BookFile>();
+  }
+
+  const uniquePaths = [...new Set(paths)];
+  const files = await db.transaction("r", [db.bookFiles], async () => {
+    return db.bookFiles
+      .where("path")
+      .anyOf(uniquePaths)
+      .and((file) => file.bookId === bookId)
+      .toArray();
+  });
+
+  return new Map(files.map((file) => [file.path, file]));
+}
+
 // ============================================================================
 // Helper Functions (Reading Progress)
 // ============================================================================

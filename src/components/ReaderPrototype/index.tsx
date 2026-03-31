@@ -5,7 +5,7 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
-import { getBookFile, type Book } from "@/lib/db";
+import { getBookFile, getBookFilesByPaths, type Book, type BookFile } from "@/lib/db";
 import {
   cleanupResourceUrls,
   processEmbeddedResources,
@@ -105,33 +105,25 @@ function buildChapterEntries(book: Book | null): ChapterEntry[] {
 }
 
 async function loadSingleChapter(
-  bookId: string,
+  chapterFile: BookFile | undefined,
   chapter: ChapterEntry,
-): Promise<{ html: string; resourceUrlMap: Map<string, string> }> {
-  const chapterFile = await getBookFile(bookId, chapter.href);
+): Promise<string> {
   if (!chapterFile) {
-    return { html: "", resourceUrlMap: new Map() };
+    return "";
   }
 
   const text = await chapterFile.content.text();
-  const resourceUrlMap = new Map<string, string>();
 
   const { document: chapterDoc } = await processEmbeddedResources({
     content: text,
     mediaType: chapterFile.mediaType,
     basePath: chapter.href,
-    loadResource: async (path: string) => {
-      const resourceFile = await getBookFile(bookId, path);
-      return resourceFile?.content || null;
-    },
-    resourceUrlMap,
+    loadResource: async () => null,
     skipImages: true,
+    loadLinkedResources: false,
   });
 
-  return {
-    html: chapterDoc.querySelector("body")?.innerHTML ?? "",
-    resourceUrlMap,
-  };
+  return chapterDoc.querySelector("body")?.innerHTML ?? "";
 }
 
 function renderPageSlice(
@@ -208,8 +200,8 @@ export function ReaderPrototype() {
 
   const [jumpInput, setJumpInput] = useState("1");
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
-  const resourceMapRef = useRef<Map<number, Map<string, string>>>(new Map());
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
+  const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<number | null>(null);
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -252,16 +244,15 @@ export function ReaderPrototype() {
     }
 
     let cancelled = false;
+    setSourceLoadWallClockMs(null);
 
     const cleanupAllResources = () => {
-      for (const resourceMap of resourceMapRef.current.values()) {
-        cleanupResourceUrls(resourceMap);
-      }
-      resourceMapRef.current.clear();
       cleanupResourceUrls(deferredImageCacheRef.current);
     };
 
     const loadIncrementally = async () => {
+      const sourceLoadStartedAt = performance.now();
+
       try {
         cleanupAllResources();
 
@@ -269,36 +260,38 @@ export function ReaderPrototype() {
         if (!initialChapter) return;
 
         const initialLoadStartedAt = performance.now();
-        const initialLoaded = await loadSingleChapter(bookId, initialChapter);
+        const initialChapterFile = await getBookFile(bookId, initialChapter.href);
+        const initialHtml = await loadSingleChapter(initialChapterFile, initialChapter);
         const initialSourceLoadMs = performance.now() - initialLoadStartedAt;
         if (cancelled) {
-          cleanupResourceUrls(initialLoaded.resourceUrlMap);
           return;
         }
-        resourceMapRef.current.set(0, initialLoaded.resourceUrlMap);
-        pagination.addChapter(0, initialLoaded.html, {
+        pagination.addChapter(0, initialHtml, {
           sourceLoadMs: initialSourceLoadMs,
         });
 
-        for (let i = 1; i < chapterEntries.length; i++) {
-          const chapter = chapterEntries[i];
-          if (!chapter) continue;
-
-          const chapterLoadStartedAt = performance.now();
-          const loaded = await loadSingleChapter(bookId, chapter);
-          const sourceLoadMs = performance.now() - chapterLoadStartedAt;
+        const remainingChapters = chapterEntries.slice(1);
+        if (remainingChapters.length > 0) {
+          const remainingChapterPaths = remainingChapters.map((chapter) => chapter.href);
+          const chaptersByPath = await getBookFilesByPaths(bookId, remainingChapterPaths);
           if (cancelled) {
-            cleanupResourceUrls(loaded.resourceUrlMap);
             return;
           }
 
-          const previousResourceMap = resourceMapRef.current.get(i);
-          if (previousResourceMap) {
-            cleanupResourceUrls(previousResourceMap);
-          }
+          for (let i = 1; i < chapterEntries.length; i++) {
+            const chapter = chapterEntries[i];
+            if (!chapter) continue;
 
-          resourceMapRef.current.set(i, loaded.resourceUrlMap);
-          pagination.addChapter(i, loaded.html, { sourceLoadMs });
+            const chapterLoadStartedAt = performance.now();
+            const chapterFile = chaptersByPath.get(chapter.href);
+            const chapterHtml = await loadSingleChapter(chapterFile, chapter);
+            const sourceLoadMs = performance.now() - chapterLoadStartedAt;
+            if (cancelled) {
+              return;
+            }
+
+            pagination.addChapter(i, chapterHtml, { sourceLoadMs });
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -306,6 +299,10 @@ export function ReaderPrototype() {
             "[ReaderPrototype] Failed to stream chapter content",
             error,
           );
+        }
+      } finally {
+        if (!cancelled) {
+          setSourceLoadWallClockMs(performance.now() - sourceLoadStartedAt);
         }
       }
     };
@@ -510,7 +507,8 @@ export function ReaderPrototype() {
           <section className="mb-4 rounded-xl border bg-card p-4 shadow-sm">
             <p className="text-sm font-medium">Pagination Diagnostics</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Source Load: {formatMs(totalSourceLoadMs)} · Stage 1:{" "}
+              Source Load (sum): {formatMs(totalSourceLoadMs)} · Source Load
+              (wall-clock): {formatMs(sourceLoadWallClockMs)} · Stage 1:{" "}
               {formatMs(pagination.diagnostics.stage1ParseMs)} · Stage 2:{" "}
               {formatMs(pagination.diagnostics.stage2PrepareMs)} · Stage 3:{" "}
               {formatMs(pagination.diagnostics.stage3LayoutMs)} · Total:{" "}
