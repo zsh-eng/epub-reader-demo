@@ -9,6 +9,7 @@ import type {
   FontConfig,
   LayoutTheme,
   PageSlice,
+  PaginationChapterDiagnostics,
   PaginationDiagnostics,
 } from "./types";
 
@@ -27,7 +28,11 @@ export interface UsePaginationResult {
   nextPage: () => void;
   prevPage: () => void;
   goToPage: (page: number) => void;
-  addChapter: (chapterIndex: number, html: string) => void;
+  addChapter: (
+    chapterIndex: number,
+    html: string,
+    options?: AddChapterOptions,
+  ) => void;
 
   status: PaginationStatus;
   diagnostics: PaginationDiagnostics | null;
@@ -39,6 +44,10 @@ export interface UsePaginationOptions {
   layoutTheme: LayoutTheme;
   viewport: { width: number; height: number };
   initialChapterIndex?: number;
+}
+
+export interface AddChapterOptions {
+  sourceLoadMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +98,13 @@ export function usePagination(
 
   // Store last known slices' first blockId for content anchoring
   const lastAnchorRef = useRef<ContentAnchor | null>(null);
+  const stage1ByChapterRef = useRef<Map<number, number>>(new Map());
+  const sourceLoadByChapterRef = useRef<Map<number, number>>(new Map());
+  const chapterQueuedAtRef = useRef<Map<number, number>>(new Map());
+  const chapterLoadByChapterRef = useRef<Map<number, number>>(new Map());
+  const workerChapterDiagnosticsRef = useRef<
+    Map<number, PaginationChapterDiagnostics>
+  >(new Map());
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
     workerRef.current?.postMessage(cmd);
@@ -124,6 +140,116 @@ export function usePagination(
     [],
   );
 
+  const finalizeChapterTiming = useCallback(
+    (chapterIndex: number, chapterDiagnostics: PaginationChapterDiagnostics | null) => {
+      if (chapterDiagnostics) {
+        workerChapterDiagnosticsRef.current.set(chapterIndex, chapterDiagnostics);
+      }
+
+      const queuedAt = chapterQueuedAtRef.current.get(chapterIndex);
+      if (queuedAt === undefined) return;
+
+      chapterLoadByChapterRef.current.set(chapterIndex, performance.now() - queuedAt);
+      chapterQueuedAtRef.current.delete(chapterIndex);
+    },
+    [],
+  );
+
+  const buildMergedDiagnostics = useCallback(
+    (base: PaginationDiagnostics | null): PaginationDiagnostics | null => {
+      const chapterMap = new Map<number, PaginationChapterDiagnostics>();
+
+      for (const chapter of base?.chapterTimings ?? []) {
+        chapterMap.set(chapter.chapterIndex, chapter);
+      }
+
+      for (const [chapterIndex, chapter] of workerChapterDiagnosticsRef.current) {
+        chapterMap.set(chapterIndex, chapter);
+      }
+
+      if (chapterMap.size === 0) {
+        if (!base) return null;
+        return {
+          ...base,
+          stage1ParseMs: 0,
+          stage2PrepareMs: base.stage2PrepareMs ?? 0,
+          stage3LayoutMs: base.stage3LayoutMs ?? 0,
+          totalMs:
+            (base.stage1ParseMs ?? 0) +
+            (base.stage2PrepareMs ?? 0) +
+            (base.stage3LayoutMs ?? 0),
+          chapterCount: 0,
+          chapterTimings: [],
+        };
+      }
+
+      const chapterTimings = Array.from(chapterMap.values())
+        .sort((a, b) => a.chapterIndex - b.chapterIndex)
+        .map((chapter) => {
+          const stage1ParseMs =
+            stage1ByChapterRef.current.get(chapter.chapterIndex) ??
+            chapter.stage1ParseMs ??
+            0;
+          const stage2PrepareMs = chapter.stage2PrepareMs ?? 0;
+          const stage3LayoutMs = chapter.stage3LayoutMs ?? 0;
+          const totalMs = stage1ParseMs + stage2PrepareMs + stage3LayoutMs;
+          const sourceLoadMs =
+            sourceLoadByChapterRef.current.get(chapter.chapterIndex) ??
+            chapter.sourceLoadMs;
+          const chapterLoadMs =
+            chapterLoadByChapterRef.current.get(chapter.chapterIndex) ??
+            chapter.chapterLoadMs ??
+            totalMs;
+
+          return {
+            ...chapter,
+            stage1ParseMs,
+            stage2PrepareMs,
+            stage3LayoutMs,
+            totalMs,
+            chapterLoadMs,
+            sourceLoadMs,
+          };
+        });
+
+      const blockCount = chapterTimings.reduce(
+        (sum, chapter) => sum + chapter.blockCount,
+        0,
+      );
+      const lineCount = chapterTimings.reduce(
+        (sum, chapter) => sum + chapter.lineCount,
+        0,
+      );
+      const stage1ParseMs = chapterTimings.reduce(
+        (sum, chapter) => sum + (chapter.stage1ParseMs ?? 0),
+        0,
+      );
+      const stage2PrepareMs = chapterTimings.reduce(
+        (sum, chapter) => sum + (chapter.stage2PrepareMs ?? 0),
+        0,
+      );
+      const stage3LayoutMs = chapterTimings.reduce(
+        (sum, chapter) => sum + (chapter.stage3LayoutMs ?? 0),
+        0,
+      );
+      const computeMs = stage2PrepareMs + stage3LayoutMs;
+
+      return {
+        ...(base ?? { blockCount: 0, lineCount: 0, computeMs: 0 }),
+        blockCount,
+        lineCount,
+        computeMs,
+        stage1ParseMs,
+        stage2PrepareMs,
+        stage3LayoutMs,
+        totalMs: stage1ParseMs + stage2PrepareMs + stage3LayoutMs,
+        chapterCount: chapterTimings.length,
+        chapterTimings,
+      };
+    },
+    [],
+  );
+
   // Handle worker events
   const handleEvent = useCallback(
     (event: PaginationEvent) => {
@@ -132,7 +258,10 @@ export function usePagination(
           chapterPageOffsetsRef.current = event.chapterPageOffsets;
           setTotalPages(event.totalPages);
           setEstimatedTotalPages(null);
-          setDiagnostics(event.diagnostics);
+          for (const chapter of event.diagnostics.chapterTimings ?? []) {
+            finalizeChapterTiming(chapter.chapterIndex, chapter);
+          }
+          setDiagnostics(buildMergedDiagnostics(event.diagnostics));
           setStatus("ready");
 
           if (event.anchorPage !== null) {
@@ -172,6 +301,8 @@ export function usePagination(
         case "partialReady": {
           chapterPageOffsetsRef.current = event.chapterPageOffsets;
           setEstimatedTotalPages(event.estimatedTotalPages);
+          finalizeChapterTiming(event.chapterIndex, event.chapterDiagnostics);
+          setDiagnostics((prev) => buildMergedDiagnostics(prev));
           setStatus("partial");
 
           if (event.anchorPage !== null) {
@@ -185,6 +316,8 @@ export function usePagination(
         case "progress": {
           chapterPageOffsetsRef.current = event.chapterPageOffsets;
           setEstimatedTotalPages(event.runningTotalPages);
+          finalizeChapterTiming(event.chapterIndex, event.chapterDiagnostics);
+          setDiagnostics((prev) => buildMergedDiagnostics(prev));
           break;
         }
 
@@ -194,7 +327,12 @@ export function usePagination(
         }
       }
     },
-    [postCommand, updateAnchorFromSlices],
+    [
+      buildMergedDiagnostics,
+      finalizeChapterTiming,
+      postCommand,
+      updateAnchorFromSlices,
+    ],
   );
 
   // Create and manage worker
@@ -244,6 +382,11 @@ export function usePagination(
     setDiagnostics(null);
     chapterPageOffsetsRef.current = [];
     lastAnchorRef.current = null;
+    stage1ByChapterRef.current.clear();
+    sourceLoadByChapterRef.current.clear();
+    chapterQueuedAtRef.current.clear();
+    chapterLoadByChapterRef.current.clear();
+    workerChapterDiagnosticsRef.current.clear();
 
     postCommand({
       type: "init",
@@ -271,10 +414,24 @@ export function usePagination(
   ]);
 
   const addChapter = useCallback(
-    (chapterIndex: number, html: string) => {
+    (chapterIndex: number, html: string, options?: AddChapterOptions) => {
       if (totalChapters <= 0) return;
+      if (chapterIndex < 0 || chapterIndex >= totalChapters) return;
 
+      if (
+        typeof options?.sourceLoadMs === "number" &&
+        Number.isFinite(options.sourceLoadMs)
+      ) {
+        sourceLoadByChapterRef.current.set(chapterIndex, options.sourceLoadMs);
+      }
+
+      chapterQueuedAtRef.current.set(chapterIndex, performance.now());
+      const stage1StartedAt = performance.now();
       const blocks = parseChapterHtml(html);
+      stage1ByChapterRef.current.set(
+        chapterIndex,
+        performance.now() - stage1StartedAt,
+      );
       postCommand({ type: "addChapter", chapterIndex, blocks });
     },
     [postCommand, totalChapters],

@@ -3,6 +3,7 @@ import type {
   FontConfig,
   LayoutTheme,
   PageSlice,
+  PaginationChapterDiagnostics,
   PaginationDiagnostics,
 } from "./types";
 
@@ -93,14 +94,17 @@ export interface PartialReadyEvent {
   anchorPage: number | null;
   slices: PageSlice[];
   chapterPageOffsets: number[];
+  chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
 export interface ProgressEvent {
   type: "progress";
+  chapterIndex: number;
   chaptersCompleted: number;
   totalChapters: number;
   runningTotalPages: number;
   chapterPageOffsets: number[];
+  chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
 export interface ErrorEvent {

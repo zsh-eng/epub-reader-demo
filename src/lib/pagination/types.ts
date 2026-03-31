@@ -179,6 +179,25 @@ export interface PaginationDiagnostics {
   blockCount: number;
   lineCount: number;
   computeMs: number;
+  stage1ParseMs?: number;
+  stage2PrepareMs?: number;
+  stage3LayoutMs?: number;
+  totalMs?: number;
+  chapterCount?: number;
+  chapterTimings?: PaginationChapterDiagnostics[];
+}
+
+export interface PaginationChapterDiagnostics {
+  chapterIndex: number;
+  blockCount: number;
+  lineCount: number;
+  pageCount: number;
+  stage1ParseMs?: number;
+  stage2PrepareMs?: number;
+  stage3LayoutMs?: number;
+  chapterLoadMs?: number;
+  sourceLoadMs?: number;
+  totalMs?: number;
 }
 
 export interface PaginationResult {

@@ -9,6 +9,7 @@ import type {
   LayoutTheme,
   Page,
   PageSlice,
+  PaginationChapterDiagnostics,
   PaginationDiagnostics,
   PreparedBlock,
 } from "./types";
@@ -21,6 +22,8 @@ export class PaginationEngine {
   private blocksByChapter: (Block[] | null)[] = [];
   private preparedByChapter: (PreparedBlock[] | null)[] = [];
   private pagesByChapter: (Page[] | null)[] = [];
+  private chapterDiagnosticsByChapter: (PaginationChapterDiagnostics | null)[] =
+    [];
   private chapterPageOffsets: number[] = [];
 
   private fontConfig: FontConfig | null = null;
@@ -92,6 +95,7 @@ export class PaginationEngine {
     this.blocksByChapter = new Array(this.totalChapters).fill(null);
     this.preparedByChapter = new Array(this.totalChapters).fill(null);
     this.pagesByChapter = new Array(this.totalChapters).fill(null);
+    this.chapterDiagnosticsByChapter = new Array(this.totalChapters).fill(null);
 
     this.receivedChapters = 0;
     this.initialChapterReceived = false;
@@ -107,7 +111,7 @@ export class PaginationEngine {
     const hadChapter = this.blocksByChapter[chapterIndex] !== null;
     this.blocksByChapter[chapterIndex] = blocks;
 
-    this.prepareAndLayoutChapter(chapterIndex);
+    const chapterDiagnostics = this.prepareAndLayoutChapter(chapterIndex);
     this.recomputeOffsets();
 
     if (!hadChapter) {
@@ -129,6 +133,7 @@ export class PaginationEngine {
         anchorPage,
         slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
         chapterPageOffsets: [...this.chapterPageOffsets],
+        chapterDiagnostics,
       });
 
       if (this.receivedChapters === this.totalChapters) {
@@ -144,10 +149,12 @@ export class PaginationEngine {
 
     this.emit({
       type: "progress",
+      chapterIndex,
       chaptersCompleted: this.receivedChapters,
       totalChapters: this.totalChapters,
       runningTotalPages: this.getTotalPages(),
       chapterPageOffsets: [...this.chapterPageOffsets],
+      chapterDiagnostics,
     });
   }
 
@@ -168,7 +175,8 @@ export class PaginationEngine {
     );
 
     if (this.blocksByChapter[validAnchorChapter]) {
-      this.prepareAndLayoutChapter(validAnchorChapter);
+      const chapterDiagnostics =
+        this.prepareAndLayoutChapter(validAnchorChapter);
       this.recomputeOffsets();
 
       const anchorPage = anchor
@@ -183,21 +191,24 @@ export class PaginationEngine {
         anchorPage,
         slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
         chapterPageOffsets: [...this.chapterPageOffsets],
+        chapterDiagnostics,
       });
     }
 
     for (let i = 0; i < this.totalChapters; i++) {
       if (i === validAnchorChapter || !this.blocksByChapter[i]) continue;
 
-      this.prepareAndLayoutChapter(i);
+      const chapterDiagnostics = this.prepareAndLayoutChapter(i);
       this.recomputeOffsets();
 
       this.emit({
         type: "progress",
+        chapterIndex: i,
         chaptersCompleted: this.receivedChapters,
         totalChapters: this.totalChapters,
         runningTotalPages: this.getTotalPages(),
         chapterPageOffsets: [...this.chapterPageOffsets],
+        chapterDiagnostics,
       });
     }
 
@@ -244,13 +255,9 @@ export class PaginationEngine {
     for (let i = 0; i < this.totalChapters; i++) {
       const prepared = this.preparedByChapter[i];
       if (!prepared) continue;
-      const result = layoutPages(
-        prepared,
-        this.viewport.width,
-        this.viewport.height,
-        this.layoutTheme,
-      );
-      this.pagesByChapter[i] = result.pages;
+      const stage2PrepareMs =
+        this.chapterDiagnosticsByChapter[i]?.stage2PrepareMs ?? 0;
+      this.layoutPreparedChapter(i, prepared, stage2PrepareMs);
     }
 
     this.recomputeOffsets();
@@ -292,21 +299,46 @@ export class PaginationEngine {
     });
   }
 
-  private prepareAndLayoutChapter(chapterIndex: number): void {
-    if (!this.fontConfig || !this.layoutTheme) return;
+  private prepareAndLayoutChapter(
+    chapterIndex: number,
+  ): PaginationChapterDiagnostics | null {
+    if (!this.fontConfig || !this.layoutTheme) return null;
     const blocks = this.blocksByChapter[chapterIndex];
-    if (!blocks) return;
+    if (!blocks) return null;
 
+    const stage2StartedAt = performance.now();
     const prepared = prepareBlocks(blocks, this.fontConfig);
+    const stage2PrepareMs = performance.now() - stage2StartedAt;
     this.preparedByChapter[chapterIndex] = prepared;
 
+    return this.layoutPreparedChapter(chapterIndex, prepared, stage2PrepareMs);
+  }
+
+  private layoutPreparedChapter(
+    chapterIndex: number,
+    prepared: PreparedBlock[],
+    stage2PrepareMs: number,
+  ): PaginationChapterDiagnostics {
     const result = layoutPages(
       prepared,
       this.viewport.width,
       this.viewport.height,
-      this.layoutTheme,
+      this.layoutTheme!,
     );
     this.pagesByChapter[chapterIndex] = result.pages;
+
+    const chapterDiagnostics: PaginationChapterDiagnostics = {
+      chapterIndex,
+      blockCount: result.diagnostics.blockCount,
+      lineCount: result.diagnostics.lineCount,
+      pageCount: result.pages.length,
+      stage2PrepareMs,
+      stage3LayoutMs: result.diagnostics.computeMs,
+      totalMs: stage2PrepareMs + result.diagnostics.computeMs,
+    };
+
+    this.chapterDiagnosticsByChapter[chapterIndex] = chapterDiagnostics;
+    return chapterDiagnostics;
   }
 
   private recomputeOffsets(): void {
@@ -398,19 +430,31 @@ export class PaginationEngine {
   private buildDiagnostics(): PaginationDiagnostics {
     let blockCount = 0;
     let lineCount = 0;
+    let stage2PrepareMs = 0;
+    let stage3LayoutMs = 0;
 
-    for (const prepared of this.preparedByChapter) {
-      if (prepared) blockCount += prepared.length;
-    }
-    for (const pages of this.pagesByChapter) {
-      if (!pages) continue;
-      for (const page of pages) {
-        for (const slice of page.slices) {
-          if (slice.type === "text") lineCount += slice.lines.length;
-        }
-      }
+    const chapterTimings: PaginationChapterDiagnostics[] = [];
+
+    for (const chapter of this.chapterDiagnosticsByChapter) {
+      if (!chapter) continue;
+      blockCount += chapter.blockCount;
+      lineCount += chapter.lineCount;
+      stage2PrepareMs += chapter.stage2PrepareMs ?? 0;
+      stage3LayoutMs += chapter.stage3LayoutMs ?? 0;
+      chapterTimings.push({ ...chapter });
     }
 
-    return { blockCount, lineCount, computeMs: 0 };
+    const computeMs = stage2PrepareMs + stage3LayoutMs;
+
+    return {
+      blockCount,
+      lineCount,
+      computeMs,
+      stage2PrepareMs,
+      stage3LayoutMs,
+      totalMs: computeMs,
+      chapterCount: chapterTimings.length,
+      chapterTimings,
+    };
   }
 }

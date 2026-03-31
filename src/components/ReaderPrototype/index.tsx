@@ -38,6 +38,11 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function formatMs(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+  return `${value.toFixed(1)}ms`;
+}
+
 function getNamedBodyFont(fontFamily: FontFamily): string {
   switch (fontFamily) {
     case "sans-serif":
@@ -252,19 +257,25 @@ export function ReaderPrototype() {
         const initialChapter = chapterEntries[0];
         if (!initialChapter) return;
 
+        const initialLoadStartedAt = performance.now();
         const initialLoaded = await loadSingleChapter(bookId, initialChapter);
+        const initialSourceLoadMs = performance.now() - initialLoadStartedAt;
         if (cancelled) {
           cleanupResourceUrls(initialLoaded.resourceUrlMap);
           return;
         }
         resourceMapRef.current.set(0, initialLoaded.resourceUrlMap);
-        pagination.addChapter(0, initialLoaded.html);
+        pagination.addChapter(0, initialLoaded.html, {
+          sourceLoadMs: initialSourceLoadMs,
+        });
 
         for (let i = 1; i < chapterEntries.length; i++) {
           const chapter = chapterEntries[i];
           if (!chapter) continue;
 
+          const chapterLoadStartedAt = performance.now();
           const loaded = await loadSingleChapter(bookId, chapter);
+          const sourceLoadMs = performance.now() - chapterLoadStartedAt;
           if (cancelled) {
             cleanupResourceUrls(loaded.resourceUrlMap);
             return;
@@ -276,7 +287,7 @@ export function ReaderPrototype() {
           }
 
           resourceMapRef.current.set(i, loaded.resourceUrlMap);
-          pagination.addChapter(i, loaded.html);
+          pagination.addChapter(i, loaded.html, { sourceLoadMs });
         }
       } catch (error) {
         if (!cancelled) {
@@ -302,6 +313,18 @@ export function ReaderPrototype() {
   useEffect(() => {
     setJumpInput(String(pagination.currentPage));
   }, [pagination.currentPage]);
+
+  const chapterTimingRows = useMemo(() => {
+    const chapterTimings = pagination.diagnostics?.chapterTimings ?? [];
+    return [...chapterTimings].sort((a, b) => a.chapterIndex - b.chapterIndex);
+  }, [pagination.diagnostics?.chapterTimings]);
+
+  const totalSourceLoadMs = useMemo(() => {
+    return chapterTimingRows.reduce(
+      (sum, chapter) => sum + (chapter.sourceLoadMs ?? 0),
+      0,
+    );
+  }, [chapterTimingRows]);
 
   // Keyboard navigation
   const paginationRef = useRef(pagination);
@@ -458,11 +481,86 @@ export function ReaderPrototype() {
               {" "}
               · Blocks: {pagination.diagnostics.blockCount} · Lines:{" "}
               {pagination.diagnostics.lineCount}
+              {typeof pagination.diagnostics.stage1ParseMs === "number" && (
+                <>
+                  {" "}
+                  · Stage 1: {formatMs(pagination.diagnostics.stage1ParseMs)} ·
+                  Stage 2: {formatMs(pagination.diagnostics.stage2PrepareMs)} ·
+                  Stage 3: {formatMs(pagination.diagnostics.stage3LayoutMs)}
+                </>
+              )}
             </>
           )}{" "}
           · Viewport: {Math.round(viewport.width)}x{Math.round(viewport.height)}{" "}
           · Keyboard: ← / →
         </p>
+
+        {pagination.diagnostics && chapterTimingRows.length > 0 && (
+          <section className="mb-4 rounded-xl border bg-card p-4 shadow-sm">
+            <p className="text-sm font-medium">Pagination Diagnostics</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Source Load: {formatMs(totalSourceLoadMs)} · Stage 1:{" "}
+              {formatMs(pagination.diagnostics.stage1ParseMs)} · Stage 2:{" "}
+              {formatMs(pagination.diagnostics.stage2PrepareMs)} · Stage 3:{" "}
+              {formatMs(pagination.diagnostics.stage3LayoutMs)} · Total:{" "}
+              {formatMs(pagination.diagnostics.totalMs)}
+            </p>
+
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[840px] text-xs">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-3">Chapter</th>
+                    <th className="py-2 pr-3">Title</th>
+                    <th className="py-2 pr-3 tabular-nums">Pages</th>
+                    <th className="py-2 pr-3 tabular-nums">Blocks</th>
+                    <th className="py-2 pr-3 tabular-nums">Lines</th>
+                    <th className="py-2 pr-3 tabular-nums">Source Load</th>
+                    <th className="py-2 pr-3 tabular-nums">Stage 1</th>
+                    <th className="py-2 pr-3 tabular-nums">Stage 2</th>
+                    <th className="py-2 pr-3 tabular-nums">Stage 3</th>
+                    <th className="py-2 pr-3 tabular-nums">Chapter Load</th>
+                    <th className="py-2 pr-0 tabular-nums">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chapterTimingRows.map((chapter) => (
+                    <tr key={chapter.chapterIndex} className="border-b last:border-b-0">
+                      <td className="py-2 pr-3 tabular-nums">
+                        {chapter.chapterIndex + 1}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {chapterEntries[chapter.chapterIndex]?.title ??
+                          `Chapter ${chapter.chapterIndex + 1}`}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">{chapter.pageCount}</td>
+                      <td className="py-2 pr-3 tabular-nums">{chapter.blockCount}</td>
+                      <td className="py-2 pr-3 tabular-nums">{chapter.lineCount}</td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {formatMs(chapter.sourceLoadMs)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {formatMs(chapter.stage1ParseMs)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {formatMs(chapter.stage2PrepareMs)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {formatMs(chapter.stage3LayoutMs)}
+                      </td>
+                      <td className="py-2 pr-3 tabular-nums">
+                        {formatMs(chapter.chapterLoadMs)}
+                      </td>
+                      <td className="py-2 pr-0 tabular-nums">
+                        {formatMs(chapter.totalMs)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         <div className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
           <div

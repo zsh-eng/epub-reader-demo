@@ -10,6 +10,7 @@ export type {
   UsePaginationOptions,
   UsePaginationResult,
   PaginationStatus,
+  AddChapterOptions,
 } from "./use-pagination";
 
 export type {
@@ -48,4 +49,5 @@ export type {
   PageLine,
   PageFragment,
   PaginationDiagnostics,
+  PaginationChapterDiagnostics,
 } from "./types";
