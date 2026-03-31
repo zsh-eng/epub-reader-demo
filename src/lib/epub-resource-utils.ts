@@ -4,6 +4,21 @@
 
 import { EPUB_LINK } from "@/types/reader.types";
 
+export const DEFERRED_EPUB_IMAGE_PREFIX = "epub-deferred://";
+
+export function createDeferredEpubImageSrc(resourcePath: string): string {
+  return `${DEFERRED_EPUB_IMAGE_PREFIX}${resourcePath}`;
+}
+
+export function getDeferredEpubImagePath(src: string): string | null {
+  if (!src.startsWith(DEFERRED_EPUB_IMAGE_PREFIX)) {
+    return null;
+  }
+
+  const resourcePath = src.slice(DEFERRED_EPUB_IMAGE_PREFIX.length);
+  return resourcePath.length > 0 ? resourcePath : null;
+}
+
 /**
  * Returns the MIME type for parsing EPUB content.
  * XHTML content must be parsed as XML to correctly handle self-closing tags.
@@ -116,6 +131,8 @@ export interface ProcessResourcesOptions {
   loadResource: (path: string) => Promise<Blob | null>;
   /** Optional map to store created object URLs for cleanup */
   resourceUrlMap?: Map<string, string>;
+  /** Skip loading <img> resources and mark them for deferred loading */
+  skipImages?: boolean;
 }
 
 /**
@@ -144,8 +161,14 @@ export interface ProcessResourcesResult {
 export async function processEmbeddedResources(
   options: ProcessResourcesOptions,
 ): Promise<ProcessResourcesResult> {
-  const { content, mediaType, basePath, loadResource, resourceUrlMap } =
-    options;
+  const {
+    content,
+    mediaType,
+    basePath,
+    loadResource,
+    resourceUrlMap,
+    skipImages = false,
+  } = options;
 
   // Use provided map or create a new one
   const resourceUrls = resourceUrlMap || new Map<string, string>();
@@ -212,6 +235,11 @@ export async function processEmbeddedResources(
 
     // Resolve the resource path relative to the base path
     const resolvedPath = resolvePath(basePath, resourcePath);
+
+    if (skipImages && src && element.tagName.toLowerCase() === "img") {
+      element.setAttribute("src", createDeferredEpubImageSrc(resolvedPath));
+      continue;
+    }
 
     // Check if we already have a URL for this resource
     if (!resourceUrls.has(resolvedPath)) {

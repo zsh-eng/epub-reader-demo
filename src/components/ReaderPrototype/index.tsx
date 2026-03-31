@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LazyImage } from "@/components/ReaderPrototype/LazyImage";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -124,6 +125,7 @@ async function loadSingleChapter(
       return resourceFile?.content || null;
     },
     resourceUrlMap,
+    skipImages: true,
   });
 
   return {
@@ -132,7 +134,12 @@ async function loadSingleChapter(
   };
 }
 
-function renderPageSlice(slice: PageSlice, sliceIndex: number): ReactElement {
+function renderPageSlice(
+  slice: PageSlice,
+  sliceIndex: number,
+  bookId: string,
+  deferredImageCache: Map<string, string>,
+): ReactElement {
   const key = `${slice.blockId}-${sliceIndex}`;
 
   if (slice.type === "spacer") {
@@ -142,12 +149,14 @@ function renderPageSlice(slice: PageSlice, sliceIndex: number): ReactElement {
   if (slice.type === "image") {
     return (
       <div key={key} className="flex justify-center">
-        <img
+        <LazyImage
+          bookId={bookId}
           src={slice.src}
           alt={slice.alt || "Chapter image"}
+          cache={deferredImageCache}
+          width={slice.width}
+          height={slice.height}
           style={{
-            width: `${slice.width}px`,
-            height: `${slice.height}px`,
             objectFit: "contain",
           }}
         />
@@ -200,6 +209,7 @@ export function ReaderPrototype() {
   const [jumpInput, setJumpInput] = useState("1");
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
   const resourceMapRef = useRef<Map<number, Map<string, string>>>(new Map());
+  const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -248,6 +258,7 @@ export function ReaderPrototype() {
         cleanupResourceUrls(resourceMap);
       }
       resourceMapRef.current.clear();
+      cleanupResourceUrls(deferredImageCacheRef.current);
     };
 
     const loadIncrementally = async () => {
@@ -577,7 +588,14 @@ export function ReaderPrototype() {
                   <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
                 </div>
               ) : (
-                pagination.slices.map((slice, i) => renderPageSlice(slice, i))
+                pagination.slices.map((slice, i) =>
+                  renderPageSlice(
+                    slice,
+                    i,
+                    bookId,
+                    deferredImageCacheRef.current,
+                  ),
+                )
               )}
             </div>
           </div>
