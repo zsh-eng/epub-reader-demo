@@ -85,6 +85,11 @@ export interface ReadingProgress {
 }
 
 export interface ReadingSettings {
+  /**
+   * Legacy settings shape kept for IndexedDB/sync schema compatibility.
+   * The active reader UI currently uses `ReaderSettings` from
+   * `src/types/reader.types.ts` via `useReaderSettings` (localStorage).
+   */
   id: string; // Primary key (single record, use 'default')
   fontSize: number; // In pixels (16-24)
   lineHeight: number; // Multiplier (1.2-2.0)
