@@ -1,12 +1,14 @@
 import type { PaginationCommand } from "./engine-types";
 import { PaginationEngine } from "./pagination-engine";
+import { ensurePaginationWorkerFontsReady } from "./pagination-worker-fonts";
 import {
-    coalesceQueuedCommands,
-    createCommandRuntime,
-    type QueuedPaginationCommand,
+  coalesceQueuedCommands,
+  createCommandRuntime,
+  type QueuedPaginationCommand,
 } from "./pagination-worker-runtime";
 
 const engine = new PaginationEngine((event) => postMessage(event));
+const workerFontsReady = ensurePaginationWorkerFontsReady();
 
 type SchedulerPriority = "user-blocking" | "user-visible" | "background";
 
@@ -59,6 +61,8 @@ async function flush(): Promise<void> {
   isFlushing = true;
 
   try {
+    await workerFontsReady;
+
     while (pendingCommands.length > 0) {
       const batch = coalesceQueuedCommands(pendingCommands);
       pendingCommands = [];
