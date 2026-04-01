@@ -500,13 +500,12 @@ export function usePagination(
           setDiagnostics(buildMergedDiagnostics(event.diagnostics));
           setStatus("ready");
 
-          const desiredPage = clamp(currentPageRef.current, 1, event.totalPages);
           const resolvedPage =
             event.resolvedPage === null
               ? null
               : clamp(event.resolvedPage, 1, event.totalPages);
 
-          if (resolvedPage !== null && desiredPage === resolvedPage) {
+          if (resolvedPage !== null) {
             applyResolvedPage(
               resolvedPage,
               event.slices,
@@ -515,12 +514,7 @@ export function usePagination(
             break;
           }
 
-          if (resolvedPage === null && desiredPage === 1) {
-            applyResolvedPage(desiredPage, event.slices, event.slicesChapterIndex);
-            break;
-          }
-
-          postCommand({ type: "getPage", globalPage: desiredPage });
+          applyResolvedPage(1, event.slices, event.slicesChapterIndex);
           break;
         }
 
