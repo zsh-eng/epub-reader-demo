@@ -28,6 +28,7 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
+import { DebugSection } from "./DebugSection";
 import { InspectorPanel } from "./InspectorPanel";
 import { InspectorDrawer } from "./InspectorDrawer";
 
@@ -241,7 +242,7 @@ export function ReaderPrototype() {
     if (!viewportAutoMode) return;
 
     const onResize = () => {
-      const panelWidth = !isMobile && isPanelOpen ? 320 : 0;
+      const panelWidth = !isMobile && isPanelOpen ? 640 : 0;
       const horizontalPadding = (isMobile ? 32 : 120) + panelWidth;
       const verticalPadding = isMobile ? 270 : 300;
       setViewport({
@@ -495,10 +496,19 @@ export function ReaderPrototype() {
     onViewportAutoModeChange: setViewportAutoMode,
     paragraphSpacingFactor,
     onParagraphSpacingFactorChange: setParagraphSpacingFactor,
+  };
+
+  const debugSectionProps = {
     diagnostics: pagination.diagnostics,
+    paginationStatus: pagination.status,
+    totalPages: displayTotalPages,
+    viewport,
     sourceLoadWallClockMs,
     addChapterSendWallClockMs,
     chapterTimingRows,
+    commandHistory: pagination.commandHistory,
+    chapterTitles: (index: number) =>
+      chapterEntries[index]?.title ?? `Chapter ${index + 1}`,
   };
 
   return (
@@ -533,6 +543,14 @@ export function ReaderPrototype() {
 
       {/* Content + Panel */}
       <div className="flex flex-1 overflow-hidden">
+        {!isMobile && isPanelOpen && (
+          <aside className="w-[320px] shrink-0 border-r overflow-y-auto px-3">
+            <div className="space-y-1 py-2">
+              <DebugSection {...debugSectionProps} />
+            </div>
+          </aside>
+        )}
+
         <main className="flex-1 overflow-auto">
           <div className="flex justify-center pt-6 pb-6 px-4">
             <div
@@ -576,6 +594,9 @@ export function ReaderPrototype() {
       {isMobile && (
         <InspectorDrawer open={isPanelOpen} onOpenChange={setIsPanelOpen}>
           <InspectorPanel {...panelProps} />
+          <div className="space-y-1 py-2">
+            <DebugSection {...debugSectionProps} />
+          </div>
         </InspectorDrawer>
       )}
     </div>

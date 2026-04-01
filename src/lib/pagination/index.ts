@@ -10,6 +10,7 @@ export type {
   UsePaginationOptions,
   UsePaginationResult,
   PaginationStatus,
+  PaginationCommandHistoryEntry,
 } from "./use-pagination";
 
 export type {

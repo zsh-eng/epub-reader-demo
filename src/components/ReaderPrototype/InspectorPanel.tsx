@@ -1,10 +1,5 @@
 import { Separator } from "@/components/ui/separator";
-import type {
-  PaginationChapterDiagnostics,
-  PaginationDiagnostics,
-} from "@/lib/pagination";
 import type { ReaderSettings } from "@/types/reader.types";
-import { DebugSection } from "./DebugSection";
 import { NavigationSection } from "./NavigationSection";
 import { SettingsSection } from "./SettingsSection";
 
@@ -39,18 +34,9 @@ export interface InspectorPanelProps {
   // Layout
   paragraphSpacingFactor: number;
   onParagraphSpacingFactorChange: (value: number) => void;
-
-  // Debug
-  diagnostics: PaginationDiagnostics | null;
-  sourceLoadWallClockMs: number | null;
-  addChapterSendWallClockMs: number | null;
-  chapterTimingRows: PaginationChapterDiagnostics[];
 }
 
 export function InspectorPanel(props: InspectorPanelProps) {
-  const chapterTitles = (index: number) =>
-    props.chapterEntries[index]?.title ?? `Chapter ${index + 1}`;
-
   return (
     <div className="space-y-1 py-2">
       <NavigationSection
@@ -76,19 +62,6 @@ export function InspectorPanel(props: InspectorPanelProps) {
         onViewportAutoModeChange={props.onViewportAutoModeChange}
         paragraphSpacingFactor={props.paragraphSpacingFactor}
         onParagraphSpacingFactorChange={props.onParagraphSpacingFactorChange}
-      />
-
-      <Separator />
-
-      <DebugSection
-        diagnostics={props.diagnostics}
-        paginationStatus={props.paginationStatus}
-        totalPages={props.totalPages}
-        viewport={props.viewport}
-        sourceLoadWallClockMs={props.sourceLoadWallClockMs}
-        addChapterSendWallClockMs={props.addChapterSendWallClockMs}
-        chapterTimingRows={props.chapterTimingRows}
-        chapterTitles={chapterTitles}
       />
     </div>
   );

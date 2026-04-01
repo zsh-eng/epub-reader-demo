@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  nextPaginationCommandHistory,
+  type PaginationCommandHistoryEntry,
+} from "./command-history";
 import type {
   ContentAnchor,
   PaginationCommand,
@@ -18,6 +22,7 @@ import type {
 // ---------------------------------------------------------------------------
 
 export type PaginationStatus = "idle" | "loading" | "partial" | "ready";
+export type { PaginationCommandHistoryEntry };
 
 export interface UsePaginationResult {
   slices: PageSlice[];
@@ -32,6 +37,7 @@ export interface UsePaginationResult {
 
   status: PaginationStatus;
   diagnostics: PaginationDiagnostics | null;
+  commandHistory: PaginationCommandHistoryEntry[];
 }
 
 export interface UsePaginationOptions {
@@ -71,8 +77,12 @@ export function usePagination(
   const [diagnostics, setDiagnostics] = useState<PaginationDiagnostics | null>(
     null,
   );
+  const [commandHistory, setCommandHistory] = useState<
+    PaginationCommandHistoryEntry[]
+  >([]);
 
   const workerRef = useRef<Worker | null>(null);
+  const commandSequenceRef = useRef(0);
   const chapterPageOffsetsRef = useRef<number[]>([]);
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef<number | null>(null);
@@ -98,6 +108,10 @@ export function usePagination(
   >(new Map());
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
+    commandSequenceRef.current += 1;
+    setCommandHistory((prev) =>
+      nextPaginationCommandHistory(prev, cmd, commandSequenceRef.current),
+    );
     workerRef.current?.postMessage(cmd);
   }, []);
 
@@ -502,5 +516,6 @@ export function usePagination(
     addChapter,
     status,
     diagnostics,
+    commandHistory,
   };
 }

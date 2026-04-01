@@ -3,7 +3,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
+  PaginationCommandHistoryEntry,
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
 } from "@/lib/pagination";
@@ -19,12 +21,20 @@ interface DebugSectionProps {
   sourceLoadWallClockMs: number | null;
   addChapterSendWallClockMs: number | null;
   chapterTimingRows: PaginationChapterDiagnostics[];
+  commandHistory: PaginationCommandHistoryEntry[];
   chapterTitles: (index: number) => string;
 }
 
 function formatMs(value: number | null | undefined): string {
   if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
   return `${value.toFixed(1)}ms`;
+}
+
+function formatTimestamp(timestampMs: number): string {
+  const date = new Date(timestampMs);
+  const time = date.toLocaleTimeString("en-GB", { hour12: false });
+  const millis = String(date.getMilliseconds()).padStart(3, "0");
+  return `${time}.${millis}`;
 }
 
 function KVRow({ label, value }: { label: string; value: string }) {
@@ -44,12 +54,13 @@ export function DebugSection({
   sourceLoadWallClockMs,
   addChapterSendWallClockMs,
   chapterTimingRows,
+  commandHistory,
   chapterTitles,
 }: DebugSectionProps) {
   const [chapterTableOpen, setChapterTableOpen] = useState(false);
 
   return (
-    <InspectorSection title="Debug & Diagnostics" defaultOpen={false}>
+    <InspectorSection title="Debug & Diagnostics" defaultOpen={true}>
       <div className="rounded-lg bg-muted/50 p-3 font-mono text-[11px] leading-relaxed space-y-0.5">
         <KVRow label="Status" value={paginationStatus} />
         <KVRow
@@ -95,6 +106,40 @@ export function DebugSection({
           label="Last addChapter"
           value={formatMs(addChapterSendWallClockMs)}
         />
+
+        <div className="border-t border-border/50 my-1.5" />
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span>Command History</span>
+            <span className="tabular-nums">{commandHistory.length}</span>
+          </div>
+          <ScrollArea className="h-44 rounded border border-border/50 bg-background/60">
+            {commandHistory.length === 0 ? (
+              <p className="p-2 text-muted-foreground">No commands yet</p>
+            ) : (
+              <div className="p-1">
+                {commandHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="grid grid-cols-[88px_1fr] items-start gap-1 rounded px-1 py-0.5 hover:bg-muted/50"
+                  >
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatTimestamp(entry.timestampMs)}
+                    </span>
+                    <span className="truncate">
+                      <span>{entry.type}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        {entry.summary}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
 
         {chapterTimingRows.length > 0 && (
           <>
