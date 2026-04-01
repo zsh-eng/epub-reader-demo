@@ -306,27 +306,21 @@ export function usePagination(
 
           if (event.anchorPage !== null) {
             const clamped = clamp(event.anchorPage, 1, event.totalPages);
+            currentPageRef.current = clamped;
             setCurrentPage(clamped);
             setSlices(event.slices);
             updateAnchorFromSlices(event.slices, clamped);
           } else {
-            // Clamp current page to new total
-            setCurrentPage((prev) => {
-              const clamped = clamp(prev, 1, event.totalPages);
-              if (clamped === 1 && event.slices.length > 0) {
-                setSlices(event.slices);
-                updateAnchorFromSlices(event.slices, 1);
-              } else if (clamped !== 1) {
-                // Request the correct page
-                postCommand({ type: "getPage", globalPage: clamped });
-              }
-              return clamped;
-            });
+            const clamped = clamp(currentPageRef.current, 1, event.totalPages);
+            currentPageRef.current = clamped;
+            setCurrentPage(clamped);
 
-            // If page is 1, use the provided slices
-            if (currentPageRef.current === 1) {
+            if (clamped === 1) {
               setSlices(event.slices);
               updateAnchorFromSlices(event.slices, 1);
+            } else {
+              // Request the currently selected page from the new layout.
+              postCommand({ type: "getPage", globalPage: clamped });
             }
           }
           break;
@@ -346,6 +340,7 @@ export function usePagination(
           setStatus("partial");
 
           if (event.anchorPage !== null) {
+            currentPageRef.current = event.anchorPage;
             setCurrentPage(event.anchorPage);
             setSlices(event.slices);
             updateAnchorFromSlices(event.slices, event.anchorPage);
@@ -514,30 +509,33 @@ export function usePagination(
 
   // Navigation
   const nextPage = useCallback(() => {
-    setCurrentPage((prev) => {
-      const max = totalPagesRef.current ?? prev;
-      const next = Math.min(max, prev + 1);
-      if (next !== prev) {
-        postCommand({ type: "getPage", globalPage: next });
-      }
-      return next;
-    });
+    const current = currentPageRef.current;
+    const max = totalPagesRef.current ?? current;
+    const next = Math.min(max, current + 1);
+    if (next === current) return;
+
+    currentPageRef.current = next;
+    setCurrentPage(next);
+    postCommand({ type: "getPage", globalPage: next });
   }, [postCommand]);
 
   const prevPage = useCallback(() => {
-    setCurrentPage((prev) => {
-      const next = Math.max(1, prev - 1);
-      if (next !== prev) {
-        postCommand({ type: "getPage", globalPage: next });
-      }
-      return next;
-    });
+    const current = currentPageRef.current;
+    const next = Math.max(1, current - 1);
+    if (next === current) return;
+
+    currentPageRef.current = next;
+    setCurrentPage(next);
+    postCommand({ type: "getPage", globalPage: next });
   }, [postCommand]);
 
   const goToPage = useCallback(
     (page: number) => {
       const max = totalPagesRef.current ?? 1;
       const clamped = clamp(page, 1, max);
+      if (clamped === currentPageRef.current) return;
+
+      currentPageRef.current = clamped;
       setCurrentPage(clamped);
       postCommand({ type: "getPage", globalPage: clamped });
     },
