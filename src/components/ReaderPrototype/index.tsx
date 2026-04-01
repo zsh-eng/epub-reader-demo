@@ -202,6 +202,8 @@ export function ReaderPrototype() {
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
   const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<number | null>(null);
+  const [addChapterSendWallClockMs, setAddChapterSendWallClockMs] =
+    useState<number | null>(null);
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -245,6 +247,7 @@ export function ReaderPrototype() {
 
     let cancelled = false;
     setSourceLoadWallClockMs(null);
+    setAddChapterSendWallClockMs(null);
 
     const cleanupAllResources = () => {
       cleanupResourceUrls(deferredImageCacheRef.current);
@@ -252,6 +255,7 @@ export function ReaderPrototype() {
 
     const loadIncrementally = async () => {
       const sourceLoadStartedAt = performance.now();
+      let lastAddChapterSentAt: number | null = null;
 
       try {
         cleanupAllResources();
@@ -259,16 +263,13 @@ export function ReaderPrototype() {
         const initialChapter = chapterEntries[0];
         if (!initialChapter) return;
 
-        const initialLoadStartedAt = performance.now();
         const initialChapterFile = await getBookFile(bookId, initialChapter.href);
         const initialHtml = await loadSingleChapter(initialChapterFile, initialChapter);
-        const initialSourceLoadMs = performance.now() - initialLoadStartedAt;
         if (cancelled) {
           return;
         }
-        pagination.addChapter(0, initialHtml, {
-          sourceLoadMs: initialSourceLoadMs,
-        });
+        pagination.addChapter(0, initialHtml);
+        lastAddChapterSentAt = performance.now();
 
         const remainingChapters = chapterEntries.slice(1);
         if (remainingChapters.length > 0) {
@@ -282,15 +283,14 @@ export function ReaderPrototype() {
             const chapter = chapterEntries[i];
             if (!chapter) continue;
 
-            const chapterLoadStartedAt = performance.now();
             const chapterFile = chaptersByPath.get(chapter.href);
             const chapterHtml = await loadSingleChapter(chapterFile, chapter);
-            const sourceLoadMs = performance.now() - chapterLoadStartedAt;
             if (cancelled) {
               return;
             }
 
-            pagination.addChapter(i, chapterHtml, { sourceLoadMs });
+            pagination.addChapter(i, chapterHtml);
+            lastAddChapterSentAt = performance.now();
           }
         }
       } catch (error) {
@@ -302,7 +302,13 @@ export function ReaderPrototype() {
         }
       } finally {
         if (!cancelled) {
-          setSourceLoadWallClockMs(performance.now() - sourceLoadStartedAt);
+          const loadFinishedAt = performance.now();
+          setSourceLoadWallClockMs(loadFinishedAt - sourceLoadStartedAt);
+          setAddChapterSendWallClockMs(
+            lastAddChapterSentAt === null
+              ? null
+              : lastAddChapterSentAt - sourceLoadStartedAt,
+          );
         }
       }
     };
@@ -326,13 +332,6 @@ export function ReaderPrototype() {
     const chapterTimings = pagination.diagnostics?.chapterTimings ?? [];
     return [...chapterTimings].sort((a, b) => a.chapterIndex - b.chapterIndex);
   }, [pagination.diagnostics?.chapterTimings]);
-
-  const totalSourceLoadMs = useMemo(() => {
-    return chapterTimingRows.reduce(
-      (sum, chapter) => sum + (chapter.sourceLoadMs ?? 0),
-      0,
-    );
-  }, [chapterTimingRows]);
 
   // Keyboard navigation
   const paginationRef = useRef(pagination);
@@ -507,8 +506,9 @@ export function ReaderPrototype() {
           <section className="mb-4 rounded-xl border bg-card p-4 shadow-sm">
             <p className="text-sm font-medium">Pagination Diagnostics</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Source Load (sum): {formatMs(totalSourceLoadMs)} · Source Load
-              (wall-clock): {formatMs(sourceLoadWallClockMs)} · Stage 1:{" "}
+              Source Load (wall-clock): {formatMs(sourceLoadWallClockMs)} · Last
+              addChapter sent (wall-clock): {formatMs(addChapterSendWallClockMs)} ·
+              Stage 1:{" "}
               {formatMs(pagination.diagnostics.stage1ParseMs)} · Stage 2:{" "}
               {formatMs(pagination.diagnostics.stage2PrepareMs)} · Stage 3:{" "}
               {formatMs(pagination.diagnostics.stage3LayoutMs)} · Total:{" "}
@@ -516,7 +516,7 @@ export function ReaderPrototype() {
             </p>
 
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[840px] text-xs">
+              <table className="w-full min-w-[760px] text-xs">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-3">Chapter</th>
@@ -524,7 +524,6 @@ export function ReaderPrototype() {
                     <th className="py-2 pr-3 tabular-nums">Pages</th>
                     <th className="py-2 pr-3 tabular-nums">Blocks</th>
                     <th className="py-2 pr-3 tabular-nums">Lines</th>
-                    <th className="py-2 pr-3 tabular-nums">Source Load</th>
                     <th className="py-2 pr-3 tabular-nums">Stage 1</th>
                     <th className="py-2 pr-3 tabular-nums">Stage 2</th>
                     <th className="py-2 pr-3 tabular-nums">Stage 3</th>
@@ -545,9 +544,6 @@ export function ReaderPrototype() {
                       <td className="py-2 pr-3 tabular-nums">{chapter.pageCount}</td>
                       <td className="py-2 pr-3 tabular-nums">{chapter.blockCount}</td>
                       <td className="py-2 pr-3 tabular-nums">{chapter.lineCount}</td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {formatMs(chapter.sourceLoadMs)}
-                      </td>
                       <td className="py-2 pr-3 tabular-nums">
                         {formatMs(chapter.stage1ParseMs)}
                       </td>

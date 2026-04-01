@@ -196,7 +196,6 @@ export interface PaginationChapterDiagnostics {
   stage2PrepareMs?: number;
   stage3LayoutMs?: number;
   chapterLoadMs?: number;
-  sourceLoadMs?: number;
   totalMs?: number;
 }
 

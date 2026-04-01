@@ -10,7 +10,6 @@ export type {
   UsePaginationOptions,
   UsePaginationResult,
   PaginationStatus,
-  AddChapterOptions,
 } from "./use-pagination";
 
 export type {

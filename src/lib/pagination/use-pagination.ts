@@ -28,11 +28,7 @@ export interface UsePaginationResult {
   nextPage: () => void;
   prevPage: () => void;
   goToPage: (page: number) => void;
-  addChapter: (
-    chapterIndex: number,
-    html: string,
-    options?: AddChapterOptions,
-  ) => void;
+  addChapter: (chapterIndex: number, html: string) => void;
 
   status: PaginationStatus;
   diagnostics: PaginationDiagnostics | null;
@@ -44,10 +40,6 @@ export interface UsePaginationOptions {
   layoutTheme: LayoutTheme;
   viewport: { width: number; height: number };
   initialChapterIndex?: number;
-}
-
-export interface AddChapterOptions {
-  sourceLoadMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,7 +91,6 @@ export function usePagination(
   // Store last known slices' first blockId for content anchoring
   const lastAnchorRef = useRef<ContentAnchor | null>(null);
   const stage1ByChapterRef = useRef<Map<number, number>>(new Map());
-  const sourceLoadByChapterRef = useRef<Map<number, number>>(new Map());
   const chapterQueuedAtRef = useRef<Map<number, number>>(new Map());
   const chapterLoadByChapterRef = useRef<Map<number, number>>(new Map());
   const workerChapterDiagnosticsRef = useRef<
@@ -193,9 +184,6 @@ export function usePagination(
           const stage2PrepareMs = chapter.stage2PrepareMs ?? 0;
           const stage3LayoutMs = chapter.stage3LayoutMs ?? 0;
           const totalMs = stage1ParseMs + stage2PrepareMs + stage3LayoutMs;
-          const sourceLoadMs =
-            sourceLoadByChapterRef.current.get(chapter.chapterIndex) ??
-            chapter.sourceLoadMs;
           const chapterLoadMs =
             chapterLoadByChapterRef.current.get(chapter.chapterIndex) ??
             chapter.chapterLoadMs ??
@@ -208,7 +196,6 @@ export function usePagination(
             stage3LayoutMs,
             totalMs,
             chapterLoadMs,
-            sourceLoadMs,
           };
         });
 
@@ -383,7 +370,6 @@ export function usePagination(
     chapterPageOffsetsRef.current = [];
     lastAnchorRef.current = null;
     stage1ByChapterRef.current.clear();
-    sourceLoadByChapterRef.current.clear();
     chapterQueuedAtRef.current.clear();
     chapterLoadByChapterRef.current.clear();
     workerChapterDiagnosticsRef.current.clear();
@@ -414,16 +400,9 @@ export function usePagination(
   ]);
 
   const addChapter = useCallback(
-    (chapterIndex: number, html: string, options?: AddChapterOptions) => {
+    (chapterIndex: number, html: string) => {
       if (totalChapters <= 0) return;
       if (chapterIndex < 0 || chapterIndex >= totalChapters) return;
-
-      if (
-        typeof options?.sourceLoadMs === "number" &&
-        Number.isFinite(options.sourceLoadMs)
-      ) {
-        sourceLoadByChapterRef.current.set(chapterIndex, options.sourceLoadMs);
-      }
 
       chapterQueuedAtRef.current.set(chapterIndex, performance.now());
       const stage1StartedAt = performance.now();
