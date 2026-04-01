@@ -83,6 +83,8 @@ export function usePagination(
 
   const workerRef = useRef<Worker | null>(null);
   const commandSequenceRef = useRef(0);
+  const commandHistoryRef = useRef<PaginationCommandHistoryEntry[]>([]);
+  const commandHistoryFlushTimerRef = useRef<number | null>(null);
   const chapterPageOffsetsRef = useRef<number[]>([]);
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef<number | null>(null);
@@ -107,12 +109,49 @@ export function usePagination(
     Map<number, PaginationChapterDiagnostics>
   >(new Map());
 
+  const flushCommandHistory = useCallback(() => {
+    commandHistoryFlushTimerRef.current = null;
+    setCommandHistory(commandHistoryRef.current);
+  }, []);
+
+  const scheduleCommandHistoryFlush = useCallback(
+    (immediate = false) => {
+      if (immediate) {
+        if (commandHistoryFlushTimerRef.current !== null) {
+          window.clearTimeout(commandHistoryFlushTimerRef.current);
+          commandHistoryFlushTimerRef.current = null;
+        }
+        flushCommandHistory();
+        return;
+      }
+
+      if (commandHistoryFlushTimerRef.current !== null) return;
+
+      commandHistoryFlushTimerRef.current = window.setTimeout(() => {
+        flushCommandHistory();
+      }, 120);
+    },
+    [flushCommandHistory],
+  );
+
   const postCommand = useCallback((cmd: PaginationCommand) => {
     commandSequenceRef.current += 1;
-    setCommandHistory((prev) =>
-      nextPaginationCommandHistory(prev, cmd, commandSequenceRef.current),
+    commandHistoryRef.current = nextPaginationCommandHistory(
+      commandHistoryRef.current,
+      cmd,
+      commandSequenceRef.current,
     );
+    scheduleCommandHistoryFlush(cmd.type === "init");
     workerRef.current?.postMessage(cmd);
+  }, [scheduleCommandHistoryFlush]);
+
+  useEffect(() => {
+    return () => {
+      if (commandHistoryFlushTimerRef.current !== null) {
+        window.clearTimeout(commandHistoryFlushTimerRef.current);
+        commandHistoryFlushTimerRef.current = null;
+      }
+    };
   }, []);
 
   const getContentAnchor = useCallback((): ContentAnchor | null => {

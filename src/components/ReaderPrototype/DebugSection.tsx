@@ -10,7 +10,7 @@ import type {
   PaginationDiagnostics,
 } from "@/lib/pagination";
 import { ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { InspectorSection } from "./InspectorSection";
 
 interface DebugSectionProps {
@@ -45,6 +45,37 @@ function KVRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+const CommandHistoryList = memo(function CommandHistoryList({
+  commandHistory,
+}: {
+  commandHistory: PaginationCommandHistoryEntry[];
+}) {
+  return (
+    <ScrollArea className="h-44 rounded border border-border/50 bg-background/60">
+      {commandHistory.length === 0 ? (
+        <p className="p-2 text-muted-foreground">No commands yet</p>
+      ) : (
+        <div className="p-1">
+          {commandHistory.map((entry) => (
+            <div
+              key={entry.id}
+              className="grid grid-cols-[88px_1fr] items-start gap-1 rounded px-1 py-0.5 hover:bg-muted/50"
+            >
+              <span className="tabular-nums text-muted-foreground">
+                {formatTimestamp(entry.timestampMs)}
+              </span>
+              <span className="truncate">
+                <span>{entry.type}</span>
+                <span className="text-muted-foreground"> {entry.summary}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </ScrollArea>
+  );
+});
 
 export function DebugSection({
   diagnostics,
@@ -114,31 +145,7 @@ export function DebugSection({
             <span>Command History</span>
             <span className="tabular-nums">{commandHistory.length}</span>
           </div>
-          <ScrollArea className="h-44 rounded border border-border/50 bg-background/60">
-            {commandHistory.length === 0 ? (
-              <p className="p-2 text-muted-foreground">No commands yet</p>
-            ) : (
-              <div className="p-1">
-                {commandHistory.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="grid grid-cols-[88px_1fr] items-start gap-1 rounded px-1 py-0.5 hover:bg-muted/50"
-                  >
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatTimestamp(entry.timestampMs)}
-                    </span>
-                    <span className="truncate">
-                      <span>{entry.type}</span>
-                      <span className="text-muted-foreground">
-                        {" "}
-                        {entry.summary}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
+          <CommandHistoryList commandHistory={commandHistory} />
         </div>
 
         {chapterTimingRows.length > 0 && (
