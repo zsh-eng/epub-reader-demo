@@ -8,6 +8,7 @@ import type {
   PaginationCommandHistoryEntry,
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
+  PaginationFontSwitchLatencyTrace,
 } from "@/lib/pagination";
 import { ChevronRight } from "lucide-react";
 import { memo, useState } from "react";
@@ -22,6 +23,7 @@ interface DebugSectionProps {
   addChapterSendWallClockMs: number | null;
   chapterTimingRows: PaginationChapterDiagnostics[];
   commandHistory: PaginationCommandHistoryEntry[];
+  fontSwitchLatencyTraces: PaginationFontSwitchLatencyTrace[];
   chapterTitles: (index: number) => string;
 }
 
@@ -35,6 +37,16 @@ function formatTimestamp(timestampMs: number): string {
   const time = date.toLocaleTimeString("en-GB", { hour12: false });
   const millis = String(date.getMilliseconds()).padStart(3, "0");
   return `${time}.${millis}`;
+}
+
+function formatDeltaMs(
+  startMs: number | null | undefined,
+  endMs: number | null | undefined,
+): string {
+  if (typeof startMs !== "number" || typeof endMs !== "number") return "n/a";
+  const delta = endMs - startMs;
+  if (!Number.isFinite(delta)) return "n/a";
+  return `${delta.toFixed(1)}ms`;
 }
 
 function KVRow({ label, value }: { label: string; value: string }) {
@@ -86,6 +98,7 @@ export function DebugSection({
   addChapterSendWallClockMs,
   chapterTimingRows,
   commandHistory,
+  fontSwitchLatencyTraces,
   chapterTitles,
 }: DebugSectionProps) {
   const [chapterTableOpen, setChapterTableOpen] = useState(false);
@@ -146,6 +159,65 @@ export function DebugSection({
             <span className="tabular-nums">{commandHistory.length}</span>
           </div>
           <CommandHistoryList commandHistory={commandHistory} />
+        </div>
+
+        <div className="border-t border-border/50 my-1.5" />
+
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-muted-foreground">
+            <span>Font Switch Latency</span>
+            <span className="tabular-nums">{fontSwitchLatencyTraces.length}</span>
+          </div>
+          <ScrollArea className="h-36 rounded border border-border/50 bg-background/60">
+            {fontSwitchLatencyTraces.length === 0 ? (
+              <p className="p-2 text-muted-foreground">No font switches yet</p>
+            ) : (
+              <div className="p-1 space-y-1">
+                {fontSwitchLatencyTraces.map((trace) => (
+                  <div
+                    key={trace.id}
+                    className="rounded border border-border/50 bg-background/70 px-2 py-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="truncate">
+                        {trace.fromFont ?? "?"} → {trace.toFont ?? "?"}
+                      </span>
+                      <span className="text-muted-foreground">
+                        {trace.status}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 text-muted-foreground">
+                      <span>
+                        intent→cmd{" "}
+                        {formatDeltaMs(trace.intentAtMs, trace.commandPostedAtMs)}
+                      </span>
+                      <span>
+                        cmd→partial{" "}
+                        {formatDeltaMs(
+                          trace.commandPostedAtMs,
+                          trace.firstPartialAtMs,
+                        )}
+                      </span>
+                      <span>
+                        cmd→ready{" "}
+                        {formatDeltaMs(trace.commandPostedAtMs, trace.readyAtMs)}
+                      </span>
+                      <span>
+                        ready→paint{" "}
+                        {formatDeltaMs(trace.readyAtMs, trace.paintedAtMs)}
+                      </span>
+                    </div>
+                    <div className="text-muted-foreground">
+                      partial={trace.partialEvents}, progress={trace.progressEvents},
+                      fontLoaded(start/ready)=
+                      {String(trace.bodyFontLoadedAtStart)}/
+                      {String(trace.bodyFontLoadedAtReady)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
         </div>
 
         {chapterTimingRows.length > 0 && (

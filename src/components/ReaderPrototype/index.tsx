@@ -484,7 +484,18 @@ export function ReaderPrototype() {
     chapterEntries,
     currentChapterIndex: pagination.currentChapterIndex,
     settings,
-    onUpdateSettings: updateSettings,
+    onUpdateSettings: (patch: Partial<ReaderSettings>) => {
+      if (
+        patch.fontFamily &&
+        patch.fontFamily !== settings.fontFamily
+      ) {
+        pagination.markFontSwitchIntent(
+          settings.fontFamily,
+          patch.fontFamily,
+        );
+      }
+      updateSettings(patch);
+    },
     viewport,
     onViewportChange: setViewport,
     viewportAutoMode,
@@ -502,6 +513,7 @@ export function ReaderPrototype() {
     addChapterSendWallClockMs,
     chapterTimingRows,
     commandHistory: pagination.commandHistory,
+    fontSwitchLatencyTraces: pagination.fontSwitchLatencyTraces,
     chapterTitles: (index: number) =>
       chapterEntries[index]?.title ?? `Chapter ${index + 1}`,
   };

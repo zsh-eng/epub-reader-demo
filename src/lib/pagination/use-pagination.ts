@@ -23,6 +23,30 @@ import type {
 export type PaginationStatus = "idle" | "loading" | "partial" | "ready";
 export type { PaginationCommandHistoryEntry };
 
+export interface FontSwitchLatencyIntent {
+  from: string;
+  to: string;
+  startedAtMs: number;
+}
+
+export interface PaginationFontSwitchLatencyTrace {
+  id: string;
+  status: "running" | "ready" | "superseded";
+  startedAtMs: number;
+  intentAtMs: number | null;
+  fromFont: string | null;
+  toFont: string | null;
+  commandPostedAtMs: number;
+  firstPartialAtMs: number | null;
+  firstProgressAtMs: number | null;
+  readyAtMs: number | null;
+  paintedAtMs: number | null;
+  partialEvents: number;
+  progressEvents: number;
+  bodyFontLoadedAtStart: boolean | null;
+  bodyFontLoadedAtReady: boolean | null;
+}
+
 export interface UsePaginationResult {
   slices: PageSlice[];
   currentPage: number;
@@ -39,6 +63,8 @@ export interface UsePaginationResult {
   status: PaginationStatus;
   diagnostics: PaginationDiagnostics | null;
   commandHistory: PaginationCommandHistoryEntry[];
+  fontSwitchLatencyTraces: PaginationFontSwitchLatencyTrace[];
+  markFontSwitchIntent: (from: string, to: string) => void;
 }
 
 export interface UsePaginationOptions {
@@ -55,10 +81,31 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function areFontConfigsEqual(
+  a: PaginationConfig["fontConfig"],
+  b: PaginationConfig["fontConfig"],
+): boolean {
+  return (
+    a.bodyFamily === b.bodyFamily &&
+    a.headingFamily === b.headingFamily &&
+    a.codeFamily === b.codeFamily &&
+    a.baseSizePx === b.baseSizePx
+  );
+}
+
+function readFontLoaded(bodyFamily: string): boolean | null {
+  if (typeof document === "undefined") return null;
+  if (!("fonts" in document)) return null;
+  if (typeof document.fonts.check !== "function") return null;
+
+  return document.fonts.check(`16px ${bodyFamily}`);
+}
+
 export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
   const { totalChapters, config, initialChapterIndex } = options;
+  const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -76,6 +123,9 @@ export function usePagination(
   const [commandHistory, setCommandHistory] = useState<
     PaginationCommandHistoryEntry[]
   >([]);
+  const [fontSwitchLatencyTraces, setFontSwitchLatencyTraces] = useState<
+    PaginationFontSwitchLatencyTrace[]
+  >([]);
 
   const workerRef = useRef<Worker | null>(null);
   const commandSequenceRef = useRef(0);
@@ -84,6 +134,7 @@ export function usePagination(
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef<number | null>(null);
   const estimatedTotalPagesRef = useRef<number | null>(null);
+  const latestBodyFamilyRef = useRef(config.fontConfig.bodyFamily);
 
   // Keep refs in sync for use in callbacks.
   // Use effects so re-renders from unrelated state (e.g. command history)
@@ -100,6 +151,10 @@ export function usePagination(
     estimatedTotalPagesRef.current = estimatedTotalPages;
   }, [estimatedTotalPages]);
 
+  useEffect(() => {
+    latestBodyFamilyRef.current = config.fontConfig.bodyFamily;
+  }, [config.fontConfig.bodyFamily]);
+
   // Track previous values to detect changes
   const prevTotalChaptersRef = useRef<number | null>(null);
   const prevInitialChapterIndexRef = useRef<number | null>(null);
@@ -112,6 +167,14 @@ export function usePagination(
   const workerChapterDiagnosticsRef = useRef<
     Map<number, PaginationChapterDiagnostics>
   >(new Map());
+  const previousConfigRef = useRef<PaginationConfig | null>(null);
+  const fontSwitchIntentRef = useRef<FontSwitchLatencyIntent | null>(null);
+  const activeFontSwitchTraceIdRef = useRef<string | null>(null);
+  const fontSwitchTraceSequenceRef = useRef(0);
+  const fontSwitchLatencyTracesRef = useRef<PaginationFontSwitchLatencyTrace[]>(
+    [],
+  );
+  const fontSwitchLatencyFlushTimerRef = useRef<number | null>(null);
 
   const flushCommandHistory = useCallback(() => {
     commandHistoryFlushTimerRef.current = null;
@@ -138,6 +201,54 @@ export function usePagination(
     [flushCommandHistory],
   );
 
+  const flushFontSwitchLatencyTraces = useCallback(() => {
+    fontSwitchLatencyFlushTimerRef.current = null;
+    setFontSwitchLatencyTraces([...fontSwitchLatencyTracesRef.current]);
+  }, []);
+
+  const scheduleFontSwitchLatencyFlush = useCallback(
+    (immediate = false) => {
+      if (immediate) {
+        if (fontSwitchLatencyFlushTimerRef.current !== null) {
+          window.clearTimeout(fontSwitchLatencyFlushTimerRef.current);
+          fontSwitchLatencyFlushTimerRef.current = null;
+        }
+        flushFontSwitchLatencyTraces();
+        return;
+      }
+
+      if (fontSwitchLatencyFlushTimerRef.current !== null) return;
+
+      fontSwitchLatencyFlushTimerRef.current = window.setTimeout(() => {
+        flushFontSwitchLatencyTraces();
+      }, 80);
+    },
+    [flushFontSwitchLatencyTraces],
+  );
+
+  const updateFontSwitchTrace = useCallback(
+    (
+      traceId: string,
+      apply: (
+        trace: PaginationFontSwitchLatencyTrace,
+      ) => PaginationFontSwitchLatencyTrace,
+    ) => {
+      const next = fontSwitchLatencyTracesRef.current.map((trace) =>
+        trace.id === traceId ? apply(trace) : trace,
+      );
+      fontSwitchLatencyTracesRef.current = next;
+    },
+    [],
+  );
+
+  const markFontSwitchIntent = useCallback((from: string, to: string) => {
+    fontSwitchIntentRef.current = {
+      from,
+      to,
+      startedAtMs: performance.now(),
+    };
+  }, []);
+
   const postCommand = useCallback((cmd: PaginationCommand) => {
     commandSequenceRef.current += 1;
     commandHistoryRef.current = nextPaginationCommandHistory(
@@ -154,6 +265,10 @@ export function usePagination(
       if (commandHistoryFlushTimerRef.current !== null) {
         window.clearTimeout(commandHistoryFlushTimerRef.current);
         commandHistoryFlushTimerRef.current = null;
+      }
+      if (fontSwitchLatencyFlushTimerRef.current !== null) {
+        window.clearTimeout(fontSwitchLatencyFlushTimerRef.current);
+        fontSwitchLatencyFlushTimerRef.current = null;
       }
     };
   }, []);
@@ -296,11 +411,108 @@ export function usePagination(
     [],
   );
 
+  const beginFontSwitchTrace = useCallback(
+    (nextConfig: PaginationConfig) => {
+      const now = performance.now();
+      const traceId = `font-switch-${Date.now()}-${fontSwitchTraceSequenceRef.current + 1}`;
+      fontSwitchTraceSequenceRef.current += 1;
+
+      const activeTraceId = activeFontSwitchTraceIdRef.current;
+      if (activeTraceId) {
+        updateFontSwitchTrace(activeTraceId, (trace) => {
+          if (trace.status !== "running") return trace;
+          return { ...trace, status: "superseded" };
+        });
+      }
+
+      const intent = fontSwitchIntentRef.current;
+      fontSwitchIntentRef.current = null;
+
+      const trace: PaginationFontSwitchLatencyTrace = {
+        id: traceId,
+        status: "running",
+        startedAtMs: now,
+        intentAtMs: intent?.startedAtMs ?? null,
+        fromFont: intent?.from ?? null,
+        toFont: intent?.to ?? null,
+        commandPostedAtMs: now,
+        firstPartialAtMs: null,
+        firstProgressAtMs: null,
+        readyAtMs: null,
+        paintedAtMs: null,
+        partialEvents: 0,
+        progressEvents: 0,
+        bodyFontLoadedAtStart: readFontLoaded(nextConfig.fontConfig.bodyFamily),
+        bodyFontLoadedAtReady: null,
+      };
+
+      fontSwitchLatencyTracesRef.current = [
+        trace,
+        ...fontSwitchLatencyTracesRef.current,
+      ].slice(0, MAX_FONT_SWITCH_LATENCY_TRACES);
+
+      activeFontSwitchTraceIdRef.current = traceId;
+      scheduleFontSwitchLatencyFlush(true);
+    },
+    [scheduleFontSwitchLatencyFlush, updateFontSwitchTrace],
+  );
+
+  const schedulePaintProbeForTrace = useCallback(
+    (traceId: string) => {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          const paintedAtMs = performance.now();
+          updateFontSwitchTrace(traceId, (trace) => {
+            if (trace.paintedAtMs !== null) return trace;
+            return { ...trace, paintedAtMs };
+          });
+          scheduleFontSwitchLatencyFlush(true);
+        });
+      });
+    },
+    [scheduleFontSwitchLatencyFlush, updateFontSwitchTrace],
+  );
+
+  const markActiveFontSwitchTrace = useCallback(
+    (
+      apply: (
+        trace: PaginationFontSwitchLatencyTrace,
+      ) => PaginationFontSwitchLatencyTrace,
+      immediate = false,
+    ) => {
+      const traceId = activeFontSwitchTraceIdRef.current;
+      if (!traceId) return;
+
+      updateFontSwitchTrace(traceId, apply);
+      scheduleFontSwitchLatencyFlush(immediate);
+    },
+    [scheduleFontSwitchLatencyFlush, updateFontSwitchTrace],
+  );
+
   // Handle worker events
   const handleEvent = useCallback(
     (event: PaginationEvent) => {
       switch (event.type) {
         case "ready": {
+          const readyAtMs = performance.now();
+          const activeTraceId = activeFontSwitchTraceIdRef.current;
+
+          if (activeTraceId) {
+            updateFontSwitchTrace(activeTraceId, (trace) => {
+              return {
+                ...trace,
+                status: "ready",
+                readyAtMs,
+                bodyFontLoadedAtReady: readFontLoaded(
+                  latestBodyFamilyRef.current,
+                ),
+              };
+            });
+            activeFontSwitchTraceIdRef.current = null;
+            scheduleFontSwitchLatencyFlush(true);
+            schedulePaintProbeForTrace(activeTraceId);
+          }
+
           setTotalPages(event.totalPages);
           totalPagesRef.current = event.totalPages;
           setEstimatedTotalPages(null);
@@ -342,6 +554,16 @@ export function usePagination(
         }
 
         case "partialReady": {
+          const partialAtMs = performance.now();
+          markActiveFontSwitchTrace(
+            (trace) => ({
+              ...trace,
+              firstPartialAtMs: trace.firstPartialAtMs ?? partialAtMs,
+              partialEvents: trace.partialEvents + 1,
+            }),
+            false,
+          );
+
           setEstimatedTotalPages(event.estimatedTotalPages);
           finalizeChapterTiming(event.chapterIndex, event.chapterDiagnostics);
           setDiagnostics((prev) => buildMergedDiagnostics(prev));
@@ -358,6 +580,16 @@ export function usePagination(
         }
 
         case "progress": {
+          const progressAtMs = performance.now();
+          markActiveFontSwitchTrace(
+            (trace) => ({
+              ...trace,
+              firstProgressAtMs: trace.firstProgressAtMs ?? progressAtMs,
+              progressEvents: trace.progressEvents + 1,
+            }),
+            false,
+          );
+
           setEstimatedTotalPages(event.runningTotalPages);
           finalizeChapterTiming(event.chapterIndex, event.chapterDiagnostics);
           setDiagnostics((prev) => buildMergedDiagnostics(prev));
@@ -374,7 +606,11 @@ export function usePagination(
       buildMergedDiagnostics,
       finalizeChapterTiming,
       applyResolvedPage,
+      markActiveFontSwitchTrace,
       postCommand,
+      scheduleFontSwitchLatencyFlush,
+      schedulePaintProbeForTrace,
+      updateFontSwitchTrace,
     ],
   );
 
@@ -432,6 +668,11 @@ export function usePagination(
     chapterQueuedAtRef.current.clear();
     chapterLoadByChapterRef.current.clear();
     workerChapterDiagnosticsRef.current.clear();
+    previousConfigRef.current = config;
+    fontSwitchIntentRef.current = null;
+    activeFontSwitchTraceIdRef.current = null;
+    fontSwitchLatencyTracesRef.current = [];
+    setFontSwitchLatencyTraces([]);
 
     postCommand({
       type: "init",
@@ -470,12 +711,27 @@ export function usePagination(
   useEffect(() => {
     if (totalChapters <= 0) return;
 
+    const previousConfig = previousConfigRef.current;
+    if (
+      previousConfig &&
+      !areFontConfigsEqual(previousConfig.fontConfig, config.fontConfig)
+    ) {
+      beginFontSwitchTrace(config);
+    }
+    previousConfigRef.current = config;
+
     postCommand({
       type: "updateConfig",
       config,
       anchor: getContentAnchor(),
     });
-  }, [config, totalChapters, postCommand, getContentAnchor]);
+  }, [
+    beginFontSwitchTrace,
+    config,
+    totalChapters,
+    postCommand,
+    getContentAnchor,
+  ]);
 
   // Navigation
   const nextPage = useCallback(() => {
@@ -536,5 +792,7 @@ export function usePagination(
     status,
     diagnostics,
     commandHistory,
+    fontSwitchLatencyTraces,
+    markFontSwitchIntent,
   };
 }
