@@ -24,6 +24,7 @@ import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -166,23 +167,16 @@ function renderPageSlice(
   }
 
   return (
-    <div key={key}>
+    <p
+      key={key}
+      className="m-0"
+      style={{
+        lineHeight: `${slice.lineHeight}px`,
+        textAlign: slice.textAlign,
+      }}
+    >
       {slice.lines.map((line, lineIndex) => (
-        <div
-          key={`${key}-line-${lineIndex}`}
-          className="overflow-hidden whitespace-nowrap"
-          style={{
-            height: `${slice.lineHeight}px`,
-            lineHeight: `${slice.lineHeight}px`,
-            textAlign: slice.textAlign,
-            textAlignLast:
-              slice.textAlign === "justify"
-                ? line.isLastInBlock
-                  ? "auto"
-                  : "justify"
-                : undefined,
-          }}
-        >
+        <Fragment key={`${key}-line-${lineIndex}`}>
           {line.fragments.map((fragment, fragmentIndex) => (
             <span
               key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
@@ -201,9 +195,10 @@ function renderPageSlice(
               {fragment.text}
             </span>
           ))}
-        </div>
+          {lineIndex < slice.lines.length - 1 ? " " : null}
+        </Fragment>
       ))}
-    </div>
+    </p>
   );
 }
 
