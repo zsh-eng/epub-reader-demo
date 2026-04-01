@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { LazyImage } from "@/components/ReaderPrototype/LazyImage";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
@@ -28,6 +27,9 @@ import {
   type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { SlidersHorizontal } from "lucide-react";
+import { InspectorPanel } from "./InspectorPanel";
+import { InspectorDrawer } from "./InspectorDrawer";
 
 interface ChapterEntry {
   index: number;
@@ -37,11 +39,6 @@ interface ChapterEntry {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
-}
-
-function formatMs(value: number | null | undefined): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
-  return `${value.toFixed(1)}ms`;
 }
 
 function getNamedBodyFont(fontFamily: FontFamily): string {
@@ -72,11 +69,14 @@ function buildFontConfig(settings: ReaderSettings): FontConfig {
   };
 }
 
-function buildLayoutTheme(settings: ReaderSettings): LayoutTheme {
+function buildLayoutTheme(
+  settings: ReaderSettings,
+  paragraphSpacingFactor: number,
+): LayoutTheme {
   return {
     baseFontSizePx: 16 * (settings.fontSize / 100),
     lineHeightFactor: settings.lineHeight,
-    paragraphSpacingFactor: 1.2,
+    paragraphSpacingFactor,
     headingSpaceAbove: 1.5,
     headingSpaceBelow: 0.7,
     textAlign: settings.textAlign,
@@ -196,14 +196,36 @@ export function ReaderPrototype() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { settings } = useReaderSettings();
+  const { settings, updateSettings } = useReaderSettings();
 
-  const [jumpInput, setJumpInput] = useState("1");
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [viewportAutoMode, setViewportAutoMode] = useState(true);
+  const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(1.2);
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
-  const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<number | null>(null);
-  const [addChapterSendWallClockMs, setAddChapterSendWallClockMs] =
-    useState<number | null>(null);
+  const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<
+    number | null
+  >(null);
+  const [addChapterSendWallClockMs, setAddChapterSendWallClockMs] = useState<
+    number | null
+  >(null);
+
+  // Toggle button inactivity fade
+  const [headerActive, setHeaderActive] = useState(true);
+  const inactivityTimerRef = useRef<number>(undefined);
+  const resetInactivityTimer = useCallback(() => {
+    setHeaderActive(true);
+    clearTimeout(inactivityTimerRef.current);
+    inactivityTimerRef.current = window.setTimeout(
+      () => setHeaderActive(false),
+      3000,
+    );
+  }, []);
+
+  useEffect(() => {
+    resetInactivityTimer();
+    return () => clearTimeout(inactivityTimerRef.current);
+  }, [resetInactivityTimer]);
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -214,9 +236,13 @@ export function ReaderPrototype() {
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
 
+  // Viewport auto-resize
   useEffect(() => {
+    if (!viewportAutoMode) return;
+
     const onResize = () => {
-      const horizontalPadding = isMobile ? 32 : 120;
+      const panelWidth = !isMobile && isPanelOpen ? 320 : 0;
+      const horizontalPadding = (isMobile ? 32 : 120) + panelWidth;
       const verticalPadding = isMobile ? 270 : 300;
       setViewport({
         width: clamp(window.innerWidth - horizontalPadding, 240, 760),
@@ -227,10 +253,13 @@ export function ReaderPrototype() {
     onResize();
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [isMobile]);
+  }, [isMobile, viewportAutoMode, isPanelOpen]);
 
   const fontConfig = useMemo(() => buildFontConfig(settings), [settings]);
-  const layoutTheme = useMemo(() => buildLayoutTheme(settings), [settings]);
+  const layoutTheme = useMemo(
+    () => buildLayoutTheme(settings, paragraphSpacingFactor),
+    [settings, paragraphSpacingFactor],
+  );
 
   const pagination = usePagination({
     totalChapters: chapterEntries.length,
@@ -263,21 +292,28 @@ export function ReaderPrototype() {
         const initialChapter = chapterEntries[0];
         if (!initialChapter) return;
 
-        const initialChapterFile = await getBookFile(bookId, initialChapter.href);
-        const initialHtml = await loadSingleChapter(initialChapterFile, initialChapter);
-        if (cancelled) {
-          return;
-        }
+        const initialChapterFile = await getBookFile(
+          bookId,
+          initialChapter.href,
+        );
+        const initialHtml = await loadSingleChapter(
+          initialChapterFile,
+          initialChapter,
+        );
+        if (cancelled) return;
         pagination.addChapter(0, initialHtml);
         lastAddChapterSentAt = performance.now();
 
         const remainingChapters = chapterEntries.slice(1);
         if (remainingChapters.length > 0) {
-          const remainingChapterPaths = remainingChapters.map((chapter) => chapter.href);
-          const chaptersByPath = await getBookFilesByPaths(bookId, remainingChapterPaths);
-          if (cancelled) {
-            return;
-          }
+          const remainingChapterPaths = remainingChapters.map(
+            (chapter) => chapter.href,
+          );
+          const chaptersByPath = await getBookFilesByPaths(
+            bookId,
+            remainingChapterPaths,
+          );
+          if (cancelled) return;
 
           for (let i = 1; i < chapterEntries.length; i++) {
             const chapter = chapterEntries[i];
@@ -285,9 +321,7 @@ export function ReaderPrototype() {
 
             const chapterFile = chaptersByPath.get(chapter.href);
             const chapterHtml = await loadSingleChapter(chapterFile, chapter);
-            if (cancelled) {
-              return;
-            }
+            if (cancelled) return;
 
             pagination.addChapter(i, chapterHtml);
             lastAddChapterSentAt = performance.now();
@@ -324,14 +358,32 @@ export function ReaderPrototype() {
   const displayTotalPages =
     pagination.totalPages ?? pagination.estimatedTotalPages ?? 0;
 
-  useEffect(() => {
-    setJumpInput(String(pagination.currentPage));
-  }, [pagination.currentPage]);
-
   const chapterTimingRows = useMemo(() => {
     const chapterTimings = pagination.diagnostics?.chapterTimings ?? [];
     return [...chapterTimings].sort((a, b) => a.chapterIndex - b.chapterIndex);
   }, [pagination.diagnostics?.chapterTimings]);
+
+  // Derive current chapter index from page position
+  const currentChapterIndex = useMemo(() => {
+    if (chapterTimingRows.length === 0) return 0;
+    let acc = 0;
+    for (const ch of chapterTimingRows) {
+      acc += ch.pageCount;
+      if (pagination.currentPage <= acc) return ch.chapterIndex;
+    }
+    return chapterTimingRows.at(-1)?.chapterIndex ?? 0;
+  }, [pagination.currentPage, chapterTimingRows]);
+
+  // Compute first page for each chapter
+  const chapterFirstPages = useMemo(() => {
+    const map = new Map<number, number>();
+    let acc = 1;
+    for (const ch of chapterTimingRows) {
+      map.set(ch.chapterIndex, acc);
+      acc += ch.pageCount;
+    }
+    return map;
+  }, [chapterTimingRows]);
 
   // Keyboard navigation
   const paginationRef = useRef(pagination);
@@ -367,13 +419,6 @@ export function ReaderPrototype() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-
-  const handleJumpToPage = useCallback(() => {
-    const parsed = Number.parseInt(jumpInput, 10);
-    if (!Number.isFinite(parsed)) return;
-    const clamped = clamp(parsed, 1, displayTotalPages);
-    pagination.goToPage(clamped);
-  }, [jumpInput, displayTotalPages, pagination]);
 
   if (isBookLoading) {
     return (
@@ -432,169 +477,107 @@ export function ReaderPrototype() {
     );
   }
 
+  const panelProps = {
+    currentPage: pagination.currentPage,
+    totalPages: displayTotalPages,
+    paginationStatus: pagination.status,
+    onGoToPage: pagination.goToPage,
+    onNextPage: pagination.nextPage,
+    onPrevPage: pagination.prevPage,
+    chapterEntries,
+    currentChapterIndex,
+    chapterFirstPages,
+    settings,
+    onUpdateSettings: updateSettings,
+    viewport,
+    onViewportChange: setViewport,
+    viewportAutoMode,
+    onViewportAutoModeChange: setViewportAutoMode,
+    paragraphSpacingFactor,
+    onParagraphSpacingFactorChange: setParagraphSpacingFactor,
+    diagnostics: pagination.diagnostics,
+    sourceLoadWallClockMs,
+    addChapterSendWallClockMs,
+    chapterTimingRows,
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-3">
-          <Button variant="outline" onClick={() => navigate("/")}>
+    <div className="flex h-screen flex-col bg-background text-foreground">
+      {/* Minimal header */}
+      <header
+        className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm"
+        onMouseMove={resetInactivityTimer}
+      >
+        <div className="flex items-center gap-3 px-4 py-3">
+          <Button variant="outline" size="sm" onClick={() => navigate("/")}>
             Back
           </Button>
-          <div className="mr-auto min-w-[180px]">
+          <div className="mr-auto min-w-0">
             <p className="truncate text-sm font-medium">{book.title}</p>
             <p className="text-xs text-muted-foreground">
-              Pretext prototype · Whole book ({chapterEntries.length} chapters)
+              Pretext prototype · {chapterEntries.length} chapters
               {pagination.status === "partial" && " · Preparing..."}
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={pagination.prevPage}
-            disabled={pagination.currentPage <= 1}
+          <button
+            onClick={() => setIsPanelOpen((o) => !o)}
+            className={cn(
+              "rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-500",
+              headerActive || isPanelOpen ? "opacity-100" : "opacity-30",
+              isPanelOpen && "bg-muted text-foreground",
+            )}
           >
-            Prev
-          </Button>
-          <div className="min-w-[132px] text-center text-sm tabular-nums">
-            Page {pagination.currentPage} / {displayTotalPages}
-            {pagination.status === "partial" && "~"}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={pagination.nextPage}
-            disabled={pagination.currentPage >= displayTotalPages}
-          >
-            Next
-          </Button>
-          <Input
-            type="number"
-            min={1}
-            max={displayTotalPages}
-            value={jumpInput}
-            onChange={(event) => setJumpInput(event.target.value)}
-            className="h-9 w-24 rounded-md"
-          />
-          <Button variant="secondary" size="sm" onClick={handleJumpToPage}>
-            Jump
-          </Button>
+            <SlidersHorizontal className="size-4" />
+          </button>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">
-        <p className="mb-3 text-xs text-muted-foreground">
-          Status: {pagination.status}
-          {pagination.diagnostics && (
-            <>
-              {" "}
-              · Blocks: {pagination.diagnostics.blockCount} · Lines:{" "}
-              {pagination.diagnostics.lineCount}
-              {typeof pagination.diagnostics.stage1ParseMs === "number" && (
-                <>
-                  {" "}
-                  · Stage 1: {formatMs(pagination.diagnostics.stage1ParseMs)} ·
-                  Stage 2: {formatMs(pagination.diagnostics.stage2PrepareMs)} ·
-                  Stage 3: {formatMs(pagination.diagnostics.stage3LayoutMs)}
-                </>
-              )}
-            </>
-          )}{" "}
-          · Viewport: {Math.round(viewport.width)}x{Math.round(viewport.height)}{" "}
-          · Keyboard: ← / →
-        </p>
-
-        {pagination.diagnostics && chapterTimingRows.length > 0 && (
-          <section className="mb-4 rounded-xl border bg-card p-4 shadow-sm">
-            <p className="text-sm font-medium">Pagination Diagnostics</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Source Load (wall-clock): {formatMs(sourceLoadWallClockMs)} · Last
-              addChapter sent (wall-clock): {formatMs(addChapterSendWallClockMs)} ·
-              Stage 1:{" "}
-              {formatMs(pagination.diagnostics.stage1ParseMs)} · Stage 2:{" "}
-              {formatMs(pagination.diagnostics.stage2PrepareMs)} · Stage 3:{" "}
-              {formatMs(pagination.diagnostics.stage3LayoutMs)} · Total:{" "}
-              {formatMs(pagination.diagnostics.totalMs)}
-            </p>
-
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs">
-                <thead>
-                  <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 pr-3">Chapter</th>
-                    <th className="py-2 pr-3">Title</th>
-                    <th className="py-2 pr-3 tabular-nums">Pages</th>
-                    <th className="py-2 pr-3 tabular-nums">Blocks</th>
-                    <th className="py-2 pr-3 tabular-nums">Lines</th>
-                    <th className="py-2 pr-3 tabular-nums">Stage 1</th>
-                    <th className="py-2 pr-3 tabular-nums">Stage 2</th>
-                    <th className="py-2 pr-3 tabular-nums">Stage 3</th>
-                    <th className="py-2 pr-3 tabular-nums">Chapter Load</th>
-                    <th className="py-2 pr-0 tabular-nums">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {chapterTimingRows.map((chapter) => (
-                    <tr key={chapter.chapterIndex} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3 tabular-nums">
-                        {chapter.chapterIndex + 1}
-                      </td>
-                      <td className="py-2 pr-3">
-                        {chapterEntries[chapter.chapterIndex]?.title ??
-                          `Chapter ${chapter.chapterIndex + 1}`}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">{chapter.pageCount}</td>
-                      <td className="py-2 pr-3 tabular-nums">{chapter.blockCount}</td>
-                      <td className="py-2 pr-3 tabular-nums">{chapter.lineCount}</td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {formatMs(chapter.stage1ParseMs)}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {formatMs(chapter.stage2PrepareMs)}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {formatMs(chapter.stage3LayoutMs)}
-                      </td>
-                      <td className="py-2 pr-3 tabular-nums">
-                        {formatMs(chapter.chapterLoadMs)}
-                      </td>
-                      <td className="py-2 pr-0 tabular-nums">
-                        {formatMs(chapter.totalMs)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        )}
-
-        <div className="rounded-xl border bg-card p-4 shadow-sm md:p-6">
-          <div
-            className="mx-auto overflow-hidden rounded-lg bg-background"
-            style={{
-              width: `${viewport.width}px`,
-              height: `${viewport.height}px`,
-            }}
-          >
-            <div className="h-full w-full overflow-hidden">
-              {pagination.status === "loading" &&
-              pagination.slices.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
-                </div>
-              ) : (
-                pagination.slices.map((slice, i) =>
-                  renderPageSlice(
-                    slice,
-                    i,
-                    bookId,
-                    deferredImageCacheRef.current,
-                  ),
-                )
-              )}
+      {/* Content + Panel */}
+      <div className="flex flex-1 overflow-hidden">
+        <main className="flex-1 overflow-y-auto px-4 py-6">
+          <div className="mx-auto">
+            <div
+              className="mx-auto overflow-hidden rounded-lg border bg-background"
+              style={{
+                width: `${viewport.width}px`,
+                height: `${viewport.height}px`,
+              }}
+            >
+              <div className="h-full w-full overflow-hidden">
+                {pagination.status === "loading" &&
+                pagination.slices.length === 0 ? (
+                  <div className="flex h-full items-center justify-center">
+                    <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+                  </div>
+                ) : (
+                  pagination.slices.map((slice, i) =>
+                    renderPageSlice(
+                      slice,
+                      i,
+                      bookId,
+                      deferredImageCacheRef.current,
+                    ),
+                  )
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
+
+        {/* Desktop panel */}
+        {!isMobile && isPanelOpen && (
+          <aside className="w-[320px] shrink-0 border-l overflow-y-auto px-3">
+            <InspectorPanel {...panelProps} />
+          </aside>
+        )}
+      </div>
+
+      {/* Mobile drawer */}
+      {isMobile && (
+        <InspectorDrawer open={isPanelOpen} onOpenChange={setIsPanelOpen}>
+          <InspectorPanel {...panelProps} />
+        </InspectorDrawer>
+      )}
     </div>
   );
 }
