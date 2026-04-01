@@ -109,8 +109,17 @@ function extractInlineRuns(
 
 function parseNumeric(value: string | null): number | null {
   if (!value) return null;
-  const n = Number.parseFloat(value);
-  return Number.isFinite(n) ? n : null;
+  const trimmed = value.trim();
+  if (!/^(?:\d+|\d*\.\d+)$/.test(trimmed)) {
+    return null;
+  }
+
+  const n = Number.parseFloat(trimmed);
+  if (!Number.isFinite(n) || n <= 0) {
+    return null;
+  }
+
+  return n;
 }
 
 function getImageSource(element: Element, tag: string): string | null {
@@ -134,15 +143,22 @@ function createImageBlock(element: Element, id: string): Block | null {
   const src = getImageSource(element, tag);
   if (!src) return null;
 
+  const intrinsicWidth =
+    parseNumeric(element.getAttribute("width")) ??
+    parseNumeric(element.getAttribute("data-epub-intrinsic-width")) ??
+    DEFAULT_INTRINSIC_WIDTH;
+  const intrinsicHeight =
+    parseNumeric(element.getAttribute("height")) ??
+    parseNumeric(element.getAttribute("data-epub-intrinsic-height")) ??
+    DEFAULT_INTRINSIC_HEIGHT;
+
   return {
     type: "image",
     id,
     src,
     alt: element.getAttribute("alt") || undefined,
-    intrinsicWidth:
-      parseNumeric(element.getAttribute("width")) ?? DEFAULT_INTRINSIC_WIDTH,
-    intrinsicHeight:
-      parseNumeric(element.getAttribute("height")) ?? DEFAULT_INTRINSIC_HEIGHT,
+    intrinsicWidth,
+    intrinsicHeight,
   };
 }
 

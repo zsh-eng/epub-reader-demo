@@ -4,7 +4,13 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
-import { getBookFile, getBookFilesByPaths, type Book, type BookFile } from "@/lib/db";
+import {
+  getBookFile,
+  getBookFilesByPaths,
+  getBookImageDimensionsMap,
+  type Book,
+  type BookFile,
+} from "@/lib/db";
 import {
   cleanupResourceUrls,
   processEmbeddedResources,
@@ -108,6 +114,7 @@ function buildChapterEntries(book: Book | null): ChapterEntry[] {
 async function loadSingleChapter(
   chapterFile: BookFile | undefined,
   chapter: ChapterEntry,
+  imageDimensionsByPath: Map<string, { width: number; height: number }>,
 ): Promise<string> {
   if (!chapterFile) {
     return "";
@@ -122,6 +129,7 @@ async function loadSingleChapter(
     loadResource: async () => null,
     skipImages: true,
     loadLinkedResources: false,
+    imageDimensionsByPath,
   });
 
   return chapterDoc.querySelector("body")?.innerHTML ?? "";
@@ -286,6 +294,7 @@ export function ReaderPrototype() {
 
       try {
         cleanupAllResources();
+        const imageDimensionsByPath = await getBookImageDimensionsMap(bookId);
 
         const initialChapter = chapterEntries[0];
         if (!initialChapter) return;
@@ -297,6 +306,7 @@ export function ReaderPrototype() {
         const initialHtml = await loadSingleChapter(
           initialChapterFile,
           initialChapter,
+          imageDimensionsByPath,
         );
         if (cancelled) return;
         pagination.addChapter(0, initialHtml);
@@ -318,7 +328,11 @@ export function ReaderPrototype() {
             if (!chapter) continue;
 
             const chapterFile = chaptersByPath.get(chapter.href);
-            const chapterHtml = await loadSingleChapter(chapterFile, chapter);
+            const chapterHtml = await loadSingleChapter(
+              chapterFile,
+              chapter,
+              imageDimensionsByPath,
+            );
             if (cancelled) return;
 
             pagination.addChapter(i, chapterHtml);

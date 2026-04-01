@@ -116,6 +116,9 @@ describe("processEmbeddedResources", () => {
       loadResource: async () => null,
       skipImages: true,
       loadLinkedResources: false,
+      imageDimensionsByPath: new Map([
+        ["OEBPS/Images/cover.jpg", { width: 1200, height: 1800 }],
+      ]),
     });
 
     const svgImage = document.querySelector("image");
@@ -123,5 +126,36 @@ describe("processEmbeddedResources", () => {
 
     expect(svgImage?.getAttribute("xlink:href")).toBe(expectedDeferredSrc);
     expect(svgImage?.getAttribute("href")).toBe(expectedDeferredSrc);
+    expect(svgImage?.getAttribute("data-epub-intrinsic-width")).toBe("1200");
+    expect(svgImage?.getAttribute("data-epub-intrinsic-height")).toBe("1800");
+  });
+
+  it("injects intrinsic metadata for img and svg image elements by resolved path", async () => {
+    const content = `<html><body>
+      <img src="../Images/inline.jpg" />
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <image xlink:href="../Images/cover.jpg" />
+      </svg>
+    </body></html>`;
+
+    const { document } = await processEmbeddedResources({
+      content,
+      mediaType: "application/xhtml+xml",
+      basePath: "OEBPS/Text/Chapter1.xhtml",
+      loadResource: async () => null,
+      loadLinkedResources: false,
+      imageDimensionsByPath: new Map([
+        ["OEBPS/Images/inline.jpg", { width: 640, height: 360 }],
+        ["OEBPS/Images/cover.jpg", { width: 1200, height: 1800 }],
+      ]),
+    });
+
+    const img = document.querySelector("img");
+    const svgImage = document.querySelector("image");
+
+    expect(img?.getAttribute("data-epub-intrinsic-width")).toBe("640");
+    expect(img?.getAttribute("data-epub-intrinsic-height")).toBe("360");
+    expect(svgImage?.getAttribute("data-epub-intrinsic-width")).toBe("1200");
+    expect(svgImage?.getAttribute("data-epub-intrinsic-height")).toBe("1800");
   });
 });

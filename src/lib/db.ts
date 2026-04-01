@@ -8,6 +8,7 @@
  */
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
+import { extractImageDimensionsFromBlob } from "@/lib/image-dimensions";
 import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
@@ -133,6 +134,19 @@ export interface BookTextCache {
   extractedAt: number; // For cache invalidation if needed
 }
 
+/**
+ * Cached intrinsic dimensions for image resources inside an EPUB.
+ * Local-only derived metadata used by pagination to avoid repeatedly decoding blobs.
+ */
+export interface BookImageDimension {
+  id: string; // `${bookId}:${path}`
+  bookId: string;
+  path: string; // Canonical EPUB resource path
+  width: number;
+  height: number;
+  updatedAt: number;
+}
+
 // Add sync metadata to synced types
 export type SyncedBook = WithSyncMetadata<Book>;
 export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
@@ -148,6 +162,74 @@ export type { ReadingState, ReadingStatus } from "@/types/reading-state";
 
 // Re-export StoredFile type for convenience
 export type { StoredFile, TransferTask };
+
+export interface BookImageDimensionInput {
+  bookId: string;
+  path: string;
+  width: number;
+  height: number;
+  updatedAt?: number;
+}
+
+const IMAGE_MEDIA_TYPE_PREFIX = "image/";
+const SVG_MEDIA_TYPES = new Set(["image/svg+xml", "application/svg+xml"]);
+
+function isImageBookFile(file: Pick<BookFile, "mediaType" | "path">): boolean {
+  const mediaType = file.mediaType.toLowerCase();
+  if (mediaType.startsWith(IMAGE_MEDIA_TYPE_PREFIX)) return true;
+  if (SVG_MEDIA_TYPES.has(mediaType)) return true;
+  return file.path.toLowerCase().endsWith(".svg");
+}
+
+export function createBookImageDimensionId(bookId: string, path: string): string {
+  return `${bookId}:${path}`;
+}
+
+function createBookImageDimensionRow(
+  entry: BookImageDimensionInput,
+  fallbackTimestamp: number,
+): BookImageDimension {
+  return {
+    id: createBookImageDimensionId(entry.bookId, entry.path),
+    bookId: entry.bookId,
+    path: entry.path,
+    width: entry.width,
+    height: entry.height,
+    updatedAt: entry.updatedAt ?? fallbackTimestamp,
+  };
+}
+
+export async function deriveImageDimensionsFromBookFiles(
+  files: Pick<BookFile, "bookId" | "path" | "mediaType" | "content">[],
+): Promise<BookImageDimensionInput[]> {
+  const dimensions: BookImageDimensionInput[] = [];
+
+  for (const file of files) {
+    if (!isImageBookFile(file)) continue;
+
+    const parsed = await extractImageDimensionsFromBlob(file.content, file.mediaType);
+    if (!parsed) continue;
+
+    dimensions.push({
+      bookId: file.bookId,
+      path: file.path,
+      width: parsed.width,
+      height: parsed.height,
+    });
+  }
+
+  return dimensions;
+}
+
+export async function buildBookImageDimensionRowsFromBookFiles(
+  files: Pick<BookFile, "bookId" | "path" | "mediaType" | "content">[],
+  fallbackTimestamp: number = Date.now(),
+): Promise<BookImageDimension[]> {
+  const extracted = await deriveImageDimensionsFromBookFiles(files);
+  return extracted.map((entry) =>
+    createBookImageDimensionRow(entry, fallbackTimestamp),
+  );
+}
 
 // ============================================================================
 // Database Class
@@ -168,6 +250,7 @@ class EPUBReaderDB extends Dexie {
   transferQueue!: Table<TransferTask, string>;
   syncLog!: Table<SyncLog, number>;
   bookTextCache!: Table<BookTextCache, string>;
+  bookImageDimensions!: Table<BookImageDimension, string>;
 
   constructor() {
     super("epub-reader-db");
@@ -233,6 +316,28 @@ class EPUBReaderDB extends Dexie {
       ...LOCAL_TABLES,
     });
 
+    // Version 7: Add local image-dimensions metadata and backfill existing books
+    this.version(7)
+      .stores({
+        ...syncSchemas,
+        ...LOCAL_TABLES,
+      })
+      .upgrade(async (tx) => {
+        const existingBookFiles = (await tx
+          .table("bookFiles")
+          .toArray()) as BookFile[];
+
+        if (existingBookFiles.length === 0) return;
+
+        const rows = await buildBookImageDimensionRowsFromBookFiles(
+          existingBookFiles,
+          Date.now(),
+        );
+        if (rows.length === 0) return;
+
+        await tx.table("bookImageDimensions").bulkPut(rows);
+      });
+
     // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
 }
@@ -263,17 +368,30 @@ export async function addBookWithFiles(
   book: Book,
   bookFiles: BookFile[],
 ): Promise<string> {
-  return db.transaction("rw", [db.books, db.bookFiles, db.files], async () => {
-    // Add book first
-    const bookId = await db.books.add(book as SyncedBook);
+  const imageDimensionRows = await buildBookImageDimensionRowsFromBookFiles(
+    bookFiles,
+    Date.now(),
+  );
 
-    // Add book files (extracted EPUB content)
-    if (bookFiles.length > 0) {
-      await db.bookFiles.bulkAdd(bookFiles);
-    }
+  return db.transaction(
+    "rw",
+    [db.books, db.bookFiles, db.files, db.bookImageDimensions],
+    async () => {
+      // Add book first
+      const bookId = await db.books.add(book as SyncedBook);
 
-    return bookId;
-  });
+      // Add book files (extracted EPUB content)
+      if (bookFiles.length > 0) {
+        await db.bookFiles.bulkAdd(bookFiles);
+      }
+
+      if (imageDimensionRows.length > 0) {
+        await db.bookImageDimensions.bulkPut(imageDimensionRows);
+      }
+
+      return bookId;
+    },
+  );
 }
 
 export async function getBook(id: string): Promise<SyncedBook | undefined> {
@@ -297,6 +415,7 @@ export async function deleteBook(id: string): Promise<void> {
 
   // Clean up local-only data
   await db.bookFiles.where("bookId").equals(id).delete();
+  await db.bookImageDimensions.where("bookId").equals(id).delete();
   await db.readingProgress.where("bookId").equals(id).delete();
   await db.highlights.where("bookId").equals(id).delete();
 }
@@ -333,6 +452,26 @@ export async function getBookFile(
 
 export async function getBookFiles(bookId: string): Promise<BookFile[]> {
   return db.bookFiles.where("bookId").equals(bookId).toArray();
+}
+
+export async function getBookImageDimensionsMap(
+  bookId: string,
+): Promise<Map<string, { width: number; height: number }>> {
+  const rows = await db.bookImageDimensions.where("bookId").equals(bookId).toArray();
+  return new Map(rows.map((row) => [row.path, { width: row.width, height: row.height }]));
+}
+
+export async function upsertBookImageDimensions(
+  entries: BookImageDimensionInput[],
+): Promise<void> {
+  if (entries.length === 0) return;
+
+  const timestamp = Date.now();
+  const rows: BookImageDimension[] = entries.map((entry) =>
+    createBookImageDimensionRow(entry, timestamp),
+  );
+
+  await db.bookImageDimensions.bulkPut(rows);
 }
 
 export async function getBookFilesByPaths(

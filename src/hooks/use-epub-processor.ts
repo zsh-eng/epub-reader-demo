@@ -1,6 +1,11 @@
 import { fileManager } from "@/lib/files/file-manager";
 import { processEpubToBookFiles } from "@/lib/sync/epub-processing";
-import { db, getBookFiles } from "@/lib/db";
+import {
+  db,
+  deriveImageDimensionsFromBookFiles,
+  getBookFiles,
+  upsertBookImageDimensions,
+} from "@/lib/db";
 import { useState, useEffect } from "react";
 
 export interface UseEpubProcessorReturn {
@@ -69,6 +74,7 @@ export function useEpubProcessor(
 
         // Process EPUB to extract bookFiles
         const bookFiles = await processEpubToBookFiles(blob, bookId!);
+        const imageDimensions = await deriveImageDimensionsFromBookFiles(bookFiles);
 
         console.log(
           "[useEpubProcessor] Storing",
@@ -78,6 +84,7 @@ export function useEpubProcessor(
 
         // Store bookFiles in IndexedDB
         await db.bookFiles.bulkAdd(bookFiles);
+        await upsertBookImageDimensions(imageDimensions);
 
         // Mark book as downloaded
         await db.books.update(bookId!, {

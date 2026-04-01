@@ -44,4 +44,48 @@ describe("parseChapterHtml image extraction", () => {
       intrinsicHeight: 2114,
     });
   });
+
+  it("prefers explicit numeric width and height over injected intrinsic metadata", () => {
+    const html = `
+      <img
+        src="cover.jpg"
+        width="600"
+        height="800"
+        data-epub-intrinsic-width="1200"
+        data-epub-intrinsic-height="1600"
+      />
+    `;
+
+    const blocks = parseChapterHtml(html);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: "image",
+      src: "cover.jpg",
+      intrinsicWidth: 600,
+      intrinsicHeight: 800,
+    });
+  });
+
+  it("uses injected intrinsic metadata when width and height are non-numeric", () => {
+    const html = `
+      <img
+        src="illustration.jpg"
+        width="100%"
+        height="auto"
+        data-epub-intrinsic-width="1024"
+        data-epub-intrinsic-height="1536"
+      />
+    `;
+
+    const blocks = parseChapterHtml(html);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: "image",
+      src: "illustration.jpg",
+      intrinsicWidth: 1024,
+      intrinsicHeight: 1536,
+    });
+  });
 });
