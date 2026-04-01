@@ -3,6 +3,7 @@ import { processEpubToBookFiles } from "@/lib/sync/epub-processing";
 import {
   db,
   deriveImageDimensionsFromBookFiles,
+  getBookImageDimensionsMap,
   getBookFiles,
   upsertBookImageDimensions,
 } from "@/lib/db";
@@ -52,6 +53,14 @@ export function useEpubProcessor(
         const existingFiles = await getBookFiles(bookId!);
 
         if (existingFiles.length > 0) {
+          // NOTE: This is a temporary fix if the migration doesn't run properly
+          // Technically this would not work if there are no images in the book
+          const existingDimensions = await getBookImageDimensionsMap(bookId!);
+          if (existingDimensions.size === 0) {
+            const derived = await deriveImageDimensionsFromBookFiles(existingFiles);
+            await upsertBookImageDimensions(derived);
+          }
+
           // Book is already processed
           if (!isCancelled) {
             setIsReady(true);
