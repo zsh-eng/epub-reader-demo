@@ -15,6 +15,16 @@ import type {
 import { prepareBlocks } from "./prepare-blocks";
 import { layoutPages } from "./layout-pages";
 
+export interface PaginationRuntime {
+  maybeYield: () => void | Promise<void>;
+  isStale: () => boolean;
+}
+
+const DEFAULT_RUNTIME: PaginationRuntime = {
+  maybeYield: () => {},
+  isStale: () => false,
+};
+
 export class PaginationEngine {
   private emit: (event: PaginationEvent) => void;
 
@@ -37,7 +47,12 @@ export class PaginationEngine {
     this.emit = emit;
   }
 
-  handleCommand(cmd: PaginationCommand): void {
+  async handleCommand(
+    cmd: PaginationCommand,
+    runtimeOverrides: Partial<PaginationRuntime> = {},
+  ): Promise<void> {
+    const runtime = this.resolveRuntime(runtimeOverrides);
+
     try {
       switch (cmd.type) {
         case "init":
@@ -51,7 +66,7 @@ export class PaginationEngine {
           this.addChapter(cmd.chapterIndex, cmd.blocks);
           break;
         case "updateConfig":
-          this.updateConfig(cmd.config, cmd.anchor);
+          await this.updateConfig(cmd.config, cmd.anchor, runtime);
           break;
         case "getPage":
           this.getPage(cmd.globalPage);
@@ -142,15 +157,16 @@ export class PaginationEngine {
   private updateConfig(
     nextConfig: PaginationConfig,
     anchor: ContentAnchor | null,
-  ): void {
+    runtime: PaginationRuntime,
+  ): Promise<void> {
     const prevConfig = this.config;
     if (!prevConfig) {
       this.config = nextConfig;
-      return;
+      return Promise.resolve();
     }
 
     if (this.areConfigsEqual(prevConfig, nextConfig)) {
-      return;
+      return Promise.resolve();
     }
 
     const fontChanged = !this.areFontConfigsEqual(
@@ -160,47 +176,67 @@ export class PaginationEngine {
     this.config = nextConfig;
 
     if (this.totalChapters === 0 || this.receivedChapters === 0) {
-      return;
+      return Promise.resolve();
     }
 
     if (fontChanged) {
-      this.relayoutFromBlocks(anchor);
-      return;
+      return this.relayoutFromBlocks(anchor, runtime);
     }
 
-    this.relayoutPrepared(anchor);
+    return this.relayoutPrepared(anchor, runtime);
   }
 
-  private relayoutFromBlocks(anchor: ContentAnchor | null): void {
-    this.runRelayout(anchor, (chapterIndex) => {
-      if (!this.blocksByChapter[chapterIndex]) return null;
-      return this.prepareAndLayoutChapter(chapterIndex);
-    });
+  private relayoutFromBlocks(
+    anchor: ContentAnchor | null,
+    runtime: PaginationRuntime,
+  ): Promise<void> {
+    return this.runRelayout(
+      anchor,
+      (chapterIndex) => {
+        if (!this.blocksByChapter[chapterIndex]) return null;
+        return this.prepareAndLayoutChapter(chapterIndex);
+      },
+      runtime,
+    );
   }
 
-  private relayoutPrepared(anchor: ContentAnchor | null): void {
-    this.runRelayout(anchor, (chapterIndex) => {
-      const prepared = this.preparedByChapter[chapterIndex];
-      if (!prepared) return null;
+  private relayoutPrepared(
+    anchor: ContentAnchor | null,
+    runtime: PaginationRuntime,
+  ): Promise<void> {
+    return this.runRelayout(
+      anchor,
+      (chapterIndex) => {
+        const prepared = this.preparedByChapter[chapterIndex];
+        if (!prepared) return null;
 
-      const stage2PrepareMs =
-        this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
+        const stage2PrepareMs =
+          this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
 
-      return this.layoutPreparedChapter(chapterIndex, prepared, stage2PrepareMs);
-    });
+        return this.layoutPreparedChapter(
+          chapterIndex,
+          prepared,
+          stage2PrepareMs,
+        );
+      },
+      runtime,
+    );
   }
 
-  private runRelayout(
+  private async runRelayout(
     anchor: ContentAnchor | null,
     relayoutChapter: (
       chapterIndex: number,
     ) => PaginationChapterDiagnostics | null,
-  ): void {
+    runtime: PaginationRuntime,
+  ): Promise<void> {
     const centerChapter = this.resolveRelayoutCenterChapter();
     const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
     let emittedPartial = false;
 
     for (const chapterIndex of chapterOrder) {
+      if (runtime.isStale()) return;
+
       const chapterDiagnostics = relayoutChapter(chapterIndex);
       if (!chapterDiagnostics) continue;
 
@@ -212,21 +248,31 @@ export class PaginationEngine {
           : (this.getInitialAnchorPage() ?? 1);
         this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
         emittedPartial = true;
-        continue;
+      } else {
+        this.emit({
+          type: "progress",
+          chapterIndex,
+          chaptersCompleted: this.receivedChapters,
+          totalChapters: this.totalChapters,
+          runningTotalPages: this.getTotalPages(),
+          chapterPageOffsets: [...this.chapterPageOffsets],
+          chapterDiagnostics,
+        });
       }
 
-      this.emit({
-        type: "progress",
-        chapterIndex,
-        chaptersCompleted: this.receivedChapters,
-        totalChapters: this.totalChapters,
-        runningTotalPages: this.getTotalPages(),
-        chapterPageOffsets: [...this.chapterPageOffsets],
-        chapterDiagnostics,
-      });
+      if (runtime.isStale()) return;
+
+      const maybeYieldResult = runtime.maybeYield();
+      if (this.isPromiseLike(maybeYieldResult)) {
+        await maybeYieldResult;
+      }
     }
 
+    if (runtime.isStale()) return;
+
     this.recomputeOffsets();
+    if (runtime.isStale()) return;
+
     const anchorPage = anchor
       ? this.resolveAnchor(anchor)
       : this.getInitialAnchorPage();
@@ -276,6 +322,21 @@ export class PaginationEngine {
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
+
+  private resolveRuntime(
+    runtimeOverrides: Partial<PaginationRuntime>,
+  ): PaginationRuntime {
+    return {
+      maybeYield: runtimeOverrides.maybeYield ?? DEFAULT_RUNTIME.maybeYield,
+      isStale: runtimeOverrides.isStale ?? DEFAULT_RUNTIME.isStale,
+    };
+  }
+
+  private isPromiseLike(value: unknown): value is PromiseLike<void> {
+    if (typeof value !== "object" || value === null) return false;
+    if (!("then" in value)) return false;
+    return typeof value.then === "function";
+  }
 
   private areConfigsEqual(
     a: PaginationConfig,

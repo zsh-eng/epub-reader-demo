@@ -1,61 +1,90 @@
 import { PaginationEngine } from "./pagination-engine";
 import type { PaginationCommand } from "./engine-types";
+import {
+  coalesceQueuedCommands,
+  createCommandRuntime,
+  type QueuedPaginationCommand,
+} from "./pagination-worker-runtime";
 
 const engine = new PaginationEngine((event) => postMessage(event));
 
-// Commands that can be superseded — only the latest of each type matters
-const SUPERSEDABLE: Set<PaginationCommand["type"]> = new Set([
-  "updateConfig",
-  "getPage",
-  "goToChapter",
-]);
-
-let pendingCommands: PaginationCommand[] = [];
-let flushScheduled = false;
-
-function flush() {
-  flushScheduled = false;
-  const batch = coalesce(pendingCommands);
-  pendingCommands = [];
-
-  for (const cmd of batch) {
-    engine.handleCommand(cmd);
-  }
+interface YieldingScheduler {
+  yield: () => Promise<void>;
 }
 
-/**
- * Keep only the last occurrence of each supersedable command type.
- * Non-supersedable commands (e.g. `init`, `addChapter`) are always kept, in order.
- */
-function coalesce(commands: PaginationCommand[]): PaginationCommand[] {
-  // Walk backwards to find the last index of each supersedable type
-  const lastIndex = new Map<PaginationCommand["type"], number>();
-  for (let i = commands.length - 1; i >= 0; i--) {
-    const type = commands[i]!.type;
-    if (SUPERSEDABLE.has(type) && !lastIndex.has(type)) {
-      lastIndex.set(type, i);
-    }
+let pendingCommands: QueuedPaginationCommand[] = [];
+let nextCommandSequence = 1;
+let latestUpdateConfigSequence = 0;
+let flushScheduled = false;
+let isFlushing = false;
+
+function isYieldingScheduler(value: unknown): value is YieldingScheduler {
+  if (typeof value !== "object" || value === null) return false;
+  if (!("yield" in value)) return false;
+  return typeof value.yield === "function";
+}
+
+async function yieldToEventLoop(): Promise<void> {
+  const maybeScheduler = (globalThis as { scheduler?: unknown }).scheduler;
+  if (isYieldingScheduler(maybeScheduler)) {
+    await maybeScheduler.yield();
+    return;
   }
 
-  const result: PaginationCommand[] = [];
-  for (let i = 0; i < commands.length; i++) {
-    const cmd = commands[i]!;
-    if (SUPERSEDABLE.has(cmd.type)) {
-      // Only keep the last occurrence
-      if (lastIndex.get(cmd.type) === i) {
-        result.push(cmd);
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, 0);
+  });
+}
+
+function scheduleFlush(): void {
+  if (flushScheduled) return;
+
+  flushScheduled = true;
+  setTimeout(() => {
+    flushScheduled = false;
+    void flush();
+  }, 0);
+}
+
+async function flush(): Promise<void> {
+  if (isFlushing) return;
+  isFlushing = true;
+
+  try {
+    while (pendingCommands.length > 0) {
+      const batch = coalesceQueuedCommands(pendingCommands);
+      pendingCommands = [];
+
+      for (const queuedCommand of batch) {
+        const runtime = createCommandRuntime({
+          queuedCommand,
+          getLatestUpdateConfigSequence: () => latestUpdateConfigSequence,
+          yieldToEventLoop,
+          now: () => performance.now(),
+        });
+
+        await engine.handleCommand(queuedCommand.command, runtime);
       }
-    } else {
-      result.push(cmd);
+    }
+  } finally {
+    isFlushing = false;
+    if (pendingCommands.length > 0) {
+      scheduleFlush();
     }
   }
-  return result;
 }
 
 self.onmessage = (e: MessageEvent<PaginationCommand>) => {
-  pendingCommands.push(e.data);
-  if (!flushScheduled) {
-    flushScheduled = true;
-    setTimeout(flush, 0);
+  const queuedCommand: QueuedPaginationCommand = {
+    sequence: nextCommandSequence,
+    command: e.data,
+  };
+  nextCommandSequence += 1;
+
+  if (queuedCommand.command.type === "updateConfig") {
+    latestUpdateConfigSequence = queuedCommand.sequence;
   }
+
+  pendingCommands.push(queuedCommand);
+  scheduleFlush();
 };
