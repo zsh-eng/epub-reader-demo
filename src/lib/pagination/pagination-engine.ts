@@ -34,6 +34,7 @@ export class PaginationEngine {
   private receivedChapters = 0;
   private initialChapterIndex = 0;
   private initialChapterReceived = false;
+  private lastRequestedGlobalPage: number | null = null;
 
   constructor(emit: (event: PaginationEvent) => void) {
     this.emit = emit;
@@ -99,6 +100,7 @@ export class PaginationEngine {
 
     this.receivedChapters = 0;
     this.initialChapterReceived = false;
+    this.lastRequestedGlobalPage = null;
 
     this.recomputeOffsets();
   }
@@ -125,16 +127,7 @@ export class PaginationEngine {
       !this.initialChapterReceived
     ) {
       this.initialChapterReceived = true;
-      this.emit({
-        type: "partialReady",
-        chapterIndex,
-        chapterPageCount: this.pagesByChapter[chapterIndex]?.length ?? 0,
-        estimatedTotalPages: this.estimateTotalPages(),
-        anchorPage,
-        slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
-        chapterPageOffsets: [...this.chapterPageOffsets],
-        chapterDiagnostics,
-      });
+      this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
 
       if (this.receivedChapters === this.totalChapters) {
         this.emitReady(anchorPage);
@@ -166,44 +159,28 @@ export class PaginationEngine {
     if (this.totalChapters === 0) return;
     if (this.receivedChapters === 0) return;
 
-    const anchorChapter = anchor
-      ? anchor.chapterIndex
-      : this.initialChapterIndex;
-    const validAnchorChapter = Math.min(
-      Math.max(anchorChapter, 0),
-      this.totalChapters - 1,
-    );
+    const centerChapter = this.resolveRelayoutCenterChapter();
+    const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
+    let emittedPartial = false;
 
-    if (this.blocksByChapter[validAnchorChapter]) {
-      const chapterDiagnostics =
-        this.prepareAndLayoutChapter(validAnchorChapter);
+    for (const chapterIndex of chapterOrder) {
+      if (!this.blocksByChapter[chapterIndex]) continue;
+
+      const chapterDiagnostics = this.prepareAndLayoutChapter(chapterIndex);
       this.recomputeOffsets();
 
-      const anchorPage = anchor
-        ? this.resolveAnchor(anchor)
-        : (this.getInitialAnchorPage() ?? 1);
-
-      this.emit({
-        type: "partialReady",
-        chapterIndex: validAnchorChapter,
-        chapterPageCount: this.pagesByChapter[validAnchorChapter]?.length ?? 0,
-        estimatedTotalPages: this.estimateTotalPages(),
-        anchorPage,
-        slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
-        chapterPageOffsets: [...this.chapterPageOffsets],
-        chapterDiagnostics,
-      });
-    }
-
-    for (let i = 0; i < this.totalChapters; i++) {
-      if (i === validAnchorChapter || !this.blocksByChapter[i]) continue;
-
-      const chapterDiagnostics = this.prepareAndLayoutChapter(i);
-      this.recomputeOffsets();
+      if (!emittedPartial) {
+        const anchorPage = anchor
+          ? this.resolveAnchor(anchor)
+          : (this.getInitialAnchorPage() ?? 1);
+        this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
+        emittedPartial = true;
+        continue;
+      }
 
       this.emit({
         type: "progress",
-        chapterIndex: i,
+        chapterIndex,
         chaptersCompleted: this.receivedChapters,
         totalChapters: this.totalChapters,
         runningTotalPages: this.getTotalPages(),
@@ -217,14 +194,7 @@ export class PaginationEngine {
       ? this.resolveAnchor(anchor)
       : this.getInitialAnchorPage();
 
-    this.emit({
-      type: "ready",
-      totalPages: this.getTotalPages(),
-      anchorPage,
-      slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
-      diagnostics: this.buildDiagnostics(),
-      chapterPageOffsets: [...this.chapterPageOffsets],
-    });
+    this.emitReady(anchorPage);
   }
 
   private setViewport(
@@ -252,12 +222,41 @@ export class PaginationEngine {
     )
       return;
 
-    for (let i = 0; i < this.totalChapters; i++) {
-      const prepared = this.preparedByChapter[i];
+    const centerChapter = this.resolveRelayoutCenterChapter();
+    const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
+    let emittedPartial = false;
+
+    for (const chapterIndex of chapterOrder) {
+      const prepared = this.preparedByChapter[chapterIndex];
       if (!prepared) continue;
+
       const stage2PrepareMs =
-        this.chapterDiagnosticsByChapter[i]?.stage2PrepareMs ?? 0;
-      this.layoutPreparedChapter(i, prepared, stage2PrepareMs);
+        this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
+      const chapterDiagnostics = this.layoutPreparedChapter(
+        chapterIndex,
+        prepared,
+        stage2PrepareMs,
+      );
+      this.recomputeOffsets();
+
+      if (!emittedPartial) {
+        const anchorPage = anchor
+          ? this.resolveAnchor(anchor)
+          : (this.getInitialAnchorPage() ?? 1);
+        this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
+        emittedPartial = true;
+        continue;
+      }
+
+      this.emit({
+        type: "progress",
+        chapterIndex,
+        chaptersCompleted: this.receivedChapters,
+        totalChapters: this.totalChapters,
+        runningTotalPages: this.getTotalPages(),
+        chapterPageOffsets: [...this.chapterPageOffsets],
+        chapterDiagnostics,
+      });
     }
 
     this.recomputeOffsets();
@@ -266,17 +265,11 @@ export class PaginationEngine {
       ? this.resolveAnchor(anchor)
       : this.getInitialAnchorPage();
 
-    this.emit({
-      type: "ready",
-      totalPages: this.getTotalPages(),
-      anchorPage,
-      slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
-      diagnostics: this.buildDiagnostics(),
-      chapterPageOffsets: [...this.chapterPageOffsets],
-    });
+    this.emitReady(anchorPage);
   }
 
   private getPage(globalPage: number): void {
+    this.lastRequestedGlobalPage = Math.max(1, globalPage);
     this.emit({
       type: "pageContent",
       globalPage,
@@ -289,6 +282,7 @@ export class PaginationEngine {
   // -----------------------------------------------------------------------
 
   private emitReady(anchorPage: number | null): void {
+    this.updateLastRequestedPage(anchorPage);
     this.emit({
       type: "ready",
       totalPages: this.getTotalPages(),
@@ -297,6 +291,29 @@ export class PaginationEngine {
       diagnostics: this.buildDiagnostics(),
       chapterPageOffsets: [...this.chapterPageOffsets],
     });
+  }
+
+  private emitPartialReady(
+    chapterIndex: number,
+    anchorPage: number | null,
+    chapterDiagnostics: PaginationChapterDiagnostics | null,
+  ): void {
+    this.updateLastRequestedPage(anchorPage);
+    this.emit({
+      type: "partialReady",
+      chapterIndex,
+      chapterPageCount: this.pagesByChapter[chapterIndex]?.length ?? 0,
+      estimatedTotalPages: this.estimateTotalPages(),
+      anchorPage,
+      slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
+      chapterPageOffsets: [...this.chapterPageOffsets],
+      chapterDiagnostics,
+    });
+  }
+
+  private updateLastRequestedPage(globalPage: number | null): void {
+    if (globalPage === null) return;
+    this.lastRequestedGlobalPage = Math.max(1, globalPage);
   }
 
   private prepareAndLayoutChapter(
@@ -425,6 +442,68 @@ export class PaginationEngine {
 
     // Fallback: return start of chapter
     return offset + 1;
+  }
+
+  private resolveChapterIndexForGlobalPage(globalPage: number): number | null {
+    if (this.totalChapters === 0) return null;
+
+    const page1 = Math.min(
+      Math.max(1, Math.floor(globalPage)),
+      this.getTotalPages(),
+    );
+    const pageIndex = page1 - 1;
+
+    for (let ch = this.chapterPageOffsets.length - 1; ch >= 0; ch--) {
+      const offset = this.chapterPageOffsets[ch];
+      if (offset === undefined || pageIndex < offset) continue;
+
+      const pages = this.pagesByChapter[ch];
+      const pageCount = pages?.length ?? 0;
+      if (pageCount === 0) continue;
+
+      if (pageIndex < offset + pageCount) {
+        return ch;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveRelayoutCenterChapter(): number {
+    if (this.lastRequestedGlobalPage !== null) {
+      const chapterIndex = this.resolveChapterIndexForGlobalPage(
+        this.lastRequestedGlobalPage,
+      );
+      if (chapterIndex !== null) {
+        return chapterIndex;
+      }
+    }
+
+    return this.initialChapterIndex;
+  }
+
+  private buildMiddleOutChapterOrder(centerChapter: number): number[] {
+    if (this.totalChapters <= 0) return [];
+
+    const center = Math.min(
+      Math.max(centerChapter, 0),
+      this.totalChapters - 1,
+    );
+    const order: number[] = [center];
+
+    for (let delta = 1; order.length < this.totalChapters; delta++) {
+      const right = center + delta;
+      if (right < this.totalChapters) {
+        order.push(right);
+      }
+
+      const left = center - delta;
+      if (left >= 0) {
+        order.push(left);
+      }
+    }
+
+    return order;
   }
 
   private buildDiagnostics(): PaginationDiagnostics {
