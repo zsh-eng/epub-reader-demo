@@ -175,6 +175,12 @@ function renderPageSlice(
             height: `${slice.lineHeight}px`,
             lineHeight: `${slice.lineHeight}px`,
             textAlign: slice.textAlign,
+            textAlignLast:
+              slice.textAlign === "justify"
+                ? line.isLastInBlock
+                  ? "auto"
+                  : "justify"
+                : undefined,
           }}
         >
           {line.fragments.map((fragment, fragmentIndex) => (

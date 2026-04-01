@@ -107,7 +107,7 @@ export function layoutTextLines(
     }
 
     if (fragments.length === 0) break;
-    lines.push({ fragments });
+    lines.push({ fragments, isLastInBlock: false });
   }
 
   return lines;
@@ -142,5 +142,6 @@ export function layoutPreWrapLines(
         isCode: true,
       },
     ],
+    isLastInBlock: false,
   }));
 }

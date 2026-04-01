@@ -162,7 +162,12 @@ export function layoutPages(
       }
 
       const take = Math.min(maxLines, lines.length - lineIndex);
-      const sliceLines = lines.slice(lineIndex, lineIndex + take);
+      const sliceLines = lines
+        .slice(lineIndex, lineIndex + take)
+        .map((line, offset) => ({
+          ...line,
+          isLastInBlock: lineIndex + offset === lines.length - 1,
+        }));
 
       current.slices.push({
         type: "text",

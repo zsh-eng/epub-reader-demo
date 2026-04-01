@@ -149,6 +149,7 @@ export interface PageFragment {
 
 export interface PageLine {
   fragments: PageFragment[];
+  isLastInBlock: boolean;
 }
 
 export interface TextSlice {
