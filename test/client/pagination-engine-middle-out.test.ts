@@ -1,6 +1,11 @@
 import { PaginationEngine } from "@/lib/pagination/pagination-engine";
 import type { PaginationEvent } from "@/lib/pagination/engine-types";
-import type { Block, FontConfig, LayoutTheme } from "@/lib/pagination/types";
+import type {
+  Block,
+  FontConfig,
+  LayoutTheme,
+  PaginationConfig,
+} from "@/lib/pagination/types";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -19,6 +24,12 @@ const BASE_LAYOUT_THEME: LayoutTheme = {
   textAlign: "left",
 };
 
+const BASE_CONFIG: PaginationConfig = {
+  fontConfig: BASE_FONT_CONFIG,
+  layoutTheme: BASE_LAYOUT_THEME,
+  viewport: { width: 620, height: 860 },
+};
+
 function createEngine(totalChapters: number, initialChapterIndex: number) {
   const events: PaginationEvent[] = [];
   const engine = new PaginationEngine((event) => events.push(event));
@@ -26,9 +37,7 @@ function createEngine(totalChapters: number, initialChapterIndex: number) {
   engine.handleCommand({
     type: "init",
     totalChapters,
-    fontConfig: BASE_FONT_CONFIG,
-    layoutTheme: BASE_LAYOUT_THEME,
-    viewport: { width: 620, height: 860 },
+    config: BASE_CONFIG,
     initialChapterIndex,
   });
 
@@ -97,9 +106,11 @@ describe("Pagination engine relayout middle-out prioritization", () => {
     events.length = 0;
 
     engine.handleCommand({
-      type: "setViewport",
-      width: 700,
-      height: 900,
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        viewport: { width: 700, height: 900 },
+      },
       anchor: { chapterIndex: 2, blockId: "spacer-2" },
     });
 
@@ -115,9 +126,11 @@ describe("Pagination engine relayout middle-out prioritization", () => {
 
     events.length = 0;
     engine.handleCommand({
-      type: "setViewport",
-      width: 660,
-      height: 860,
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        viewport: { width: 660, height: 860 },
+      },
       anchor: { chapterIndex: 2, blockId: "spacer-2" },
     });
 
@@ -133,9 +146,11 @@ describe("Pagination engine relayout middle-out prioritization", () => {
 
     events.length = 0;
     engine.handleCommand({
-      type: "setViewport",
-      width: 680,
-      height: 820,
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        viewport: { width: 680, height: 820 },
+      },
       anchor: null,
     });
 
@@ -154,10 +169,13 @@ describe("Pagination engine relayout middle-out prioritization", () => {
     events.length = 0;
 
     engine.handleCommand({
-      type: "setFontConfig",
-      fontConfig: {
-        ...BASE_FONT_CONFIG,
-        baseSizePx: 18,
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        fontConfig: {
+          ...BASE_FONT_CONFIG,
+          baseSizePx: 18,
+        },
       },
       anchor: { chapterIndex: 3, blockId: "spacer-3" },
     });
@@ -168,10 +186,13 @@ describe("Pagination engine relayout middle-out prioritization", () => {
 
     events.length = 0;
     engine.handleCommand({
-      type: "setLayoutTheme",
-      layoutTheme: {
-        ...BASE_LAYOUT_THEME,
-        paragraphSpacingFactor: 1.3,
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        layoutTheme: {
+          ...BASE_LAYOUT_THEME,
+          paragraphSpacingFactor: 1.3,
+        },
       },
       anchor: { chapterIndex: 3, blockId: "spacer-3" },
     });
@@ -180,5 +201,20 @@ describe("Pagination engine relayout middle-out prioritization", () => {
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(1);
     expect(events.at(-1)?.type).toBe("ready");
+  });
+
+  it("ignores updateConfig when config has not changed", () => {
+    const { engine, events } = createEngine(2, 0);
+    addChapter(engine, 0);
+    addChapter(engine, 1);
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "updateConfig",
+      config: BASE_CONFIG,
+      anchor: { chapterIndex: 0, blockId: "spacer-0" },
+    });
+
+    expect(events).toHaveLength(0);
   });
 });

@@ -40,6 +40,7 @@ export type {
   PreparedAtomicItem,
   // Stage 3
   LayoutTheme,
+  PaginationConfig,
   PaginationResult,
   Page,
   PageSlice,

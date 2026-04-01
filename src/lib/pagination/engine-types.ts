@@ -1,8 +1,7 @@
 import type {
   Block,
-  FontConfig,
-  LayoutTheme,
   PageSlice,
+  PaginationConfig,
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
 } from "./types";
@@ -23,9 +22,7 @@ export interface ContentAnchor {
 export interface InitCommand {
   type: "init";
   totalChapters: number;
-  fontConfig: FontConfig;
-  layoutTheme: LayoutTheme;
-  viewport: { width: number; height: number };
+  config: PaginationConfig;
   initialChapterIndex: number;
 }
 
@@ -35,22 +32,9 @@ export interface AddChapterCommand {
   blocks: Block[];
 }
 
-export interface SetFontConfigCommand {
-  type: "setFontConfig";
-  fontConfig: FontConfig;
-  anchor: ContentAnchor | null;
-}
-
-export interface SetViewportCommand {
-  type: "setViewport";
-  width: number;
-  height: number;
-  anchor: ContentAnchor | null;
-}
-
-export interface SetLayoutThemeCommand {
-  type: "setLayoutTheme";
-  layoutTheme: LayoutTheme;
+export interface UpdateConfigCommand {
+  type: "updateConfig";
+  config: PaginationConfig;
   anchor: ContentAnchor | null;
 }
 
@@ -62,9 +46,7 @@ export interface GetPageCommand {
 export type PaginationCommand =
   | InitCommand
   | AddChapterCommand
-  | SetFontConfigCommand
-  | SetViewportCommand
-  | SetLayoutThemeCommand
+  | UpdateConfigCommand
   | GetPageCommand;
 
 // ---------------------------------------------------------------------------

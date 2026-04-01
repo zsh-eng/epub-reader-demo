@@ -22,6 +22,12 @@ const BASE_LAYOUT_THEME = {
   textAlign: "left" as const,
 };
 
+const BASE_CONFIG = {
+  fontConfig: BASE_FONT_CONFIG,
+  layoutTheme: BASE_LAYOUT_THEME,
+  viewport: { width: 620, height: 860 },
+};
+
 describe("Pagination command history", () => {
   it("records sent commands in newest-first order", () => {
     const commandA: PaginationCommand = { type: "getPage", globalPage: 3 };
@@ -99,9 +105,7 @@ describe("Pagination command history", () => {
     const initCommand: PaginationCommand = {
       type: "init",
       totalChapters: 8,
-      fontConfig: BASE_FONT_CONFIG,
-      layoutTheme: BASE_LAYOUT_THEME,
-      viewport: { width: 620, height: 860 },
+      config: BASE_CONFIG,
       initialChapterIndex: 2,
     };
 
@@ -110,5 +114,32 @@ describe("Pagination command history", () => {
     expect(afterInit).toHaveLength(1);
     expect(afterInit[0]?.type).toBe("init");
     expect(afterInit[0]?.summary).toContain("chapters=8");
+  });
+
+  it("summarizes updateConfig with merged config fields", () => {
+    const summary = summarizePaginationCommand({
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        fontConfig: {
+          ...BASE_FONT_CONFIG,
+          baseSizePx: 18,
+        },
+        layoutTheme: {
+          ...BASE_LAYOUT_THEME,
+          lineHeightFactor: 1.8,
+          paragraphSpacingFactor: 1.4,
+          textAlign: "justify",
+        },
+        viewport: { width: 700, height: 900 },
+      },
+      anchor: { chapterIndex: 1, blockId: "block-123" },
+    });
+
+    expect(summary).toContain("base=18.0px");
+    expect(summary).toContain("lineHeight=1.80");
+    expect(summary).toContain("para=1.40");
+    expect(summary).toContain("align=justify");
+    expect(summary).toContain("viewport=700x900");
   });
 });

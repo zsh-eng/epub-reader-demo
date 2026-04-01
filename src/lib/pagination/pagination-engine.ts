@@ -5,10 +5,9 @@ import type {
 } from "./engine-types";
 import type {
   Block,
-  FontConfig,
-  LayoutTheme,
   Page,
   PageSlice,
+  PaginationConfig,
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
   PreparedBlock,
@@ -26,9 +25,7 @@ export class PaginationEngine {
     [];
   private chapterPageOffsets: number[] = [];
 
-  private fontConfig: FontConfig | null = null;
-  private viewport = { width: 620, height: 860 };
-  private layoutTheme: LayoutTheme | null = null;
+  private config: PaginationConfig | null = null;
 
   private totalChapters = 0;
   private receivedChapters = 0;
@@ -46,23 +43,15 @@ export class PaginationEngine {
         case "init":
           this.init(
             cmd.totalChapters,
-            cmd.fontConfig,
-            cmd.layoutTheme,
-            cmd.viewport,
+            cmd.config,
             cmd.initialChapterIndex,
           );
           break;
         case "addChapter":
           this.addChapter(cmd.chapterIndex, cmd.blocks);
           break;
-        case "setFontConfig":
-          this.setFontConfig(cmd.fontConfig, cmd.anchor);
-          break;
-        case "setViewport":
-          this.setViewport(cmd.width, cmd.height, cmd.anchor);
-          break;
-        case "setLayoutTheme":
-          this.setLayoutTheme(cmd.layoutTheme, cmd.anchor);
+        case "updateConfig":
+          this.updateConfig(cmd.config, cmd.anchor);
           break;
         case "getPage":
           this.getPage(cmd.globalPage);
@@ -78,14 +67,10 @@ export class PaginationEngine {
 
   private init(
     totalChapters: number,
-    fontConfig: FontConfig,
-    layoutTheme: LayoutTheme,
-    viewport: { width: number; height: number },
+    config: PaginationConfig,
     initialChapterIndex: number,
   ): void {
-    this.fontConfig = fontConfig;
-    this.layoutTheme = layoutTheme;
-    this.viewport = viewport;
+    this.config = config;
 
     this.totalChapters = Math.max(0, totalChapters);
     this.initialChapterIndex =
@@ -151,92 +136,71 @@ export class PaginationEngine {
     });
   }
 
-  private setFontConfig(
-    fontConfig: FontConfig,
+  private updateConfig(
+    nextConfig: PaginationConfig,
     anchor: ContentAnchor | null,
   ): void {
-    this.fontConfig = fontConfig;
-    if (this.totalChapters === 0) return;
-    if (this.receivedChapters === 0) return;
-
-    const centerChapter = this.resolveRelayoutCenterChapter();
-    const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
-    let emittedPartial = false;
-
-    for (const chapterIndex of chapterOrder) {
-      if (!this.blocksByChapter[chapterIndex]) continue;
-
-      const chapterDiagnostics = this.prepareAndLayoutChapter(chapterIndex);
-      this.recomputeOffsets();
-
-      if (!emittedPartial) {
-        const anchorPage = anchor
-          ? this.resolveAnchor(anchor)
-          : (this.getInitialAnchorPage() ?? 1);
-        this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
-        emittedPartial = true;
-        continue;
-      }
-
-      this.emit({
-        type: "progress",
-        chapterIndex,
-        chaptersCompleted: this.receivedChapters,
-        totalChapters: this.totalChapters,
-        runningTotalPages: this.getTotalPages(),
-        chapterPageOffsets: [...this.chapterPageOffsets],
-        chapterDiagnostics,
-      });
+    const prevConfig = this.config;
+    if (!prevConfig) {
+      this.config = nextConfig;
+      return;
     }
 
-    this.recomputeOffsets();
-    const anchorPage = anchor
-      ? this.resolveAnchor(anchor)
-      : this.getInitialAnchorPage();
-
-    this.emitReady(anchorPage);
-  }
-
-  private setViewport(
-    width: number,
-    height: number,
-    anchor: ContentAnchor | null,
-  ): void {
-    this.viewport = { width, height };
-    this.relayoutAll(anchor);
-  }
-
-  private setLayoutTheme(
-    layoutTheme: LayoutTheme,
-    anchor: ContentAnchor | null,
-  ): void {
-    this.layoutTheme = layoutTheme;
-    this.relayoutAll(anchor);
-  }
-
-  private relayoutAll(anchor: ContentAnchor | null): void {
-    if (
-      !this.layoutTheme ||
-      this.totalChapters === 0 ||
-      this.receivedChapters === 0
-    )
+    if (this.areConfigsEqual(prevConfig, nextConfig)) {
       return;
+    }
 
-    const centerChapter = this.resolveRelayoutCenterChapter();
-    const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
-    let emittedPartial = false;
+    const fontChanged = !this.areFontConfigsEqual(
+      prevConfig.fontConfig,
+      nextConfig.fontConfig,
+    );
+    this.config = nextConfig;
 
-    for (const chapterIndex of chapterOrder) {
+    if (this.totalChapters === 0 || this.receivedChapters === 0) {
+      return;
+    }
+
+    if (fontChanged) {
+      this.relayoutFromBlocks(anchor);
+      return;
+    }
+
+    this.relayoutPrepared(anchor);
+  }
+
+  private relayoutFromBlocks(anchor: ContentAnchor | null): void {
+    this.runRelayout(anchor, (chapterIndex) => {
+      if (!this.blocksByChapter[chapterIndex]) return null;
+      return this.prepareAndLayoutChapter(chapterIndex);
+    });
+  }
+
+  private relayoutPrepared(anchor: ContentAnchor | null): void {
+    this.runRelayout(anchor, (chapterIndex) => {
       const prepared = this.preparedByChapter[chapterIndex];
-      if (!prepared) continue;
+      if (!prepared) return null;
 
       const stage2PrepareMs =
         this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
-      const chapterDiagnostics = this.layoutPreparedChapter(
-        chapterIndex,
-        prepared,
-        stage2PrepareMs,
-      );
+
+      return this.layoutPreparedChapter(chapterIndex, prepared, stage2PrepareMs);
+    });
+  }
+
+  private runRelayout(
+    anchor: ContentAnchor | null,
+    relayoutChapter: (
+      chapterIndex: number,
+    ) => PaginationChapterDiagnostics | null,
+  ): void {
+    const centerChapter = this.resolveRelayoutCenterChapter();
+    const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
+    let emittedPartial = false;
+
+    for (const chapterIndex of chapterOrder) {
+      const chapterDiagnostics = relayoutChapter(chapterIndex);
+      if (!chapterDiagnostics) continue;
+
       this.recomputeOffsets();
 
       if (!emittedPartial) {
@@ -260,11 +224,9 @@ export class PaginationEngine {
     }
 
     this.recomputeOffsets();
-
     const anchorPage = anchor
       ? this.resolveAnchor(anchor)
       : this.getInitialAnchorPage();
-
     this.emitReady(anchorPage);
   }
 
@@ -292,6 +254,50 @@ export class PaginationEngine {
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
+
+  private areConfigsEqual(
+    a: PaginationConfig,
+    b: PaginationConfig,
+  ): boolean {
+    return (
+      this.areFontConfigsEqual(a.fontConfig, b.fontConfig) &&
+      this.areLayoutThemesEqual(a.layoutTheme, b.layoutTheme) &&
+      this.areViewportsEqual(a.viewport, b.viewport)
+    );
+  }
+
+  private areFontConfigsEqual(
+    a: PaginationConfig["fontConfig"],
+    b: PaginationConfig["fontConfig"],
+  ): boolean {
+    return (
+      a.bodyFamily === b.bodyFamily &&
+      a.headingFamily === b.headingFamily &&
+      a.codeFamily === b.codeFamily &&
+      a.baseSizePx === b.baseSizePx
+    );
+  }
+
+  private areLayoutThemesEqual(
+    a: PaginationConfig["layoutTheme"],
+    b: PaginationConfig["layoutTheme"],
+  ): boolean {
+    return (
+      a.lineHeightFactor === b.lineHeightFactor &&
+      a.paragraphSpacingFactor === b.paragraphSpacingFactor &&
+      a.headingSpaceAbove === b.headingSpaceAbove &&
+      a.headingSpaceBelow === b.headingSpaceBelow &&
+      a.textAlign === b.textAlign &&
+      a.baseFontSizePx === b.baseFontSizePx
+    );
+  }
+
+  private areViewportsEqual(
+    a: PaginationConfig["viewport"],
+    b: PaginationConfig["viewport"],
+  ): boolean {
+    return a.width === b.width && a.height === b.height;
+  }
 
   private emitReady(anchorPage: number | null): void {
     this.updateLastRequestedPage(anchorPage);
@@ -337,12 +343,14 @@ export class PaginationEngine {
   private prepareAndLayoutChapter(
     chapterIndex: number,
   ): PaginationChapterDiagnostics | null {
-    if (!this.fontConfig || !this.layoutTheme) return null;
+    const config = this.config;
+    if (!config) return null;
+
     const blocks = this.blocksByChapter[chapterIndex];
     if (!blocks) return null;
 
     const stage2StartedAt = performance.now();
-    const prepared = prepareBlocks(blocks, this.fontConfig);
+    const prepared = prepareBlocks(blocks, config.fontConfig);
     const stage2PrepareMs = performance.now() - stage2StartedAt;
     this.preparedByChapter[chapterIndex] = prepared;
 
@@ -354,11 +362,16 @@ export class PaginationEngine {
     prepared: PreparedBlock[],
     stage2PrepareMs: number,
   ): PaginationChapterDiagnostics {
+    const config = this.config;
+    if (!config) {
+      throw new Error("Pagination config is not initialized");
+    }
+
     const result = layoutPages(
       prepared,
-      this.viewport.width,
-      this.viewport.height,
-      this.layoutTheme!,
+      config.viewport.width,
+      config.viewport.height,
+      config.layoutTheme,
     );
     this.pagesByChapter[chapterIndex] = result.pages;
 

@@ -10,9 +10,8 @@ import type {
 } from "./engine-types";
 import { parseChapterHtml } from "./parse-html";
 import type {
-  FontConfig,
-  LayoutTheme,
   PageSlice,
+  PaginationConfig,
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
 } from "./types";
@@ -42,9 +41,7 @@ export interface UsePaginationResult {
 
 export interface UsePaginationOptions {
   totalChapters: number;
-  fontConfig: FontConfig;
-  layoutTheme: LayoutTheme;
-  viewport: { width: number; height: number };
+  config: PaginationConfig;
   initialChapterIndex?: number;
 }
 
@@ -59,13 +56,7 @@ function clamp(value: number, min: number, max: number): number {
 export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
-  const {
-    totalChapters,
-    fontConfig,
-    layoutTheme,
-    viewport,
-    initialChapterIndex,
-  } = options;
+  const { totalChapters, config, initialChapterIndex } = options;
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -95,9 +86,6 @@ export function usePagination(
   // Track previous values to detect changes
   const prevTotalChaptersRef = useRef<number | null>(null);
   const prevInitialChapterIndexRef = useRef<number | null>(null);
-  const prevFontConfigRef = useRef<FontConfig>(fontConfig);
-  const prevViewportRef = useRef(viewport);
-  const prevLayoutThemeRef = useRef<LayoutTheme>(layoutTheme);
 
   // Store last known slices' first blockId for content anchoring
   const lastAnchorRef = useRef<ContentAnchor | null>(null);
@@ -414,24 +402,15 @@ export function usePagination(
     postCommand({
       type: "init",
       totalChapters,
-      fontConfig,
-      layoutTheme,
-      viewport,
+      config,
       initialChapterIndex: nextInitialChapterIndex,
     });
 
     prevTotalChaptersRef.current = totalChapters;
     prevInitialChapterIndexRef.current = nextInitialChapterIndex;
-
-    // Update prev refs so we don't immediately re-send config changes
-    prevFontConfigRef.current = fontConfig;
-    prevViewportRef.current = viewport;
-    prevLayoutThemeRef.current = layoutTheme;
   }, [
     totalChapters,
-    fontConfig,
-    layoutTheme,
-    viewport,
+    config,
     initialChapterIndex,
     postCommand,
   ]);
@@ -453,48 +432,16 @@ export function usePagination(
     [postCommand, totalChapters],
   );
 
-  // Send font config changes
+  // Send pagination config changes
   useEffect(() => {
     if (totalChapters <= 0) return;
-    if (fontConfig === prevFontConfigRef.current) return;
-    prevFontConfigRef.current = fontConfig;
-
-    setStatus("loading");
-    postCommand({
-      type: "setFontConfig",
-      fontConfig,
-      anchor: getContentAnchor(),
-    });
-  }, [fontConfig, totalChapters, postCommand, getContentAnchor]);
-
-  // Send viewport changes
-  useEffect(() => {
-    if (totalChapters <= 0) return;
-    const prev = prevViewportRef.current;
-    if (viewport.width === prev.width && viewport.height === prev.height)
-      return;
-    prevViewportRef.current = viewport;
 
     postCommand({
-      type: "setViewport",
-      width: viewport.width,
-      height: viewport.height,
+      type: "updateConfig",
+      config,
       anchor: getContentAnchor(),
     });
-  }, [viewport, totalChapters, postCommand, getContentAnchor]);
-
-  // Send layout theme changes
-  useEffect(() => {
-    if (totalChapters <= 0) return;
-    if (layoutTheme === prevLayoutThemeRef.current) return;
-    prevLayoutThemeRef.current = layoutTheme;
-
-    postCommand({
-      type: "setLayoutTheme",
-      layoutTheme,
-      anchor: getContentAnchor(),
-    });
-  }, [layoutTheme, totalChapters, postCommand, getContentAnchor]);
+  }, [config, totalChapters, postCommand, getContentAnchor]);
 
   // Navigation
   const nextPage = useCallback(() => {

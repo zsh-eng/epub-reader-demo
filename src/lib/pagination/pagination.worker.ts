@@ -5,9 +5,7 @@ const engine = new PaginationEngine((event) => postMessage(event));
 
 // Commands that can be superseded — only the latest of each type matters
 const SUPERSEDABLE: Set<PaginationCommand["type"]> = new Set([
-  "setViewport",
-  "setFontConfig",
-  "setLayoutTheme",
+  "updateConfig",
   "getPage",
 ]);
 

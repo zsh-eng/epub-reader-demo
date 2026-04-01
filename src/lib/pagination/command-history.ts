@@ -24,15 +24,11 @@ function summarizeAnchor(anchor: ContentAnchor | null): string {
 export function summarizePaginationCommand(command: PaginationCommand): string {
   switch (command.type) {
     case "init":
-      return `chapters=${command.totalChapters}, initial=${command.initialChapterIndex + 1}, viewport=${Math.round(command.viewport.width)}x${Math.round(command.viewport.height)}`;
+      return `chapters=${command.totalChapters}, initial=${command.initialChapterIndex + 1}, viewport=${Math.round(command.config.viewport.width)}x${Math.round(command.config.viewport.height)}`;
     case "addChapter":
       return `chapter=${command.chapterIndex + 1}, blocks=${command.blocks.length}`;
-    case "setFontConfig":
-      return `base=${command.fontConfig.baseSizePx.toFixed(1)}px, anchor=${summarizeAnchor(command.anchor)}`;
-    case "setViewport":
-      return `viewport=${Math.round(command.width)}x${Math.round(command.height)}, anchor=${summarizeAnchor(command.anchor)}`;
-    case "setLayoutTheme":
-      return `lineHeight=${command.layoutTheme.lineHeightFactor.toFixed(2)}, para=${command.layoutTheme.paragraphSpacingFactor.toFixed(2)}, align=${command.layoutTheme.textAlign}, anchor=${summarizeAnchor(command.anchor)}`;
+    case "updateConfig":
+      return `base=${command.config.fontConfig.baseSizePx.toFixed(1)}px, lineHeight=${command.config.layoutTheme.lineHeightFactor.toFixed(2)}, para=${command.config.layoutTheme.paragraphSpacingFactor.toFixed(2)}, align=${command.config.layoutTheme.textAlign}, viewport=${Math.round(command.config.viewport.width)}x${Math.round(command.config.viewport.height)}, anchor=${summarizeAnchor(command.anchor)}`;
     case "getPage":
       return `page=${command.globalPage}`;
   }

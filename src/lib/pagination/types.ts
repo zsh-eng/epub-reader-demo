@@ -133,6 +133,12 @@ export interface LayoutTheme {
   baseFontSizePx: number;
 }
 
+export interface PaginationConfig {
+  fontConfig: FontConfig;
+  layoutTheme: LayoutTheme;
+  viewport: { width: number; height: number };
+}
+
 export interface PageFragment {
   text: string;
   font: string;

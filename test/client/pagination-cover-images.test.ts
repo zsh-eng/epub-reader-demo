@@ -1,7 +1,12 @@
 import { PaginationEngine } from "@/lib/pagination/pagination-engine";
 import { parseChapterHtml } from "@/lib/pagination/parse-html";
 import type { PaginationEvent } from "@/lib/pagination/engine-types";
-import type { FontConfig, LayoutTheme, PageSlice } from "@/lib/pagination/types";
+import type {
+  FontConfig,
+  LayoutTheme,
+  PageSlice,
+  PaginationConfig,
+} from "@/lib/pagination/types";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -18,6 +23,12 @@ const BASE_LAYOUT_THEME: LayoutTheme = {
   headingSpaceAbove: 1.5,
   headingSpaceBelow: 0.7,
   textAlign: "left",
+};
+
+const BASE_CONFIG: PaginationConfig = {
+  fontConfig: BASE_FONT_CONFIG,
+  layoutTheme: BASE_LAYOUT_THEME,
+  viewport: { width: 620, height: 860 },
 };
 
 function collectRenderedImageSlices(events: PaginationEvent[]): PageSlice[] {
@@ -43,9 +54,7 @@ function renderSingleChapter(html: string): PageSlice[] {
   engine.handleCommand({
     type: "init",
     totalChapters: 1,
-    fontConfig: BASE_FONT_CONFIG,
-    layoutTheme: BASE_LAYOUT_THEME,
-    viewport: { width: 620, height: 860 },
+    config: BASE_CONFIG,
     initialChapterIndex: 0,
   });
 

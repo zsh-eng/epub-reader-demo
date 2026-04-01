@@ -11,8 +11,7 @@ import {
 } from "@/lib/epub-resource-utils";
 import {
   usePagination,
-  type FontConfig,
-  type LayoutTheme,
+  type PaginationConfig,
   type PageSlice,
 } from "@/lib/pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
@@ -61,26 +60,27 @@ function getNamedBodyFont(fontFamily: FontFamily): string {
   }
 }
 
-function buildFontConfig(settings: ReaderSettings): FontConfig {
-  return {
-    bodyFamily: getNamedBodyFont(settings.fontFamily),
-    headingFamily: `"EB Garamond", Georgia, serif`,
-    codeFamily: `"Courier New", Menlo, Monaco, monospace`,
-    baseSizePx: 16 * (settings.fontSize / 100),
-  };
-}
-
-function buildLayoutTheme(
+function buildPaginationConfig(
   settings: ReaderSettings,
   paragraphSpacingFactor: number,
-): LayoutTheme {
+  viewport: { width: number; height: number },
+): PaginationConfig {
   return {
-    baseFontSizePx: 16 * (settings.fontSize / 100),
-    lineHeightFactor: settings.lineHeight,
-    paragraphSpacingFactor,
-    headingSpaceAbove: 1.5,
-    headingSpaceBelow: 0.7,
-    textAlign: settings.textAlign,
+    fontConfig: {
+      bodyFamily: getNamedBodyFont(settings.fontFamily),
+      headingFamily: `"EB Garamond", Georgia, serif`,
+      codeFamily: `"Courier New", Menlo, Monaco, monospace`,
+      baseSizePx: 16 * (settings.fontSize / 100),
+    },
+    layoutTheme: {
+      baseFontSizePx: 16 * (settings.fontSize / 100),
+      lineHeightFactor: settings.lineHeight,
+      paragraphSpacingFactor,
+      headingSpaceAbove: 1.5,
+      headingSpaceBelow: 0.7,
+      textAlign: settings.textAlign,
+    },
+    viewport,
   };
 }
 
@@ -256,17 +256,14 @@ export function ReaderPrototype() {
     return () => window.removeEventListener("resize", onResize);
   }, [isMobile, viewportAutoMode, isPanelOpen]);
 
-  const fontConfig = useMemo(() => buildFontConfig(settings), [settings]);
-  const layoutTheme = useMemo(
-    () => buildLayoutTheme(settings, paragraphSpacingFactor),
-    [settings, paragraphSpacingFactor],
+  const paginationConfig = useMemo(
+    () => buildPaginationConfig(settings, paragraphSpacingFactor, viewport),
+    [settings, paragraphSpacingFactor, viewport],
   );
 
   const pagination = usePagination({
     totalChapters: chapterEntries.length,
-    fontConfig,
-    layoutTheme,
-    viewport,
+    config: paginationConfig,
     initialChapterIndex: 0,
   });
 
