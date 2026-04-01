@@ -75,6 +75,7 @@ export interface ReadyEvent {
   type: "ready";
   totalPages: number;
   anchorPage: number | null;
+  slicesChapterIndex: number | null;
   slices: PageSlice[];
   diagnostics: PaginationDiagnostics;
   chapterPageOffsets: number[];
@@ -83,7 +84,13 @@ export interface ReadyEvent {
 export interface PageContentEvent {
   type: "pageContent";
   globalPage: number;
+  chapterIndex: number;
   slices: PageSlice[];
+}
+
+export interface PageUnavailableEvent {
+  type: "pageUnavailable";
+  globalPage: number;
 }
 
 export interface PartialReadyEvent {
@@ -92,6 +99,7 @@ export interface PartialReadyEvent {
   chapterPageCount: number;
   estimatedTotalPages: number;
   anchorPage: number | null;
+  slicesChapterIndex: number | null;
   slices: PageSlice[];
   chapterPageOffsets: number[];
   chapterDiagnostics: PaginationChapterDiagnostics | null;
@@ -115,6 +123,7 @@ export interface ErrorEvent {
 export type PaginationEvent =
   | ReadyEvent
   | PageContentEvent
+  | PageUnavailableEvent
   | PartialReadyEvent
   | ProgressEvent
   | ErrorEvent;

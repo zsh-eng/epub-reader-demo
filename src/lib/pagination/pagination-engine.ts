@@ -269,11 +269,23 @@ export class PaginationEngine {
   }
 
   private getPage(globalPage: number): void {
-    this.lastRequestedGlobalPage = Math.max(1, globalPage);
+    const page1 = Math.max(1, Math.floor(globalPage));
+    this.lastRequestedGlobalPage = page1;
+
+    const pageContent = this.resolvePageContentForGlobalPage(page1);
+    if (!pageContent) {
+      this.emit({
+        type: "pageUnavailable",
+        globalPage: page1,
+      });
+      return;
+    }
+
     this.emit({
       type: "pageContent",
-      globalPage,
-      slices: this.getSlicesForGlobalPage(globalPage),
+      globalPage: page1,
+      chapterIndex: pageContent.chapterIndex,
+      slices: pageContent.slices,
     });
   }
 
@@ -283,11 +295,14 @@ export class PaginationEngine {
 
   private emitReady(anchorPage: number | null): void {
     this.updateLastRequestedPage(anchorPage);
+    const readyPage = anchorPage ?? 1;
+    const pageContent = this.resolvePageContentForGlobalPage(readyPage);
     this.emit({
       type: "ready",
       totalPages: this.getTotalPages(),
       anchorPage,
-      slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
+      slicesChapterIndex: pageContent?.chapterIndex ?? null,
+      slices: pageContent?.slices ?? [],
       diagnostics: this.buildDiagnostics(),
       chapterPageOffsets: [...this.chapterPageOffsets],
     });
@@ -299,13 +314,16 @@ export class PaginationEngine {
     chapterDiagnostics: PaginationChapterDiagnostics | null,
   ): void {
     this.updateLastRequestedPage(anchorPage);
+    const readyPage = anchorPage ?? 1;
+    const pageContent = this.resolvePageContentForGlobalPage(readyPage);
     this.emit({
       type: "partialReady",
       chapterIndex,
       chapterPageCount: this.pagesByChapter[chapterIndex]?.length ?? 0,
       estimatedTotalPages: this.estimateTotalPages(),
       anchorPage,
-      slices: this.getSlicesForGlobalPage(anchorPage ?? 1),
+      slicesChapterIndex: pageContent?.chapterIndex ?? null,
+      slices: pageContent?.slices ?? [],
       chapterPageOffsets: [...this.chapterPageOffsets],
       chapterDiagnostics,
     });
@@ -404,23 +422,28 @@ export class PaginationEngine {
     return offset + 1;
   }
 
-  private getSlicesForGlobalPage(globalPage: number): PageSlice[] {
-    const page1 = Math.max(1, globalPage);
+  private resolvePageContentForGlobalPage(globalPage: number): {
+    chapterIndex: number;
+    slices: PageSlice[];
+  } | null {
+    const page1 = Math.max(1, Math.floor(globalPage));
     const pageIndex = page1 - 1;
 
     for (let ch = this.chapterPageOffsets.length - 1; ch >= 0; ch--) {
       const offset = this.chapterPageOffsets[ch];
-      if (offset === undefined) continue;
-      if (pageIndex >= offset) {
-        const localIndex = pageIndex - offset;
-        const pages = this.pagesByChapter[ch];
-        if (pages && localIndex < pages.length) {
-          return pages[localIndex]?.slices ?? [];
-        }
-      }
+      if (offset === undefined || pageIndex < offset) continue;
+
+      const localIndex = pageIndex - offset;
+      const pages = this.pagesByChapter[ch];
+      if (!pages || localIndex >= pages.length) continue;
+
+      return {
+        chapterIndex: ch,
+        slices: pages[localIndex]?.slices ?? [],
+      };
     }
 
-    return [];
+    return null;
   }
 
   private resolveAnchor(anchor: ContentAnchor): number | null {
@@ -451,22 +474,7 @@ export class PaginationEngine {
       Math.max(1, Math.floor(globalPage)),
       this.getTotalPages(),
     );
-    const pageIndex = page1 - 1;
-
-    for (let ch = this.chapterPageOffsets.length - 1; ch >= 0; ch--) {
-      const offset = this.chapterPageOffsets[ch];
-      if (offset === undefined || pageIndex < offset) continue;
-
-      const pages = this.pagesByChapter[ch];
-      const pageCount = pages?.length ?? 0;
-      if (pageCount === 0) continue;
-
-      if (pageIndex < offset + pageCount) {
-        return ch;
-      }
-    }
-
-    return null;
+    return this.resolvePageContentForGlobalPage(page1)?.chapterIndex ?? null;
   }
 
   private resolveRelayoutCenterChapter(): number {

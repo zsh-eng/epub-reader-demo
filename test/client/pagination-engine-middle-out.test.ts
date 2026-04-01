@@ -66,6 +66,28 @@ function countEvents(events: PaginationEvent[], type: PaginationEvent["type"]) {
 }
 
 describe("Pagination engine relayout middle-out prioritization", () => {
+  it("emits pageUnavailable until the requested page is resolvable", () => {
+    const { engine, events } = createEngine(2, 0);
+    addChapter(engine, 0);
+
+    events.length = 0;
+    engine.handleCommand({ type: "getPage", globalPage: 2 });
+
+    expect(events).toEqual([{ type: "pageUnavailable", globalPage: 2 }]);
+
+    addChapter(engine, 1);
+    events.length = 0;
+    engine.handleCommand({ type: "getPage", globalPage: 2 });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("pageContent");
+
+    if (events[0]?.type === "pageContent") {
+      expect(events[0].chapterIndex).toBe(1);
+      expect(events[0].globalPage).toBe(2);
+    }
+  });
+
   it("uses last requested page to center middle-out relayout order", () => {
     const { engine, events } = createEngine(5, 0);
     for (let i = 0; i < 5; i++) addChapter(engine, i);

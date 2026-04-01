@@ -85,7 +85,6 @@ export function usePagination(
   const commandSequenceRef = useRef(0);
   const commandHistoryRef = useRef<PaginationCommandHistoryEntry[]>([]);
   const commandHistoryFlushTimerRef = useRef<number | null>(null);
-  const chapterPageOffsetsRef = useRef<number[]>([]);
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef<number | null>(null);
 
@@ -159,27 +158,16 @@ export function usePagination(
   }, []);
 
   const updateAnchorFromSlices = useCallback(
-    (pageSlices: PageSlice[], page: number) => {
-      if (pageSlices.length === 0) return;
-      const offsets = chapterPageOffsetsRef.current;
-      const pageIndex = page - 1;
-
-      // Find which chapter this page belongs to
-      let chapterIndex = 0;
-      for (let i = offsets.length - 1; i >= 0; i--) {
-        if (pageIndex >= (offsets[i] ?? 0)) {
-          chapterIndex = i;
-          break;
-        }
-      }
+    (pageSlices: PageSlice[], chapterIndex: number | null) => {
+      if (pageSlices.length === 0 || chapterIndex === null) return;
 
       const firstSlice = pageSlices[0];
-      if (firstSlice) {
-        lastAnchorRef.current = {
-          chapterIndex,
-          blockId: firstSlice.blockId,
-        };
-      }
+      if (!firstSlice) return;
+
+      lastAnchorRef.current = {
+        chapterIndex,
+        blockId: firstSlice.blockId,
+      };
     },
     [],
   );
@@ -295,7 +283,6 @@ export function usePagination(
     (event: PaginationEvent) => {
       switch (event.type) {
         case "ready": {
-          chapterPageOffsetsRef.current = event.chapterPageOffsets;
           setTotalPages(event.totalPages);
           setEstimatedTotalPages(null);
           for (const chapter of event.diagnostics.chapterTimings ?? []) {
@@ -309,7 +296,7 @@ export function usePagination(
             currentPageRef.current = clamped;
             setCurrentPage(clamped);
             setSlices(event.slices);
-            updateAnchorFromSlices(event.slices, clamped);
+            updateAnchorFromSlices(event.slices, event.slicesChapterIndex);
           } else {
             const clamped = clamp(currentPageRef.current, 1, event.totalPages);
             currentPageRef.current = clamped;
@@ -317,7 +304,7 @@ export function usePagination(
 
             if (clamped === 1) {
               setSlices(event.slices);
-              updateAnchorFromSlices(event.slices, 1);
+              updateAnchorFromSlices(event.slices, event.slicesChapterIndex);
             } else {
               // Request the currently selected page from the new layout.
               postCommand({ type: "getPage", globalPage: clamped });
@@ -328,12 +315,16 @@ export function usePagination(
 
         case "pageContent": {
           setSlices(event.slices);
-          updateAnchorFromSlices(event.slices, event.globalPage);
+          updateAnchorFromSlices(event.slices, event.chapterIndex);
+          break;
+        }
+
+        case "pageUnavailable": {
+          setSlices([]);
           break;
         }
 
         case "partialReady": {
-          chapterPageOffsetsRef.current = event.chapterPageOffsets;
           setEstimatedTotalPages(event.estimatedTotalPages);
           finalizeChapterTiming(event.chapterIndex, event.chapterDiagnostics);
           setDiagnostics((prev) => buildMergedDiagnostics(prev));
@@ -343,13 +334,12 @@ export function usePagination(
             currentPageRef.current = event.anchorPage;
             setCurrentPage(event.anchorPage);
             setSlices(event.slices);
-            updateAnchorFromSlices(event.slices, event.anchorPage);
+            updateAnchorFromSlices(event.slices, event.slicesChapterIndex);
           }
           break;
         }
 
         case "progress": {
-          chapterPageOffsetsRef.current = event.chapterPageOffsets;
           setEstimatedTotalPages(event.runningTotalPages);
           finalizeChapterTiming(event.chapterIndex, event.chapterDiagnostics);
           setDiagnostics((prev) => buildMergedDiagnostics(prev));
@@ -415,7 +405,6 @@ export function usePagination(
     setTotalPages(null);
     setEstimatedTotalPages(null);
     setDiagnostics(null);
-    chapterPageOffsetsRef.current = [];
     lastAnchorRef.current = null;
     stage1ByChapterRef.current.clear();
     chapterQueuedAtRef.current.clear();
