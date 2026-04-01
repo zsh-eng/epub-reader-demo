@@ -187,6 +187,7 @@ export async function processEmbeddedResources(
 
   // Process each resource
   for (const element of Array.from(resourceElements)) {
+    const tagName = element.tagName.toLowerCase();
     const src = element.getAttribute("src");
     const href = element.getAttribute("href");
     // Handle both xlink:href and regular namespaced href
@@ -199,7 +200,7 @@ export async function processEmbeddedResources(
     if (!resourcePath) continue;
 
     // Handle anchor elements specially
-    if (element.tagName.toLowerCase() === "a" && href) {
+    if (tagName === "a" && href) {
       // Pure same-page anchor links (e.g., #footnote1) - leave them as-is
       if (href.startsWith("#")) {
         continue;
@@ -239,8 +240,20 @@ export async function processEmbeddedResources(
     // Resolve the resource path relative to the base path
     const resolvedPath = resolvePath(basePath, resourcePath);
 
-    if (skipImages && src && element.tagName.toLowerCase() === "img") {
+    if (skipImages && src && tagName === "img") {
       element.setAttribute("src", createDeferredEpubImageSrc(resolvedPath));
+      continue;
+    }
+
+    if (skipImages && tagName === "image" && (xlinkHref || href)) {
+      const deferredSrc = createDeferredEpubImageSrc(resolvedPath);
+      element.setAttribute("href", deferredSrc);
+      element.setAttributeNS(
+        "http://www.w3.org/1999/xlink",
+        "xlink:href",
+        deferredSrc,
+      );
+      element.setAttribute("xlink:href", deferredSrc);
       continue;
     }
 
@@ -277,8 +290,7 @@ export async function processEmbeddedResources(
         element.setAttribute("xlink:href", objectUrl);
       } else if (
         href &&
-        (element.tagName.toLowerCase() === "link" ||
-          element.tagName.toLowerCase() === "image")
+        (tagName === "link" || tagName === "image")
       ) {
         element.setAttribute("href", objectUrl);
       }

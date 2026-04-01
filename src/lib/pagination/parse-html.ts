@@ -86,7 +86,7 @@ function extractInlineRuns(
     return;
   }
 
-  if (!(node instanceof HTMLElement)) return;
+  if (!(node instanceof Element)) return;
 
   const tag = node.tagName.toLowerCase();
   if (IGNORE_TAGS.has(tag)) return;
@@ -113,8 +113,41 @@ function parseNumeric(value: string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function getImageSource(element: Element, tag: string): string | null {
+  if (tag === "img") {
+    return element.getAttribute("src");
+  }
+
+  if (tag !== "image") {
+    return null;
+  }
+
+  return (
+    element.getAttribute("href") ??
+    element.getAttribute("xlink:href") ??
+    element.getAttributeNS("http://www.w3.org/1999/xlink", "href")
+  );
+}
+
+function createImageBlock(element: Element, id: string): Block | null {
+  const tag = element.tagName.toLowerCase();
+  const src = getImageSource(element, tag);
+  if (!src) return null;
+
+  return {
+    type: "image",
+    id,
+    src,
+    alt: element.getAttribute("alt") || undefined,
+    intrinsicWidth:
+      parseNumeric(element.getAttribute("width")) ?? DEFAULT_INTRINSIC_WIDTH,
+    intrinsicHeight:
+      parseNumeric(element.getAttribute("height")) ?? DEFAULT_INTRINSIC_HEIGHT,
+  };
+}
+
 function createTextBlock(
-  element: HTMLElement,
+  element: Element,
   tag: BlockTag,
   id: string,
 ): TextBlock | null {
@@ -148,29 +181,23 @@ export function parseChapterHtml(html: string): Block[] {
       return;
     }
 
-    if (!(node instanceof HTMLElement)) return;
+    if (!(node instanceof Element)) return;
 
     const tag = node.tagName.toLowerCase();
     if (IGNORE_TAGS.has(tag)) return;
 
-    if (tag === "img") {
-      const src = node.getAttribute("src");
-      if (!src) return;
-      blocks.push({
-        type: "image",
-        id: `image-${counter.value++}`,
-        src,
-        alt: node.getAttribute("alt") || undefined,
-        intrinsicWidth:
-          parseNumeric(node.getAttribute("width")) ?? DEFAULT_INTRINSIC_WIDTH,
-        intrinsicHeight:
-          parseNumeric(node.getAttribute("height")) ?? DEFAULT_INTRINSIC_HEIGHT,
-      });
+    const imageBlock = createImageBlock(node, `image-${counter.value}`);
+    if (imageBlock) {
+      counter.value += 1;
+      blocks.push(imageBlock);
       return;
     }
 
     if (tag === "hr") {
-      blocks.push({ type: "spacer", id: `spacer-${counter.value++}` });
+      blocks.push({
+        type: "spacer",
+        id: `spacer-${counter.value++}`,
+      });
       return;
     }
 
@@ -180,7 +207,17 @@ export function parseChapterHtml(html: string): Block[] {
         tag as BlockTag,
         `text-${counter.value++}`,
       );
-      if (block) blocks.push(block);
+      if (block) {
+        blocks.push(block);
+        return;
+      }
+
+      // Some books wrap cover images in heading/paragraph tags.
+      for (const child of Array.from(node.childNodes)) {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          walk(child);
+        }
+      }
       return;
     }
 

@@ -101,4 +101,27 @@ describe("processEmbeddedResources", () => {
     expect(link?.getAttribute(EPUB_LINK.fragmentAttribute)).toBe("sec-1");
     expect(link?.getAttribute("href")).toBe("#");
   });
+
+  it("marks svg image resources for deferred loading when skipImages is enabled", async () => {
+    const content = `<html><body>
+      <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+        <image xlink:href="../Images/cover.jpg" width="1200" height="1800" />
+      </svg>
+    </body></html>`;
+
+    const { document } = await processEmbeddedResources({
+      content,
+      mediaType: "application/xhtml+xml",
+      basePath: "OEBPS/Text/Cover.xhtml",
+      loadResource: async () => null,
+      skipImages: true,
+      loadLinkedResources: false,
+    });
+
+    const svgImage = document.querySelector("image");
+    const expectedDeferredSrc = "epub-deferred://OEBPS/Images/cover.jpg";
+
+    expect(svgImage?.getAttribute("xlink:href")).toBe(expectedDeferredSrc);
+    expect(svgImage?.getAttribute("href")).toBe(expectedDeferredSrc);
+  });
 });
