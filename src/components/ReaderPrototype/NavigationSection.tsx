@@ -87,7 +87,7 @@ export function NavigationSection({
           <Button
             variant="outline"
             size="sm"
-            className="flex-1"
+            className="flex-1 rounded-lg"
             onClick={onPrevPage}
             disabled={currentPage <= 1}
           >
@@ -96,7 +96,7 @@ export function NavigationSection({
           <Button
             variant="outline"
             size="sm"
-            className="flex-1"
+            className="flex-1 rounded-lg"
             onClick={onNextPage}
             disabled={currentPage >= totalPages}
           >
@@ -115,9 +115,9 @@ export function NavigationSection({
             onKeyDown={(e) => {
               if (e.key === "Enter") handleJump();
             }}
-            className="h-8 flex-1"
+            className="h-8 flex-1 rounded-lg"
           />
-          <Button variant="secondary" size="sm" onClick={handleJump}>
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={handleJump}>
             Go
           </Button>
         </div>

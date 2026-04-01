@@ -308,4 +308,22 @@
         opacity: 0.6;
         user-select: none;
     }
+
+    /* Reader container outline — shows dotted border briefly on mount or resize */
+    @keyframes reader-outline-fade {
+        0% {
+            border-color: var(--color-border);
+        }
+        70% {
+            border-color: var(--color-border);
+        }
+        100% {
+            border-color: transparent;
+        }
+    }
+
+    .reader-container-outline {
+        border: 1px dashed transparent;
+        animation: reader-outline-fade 1.5s ease-out forwards;
+    }
 }

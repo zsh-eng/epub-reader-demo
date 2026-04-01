@@ -27,7 +27,7 @@ import {
   type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { InspectorPanel } from "./InspectorPanel";
 import { InspectorDrawer } from "./InspectorDrawer";
 
@@ -198,7 +198,7 @@ export function ReaderPrototype() {
   const isMobile = useIsMobile();
   const { settings, updateSettings } = useReaderSettings();
 
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
+  const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [viewportAutoMode, setViewportAutoMode] = useState(true);
   const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(1.2);
   const [viewport, setViewport] = useState({ width: 620, height: 860 });
@@ -245,7 +245,7 @@ export function ReaderPrototype() {
       const horizontalPadding = (isMobile ? 32 : 120) + panelWidth;
       const verticalPadding = isMobile ? 270 : 300;
       setViewport({
-        width: clamp(window.innerWidth - horizontalPadding, 240, 760),
+        width: clamp(window.innerWidth - horizontalPadding, 240, 1440),
         height: clamp(window.innerHeight - verticalPadding, 300, 980),
       });
     };
@@ -508,21 +508,20 @@ export function ReaderPrototype() {
         className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm"
         onMouseMove={resetInactivityTimer}
       >
-        <div className="flex items-center gap-3 px-4 py-3">
-          <Button variant="outline" size="sm" onClick={() => navigate("/")}>
-            Back
-          </Button>
-          <div className="mr-auto min-w-0">
-            <p className="truncate text-sm font-medium">{book.title}</p>
-            <p className="text-xs text-muted-foreground">
-              Pretext prototype · {chapterEntries.length} chapters
-              {pagination.status === "partial" && " · Preparing..."}
-            </p>
-          </div>
+        <div className="flex items-center gap-3 px-4 py-2.5">
+          <button
+            onClick={() => navigate("/")}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-4" />
+          </button>
+          <p className="flex-1 truncate text-center text-sm italic font-medium">
+            {book.title}
+          </p>
           <button
             onClick={() => setIsPanelOpen((o) => !o)}
             className={cn(
-              "rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-500",
+              "rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-500",
               headerActive || isPanelOpen ? "opacity-100" : "opacity-30",
               isPanelOpen && "bg-muted text-foreground",
             )}
@@ -534,10 +533,11 @@ export function ReaderPrototype() {
 
       {/* Content + Panel */}
       <div className="flex flex-1 overflow-hidden">
-        <main className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="mx-auto">
+        <main className="flex-1 overflow-auto">
+          <div className="flex justify-center pt-6 pb-6 px-4">
             <div
-              className="mx-auto overflow-hidden rounded-lg border bg-background"
+              key={`${viewport.width}-${viewport.height}`}
+              className="reader-container-outline overflow-hidden"
               style={{
                 width: `${viewport.width}px`,
                 height: `${viewport.height}px`,

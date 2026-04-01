@@ -198,7 +198,7 @@ export function SettingsSection({
           <div className="flex items-center gap-3">
             <Slider
               min={240}
-              max={760}
+              max={1440}
               step={10}
               value={[viewport.width]}
               onValueChange={([v]) => {
