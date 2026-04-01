@@ -185,11 +185,8 @@ describe("book image dimensions backfill behavior", () => {
       content: new Blob(["<html></html>"], { type: "application/xhtml+xml" }),
     };
 
-    await db.bookFiles.bulkAdd([imageFile, chapterFile]);
-
-    const files = await db.bookFiles.toArray();
     const backfillRows = await buildBookImageDimensionRowsFromBookFiles(
-      files,
+      [imageFile, chapterFile],
       123456,
     );
 
