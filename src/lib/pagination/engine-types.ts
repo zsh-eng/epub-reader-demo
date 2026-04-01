@@ -43,11 +43,17 @@ export interface GetPageCommand {
   globalPage: number;
 }
 
+export interface GoToChapterCommand {
+  type: "goToChapter";
+  chapterIndex: number;
+}
+
 export type PaginationCommand =
   | InitCommand
   | AddChapterCommand
   | UpdateConfigCommand
-  | GetPageCommand;
+  | GetPageCommand
+  | GoToChapterCommand;
 
 // ---------------------------------------------------------------------------
 // Events (worker → main thread)

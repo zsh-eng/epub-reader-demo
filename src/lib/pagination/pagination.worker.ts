@@ -7,6 +7,7 @@ const engine = new PaginationEngine((event) => postMessage(event));
 const SUPERSEDABLE: Set<PaginationCommand["type"]> = new Set([
   "updateConfig",
   "getPage",
+  "goToChapter",
 ]);
 
 let pendingCommands: PaginationCommand[] = [];

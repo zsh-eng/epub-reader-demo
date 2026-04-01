@@ -26,12 +26,14 @@ export type { PaginationCommandHistoryEntry };
 export interface UsePaginationResult {
   slices: PageSlice[];
   currentPage: number;
+  currentChapterIndex: number;
   totalPages: number | null;
   estimatedTotalPages: number | null;
 
   nextPage: () => void;
   prevPage: () => void;
   goToPage: (page: number) => void;
+  goToChapterIndex: (chapterIndex: number) => void;
   addChapter: (chapterIndex: number, html: string) => void;
 
   status: PaginationStatus;
@@ -60,6 +62,9 @@ export function usePagination(
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(
+    initialChapterIndex ?? 0,
+  );
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const [estimatedTotalPages, setEstimatedTotalPages] = useState<number | null>(
     null,
@@ -78,10 +83,22 @@ export function usePagination(
   const commandHistoryFlushTimerRef = useRef<number | null>(null);
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef<number | null>(null);
+  const estimatedTotalPagesRef = useRef<number | null>(null);
 
-  // Keep refs in sync for use in callbacks
-  currentPageRef.current = currentPage;
-  totalPagesRef.current = totalPages;
+  // Keep refs in sync for use in callbacks.
+  // Use effects so re-renders from unrelated state (e.g. command history)
+  // don't reset optimistic navigation refs before worker responses arrive.
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
+  useEffect(() => {
+    totalPagesRef.current = totalPages;
+  }, [totalPages]);
+
+  useEffect(() => {
+    estimatedTotalPagesRef.current = estimatedTotalPages;
+  }, [estimatedTotalPages]);
 
   // Track previous values to detect changes
   const prevTotalChaptersRef = useRef<number | null>(null);
@@ -173,6 +190,19 @@ export function usePagination(
       chapterQueuedAtRef.current.delete(chapterIndex);
     },
     [],
+  );
+
+  const applyResolvedPage = useCallback(
+    (globalPage: number, pageSlices: PageSlice[], chapterIndex: number | null) => {
+      currentPageRef.current = globalPage;
+      setCurrentPage(globalPage);
+      if (chapterIndex !== null) {
+        setCurrentChapterIndex(chapterIndex);
+      }
+      setSlices(pageSlices);
+      updateAnchorFromSlices(pageSlices, chapterIndex);
+    },
+    [updateAnchorFromSlices],
   );
 
   const buildMergedDiagnostics = useCallback(
@@ -272,43 +302,42 @@ export function usePagination(
       switch (event.type) {
         case "ready": {
           setTotalPages(event.totalPages);
+          totalPagesRef.current = event.totalPages;
           setEstimatedTotalPages(null);
+          estimatedTotalPagesRef.current = null;
           for (const chapter of event.diagnostics.chapterTimings ?? []) {
             finalizeChapterTiming(chapter.chapterIndex, chapter);
           }
           setDiagnostics(buildMergedDiagnostics(event.diagnostics));
           setStatus("ready");
 
-          if (event.anchorPage !== null) {
-            const clamped = clamp(event.anchorPage, 1, event.totalPages);
-            currentPageRef.current = clamped;
-            setCurrentPage(clamped);
-            setSlices(event.slices);
-            updateAnchorFromSlices(event.slices, event.slicesChapterIndex);
-          } else {
-            const clamped = clamp(currentPageRef.current, 1, event.totalPages);
-            currentPageRef.current = clamped;
-            setCurrentPage(clamped);
+          const desiredPage = clamp(currentPageRef.current, 1, event.totalPages);
+          const anchorPage =
+            event.anchorPage === null
+              ? null
+              : clamp(event.anchorPage, 1, event.totalPages);
 
-            if (clamped === 1) {
-              setSlices(event.slices);
-              updateAnchorFromSlices(event.slices, event.slicesChapterIndex);
-            } else {
-              // Request the currently selected page from the new layout.
-              postCommand({ type: "getPage", globalPage: clamped });
-            }
+          if (anchorPage !== null && desiredPage === anchorPage) {
+            applyResolvedPage(anchorPage, event.slices, event.slicesChapterIndex);
+            break;
           }
+
+          if (anchorPage === null && desiredPage === 1) {
+            applyResolvedPage(desiredPage, event.slices, event.slicesChapterIndex);
+            break;
+          }
+
+          postCommand({ type: "getPage", globalPage: desiredPage });
           break;
         }
 
         case "pageContent": {
-          setSlices(event.slices);
-          updateAnchorFromSlices(event.slices, event.chapterIndex);
+          applyResolvedPage(event.globalPage, event.slices, event.chapterIndex);
           break;
         }
 
         case "pageUnavailable": {
-          setSlices([]);
+          // Keep current page/slices as-is for unresolved navigation targets.
           break;
         }
 
@@ -319,10 +348,11 @@ export function usePagination(
           setStatus("partial");
 
           if (event.anchorPage !== null) {
-            currentPageRef.current = event.anchorPage;
-            setCurrentPage(event.anchorPage);
-            setSlices(event.slices);
-            updateAnchorFromSlices(event.slices, event.slicesChapterIndex);
+            applyResolvedPage(
+              event.anchorPage,
+              event.slices,
+              event.slicesChapterIndex,
+            );
           }
           break;
         }
@@ -343,8 +373,8 @@ export function usePagination(
     [
       buildMergedDiagnostics,
       finalizeChapterTiming,
+      applyResolvedPage,
       postCommand,
-      updateAnchorFromSlices,
     ],
   );
 
@@ -390,8 +420,12 @@ export function usePagination(
     setStatus("loading");
     setSlices([]);
     setCurrentPage(1);
+    currentPageRef.current = 1;
+    setCurrentChapterIndex(nextInitialChapterIndex);
     setTotalPages(null);
+    totalPagesRef.current = null;
     setEstimatedTotalPages(null);
+    estimatedTotalPagesRef.current = null;
     setDiagnostics(null);
     lastAnchorRef.current = null;
     stage1ByChapterRef.current.clear();
@@ -446,12 +480,11 @@ export function usePagination(
   // Navigation
   const nextPage = useCallback(() => {
     const current = currentPageRef.current;
-    const max = totalPagesRef.current ?? current;
-    const next = Math.min(max, current + 1);
+    const knownTotal = totalPagesRef.current;
+    const next =
+      knownTotal === null ? current + 1 : Math.min(knownTotal, current + 1);
     if (next === current) return;
 
-    currentPageRef.current = next;
-    setCurrentPage(next);
     postCommand({ type: "getPage", globalPage: next });
   }, [postCommand]);
 
@@ -460,32 +493,45 @@ export function usePagination(
     const next = Math.max(1, current - 1);
     if (next === current) return;
 
-    currentPageRef.current = next;
-    setCurrentPage(next);
     postCommand({ type: "getPage", globalPage: next });
   }, [postCommand]);
 
   const goToPage = useCallback(
     (page: number) => {
-      const max = totalPagesRef.current ?? 1;
-      const clamped = clamp(page, 1, max);
+      const normalized = Math.max(1, Math.floor(page));
+      const maxKnownPages =
+        totalPagesRef.current ?? estimatedTotalPagesRef.current;
+      const clamped =
+        maxKnownPages === null ? normalized : clamp(normalized, 1, maxKnownPages);
       if (clamped === currentPageRef.current) return;
 
-      currentPageRef.current = clamped;
-      setCurrentPage(clamped);
       postCommand({ type: "getPage", globalPage: clamped });
     },
     [postCommand],
   );
 
+  const goToChapterIndex = useCallback(
+    (chapterIndex: number) => {
+      if (totalChapters <= 0) return;
+
+      const normalized = Math.floor(chapterIndex);
+      if (normalized < 0 || normalized >= totalChapters) return;
+
+      postCommand({ type: "goToChapter", chapterIndex: normalized });
+    },
+    [postCommand, totalChapters],
+  );
+
   return {
     slices,
     currentPage,
+    currentChapterIndex,
     totalPages,
     estimatedTotalPages,
     nextPage,
     prevPage,
     goToPage,
+    goToChapterIndex,
     addChapter,
     status,
     diagnostics,

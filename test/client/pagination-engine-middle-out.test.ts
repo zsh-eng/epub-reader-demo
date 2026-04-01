@@ -75,6 +75,33 @@ function countEvents(events: PaginationEvent[], type: PaginationEvent["type"]) {
 }
 
 describe("Pagination engine relayout middle-out prioritization", () => {
+  it("goToChapter emits pageContent for a loaded chapter", () => {
+    const { engine, events } = createEngine(3, 0);
+    addChapter(engine, 0);
+    addChapter(engine, 2);
+
+    events.length = 0;
+    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("pageContent");
+
+    if (events[0]?.type === "pageContent") {
+      expect(events[0].chapterIndex).toBe(2);
+      expect(events[0].globalPage).toBe(2);
+    }
+  });
+
+  it("goToChapter emits pageUnavailable for an unresolved chapter", () => {
+    const { engine, events } = createEngine(3, 0);
+    addChapter(engine, 0);
+
+    events.length = 0;
+    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+
+    expect(events).toEqual([{ type: "pageUnavailable", globalPage: 2 }]);
+  });
+
   it("emits pageUnavailable until the requested page is resolvable", () => {
     const { engine, events } = createEngine(2, 0);
     addChapter(engine, 0);

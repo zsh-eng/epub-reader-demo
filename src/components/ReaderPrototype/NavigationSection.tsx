@@ -22,11 +22,11 @@ interface NavigationSectionProps {
   totalPages: number;
   paginationStatus: string;
   onGoToPage: (page: number) => void;
+  onGoToChapterIndex: (chapterIndex: number) => void;
   onNextPage: () => void;
   onPrevPage: () => void;
   chapterEntries: ChapterEntry[];
   currentChapterIndex: number;
-  chapterFirstPages: Map<number, number>;
 }
 
 export function NavigationSection({
@@ -34,11 +34,11 @@ export function NavigationSection({
   totalPages,
   paginationStatus,
   onGoToPage,
+  onGoToChapterIndex,
   onPrevPage,
   onNextPage,
   chapterEntries,
   currentChapterIndex,
-  chapterFirstPages,
 }: NavigationSectionProps) {
   const [jumpInput, setJumpInput] = useState(String(currentPage));
 
@@ -52,12 +52,11 @@ export function NavigationSection({
   const handleChapterSelect = useCallback(
     (value: string) => {
       const chapterIndex = Number.parseInt(value, 10);
-      const firstPage = chapterFirstPages.get(chapterIndex);
-      if (firstPage !== undefined) {
-        onGoToPage(firstPage);
+      if (Number.isFinite(chapterIndex)) {
+        onGoToChapterIndex(chapterIndex);
       }
     },
-    [chapterFirstPages, onGoToPage],
+    [onGoToChapterIndex],
   );
 
   const percentage =
@@ -98,7 +97,7 @@ export function NavigationSection({
             size="sm"
             className="flex-1 rounded-lg"
             onClick={onNextPage}
-            disabled={currentPage >= totalPages}
+            disabled={paginationStatus === "ready" && currentPage >= totalPages}
           >
             Next
           </Button>

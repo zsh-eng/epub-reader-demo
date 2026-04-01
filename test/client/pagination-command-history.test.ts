@@ -142,4 +142,13 @@ describe("Pagination command history", () => {
     expect(summary).toContain("align=justify");
     expect(summary).toContain("viewport=700x900");
   });
+
+  it("summarizes goToChapter as a 1-indexed chapter number", () => {
+    const summary = summarizePaginationCommand({
+      type: "goToChapter",
+      chapterIndex: 4,
+    });
+
+    expect(summary).toContain("chapter=5");
+  });
 });

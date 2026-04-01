@@ -15,11 +15,11 @@ export interface InspectorPanelProps {
   totalPages: number;
   paginationStatus: string;
   onGoToPage: (page: number) => void;
+  onGoToChapterIndex: (chapterIndex: number) => void;
   onNextPage: () => void;
   onPrevPage: () => void;
   chapterEntries: ChapterEntry[];
   currentChapterIndex: number;
-  chapterFirstPages: Map<number, number>;
 
   // Settings
   settings: ReaderSettings;
@@ -44,11 +44,11 @@ export function InspectorPanel(props: InspectorPanelProps) {
         totalPages={props.totalPages}
         paginationStatus={props.paginationStatus}
         onGoToPage={props.onGoToPage}
+        onGoToChapterIndex={props.onGoToChapterIndex}
         onNextPage={props.onNextPage}
         onPrevPage={props.onPrevPage}
         chapterEntries={props.chapterEntries}
         currentChapterIndex={props.currentChapterIndex}
-        chapterFirstPages={props.chapterFirstPages}
       />
 
       <Separator />

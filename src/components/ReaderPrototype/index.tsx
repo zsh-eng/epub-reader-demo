@@ -375,28 +375,6 @@ export function ReaderPrototype() {
     return [...chapterTimings].sort((a, b) => a.chapterIndex - b.chapterIndex);
   }, [pagination.diagnostics?.chapterTimings]);
 
-  // Derive current chapter index from page position
-  const currentChapterIndex = useMemo(() => {
-    if (chapterTimingRows.length === 0) return 0;
-    let acc = 0;
-    for (const ch of chapterTimingRows) {
-      acc += ch.pageCount;
-      if (pagination.currentPage <= acc) return ch.chapterIndex;
-    }
-    return chapterTimingRows.at(-1)?.chapterIndex ?? 0;
-  }, [pagination.currentPage, chapterTimingRows]);
-
-  // Compute first page for each chapter
-  const chapterFirstPages = useMemo(() => {
-    const map = new Map<number, number>();
-    let acc = 1;
-    for (const ch of chapterTimingRows) {
-      map.set(ch.chapterIndex, acc);
-      acc += ch.pageCount;
-    }
-    return map;
-  }, [chapterTimingRows]);
-
   // Keyboard navigation
   const paginationRef = useRef(pagination);
   paginationRef.current = pagination;
@@ -494,11 +472,11 @@ export function ReaderPrototype() {
     totalPages: displayTotalPages,
     paginationStatus: pagination.status,
     onGoToPage: pagination.goToPage,
+    onGoToChapterIndex: pagination.goToChapterIndex,
     onNextPage: pagination.nextPage,
     onPrevPage: pagination.prevPage,
     chapterEntries,
-    currentChapterIndex,
-    chapterFirstPages,
+    currentChapterIndex: pagination.currentChapterIndex,
     settings,
     onUpdateSettings: updateSettings,
     viewport,

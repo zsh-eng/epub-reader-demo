@@ -56,6 +56,9 @@ export class PaginationEngine {
         case "getPage":
           this.getPage(cmd.globalPage);
           break;
+        case "goToChapter":
+          this.goToChapter(cmd.chapterIndex);
+          break;
       }
     } catch (err) {
       this.emit({
@@ -251,6 +254,25 @@ export class PaginationEngine {
     });
   }
 
+  private goToChapter(chapterIndex: number): void {
+    const chapter = Math.floor(chapterIndex);
+    if (chapter < 0 || chapter >= this.totalChapters) {
+      throw new Error(`Chapter index ${chapterIndex} is out of bounds`);
+    }
+
+    const targetPage = this.resolveFirstPageForChapter(chapter);
+    if (targetPage === null) {
+      const unresolvedPage = (this.chapterPageOffsets[chapter] ?? 0) + 1;
+      this.emit({
+        type: "pageUnavailable",
+        globalPage: unresolvedPage,
+      });
+      return;
+    }
+
+    this.getPage(targetPage);
+  }
+
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
@@ -432,6 +454,14 @@ export class PaginationEngine {
     if (!pages || pages.length === 0) return null;
 
     const offset = this.chapterPageOffsets[this.initialChapterIndex] ?? 0;
+    return offset + 1;
+  }
+
+  private resolveFirstPageForChapter(chapterIndex: number): number | null {
+    const pages = this.pagesByChapter[chapterIndex];
+    if (!pages || pages.length === 0) return null;
+
+    const offset = this.chapterPageOffsets[chapterIndex] ?? 0;
     return offset + 1;
   }
 

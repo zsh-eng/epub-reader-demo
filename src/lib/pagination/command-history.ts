@@ -31,6 +31,8 @@ export function summarizePaginationCommand(command: PaginationCommand): string {
       return `base=${command.config.fontConfig.baseSizePx.toFixed(1)}px, lineHeight=${command.config.layoutTheme.lineHeightFactor.toFixed(2)}, para=${command.config.layoutTheme.paragraphSpacingFactor.toFixed(2)}, align=${command.config.layoutTheme.textAlign}, viewport=${Math.round(command.config.viewport.width)}x${Math.round(command.config.viewport.height)}, anchor=${summarizeAnchor(command.anchor)}`;
     case "getPage":
       return `page=${command.globalPage}`;
+    case "goToChapter":
+      return `chapter=${command.chapterIndex + 1}`;
   }
 }
 
