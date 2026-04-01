@@ -124,6 +124,38 @@ describe("Pagination engine relayout middle-out prioritization", () => {
     }
   });
 
+  it("keeps relayout anchored to the visible page after an unresolved request", () => {
+    const { engine, events } = createEngine(2, 0);
+    addChapter(engine, 0);
+
+    events.length = 0;
+    engine.handleCommand({ type: "getPage", globalPage: 2 });
+    expect(events).toEqual([{ type: "pageUnavailable", globalPage: 2 }]);
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        viewport: { width: 700, height: 900 },
+      },
+    });
+
+    const partialReadyEvent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "partialReady" }> =>
+        event.type === "partialReady",
+    );
+    const readyEvent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "ready" }> =>
+        event.type === "ready",
+    );
+
+    expect(partialReadyEvent?.resolvedPage).toBe(1);
+    expect(partialReadyEvent?.slicesChapterIndex).toBe(0);
+    expect(readyEvent?.resolvedPage).toBe(1);
+    expect(readyEvent?.slicesChapterIndex).toBe(0);
+  });
+
   it("uses last requested page to center middle-out relayout order", () => {
     const { engine, events } = createEngine(5, 0);
     for (let i = 0; i < 5; i++) addChapter(engine, i);
@@ -138,7 +170,6 @@ describe("Pagination engine relayout middle-out prioritization", () => {
         ...BASE_CONFIG,
         viewport: { width: 700, height: 900 },
       },
-      anchor: { chapterIndex: 2, blockId: "spacer-2" },
     });
 
     expect(getChapterOrder(events)).toEqual([2, 3, 1, 4, 0]);
@@ -158,7 +189,6 @@ describe("Pagination engine relayout middle-out prioritization", () => {
         ...BASE_CONFIG,
         viewport: { width: 660, height: 860 },
       },
-      anchor: { chapterIndex: 2, blockId: "spacer-2" },
     });
 
     expect(getChapterOrder(events)).toEqual([2, 3, 1, 4, 0]);
@@ -178,7 +208,6 @@ describe("Pagination engine relayout middle-out prioritization", () => {
         ...BASE_CONFIG,
         viewport: { width: 680, height: 820 },
       },
-      anchor: null,
     });
 
     expect(getChapterOrder(events)).toEqual([4, 0]);
@@ -204,7 +233,6 @@ describe("Pagination engine relayout middle-out prioritization", () => {
           baseSizePx: 18,
         },
       },
-      anchor: { chapterIndex: 3, blockId: "spacer-3" },
     });
 
     expect(getChapterOrder(events)).toEqual([3, 4, 2, 1, 0]);
@@ -221,7 +249,6 @@ describe("Pagination engine relayout middle-out prioritization", () => {
           paragraphSpacingFactor: 1.3,
         },
       },
-      anchor: { chapterIndex: 3, blockId: "spacer-3" },
     });
 
     expect(getChapterOrder(events)).toEqual([3, 4, 2, 1, 0]);
@@ -239,7 +266,6 @@ describe("Pagination engine relayout middle-out prioritization", () => {
     engine.handleCommand({
       type: "updateConfig",
       config: BASE_CONFIG,
-      anchor: { chapterIndex: 0, blockId: "spacer-0" },
     });
 
     expect(events).toHaveLength(0);

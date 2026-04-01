@@ -1,8 +1,4 @@
-import type {
-  ContentAnchor,
-  PaginationCommand,
-  PaginationEvent,
-} from "./engine-types";
+import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import type {
   Block,
   Page,
@@ -25,6 +21,11 @@ const DEFAULT_RUNTIME: PaginationRuntime = {
   isStale: () => false,
 };
 
+interface ContentAnchor {
+  chapterIndex: number;
+  blockId: string;
+}
+
 export class PaginationEngine {
   private emit: (event: PaginationEvent) => void;
 
@@ -42,6 +43,7 @@ export class PaginationEngine {
   private initialChapterIndex = 0;
   private initialChapterReceived = false;
   private lastRequestedGlobalPage: number | null = null;
+  private resolvedContentAnchor: ContentAnchor | null = null;
 
   constructor(emit: (event: PaginationEvent) => void) {
     this.emit = emit;
@@ -66,7 +68,7 @@ export class PaginationEngine {
           this.addChapter(cmd.chapterIndex, cmd.blocks);
           break;
         case "updateConfig":
-          await this.updateConfig(cmd.config, cmd.anchor, runtime);
+          await this.updateConfig(cmd.config, runtime);
           break;
         case "getPage":
           this.getPage(cmd.globalPage);
@@ -104,6 +106,7 @@ export class PaginationEngine {
     this.receivedChapters = 0;
     this.initialChapterReceived = false;
     this.lastRequestedGlobalPage = null;
+    this.resolvedContentAnchor = null;
 
     this.recomputeOffsets();
   }
@@ -123,23 +126,24 @@ export class PaginationEngine {
       this.receivedChapters += 1;
     }
 
-    const anchorPage = this.getInitialAnchorPage();
+    const resolvedPage =
+      this.resolveStoredAnchorPage() ?? this.getInitialAnchorPage();
 
     if (
       chapterIndex === this.initialChapterIndex &&
       !this.initialChapterReceived
     ) {
       this.initialChapterReceived = true;
-      this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
+      this.emitPartialReady(chapterIndex, resolvedPage, chapterDiagnostics);
 
       if (this.receivedChapters === this.totalChapters) {
-        this.emitReady(anchorPage);
+        this.emitReady(resolvedPage);
       }
       return;
     }
 
     if (this.receivedChapters === this.totalChapters) {
-      this.emitReady(anchorPage);
+      this.emitReady(resolvedPage);
       return;
     }
 
@@ -156,7 +160,6 @@ export class PaginationEngine {
 
   private updateConfig(
     nextConfig: PaginationConfig,
-    anchor: ContentAnchor | null,
     runtime: PaginationRuntime,
   ): Promise<void> {
     const prevConfig = this.config;
@@ -180,18 +183,14 @@ export class PaginationEngine {
     }
 
     if (fontChanged) {
-      return this.relayoutFromBlocks(anchor, runtime);
+      return this.relayoutFromBlocks(runtime);
     }
 
-    return this.relayoutPrepared(anchor, runtime);
+    return this.relayoutPrepared(runtime);
   }
 
-  private relayoutFromBlocks(
-    anchor: ContentAnchor | null,
-    runtime: PaginationRuntime,
-  ): Promise<void> {
+  private relayoutFromBlocks(runtime: PaginationRuntime): Promise<void> {
     return this.runRelayout(
-      anchor,
       (chapterIndex) => {
         if (!this.blocksByChapter[chapterIndex]) return null;
         return this.prepareAndLayoutChapter(chapterIndex);
@@ -200,12 +199,8 @@ export class PaginationEngine {
     );
   }
 
-  private relayoutPrepared(
-    anchor: ContentAnchor | null,
-    runtime: PaginationRuntime,
-  ): Promise<void> {
+  private relayoutPrepared(runtime: PaginationRuntime): Promise<void> {
     return this.runRelayout(
-      anchor,
       (chapterIndex) => {
         const prepared = this.preparedByChapter[chapterIndex];
         if (!prepared) return null;
@@ -224,7 +219,6 @@ export class PaginationEngine {
   }
 
   private async runRelayout(
-    anchor: ContentAnchor | null,
     relayoutChapter: (
       chapterIndex: number,
     ) => PaginationChapterDiagnostics | null,
@@ -243,10 +237,9 @@ export class PaginationEngine {
       this.recomputeOffsets();
 
       if (!emittedPartial) {
-        const anchorPage = anchor
-          ? this.resolveAnchor(anchor)
-          : (this.getInitialAnchorPage() ?? 1);
-        this.emitPartialReady(chapterIndex, anchorPage, chapterDiagnostics);
+        const resolvedPage =
+          this.resolveStoredAnchorPage() ?? (this.getInitialAnchorPage() ?? 1);
+        this.emitPartialReady(chapterIndex, resolvedPage, chapterDiagnostics);
         emittedPartial = true;
       } else {
         this.emit({
@@ -273,10 +266,9 @@ export class PaginationEngine {
     this.recomputeOffsets();
     if (runtime.isStale()) return;
 
-    const anchorPage = anchor
-      ? this.resolveAnchor(anchor)
-      : this.getInitialAnchorPage();
-    this.emitReady(anchorPage);
+    const resolvedPage =
+      this.resolveStoredAnchorPage() ?? this.getInitialAnchorPage();
+    this.emitReady(resolvedPage);
   }
 
   private getPage(globalPage: number): void {
@@ -291,6 +283,8 @@ export class PaginationEngine {
       });
       return;
     }
+
+    this.updateResolvedAnchorFromPageContent(pageContent);
 
     this.emit({
       type: "pageContent",
@@ -382,14 +376,15 @@ export class PaginationEngine {
     return a.width === b.width && a.height === b.height;
   }
 
-  private emitReady(anchorPage: number | null): void {
-    this.updateLastRequestedPage(anchorPage);
-    const readyPage = anchorPage ?? 1;
+  private emitReady(resolvedPage: number | null): void {
+    this.updateLastRequestedPage(resolvedPage);
+    const readyPage = resolvedPage ?? 1;
     const pageContent = this.resolvePageContentForGlobalPage(readyPage);
+    this.updateResolvedAnchorFromPageContent(pageContent);
     this.emit({
       type: "ready",
       totalPages: this.getTotalPages(),
-      anchorPage,
+      resolvedPage,
       slicesChapterIndex: pageContent?.chapterIndex ?? null,
       slices: pageContent?.slices ?? [],
       diagnostics: this.buildDiagnostics(),
@@ -399,23 +394,44 @@ export class PaginationEngine {
 
   private emitPartialReady(
     chapterIndex: number,
-    anchorPage: number | null,
+    resolvedPage: number | null,
     chapterDiagnostics: PaginationChapterDiagnostics | null,
   ): void {
-    this.updateLastRequestedPage(anchorPage);
-    const readyPage = anchorPage ?? 1;
+    this.updateLastRequestedPage(resolvedPage);
+    const readyPage = resolvedPage ?? 1;
     const pageContent = this.resolvePageContentForGlobalPage(readyPage);
+    this.updateResolvedAnchorFromPageContent(pageContent);
     this.emit({
       type: "partialReady",
       chapterIndex,
       chapterPageCount: this.pagesByChapter[chapterIndex]?.length ?? 0,
       estimatedTotalPages: this.estimateTotalPages(),
-      anchorPage,
+      resolvedPage,
       slicesChapterIndex: pageContent?.chapterIndex ?? null,
       slices: pageContent?.slices ?? [],
       chapterPageOffsets: [...this.chapterPageOffsets],
       chapterDiagnostics,
     });
+  }
+
+  private updateResolvedAnchorFromPageContent(pageContent: {
+    chapterIndex: number;
+    slices: PageSlice[];
+  } | null): void {
+    if (!pageContent) return;
+
+    const firstSlice = pageContent.slices[0];
+    if (!firstSlice) return;
+
+    this.resolvedContentAnchor = {
+      chapterIndex: pageContent.chapterIndex,
+      blockId: firstSlice.blockId,
+    };
+  }
+
+  private resolveStoredAnchorPage(): number | null {
+    if (!this.resolvedContentAnchor) return null;
+    return this.resolveAnchor(this.resolvedContentAnchor);
   }
 
   private updateLastRequestedPage(globalPage: number | null): void {

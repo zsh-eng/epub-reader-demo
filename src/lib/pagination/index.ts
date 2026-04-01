@@ -16,7 +16,6 @@ export type {
 } from "./use-pagination";
 
 export type {
-  ContentAnchor,
   PaginationCommand,
   PaginationEvent,
 } from "./engine-types";

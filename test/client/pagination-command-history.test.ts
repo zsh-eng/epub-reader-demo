@@ -133,7 +133,6 @@ describe("Pagination command history", () => {
         },
         viewport: { width: 700, height: 900 },
       },
-      anchor: { chapterIndex: 1, blockId: "block-123" },
     });
 
     expect(summary).toContain("base=18.0px");

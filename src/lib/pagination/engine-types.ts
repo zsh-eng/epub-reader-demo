@@ -7,15 +7,6 @@ import type {
 } from "./types";
 
 // ---------------------------------------------------------------------------
-// Content anchor — used to preserve reading position across re-layouts
-// ---------------------------------------------------------------------------
-
-export interface ContentAnchor {
-  chapterIndex: number;
-  blockId: string;
-}
-
-// ---------------------------------------------------------------------------
 // Commands (main thread → worker)
 // ---------------------------------------------------------------------------
 
@@ -35,7 +26,6 @@ export interface AddChapterCommand {
 export interface UpdateConfigCommand {
   type: "updateConfig";
   config: PaginationConfig;
-  anchor: ContentAnchor | null;
 }
 
 export interface GetPageCommand {
@@ -62,7 +52,7 @@ export type PaginationCommand =
 export interface ReadyEvent {
   type: "ready";
   totalPages: number;
-  anchorPage: number | null;
+  resolvedPage: number | null;
   slicesChapterIndex: number | null;
   slices: PageSlice[];
   diagnostics: PaginationDiagnostics;
@@ -86,7 +76,7 @@ export interface PartialReadyEvent {
   chapterIndex: number;
   chapterPageCount: number;
   estimatedTotalPages: number;
-  anchorPage: number | null;
+  resolvedPage: number | null;
   slicesChapterIndex: number | null;
   slices: PageSlice[];
   chapterPageOffsets: number[];

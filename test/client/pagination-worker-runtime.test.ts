@@ -79,7 +79,7 @@ describe("Pagination worker runtime", () => {
       },
       {
         sequence: 3,
-        command: { type: "updateConfig", config: buildConfig(17), anchor: null },
+        command: { type: "updateConfig", config: buildConfig(17) },
       },
       {
         sequence: 4,
@@ -95,7 +95,7 @@ describe("Pagination worker runtime", () => {
       },
       {
         sequence: 7,
-        command: { type: "updateConfig", config: buildConfig(18), anchor: null },
+        command: { type: "updateConfig", config: buildConfig(18) },
       },
       {
         sequence: 8,
@@ -116,7 +116,6 @@ describe("Pagination worker runtime", () => {
         command: {
           type: "updateConfig",
           config: buildConfig(18),
-          anchor: null,
         },
       },
       getLatestUpdateConfigSequence: () => latestUpdateConfigSequence,
@@ -140,7 +139,6 @@ describe("Pagination worker runtime", () => {
         command: {
           type: "updateConfig",
           config: buildConfig(19),
-          anchor: null,
         },
       },
       getLatestUpdateConfigSequence: () => 3,
@@ -193,12 +191,10 @@ describe("Pagination worker runtime", () => {
     const updateConfigA: PaginationCommand = {
       type: "updateConfig",
       config: buildConfig(18),
-      anchor: { chapterIndex: 2, blockId: "spacer-2" },
     };
     const updateConfigB: PaginationCommand = {
       type: "updateConfig",
       config: buildConfig(20),
-      anchor: { chapterIndex: 2, blockId: "spacer-2" },
     };
 
     let latestUpdateConfigSequence = 1;

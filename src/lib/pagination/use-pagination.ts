@@ -4,7 +4,6 @@ import {
     type PaginationCommandHistoryEntry,
 } from "./command-history";
 import type {
-    ContentAnchor,
     PaginationCommand,
     PaginationEvent,
 } from "./engine-types";
@@ -159,8 +158,6 @@ export function usePagination(
   const prevTotalChaptersRef = useRef<number | null>(null);
   const prevInitialChapterIndexRef = useRef<number | null>(null);
 
-  // Store last known slices' first blockId for content anchoring
-  const lastAnchorRef = useRef<ContentAnchor | null>(null);
   const stage1ByChapterRef = useRef<Map<number, number>>(new Map());
   const chapterQueuedAtRef = useRef<Map<number, number>>(new Map());
   const chapterLoadByChapterRef = useRef<Map<number, number>>(new Map());
@@ -273,25 +270,6 @@ export function usePagination(
     };
   }, []);
 
-  const getContentAnchor = useCallback((): ContentAnchor | null => {
-    return lastAnchorRef.current;
-  }, []);
-
-  const updateAnchorFromSlices = useCallback(
-    (pageSlices: PageSlice[], chapterIndex: number | null) => {
-      if (pageSlices.length === 0 || chapterIndex === null) return;
-
-      const firstSlice = pageSlices[0];
-      if (!firstSlice) return;
-
-      lastAnchorRef.current = {
-        chapterIndex,
-        blockId: firstSlice.blockId,
-      };
-    },
-    [],
-  );
-
   const finalizeChapterTiming = useCallback(
     (chapterIndex: number, chapterDiagnostics: PaginationChapterDiagnostics | null) => {
       if (chapterDiagnostics) {
@@ -315,9 +293,8 @@ export function usePagination(
         setCurrentChapterIndex(chapterIndex);
       }
       setSlices(pageSlices);
-      updateAnchorFromSlices(pageSlices, chapterIndex);
     },
-    [updateAnchorFromSlices],
+    [],
   );
 
   const buildMergedDiagnostics = useCallback(
@@ -524,17 +501,21 @@ export function usePagination(
           setStatus("ready");
 
           const desiredPage = clamp(currentPageRef.current, 1, event.totalPages);
-          const anchorPage =
-            event.anchorPage === null
+          const resolvedPage =
+            event.resolvedPage === null
               ? null
-              : clamp(event.anchorPage, 1, event.totalPages);
+              : clamp(event.resolvedPage, 1, event.totalPages);
 
-          if (anchorPage !== null && desiredPage === anchorPage) {
-            applyResolvedPage(anchorPage, event.slices, event.slicesChapterIndex);
+          if (resolvedPage !== null && desiredPage === resolvedPage) {
+            applyResolvedPage(
+              resolvedPage,
+              event.slices,
+              event.slicesChapterIndex,
+            );
             break;
           }
 
-          if (anchorPage === null && desiredPage === 1) {
+          if (resolvedPage === null && desiredPage === 1) {
             applyResolvedPage(desiredPage, event.slices, event.slicesChapterIndex);
             break;
           }
@@ -571,9 +552,9 @@ export function usePagination(
           setDiagnostics((prev) => buildMergedDiagnostics(prev));
           setStatus("partial");
 
-          if (event.anchorPage !== null) {
+          if (event.resolvedPage !== null) {
             applyResolvedPage(
-              event.anchorPage,
+              event.resolvedPage,
               event.slices,
               event.slicesChapterIndex,
             );
@@ -666,7 +647,6 @@ export function usePagination(
     setEstimatedTotalPages(null);
     estimatedTotalPagesRef.current = null;
     setDiagnostics(null);
-    lastAnchorRef.current = null;
     stage1ByChapterRef.current.clear();
     chapterQueuedAtRef.current.clear();
     chapterLoadByChapterRef.current.clear();
@@ -726,14 +706,12 @@ export function usePagination(
     postCommand({
       type: "updateConfig",
       config,
-      anchor: getContentAnchor(),
     });
   }, [
     beginFontSwitchTrace,
     config,
     totalChapters,
     postCommand,
-    getContentAnchor,
   ]);
 
   // Navigation
