@@ -1,15 +1,20 @@
-import { PaginationEngine } from "./pagination-engine";
 import type { PaginationCommand } from "./engine-types";
+import { PaginationEngine } from "./pagination-engine";
 import {
-  coalesceQueuedCommands,
-  createCommandRuntime,
-  type QueuedPaginationCommand,
+    coalesceQueuedCommands,
+    createCommandRuntime,
+    type QueuedPaginationCommand,
 } from "./pagination-worker-runtime";
 
 const engine = new PaginationEngine((event) => postMessage(event));
 
-interface YieldingScheduler {
-  yield: () => Promise<void>;
+type SchedulerPriority = "user-blocking" | "user-visible" | "background";
+
+interface TaskScheduler {
+  postTask?: <T>(
+    callback: () => T | PromiseLike<T>,
+    options?: { priority?: SchedulerPriority },
+  ) => Promise<T>;
 }
 
 let pendingCommands: QueuedPaginationCommand[] = [];
@@ -18,16 +23,19 @@ let latestUpdateConfigSequence = 0;
 let flushScheduled = false;
 let isFlushing = false;
 
-function isYieldingScheduler(value: unknown): value is YieldingScheduler {
-  if (typeof value !== "object" || value === null) return false;
-  if (!("yield" in value)) return false;
-  return typeof value.yield === "function";
+function isTaskScheduler(value: unknown): value is TaskScheduler {
+  return typeof value === "object" && value !== null;
 }
 
 async function yieldToEventLoop(): Promise<void> {
   const maybeScheduler = (globalThis as { scheduler?: unknown }).scheduler;
-  if (isYieldingScheduler(maybeScheduler)) {
-    await maybeScheduler.yield();
+  if (
+    isTaskScheduler(maybeScheduler) &&
+    typeof maybeScheduler.postTask === "function"
+  ) {
+    await maybeScheduler.postTask(() => undefined, {
+      priority: "background",
+    });
     return;
   }
 

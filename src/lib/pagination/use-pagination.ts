@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  nextPaginationCommandHistory,
-  type PaginationCommandHistoryEntry,
+    nextPaginationCommandHistory,
+    type PaginationCommandHistoryEntry,
 } from "./command-history";
 import type {
-  ContentAnchor,
-  PaginationCommand,
-  PaginationEvent,
+    ContentAnchor,
+    PaginationCommand,
+    PaginationEvent,
 } from "./engine-types";
 import { parseChapterHtml } from "./parse-html";
 import type {
-  PageSlice,
-  PaginationConfig,
-  PaginationChapterDiagnostics,
-  PaginationDiagnostics,
+    PageSlice,
+    PaginationChapterDiagnostics,
+    PaginationConfig,
+    PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -544,6 +544,7 @@ export function usePagination(
         }
 
         case "pageContent": {
+          console.log("page content for", event.globalPage, event.chapterIndex)
           applyResolvedPage(event.globalPage, event.slices, event.chapterIndex);
           break;
         }
@@ -554,6 +555,7 @@ export function usePagination(
         }
 
         case "partialReady": {
+          console.log("partial ready")
           const partialAtMs = performance.now();
           markActiveFontSwitchTrace(
             (trace) => ({
@@ -580,6 +582,7 @@ export function usePagination(
         }
 
         case "progress": {
+          console.log("received progress for", event.chapterIndex);
           const progressAtMs = performance.now();
           markActiveFontSwitchTrace(
             (trace) => ({

@@ -1,7 +1,7 @@
 import type { PaginationCommand } from "./engine-types";
 import type { PaginationRuntime } from "./pagination-engine";
 
-export const RELAYOUT_YIELD_BUDGET_MS = 50;
+export const RELAYOUT_YIELD_BUDGET_MS = 24;
 
 const SUPERSEDABLE: Set<PaginationCommand["type"]> = new Set([
   "updateConfig",
