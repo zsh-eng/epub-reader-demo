@@ -5,33 +5,33 @@ import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-    getBookFile,
-    getBookFilesByPaths,
-    getBookImageDimensionsMap,
-    type Book,
-    type BookFile,
+  getBookFile,
+  getBookFilesByPaths,
+  getBookImageDimensionsMap,
+  type Book,
+  type BookFile,
 } from "@/lib/db";
 import {
-    cleanupResourceUrls,
-    processEmbeddedResources,
+  cleanupResourceUrls,
+  processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import {
-    usePagination,
-    type PageSlice,
-    type PaginationConfig,
+  usePagination,
+  type PageSlice,
+  type PaginationConfig,
 } from "@/lib/pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import {
-    Fragment,
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-    type ReactElement,
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DebugSection } from "./DebugSection";
@@ -142,6 +142,7 @@ function renderPageSlice(
   sliceIndex: number,
   bookId: string,
   deferredImageCache: Map<string, string>,
+  baseFontSize: number
 ): ReactElement {
   // if (sliceIndex == 0) {
   //   console.log("update being rendered", performance.now() / 1000)
@@ -178,6 +179,7 @@ function renderPageSlice(
       style={{
         lineHeight: `${slice.lineHeight}px`,
         textAlign: slice.textAlign,
+        fontSize: baseFontSize
       }}
     >
       {slice.lines.map((line, lineIndex) => (
@@ -200,7 +202,6 @@ function renderPageSlice(
               {fragment.text}
             </span>
           ))}
-          {lineIndex < slice.lines.length - 1 ? " " : null}
         </Fragment>
       ))}
     </p>
@@ -573,6 +574,7 @@ export function ReaderPrototype() {
                       i,
                       bookId,
                       deferredImageCacheRef.current,
+                      paginationConfig.fontConfig.baseSizePx
                     ),
                   )
                 )}
