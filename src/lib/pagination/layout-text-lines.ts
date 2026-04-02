@@ -3,9 +3,20 @@ import {
   layoutWithLines,
   prepareWithSegments,
 } from "@chenglou/pretext";
-import type { PageLine, PreparedInlineItem } from "./types";
-import { LINE_START_CURSOR, cursorsMatch } from "./measure";
 import type { LayoutCursor } from "@chenglou/pretext";
+import type { PageLine, PreparedInlineItem, TextCursorOffset } from "./types";
+import { LINE_START_CURSOR, cursorsMatch } from "./measure";
+
+function createOffset(
+  itemIndex: number,
+  cursor: LayoutCursor,
+): TextCursorOffset {
+  return {
+    itemIndex,
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex,
+  };
+}
 
 export function layoutTextLines(
   items: PreparedInlineItem[],
@@ -20,6 +31,8 @@ export function layoutTextLines(
   while (itemIndex < items.length) {
     const fragments: PageLine["fragments"] = [];
     let remainingWidth = safeWidth;
+    let lineStartOffset: TextCursorOffset | null = null;
+    let lineEndOffset: TextCursorOffset | null = null;
 
     lineLoop: while (itemIndex < items.length) {
       const item = items[itemIndex];
@@ -60,6 +73,11 @@ export function layoutTextLines(
       if (!textCursor) {
         const fullWidth = leadingGap + item.fullWidth + item.chromeWidth;
         if (fullWidth <= remainingWidth) {
+          if (!lineStartOffset) {
+            lineStartOffset = createOffset(itemIndex, LINE_START_CURSOR);
+          }
+          lineEndOffset = createOffset(itemIndex, item.endCursor);
+
           fragments.push({
             text: item.fullText,
             font: item.font,
@@ -87,6 +105,11 @@ export function layoutTextLines(
         continue;
       }
 
+      if (!lineStartOffset) {
+        lineStartOffset = createOffset(itemIndex, start);
+      }
+      lineEndOffset = createOffset(itemIndex, line.end);
+
       fragments.push({
         text: line.text,
         font: item.font,
@@ -107,7 +130,12 @@ export function layoutTextLines(
     }
 
     if (fragments.length === 0) break;
-    lines.push({ fragments, isLastInBlock: false });
+    lines.push({
+      fragments,
+      startOffset: lineStartOffset ?? undefined,
+      endOffset: lineEndOffset ?? undefined,
+      isLastInBlock: false,
+    });
   }
 
   return lines;
@@ -142,6 +170,8 @@ export function layoutPreWrapLines(
         isCode: true,
       },
     ],
+    startOffset: createOffset(0, line.start),
+    endOffset: createOffset(0, line.end),
     isLastInBlock: false,
   }));
 }

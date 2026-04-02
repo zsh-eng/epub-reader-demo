@@ -4,17 +4,25 @@ import type {
   PaginationConfig,
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
+  TextCursorOffset,
 } from "./types";
 
 // ---------------------------------------------------------------------------
 // Commands (main thread → worker)
 // ---------------------------------------------------------------------------
 
+export interface ContentAnchor {
+  chapterIndex: number;
+  blockId: string;
+  offset?: TextCursorOffset;
+}
+
 export interface InitCommand {
   type: "init";
   totalChapters: number;
   config: PaginationConfig;
   initialChapterIndex: number;
+  initialAnchor?: ContentAnchor | null;
 }
 
 export interface AddChapterCommand {
@@ -53,6 +61,7 @@ export interface ReadyEvent {
   type: "ready";
   totalPages: number;
   resolvedPage: number | null;
+  resolvedAnchor: ContentAnchor | null;
   slicesChapterIndex: number | null;
   slices: PageSlice[];
   diagnostics: PaginationDiagnostics;
@@ -64,6 +73,7 @@ export interface PageContentEvent {
   globalPage: number;
   chapterIndex: number;
   slices: PageSlice[];
+  resolvedAnchor: ContentAnchor | null;
 }
 
 export interface PageUnavailableEvent {
@@ -77,6 +87,7 @@ export interface PartialReadyEvent {
   chapterPageCount: number;
   estimatedTotalPages: number;
   resolvedPage: number | null;
+  resolvedAnchor: ContentAnchor | null;
   slicesChapterIndex: number | null;
   slices: PageSlice[];
   chapterPageOffsets: number[];

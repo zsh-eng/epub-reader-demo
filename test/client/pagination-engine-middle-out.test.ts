@@ -61,6 +61,38 @@ function addChapter(engine: PaginationEngine, chapterIndex: number): void {
   });
 }
 
+function addChapterWithBlocks(
+  engine: PaginationEngine,
+  chapterIndex: number,
+  blocks: Block[],
+): void {
+  engine.handleCommand({
+    type: "addChapter",
+    chapterIndex,
+    blocks,
+  });
+}
+
+function buildLongTextBlocks(blockId: string): Block[] {
+  const paragraph = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+  return [
+    {
+      type: "text",
+      id: blockId,
+      tag: "p",
+      runs: [
+        {
+          text: paragraph.repeat(260),
+          bold: false,
+          italic: false,
+          isCode: false,
+          isLink: false,
+        },
+      ],
+    },
+  ];
+}
+
 function getChapterOrder(events: PaginationEvent[]): number[] {
   return events
     .filter(
@@ -269,5 +301,148 @@ describe("Pagination engine relayout middle-out prioritization", () => {
     });
 
     expect(events).toHaveLength(0);
+  });
+
+  it("keeps cursor-anchored position for long blocks during relayout", () => {
+    const { engine, events } = createEngine(1, 0);
+    addChapterWithBlocks(engine, 0, buildLongTextBlocks("text-long"));
+
+    const initialReady = events.find(
+      (event): event is Extract<PaginationEvent, { type: "ready" }> =>
+        event.type === "ready",
+    );
+    expect(initialReady?.totalPages ?? 0).toBeGreaterThan(1);
+
+    events.length = 0;
+    engine.handleCommand({ type: "getPage", globalPage: 2 });
+
+    const pageContent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "pageContent" }> =>
+        event.type === "pageContent",
+    );
+    expect(pageContent?.resolvedAnchor?.offset).toBeDefined();
+    expect(pageContent?.globalPage).toBe(2);
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "updateConfig",
+      config: {
+        ...BASE_CONFIG,
+        viewport: { width: 520, height: 900 },
+      },
+    });
+
+    const partialReadyEvent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "partialReady" }> =>
+        event.type === "partialReady",
+    );
+    const readyEvent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "ready" }> =>
+        event.type === "ready",
+    );
+
+    expect(partialReadyEvent?.resolvedPage ?? 1).toBeGreaterThan(1);
+    expect(readyEvent?.resolvedPage ?? 1).toBeGreaterThan(1);
+    expect(partialReadyEvent?.resolvedAnchor?.offset).toBeDefined();
+    expect(readyEvent?.resolvedAnchor?.offset).toBeDefined();
+  });
+
+  it("includes resolvedAnchor in events and restores from init initialAnchor", () => {
+    const initialBlocks = buildLongTextBlocks("text-restore");
+    const firstEvents: PaginationEvent[] = [];
+    const firstEngine = new PaginationEngine((event) => firstEvents.push(event));
+
+    firstEngine.handleCommand({
+      type: "init",
+      totalChapters: 1,
+      config: BASE_CONFIG,
+      initialChapterIndex: 0,
+    });
+    firstEngine.handleCommand({
+      type: "addChapter",
+      chapterIndex: 0,
+      blocks: initialBlocks,
+    });
+    const initialReady = firstEvents.find(
+      (event): event is Extract<PaginationEvent, { type: "ready" }> =>
+        event.type === "ready",
+    );
+    expect(initialReady?.totalPages ?? 0).toBeGreaterThan(1);
+
+    firstEvents.length = 0;
+    firstEngine.handleCommand({ type: "getPage", globalPage: 2 });
+
+    const pageEvent = firstEvents.find(
+      (event): event is Extract<PaginationEvent, { type: "pageContent" }> =>
+        event.type === "pageContent",
+    );
+    expect(pageEvent).toBeDefined();
+    expect(pageEvent?.resolvedAnchor).not.toBeNull();
+    expect(pageEvent?.resolvedAnchor?.offset).toBeDefined();
+
+    const restoredEvents: PaginationEvent[] = [];
+    const restoredEngine = new PaginationEngine((event) =>
+      restoredEvents.push(event),
+    );
+
+    restoredEngine.handleCommand({
+      type: "init",
+      totalChapters: 1,
+      config: BASE_CONFIG,
+      initialChapterIndex: 0,
+      initialAnchor: pageEvent?.resolvedAnchor ?? null,
+    });
+    restoredEngine.handleCommand({
+      type: "addChapter",
+      chapterIndex: 0,
+      blocks: buildLongTextBlocks("text-restore"),
+    });
+
+    const restoredPartial = restoredEvents.find(
+      (event): event is Extract<PaginationEvent, { type: "partialReady" }> =>
+        event.type === "partialReady",
+    );
+    const restoredReady = restoredEvents.find(
+      (event): event is Extract<PaginationEvent, { type: "ready" }> =>
+        event.type === "ready",
+    );
+
+    expect(restoredPartial?.resolvedAnchor).not.toBeNull();
+    expect(restoredReady?.resolvedAnchor).not.toBeNull();
+    expect(restoredPartial?.resolvedPage ?? 1).toBeGreaterThan(1);
+    expect(restoredReady?.resolvedPage ?? 1).toBeGreaterThan(1);
+  });
+
+  it("keeps block-only fallback behavior when anchor has no offset", () => {
+    const events: PaginationEvent[] = [];
+    const engine = new PaginationEngine((event) => events.push(event));
+
+    engine.handleCommand({
+      type: "init",
+      totalChapters: 1,
+      config: BASE_CONFIG,
+      initialChapterIndex: 0,
+      initialAnchor: {
+        chapterIndex: 0,
+        blockId: "text-fallback",
+      },
+    });
+    engine.handleCommand({
+      type: "addChapter",
+      chapterIndex: 0,
+      blocks: buildLongTextBlocks("text-fallback"),
+    });
+
+    const partialReadyEvent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "partialReady" }> =>
+        event.type === "partialReady",
+    );
+    const readyEvent = events.find(
+      (event): event is Extract<PaginationEvent, { type: "ready" }> =>
+        event.type === "ready",
+    );
+
+    expect(partialReadyEvent?.resolvedPage).toBe(1);
+    expect(readyEvent?.resolvedPage).toBe(1);
   });
 });

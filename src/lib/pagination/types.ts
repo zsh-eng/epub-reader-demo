@@ -147,8 +147,16 @@ export interface PageFragment {
   isCode: boolean;
 }
 
+export interface TextCursorOffset {
+  itemIndex: number;
+  segmentIndex: number;
+  graphemeIndex: number;
+}
+
 export interface PageLine {
   fragments: PageFragment[];
+  startOffset?: TextCursorOffset;
+  endOffset?: TextCursorOffset;
   isLastInBlock: boolean;
 }
 

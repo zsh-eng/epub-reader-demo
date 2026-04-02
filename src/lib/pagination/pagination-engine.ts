@@ -1,4 +1,8 @@
-import type { PaginationCommand, PaginationEvent } from "./engine-types";
+import type {
+  ContentAnchor,
+  PaginationCommand,
+  PaginationEvent,
+} from "./engine-types";
 import type {
   Block,
   Page,
@@ -7,6 +11,7 @@ import type {
   PaginationChapterDiagnostics,
   PaginationDiagnostics,
   PreparedBlock,
+  TextCursorOffset,
 } from "./types";
 import { prepareBlocks } from "./prepare-blocks";
 import { layoutPages } from "./layout-pages";
@@ -20,11 +25,6 @@ const DEFAULT_RUNTIME: PaginationRuntime = {
   maybeYield: () => {},
   isStale: () => false,
 };
-
-interface ContentAnchor {
-  chapterIndex: number;
-  blockId: string;
-}
 
 export class PaginationEngine {
   private emit: (event: PaginationEvent) => void;
@@ -62,6 +62,7 @@ export class PaginationEngine {
             cmd.totalChapters,
             cmd.config,
             cmd.initialChapterIndex,
+            cmd.initialAnchor ?? null,
           );
           break;
         case "addChapter":
@@ -89,6 +90,7 @@ export class PaginationEngine {
     totalChapters: number,
     config: PaginationConfig,
     initialChapterIndex: number,
+    initialAnchor: ContentAnchor | null,
   ): void {
     this.config = config;
 
@@ -106,7 +108,7 @@ export class PaginationEngine {
     this.receivedChapters = 0;
     this.initialChapterReceived = false;
     this.lastRequestedGlobalPage = null;
-    this.resolvedContentAnchor = null;
+    this.resolvedContentAnchor = this.normalizeAnchor(initialAnchor);
 
     this.recomputeOffsets();
   }
@@ -291,6 +293,7 @@ export class PaginationEngine {
       globalPage: page1,
       chapterIndex: pageContent.chapterIndex,
       slices: pageContent.slices,
+      resolvedAnchor: this.cloneAnchor(this.resolvedContentAnchor),
     });
   }
 
@@ -330,6 +333,83 @@ export class PaginationEngine {
     if (typeof value !== "object" || value === null) return false;
     if (!("then" in value)) return false;
     return typeof value.then === "function";
+  }
+
+  private normalizeAnchor(anchor: ContentAnchor | null): ContentAnchor | null {
+    if (!anchor) return null;
+    if (typeof anchor.blockId !== "string") return null;
+
+    const chapterIndex = Math.floor(anchor.chapterIndex);
+    if (!Number.isFinite(chapterIndex)) return null;
+    if (chapterIndex < 0 || chapterIndex >= this.totalChapters) return null;
+
+    const blockId = anchor.blockId.trim();
+    if (!blockId) return null;
+
+    const offset = this.normalizeOffset(anchor.offset);
+    if (!offset) {
+      return {
+        chapterIndex,
+        blockId,
+      };
+    }
+
+    return {
+      chapterIndex,
+      blockId,
+      offset,
+    };
+  }
+
+  private normalizeOffset(
+    offset: TextCursorOffset | undefined,
+  ): TextCursorOffset | null {
+    if (!offset) return null;
+
+    const itemIndex = Math.floor(offset.itemIndex);
+    const segmentIndex = Math.floor(offset.segmentIndex);
+    const graphemeIndex = Math.floor(offset.graphemeIndex);
+
+    if (!Number.isFinite(itemIndex) || itemIndex < 0) return null;
+    if (!Number.isFinite(segmentIndex) || segmentIndex < 0) return null;
+    if (!Number.isFinite(graphemeIndex) || graphemeIndex < 0) return null;
+
+    return {
+      itemIndex,
+      segmentIndex,
+      graphemeIndex,
+    };
+  }
+
+  private cloneOffset(offset: TextCursorOffset): TextCursorOffset {
+    return {
+      itemIndex: offset.itemIndex,
+      segmentIndex: offset.segmentIndex,
+      graphemeIndex: offset.graphemeIndex,
+    };
+  }
+
+  private cloneAnchor(anchor: ContentAnchor | null): ContentAnchor | null {
+    if (!anchor) return null;
+
+    return {
+      chapterIndex: anchor.chapterIndex,
+      blockId: anchor.blockId,
+      offset: anchor.offset ? this.cloneOffset(anchor.offset) : undefined,
+    };
+  }
+
+  private compareOffsets(a: TextCursorOffset, b: TextCursorOffset): number {
+    if (a.itemIndex !== b.itemIndex) {
+      return a.itemIndex < b.itemIndex ? -1 : 1;
+    }
+    if (a.segmentIndex !== b.segmentIndex) {
+      return a.segmentIndex < b.segmentIndex ? -1 : 1;
+    }
+    if (a.graphemeIndex !== b.graphemeIndex) {
+      return a.graphemeIndex < b.graphemeIndex ? -1 : 1;
+    }
+    return 0;
   }
 
   private areConfigsEqual(
@@ -381,10 +461,12 @@ export class PaginationEngine {
     const readyPage = resolvedPage ?? 1;
     const pageContent = this.resolvePageContentForGlobalPage(readyPage);
     this.updateResolvedAnchorFromPageContent(pageContent);
+    const resolvedAnchor = this.cloneAnchor(this.resolvedContentAnchor);
     this.emit({
       type: "ready",
       totalPages: this.getTotalPages(),
       resolvedPage,
+      resolvedAnchor,
       slicesChapterIndex: pageContent?.chapterIndex ?? null,
       slices: pageContent?.slices ?? [],
       diagnostics: this.buildDiagnostics(),
@@ -401,12 +483,14 @@ export class PaginationEngine {
     const readyPage = resolvedPage ?? 1;
     const pageContent = this.resolvePageContentForGlobalPage(readyPage);
     this.updateResolvedAnchorFromPageContent(pageContent);
+    const resolvedAnchor = this.cloneAnchor(this.resolvedContentAnchor);
     this.emit({
       type: "partialReady",
       chapterIndex,
       chapterPageCount: this.pagesByChapter[chapterIndex]?.length ?? 0,
       estimatedTotalPages: this.estimateTotalPages(),
       resolvedPage,
+      resolvedAnchor,
       slicesChapterIndex: pageContent?.chapterIndex ?? null,
       slices: pageContent?.slices ?? [],
       chapterPageOffsets: [...this.chapterPageOffsets],
@@ -419,6 +503,51 @@ export class PaginationEngine {
     slices: PageSlice[];
   } | null): void {
     if (!pageContent) return;
+    // TODO: we should use the middle slice instead for anchoring - it's more accurate and less prone to the page shifting around
+    // const middleSliceBlockId = pageContent.slices[Math.floor(pageContent.slices.length / 2)].blockId;
+    // this.resolvedContentAnchor = {
+    //   chapterIndex: pageContent.chapterIndex,
+    //   blockId: middleSliceBlockId,
+    // };
+    // return
+
+    const textSlice = pageContent.slices.find((slice) => {
+      if (slice.type !== "text") return false;
+      return slice.lines.some((line) => line.startOffset !== undefined);
+    });
+    if (textSlice?.type === "text") {
+      const firstLineWithOffset = textSlice.lines.find(
+        (line) => line.startOffset !== undefined,
+      );
+      if (firstLineWithOffset?.startOffset) {
+        this.resolvedContentAnchor = {
+          chapterIndex: pageContent.chapterIndex,
+          blockId: textSlice.blockId,
+          offset: this.cloneOffset(firstLineWithOffset.startOffset),
+        };
+        return;
+      }
+    }
+
+    const imageSlice = pageContent.slices.find((slice) => slice.type === "image");
+    if (imageSlice) {
+      this.resolvedContentAnchor = {
+        chapterIndex: pageContent.chapterIndex,
+        blockId: imageSlice.blockId,
+      };
+      return;
+    }
+
+    const spacerSlice = pageContent.slices.find(
+      (slice) => slice.type === "spacer",
+    );
+    if (spacerSlice) {
+      this.resolvedContentAnchor = {
+        chapterIndex: pageContent.chapterIndex,
+        blockId: spacerSlice.blockId,
+      };
+      return;
+    }
 
     const firstSlice = pageContent.slices[0];
     if (!firstSlice) return;
@@ -567,20 +696,57 @@ export class PaginationEngine {
   }
 
   private resolveAnchor(anchor: ContentAnchor): number | null {
-    const { chapterIndex, blockId } = anchor;
+    const { chapterIndex, blockId, offset: anchorOffset } = anchor;
     const pages = this.pagesByChapter[chapterIndex];
     if (!pages) return null;
 
     const offset = this.chapterPageOffsets[chapterIndex] ?? 0;
+    let firstBlockPageIndex: number | null = null;
+    let nearestPrecedingPageIndex: number | null = null;
+    let nearestPrecedingEnd: TextCursorOffset | null = null;
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
       if (!page) continue;
       for (const slice of page.slices) {
-        if (slice.blockId === blockId) {
-          return offset + i + 1; // 1-indexed
+        if (slice.blockId !== blockId) continue;
+
+        if (firstBlockPageIndex === null) {
+          firstBlockPageIndex = i;
+        }
+
+        if (!anchorOffset || slice.type !== "text") continue;
+
+        for (const line of slice.lines) {
+          const lineStart = line.startOffset;
+          const lineEnd = line.endOffset;
+          if (!lineStart || !lineEnd) continue;
+
+          const startCompare = this.compareOffsets(lineStart, anchorOffset);
+          const endCompare = this.compareOffsets(anchorOffset, lineEnd);
+          if (startCompare <= 0 && endCompare < 0) {
+            return offset + i + 1;
+          }
+
+          if (this.compareOffsets(lineEnd, anchorOffset) <= 0) {
+            if (
+              !nearestPrecedingEnd ||
+              this.compareOffsets(lineEnd, nearestPrecedingEnd) > 0
+            ) {
+              nearestPrecedingEnd = lineEnd;
+              nearestPrecedingPageIndex = i;
+            }
+          }
         }
       }
+    }
+
+    if (nearestPrecedingPageIndex !== null) {
+      return offset + nearestPrecedingPageIndex + 1;
+    }
+
+    if (firstBlockPageIndex !== null) {
+      return offset + firstBlockPageIndex + 1;
     }
 
     // Fallback: return start of chapter

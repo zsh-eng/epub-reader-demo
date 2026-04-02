@@ -4,6 +4,7 @@ import {
     type PaginationCommandHistoryEntry,
 } from "./command-history";
 import type {
+    ContentAnchor,
     PaginationCommand,
     PaginationEvent,
 } from "./engine-types";
@@ -52,6 +53,7 @@ export interface UsePaginationResult {
   currentChapterIndex: number;
   totalPages: number | null;
   estimatedTotalPages: number | null;
+  resolvedAnchor: ContentAnchor | null;
 
   nextPage: () => void;
   prevPage: () => void;
@@ -70,6 +72,7 @@ export interface UsePaginationOptions {
   totalChapters: number;
   config: PaginationConfig;
   initialChapterIndex?: number;
+  initialAnchor?: ContentAnchor | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +81,15 @@ export interface UsePaginationOptions {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function anchorToKey(anchor: ContentAnchor | null | undefined): string {
+  if (!anchor) return "null";
+  const offset = anchor.offset;
+  if (!offset) {
+    return `${anchor.chapterIndex}:${anchor.blockId}`;
+  }
+  return `${anchor.chapterIndex}:${anchor.blockId}:${offset.itemIndex}:${offset.segmentIndex}:${offset.graphemeIndex}`;
 }
 
 function areFontConfigsEqual(
@@ -103,7 +115,7 @@ function readFontLoaded(bodyFamily: string): boolean | null {
 export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
-  const { totalChapters, config, initialChapterIndex } = options;
+  const { totalChapters, config, initialChapterIndex, initialAnchor } = options;
   const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
@@ -114,6 +126,9 @@ export function usePagination(
   const [totalPages, setTotalPages] = useState<number | null>(null);
   const [estimatedTotalPages, setEstimatedTotalPages] = useState<number | null>(
     null,
+  );
+  const [resolvedAnchor, setResolvedAnchor] = useState<ContentAnchor | null>(
+    initialAnchor ?? null,
   );
   const [status, setStatus] = useState<PaginationStatus>("idle");
   const [diagnostics, setDiagnostics] = useState<PaginationDiagnostics | null>(
@@ -157,6 +172,7 @@ export function usePagination(
   // Track previous values to detect changes
   const prevTotalChaptersRef = useRef<number | null>(null);
   const prevInitialChapterIndexRef = useRef<number | null>(null);
+  const prevInitialAnchorKeyRef = useRef<string>("null");
 
   const stage1ByChapterRef = useRef<Map<number, number>>(new Map());
   const chapterQueuedAtRef = useRef<Map<number, number>>(new Map());
@@ -286,13 +302,19 @@ export function usePagination(
   );
 
   const applyResolvedPage = useCallback(
-    (globalPage: number, pageSlices: PageSlice[], chapterIndex: number | null) => {
+    (
+      globalPage: number,
+      pageSlices: PageSlice[],
+      chapterIndex: number | null,
+      anchor: ContentAnchor | null,
+    ) => {
       currentPageRef.current = globalPage;
       setCurrentPage(globalPage);
       if (chapterIndex !== null) {
         setCurrentChapterIndex(chapterIndex);
       }
       setSlices(pageSlices);
+      setResolvedAnchor(anchor);
     },
     [],
   );
@@ -510,17 +532,28 @@ export function usePagination(
               resolvedPage,
               event.slices,
               event.slicesChapterIndex,
+              event.resolvedAnchor,
             );
             break;
           }
 
-          applyResolvedPage(1, event.slices, event.slicesChapterIndex);
+          applyResolvedPage(
+            1,
+            event.slices,
+            event.slicesChapterIndex,
+            event.resolvedAnchor,
+          );
           break;
         }
 
         case "pageContent": {
           console.log("page content for", event.globalPage, event.chapterIndex)
-          applyResolvedPage(event.globalPage, event.slices, event.chapterIndex);
+          applyResolvedPage(
+            event.globalPage,
+            event.slices,
+            event.chapterIndex,
+            event.resolvedAnchor,
+          );
           break;
         }
 
@@ -551,7 +584,10 @@ export function usePagination(
               event.resolvedPage,
               event.slices,
               event.slicesChapterIndex,
+              event.resolvedAnchor,
             );
+          } else {
+            setResolvedAnchor(event.resolvedAnchor);
           }
           break;
         }
@@ -618,16 +654,20 @@ export function usePagination(
   // Send init command when chapter count changes
   useEffect(() => {
     const nextInitialChapterIndex = initialChapterIndex ?? 0;
+    const nextInitialAnchor = initialAnchor ?? null;
+    const nextInitialAnchorKey = anchorToKey(nextInitialAnchor);
 
     if (totalChapters <= 0) {
       prevTotalChaptersRef.current = totalChapters;
       prevInitialChapterIndexRef.current = nextInitialChapterIndex;
+      prevInitialAnchorKeyRef.current = nextInitialAnchorKey;
       return;
     }
 
     const shouldInit =
       prevTotalChaptersRef.current !== totalChapters ||
-      prevInitialChapterIndexRef.current !== nextInitialChapterIndex;
+      prevInitialChapterIndexRef.current !== nextInitialChapterIndex ||
+      prevInitialAnchorKeyRef.current !== nextInitialAnchorKey;
 
     if (!shouldInit) return;
 
@@ -640,6 +680,7 @@ export function usePagination(
     totalPagesRef.current = null;
     setEstimatedTotalPages(null);
     estimatedTotalPagesRef.current = null;
+    setResolvedAnchor(nextInitialAnchor);
     setDiagnostics(null);
     stage1ByChapterRef.current.clear();
     chapterQueuedAtRef.current.clear();
@@ -656,14 +697,17 @@ export function usePagination(
       totalChapters,
       config,
       initialChapterIndex: nextInitialChapterIndex,
+      initialAnchor: nextInitialAnchor,
     });
 
     prevTotalChaptersRef.current = totalChapters;
     prevInitialChapterIndexRef.current = nextInitialChapterIndex;
+    prevInitialAnchorKeyRef.current = nextInitialAnchorKey;
   }, [
     totalChapters,
     config,
     initialChapterIndex,
+    initialAnchor,
     postCommand,
   ]);
 
@@ -759,6 +803,7 @@ export function usePagination(
     currentChapterIndex,
     totalPages,
     estimatedTotalPages,
+    resolvedAnchor,
     nextPage,
     prevPage,
     goToPage,

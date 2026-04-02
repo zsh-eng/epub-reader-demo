@@ -16,6 +16,7 @@ export type {
 } from "./use-pagination";
 
 export type {
+  ContentAnchor,
   PaginationCommand,
   PaginationEvent,
 } from "./engine-types";
@@ -45,6 +46,7 @@ export type {
   PaginationResult,
   Page,
   PageSlice,
+  TextCursorOffset,
   TextSlice,
   ImageSlice,
   SpacerSlice,
