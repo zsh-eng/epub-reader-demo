@@ -7,7 +7,7 @@ export interface PaginationCommandHistoryEntry {
   summary: string;
 }
 
-export const MAX_PAGINATION_COMMAND_HISTORY = 200;
+export const MAX_PAGINATION_COMMAND_HISTORY = 50;
 
 export function summarizePaginationCommand(command: PaginationCommand): string {
   switch (command.type) {
