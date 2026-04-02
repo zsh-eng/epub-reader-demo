@@ -75,7 +75,8 @@ function buildPaginationConfig(
   return {
     fontConfig: {
       bodyFamily: getNamedBodyFont(settings.fontFamily),
-      headingFamily: `"EB Garamond", Georgia, serif`,
+      // headingFamily: `"EB Garamond", Georgia, serif`,
+      headingFamily: getNamedBodyFont(settings.fontFamily),
       codeFamily: `"Courier New", Menlo, Monaco, monospace`,
       baseSizePx: 16 * (settings.fontSize / 100),
     },
@@ -142,6 +143,10 @@ function renderPageSlice(
   bookId: string,
   deferredImageCache: Map<string, string>,
 ): ReactElement {
+  // if (sliceIndex == 0) {
+  //   console.log("update being rendered", performance.now() / 1000)
+  // }
+
   const key = `${slice.blockId}-${sliceIndex}`;
 
   if (slice.type === "spacer") {

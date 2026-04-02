@@ -1,5 +1,6 @@
-import type { PaginationCommand } from "./engine-types";
+import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import { PaginationEngine } from "./pagination-engine";
+import { normalizePaginationRevision } from "./pagination-revision";
 import { ensurePaginationWorkerFontsReady } from "./pagination-worker-fonts";
 import {
   coalesceQueuedCommands,
@@ -7,7 +8,6 @@ import {
   type QueuedPaginationCommand,
 } from "./pagination-worker-runtime";
 
-const engine = new PaginationEngine((event) => postMessage(event));
 const workerFontsReady = ensurePaginationWorkerFontsReady();
 
 type SchedulerPriority = "user-blocking" | "user-visible" | "background";
@@ -20,10 +20,20 @@ interface TaskScheduler {
 }
 
 let pendingCommands: QueuedPaginationCommand[] = [];
-let nextCommandSequence = 1;
-let latestUpdateConfigSequence = 0;
+let latestLayoutRevision = 0;
+let activeCommandRevision = 0;
 let flushScheduled = false;
 let isFlushing = false;
+
+function emitEvent(event: PaginationEvent): void {
+  const eventWithRevision: PaginationEvent = {
+    ...event,
+    revision: activeCommandRevision,
+  };
+  postMessage(eventWithRevision);
+}
+
+const engine = new PaginationEngine(emitEvent);
 
 function isTaskScheduler(value: unknown): value is TaskScheduler {
   return typeof value === "object" && value !== null;
@@ -70,12 +80,14 @@ async function flush(): Promise<void> {
       for (const queuedCommand of batch) {
         const runtime = createCommandRuntime({
           queuedCommand,
-          getLatestUpdateConfigSequence: () => latestUpdateConfigSequence,
+          getLatestLayoutRevision: () => latestLayoutRevision,
           yieldToEventLoop,
           now: () => performance.now(),
         });
 
+        activeCommandRevision = queuedCommand.revision;
         await engine.handleCommand(queuedCommand.command, runtime);
+        activeCommandRevision = latestLayoutRevision;
       }
     }
   } finally {
@@ -87,14 +99,18 @@ async function flush(): Promise<void> {
 }
 
 self.onmessage = (e: MessageEvent<PaginationCommand>) => {
-  const queuedCommand: QueuedPaginationCommand = {
-    sequence: nextCommandSequence,
-    command: e.data,
+  const revision = normalizePaginationRevision(e.data.revision, 0);
+  const command: PaginationCommand = {
+    ...e.data,
+    revision,
   };
-  nextCommandSequence += 1;
+  const queuedCommand: QueuedPaginationCommand = {
+    revision,
+    command,
+  };
 
-  if (queuedCommand.command.type === "updateConfig") {
-    latestUpdateConfigSequence = queuedCommand.sequence;
+  if (command.type === "init" || command.type === "updateConfig") {
+    latestLayoutRevision = Math.max(latestLayoutRevision, revision);
   }
 
   pendingCommands.push(queuedCommand);

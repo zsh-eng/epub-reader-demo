@@ -70,62 +70,62 @@ describe("Pagination worker runtime", () => {
   it("coalesces supersedable commands while preserving non-supersedable order", () => {
     const commands: QueuedPaginationCommand[] = [
       {
-        sequence: 1,
+        revision: 1,
         command: { type: "addChapter", chapterIndex: 0, blocks: [] },
       },
       {
-        sequence: 2,
+        revision: 1,
         command: { type: "getPage", globalPage: 2 },
       },
       {
-        sequence: 3,
+        revision: 2,
         command: { type: "updateConfig", config: buildConfig(17) },
       },
       {
-        sequence: 4,
+        revision: 1,
         command: { type: "getPage", globalPage: 7 },
       },
       {
-        sequence: 5,
+        revision: 1,
         command: { type: "goToChapter", chapterIndex: 5 },
       },
       {
-        sequence: 6,
+        revision: 1,
         command: { type: "goToChapter", chapterIndex: 2 },
       },
       {
-        sequence: 7,
+        revision: 3,
         command: { type: "updateConfig", config: buildConfig(18) },
       },
       {
-        sequence: 8,
+        revision: 3,
         command: { type: "addChapter", chapterIndex: 1, blocks: [] },
       },
     ];
 
     const coalesced = coalesceQueuedCommands(commands);
-    expect(coalesced.map((entry) => entry.sequence)).toEqual([1, 4, 6, 7, 8]);
+    expect(coalesced.map((entry) => entry.revision)).toEqual([1, 1, 1, 3, 3]);
   });
 
-  it("marks updateConfig runtime stale when a newer sequence arrives", () => {
-    let latestUpdateConfigSequence = 10;
+  it("marks updateConfig runtime stale when a newer revision arrives", () => {
+    let latestLayoutRevision = 10;
 
     const runtime = createCommandRuntime({
       queuedCommand: {
-        sequence: 10,
+        revision: 10,
         command: {
           type: "updateConfig",
           config: buildConfig(18),
         },
       },
-      getLatestUpdateConfigSequence: () => latestUpdateConfigSequence,
+      getLatestLayoutRevision: () => latestLayoutRevision,
       yieldToEventLoop: async () => {},
       now: () => 0,
     });
 
     expect(runtime.isStale()).toBe(false);
 
-    latestUpdateConfigSequence = 11;
+    latestLayoutRevision = 11;
     expect(runtime.isStale()).toBe(true);
   });
 
@@ -135,13 +135,13 @@ describe("Pagination worker runtime", () => {
 
     const runtime = createCommandRuntime({
       queuedCommand: {
-        sequence: 3,
+        revision: 3,
         command: {
           type: "updateConfig",
           config: buildConfig(19),
         },
       },
-      getLatestUpdateConfigSequence: () => 3,
+      getLatestLayoutRevision: () => 3,
       yieldToEventLoop: async () => {
         yieldCalls += 1;
       },
@@ -197,17 +197,17 @@ describe("Pagination worker runtime", () => {
       config: buildConfig(20),
     };
 
-    let latestUpdateConfigSequence = 1;
+    let latestLayoutRevision = 1;
     const staleRuntime = createCommandRuntime({
       queuedCommand: {
-        sequence: 1,
+        revision: 1,
         command: updateConfigA,
       },
-      getLatestUpdateConfigSequence: () => latestUpdateConfigSequence,
+      getLatestLayoutRevision: () => latestLayoutRevision,
       relayoutYieldBudgetMs: 0,
       now: () => 0,
       yieldToEventLoop: async () => {
-        latestUpdateConfigSequence = 2;
+        latestLayoutRevision = 2;
       },
     });
 
@@ -219,10 +219,10 @@ describe("Pagination worker runtime", () => {
 
     const freshRuntime = createCommandRuntime({
       queuedCommand: {
-        sequence: 2,
+        revision: 2,
         command: updateConfigB,
       },
-      getLatestUpdateConfigSequence: () => latestUpdateConfigSequence,
+      getLatestLayoutRevision: () => latestLayoutRevision,
       relayoutYieldBudgetMs: 0,
       now: () => 0,
       yieldToEventLoop: async () => {},

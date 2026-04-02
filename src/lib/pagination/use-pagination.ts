@@ -4,6 +4,7 @@ import type {
   PaginationCommand,
   PaginationEvent,
 } from "./engine-types";
+import { shouldAcceptPaginationEvent } from "./pagination-revision";
 import { PaginationTracer } from "./pagination-tracer";
 import { parseChapterHtml } from "./parse-html";
 import {
@@ -89,12 +90,15 @@ export function usePagination(
   const totalPagesRef = useRef<number | null>(null);
   const estimatedTotalPagesRef = useRef<number | null>(null);
   const latestBodyFamilyRef = useRef(config.fontConfig.bodyFamily);
+  const nextLayoutRevisionRef = useRef(1);
+  const latestPostedLayoutRevisionRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
 
   // Keep refs in sync for use in callbacks.
   // Use effects so re-renders don't reset optimistic navigation refs
   // before worker responses arrive.
   useEffect(() => {
+    console.log("current page was updated", performance.now() / 1000)
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
@@ -122,10 +126,25 @@ export function usePagination(
   }, []);
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    tracerRef.current.recordPostedCommand(cmd, {
+    const advancesLayoutRevision =
+      cmd.type === "init" || cmd.type === "updateConfig";
+    const revision = advancesLayoutRevision
+      ? nextLayoutRevisionRef.current++
+      : latestPostedLayoutRevisionRef.current;
+
+    if (advancesLayoutRevision) {
+      latestPostedLayoutRevisionRef.current = revision;
+    }
+
+    const commandWithRevision: PaginationCommand = {
+      ...cmd,
+      revision,
+    };
+
+    tracerRef.current.recordPostedCommand(commandWithRevision, {
       immediate: cmd.type === "init",
     });
-    workerRef.current?.postMessage(cmd);
+    workerRef.current?.postMessage(commandWithRevision);
   }, []);
 
   useEffect(() => {
@@ -157,6 +176,15 @@ export function usePagination(
   // Handle worker events
   const handleEvent = useCallback(
     (event: PaginationEvent) => {
+      if (
+        !shouldAcceptPaginationEvent(
+          event,
+          latestPostedLayoutRevisionRef.current,
+        )
+      ) {
+        return;
+      }
+
       switch (event.type) {
         case "ready": {
           tracerRef.current.markReady(latestBodyFamilyRef.current);
@@ -177,6 +205,7 @@ export function usePagination(
               : clamp(event.resolvedPage, 1, event.totalPages);
 
           if (resolvedPage !== null) {
+            console.log("applying the READY resolved page", performance.now() / 1000, event.slices)
             applyResolvedPage(
               resolvedPage,
               event.slices,
@@ -224,6 +253,7 @@ export function usePagination(
           setStatus("partial");
 
           if (event.resolvedPage !== null) {
+            console.log("applying the partial ready resolved page", performance.now() / 1000, event.slices)
             applyResolvedPage(
               event.resolvedPage,
               event.slices,
@@ -361,6 +391,7 @@ export function usePagination(
     }
     previousConfigRef.current = config;
 
+    console.log("sending update for config", performance.now() / 1000, config)
     postCommand({
       type: "updateConfig",
       config,

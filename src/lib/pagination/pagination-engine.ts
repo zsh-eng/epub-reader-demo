@@ -13,7 +13,7 @@ import type {
   PaginationConfig,
   PaginationDiagnostics,
   PreparedBlock,
-  TextCursorOffset,
+  TextCursorOffset
 } from "./types";
 import { areFontConfigsEqual } from "./types";
 
@@ -138,7 +138,6 @@ export class PaginationEngine {
     ) {
       this.initialChapterReceived = true;
       this.emitPartialReady(chapterIndex, resolvedPage, chapterDiagnostics);
-
       if (this.receivedChapters === this.totalChapters) {
         this.emitReady(resolvedPage);
       }
@@ -179,6 +178,7 @@ export class PaginationEngine {
       prevConfig.fontConfig,
       nextConfig.fontConfig,
     );
+    console.log("the fonts have changed! updating the font from", prevConfig.fontConfig.bodyFamily, "to", nextConfig.fontConfig.bodyFamily)
     this.config = nextConfig;
 
     if (this.totalChapters === 0 || this.receivedChapters === 0) {
@@ -228,6 +228,7 @@ export class PaginationEngine {
     runtime: PaginationRuntime,
   ): Promise<void> {
     const centerChapter = this.resolveRelayoutCenterChapter();
+    console.log("last requested global page", this.lastRequestedGlobalPage, "with center chapter as", centerChapter)
     const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
     let emittedPartial = false;
 
@@ -426,11 +427,13 @@ export class PaginationEngine {
   }
 
   private emitReady(resolvedPage: number | null): void {
+    console.log("emitting ready", resolvedPage)
     this.updateLastRequestedPage(resolvedPage);
     const readyPage = resolvedPage ?? 1;
     const pageContent = this.resolvePageContentForGlobalPage(readyPage);
     this.updateResolvedAnchorFromPageContent(pageContent);
     const resolvedAnchor = this.cloneAnchor(this.resolvedContentAnchor);
+    console.log("the ready slices are ", pageContent?.slices)
     this.emit({
       type: "ready",
       totalPages: this.getTotalPages(),
@@ -448,11 +451,15 @@ export class PaginationEngine {
     resolvedPage: number | null,
     chapterDiagnostics: PaginationChapterDiagnostics | null,
   ): void {
+    console.log("emitting the partial ready", resolvedPage)
     this.updateLastRequestedPage(resolvedPage);
     const readyPage = resolvedPage ?? 1;
     const pageContent = this.resolvePageContentForGlobalPage(readyPage);
     this.updateResolvedAnchorFromPageContent(pageContent);
     const resolvedAnchor = this.cloneAnchor(this.resolvedContentAnchor);
+    console.log("the partial ready slices are ", pageContent?.slices)
+    console.log("preparedblocks by chapter", this.preparedByChapter[chapterIndex])
+    console.log("pages by chapter", this.pagesByChapter[chapterIndex])
     this.emit({
       type: "partialReady",
       chapterIndex,

@@ -17,7 +17,15 @@ export interface ContentAnchor {
   offset?: TextCursorOffset;
 }
 
-export interface InitCommand {
+interface PaginationCommandMetadata {
+  revision?: number;
+}
+
+interface PaginationEventMetadata {
+  revision?: number;
+}
+
+export interface InitCommand extends PaginationCommandMetadata {
   type: "init";
   totalChapters: number;
   config: PaginationConfig;
@@ -25,23 +33,23 @@ export interface InitCommand {
   initialAnchor?: ContentAnchor | null;
 }
 
-export interface AddChapterCommand {
+export interface AddChapterCommand extends PaginationCommandMetadata {
   type: "addChapter";
   chapterIndex: number;
   blocks: Block[];
 }
 
-export interface UpdateConfigCommand {
+export interface UpdateConfigCommand extends PaginationCommandMetadata {
   type: "updateConfig";
   config: PaginationConfig;
 }
 
-export interface GetPageCommand {
+export interface GetPageCommand extends PaginationCommandMetadata {
   type: "getPage";
   globalPage: number;
 }
 
-export interface GoToChapterCommand {
+export interface GoToChapterCommand extends PaginationCommandMetadata {
   type: "goToChapter";
   chapterIndex: number;
 }
@@ -57,7 +65,7 @@ export type PaginationCommand =
 // Events (worker → main thread)
 // ---------------------------------------------------------------------------
 
-export interface ReadyEvent {
+export interface ReadyEvent extends PaginationEventMetadata {
   type: "ready";
   totalPages: number;
   resolvedPage: number | null;
@@ -68,7 +76,7 @@ export interface ReadyEvent {
   chapterPageOffsets: number[];
 }
 
-export interface PageContentEvent {
+export interface PageContentEvent extends PaginationEventMetadata {
   type: "pageContent";
   globalPage: number;
   chapterIndex: number;
@@ -76,12 +84,12 @@ export interface PageContentEvent {
   resolvedAnchor: ContentAnchor | null;
 }
 
-export interface PageUnavailableEvent {
+export interface PageUnavailableEvent extends PaginationEventMetadata {
   type: "pageUnavailable";
   globalPage: number;
 }
 
-export interface PartialReadyEvent {
+export interface PartialReadyEvent extends PaginationEventMetadata {
   type: "partialReady";
   chapterIndex: number;
   chapterPageCount: number;
@@ -94,7 +102,7 @@ export interface PartialReadyEvent {
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
-export interface ProgressEvent {
+export interface ProgressEvent extends PaginationEventMetadata {
   type: "progress";
   chapterIndex: number;
   chaptersCompleted: number;
@@ -104,7 +112,7 @@ export interface ProgressEvent {
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
-export interface ErrorEvent {
+export interface ErrorEvent extends PaginationEventMetadata {
   type: "error";
   message: string;
 }

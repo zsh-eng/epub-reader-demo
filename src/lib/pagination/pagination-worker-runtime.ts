@@ -10,13 +10,13 @@ const SUPERSEDABLE: Set<PaginationCommand["type"]> = new Set([
 ]);
 
 export interface QueuedPaginationCommand {
-  sequence: number;
+  revision: number;
   command: PaginationCommand;
 }
 
 interface CreateCommandRuntimeOptions {
   queuedCommand: QueuedPaginationCommand;
-  getLatestUpdateConfigSequence: () => number;
+  getLatestLayoutRevision: () => number;
   yieldToEventLoop: () => Promise<void>;
   now: () => number;
   relayoutYieldBudgetMs?: number;
@@ -64,7 +64,7 @@ export function coalesceQueuedCommands(
 
 export function createCommandRuntime({
   queuedCommand,
-  getLatestUpdateConfigSequence,
+  getLatestLayoutRevision,
   yieldToEventLoop,
   now,
   relayoutYieldBudgetMs = RELAYOUT_YIELD_BUDGET_MS,
@@ -77,7 +77,7 @@ export function createCommandRuntime({
 
   return {
     isStale: () => {
-      return queuedCommand.sequence < getLatestUpdateConfigSequence();
+      return queuedCommand.revision < getLatestLayoutRevision();
     },
     maybeYield: () => {
       const elapsedMs = now() - lastYieldAt;
