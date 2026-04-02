@@ -1,5 +1,8 @@
 import { PaginationEngine } from "@/lib/pagination/pagination-engine";
 import type { PaginationEvent } from "@/lib/pagination/engine-types";
+import {
+  createCommandRuntime,
+} from "@/lib/pagination/pagination-worker-runtime";
 import type {
   Block,
   FontConfig,
@@ -444,5 +447,116 @@ describe("Pagination engine relayout middle-out prioritization", () => {
 
     expect(partialReadyEvent?.resolvedPage).toBe(1);
     expect(readyEvent?.resolvedPage).toBe(1);
+  });
+
+  it("partialReady slices match the processed chapter after a stale relayout shifts offsets", async () => {
+    // Two configs with very different font sizes to produce large page-count
+    // differences per chapter. This amplifies the offset drift that occurs
+    // when a relayout is interrupted (staled) partway through middle-out.
+    const configSmall: PaginationConfig = {
+      fontConfig: { ...BASE_FONT_CONFIG, baseSizePx: 14 },
+      layoutTheme: { ...BASE_LAYOUT_THEME, baseFontSizePx: 14 },
+      viewport: { width: 620, height: 860 },
+    };
+    const configLarge: PaginationConfig = {
+      fontConfig: { ...BASE_FONT_CONFIG, baseSizePx: 22 },
+      layoutTheme: { ...BASE_LAYOUT_THEME, baseFontSizePx: 22 },
+      viewport: { width: 620, height: 860 },
+    };
+
+    const events: PaginationEvent[] = [];
+    const engine = new PaginationEngine((event) => events.push(event));
+
+    await engine.handleCommand({
+      type: "init",
+      totalChapters: 10,
+      config: configSmall,
+      initialChapterIndex: 0,
+    });
+
+    for (let i = 0; i < 10; i++) {
+      await engine.handleCommand({
+        type: "addChapter",
+        chapterIndex: i,
+        blocks: buildLongTextBlocks(`ch${i}-text`),
+      });
+    }
+
+    // Find the ready event so we know offsets, then navigate into chapter 5
+    const initialReady = events.find(
+      (e): e is Extract<PaginationEvent, { type: "ready" }> =>
+        e.type === "ready",
+    );
+    expect(initialReady).toBeDefined();
+    const ch5FirstPage = (initialReady!.chapterPageOffsets[5] ?? 0) + 1;
+    await engine.handleCommand({ type: "getPage", globalPage: ch5FirstPage });
+
+    events.length = 0;
+
+    // ---- Stale relayout (small → large font) ----
+    // Becomes stale after processing 3 chapters in middle-out order:
+    //   center (5) → center+1 (6) → center-1 (4)
+    // Processing chapter 4 with the large font shifts offset[5] upward,
+    // making the stale lastRequestedGlobalPage map to chapter 4 instead of 5.
+    let latestLayoutRevision = 1;
+    let yieldCount = 0;
+
+    const staleRuntime = createCommandRuntime({
+      queuedCommand: {
+        revision: 1,
+        command: { type: "updateConfig", config: configLarge },
+      },
+      getLatestLayoutRevision: () => latestLayoutRevision,
+      relayoutYieldBudgetMs: 0,
+      now: () => 0,
+      yieldToEventLoop: async () => {
+        yieldCount++;
+        if (yieldCount >= 3) {
+          latestLayoutRevision = 2;
+        }
+      },
+    });
+
+    await engine.handleCommand(
+      { type: "updateConfig", config: configLarge },
+      staleRuntime,
+    );
+
+    expect(countEvents(events, "partialReady")).toBe(1);
+    expect(countEvents(events, "ready")).toBe(0);
+
+    events.length = 0;
+
+    // ---- Second relayout (large → small font) ----
+    // This relayout starts with mixed-state offsets. Before the fix,
+    // resolveRelayoutCenterChapter re-resolves the stale lastRequestedGlobalPage
+    // against shifted offsets, picking the wrong center chapter. The anchor
+    // (which stores chapterIndex explicitly) still points to chapter 5.
+    const freshRuntime = createCommandRuntime({
+      queuedCommand: {
+        revision: 2,
+        command: { type: "updateConfig", config: configSmall },
+      },
+      getLatestLayoutRevision: () => latestLayoutRevision,
+      relayoutYieldBudgetMs: 0,
+      now: () => 0,
+      yieldToEventLoop: async () => {},
+    });
+
+    await engine.handleCommand(
+      { type: "updateConfig", config: configSmall },
+      freshRuntime,
+    );
+
+    const partialReady = events.find(
+      (e): e is Extract<PaginationEvent, { type: "partialReady" }> =>
+        e.type === "partialReady",
+    );
+    expect(partialReady).toBeDefined();
+
+    // The chapter the engine processed first (chapterIndex) must match
+    // the chapter whose slices were sent to the UI (slicesChapterIndex).
+    // Before the fix, the stale center drifts to an adjacent chapter.
+    expect(partialReady!.slicesChapterIndex).toBe(partialReady!.chapterIndex);
   });
 });
