@@ -1,23 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  nextPaginationCommandHistory,
-  type PaginationCommandHistoryEntry,
-} from "./command-history";
 import type {
   ContentAnchor,
   PaginationCommand,
   PaginationEvent,
 } from "./engine-types";
-import {
-  PaginationTracer,
-  type PaginationFontSwitchLatencyTrace,
-} from "./pagination-tracer";
+import { PaginationTracer } from "./pagination-tracer";
 import { parseChapterHtml } from "./parse-html";
 import {
   areFontConfigsEqual,
   type PageSlice,
   type PaginationConfig,
-  type PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -25,7 +17,6 @@ import {
 // ---------------------------------------------------------------------------
 
 export type PaginationStatus = "idle" | "loading" | "partial" | "ready";
-export type { PaginationCommandHistoryEntry, PaginationFontSwitchLatencyTrace };
 
 export interface UsePaginationResult {
   slices: PageSlice[];
@@ -39,7 +30,6 @@ export interface UsePaginationResult {
   estimatedTotalPages: number | null;
   resolvedAnchor: ContentAnchor | null;
 
-  // COMMENT: I think this is good, exposing the commands as functions
   nextPage: () => void;
   prevPage: () => void;
   goToPage: (page: number) => void;
@@ -47,9 +37,7 @@ export interface UsePaginationResult {
   addChapter: (chapterIndex: number, html: string) => void;
 
   status: PaginationStatus;
-  diagnostics: PaginationDiagnostics | null;
-  commandHistory: PaginationCommandHistoryEntry[];
-  fontSwitchLatencyTraces: PaginationFontSwitchLatencyTrace[];
+  tracer: PaginationTracer;
   markFontSwitchIntent: (from: string, to: string) => void;
 }
 
@@ -81,8 +69,6 @@ export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
   const { totalChapters, config, initialChapterIndex, initialAnchor } = options;
-  // COMMENT: why is this inside the hook? It's a constant
-  const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
@@ -97,31 +83,17 @@ export function usePagination(
     initialAnchor ?? null,
   );
   const [status, setStatus] = useState<PaginationStatus>("idle");
-  const [diagnostics, setDiagnostics] = useState<PaginationDiagnostics | null>(
-    null,
-  );
-  const [commandHistory, setCommandHistory] = useState<
-    PaginationCommandHistoryEntry[]
-  >([]);
-  const [fontSwitchLatencyTraces, setFontSwitchLatencyTraces] = useState<
-    PaginationFontSwitchLatencyTrace[]
-  >([]);
 
   const workerRef = useRef<Worker | null>(null);
-  const commandSequenceRef = useRef(0);
-  const commandHistoryRef = useRef<PaginationCommandHistoryEntry[]>([]);
-  const commandHistoryFlushTimerRef = useRef<number | null>(null);
   const currentPageRef = useRef(1);
   const totalPagesRef = useRef<number | null>(null);
   const estimatedTotalPagesRef = useRef<number | null>(null);
   const latestBodyFamilyRef = useRef(config.fontConfig.bodyFamily);
-  const tracerRef = useRef(
-    new PaginationTracer(MAX_FONT_SWITCH_LATENCY_TRACES, setFontSwitchLatencyTraces),
-  );
+  const tracerRef = useRef(new PaginationTracer());
 
   // Keep refs in sync for use in callbacks.
-  // Use effects so re-renders from unrelated state (e.g. command history)
-  // don't reset optimistic navigation refs before worker responses arrive.
+  // Use effects so re-renders don't reset optimistic navigation refs
+  // before worker responses arrive.
   useEffect(() => {
     currentPageRef.current = currentPage;
   }, [currentPage]);
@@ -145,52 +117,19 @@ export function usePagination(
 
   const previousConfigRef = useRef<PaginationConfig | null>(null);
 
-  const flushCommandHistory = useCallback(() => {
-    commandHistoryFlushTimerRef.current = null;
-    setCommandHistory(commandHistoryRef.current);
-  }, []);
-
-  const scheduleCommandHistoryFlush = useCallback(
-    (immediate = false) => {
-      if (immediate) {
-        if (commandHistoryFlushTimerRef.current !== null) {
-          window.clearTimeout(commandHistoryFlushTimerRef.current);
-          commandHistoryFlushTimerRef.current = null;
-        }
-        flushCommandHistory();
-        return;
-      }
-
-      if (commandHistoryFlushTimerRef.current !== null) return;
-
-      commandHistoryFlushTimerRef.current = window.setTimeout(() => {
-        flushCommandHistory();
-      }, 120);
-    },
-    [flushCommandHistory],
-  );
-
   const markFontSwitchIntent = useCallback((from: string, to: string) => {
     tracerRef.current.recordIntent(from, to);
   }, []);
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    commandSequenceRef.current += 1;
-    commandHistoryRef.current = nextPaginationCommandHistory(
-      commandHistoryRef.current,
-      cmd,
-      commandSequenceRef.current,
-    );
-    scheduleCommandHistoryFlush(cmd.type === "init");
+    tracerRef.current.recordPostedCommand(cmd, {
+      immediate: cmd.type === "init",
+    });
     workerRef.current?.postMessage(cmd);
-  }, [scheduleCommandHistoryFlush]);
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (commandHistoryFlushTimerRef.current !== null) {
-        window.clearTimeout(commandHistoryFlushTimerRef.current);
-        commandHistoryFlushTimerRef.current = null;
-      }
       tracerRef.current.cleanup();
     };
   }, []);
@@ -229,7 +168,7 @@ export function usePagination(
           for (const chapter of event.diagnostics.chapterTimings ?? []) {
             tracerRef.current.finalizeChapter(chapter.chapterIndex, chapter);
           }
-          setDiagnostics(tracerRef.current.getDiagnostics(event.diagnostics));
+          tracerRef.current.updateDiagnostics(event.diagnostics);
           setStatus("ready");
 
           const resolvedPage =
@@ -281,7 +220,7 @@ export function usePagination(
 
           setEstimatedTotalPages(event.estimatedTotalPages);
           tracerRef.current.finalizeChapter(event.chapterIndex, event.chapterDiagnostics);
-          setDiagnostics(tracerRef.current.getDiagnostics(null));
+          tracerRef.current.updateDiagnostics(null);
           setStatus("partial");
 
           if (event.resolvedPage !== null) {
@@ -307,7 +246,7 @@ export function usePagination(
 
           setEstimatedTotalPages(event.runningTotalPages);
           tracerRef.current.finalizeChapter(event.chapterIndex, event.chapterDiagnostics);
-          setDiagnostics(tracerRef.current.getDiagnostics(null));
+          tracerRef.current.updateDiagnostics(null);
           break;
         }
 
@@ -373,9 +312,7 @@ export function usePagination(
     setEstimatedTotalPages(null);
     estimatedTotalPagesRef.current = null;
     setResolvedAnchor(nextInitialAnchor);
-    setDiagnostics(null);
     tracerRef.current.reset();
-    setFontSwitchLatencyTraces([]);
     previousConfigRef.current = config;
 
     postCommand({
@@ -488,9 +425,7 @@ export function usePagination(
     goToChapterIndex,
     addChapter,
     status,
-    diagnostics,
-    commandHistory,
-    fontSwitchLatencyTraces,
+    tracer: tracerRef.current,
     markFontSwitchIntent,
   };
 }

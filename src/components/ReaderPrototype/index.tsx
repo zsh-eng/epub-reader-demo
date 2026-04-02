@@ -1,42 +1,42 @@
-import { Button } from "@/components/ui/button";
 import { LazyImage } from "@/components/ReaderPrototype/LazyImage";
+import { Button } from "@/components/ui/button";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-  getBookFile,
-  getBookFilesByPaths,
-  getBookImageDimensionsMap,
-  type Book,
-  type BookFile,
+    getBookFile,
+    getBookFilesByPaths,
+    getBookImageDimensionsMap,
+    type Book,
+    type BookFile,
 } from "@/lib/db";
 import {
-  cleanupResourceUrls,
-  processEmbeddedResources,
+    cleanupResourceUrls,
+    processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import {
-  usePagination,
-  type PaginationConfig,
-  type PageSlice,
+    usePagination,
+    type PageSlice,
+    type PaginationConfig,
 } from "@/lib/pagination";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
+import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
+    Fragment,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { DebugSection } from "./DebugSection";
-import { InspectorPanel } from "./InspectorPanel";
 import { InspectorDrawer } from "./InspectorDrawer";
+import { InspectorPanel } from "./InspectorPanel";
 
 interface ChapterEntry {
   index: number;
@@ -371,11 +371,6 @@ export function ReaderPrototype() {
   const displayTotalPages =
     pagination.totalPages ?? pagination.estimatedTotalPages ?? 0;
 
-  const chapterTimingRows = useMemo(() => {
-    const chapterTimings = pagination.diagnostics?.chapterTimings ?? [];
-    return [...chapterTimings].sort((a, b) => a.chapterIndex - b.chapterIndex);
-  }, [pagination.diagnostics?.chapterTimings]);
-
   // Keyboard navigation
   const paginationRef = useRef(pagination);
   paginationRef.current = pagination;
@@ -500,15 +495,12 @@ export function ReaderPrototype() {
   };
 
   const debugSectionProps = {
-    diagnostics: pagination.diagnostics,
+    tracer: pagination.tracer,
     paginationStatus: pagination.status,
     totalPages: displayTotalPages,
     viewport,
     sourceLoadWallClockMs,
     addChapterSendWallClockMs,
-    chapterTimingRows,
-    commandHistory: pagination.commandHistory,
-    fontSwitchLatencyTraces: pagination.fontSwitchLatencyTraces,
     chapterTitles: (index: number) =>
       chapterEntries[index]?.title ?? `Chapter ${index + 1}`,
   };

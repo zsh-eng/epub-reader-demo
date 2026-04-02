@@ -1,7 +1,12 @@
+import {
+    nextPaginationCommandHistory,
+    type PaginationCommandHistoryEntry,
+} from "./command-history";
+import type { PaginationCommand } from "./engine-types";
 import type {
-  PaginationChapterDiagnostics,
-  PaginationConfig,
-  PaginationDiagnostics,
+    PaginationChapterDiagnostics,
+    PaginationConfig,
+    PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -12,6 +17,10 @@ interface FontSwitchLatencyIntent {
   from: string;
   to: string;
   startedAtMs: number;
+}
+
+interface RecordPostedCommandOptions {
+  immediate?: boolean;
 }
 
 export interface PaginationFontSwitchLatencyTrace {
@@ -31,6 +40,20 @@ export interface PaginationFontSwitchLatencyTrace {
   bodyFontLoadedAtStart: boolean | null;
   bodyFontLoadedAtReady: boolean | null;
 }
+
+export interface PaginationTracerSnapshot {
+  diagnostics: PaginationDiagnostics | null;
+  fontSwitchLatencyTraces: PaginationFontSwitchLatencyTrace[];
+  commandHistory: PaginationCommandHistoryEntry[];
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const TRACE_FLUSH_DELAY_MS = 80;
+const COMMAND_HISTORY_FLUSH_DELAY_MS = 120;
+const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -59,20 +82,57 @@ export class PaginationTracer {
   private fontSwitchIntent: FontSwitchLatencyIntent | null = null;
   private activeFontSwitchTraceId: string | null = null;
   private traceSequence = 0;
+  private commandSequence = 0;
+
   private traces: PaginationFontSwitchLatencyTrace[] = [];
-  private flushTimer: number | null = null;
+  private traceFlushTimer: number | null = null;
+  private pendingCommandHistory: PaginationCommandHistoryEntry[] | null = null;
+  private commandHistoryFlushTimer: number | null = null;
+
+  private snapshot: PaginationTracerSnapshot = {
+    diagnostics: null,
+    fontSwitchLatencyTraces: [],
+    commandHistory: [],
+  };
+  private listeners = new Set<() => void>();
 
   private readonly maxTraces: number;
-  private readonly onFlush: (
-    traces: PaginationFontSwitchLatencyTrace[],
-  ) => void;
 
-  constructor(
-    maxTraces: number,
-    onFlush: (traces: PaginationFontSwitchLatencyTrace[]) => void,
-  ) {
+  constructor(maxTraces: number = MAX_FONT_SWITCH_LATENCY_TRACES) {
     this.maxTraces = maxTraces;
-    this.onFlush = onFlush;
+  }
+
+  // -------------------------------------------------------------------------
+  // External store API
+  // -------------------------------------------------------------------------
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  getSnapshot = (): PaginationTracerSnapshot => {
+    return this.snapshot;
+  };
+
+  // -------------------------------------------------------------------------
+  // Command history
+  // -------------------------------------------------------------------------
+
+  recordPostedCommand(
+    command: PaginationCommand,
+    options: RecordPostedCommandOptions = {},
+  ): void {
+    this.commandSequence += 1;
+    this.pendingCommandHistory = nextPaginationCommandHistory(
+      this.pendingCommandHistory ?? this.snapshot.commandHistory,
+      command,
+      this.commandSequence,
+    );
+
+    this.scheduleCommandHistoryFlush(options.immediate ?? command.type === "init");
   }
 
   // -------------------------------------------------------------------------
@@ -145,7 +205,7 @@ export class PaginationTracer {
 
     this.traces = [trace, ...this.traces].slice(0, this.maxTraces);
     this.activeFontSwitchTraceId = traceId;
-    this.scheduleFlush(true);
+    this.scheduleTraceFlush(true);
   }
 
   markActive(
@@ -157,7 +217,7 @@ export class PaginationTracer {
     const id = this.activeFontSwitchTraceId;
     if (!id) return;
     this.updateTrace(id, apply);
-    this.scheduleFlush(immediate);
+    this.scheduleTraceFlush(immediate);
   }
 
   markReady(bodyFamily: string): void {
@@ -172,11 +232,18 @@ export class PaginationTracer {
       bodyFontLoadedAtReady: readFontLoaded(bodyFamily),
     }));
     this.activeFontSwitchTraceId = null;
-    this.scheduleFlush(true);
+    this.scheduleTraceFlush(true);
     this.schedulePaintProbe(activeId);
   }
 
   schedulePaintProbe(traceId: string): void {
+    if (
+      typeof window === "undefined" ||
+      typeof window.requestAnimationFrame !== "function"
+    ) {
+      return;
+    }
+
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         const paintedAtMs = performance.now();
@@ -184,9 +251,24 @@ export class PaginationTracer {
           if (t.paintedAtMs !== null) return t;
           return { ...t, paintedAtMs };
         });
-        this.scheduleFlush(true);
+        this.scheduleTraceFlush(true);
       });
     });
+  }
+
+  // -------------------------------------------------------------------------
+  // Diagnostics
+  // -------------------------------------------------------------------------
+
+  updateDiagnostics(base: PaginationDiagnostics | null): void {
+    const diagnostics = this.buildDiagnostics(base);
+    if (diagnostics === null && this.snapshot.diagnostics === null) return;
+
+    this.snapshot = {
+      ...this.snapshot,
+      diagnostics,
+    };
+    this.emitChange();
   }
 
   // -------------------------------------------------------------------------
@@ -201,24 +283,115 @@ export class PaginationTracer {
     this.fontSwitchIntent = null;
     this.activeFontSwitchTraceId = null;
     this.traces = [];
+    this.pendingCommandHistory = null;
+
+    if (this.traceFlushTimer !== null) {
+      window.clearTimeout(this.traceFlushTimer);
+      this.traceFlushTimer = null;
+    }
+
+    if (this.commandHistoryFlushTimer !== null) {
+      window.clearTimeout(this.commandHistoryFlushTimer);
+      this.commandHistoryFlushTimer = null;
+    }
+
+    const hadDebugState =
+      this.snapshot.diagnostics !== null ||
+      this.snapshot.fontSwitchLatencyTraces.length > 0 ||
+      this.snapshot.commandHistory.length > 0;
+
+    this.snapshot = {
+      diagnostics: null,
+      fontSwitchLatencyTraces: [],
+      commandHistory: [],
+    };
+
+    if (hadDebugState) {
+      this.emitChange();
+    }
   }
 
   cleanup(): void {
-    if (this.flushTimer !== null) {
-      window.clearTimeout(this.flushTimer);
-      this.flushTimer = null;
+    if (this.traceFlushTimer !== null) {
+      window.clearTimeout(this.traceFlushTimer);
+      this.traceFlushTimer = null;
+    }
+
+    if (this.commandHistoryFlushTimer !== null) {
+      window.clearTimeout(this.commandHistoryFlushTimer);
+      this.commandHistoryFlushTimer = null;
     }
   }
 
   // -------------------------------------------------------------------------
-  // Read outputs
+  // Private
   // -------------------------------------------------------------------------
 
-  getTraces(): PaginationFontSwitchLatencyTrace[] {
-    return this.traces;
+  private updateTrace(
+    id: string,
+    apply: (
+      t: PaginationFontSwitchLatencyTrace,
+    ) => PaginationFontSwitchLatencyTrace,
+  ): void {
+    this.traces = this.traces.map((t) => (t.id === id ? apply(t) : t));
   }
 
-  getDiagnostics(
+  private scheduleTraceFlush(immediate: boolean): void {
+    if (immediate) {
+      if (this.traceFlushTimer !== null) {
+        window.clearTimeout(this.traceFlushTimer);
+        this.traceFlushTimer = null;
+      }
+      this.flushTraces();
+      return;
+    }
+
+    if (this.traceFlushTimer !== null) return;
+
+    this.traceFlushTimer = window.setTimeout(() => {
+      this.traceFlushTimer = null;
+      this.flushTraces();
+    }, TRACE_FLUSH_DELAY_MS);
+  }
+
+  private flushTraces(): void {
+    this.snapshot = {
+      ...this.snapshot,
+      fontSwitchLatencyTraces: [...this.traces],
+    };
+    this.emitChange();
+  }
+
+  private scheduleCommandHistoryFlush(immediate: boolean): void {
+    if (immediate) {
+      if (this.commandHistoryFlushTimer !== null) {
+        window.clearTimeout(this.commandHistoryFlushTimer);
+        this.commandHistoryFlushTimer = null;
+      }
+      this.flushCommandHistory();
+      return;
+    }
+
+    if (this.commandHistoryFlushTimer !== null) return;
+
+    this.commandHistoryFlushTimer = window.setTimeout(() => {
+      this.commandHistoryFlushTimer = null;
+      this.flushCommandHistory();
+    }, COMMAND_HISTORY_FLUSH_DELAY_MS);
+  }
+
+  private flushCommandHistory(): void {
+    if (!this.pendingCommandHistory) return;
+
+    this.snapshot = {
+      ...this.snapshot,
+      commandHistory: this.pendingCommandHistory,
+    };
+    this.pendingCommandHistory = null;
+    this.emitChange();
+  }
+
+  private buildDiagnostics(
     base: PaginationDiagnostics | null,
   ): PaginationDiagnostics | null {
     const chapterMap = new Map<number, PaginationChapterDiagnostics>();
@@ -308,34 +481,9 @@ export class PaginationTracer {
     };
   }
 
-  // -------------------------------------------------------------------------
-  // Private
-  // -------------------------------------------------------------------------
-
-  private updateTrace(
-    id: string,
-    apply: (
-      t: PaginationFontSwitchLatencyTrace,
-    ) => PaginationFontSwitchLatencyTrace,
-  ): void {
-    this.traces = this.traces.map((t) => (t.id === id ? apply(t) : t));
-  }
-
-  private scheduleFlush(immediate: boolean): void {
-    if (immediate) {
-      if (this.flushTimer !== null) {
-        window.clearTimeout(this.flushTimer);
-        this.flushTimer = null;
-      }
-      this.onFlush([...this.traces]);
-      return;
+  private emitChange(): void {
+    for (const listener of this.listeners) {
+      listener();
     }
-
-    if (this.flushTimer !== null) return;
-
-    this.flushTimer = window.setTimeout(() => {
-      this.flushTimer = null;
-      this.onFlush([...this.traces]);
-    }, 80);
   }
 }

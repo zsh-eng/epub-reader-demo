@@ -1,29 +1,25 @@
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
-  PaginationCommandHistoryEntry,
-  PaginationChapterDiagnostics,
-  PaginationDiagnostics,
-  PaginationFontSwitchLatencyTrace,
+    PaginationCommandHistoryEntry,
+    PaginationTracer,
+    PaginationTracerSnapshot,
 } from "@/lib/pagination";
 import { ChevronRight } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useMemo, useState, useSyncExternalStore } from "react";
 import { InspectorSection } from "./InspectorSection";
 
 interface DebugSectionProps {
-  diagnostics: PaginationDiagnostics | null;
+  tracer: PaginationTracer;
   paginationStatus: string;
   totalPages: number;
   viewport: { width: number; height: number };
   sourceLoadWallClockMs: number | null;
   addChapterSendWallClockMs: number | null;
-  chapterTimingRows: PaginationChapterDiagnostics[];
-  commandHistory: PaginationCommandHistoryEntry[];
-  fontSwitchLatencyTraces: PaginationFontSwitchLatencyTrace[];
   chapterTitles: (index: number) => string;
 }
 
@@ -89,19 +85,35 @@ const CommandHistoryList = memo(function CommandHistoryList({
   );
 });
 
+function usePaginationDebugSnapshot(
+  tracer: PaginationTracer,
+): PaginationTracerSnapshot {
+  return useSyncExternalStore(
+    tracer.subscribe,
+    tracer.getSnapshot,
+    tracer.getSnapshot,
+  );
+}
+
 export function DebugSection({
-  diagnostics,
+  tracer,
   paginationStatus,
   totalPages,
   viewport,
   sourceLoadWallClockMs,
   addChapterSendWallClockMs,
-  chapterTimingRows,
-  commandHistory,
-  fontSwitchLatencyTraces,
   chapterTitles,
 }: DebugSectionProps) {
   const [chapterTableOpen, setChapterTableOpen] = useState(false);
+  const snapshot = usePaginationDebugSnapshot(tracer);
+
+  const diagnostics = snapshot.diagnostics;
+  const commandHistory = snapshot.commandHistory;
+  const fontSwitchLatencyTraces = snapshot.fontSwitchLatencyTraces;
+  const chapterTimingRows = useMemo(() => {
+    const chapterTimings = diagnostics?.chapterTimings ?? [];
+    return [...chapterTimings].sort((a, b) => a.chapterIndex - b.chapterIndex);
+  }, [diagnostics?.chapterTimings]);
 
   return (
     <InspectorSection title="Debug & Diagnostics" defaultOpen={true}>
