@@ -218,3 +218,15 @@ export interface PaginationResult {
   pages: Page[];
   diagnostics: PaginationDiagnostics;
 }
+
+export function areFontConfigsEqual(
+  a: FontConfig,
+  b: FontConfig,
+): boolean {
+  return (
+    a.bodyFamily === b.bodyFamily &&
+    a.headingFamily === b.headingFamily &&
+    a.codeFamily === b.codeFamily &&
+    a.baseSizePx === b.baseSizePx
+  );
+}

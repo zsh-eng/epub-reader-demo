@@ -3,18 +3,19 @@ import type {
   PaginationCommand,
   PaginationEvent,
 } from "./engine-types";
+import { layoutPages } from "./layout-pages";
+import { prepareBlocks } from "./prepare-blocks";
 import type {
   Block,
   Page,
   PageSlice,
-  PaginationConfig,
   PaginationChapterDiagnostics,
+  PaginationConfig,
   PaginationDiagnostics,
   PreparedBlock,
   TextCursorOffset,
 } from "./types";
-import { prepareBlocks } from "./prepare-blocks";
-import { layoutPages } from "./layout-pages";
+import { areFontConfigsEqual } from "./types";
 
 export interface PaginationRuntime {
   maybeYield: () => void | Promise<void>;
@@ -174,7 +175,7 @@ export class PaginationEngine {
       return Promise.resolve();
     }
 
-    const fontChanged = !this.areFontConfigsEqual(
+    const fontChanged = !areFontConfigsEqual(
       prevConfig.fontConfig,
       nextConfig.fontConfig,
     );
@@ -337,28 +338,15 @@ export class PaginationEngine {
 
   private normalizeAnchor(anchor: ContentAnchor | null): ContentAnchor | null {
     if (!anchor) return null;
-    if (typeof anchor.blockId !== "string") return null;
+    if (typeof anchor.blockId !== "string" || !anchor.blockId) return null;
 
-    const chapterIndex = Math.floor(anchor.chapterIndex);
-    if (!Number.isFinite(chapterIndex)) return null;
-    if (chapterIndex < 0 || chapterIndex >= this.totalChapters) return null;
-
-    const blockId = anchor.blockId.trim();
-    if (!blockId) return null;
+    const { chapterIndex } = anchor;
+    if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= this.totalChapters) return null;
 
     const offset = this.normalizeOffset(anchor.offset);
-    if (!offset) {
-      return {
-        chapterIndex,
-        blockId,
-      };
-    }
-
-    return {
-      chapterIndex,
-      blockId,
-      offset,
-    };
+    return offset
+      ? { chapterIndex, blockId: anchor.blockId, offset }
+      : { chapterIndex, blockId: anchor.blockId };
   }
 
   private normalizeOffset(
@@ -366,19 +354,12 @@ export class PaginationEngine {
   ): TextCursorOffset | null {
     if (!offset) return null;
 
-    const itemIndex = Math.floor(offset.itemIndex);
-    const segmentIndex = Math.floor(offset.segmentIndex);
-    const graphemeIndex = Math.floor(offset.graphemeIndex);
+    const { itemIndex, segmentIndex, graphemeIndex } = offset;
+    if (!Number.isInteger(itemIndex) || itemIndex < 0) return null;
+    if (!Number.isInteger(segmentIndex) || segmentIndex < 0) return null;
+    if (!Number.isInteger(graphemeIndex) || graphemeIndex < 0) return null;
 
-    if (!Number.isFinite(itemIndex) || itemIndex < 0) return null;
-    if (!Number.isFinite(segmentIndex) || segmentIndex < 0) return null;
-    if (!Number.isFinite(graphemeIndex) || graphemeIndex < 0) return null;
-
-    return {
-      itemIndex,
-      segmentIndex,
-      graphemeIndex,
-    };
+    return { itemIndex, segmentIndex, graphemeIndex };
   }
 
   private cloneOffset(offset: TextCursorOffset): TextCursorOffset {
@@ -417,21 +398,9 @@ export class PaginationEngine {
     b: PaginationConfig,
   ): boolean {
     return (
-      this.areFontConfigsEqual(a.fontConfig, b.fontConfig) &&
+      areFontConfigsEqual(a.fontConfig, b.fontConfig) &&
       this.areLayoutThemesEqual(a.layoutTheme, b.layoutTheme) &&
       this.areViewportsEqual(a.viewport, b.viewport)
-    );
-  }
-
-  private areFontConfigsEqual(
-    a: PaginationConfig["fontConfig"],
-    b: PaginationConfig["fontConfig"],
-  ): boolean {
-    return (
-      a.bodyFamily === b.bodyFamily &&
-      a.headingFamily === b.headingFamily &&
-      a.codeFamily === b.codeFamily &&
-      a.baseSizePx === b.baseSizePx
     );
   }
 
@@ -502,59 +471,26 @@ export class PaginationEngine {
     chapterIndex: number;
     slices: PageSlice[];
   } | null): void {
-    if (!pageContent) return;
-    // TODO: we should use the middle slice instead for anchoring - it's more accurate and less prone to the page shifting around
-    // const middleSliceBlockId = pageContent.slices[Math.floor(pageContent.slices.length / 2)].blockId;
-    // this.resolvedContentAnchor = {
-    //   chapterIndex: pageContent.chapterIndex,
-    //   blockId: middleSliceBlockId,
-    // };
-    // return
+    if (!pageContent || pageContent.slices.length === 0) return;
 
-    const textSlice = pageContent.slices.find((slice) => {
-      if (slice.type !== "text") return false;
-      return slice.lines.some((line) => line.startOffset !== undefined);
-    });
-    if (textSlice?.type === "text") {
-      const firstLineWithOffset = textSlice.lines.find(
-        (line) => line.startOffset !== undefined,
-      );
-      if (firstLineWithOffset?.startOffset) {
-        this.resolvedContentAnchor = {
-          chapterIndex: pageContent.chapterIndex,
-          blockId: textSlice.blockId,
-          offset: this.cloneOffset(firstLineWithOffset.startOffset),
-        };
-        return;
-      }
-    }
+    const middleSlice = pageContent.slices[Math.floor(pageContent.slices.length / 2)];
+    if (!middleSlice) return;
 
-    const imageSlice = pageContent.slices.find((slice) => slice.type === "image");
-    if (imageSlice) {
+    if (middleSlice.type !== "text") {
       this.resolvedContentAnchor = {
         chapterIndex: pageContent.chapterIndex,
-        blockId: imageSlice.blockId,
+        blockId: middleSlice.blockId,
       };
       return;
     }
 
-    const spacerSlice = pageContent.slices.find(
-      (slice) => slice.type === "spacer",
-    );
-    if (spacerSlice) {
-      this.resolvedContentAnchor = {
-        chapterIndex: pageContent.chapterIndex,
-        blockId: spacerSlice.blockId,
-      };
-      return;
-    }
-
-    const firstSlice = pageContent.slices[0];
-    if (!firstSlice) return;
-
+    // For text slices, capture an offset so very long paragraphs can be
+    // restored accurately within the block.
+    const midLine = middleSlice.lines[Math.floor(middleSlice.lines.length / 2)];
     this.resolvedContentAnchor = {
       chapterIndex: pageContent.chapterIndex,
-      blockId: firstSlice.blockId,
+      blockId: middleSlice.blockId,
+      ...(midLine?.startOffset ? { offset: this.cloneOffset(midLine.startOffset) } : {}),
     };
   }
 

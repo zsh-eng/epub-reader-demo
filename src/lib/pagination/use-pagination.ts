@@ -9,11 +9,12 @@ import type {
     PaginationEvent,
 } from "./engine-types";
 import { parseChapterHtml } from "./parse-html";
-import type {
-    PageSlice,
-    PaginationChapterDiagnostics,
-    PaginationConfig,
-    PaginationDiagnostics,
+import {
+    areFontConfigsEqual,
+    type PageSlice,
+    type PaginationChapterDiagnostics,
+    type PaginationConfig,
+    type PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -90,18 +91,6 @@ function anchorToKey(anchor: ContentAnchor | null | undefined): string {
     return `${anchor.chapterIndex}:${anchor.blockId}`;
   }
   return `${anchor.chapterIndex}:${anchor.blockId}:${offset.itemIndex}:${offset.segmentIndex}:${offset.graphemeIndex}`;
-}
-
-function areFontConfigsEqual(
-  a: PaginationConfig["fontConfig"],
-  b: PaginationConfig["fontConfig"],
-): boolean {
-  return (
-    a.bodyFamily === b.bodyFamily &&
-    a.headingFamily === b.headingFamily &&
-    a.codeFamily === b.codeFamily &&
-    a.baseSizePx === b.baseSizePx
-  );
 }
 
 function readFontLoaded(bodyFamily: string): boolean | null {
@@ -547,7 +536,6 @@ export function usePagination(
         }
 
         case "pageContent": {
-          console.log("page content for", event.globalPage, event.chapterIndex)
           applyResolvedPage(
             event.globalPage,
             event.slices,
@@ -563,7 +551,6 @@ export function usePagination(
         }
 
         case "partialReady": {
-          console.log("partial ready")
           const partialAtMs = performance.now();
           markActiveFontSwitchTrace(
             (trace) => ({
@@ -593,7 +580,6 @@ export function usePagination(
         }
 
         case "progress": {
-          console.log("received progress for", event.chapterIndex);
           const progressAtMs = performance.now();
           markActiveFontSwitchTrace(
             (trace) => ({
