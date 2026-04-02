@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-    nextPaginationCommandHistory,
-    type PaginationCommandHistoryEntry,
+  nextPaginationCommandHistory,
+  type PaginationCommandHistoryEntry,
 } from "./command-history";
 import type {
-    ContentAnchor,
-    PaginationCommand,
-    PaginationEvent,
+  ContentAnchor,
+  PaginationCommand,
+  PaginationEvent,
 } from "./engine-types";
 import { parseChapterHtml } from "./parse-html";
 import {
-    areFontConfigsEqual,
-    type PageSlice,
-    type PaginationChapterDiagnostics,
-    type PaginationConfig,
-    type PaginationDiagnostics,
+  areFontConfigsEqual,
+  type PageSlice,
+  type PaginationChapterDiagnostics,
+  type PaginationConfig,
+  type PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -52,10 +52,15 @@ export interface UsePaginationResult {
   slices: PageSlice[];
   currentPage: number;
   currentChapterIndex: number;
+  // COMMENT: any way for discriminated union or something to note down the possible
+  // states?
+  // Also we should be clear and add some comments here when each state occurs
+  // e.g. when loading, when layout shift, etc.
   totalPages: number | null;
   estimatedTotalPages: number | null;
   resolvedAnchor: ContentAnchor | null;
 
+  // COMMENT: I think this is good, exposing the commands as functions
   nextPage: () => void;
   prevPage: () => void;
   goToPage: (page: number) => void;
@@ -93,6 +98,9 @@ function anchorToKey(anchor: ContentAnchor | null | undefined): string {
   return `${anchor.chapterIndex}:${anchor.blockId}:${offset.itemIndex}:${offset.segmentIndex}:${offset.graphemeIndex}`;
 }
 
+// COMMENT: no point putting this in the pagination right?
+// Feels unnecessary as the library user should be in charge of using fonts
+// that they know are there
 function readFontLoaded(bodyFamily: string): boolean | null {
   if (typeof document === "undefined") return null;
   if (!("fonts" in document)) return null;
@@ -105,6 +113,7 @@ export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
   const { totalChapters, config, initialChapterIndex, initialAnchor } = options;
+  // COMMENT: why is this inside the hook? It's a constant
   const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
 
   const [slices, setSlices] = useState<PageSlice[]>([]);
@@ -607,7 +616,6 @@ export function usePagination(
       finalizeChapterTiming,
       applyResolvedPage,
       markActiveFontSwitchTrace,
-      postCommand,
       scheduleFontSwitchLatencyFlush,
       schedulePaintProbeForTrace,
       updateFontSwitchTrace,
