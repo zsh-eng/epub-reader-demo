@@ -11,7 +11,6 @@ export type {
   UsePaginationResult,
   PaginationStatus,
   PaginationCommandHistoryEntry,
-  FontSwitchLatencyIntent,
   PaginationFontSwitchLatencyTrace,
 } from "./use-pagination";
 
