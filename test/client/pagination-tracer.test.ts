@@ -34,7 +34,7 @@ describe("PaginationTracer", () => {
     vi.restoreAllMocks();
   });
 
-  it("flushes command history on debounce and immediately for init", () => {
+  it("publishes command history updates immediately", () => {
     const tracer = new PaginationTracer(12);
     const notifications: number[] = [];
 
@@ -43,15 +43,9 @@ describe("PaginationTracer", () => {
     });
 
     tracer.recordPostedCommand({ type: "getPage", globalPage: 3 });
-    expect(tracer.getSnapshot().commandHistory).toHaveLength(0);
-
-    vi.advanceTimersByTime(119);
-    expect(tracer.getSnapshot().commandHistory).toHaveLength(0);
-
-    vi.advanceTimersByTime(1);
-    const afterDebounce = tracer.getSnapshot().commandHistory;
-    expect(afterDebounce).toHaveLength(1);
-    expect(afterDebounce[0]?.summary).toContain("page=3");
+    const afterFirstCommand = tracer.getSnapshot().commandHistory;
+    expect(afterFirstCommand).toHaveLength(1);
+    expect(afterFirstCommand[0]?.summary).toContain("page=3");
 
     tracer.recordPostedCommand(
       {
@@ -136,7 +130,7 @@ describe("PaginationTracer", () => {
     unsubscribe();
   });
 
-  it("cleanup cancels pending command history flushes", () => {
+  it("cleanup does not clear immediate command history updates", () => {
     const tracer = new PaginationTracer(12);
     const onChange = vi.fn();
 
@@ -146,7 +140,7 @@ describe("PaginationTracer", () => {
 
     vi.advanceTimersByTime(500);
 
-    expect(tracer.getSnapshot().commandHistory).toHaveLength(0);
-    expect(onChange).not.toHaveBeenCalled();
+    expect(tracer.getSnapshot().commandHistory).toHaveLength(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 });

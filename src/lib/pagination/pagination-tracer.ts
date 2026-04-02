@@ -51,8 +51,6 @@ export interface PaginationTracerSnapshot {
 // Constants
 // ---------------------------------------------------------------------------
 
-const TRACE_FLUSH_DELAY_MS = 80;
-const COMMAND_HISTORY_FLUSH_DELAY_MS = 120;
 const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
 
 // ---------------------------------------------------------------------------
@@ -85,9 +83,6 @@ export class PaginationTracer {
   private commandSequence = 0;
 
   private traces: PaginationFontSwitchLatencyTrace[] = [];
-  private traceFlushTimer: number | null = null;
-  private pendingCommandHistory: PaginationCommandHistoryEntry[] | null = null;
-  private commandHistoryFlushTimer: number | null = null;
 
   private snapshot: PaginationTracerSnapshot = {
     diagnostics: null,
@@ -123,16 +118,20 @@ export class PaginationTracer {
 
   recordPostedCommand(
     command: PaginationCommand,
-    options: RecordPostedCommandOptions = {},
+    _options: RecordPostedCommandOptions = {},
   ): void {
     this.commandSequence += 1;
-    this.pendingCommandHistory = nextPaginationCommandHistory(
-      this.pendingCommandHistory ?? this.snapshot.commandHistory,
+    const commandHistory = nextPaginationCommandHistory(
+      this.snapshot.commandHistory,
       command,
       this.commandSequence,
     );
 
-    this.scheduleCommandHistoryFlush(options.immediate ?? command.type === "init");
+    this.snapshot = {
+      ...this.snapshot,
+      commandHistory,
+    };
+    this.emitChange();
   }
 
   // -------------------------------------------------------------------------
@@ -205,19 +204,19 @@ export class PaginationTracer {
 
     this.traces = [trace, ...this.traces].slice(0, this.maxTraces);
     this.activeFontSwitchTraceId = traceId;
-    this.scheduleTraceFlush(true);
+    this.flushTraces();
   }
 
   markActive(
     apply: (
       t: PaginationFontSwitchLatencyTrace,
     ) => PaginationFontSwitchLatencyTrace,
-    immediate = false,
+    _immediate = false,
   ): void {
     const id = this.activeFontSwitchTraceId;
     if (!id) return;
     this.updateTrace(id, apply);
-    this.scheduleTraceFlush(immediate);
+    this.flushTraces();
   }
 
   markReady(bodyFamily: string): void {
@@ -232,7 +231,7 @@ export class PaginationTracer {
       bodyFontLoadedAtReady: readFontLoaded(bodyFamily),
     }));
     this.activeFontSwitchTraceId = null;
-    this.scheduleTraceFlush(true);
+    this.flushTraces();
     this.schedulePaintProbe(activeId);
   }
 
@@ -251,7 +250,7 @@ export class PaginationTracer {
           if (t.paintedAtMs !== null) return t;
           return { ...t, paintedAtMs };
         });
-        this.scheduleTraceFlush(true);
+        this.flushTraces();
       });
     });
   }
@@ -283,17 +282,6 @@ export class PaginationTracer {
     this.fontSwitchIntent = null;
     this.activeFontSwitchTraceId = null;
     this.traces = [];
-    this.pendingCommandHistory = null;
-
-    if (this.traceFlushTimer !== null) {
-      window.clearTimeout(this.traceFlushTimer);
-      this.traceFlushTimer = null;
-    }
-
-    if (this.commandHistoryFlushTimer !== null) {
-      window.clearTimeout(this.commandHistoryFlushTimer);
-      this.commandHistoryFlushTimer = null;
-    }
 
     const hadDebugState =
       this.snapshot.diagnostics !== null ||
@@ -312,15 +300,7 @@ export class PaginationTracer {
   }
 
   cleanup(): void {
-    if (this.traceFlushTimer !== null) {
-      window.clearTimeout(this.traceFlushTimer);
-      this.traceFlushTimer = null;
-    }
-
-    if (this.commandHistoryFlushTimer !== null) {
-      window.clearTimeout(this.commandHistoryFlushTimer);
-      this.commandHistoryFlushTimer = null;
-    }
+    // No-op: tracer now publishes changes immediately without queued timers.
   }
 
   // -------------------------------------------------------------------------
@@ -336,58 +316,11 @@ export class PaginationTracer {
     this.traces = this.traces.map((t) => (t.id === id ? apply(t) : t));
   }
 
-  private scheduleTraceFlush(immediate: boolean): void {
-    if (immediate) {
-      if (this.traceFlushTimer !== null) {
-        window.clearTimeout(this.traceFlushTimer);
-        this.traceFlushTimer = null;
-      }
-      this.flushTraces();
-      return;
-    }
-
-    if (this.traceFlushTimer !== null) return;
-
-    this.traceFlushTimer = window.setTimeout(() => {
-      this.traceFlushTimer = null;
-      this.flushTraces();
-    }, TRACE_FLUSH_DELAY_MS);
-  }
-
   private flushTraces(): void {
     this.snapshot = {
       ...this.snapshot,
       fontSwitchLatencyTraces: [...this.traces],
     };
-    this.emitChange();
-  }
-
-  private scheduleCommandHistoryFlush(immediate: boolean): void {
-    if (immediate) {
-      if (this.commandHistoryFlushTimer !== null) {
-        window.clearTimeout(this.commandHistoryFlushTimer);
-        this.commandHistoryFlushTimer = null;
-      }
-      this.flushCommandHistory();
-      return;
-    }
-
-    if (this.commandHistoryFlushTimer !== null) return;
-
-    this.commandHistoryFlushTimer = window.setTimeout(() => {
-      this.commandHistoryFlushTimer = null;
-      this.flushCommandHistory();
-    }, COMMAND_HISTORY_FLUSH_DELAY_MS);
-  }
-
-  private flushCommandHistory(): void {
-    if (!this.pendingCommandHistory) return;
-
-    this.snapshot = {
-      ...this.snapshot,
-      commandHistory: this.pendingCommandHistory,
-    };
-    this.pendingCommandHistory = null;
     this.emitChange();
   }
 
