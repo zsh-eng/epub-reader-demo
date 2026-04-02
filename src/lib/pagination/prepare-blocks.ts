@@ -1,4 +1,9 @@
-import { layoutNextLine, prepareWithSegments } from "@chenglou/pretext";
+import {
+  layoutNextLine,
+  prepareWithSegments,
+  type LayoutCursor,
+  type PreparedTextWithSegments,
+} from "@chenglou/pretext";
 import type {
   Block,
   FontConfig,
@@ -8,9 +13,53 @@ import type {
   PreparedTextBlock,
 } from "./types";
 import { headingScale, CODE_CHROME_PX } from "./spacing";
-import { LINE_START_CURSOR, measureCollapsedSpaceWidth } from "./measure";
+import {
+  clearMeasureCache,
+  LINE_START_CURSOR,
+  measureCollapsedSpaceWidth,
+} from "./measure";
 
 const UNBOUNDED_WIDTH = 100_000;
+const PREPARED_TEXT_CACHE_MAX = 12_000;
+
+interface PreparedTextCacheEntry {
+  prepared: PreparedTextWithSegments;
+  fullText: string;
+  fullWidth: number;
+  endCursor: LayoutCursor;
+}
+
+const preparedTextCache = new Map<string, PreparedTextCacheEntry | null>();
+
+function getPreparedText(
+  text: string,
+  font: string,
+): PreparedTextCacheEntry | null {
+  const cacheKey = `${font}\n${text}`;
+
+  if (preparedTextCache.has(cacheKey)) {
+    return preparedTextCache.get(cacheKey) ?? null;
+  }
+
+  const prepared = prepareWithSegments(text, font);
+  const wholeLine = layoutNextLine(prepared, LINE_START_CURSOR, UNBOUNDED_WIDTH);
+
+  const cached =
+    wholeLine === null
+      ? null
+      : {
+          prepared,
+          fullText: wholeLine.text,
+          fullWidth: wholeLine.width,
+          endCursor: wholeLine.end,
+        };
+
+  if (preparedTextCache.size >= PREPARED_TEXT_CACHE_MAX) {
+    preparedTextCache.clear();
+  }
+  preparedTextCache.set(cacheKey, cached);
+  return cached;
+}
 
 function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   const scale = headingScale(tag);
@@ -39,31 +88,40 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
 function prepareTextBlock(
   block: Extract<Block, { type: "text" }>,
   fonts: FontConfig,
-): PreparedTextBlock {
+): PreparedTextBlock | null {
   const items: PreparedInlineItem[] = [];
+  const isPreformatted = block.tag === "pre";
   let pendingGap = 0;
-  let containsNewlines = block.tag === "pre";
+  let containsNewlines = isPreformatted;
 
   for (const run of block.runs) {
-    if (run.text.includes("\n")) containsNewlines = true;
-
     const carryGap = pendingGap;
-    const hasLeadingWhitespace = /^\s/.test(run.text);
-    const hasTrailingWhitespace = /\s$/.test(run.text);
-    const trimmedText = run.text.trim();
+    const sourceText = run.text.replace(/\u00a0/g, " ");
+    const isHardBreak = !isPreformatted && run.hardBreak === true;
+    const normalizedText =
+      isPreformatted || isHardBreak
+        ? sourceText
+        : sourceText.replace(/\s+/g, " ");
+    const hasLeadingWhitespace =
+      !isPreformatted && !isHardBreak && /^\s/.test(sourceText);
+    const hasTrailingWhitespace =
+      !isPreformatted && !isHardBreak && /\s$/.test(sourceText);
+    const preparedText =
+      isPreformatted || isHardBreak ? normalizedText : normalizedText.trim();
 
     const font = resolveFont(run, block.tag, fonts);
-    pendingGap = hasTrailingWhitespace ? measureCollapsedSpaceWidth(font) : 0;
+    const needsCollapsedSpaceWidth =
+      hasTrailingWhitespace || hasLeadingWhitespace || carryGap > 0;
+    const collapsedSpaceWidth = needsCollapsedSpaceWidth
+      ? measureCollapsedSpaceWidth(font)
+      : 0;
+    pendingGap = hasTrailingWhitespace ? collapsedSpaceWidth : 0;
 
-    if (!trimmedText) continue;
+    if (isHardBreak) containsNewlines = true;
+    if (!preparedText) continue;
 
-    const prepared = prepareWithSegments(trimmedText, font);
-    const wholeLine = layoutNextLine(
-      prepared,
-      LINE_START_CURSOR,
-      UNBOUNDED_WIDTH,
-    );
-    if (!wholeLine) continue;
+    const cached = getPreparedText(preparedText, font);
+    if (!cached) continue;
 
     items.push({
       kind: "text",
@@ -71,15 +129,20 @@ function prepareTextBlock(
       isLink: run.isLink,
       isCode: run.isCode,
       chromeWidth: run.isCode ? CODE_CHROME_PX : 0,
-      prepared,
-      fullText: wholeLine.text,
-      fullWidth: wholeLine.width,
-      endCursor: wholeLine.end,
+      prepared: cached.prepared,
+      rawText: preparedText,
+      fullText: cached.fullText,
+      fullWidth: cached.fullWidth,
+      endCursor: cached.endCursor,
       leadingGap:
         carryGap > 0 || hasLeadingWhitespace
-          ? measureCollapsedSpaceWidth(font)
+          ? collapsedSpaceWidth
           : 0,
     });
+  }
+
+  if (items.length === 0) {
+    return null;
   }
 
   return {
@@ -99,9 +162,13 @@ export function prepareBlocks(
 
   for (const block of blocks) {
     switch (block.type) {
-      case "text":
-        result.push(prepareTextBlock(block, fonts));
+      case "text": {
+        const preparedTextBlock = prepareTextBlock(block, fonts);
+        if (preparedTextBlock) {
+          result.push(preparedTextBlock);
+        }
         break;
+      }
       case "image":
         result.push({ ...block });
         break;
@@ -115,4 +182,7 @@ export function prepareBlocks(
   return result;
 }
 
-export { clearMeasureCache as clearPrepareCache } from "./measure";
+export function clearPrepareCache(): void {
+  clearMeasureCache();
+  preparedTextCache.clear();
+}

@@ -59,6 +59,7 @@ const DEFAULT_CONTEXT: InlineContext = {
 
 function runsMatch(a: InlineRun, b: InlineRun): boolean {
   return (
+    (a.hardBreak ?? false) === (b.hardBreak ?? false) &&
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.isCode === b.isCode &&
@@ -92,7 +93,7 @@ function extractInlineRuns(
   if (IGNORE_TAGS.has(tag)) return;
 
   if (tag === "br") {
-    appendRun(output, { text: "\n", ...ctx });
+    appendRun(output, { text: "\n", hardBreak: true, ...ctx });
     return;
   }
 

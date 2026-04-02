@@ -142,6 +142,11 @@ export function layoutPages(
       continue;
     }
 
+    const lastLine = lines[lines.length - 1];
+    if (lastLine) {
+      lastLine.isLastInBlock = true;
+    }
+
     const lineHeight = getLineHeight(textBlock.tag, theme);
     let lineIndex = 0;
 
@@ -162,12 +167,7 @@ export function layoutPages(
       }
 
       const take = Math.min(maxLines, lines.length - lineIndex);
-      const sliceLines = lines
-        .slice(lineIndex, lineIndex + take)
-        .map((line, offset) => ({
-          ...line,
-          isLastInBlock: lineIndex + offset === lines.length - 1,
-        }));
+      const sliceLines = lines.slice(lineIndex, lineIndex + take);
 
       current.slices.push({
         type: "text",

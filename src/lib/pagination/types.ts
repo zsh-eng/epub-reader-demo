@@ -19,6 +19,7 @@ export type BlockTag =
 
 export interface InlineRun {
   text: string;
+  hardBreak?: boolean;
   bold: boolean;
   italic: boolean;
   isCode: boolean;
@@ -71,6 +72,7 @@ export interface PreparedTextItem {
   isCode: boolean;
   chromeWidth: number;
   prepared: PreparedTextWithSegments;
+  rawText: string;
   fullText: string;
   fullWidth: number;
   endCursor: LayoutCursor;

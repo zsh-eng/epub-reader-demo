@@ -151,7 +151,7 @@ export function layoutPreWrapLines(
   if (!firstText || firstText.kind !== "text") return [];
 
   const combinedText = items
-    .map((i) => (i.kind === "text" ? i.fullText : ""))
+    .map((i) => (i.kind === "text" ? i.rawText : ""))
     .join("");
   const font = firstText.font;
 
