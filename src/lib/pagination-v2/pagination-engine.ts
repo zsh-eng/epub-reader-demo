@@ -70,6 +70,7 @@ export class PaginationEngine {
   private pagesByChapter: (Page[] | null)[] = [];
   private chapterDiagnosticsByChapter: (PaginationChapterDiagnostics | null)[] =
     [];
+  // I think this can be a computed property as well based on pages by chapter
   private chapterPageOffsets: number[] = [];
 
   /** Always non-null after init(). Updated only by navigation commands. */
@@ -374,6 +375,9 @@ export class PaginationEngine {
       return;
     }
 
+    // TODO: for going to chapters and the initial chapter, ideally the anchor should
+    // be on the start of the first page so we're always anchored to the start of the
+    // chapter
     this.anchor = this.pickAnchorForPage(ch, 0);
     this.emitPageContent();
   }
@@ -422,9 +426,7 @@ export class PaginationEngine {
       }
 
       if (runtime.isStale()) return;
-
-      const maybeYield = runtime.maybeYield();
-      if (isPromiseLike(maybeYield)) await maybeYield;
+      await runtime.maybeYield();
     }
 
     if (runtime.isStale()) return;
