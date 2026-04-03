@@ -550,6 +550,94 @@ describe("stale relayout detection", () => {
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(0);
   });
+
+  it("re-prepares all loaded chapters after a preempted font relayout", async () => {
+    const totalChapters = 3;
+    const fontOnlyConfig: PaginationConfig = {
+      ...BASE_CONFIG,
+      fontConfig: { ...BASE_FONT_CONFIG, baseSizePx: 34 },
+      layoutTheme: { ...BASE_LAYOUT_THEME, baseFontSizePx: 34 },
+    };
+    const finalConfig: PaginationConfig = {
+      ...fontOnlyConfig,
+      viewport: { width: 430, height: 860 },
+    };
+
+    const { engine, events } = createEngine(
+      totalChapters,
+      0,
+      makeLongTextBlocks("bug-repro-0"),
+    );
+    addChapter(engine, 1, makeLongTextBlocks("bug-repro-1"));
+    addChapter(engine, 2, makeLongTextBlocks("bug-repro-2"));
+
+    events.length = 0;
+
+    let isStale = false;
+    await engine.handleCommand(
+      { type: "updateConfig", config: fontOnlyConfig },
+      {
+        isStale: () => isStale,
+        maybeYield: async () => {
+          // Simulate a new layout command arriving right after first chapter.
+          isStale = true;
+        },
+      },
+    );
+
+    expect(countEvents(events, "partialReady")).toBe(1);
+    expect(countEvents(events, "ready")).toBe(0);
+
+    events.length = 0;
+    await engine.handleCommand({ type: "updateConfig", config: finalConfig });
+    const interruptedReady = events.find(
+      (e): e is Extract<PaginationEvent, { type: "ready" }> =>
+        e.type === "ready",
+    );
+    expect(interruptedReady).toBeDefined();
+
+    const control = createEngine(totalChapters, 0, makeLongTextBlocks("ctrl-0"));
+    addChapter(control.engine, 1, makeLongTextBlocks("ctrl-1"));
+    addChapter(control.engine, 2, makeLongTextBlocks("ctrl-2"));
+    control.events.length = 0;
+
+    await control.engine.handleCommand({
+      type: "updateConfig",
+      config: finalConfig,
+    });
+    const cleanReady = control.events.find(
+      (e): e is Extract<PaginationEvent, { type: "ready" }> =>
+        e.type === "ready",
+    );
+    expect(cleanReady).toBeDefined();
+
+    const getPreparedBodyFontsByChapter = (target: PaginationEngine) => {
+      const preparedByChapter = (
+        target as unknown as {
+          preparedByChapter: Array<
+            | Array<{
+                type: string;
+                items?: Array<{ kind: string; font?: string }>;
+              }>
+            | null
+          >;
+        }
+      ).preparedByChapter;
+
+      return preparedByChapter.map((prepared) => {
+        const textBlock = prepared?.find((block) => block.type === "text");
+        const textItem = textBlock?.items?.find((item) => item.kind === "text");
+        return textItem?.font ?? "";
+      });
+    };
+
+    const interruptedFonts = getPreparedBodyFontsByChapter(engine);
+    const cleanFonts = getPreparedBodyFontsByChapter(control.engine);
+
+    expect(interruptedFonts.every((font) => font.includes("34px"))).toBe(true);
+    expect(cleanFonts.every((font) => font.includes("34px"))).toBe(true);
+    expect(interruptedFonts).toEqual(cleanFonts);
+  });
 });
 
 // ---------------------------------------------------------------------------

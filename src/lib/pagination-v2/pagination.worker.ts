@@ -1,12 +1,12 @@
+import { ensurePaginationWorkerFontsReady } from "../pagination/pagination-worker-fonts";
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import { PaginationEngine } from "./pagination-engine";
-import { ensurePaginationWorkerFontsReady } from "../pagination/pagination-worker-fonts";
 import {
-  coalesceQueuedCommands,
-  createCommandRuntime,
-  LAYOUT_ADVANCING,
-  NAVIGATION_COMMANDS,
-  type QueuedPaginationCommand,
+    coalesceQueuedCommands,
+    createCommandRuntime,
+    LAYOUT_ADVANCING,
+    NAVIGATION_COMMANDS,
+    type QueuedPaginationCommand,
 } from "./pagination-worker-runtime";
 
 const workerFontsReady = ensurePaginationWorkerFontsReady();

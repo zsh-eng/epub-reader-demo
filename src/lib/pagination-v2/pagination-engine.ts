@@ -251,7 +251,10 @@ export class PaginationEngine {
     nextConfig: PaginationConfig,
     runtime: Partial<PaginationRuntime> = {},
   ): Promise<void> {
-    if (this.areConfigsEqual(this.config, nextConfig)) {
+    if (
+      this.areConfigsEqual(this.config, nextConfig) &&
+      this.hasPreparedForLoadedChapters()
+    ) {
       this.config = nextConfig;
       return;
     }
@@ -267,19 +270,27 @@ export class PaginationEngine {
     const rt = this.resolveRuntime(runtime);
 
     if (fontChanged) {
-      await this.runRelayout((ch) => {
-        if (!this.blocksByChapter[ch]) return null;
-        return this.prepareAndLayoutChapter(ch);
-      }, rt);
-    } else {
-      await this.runRelayout((ch) => {
-        const prepared = this.preparedByChapter[ch];
-        if (!prepared) return null;
-        const stage2PrepareMs =
-          this.chapterDiagnosticsByChapter[ch]?.stage2PrepareMs ?? 0;
-        return this.layoutPreparedChapter(ch, prepared, stage2PrepareMs);
-      }, rt);
+      // A preempted font relayout can otherwise leave a mix of old/new prepared
+      // chapters. Clearing loaded prepared chapters ensures any follow-up relayout
+      // (even layout-only) will re-prepare missing chapters with the latest font.
+      for (let ch = 0; ch < this.totalChapters; ch++) {
+        if (!this.blocksByChapter[ch]) continue;
+        this.preparedByChapter[ch] = null;
+      }
     }
+
+    await this.runRelayout((ch) => {
+      if (!this.blocksByChapter[ch]) return null;
+
+      const prepared = this.preparedByChapter[ch];
+      if (!prepared) {
+        return this.prepareAndLayoutChapter(ch);
+      }
+
+      const stage2PrepareMs =
+        this.chapterDiagnosticsByChapter[ch]?.stage2PrepareMs ?? 0;
+      return this.layoutPreparedChapter(ch, prepared, stage2PrepareMs);
+    }, rt);
   }
 
   nextPage(): void {
@@ -721,6 +732,14 @@ export class PaginationEngine {
       a.viewport.width === b.viewport.width &&
       a.viewport.height === b.viewport.height
     );
+  }
+
+  private hasPreparedForLoadedChapters(): boolean {
+    for (let ch = 0; ch < this.totalChapters; ch++) {
+      if (!this.blocksByChapter[ch]) continue;
+      if (!this.preparedByChapter[ch]) return false;
+    }
+    return true;
   }
 
   private resolveRuntime(
