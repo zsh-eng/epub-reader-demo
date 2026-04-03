@@ -593,7 +593,14 @@ export class PaginationEngine {
       return { type: "block", chapterIndex, blockId: "" };
     }
 
-    const midSlice = page.slices[Math.floor(page.slices.length / 2)];
+    // Spacers are not meaningful anchors: a spacer's blockId is often shared
+    // with the image that follows it (both come from the same block in the
+    // source), so anchoring to a spacer causes resolveAnchorToPage to find
+    // the wrong page when two slices share the same blockId.
+    const anchorableSlices = page.slices.filter((s) => s.type !== "spacer");
+    const slices = anchorableSlices.length > 0 ? anchorableSlices : page.slices;
+
+    const midSlice = slices[Math.floor(slices.length / 2)];
     if (!midSlice) {
       return { type: "block", chapterIndex, blockId: page.slices[0]!.blockId };
     }
