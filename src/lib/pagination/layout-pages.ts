@@ -43,26 +43,24 @@ export function layoutPages(
   };
 
   const addSpacer = (blockId: string, height: number) => {
-    let remaining = Math.max(0, height);
-    while (remaining > 0) {
-      const available = safeHeight - current.usedHeight;
-      if (available <= 0) {
-        pushPage();
-        continue;
-      }
-      const chunk = Math.min(remaining, available);
-      if (chunk <= 0) break;
+    const requested = Math.max(0, height);
+    if (requested <= 0) return;
 
-      current.slices.push({
-        type: "spacer",
-        blockId,
-        height: chunk,
-      });
-      current.usedHeight += chunk;
-      remaining -= chunk;
+    // Keep spacers atomic so a single spacer block never appears on multiple
+    // pages with the same blockId (which breaks anchor resolution).
+    const spacerHeight = Math.min(requested, safeHeight);
+    const available = safeHeight - current.usedHeight;
 
-      if (remaining > 0) pushPage();
+    if (spacerHeight > available && current.slices.length > 0) {
+      pushPage();
     }
+
+    current.slices.push({
+      type: "spacer",
+      blockId,
+      height: spacerHeight,
+    });
+    current.usedHeight += spacerHeight;
   };
 
   for (const block of preparedBlocks) {

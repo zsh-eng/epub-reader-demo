@@ -66,6 +66,20 @@ function makeLongTextBlocks(blockId: string): Block[] {
   ];
 }
 
+function makeSpacerSplitBlocks(): Block[] {
+  return [
+    {
+      type: "image",
+      id: "image-before-split",
+      src: "cover-before-split.jpg",
+      intrinsicWidth: 600,
+      intrinsicHeight: 855,
+    },
+    { type: "spacer", id: "spacer-21" },
+    { type: "page-break", id: "pb-after-spacer" },
+  ];
+}
+
 function pageSlots(spread: ResolvedSpread) {
   return spread.slots.filter(
     (slot): slot is Extract<(typeof spread.slots)[number], { kind: "page" }> =>
@@ -243,6 +257,24 @@ describe("navigation", () => {
 
     const ready = getReadyEvent(events)!;
     expect(ready.spread.totalPages).toBeGreaterThan(3);
+
+    events.length = 0;
+    engine.handleCommand({ type: "nextSpread" });
+
+    const pageContent = getPageContentEvent(events);
+    expect(pageContent).toBeDefined();
+    expect(pageContent!.spread.currentSpread).toBe(2);
+  });
+
+  it("nextSpread should advance from a pre-split spacer anchor (regression)", () => {
+    const { engine, events } = createEngine({
+      blocks: makeSpacerSplitBlocks(),
+      spreadConfig: { columns: 1, chapterFlow: "continuous" },
+    });
+
+    const ready = getReadyEvent(events)!;
+    expect(ready.spread.totalPages).toBeGreaterThanOrEqual(2);
+    expect(ready.spread.currentSpread).toBe(1);
 
     events.length = 0;
     engine.handleCommand({ type: "nextSpread" });
