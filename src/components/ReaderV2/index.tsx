@@ -1,34 +1,30 @@
-import { LazyImage } from "@/components/ReaderPrototype/LazyImage";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-    getBookFile,
-    getBookFilesByPaths,
-    getBookImageDimensionsMap,
-    type Book,
-    type BookFile,
+  getBookFile,
+  getBookFilesByPaths,
+  getBookImageDimensionsMap,
+  type Book,
+  type BookFile,
 } from "@/lib/db";
 import {
-    cleanupResourceUrls,
-    processEmbeddedResources,
+  cleanupResourceUrls,
+  processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import { parseChapterHtml } from "@/lib/pagination";
-import {
-    usePagination,
-    type PageSlice,
-    type PaginationConfig,
-} from "@/lib/pagination-v2";
+import { usePagination, type PaginationConfig } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DebugSection } from "../ReaderPrototype/DebugSection";
 import { InspectorDrawer } from "../ReaderPrototype/InspectorDrawer";
 import { InspectorPanel } from "../ReaderPrototype/InspectorPanel";
+import { PageSliceView } from "./PageSliceView";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { usePaginationKeyboardNav } from "./hooks/use-pagination-keyboard-nav";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
@@ -120,76 +116,6 @@ async function processChapterHtml(
   return chapterDoc.querySelector("body")?.innerHTML ?? "";
 }
 
-function PageSliceView({
-  slice,
-  sliceIndex,
-  bookId,
-  deferredImageCache,
-  baseFontSize,
-}: {
-  slice: PageSlice;
-  sliceIndex: number;
-  bookId: string;
-  deferredImageCache: Map<string, string>;
-  baseFontSize: number;
-}) {
-  const key = `${slice.blockId}-${sliceIndex}`;
-
-  if (slice.type === "spacer") {
-    return <div style={{ height: `${slice.height}px` }} />;
-  }
-
-  if (slice.type === "image") {
-    return (
-      <div className="flex justify-center">
-        <LazyImage
-          bookId={bookId}
-          src={slice.src}
-          alt={slice.alt || "Chapter image"}
-          cache={deferredImageCache}
-          width={slice.width}
-          height={slice.height}
-          style={{ objectFit: "contain" }}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <p
-      className="m-0"
-      style={{
-        lineHeight: `${slice.lineHeight}px`,
-        textAlign: slice.textAlign,
-        fontSize: baseFontSize,
-      }}
-    >
-      {slice.lines.map((line, lineIndex) => (
-        <Fragment key={`${key}-line-${lineIndex}`}>
-          {line.fragments.map((fragment, fragmentIndex) => (
-            <span
-              key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
-              style={{
-                marginLeft:
-                  fragment.leadingGap > 0
-                    ? `${fragment.leadingGap}px`
-                    : undefined,
-                font: fragment.font,
-              }}
-              className={cn({
-                underline: fragment.isLink,
-                "font-medium": fragment.isCode,
-              })}
-            >
-              {fragment.text}
-            </span>
-          ))}
-        </Fragment>
-      ))}
-    </p>
-  );
-}
-
 export function ReaderV2() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -272,7 +198,11 @@ export function ReaderV2() {
         for (let i = 1; i < chapterEntries.length; i++) {
           const chapter = chapterEntries[i]!;
           const file = restFiles.get(chapter.href);
-          const html = await processChapterHtml(file, chapter, imageDimensionsByPath);
+          const html = await processChapterHtml(
+            file,
+            chapter,
+            imageDimensionsByPath,
+          );
           if (cancelled) return;
 
           const blocks = parseChapterHtml(html);
@@ -295,7 +225,13 @@ export function ReaderV2() {
       cancelled = true;
       cleanupAllResources();
     };
-  }, [bookId, isEpubReady, chapterEntries, pagination.init, pagination.addChapter]);
+  }, [
+    bookId,
+    isEpubReady,
+    chapterEntries,
+    pagination.init,
+    pagination.addChapter,
+  ]);
 
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner message="Loading book…" />;
@@ -369,9 +305,7 @@ export function ReaderV2() {
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
-      <header
-        className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm"
-      >
+      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-3 px-4 py-2.5">
           <button
             onClick={() => navigate("/")}
