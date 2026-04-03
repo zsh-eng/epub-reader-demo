@@ -1,18 +1,18 @@
 import { layoutPages } from "../pagination/layout-pages";
 import { prepareBlocks } from "../pagination/prepare-blocks";
 import type {
-    Block,
-    Page,
-    PaginationChapterDiagnostics,
-    PaginationConfig,
-    PreparedBlock,
-    TextCursorOffset,
+  Block,
+  Page,
+  PaginationChapterDiagnostics,
+  PaginationConfig,
+  PreparedBlock,
+  TextCursorOffset,
 } from "../pagination/types";
 import { areFontConfigsEqual } from "../pagination/types";
 import type {
-    ChapterUnavailableEvent,
-    PaginationCommand,
-    PaginationEvent,
+  ChapterUnavailableEvent,
+  PaginationCommand,
+  PaginationEvent,
 } from "./engine-types";
 import type { ContentAnchor, ResolvedPage } from "./types";
 
@@ -64,7 +64,6 @@ export class PaginationEngine {
   private config!: PaginationConfig;
   private totalChapters = 0;
   private initialChapterIndex = 0;
-  private receivedChapters = 0;
 
   private blocksByChapter: (Block[] | null)[] = [];
   private preparedByChapter: (PreparedBlock[] | null)[] = [];
@@ -78,6 +77,10 @@ export class PaginationEngine {
 
   constructor(emit: (event: PaginationEvent) => void) {
     this.emit = emit;
+  }
+
+  get receivedChapters(): number {
+    return this.blocksByChapter.reduce((count, blocks) => count + (blocks === null ? 1 : 0), 0)
   }
 
   // -------------------------------------------------------------------------
@@ -146,11 +149,10 @@ export class PaginationEngine {
     );
 
     this.blocksByChapter = Array.from<Block[] | null>({ length: this.totalChapters}).fill(null);
-    this.preparedByChapter = new Array(this.totalChapters).fill(null);
-    this.pagesByChapter = new Array(this.totalChapters).fill(null);
-    this.chapterDiagnosticsByChapter = new Array(this.totalChapters).fill(null);
+    this.preparedByChapter = Array.from<PreparedBlock[] | null>({ length: this.totalChapters}).fill(null);
+    this.pagesByChapter = Array.from<Page[] | null>({ length: this.totalChapters }).fill(null);
+    this.chapterDiagnosticsByChapter = Array.from<PaginationChapterDiagnostics | null>({ length: this.totalChapters }).fill(null);
 
-    this.receivedChapters = 1;
     this.blocksByChapter[this.initialChapterIndex] = firstChapterBlocks;
 
     const diagnostics = this.prepareAndLayoutChapter(this.initialChapterIndex);
@@ -188,6 +190,7 @@ export class PaginationEngine {
     }
   }
 
+  // TODO: I already said that multiple chapters to be added at the same time?
   addChapter(chapterIndex: number, blocks: Block[]): void {
     if (chapterIndex < 0 || chapterIndex >= this.totalChapters) {
       this.emit({
@@ -200,9 +203,7 @@ export class PaginationEngine {
     // Skip if we already have this chapter (e.g. initialChapterIndex from init).
     if (this.blocksByChapter[chapterIndex] !== null) return;
 
-    this.receivedChapters++;
     this.blocksByChapter[chapterIndex] = blocks;
-
     const diagnostics = this.prepareAndLayoutChapter(chapterIndex);
     this.recomputeOffsets();
 
