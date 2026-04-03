@@ -3,22 +3,24 @@ import { PaginationTracer } from "../pagination/pagination-tracer";
 import type { Block } from "../pagination/types";
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import type {
-  ContentAnchor,
-  PaginationConfig,
-  PaginationStatus,
-  ResolvedPage,
+    ContentAnchor,
+    PaginationConfig,
+    PaginationStatus,
+    ResolvedSpread,
+    SpreadConfig,
 } from "./types";
+import { DEFAULT_SPREAD_CONFIG } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface UsePaginationResult {
-  page: ResolvedPage | null;
+  spread: ResolvedSpread | null;
   status: PaginationStatus;
 
-  nextPage: () => void;
-  prevPage: () => void;
+  nextSpread: () => void;
+  prevSpread: () => void;
   goToPage: (page: number) => void;
   goToChapter: (chapterIndex: number) => void;
 
@@ -36,7 +38,8 @@ export interface UsePaginationResult {
 }
 
 export interface UsePaginationOptions {
-  config: PaginationConfig;
+  paginationConfig: PaginationConfig;
+  spreadConfig?: SpreadConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,34 +49,35 @@ export interface UsePaginationOptions {
 export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
-  const { config } = options;
+  const { paginationConfig, spreadConfig = DEFAULT_SPREAD_CONFIG } = options;
 
-  const [page, setPage] = useState<ResolvedPage | null>(null);
+  const [spread, setSpread] = useState<ResolvedSpread | null>(null);
   const [status, setStatus] = useState<PaginationStatus>("idle");
 
   const workerRef = useRef<Worker | null>(null);
   const currentEpochRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
 
-  // Keep config in a ref so init and the updateConfig effect can read the
+  // Keep config in a ref so init and config update effects can read the
   // latest value without capturing it as a closure dependency.
-  const configRef = useRef<PaginationConfig>(config);
-  configRef.current = config;
+  const paginationConfigRef = useRef<PaginationConfig>(paginationConfig);
+  paginationConfigRef.current = paginationConfig;
 
-  // Keep config in a ref so the updateConfig effect can detect changes.
-  const prevConfigRef = useRef<PaginationConfig | null>(null);
+  const spreadConfigRef = useRef<SpreadConfig>(spreadConfig);
+  spreadConfigRef.current = spreadConfig;
+
+  // Keep config refs so the config update effects can detect changes.
+  const prevPaginationConfigRef = useRef<PaginationConfig | null>(null);
+  const prevSpreadConfigRef = useRef<SpreadConfig | null>(null);
 
   const markFontSwitchIntent = useCallback((from: string, to: string) => {
     tracerRef.current.recordIntent(from, to);
   }, []);
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    tracerRef.current.recordPostedCommand(
-      cmd as Parameters<typeof tracerRef.current.recordPostedCommand>[0],
-      {
-        immediate: cmd.type === "init",
-      },
-    );
+    tracerRef.current.recordPostedCommand(cmd, {
+      immediate: cmd.type === "init",
+    });
     workerRef.current?.postMessage(cmd);
   }, []);
 
@@ -94,27 +98,29 @@ export function usePagination(
     switch (event.type) {
       case "partialReady":
         currentEpochRef.current = event.epoch;
-        setPage(event.page);
+        setSpread(event.spread);
         setStatus("partial");
         tracerRef.current.updateDiagnostics(null);
         break;
 
       case "ready":
         currentEpochRef.current = event.epoch;
-        setPage(event.page);
+        setSpread(event.spread);
         setStatus("ready");
         tracerRef.current.markReady(
-          prevConfigRef.current?.fontConfig.bodyFamily ?? "",
+          prevPaginationConfigRef.current?.fontConfig.bodyFamily ?? "",
         );
         break;
 
       case "progress":
-        setPage((prev) =>
+        setSpread((prev) =>
           prev
             ? {
                 ...prev,
                 currentPage: event.currentPage,
                 totalPages: event.totalPages,
+                currentSpread: event.currentSpread,
+                totalSpreads: event.totalSpreads,
               }
             : prev,
         );
@@ -122,7 +128,7 @@ export function usePagination(
         break;
 
       case "pageContent":
-        setPage(event.page);
+        setSpread(event.spread);
         break;
 
       case "pageUnavailable":
@@ -169,18 +175,36 @@ export function usePagination(
   // -------------------------------------------------------------------------
 
   useEffect(() => {
-    const prev = prevConfigRef.current;
-    prevConfigRef.current = config;
+    const prev = prevPaginationConfigRef.current;
+    prevPaginationConfigRef.current = paginationConfig;
 
     if (!prev) return; // init hasn't been called yet — config will be sent with init.
 
-    if (prev && prev.fontConfig.bodyFamily !== config.fontConfig.bodyFamily) {
-      tracerRef.current.beginFontSwitch(config);
+    if (
+      prev &&
+      prev.fontConfig.bodyFamily !== paginationConfig.fontConfig.bodyFamily
+    ) {
+      tracerRef.current.beginFontSwitch(paginationConfig);
     }
 
     setStatus((s) => (s === "idle" ? s : "recalculating"));
-    postCommand({ type: "updateConfig", config });
-  }, [config, postCommand]);
+    postCommand({
+      type: "updatePaginationConfig",
+      paginationConfig,
+    });
+  }, [paginationConfig, postCommand]);
+
+  useEffect(() => {
+    const prev = prevSpreadConfigRef.current;
+    prevSpreadConfigRef.current = spreadConfig;
+
+    if (!prev) return; // init hasn't been called yet — config will be sent with init.
+
+    postCommand({
+      type: "updateSpreadConfig",
+      spreadConfig,
+    });
+  }, [spreadConfig, postCommand]);
 
   // -------------------------------------------------------------------------
   // Public API
@@ -193,18 +217,21 @@ export function usePagination(
       initialAnchor?: ContentAnchor;
       firstChapterBlocks: Block[];
     }) => {
-      const currentConfig = configRef.current;
+      const currentPaginationConfig = paginationConfigRef.current;
+      const currentSpreadConfig = spreadConfigRef.current;
       currentEpochRef.current = 0;
-      prevConfigRef.current = currentConfig;
+      prevPaginationConfigRef.current = currentPaginationConfig;
+      prevSpreadConfigRef.current = currentSpreadConfig;
       tracerRef.current.reset();
 
-      setPage(null);
+      setSpread(null);
       setStatus("idle");
 
       postCommand({
         type: "init",
         totalChapters: opts.totalChapters,
-        config: currentConfig,
+        paginationConfig: currentPaginationConfig,
+        spreadConfig: currentSpreadConfig,
         initialChapterIndex: opts.initialChapterIndex,
         initialAnchor: opts.initialAnchor,
         firstChapterBlocks: opts.firstChapterBlocks,
@@ -221,12 +248,12 @@ export function usePagination(
     [postCommand],
   );
 
-  const nextPage = useCallback(() => {
-    postCommand({ type: "nextPage" });
+  const nextSpread = useCallback(() => {
+    postCommand({ type: "nextSpread" });
   }, [postCommand]);
 
-  const prevPage = useCallback(() => {
-    postCommand({ type: "prevPage" });
+  const prevSpread = useCallback(() => {
+    postCommand({ type: "prevSpread" });
   }, [postCommand]);
 
   const goToPage = useCallback(
@@ -247,10 +274,10 @@ export function usePagination(
   );
 
   return {
-    page,
+    spread,
     status,
-    nextPage,
-    prevPage,
+    nextSpread,
+    prevSpread,
     goToPage,
     goToChapter,
     init,
