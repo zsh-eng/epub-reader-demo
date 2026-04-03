@@ -33,24 +33,12 @@ const engine = new PaginationEngine(emitEvent);
 // Event loop helpers
 // ---------------------------------------------------------------------------
 
-type SchedulerPriority = "user-blocking" | "user-visible" | "background";
-interface TaskScheduler {
-  postTask?: <T>(
-    callback: () => T | PromiseLike<T>,
-    options?: { priority?: SchedulerPriority },
-  ) => Promise<T>;
-}
-
 async function yieldToEventLoop(): Promise<void> {
-  const maybeScheduler = (globalThis as { scheduler?: unknown }).scheduler;
-  if (
-    typeof maybeScheduler === "object" &&
-    maybeScheduler !== null &&
-    typeof (maybeScheduler as TaskScheduler).postTask === "function"
-  ) {
-    await (maybeScheduler as TaskScheduler).postTask!(() => undefined, {
-      priority: "background",
-    });
+  const schedulerYield = (
+    globalThis as { scheduler?: { yield?: () => Promise<void> } }
+  ).scheduler?.yield;
+  if (schedulerYield) {
+    await schedulerYield();
     return;
   }
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
