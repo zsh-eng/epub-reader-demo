@@ -2,13 +2,12 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import type { FontFamily, ReaderSettings, TextAlign } from "@/types/reader.types";
-import {
-  AlignCenter,
-  AlignJustify,
-  AlignLeft,
-  AlignRight,
-} from "lucide-react";
+import type {
+  FontFamily,
+  ReaderSettings,
+  TextAlign,
+} from "@/types/reader.types";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight } from "lucide-react";
 import { InspectorSection } from "./InspectorSection";
 
 const fonts: { value: FontFamily; label: string; stack: string }[] = [
@@ -27,7 +26,7 @@ const fonts: { value: FontFamily; label: string; stack: string }[] = [
   {
     value: "monospace",
     label: "Mono",
-    stack: 'ui-monospace, SFMono-Regular, Menlo, Monaco, monospace',
+    stack: "ui-monospace, SFMono-Regular, Menlo, Monaco, monospace",
   },
 ];
 
@@ -105,9 +104,7 @@ export function SettingsSection({
               return (
                 <button
                   key={font.value}
-                  onClick={() =>
-                    onUpdateSettings({ fontFamily: font.value })
-                  }
+                  onClick={() => onUpdateSettings({ fontFamily: font.value })}
                   className={cn(
                     "flex flex-col items-center justify-center w-14 h-14 rounded-lg border transition-all duration-150 flex-shrink-0 cursor-pointer",
                     isSelected

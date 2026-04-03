@@ -1,6 +1,10 @@
 import { layoutPreWrapLines } from "@/lib/pagination/layout-text-lines";
 import { prepareBlocks } from "@/lib/pagination/prepare-blocks";
-import type { Block, FontConfig, TextCursorOffset } from "@/lib/pagination/types";
+import type {
+  Block,
+  FontConfig,
+  TextCursorOffset,
+} from "@/lib/pagination/types";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -70,7 +74,9 @@ describe("layoutPreWrapLines cursor offsets", () => {
       const current = lines[index];
       if (!previous?.endOffset || !current?.startOffset) continue;
 
-      expect(compareOffsets(previous.endOffset, current.startOffset)).toBeLessThanOrEqual(0);
+      expect(
+        compareOffsets(previous.endOffset, current.startOffset),
+      ).toBeLessThanOrEqual(0);
     }
   });
 });

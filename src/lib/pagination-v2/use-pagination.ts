@@ -3,10 +3,10 @@ import { PaginationTracer } from "../pagination/pagination-tracer";
 import type { Block } from "../pagination/types";
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import type {
-    ContentAnchor,
-    PaginationConfig,
-    PaginationStatus,
-    ResolvedPage,
+  ContentAnchor,
+  PaginationConfig,
+  PaginationStatus,
+  ResolvedPage,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -68,9 +68,12 @@ export function usePagination(
   }, []);
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    tracerRef.current.recordPostedCommand(cmd as Parameters<typeof tracerRef.current.recordPostedCommand>[0], {
-      immediate: cmd.type === "init",
-    });
+    tracerRef.current.recordPostedCommand(
+      cmd as Parameters<typeof tracerRef.current.recordPostedCommand>[0],
+      {
+        immediate: cmd.type === "init",
+      },
+    );
     workerRef.current?.postMessage(cmd);
   }, []);
 
@@ -163,10 +166,7 @@ export function usePagination(
 
     if (!prev) return; // init hasn't been called yet — config will be sent with init.
 
-    if (
-      prev &&
-      prev.fontConfig.bodyFamily !== config.fontConfig.bodyFamily
-    ) {
+    if (prev && prev.fontConfig.bodyFamily !== config.fontConfig.bodyFamily) {
       tracerRef.current.beginFontSwitch(config);
     }
 
@@ -230,7 +230,10 @@ export function usePagination(
 
   const goToChapter = useCallback(
     (chapterIndex: number) => {
-      postCommand({ type: "goToChapter", chapterIndex: Math.floor(chapterIndex) });
+      postCommand({
+        type: "goToChapter",
+        chapterIndex: Math.floor(chapterIndex),
+      });
     },
     [postCommand],
   );

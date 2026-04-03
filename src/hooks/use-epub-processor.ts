@@ -57,7 +57,8 @@ export function useEpubProcessor(
           // Technically this would not work if there are no images in the book
           const existingDimensions = await getBookImageDimensionsMap(bookId!);
           if (existingDimensions.size === 0) {
-            const derived = await deriveImageDimensionsFromBookFiles(existingFiles);
+            const derived =
+              await deriveImageDimensionsFromBookFiles(existingFiles);
             await upsertBookImageDimensions(derived);
           }
 
@@ -83,7 +84,8 @@ export function useEpubProcessor(
 
         // Process EPUB to extract bookFiles
         const bookFiles = await processEpubToBookFiles(blob, bookId!);
-        const imageDimensions = await deriveImageDimensionsFromBookFiles(bookFiles);
+        const imageDimensions =
+          await deriveImageDimensionsFromBookFiles(bookFiles);
 
         console.log(
           "[useEpubProcessor] Storing",

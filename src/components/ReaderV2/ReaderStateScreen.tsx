@@ -48,7 +48,10 @@ export function ReaderStateScreen(props: ReaderStateScreenProps) {
         {message && <p className="text-sm text-muted-foreground">{message}</p>}
 
         {action && (
-          <Button variant={action.variant ?? "outline"} onClick={action.onClick}>
+          <Button
+            variant={action.variant ?? "outline"}
+            onClick={action.onClick}
+          >
             {action.label}
           </Button>
         )}

@@ -1,13 +1,13 @@
 import {
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type {
-    PaginationCommandHistoryEntry,
-    PaginationTracer,
-    PaginationTracerSnapshot,
+  PaginationCommandHistoryEntry,
+  PaginationTracer,
+  PaginationTracerSnapshot,
 } from "@/lib/pagination";
 import { ChevronRight } from "lucide-react";
 import { memo, useMemo, useState, useSyncExternalStore } from "react";
@@ -119,14 +119,8 @@ export function DebugSection({
     <InspectorSection title="Debug & Diagnostics" defaultOpen={true}>
       <div className="rounded-lg bg-muted/50 p-3 font-mono text-[11px] leading-relaxed space-y-0.5">
         <KVRow label="Status" value={paginationStatus} />
-        <KVRow
-          label="Blocks"
-          value={String(diagnostics?.blockCount ?? "—")}
-        />
-        <KVRow
-          label="Lines"
-          value={String(diagnostics?.lineCount ?? "—")}
-        />
+        <KVRow label="Blocks" value={String(diagnostics?.blockCount ?? "—")} />
+        <KVRow label="Lines" value={String(diagnostics?.lineCount ?? "—")} />
         <KVRow label="Pages" value={String(totalPages)} />
         <KVRow
           label="Viewport"
@@ -147,17 +141,11 @@ export function DebugSection({
           label="Stage 3 Layout"
           value={formatMs(diagnostics?.stage3LayoutMs)}
         />
-        <KVRow
-          label="Pipeline Total"
-          value={formatMs(diagnostics?.totalMs)}
-        />
+        <KVRow label="Pipeline Total" value={formatMs(diagnostics?.totalMs)} />
 
         <div className="border-t border-border/50 my-1.5" />
 
-        <KVRow
-          label="Source Load"
-          value={formatMs(sourceLoadWallClockMs)}
-        />
+        <KVRow label="Source Load" value={formatMs(sourceLoadWallClockMs)} />
         <KVRow
           label="Last addChapter"
           value={formatMs(addChapterSendWallClockMs)}
@@ -178,7 +166,9 @@ export function DebugSection({
         <div className="space-y-1">
           <div className="flex items-center justify-between text-muted-foreground">
             <span>Font Switch Latency</span>
-            <span className="tabular-nums">{fontSwitchLatencyTraces.length}</span>
+            <span className="tabular-nums">
+              {fontSwitchLatencyTraces.length}
+            </span>
           </div>
           <ScrollArea className="h-36 rounded border border-border/50 bg-background/60">
             {fontSwitchLatencyTraces.length === 0 ? (
@@ -201,7 +191,10 @@ export function DebugSection({
                     <div className="grid grid-cols-2 gap-x-2 text-muted-foreground">
                       <span>
                         intent→cmd{" "}
-                        {formatDeltaMs(trace.intentAtMs, trace.commandPostedAtMs)}
+                        {formatDeltaMs(
+                          trace.intentAtMs,
+                          trace.commandPostedAtMs,
+                        )}
                       </span>
                       <span>
                         cmd→partial{" "}
@@ -212,7 +205,10 @@ export function DebugSection({
                       </span>
                       <span>
                         cmd→ready{" "}
-                        {formatDeltaMs(trace.commandPostedAtMs, trace.readyAtMs)}
+                        {formatDeltaMs(
+                          trace.commandPostedAtMs,
+                          trace.readyAtMs,
+                        )}
                       </span>
                       <span>
                         ready→paint{" "}
@@ -220,8 +216,8 @@ export function DebugSection({
                       </span>
                     </div>
                     <div className="text-muted-foreground">
-                      partial={trace.partialEvents}, progress={trace.progressEvents},
-                      fontLoaded(start/ready)=
+                      partial={trace.partialEvents}, progress=
+                      {trace.progressEvents}, fontLoaded(start/ready)=
                       {String(trace.bodyFontLoadedAtStart)}/
                       {String(trace.bodyFontLoadedAtReady)}
                     </div>
@@ -243,9 +239,7 @@ export function DebugSection({
                 <ChevronRight
                   className="size-2.5 transition-transform duration-200"
                   style={{
-                    transform: chapterTableOpen
-                      ? "rotate(90deg)"
-                      : undefined,
+                    transform: chapterTableOpen ? "rotate(90deg)" : undefined,
                   }}
                 />
                 <span>Chapter Timings ({chapterTimingRows.length})</span>

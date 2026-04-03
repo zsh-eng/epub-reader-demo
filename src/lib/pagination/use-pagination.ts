@@ -98,7 +98,7 @@ export function usePagination(
   // Use effects so re-renders don't reset optimistic navigation refs
   // before worker responses arrive.
   useEffect(() => {
-    console.log("current page was updated", performance.now() / 1000)
+    console.log("current page was updated", performance.now() / 1000);
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
@@ -153,7 +153,6 @@ export function usePagination(
     };
   }, []);
 
-
   const applyResolvedPage = useCallback(
     (
       globalPage: number,
@@ -171,7 +170,6 @@ export function usePagination(
     },
     [],
   );
-
 
   // Handle worker events
   const handleEvent = useCallback(
@@ -205,7 +203,11 @@ export function usePagination(
               : clamp(event.resolvedPage, 1, event.totalPages);
 
           if (resolvedPage !== null) {
-            console.log("applying the READY resolved page", performance.now() / 1000, event.slices)
+            console.log(
+              "applying the READY resolved page",
+              performance.now() / 1000,
+              event.slices,
+            );
             applyResolvedPage(
               resolvedPage,
               event.slices,
@@ -248,12 +250,19 @@ export function usePagination(
           }));
 
           setEstimatedTotalPages(event.estimatedTotalPages);
-          tracerRef.current.finalizeChapter(event.chapterIndex, event.chapterDiagnostics);
+          tracerRef.current.finalizeChapter(
+            event.chapterIndex,
+            event.chapterDiagnostics,
+          );
           tracerRef.current.updateDiagnostics(null);
           setStatus("partial");
 
           if (event.resolvedPage !== null) {
-            console.log("applying the partial ready resolved page", performance.now() / 1000, event.slices)
+            console.log(
+              "applying the partial ready resolved page",
+              performance.now() / 1000,
+              event.slices,
+            );
             applyResolvedPage(
               event.resolvedPage,
               event.slices,
@@ -275,7 +284,10 @@ export function usePagination(
           }));
 
           setEstimatedTotalPages(event.runningTotalPages);
-          tracerRef.current.finalizeChapter(event.chapterIndex, event.chapterDiagnostics);
+          tracerRef.current.finalizeChapter(
+            event.chapterIndex,
+            event.chapterDiagnostics,
+          );
           tracerRef.current.updateDiagnostics(null);
           break;
         }
@@ -356,13 +368,7 @@ export function usePagination(
     prevTotalChaptersRef.current = totalChapters;
     prevInitialChapterIndexRef.current = nextInitialChapterIndex;
     prevInitialAnchorKeyRef.current = nextInitialAnchorKey;
-  }, [
-    totalChapters,
-    config,
-    initialChapterIndex,
-    initialAnchor,
-    postCommand,
-  ]);
+  }, [totalChapters, config, initialChapterIndex, initialAnchor, postCommand]);
 
   const addChapter = useCallback(
     (chapterIndex: number, html: string) => {
@@ -372,7 +378,10 @@ export function usePagination(
       tracerRef.current.recordChapterQueued(chapterIndex);
       const stage1StartedAt = performance.now();
       const blocks = parseChapterHtml(html);
-      tracerRef.current.recordStage1(chapterIndex, performance.now() - stage1StartedAt);
+      tracerRef.current.recordStage1(
+        chapterIndex,
+        performance.now() - stage1StartedAt,
+      );
       postCommand({ type: "addChapter", chapterIndex, blocks });
     },
     [postCommand, totalChapters],
@@ -391,7 +400,7 @@ export function usePagination(
     }
     previousConfigRef.current = config;
 
-    console.log("sending update for config", performance.now() / 1000, config)
+    console.log("sending update for config", performance.now() / 1000, config);
     postCommand({
       type: "updateConfig",
       config,
@@ -423,7 +432,9 @@ export function usePagination(
       const maxKnownPages =
         totalPagesRef.current ?? estimatedTotalPagesRef.current;
       const clamped =
-        maxKnownPages === null ? normalized : clamp(normalized, 1, maxKnownPages);
+        maxKnownPages === null
+          ? normalized
+          : clamp(normalized, 1, maxKnownPages);
       if (clamped === currentPageRef.current) return;
 
       postCommand({ type: "getPage", globalPage: clamped });

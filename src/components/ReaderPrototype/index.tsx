@@ -142,7 +142,7 @@ function renderPageSlice(
   sliceIndex: number,
   bookId: string,
   deferredImageCache: Map<string, string>,
-  baseFontSize: number
+  baseFontSize: number,
 ): ReactElement {
   // if (sliceIndex == 0) {
   //   console.log("update being rendered", performance.now() / 1000)
@@ -179,7 +179,7 @@ function renderPageSlice(
       style={{
         lineHeight: `${slice.lineHeight}px`,
         textAlign: slice.textAlign,
-        fontSize: baseFontSize
+        fontSize: baseFontSize,
       }}
     >
       {slice.lines.map((line, lineIndex) => (
@@ -481,14 +481,8 @@ export function ReaderPrototype() {
     currentChapterIndex: pagination.currentChapterIndex,
     settings,
     onUpdateSettings: (patch: Partial<ReaderSettings>) => {
-      if (
-        patch.fontFamily &&
-        patch.fontFamily !== settings.fontFamily
-      ) {
-        pagination.markFontSwitchIntent(
-          settings.fontFamily,
-          patch.fontFamily,
-        );
+      if (patch.fontFamily && patch.fontFamily !== settings.fontFamily) {
+        pagination.markFontSwitchIntent(settings.fontFamily, patch.fontFamily);
       }
       updateSettings(patch);
     },
@@ -574,7 +568,7 @@ export function ReaderPrototype() {
                       i,
                       bookId,
                       deferredImageCacheRef.current,
-                      paginationConfig.fontConfig.baseSizePx
+                      paginationConfig.fontConfig.baseSizePx,
                     ),
                   )
                 )}

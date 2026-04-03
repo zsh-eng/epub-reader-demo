@@ -1,12 +1,12 @@
 import {
-    nextPaginationCommandHistory,
-    type PaginationCommandHistoryEntry,
+  nextPaginationCommandHistory,
+  type PaginationCommandHistoryEntry,
 } from "./command-history";
 import type { PaginationCommand } from "./engine-types";
 import type {
-    PaginationChapterDiagnostics,
-    PaginationConfig,
-    PaginationDiagnostics,
+  PaginationChapterDiagnostics,
+  PaginationConfig,
+  PaginationDiagnostics,
 } from "./types";
 
 // ---------------------------------------------------------------------------

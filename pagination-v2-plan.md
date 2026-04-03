@@ -1,4 +1,3 @@
-
 # New Pagination Core: Design Evaluation & Implementation Plan
 
 ## Context
@@ -10,16 +9,21 @@ The current pagination prototype has accumulated complexity: a revision/epoch sy
 ## Design Evaluation: Missing Pieces & Proposals
 
 ### 1. `processEmbeddedResources` Placement
+
 **Missing from design.** Chapter HTML must be run through `processEmbeddedResources` (CSS inlining, image dimension injection) before being passed to `parseChapterHtml`. `parseChapterHtml` requires the DOM and runs on the main thread. The shell layer is responsible for this full pipeline: load HTML → `processEmbeddedResources` → `parseChapterHtml` → send blocks to the hook/worker. The pagination core only receives `Block[]`.
 
 ### 2. Navigation During Relayout — Worker Architecture
+
 **Underspecified.** The concrete mechanism: after each `maybeYield()` in the relayout loop, the worker drains any pending navigation commands before continuing to the next chapter. Navigation commands (nextPage, prevPage, goToPage) are handled inline without restarting the relayout.
 
 ### 3. Epoch System — Keep Simple
+
 One monotonic `layoutEpoch` integer, incremented on `init` and `updateConfig`. All events carry it; the hook discards events from older epochs. Simpler than the current revision system; handles the one real race (stale progress events from an interrupted relayout).
 
 ### 4. `ResolvedPage` — Rename from "Page"
+
 The internal `Page` type in `layout-pages.ts` (array of `PageSlice[]`) conflicts with the proposed event payload name. The event payload is named **`ResolvedPage`**:
+
 ```ts
 interface ResolvedPage {
   currentPage: number;
@@ -30,27 +34,34 @@ interface ResolvedPage {
   content: PageSlice[];
 }
 ```
+
 These values are **not cached** on the engine — they are computed via helper methods on demand. Iterating a few hundred chapter entries is microseconds.
 
 ### 5. `totalPagesInChapter` / `currentPageInChapter`
+
 Included in `ResolvedPage`. Computed at resolution time by the engine's `buildResolvedPage()` helper using `chapterPageOffsets`. No caching needed.
 
 ### 6. HTML Loading Strategy
+
 Load all chapter HTML files in one shot, run `processEmbeddedResources` + `parseChapterHtml` on all of them on the main thread (~60ms for long books). Send the first chapter's blocks inside the `init` command; send remaining chapters as `addChapter` commands immediately after. This ensures the engine always has at least one chapter from the moment of initialization.
 
 ### 7. Anchor is Always Non-Null After Init
+
 The engine is not instantiated until the `init` command (which includes the first chapter) is received. Once initialized, `this.anchor` is always a valid `ContentAnchor` — either the `initialAnchor` passed in, or the middle-of-first-page anchor derived from the first chapter layout. `getCurrentPage()` reads `this.anchor` directly, takes no parameter.
 
 ### 8. `PaginationStatus` — Four States
+
 ```ts
-type PaginationStatus = 'idle' | 'partial' | 'recalculating' | 'ready'
+type PaginationStatus = "idle" | "partial" | "recalculating" | "ready";
 ```
+
 - `idle` — not yet initialized
 - `partial` — first chapter laid out, remaining chapters pending
 - `recalculating` — config changed, relayout in progress
 - `ready` — all chapters laid out
 
 ### 9. Font Loading in Worker
+
 `ensurePaginationWorkerFontsReady()` from `pagination-worker-fonts.ts` is reused as-is. The worker awaits it before processing any commands.
 
 ---
@@ -58,9 +69,11 @@ type PaginationStatus = 'idle' | 'partial' | 'recalculating' | 'ready'
 ## Implementation Plan
 
 ### Directory
+
 New code in `src/lib/pagination-v2/`. Nothing in `src/lib/pagination/` is touched until cutover.
 
 **Reused directly (import from `../pagination/`):**
+
 - `parse-html.ts`, `prepare-blocks.ts`, `layout-pages.ts` — no changes
 - `pagination-worker-fonts.ts` — no changes
 - `pagination-tracer.ts` — no changes
@@ -70,13 +83,20 @@ New code in `src/lib/pagination-v2/`. Nothing in `src/lib/pagination/` is touche
 ### Phase 1: Types (`engine-types.ts`, `types.ts`)
 
 **`ContentAnchor` (discriminated union):**
+
 ```ts
 type ContentAnchor =
-  | { type: 'text'; chapterIndex: number; blockId: string; offset: TextCursorOffset }
-  | { type: 'block'; chapterIndex: number; blockId: string }
+  | {
+      type: "text";
+      chapterIndex: number;
+      blockId: string;
+      offset: TextCursorOffset;
+    }
+  | { type: "block"; chapterIndex: number; blockId: string };
 ```
 
 **`ResolvedPage`:**
+
 ```ts
 interface ResolvedPage {
   currentPage: number;
@@ -89,11 +109,13 @@ interface ResolvedPage {
 ```
 
 **Commands:**
+
 - `InitCommand` — `{ totalChapters, config, initialChapterIndex, initialAnchor?, firstChapterBlocks: Block[] }`
 - `AddChapterCommand` — `{ chapterIndex, blocks: Block[] }`
 - `UpdateConfigCommand`, `NextPageCommand`, `PrevPageCommand`, `GoToPageCommand`, `GoToChapterCommand`
 
 **Events:**
+
 - `PartialReadyEvent` — `{ type: 'partialReady'; epoch: number; page: ResolvedPage; estimatedTotalPages: number }`
 - `ReadyEvent` — `{ type: 'ready'; epoch: number; page: ResolvedPage }`
 - `ProgressEvent` — `{ type: 'progress'; epoch: number; chaptersCompleted: number; totalChapters: number; estimatedTotalPages: number }`
@@ -116,6 +138,7 @@ Key differences from existing engine:
 - **Middle-out relayout order** — centered on `this.anchor.chapterIndex`
 
 Key method signatures:
+
 ```ts
 init(totalChapters, config, initialChapterIndex, initialAnchor, firstChapterBlocks)
 addChapter(chapterIndex: number, blocks: Block[]): void
@@ -167,6 +190,7 @@ interface UsePaginationOptions {
 ### Phase 5: Shell Component (`src/components/ReaderV2/index.tsx`)
 
 Loading strategy:
+
 1. Load ALL chapter HTML files at once
 2. Run `processEmbeddedResources` + `parseChapterHtml` on all chapters (main thread)
 3. Call `usePagination` init via `totalChapters` change, passing `firstChapterBlocks` in init command
@@ -195,19 +219,20 @@ Patterns from `test/client/pagination-engine-middle-out.test.ts`.
 
 ## Files to Create
 
-| File | Notes |
-|------|-------|
-| `src/lib/pagination-v2/engine-types.ts` | Commands, events, `ResolvedPage` |
-| `src/lib/pagination-v2/types.ts` | `ContentAnchor` discriminated union |
-| `src/lib/pagination-v2/pagination-engine.ts` | New engine |
-| `src/lib/pagination-v2/pagination-worker-runtime.ts` | Epoch-based runtime |
-| `src/lib/pagination-v2/pagination.worker.ts` | New worker |
-| `src/lib/pagination-v2/use-pagination.ts` | New hook |
-| `src/lib/pagination-v2/index.ts` | Public exports |
-| `src/components/ReaderV2/index.tsx` | New shell |
-| `test/client/pagination-engine-v2.test.ts` | Tests |
+| File                                                 | Notes                               |
+| ---------------------------------------------------- | ----------------------------------- |
+| `src/lib/pagination-v2/engine-types.ts`              | Commands, events, `ResolvedPage`    |
+| `src/lib/pagination-v2/types.ts`                     | `ContentAnchor` discriminated union |
+| `src/lib/pagination-v2/pagination-engine.ts`         | New engine                          |
+| `src/lib/pagination-v2/pagination-worker-runtime.ts` | Epoch-based runtime                 |
+| `src/lib/pagination-v2/pagination.worker.ts`         | New worker                          |
+| `src/lib/pagination-v2/use-pagination.ts`            | New hook                            |
+| `src/lib/pagination-v2/index.ts`                     | Public exports                      |
+| `src/components/ReaderV2/index.tsx`                  | New shell                           |
+| `test/client/pagination-engine-v2.test.ts`           | Tests                               |
 
 ## Files Reused (import from `../pagination/`)
+
 `parse-html.ts`, `prepare-blocks.ts`, `layout-pages.ts`, `pagination-worker-fonts.ts`, `pagination-tracer.ts`
 
 ---

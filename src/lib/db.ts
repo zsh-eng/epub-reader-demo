@@ -181,7 +181,10 @@ function isImageBookFile(file: Pick<BookFile, "mediaType" | "path">): boolean {
   return file.path.toLowerCase().endsWith(".svg");
 }
 
-export function createBookImageDimensionId(bookId: string, path: string): string {
+export function createBookImageDimensionId(
+  bookId: string,
+  path: string,
+): string {
   return `${bookId}:${path}`;
 }
 
@@ -207,7 +210,10 @@ export async function deriveImageDimensionsFromBookFiles(
   for (const file of files) {
     if (!isImageBookFile(file)) continue;
 
-    const parsed = await extractImageDimensionsFromBlob(file.content, file.mediaType);
+    const parsed = await extractImageDimensionsFromBlob(
+      file.content,
+      file.mediaType,
+    );
     if (!parsed) continue;
 
     dimensions.push({
@@ -457,8 +463,13 @@ export async function getBookFiles(bookId: string): Promise<BookFile[]> {
 export async function getBookImageDimensionsMap(
   bookId: string,
 ): Promise<Map<string, { width: number; height: number }>> {
-  const rows = await db.bookImageDimensions.where("bookId").equals(bookId).toArray();
-  return new Map(rows.map((row) => [row.path, { width: row.width, height: row.height }]));
+  const rows = await db.bookImageDimensions
+    .where("bookId")
+    .equals(bookId)
+    .toArray();
+  return new Map(
+    rows.map((row) => [row.path, { width: row.width, height: row.height }]),
+  );
 }
 
 export async function upsertBookImageDimensions(

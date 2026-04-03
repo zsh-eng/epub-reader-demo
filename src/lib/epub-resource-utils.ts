@@ -302,10 +302,7 @@ export async function processEmbeddedResources(
           objectUrl,
         );
         element.setAttribute("xlink:href", objectUrl);
-      } else if (
-        href &&
-        (tagName === "link" || tagName === "image")
-      ) {
+      } else if (href && (tagName === "link" || tagName === "image")) {
         element.setAttribute("href", objectUrl);
       }
     }

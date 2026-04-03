@@ -1,8 +1,6 @@
 import { PaginationEngine } from "@/lib/pagination/pagination-engine";
 import type { PaginationEvent } from "@/lib/pagination/engine-types";
-import {
-  createCommandRuntime,
-} from "@/lib/pagination/pagination-worker-runtime";
+import { createCommandRuntime } from "@/lib/pagination/pagination-worker-runtime";
 import type {
   Block,
   FontConfig,
@@ -353,7 +351,9 @@ describe("Pagination engine relayout middle-out prioritization", () => {
   it("includes resolvedAnchor in events and restores from init initialAnchor", () => {
     const initialBlocks = buildLongTextBlocks("text-restore");
     const firstEvents: PaginationEvent[] = [];
-    const firstEngine = new PaginationEngine((event) => firstEvents.push(event));
+    const firstEngine = new PaginationEngine((event) =>
+      firstEvents.push(event),
+    );
 
     firstEngine.handleCommand({
       type: "init",

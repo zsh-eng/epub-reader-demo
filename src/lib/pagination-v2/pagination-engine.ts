@@ -79,7 +79,10 @@ export class PaginationEngine {
   }
 
   get receivedChapters(): number {
-    return this.blocksByChapter.reduce((count, blocks) => count + (blocks === null ? 0 : 1), 0)
+    return this.blocksByChapter.reduce(
+      (count, blocks) => count + (blocks === null ? 0 : 1),
+      0,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -147,10 +150,19 @@ export class PaginationEngine {
       this.totalChapters - 1,
     );
 
-    this.blocksByChapter = Array.from<Block[] | null>({ length: this.totalChapters}).fill(null);
-    this.preparedByChapter = Array.from<PreparedBlock[] | null>({ length: this.totalChapters}).fill(null);
-    this.pagesByChapter = Array.from<Page[] | null>({ length: this.totalChapters }).fill(null);
-    this.chapterDiagnosticsByChapter = Array.from<PaginationChapterDiagnostics | null>({ length: this.totalChapters }).fill(null);
+    this.blocksByChapter = Array.from<Block[] | null>({
+      length: this.totalChapters,
+    }).fill(null);
+    this.preparedByChapter = Array.from<PreparedBlock[] | null>({
+      length: this.totalChapters,
+    }).fill(null);
+    this.pagesByChapter = Array.from<Page[] | null>({
+      length: this.totalChapters,
+    }).fill(null);
+    this.chapterDiagnosticsByChapter =
+      Array.from<PaginationChapterDiagnostics | null>({
+        length: this.totalChapters,
+      }).fill(null);
 
     this.blocksByChapter[this.initialChapterIndex] = firstChapterBlocks;
 
@@ -159,14 +171,19 @@ export class PaginationEngine {
     // Establish anchor — use initialAnchor if it resolves, else pick page 0.
     if (initialAnchor) {
       const resolved = this.resolveAnchorToPage(initialAnchor);
-      this.anchor = resolved ? initialAnchor : this.pickAnchorForPage(this.initialChapterIndex, 0);
+      this.anchor = resolved
+        ? initialAnchor
+        : this.pickAnchorForPage(this.initialChapterIndex, 0);
     } else {
       this.anchor = this.pickAnchorForPage(this.initialChapterIndex, 0);
     }
 
     const page = this.buildResolvedPage();
     if (!page) {
-      this.emit({ type: "error", message: "Failed to build initial page after init" });
+      this.emit({
+        type: "error",
+        message: "Failed to build initial page after init",
+      });
       return;
     }
 
@@ -248,24 +265,18 @@ export class PaginationEngine {
     const rt = this.resolveRuntime(runtime);
 
     if (fontChanged) {
-      await this.runRelayout(
-        (ch) => {
-          if (!this.blocksByChapter[ch]) return null;
-          return this.prepareAndLayoutChapter(ch);
-        },
-        rt,
-      );
+      await this.runRelayout((ch) => {
+        if (!this.blocksByChapter[ch]) return null;
+        return this.prepareAndLayoutChapter(ch);
+      }, rt);
     } else {
-      await this.runRelayout(
-        (ch) => {
-          const prepared = this.preparedByChapter[ch];
-          if (!prepared) return null;
-          const stage2PrepareMs =
-            this.chapterDiagnosticsByChapter[ch]?.stage2PrepareMs ?? 0;
-          return this.layoutPreparedChapter(ch, prepared, stage2PrepareMs);
-        },
-        rt,
-      );
+      await this.runRelayout((ch) => {
+        const prepared = this.preparedByChapter[ch];
+        if (!prepared) return null;
+        const stage2PrepareMs =
+          this.chapterDiagnosticsByChapter[ch]?.stage2PrepareMs ?? 0;
+        return this.layoutPreparedChapter(ch, prepared, stage2PrepareMs);
+      }, rt);
     }
   }
 
@@ -571,10 +582,16 @@ export class PaginationEngine {
     }
 
     if (nearestPrecedingPage !== null) {
-      return { chapterIndex: anchor.chapterIndex, localPageIndex: nearestPrecedingPage };
+      return {
+        chapterIndex: anchor.chapterIndex,
+        localPageIndex: nearestPrecedingPage,
+      };
     }
     if (firstBlockPage !== null) {
-      return { chapterIndex: anchor.chapterIndex, localPageIndex: firstBlockPage };
+      return {
+        chapterIndex: anchor.chapterIndex,
+        localPageIndex: firstBlockPage,
+      };
     }
     // Block not found — fall back to chapter start.
     return { chapterIndex: anchor.chapterIndex, localPageIndex: 0 };

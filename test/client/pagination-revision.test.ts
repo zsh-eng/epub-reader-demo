@@ -2,10 +2,7 @@ import type { PaginationEvent } from "@/lib/pagination/engine-types";
 import { shouldAcceptPaginationEvent } from "@/lib/pagination/pagination-revision";
 import { describe, expect, it } from "vitest";
 
-function buildErrorEvent(
-  message: string,
-  revision?: number,
-): PaginationEvent {
+function buildErrorEvent(message: string, revision?: number): PaginationEvent {
   return {
     type: "error",
     message,

@@ -4,8 +4,7 @@ export interface ImageDimensions {
 }
 
 const JPEG_SOF_MARKERS = new Set<number>([
-  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce,
-  0xcf,
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
 
 function isPositiveDimension(value: number): boolean {
@@ -195,10 +194,7 @@ function parseWebpDimensions(bytes: Uint8Array): ImageDimensions | null {
       return toDimensions(width, height);
     }
 
-    offset =
-      chunkDataOffset +
-      normalizedChunkSize +
-      (normalizedChunkSize % 2);
+    offset = chunkDataOffset + normalizedChunkSize + (normalizedChunkSize % 2);
   }
 
   return null;
@@ -271,5 +267,8 @@ export async function extractImageDimensionsFromBlob(
   mediaType?: string,
 ): Promise<ImageDimensions | null> {
   const arrayBuffer = await blob.arrayBuffer();
-  return extractImageDimensionsFromBytes(new Uint8Array(arrayBuffer), mediaType);
+  return extractImageDimensionsFromBytes(
+    new Uint8Array(arrayBuffer),
+    mediaType,
+  );
 }

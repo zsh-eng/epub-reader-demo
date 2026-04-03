@@ -13,7 +13,7 @@ import type {
   PaginationConfig,
   PaginationDiagnostics,
   PreparedBlock,
-  TextCursorOffset
+  TextCursorOffset,
 } from "./types";
 import { areFontConfigsEqual } from "./types";
 
@@ -192,32 +192,26 @@ export class PaginationEngine {
   }
 
   private relayoutFromBlocks(runtime: PaginationRuntime): Promise<void> {
-    return this.runRelayout(
-      (chapterIndex) => {
-        if (!this.blocksByChapter[chapterIndex]) return null;
-        return this.prepareAndLayoutChapter(chapterIndex);
-      },
-      runtime,
-    );
+    return this.runRelayout((chapterIndex) => {
+      if (!this.blocksByChapter[chapterIndex]) return null;
+      return this.prepareAndLayoutChapter(chapterIndex);
+    }, runtime);
   }
 
   private relayoutPrepared(runtime: PaginationRuntime): Promise<void> {
-    return this.runRelayout(
-      (chapterIndex) => {
-        const prepared = this.preparedByChapter[chapterIndex];
-        if (!prepared) return null;
+    return this.runRelayout((chapterIndex) => {
+      const prepared = this.preparedByChapter[chapterIndex];
+      if (!prepared) return null;
 
-        const stage2PrepareMs =
-          this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
+      const stage2PrepareMs =
+        this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
 
-        return this.layoutPreparedChapter(
-          chapterIndex,
-          prepared,
-          stage2PrepareMs,
-        );
-      },
-      runtime,
-    );
+      return this.layoutPreparedChapter(
+        chapterIndex,
+        prepared,
+        stage2PrepareMs,
+      );
+    }, runtime);
   }
 
   private async runRelayout(
@@ -227,7 +221,12 @@ export class PaginationEngine {
     runtime: PaginationRuntime,
   ): Promise<void> {
     const centerChapter = this.resolveRelayoutCenterChapter();
-    console.log("last requested global page", this.lastRequestedGlobalPage, "with center chapter as", centerChapter)
+    console.log(
+      "last requested global page",
+      this.lastRequestedGlobalPage,
+      "with center chapter as",
+      centerChapter,
+    );
     const chapterOrder = this.buildMiddleOutChapterOrder(centerChapter);
     let emittedPartial = false;
 
@@ -241,7 +240,7 @@ export class PaginationEngine {
 
       if (!emittedPartial) {
         const resolvedPage =
-          this.resolveStoredAnchorPage() ?? (this.getInitialAnchorPage() ?? 1);
+          this.resolveStoredAnchorPage() ?? this.getInitialAnchorPage() ?? 1;
         this.emitPartialReady(chapterIndex, resolvedPage, chapterDiagnostics);
         emittedPartial = true;
       } else {
@@ -341,7 +340,12 @@ export class PaginationEngine {
     if (typeof anchor.blockId !== "string" || !anchor.blockId) return null;
 
     const { chapterIndex } = anchor;
-    if (!Number.isInteger(chapterIndex) || chapterIndex < 0 || chapterIndex >= this.totalChapters) return null;
+    if (
+      !Number.isInteger(chapterIndex) ||
+      chapterIndex < 0 ||
+      chapterIndex >= this.totalChapters
+    )
+      return null;
 
     const offset = this.normalizeOffset(anchor.offset);
     return offset
@@ -393,10 +397,7 @@ export class PaginationEngine {
     return 0;
   }
 
-  private areConfigsEqual(
-    a: PaginationConfig,
-    b: PaginationConfig,
-  ): boolean {
+  private areConfigsEqual(a: PaginationConfig, b: PaginationConfig): boolean {
     return (
       areFontConfigsEqual(a.fontConfig, b.fontConfig) &&
       this.areLayoutThemesEqual(a.layoutTheme, b.layoutTheme) &&
@@ -467,13 +468,16 @@ export class PaginationEngine {
     });
   }
 
-  private updateResolvedAnchorFromPageContent(pageContent: {
-    chapterIndex: number;
-    slices: PageSlice[];
-  } | null): void {
+  private updateResolvedAnchorFromPageContent(
+    pageContent: {
+      chapterIndex: number;
+      slices: PageSlice[];
+    } | null,
+  ): void {
     if (!pageContent || pageContent.slices.length === 0) return;
 
-    const middleSlice = pageContent.slices[Math.floor(pageContent.slices.length / 2)];
+    const middleSlice =
+      pageContent.slices[Math.floor(pageContent.slices.length / 2)];
     if (!middleSlice) return;
 
     if (middleSlice.type !== "text") {
@@ -490,7 +494,9 @@ export class PaginationEngine {
     this.resolvedContentAnchor = {
       chapterIndex: pageContent.chapterIndex,
       blockId: middleSlice.blockId,
-      ...(midLine?.startOffset ? { offset: this.cloneOffset(midLine.startOffset) } : {}),
+      ...(midLine?.startOffset
+        ? { offset: this.cloneOffset(midLine.startOffset) }
+        : {}),
     };
   }
 
@@ -728,10 +734,7 @@ export class PaginationEngine {
   private buildMiddleOutChapterOrder(centerChapter: number): number[] {
     if (this.totalChapters <= 0) return [];
 
-    const center = Math.min(
-      Math.max(centerChapter, 0),
-      this.totalChapters - 1,
-    );
+    const center = Math.min(Math.max(centerChapter, 0), this.totalChapters - 1);
     const order: number[] = [center];
 
     for (let delta = 1; order.length < this.totalChapters; delta++) {

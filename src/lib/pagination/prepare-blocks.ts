@@ -42,7 +42,11 @@ function getPreparedText(
   }
 
   const prepared = prepareWithSegments(text, font);
-  const wholeLine = layoutNextLine(prepared, LINE_START_CURSOR, UNBOUNDED_WIDTH);
+  const wholeLine = layoutNextLine(
+    prepared,
+    LINE_START_CURSOR,
+    UNBOUNDED_WIDTH,
+  );
 
   const cached =
     wholeLine === null
@@ -135,9 +139,7 @@ function prepareTextBlock(
       fullWidth: cached.fullWidth,
       endCursor: cached.endCursor,
       leadingGap:
-        carryGap > 0 || hasLeadingWhitespace
-          ? collapsedSpaceWidth
-          : 0,
+        carryGap > 0 || hasLeadingWhitespace ? collapsedSpaceWidth : 0,
     });
   }
 

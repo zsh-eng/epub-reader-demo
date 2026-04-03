@@ -1,4 +1,7 @@
-import { PaginationTracer, type PaginationTracerSnapshot } from "@/lib/pagination";
+import {
+  PaginationTracer,
+  type PaginationTracerSnapshot,
+} from "@/lib/pagination";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const BASE_FONT_CONFIG = {

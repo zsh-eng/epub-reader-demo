@@ -116,7 +116,12 @@ export function NavigationSection({
             }}
             className="h-8 flex-1 rounded-lg"
           />
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={handleJump}>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="rounded-lg"
+            onClick={handleJump}
+          >
             Go
           </Button>
         </div>

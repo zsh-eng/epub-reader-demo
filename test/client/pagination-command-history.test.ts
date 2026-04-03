@@ -109,7 +109,12 @@ describe("Pagination command history", () => {
       initialChapterIndex: 2,
     };
 
-    const afterInit = nextPaginationCommandHistory(beforeInit, initCommand, 2, 2000);
+    const afterInit = nextPaginationCommandHistory(
+      beforeInit,
+      initCommand,
+      2,
+      2000,
+    );
 
     expect(afterInit).toHaveLength(1);
     expect(afterInit[0]?.type).toBe("init");

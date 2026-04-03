@@ -85,7 +85,10 @@ function resolveSrcUrls(src: string, baseUrl: string): string {
   });
 }
 
-function parseFontFaceRules(cssText: string, baseUrl: string): ParsedFontFaceRule[] {
+function parseFontFaceRules(
+  cssText: string,
+  baseUrl: string,
+): ParsedFontFaceRule[] {
   const rules: ParsedFontFaceRule[] = [];
   const fontFacePattern = /@font-face\s*{([^}]*)}/gi;
 
@@ -105,7 +108,9 @@ function parseFontFaceRules(cssText: string, baseUrl: string): ParsedFontFaceRul
     if (style) descriptors.style = stripQuotes(style);
     if (weight) descriptors.weight = stripQuotes(weight);
     if (display) {
-      descriptors.display = stripQuotes(display) as FontFaceDescriptors["display"];
+      descriptors.display = stripQuotes(
+        display,
+      ) as FontFaceDescriptors["display"];
     }
     if (unicodeRange) descriptors.unicodeRange = stripQuotes(unicodeRange);
 
@@ -154,9 +159,7 @@ async function loadPaginationWorkerFonts(): Promise<void> {
     }
   }
 
-  await Promise.all(
-    PRELOAD_QUERIES.map((query) => scope.fonts!.load(query)),
-  );
+  await Promise.all(PRELOAD_QUERIES.map((query) => scope.fonts!.load(query)));
 }
 
 export function ensurePaginationWorkerFontsReady(): Promise<void> {

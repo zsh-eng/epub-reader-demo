@@ -221,10 +221,7 @@ export interface PaginationResult {
   diagnostics: PaginationDiagnostics;
 }
 
-export function areFontConfigsEqual(
-  a: FontConfig,
-  b: FontConfig,
-): boolean {
+export function areFontConfigsEqual(a: FontConfig, b: FontConfig): boolean {
   return (
     a.bodyFamily === b.bodyFamily &&
     a.headingFamily === b.headingFamily &&

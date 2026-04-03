@@ -34,10 +34,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Library />} />
             <Route path="/reader/:bookId" element={<Reader />} />
-            <Route
-              path="/reader-prototype/:bookId"
-              element={<ReaderV2 />}
-            />
+            <Route path="/reader-prototype/:bookId" element={<ReaderV2 />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
           </Routes>
