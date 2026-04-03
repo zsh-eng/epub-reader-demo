@@ -22,13 +22,13 @@ export interface UsePaginationResult {
   goToPage: (page: number) => void;
   goToChapter: (chapterIndex: number) => void;
 
-  /** Called by the shell once per chapter after HTML processing is complete. */
   init: (options: {
     totalChapters: number;
     initialChapterIndex: number;
     initialAnchor?: ContentAnchor;
     firstChapterBlocks: Block[];
   }) => void;
+  /** Called by the shell once per chapter after HTML processing is complete. */
   addChapter: (chapterIndex: number, blocks: Block[]) => void;
 
   tracer: PaginationTracer;

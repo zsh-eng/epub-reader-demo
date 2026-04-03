@@ -5,34 +5,34 @@ import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-  getBookFile,
-  getBookFilesByPaths,
-  getBookImageDimensionsMap,
-  type Book,
-  type BookFile,
+    getBookFile,
+    getBookFilesByPaths,
+    getBookImageDimensionsMap,
+    type Book,
+    type BookFile,
 } from "@/lib/db";
 import {
-  cleanupResourceUrls,
-  processEmbeddedResources,
+    cleanupResourceUrls,
+    processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import { parseChapterHtml } from "@/lib/pagination";
 import {
-  usePagination,
-  type PageSlice,
-  type PaginationConfig,
+    usePagination,
+    type PageSlice,
+    type PaginationConfig,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactElement,
+    Fragment,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DebugSection } from "../ReaderPrototype/DebugSection";
