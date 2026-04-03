@@ -360,7 +360,7 @@ export function ReaderV2() {
                     return (
                       <div
                         key={`gap-${slot.slotIndex}`}
-                        className="h-full w-full border border-border/60 bg-muted/20"
+                        className="h-full w-full bg-muted/20 reader-container-outline"
                       />
                     );
                   }
@@ -368,7 +368,7 @@ export function ReaderV2() {
                   return (
                     <div
                       key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
-                      className="h-full w-full overflow-hidden border border-border/60"
+                      className="h-full w-full overflow-hidden reader-container-outline"
                     >
                       {slot.page.content.map((slice, i) => (
                         <PageSliceView
