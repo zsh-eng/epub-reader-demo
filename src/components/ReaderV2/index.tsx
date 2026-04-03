@@ -1,5 +1,4 @@
 import { LazyImage } from "@/components/ReaderPrototype/LazyImage";
-import { Button } from "@/components/ui/button";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -25,27 +24,19 @@ import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
-import {
-    Fragment,
-
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-} from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DebugSection } from "../ReaderPrototype/DebugSection";
 import { InspectorDrawer } from "../ReaderPrototype/InspectorDrawer";
 import { InspectorPanel } from "../ReaderPrototype/InspectorPanel";
+import { ReaderStateScreen } from "./ReaderStateScreen";
+import { usePaginationKeyboardNav } from "./hooks/use-pagination-keyboard-nav";
+import { useReaderViewport } from "./hooks/use-reader-viewport";
 
 interface ChapterEntry {
   index: number;
   href: string;
   title: string;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }
 
 function getNamedBodyFont(fontFamily: FontFamily): string {
@@ -206,14 +197,11 @@ export function ReaderV2() {
   const { settings, updateSettings } = useReaderSettings();
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
-  const [viewportAutoMode, setViewportAutoMode] = useState(true);
   const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(1.2);
-  const [viewport, setViewport] = useState({ width: 620, height: 860 });
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
   const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<
     number | null
   >(null);
-
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -224,22 +212,8 @@ export function ReaderV2() {
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
 
-  // Viewport auto-resize
-  useEffect(() => {
-    if (!viewportAutoMode) return;
-    const onResize = () => {
-      const panelWidth = !isMobile && isPanelOpen ? 640 : 0;
-      const horizontalPadding = (isMobile ? 32 : 120) + panelWidth;
-      const verticalPadding = isMobile ? 270 : 300;
-      setViewport({
-        width: clamp(window.innerWidth - horizontalPadding, 240, 1440),
-        height: clamp(window.innerHeight - verticalPadding, 300, 980),
-      });
-    };
-    onResize();
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [isMobile, viewportAutoMode, isPanelOpen]);
+  const { viewport, setViewport, viewportAutoMode, setViewportAutoMode } =
+    useReaderViewport({ isMobile, isPanelOpen });
 
   const paginationConfig = useMemo(
     () => buildPaginationConfig(settings, paragraphSpacingFactor, viewport),
@@ -247,6 +221,10 @@ export function ReaderV2() {
   );
 
   const pagination = usePagination({ config: paginationConfig });
+  usePaginationKeyboardNav({
+    onPrevPage: pagination.prevPage,
+    onNextPage: pagination.nextPage,
+  });
 
   // Load all chapters at once, then init + addChapter
   useEffect(() => {
@@ -319,83 +297,32 @@ export function ReaderV2() {
     };
   }, [bookId, isEpubReady, chapterEntries, pagination.init, pagination.addChapter]);
 
-  // Keyboard navigation
-  const paginationRef = useRef(pagination);
-  paginationRef.current = pagination;
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target) {
-        const tag = target.tagName.toLowerCase();
-        if (
-          tag === "input" ||
-          tag === "textarea" ||
-          tag === "select" ||
-          target.isContentEditable
-        )
-          return;
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        paginationRef.current.prevPage();
-      } else if (event.key === "ArrowRight") {
-        event.preventDefault();
-        paginationRef.current.nextPage();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
   if (isBookLoading) {
-    return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="space-y-3 text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-          <p className="text-sm text-muted-foreground">Loading book…</p>
-        </div>
-      </div>
-    );
+    return <ReaderStateScreen showSpinner message="Loading book…" />;
   }
 
   if (!bookId || !book) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="space-y-3 text-center">
-          <p className="font-medium">Book not found</p>
-          <Button variant="outline" onClick={() => navigate("/")}>
-            Back to Library
-          </Button>
-        </div>
-      </div>
+      <ReaderStateScreen
+        title="Book not found"
+        action={{ label: "Back to Library", onClick: () => navigate("/") }}
+      />
     );
   }
 
   if (isProcessingEpub || !isEpubReady) {
-    return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="space-y-3 text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
-          <p className="text-sm text-muted-foreground">Preparing reader…</p>
-        </div>
-      </div>
-    );
+    return <ReaderStateScreen showSpinner message="Preparing reader…" />;
   }
 
   if (epubError || chapterEntries.length === 0) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <div className="space-y-3 text-center max-w-md px-4">
-          <p className="font-medium text-destructive">Failed to open book</p>
-          <p className="text-sm text-muted-foreground">
-            {epubError ? epubError.message : "No readable chapters found."}
-          </p>
-          <Button variant="outline" onClick={() => navigate("/")}>
-            Back to Library
-          </Button>
-        </div>
-      </div>
+      <ReaderStateScreen
+        title="Failed to open book"
+        titleTone="destructive"
+        message={epubError ? epubError.message : "No readable chapters found."}
+        contentClassName="max-w-md px-4"
+        action={{ label: "Back to Library", onClick: () => navigate("/") }}
+      />
     );
   }
 
