@@ -1,6 +1,5 @@
-import type { Block, PaginationConfig } from "./types";
-import type { ContentAnchor, ResolvedPage } from "./types";
 import type { PaginationChapterDiagnostics } from "../pagination/types";
+import type { Block, ContentAnchor, PaginationConfig, ResolvedSpread, SpreadConfig } from "./types";
 
 // ---------------------------------------------------------------------------
 // Commands (main thread → worker)
@@ -9,7 +8,8 @@ import type { PaginationChapterDiagnostics } from "../pagination/types";
 export interface InitCommand {
   type: "init";
   totalChapters: number;
-  config: PaginationConfig;
+  paginationConfig: PaginationConfig;
+  spreadConfig: SpreadConfig;
   initialChapterIndex: number;
   initialAnchor?: ContentAnchor;
   // First chapter's blocks are included so the engine is immediately live.
@@ -22,17 +22,22 @@ export interface AddChapterCommand {
   blocks: Block[];
 }
 
-export interface UpdateConfigCommand {
-  type: "updateConfig";
-  config: PaginationConfig;
+export interface UpdatePaginationConfigCommand {
+  type: "updatePaginationConfig";
+  paginationConfig: PaginationConfig;
 }
 
-export interface NextPageCommand {
-  type: "nextPage";
+export interface UpdateSpreadConfigCommand {
+  type: "updateSpreadConfig";
+  spreadConfig: SpreadConfig;
 }
 
-export interface PrevPageCommand {
-  type: "prevPage";
+export interface NextSpreadCommand {
+  type: "nextSpread";
+}
+
+export interface PrevSpreadCommand {
+  type: "prevSpread";
 }
 
 export interface GoToPageCommand {
@@ -48,9 +53,10 @@ export interface GoToChapterCommand {
 export type PaginationCommand =
   | InitCommand
   | AddChapterCommand
-  | UpdateConfigCommand
-  | NextPageCommand
-  | PrevPageCommand
+  | UpdatePaginationConfigCommand
+  | UpdateSpreadConfigCommand
+  | NextSpreadCommand
+  | PrevSpreadCommand
   | GoToPageCommand
   | GoToChapterCommand;
 
@@ -62,14 +68,14 @@ export type PaginationCommand =
 export interface PartialReadyEvent {
   type: "partialReady";
   epoch: number;
-  page: ResolvedPage;
+  spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
 export interface ReadyEvent {
   type: "ready";
   epoch: number;
-  page: ResolvedPage;
+  spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics[];
 }
 
@@ -80,13 +86,15 @@ export interface ProgressEvent {
   totalChapters: number;
   currentPage: number;
   totalPages: number;
+  currentSpread: number;
+  totalSpreads: number;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
 export interface PageContentEvent {
   type: "pageContent";
   epoch: number;
-  page: ResolvedPage;
+  spread: ResolvedSpread;
 }
 
 export interface PageUnavailableEvent {
