@@ -1,23 +1,23 @@
 import {
-  layoutNextLine,
-  prepareWithSegments,
-  type LayoutCursor,
-  type PreparedTextWithSegments,
+    layoutNextLine,
+    prepareWithSegments,
+    type LayoutCursor,
+    type PreparedTextWithSegments,
 } from "@chenglou/pretext";
-import type {
-  Block,
-  FontConfig,
-  InlineRun,
-  PreparedBlock,
-  PreparedInlineItem,
-  PreparedTextBlock,
-} from "./types";
-import { headingScale, CODE_CHROME_PX } from "./spacing";
 import {
-  clearMeasureCache,
-  LINE_START_CURSOR,
-  measureCollapsedSpaceWidth,
+    clearMeasureCache,
+    LINE_START_CURSOR,
+    measureCollapsedSpaceWidth,
 } from "./measure";
+import { CODE_CHROME_PX, headingScale } from "./spacing";
+import type {
+    Block,
+    FontConfig,
+    InlineRun,
+    PreparedBlock,
+    PreparedInlineItem,
+    PreparedTextBlock,
+} from "./types";
 
 const UNBOUNDED_WIDTH = 100_000;
 const PREPARED_TEXT_CACHE_MAX = 12_000;
@@ -72,15 +72,33 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   let family: string;
   let sizePx: number;
 
+  // IMPORTANT:
+  // Round to whole pixels so the browser's rendered line height matches
+  // what our layout engine assumes during pagination.
+  //
+  // CSS "half-leading": when line-height > font-size, the browser splits
+  // the difference in half and adds it above and below the glyph area:
+  //   glyph area (font-size) sits in the middle
+  //   half-leading above + glyph area + half-leading below = line box
+  //
+  // Fractional font sizes make this split land on sub-pixel values that
+  // the browser rounds inconsistently. For example:
+  //   font-size: 19.52px, line-height: 23px
+  //   leading = 23 - 19.52 = 3.48px → 1.74px above + 1.74px below
+  //   browser rounds each half to 2px → 2 + 19.52 + 2 = 23.52 → 23.5px
+  //
+  // layoutPages() budgets N × 23px for a text slice, but the browser
+  // paints N × 23.5px, so over a full page content overflows the page
+  // boundary by roughly half a line.
   if (run.isCode) {
     family = fonts.codeFamily;
-    sizePx = Math.max(11, fonts.baseSizePx * scale * 0.92);
+    sizePx = Math.round(Math.max(11, fonts.baseSizePx * scale * 0.92));
   } else if (isHeading) {
     family = fonts.headingFamily;
-    sizePx = fonts.baseSizePx * scale;
+    sizePx = Math.round(fonts.baseSizePx * scale);
   } else {
     family = fonts.bodyFamily;
-    sizePx = fonts.baseSizePx * scale;
+    sizePx = Math.round(fonts.baseSizePx * scale);
   }
 
   const weight = run.bold ? 700 : isHeading ? 600 : 400;

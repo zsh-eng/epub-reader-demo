@@ -1,12 +1,12 @@
-import type {
-  LayoutTheme,
-  Page,
-  PaginationResult,
-  PreparedBlock,
-  PreparedTextBlock,
-} from "./types";
+import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
 import { getBlockSpacing, getLineHeight } from "./spacing";
-import { layoutTextLines, layoutPreWrapLines } from "./layout-text-lines";
+import type {
+    LayoutTheme,
+    Page,
+    PaginationResult,
+    PreparedBlock,
+    PreparedTextBlock,
+} from "./types";
 
 function createPage(index: number): Page & { usedHeight: number } {
   return { index, slices: [], usedHeight: 0 };
@@ -82,12 +82,15 @@ export function layoutPages(
       const spacing = getBlockSpacing("p", theme);
       const gap = Math.max(prevMarginBelow, spacing.above);
 
-      // Only emit the gap when there is already content on this page. Crucially,
-      // check whether the image will overflow *before* emitting the spacer: if
-      // the image won't fit (with or without the gap), push the page first and
-      // drop the gap. Emitting the spacer then pushing would leave it stranded
-      // on the previous page, separated from the image it belongs to.
-      // This matches standard print layout — top-of-page margins are suppressed.
+      // Round to whole pixels so the browser's rendered line height matches
+      // what our layout engine assumes during pagination.
+      //
+      // Fractional font sizes (e.g. 19.52px) cause fractional half-leading:
+      // (lineHeight - fontSize) / 2 = e.g. 1.74px per side, which the browser
+      // rounds inconsistently, inflating each line by ~0.5px. layoutPages()
+      // budgets N × lineHeight for a text slice, but the browser paints
+      // N × (lineHeight + 0.5), so over a full page content overflows the
+      // page boundary by roughly half a line.
       if (current.slices.length > 0) {
         const available = safeHeight - current.usedHeight;
         if (gap + block.intrinsicHeight <= available) {
