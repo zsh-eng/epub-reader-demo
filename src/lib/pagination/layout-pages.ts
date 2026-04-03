@@ -81,14 +81,23 @@ export function layoutPages(
     if (block.type === "image") {
       const spacing = getBlockSpacing("p", theme);
       const gap = Math.max(prevMarginBelow, spacing.above);
-      if (gap > 0) addSpacer(block.id, gap);
 
-      // If image doesn't fit and page has content, start new page
-      let available = safeHeight - current.usedHeight;
-      if (block.intrinsicHeight > available && current.slices.length > 0) {
-        pushPage();
-        available = safeHeight;
+      // Only emit the gap when there is already content on this page. Crucially,
+      // check whether the image will overflow *before* emitting the spacer: if
+      // the image won't fit (with or without the gap), push the page first and
+      // drop the gap. Emitting the spacer then pushing would leave it stranded
+      // on the previous page, separated from the image it belongs to.
+      // This matches standard print layout — top-of-page margins are suppressed.
+      if (current.slices.length > 0) {
+        const available = safeHeight - current.usedHeight;
+        if (gap + block.intrinsicHeight <= available) {
+          if (gap > 0) addSpacer(block.id, gap);
+        } else {
+          pushPage();
+        }
       }
+
+      let available = safeHeight - current.usedHeight;
 
       // Scale image to fit if larger than page
       let displayHeight = block.intrinsicHeight;
