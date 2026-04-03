@@ -3,10 +3,10 @@ import { PaginationTracer } from "../pagination/pagination-tracer";
 import type { Block } from "../pagination/types";
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import type {
-  ContentAnchor,
-  PaginationConfig,
-  PaginationStatus,
-  ResolvedPage,
+    ContentAnchor,
+    PaginationConfig,
+    PaginationStatus,
+    ResolvedPage,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ export function usePagination(
   // Worker lifecycle
   // -------------------------------------------------------------------------
 
-  const handleEvent = useCallback((event: PaginationEvent) => {
+  const handleEvent = (event: PaginationEvent) => {
     // Discard events from previous layout epochs.
     if ("epoch" in event && event.epoch < currentEpochRef.current) return;
 
@@ -123,7 +123,13 @@ export function usePagination(
         console.error("[pagination worker]", event.message);
         break;
     }
-  }, []);
+  };
+
+  // Keep a ref so the worker's onmessage always calls the latest handler
+  // without the worker effect needing to depend on it (which would terminate
+  // and recreate the worker whenever the handler's identity changed).
+  const handleEventRef = useRef(handleEvent);
+  handleEventRef.current = handleEvent;
 
   useEffect(() => {
     const worker = new Worker(
@@ -132,7 +138,7 @@ export function usePagination(
     );
 
     worker.onmessage = (e: MessageEvent<PaginationEvent>) => {
-      handleEvent(e.data);
+      handleEventRef.current(e.data);
     };
 
     worker.onerror = (e) => {
@@ -145,7 +151,7 @@ export function usePagination(
       worker.terminate();
       workerRef.current = null;
     };
-  }, [handleEvent]);
+  }, []);
 
   // -------------------------------------------------------------------------
   // Config updates
