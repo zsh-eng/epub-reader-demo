@@ -182,7 +182,7 @@ export class PaginationEngine {
         type: "partialReady",
         epoch: this.epoch,
         page,
-        estimatedTotalPages: this.estimatedTotalPages,
+
         chapterDiagnostics: diagnostics,
       });
     }
@@ -222,7 +222,7 @@ export class PaginationEngine {
         epoch: this.epoch,
         chaptersCompleted: this.receivedChapters,
         totalChapters: this.totalChapters,
-        estimatedTotalPages: this.estimatedTotalPages,
+
         chapterDiagnostics: diagnostics,
       });
     }
@@ -404,7 +404,7 @@ export class PaginationEngine {
           type: "partialReady",
           epoch: this.epoch,
           page,
-          estimatedTotalPages: this.estimatedTotalPages,
+  
           chapterDiagnostics: diag,
         });
         emittedPartial = true;
@@ -414,7 +414,7 @@ export class PaginationEngine {
           epoch: this.epoch,
           chaptersCompleted: this.receivedChapters,
           totalChapters: this.totalChapters,
-          estimatedTotalPages: this.estimatedTotalPages,
+  
           chapterDiagnostics: diag,
         });
       }
@@ -503,21 +503,6 @@ export class PaginationEngine {
       total += pages?.length ?? 0;
     }
     return Math.max(1, total);
-  }
-
-  private get estimatedTotalPages(): number {
-    let loadedCount = 0;
-    let loadedPages = 0;
-    for (let i = 0; i < this.totalChapters; i++) {
-      if (!this.blocksByChapter[i]) continue;
-      loadedCount++;
-      loadedPages += this.pagesByChapter[i]?.length ?? 0;
-    }
-    if (loadedCount === 0) return 1;
-    return Math.max(
-      1,
-      Math.round((loadedPages / loadedCount) * this.totalChapters),
-    );
   }
 
   // -------------------------------------------------------------------------

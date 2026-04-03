@@ -63,7 +63,6 @@ export interface PartialReadyEvent {
   type: "partialReady";
   epoch: number;
   page: ResolvedPage;
-  estimatedTotalPages: number;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
@@ -79,7 +78,6 @@ export interface ProgressEvent {
   epoch: number;
   chaptersCompleted: number;
   totalChapters: number;
-  estimatedTotalPages: number;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
