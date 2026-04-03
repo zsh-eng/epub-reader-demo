@@ -220,15 +220,15 @@ export class PaginationEngine {
 
     this.blocksByChapter[chapterIndex] = blocks;
     const diagnostics = this.prepareAndLayoutChapter(chapterIndex);
-
-    const page = this.buildResolvedPage();
-    if (!page) return;
+    const resolvedPage = this.buildResolvedPage();
 
     if (this.receivedChapters === this.totalChapters) {
+      if (!resolvedPage) return;
+
       this.emit({
         type: "ready",
         epoch: this.epoch,
-        page,
+        page: resolvedPage,
         chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
           (d): d is PaginationChapterDiagnostics => d !== null,
         ),
@@ -239,6 +239,8 @@ export class PaginationEngine {
         epoch: this.epoch,
         chaptersCompleted: this.receivedChapters,
         totalChapters: this.totalChapters,
+        currentPage: resolvedPage?.currentPage ?? 1,
+        totalPages: resolvedPage?.totalPages ?? this.totalPages,
 
         chapterDiagnostics: diagnostics,
       });
@@ -409,6 +411,8 @@ export class PaginationEngine {
       if (!diag) continue;
 
       const page = this.buildResolvedPage();
+      const currentPage = page?.currentPage ?? 1;
+      const totalPages = page?.totalPages ?? this.totalPages;
 
       if (!emittedPartial && page) {
         this.emit({
@@ -425,6 +429,8 @@ export class PaginationEngine {
           epoch: this.epoch,
           chaptersCompleted: this.receivedChapters,
           totalChapters: this.totalChapters,
+          currentPage,
+          totalPages,
 
           chapterDiagnostics: diag,
         });

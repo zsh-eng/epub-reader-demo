@@ -146,9 +146,48 @@ describe("init + addChapter lifecycle", () => {
     addChapter(engine, 1);
     expect(countEvents(events, "progress")).toBe(1);
     expect(countEvents(events, "ready")).toBe(0);
+    const progress = events.find(
+      (e): e is Extract<PaginationEvent, { type: "progress" }> =>
+        e.type === "progress",
+    );
+    expect(progress).toBeDefined();
+    expect(progress!.currentPage).toBeGreaterThanOrEqual(1);
+    expect(progress!.totalPages).toBeGreaterThanOrEqual(progress!.currentPage);
 
     addChapter(engine, 2);
     expect(countEvents(events, "ready")).toBe(1);
+  });
+
+  it("progress grows totalPages while keeping currentPage anchored", () => {
+    const { engine, events } = createEngine(
+      4,
+      0,
+      makeLongTextBlocks("long-progress-anchor"),
+    );
+    const partial = events.find(
+      (e): e is Extract<PaginationEvent, { type: "partialReady" }> =>
+        e.type === "partialReady",
+    )!;
+    const anchoredCurrentPage = partial.page.currentPage;
+    const initialTotalPages = partial.page.totalPages;
+
+    events.length = 0;
+    addChapter(engine, 1, makeLongTextBlocks("long-progress-1"));
+    const progress1 = events.find(
+      (e): e is Extract<PaginationEvent, { type: "progress" }> =>
+        e.type === "progress",
+    )!;
+    expect(progress1.currentPage).toBe(anchoredCurrentPage);
+    expect(progress1.totalPages).toBeGreaterThan(initialTotalPages);
+
+    events.length = 0;
+    addChapter(engine, 2, makeLongTextBlocks("long-progress-2"));
+    const progress2 = events.find(
+      (e): e is Extract<PaginationEvent, { type: "progress" }> =>
+        e.type === "progress",
+    )!;
+    expect(progress2.currentPage).toBe(anchoredCurrentPage);
+    expect(progress2.totalPages).toBeGreaterThan(progress1.totalPages);
   });
 
   it("page in partialReady contains currentPage, totalPages, and content", () => {

@@ -109,7 +109,15 @@ export function usePagination(
         break;
 
       case "progress":
-        // Don't update page — just track estimated totals via diagnostics.
+        setPage((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentPage: event.currentPage,
+                totalPages: event.totalPages,
+              }
+            : prev,
+        );
         tracerRef.current.updateDiagnostics(null);
         break;
 

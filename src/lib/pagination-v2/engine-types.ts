@@ -78,6 +78,8 @@ export interface ProgressEvent {
   epoch: number;
   chaptersCompleted: number;
   totalChapters: number;
+  currentPage: number;
+  totalPages: number;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
