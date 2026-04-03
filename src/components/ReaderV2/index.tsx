@@ -1,5 +1,4 @@
 import { useBookLoader } from "@/hooks/use-book-loader";
-import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
@@ -130,11 +129,6 @@ export function ReaderV2() {
   >(null);
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
-  const {
-    isProcessing: isProcessingEpub,
-    isReady: isEpubReady,
-    error: epubError,
-  } = useEpubProcessor(bookId, book?.fileHash);
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
 
@@ -154,7 +148,7 @@ export function ReaderV2() {
 
   // Load all chapters at once, then init + addChapter
   useEffect(() => {
-    if (!bookId || !isEpubReady || chapterEntries.length === 0) return;
+    if (!bookId || chapterEntries.length === 0) return;
 
     let cancelled = false;
     setSourceLoadWallClockMs(null);
@@ -225,38 +219,16 @@ export function ReaderV2() {
       cancelled = true;
       cleanupAllResources();
     };
-  }, [
-    bookId,
-    isEpubReady,
-    chapterEntries,
-    pagination.init,
-    pagination.addChapter,
-  ]);
+  }, [bookId, chapterEntries, pagination.init, pagination.addChapter]);
 
   if (isBookLoading) {
-    return <ReaderStateScreen showSpinner message="Loading book…" />;
+    return <ReaderStateScreen />;
   }
 
   if (!bookId || !book) {
     return (
       <ReaderStateScreen
         title="Book not found"
-        action={{ label: "Back to Library", onClick: () => navigate("/") }}
-      />
-    );
-  }
-
-  if (isProcessingEpub || !isEpubReady) {
-    return <ReaderStateScreen showSpinner message="Preparing reader…" />;
-  }
-
-  if (epubError || chapterEntries.length === 0) {
-    return (
-      <ReaderStateScreen
-        title="Failed to open book"
-        titleTone="destructive"
-        message={epubError ? epubError.message : "No readable chapters found."}
-        contentClassName="max-w-md px-4"
         action={{ label: "Back to Library", onClick: () => navigate("/") }}
       />
     );
@@ -349,22 +321,16 @@ export function ReaderV2() {
               }}
             >
               <div className="h-full w-full overflow-hidden">
-                {pagination.status === "idle" || content.length === 0 ? (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
-                  </div>
-                ) : (
-                  content.map((slice, i) => (
-                    <PageSliceView
-                      key={`${slice.blockId}-${i}`}
-                      slice={slice}
-                      sliceIndex={i}
-                      bookId={bookId}
-                      deferredImageCache={deferredImageCacheRef.current}
-                      baseFontSize={paginationConfig.fontConfig.baseSizePx}
-                    />
-                  ))
-                )}
+                {content.map((slice, i) => (
+                  <PageSliceView
+                    key={`${slice.blockId}-${i}`}
+                    slice={slice}
+                    sliceIndex={i}
+                    bookId={bookId}
+                    deferredImageCache={deferredImageCacheRef.current}
+                    baseFontSize={paginationConfig.fontConfig.baseSizePx}
+                  />
+                ))}
               </div>
             </div>
           </div>
