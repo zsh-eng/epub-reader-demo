@@ -55,6 +55,11 @@ export function usePagination(
   const currentEpochRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
 
+  // Keep config in a ref so init and the updateConfig effect can read the
+  // latest value without capturing it as a closure dependency.
+  const configRef = useRef<PaginationConfig>(config);
+  configRef.current = config;
+
   // Keep config in a ref so the updateConfig effect can detect changes.
   const prevConfigRef = useRef<PaginationConfig | null>(null);
 
@@ -174,8 +179,9 @@ export function usePagination(
       initialAnchor?: ContentAnchor;
       firstChapterBlocks: Block[];
     }) => {
+      const currentConfig = configRef.current;
       currentEpochRef.current = 0;
-      prevConfigRef.current = config;
+      prevConfigRef.current = currentConfig;
       tracerRef.current.reset();
 
       setPage(null);
@@ -184,13 +190,13 @@ export function usePagination(
       postCommand({
         type: "init",
         totalChapters: opts.totalChapters,
-        config,
+        config: currentConfig,
         initialChapterIndex: opts.initialChapterIndex,
         initialAnchor: opts.initialAnchor,
         firstChapterBlocks: opts.firstChapterBlocks,
       });
     },
-    [config, postCommand],
+    [postCommand],
   );
 
   const addChapter = useCallback(
