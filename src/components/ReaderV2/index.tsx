@@ -32,7 +32,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type ReactElement,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DebugSection } from "../ReaderPrototype/DebugSection";
@@ -130,22 +129,28 @@ async function processChapterHtml(
   return chapterDoc.querySelector("body")?.innerHTML ?? "";
 }
 
-function renderPageSlice(
-  slice: PageSlice,
-  sliceIndex: number,
-  bookId: string,
-  deferredImageCache: Map<string, string>,
-  baseFontSize: number,
-): ReactElement {
+function PageSliceView({
+  slice,
+  sliceIndex,
+  bookId,
+  deferredImageCache,
+  baseFontSize,
+}: {
+  slice: PageSlice;
+  sliceIndex: number;
+  bookId: string;
+  deferredImageCache: Map<string, string>;
+  baseFontSize: number;
+}) {
   const key = `${slice.blockId}-${sliceIndex}`;
 
   if (slice.type === "spacer") {
-    return <div key={key} style={{ height: `${slice.height}px` }} />;
+    return <div style={{ height: `${slice.height}px` }} />;
   }
 
   if (slice.type === "image") {
     return (
-      <div key={key} className="flex justify-center">
+      <div className="flex justify-center">
         <LazyImage
           bookId={bookId}
           src={slice.src}
@@ -161,7 +166,6 @@ function renderPageSlice(
 
   return (
     <p
-      key={key}
       className="m-0"
       style={{
         lineHeight: `${slice.lineHeight}px`,
@@ -489,15 +493,16 @@ export function ReaderV2() {
                     <div className="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
                   </div>
                 ) : (
-                  content.map((slice, i) =>
-                    renderPageSlice(
-                      slice,
-                      i,
-                      bookId,
-                      deferredImageCacheRef.current,
-                      paginationConfig.fontConfig.baseSizePx,
-                    ),
-                  )
+                  content.map((slice, i) => (
+                    <PageSliceView
+                      key={`${slice.blockId}-${i}`}
+                      slice={slice}
+                      sliceIndex={i}
+                      bookId={bookId}
+                      deferredImageCache={deferredImageCacheRef.current}
+                      baseFontSize={paginationConfig.fontConfig.baseSizePx}
+                    />
+                  ))
                 )}
               </div>
             </div>
