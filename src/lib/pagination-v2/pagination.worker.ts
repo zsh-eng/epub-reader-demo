@@ -34,11 +34,11 @@ const engine = new PaginationEngine(emitEvent);
 // ---------------------------------------------------------------------------
 
 async function yieldToEventLoop(): Promise<void> {
-  const schedulerYield = (
+  const scheduler = (
     globalThis as { scheduler?: { yield?: () => Promise<void> } }
-  ).scheduler?.yield;
-  if (schedulerYield) {
-    await schedulerYield();
+  ).scheduler;
+  if (typeof scheduler?.yield === "function") {
+    await scheduler.yield();
     return;
   }
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
