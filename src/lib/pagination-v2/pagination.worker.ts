@@ -2,18 +2,18 @@ import { ensurePaginationWorkerFontsReady } from "../pagination/pagination-worke
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import { PaginationEngine } from "./pagination-engine";
 import {
-    coalesceQueuedCommands,
-    createCommandRuntime,
-    LAYOUT_ADVANCING,
-    NAVIGATION_COMMANDS,
-    type QueuedPaginationCommand,
+  coalesceQueuedCommands,
+  createCommandRuntime,
+  LAYOUT_ADVANCING,
+  NAVIGATION_COMMANDS,
+  type QueuedPaginationCommand,
 } from "./pagination-worker-runtime";
 
 const workerFontsReady = ensurePaginationWorkerFontsReady();
 
 // ---------------------------------------------------------------------------
 // Epoch tracking
-// Each init/updateConfig bumps layoutEpoch. The engine's .epoch field is set
+// Each init/updatePaginationConfig bumps layoutEpoch. The engine's .epoch field is set
 // to the active epoch before each command so all emitted events carry it.
 // The hook discards events from older epochs.
 // ---------------------------------------------------------------------------

@@ -1,8 +1,8 @@
 import {
   nextPaginationCommandHistory,
   type PaginationCommandHistoryEntry,
+  type TrackedPaginationCommand,
 } from "./command-history";
-import type { PaginationCommand } from "./engine-types";
 import type {
   PaginationChapterDiagnostics,
   PaginationConfig,
@@ -117,7 +117,7 @@ export class PaginationTracer {
   // -------------------------------------------------------------------------
 
   recordPostedCommand(
-    command: PaginationCommand,
+    command: TrackedPaginationCommand,
     _options: RecordPostedCommandOptions = {},
   ): void {
     this.commandSequence += 1;

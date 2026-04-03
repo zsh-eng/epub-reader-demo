@@ -5,9 +5,10 @@ export const RELAYOUT_YIELD_BUDGET_MS = 24;
 
 /** Command types where only the last occurrence matters. */
 const SUPERSEDABLE = new Set<PaginationCommand["type"]>([
-  "updateConfig",
-  "nextPage",
-  "prevPage",
+  "updatePaginationConfig",
+  "updateSpreadConfig",
+  "nextSpread",
+  "prevSpread",
   "goToPage",
   "goToChapter",
 ]);
@@ -15,13 +16,13 @@ const SUPERSEDABLE = new Set<PaginationCommand["type"]>([
 /** Command types that advance the layout epoch (require relayout). */
 export const LAYOUT_ADVANCING = new Set<PaginationCommand["type"]>([
   "init",
-  "updateConfig",
+  "updatePaginationConfig",
 ]);
 
 /** Navigation command types — drained at yield boundaries during relayout. */
 export const NAVIGATION_COMMANDS = new Set<PaginationCommand["type"]>([
-  "nextPage",
-  "prevPage",
+  "nextSpread",
+  "prevSpread",
   "goToPage",
   "goToChapter",
 ]);
@@ -75,14 +76,15 @@ const NOOP_RUNTIME: PaginationRuntime = {
 };
 
 /**
- * Build a PaginationRuntime for a relayout command (updateConfig / init).
- * Navigation-only commands (nextPage, prevPage, etc.) use the no-op runtime.
+ * Build a PaginationRuntime for a relayout command
+ * (updatePaginationConfig / init).
+ * Navigation-only commands (nextSpread, prevSpread, etc.) use the no-op runtime.
  */
 export function createCommandRuntime(
   cmd: PaginationCommand,
   opts: CreateRuntimeOptions,
 ): PaginationRuntime {
-  if (cmd.type !== "updateConfig" && cmd.type !== "init") {
+  if (cmd.type !== "updatePaginationConfig" && cmd.type !== "init") {
     return NOOP_RUNTIME;
   }
 

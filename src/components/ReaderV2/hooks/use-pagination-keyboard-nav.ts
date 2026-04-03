@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 
 interface UsePaginationKeyboardNavOptions {
-  onNextPage: () => void;
-  onPrevPage: () => void;
+  onNextSpread: () => void;
+  onPrevSpread: () => void;
 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -20,11 +20,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function usePaginationKeyboardNav(
   options: UsePaginationKeyboardNavOptions,
 ) {
-  const { onNextPage, onPrevPage } = options;
-  const nextPageRef = useRef(onNextPage);
-  const prevPageRef = useRef(onPrevPage);
-  nextPageRef.current = onNextPage;
-  prevPageRef.current = onPrevPage;
+  const { onNextSpread, onPrevSpread } = options;
+  const nextSpreadRef = useRef(onNextSpread);
+  const prevSpreadRef = useRef(onPrevSpread);
+  nextSpreadRef.current = onNextSpread;
+  prevSpreadRef.current = onPrevSpread;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -32,13 +32,13 @@ export function usePaginationKeyboardNav(
 
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        prevPageRef.current();
+        prevSpreadRef.current();
         return;
       }
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        nextPageRef.current();
+        nextSpreadRef.current();
       }
     };
 
