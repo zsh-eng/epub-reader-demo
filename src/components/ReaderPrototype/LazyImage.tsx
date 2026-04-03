@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { getBookFile } from "@/lib/db";
 import { getDeferredEpubImagePath } from "@/lib/epub-resource-utils";
 import { useEffect, useState, type CSSProperties } from "react";
@@ -109,9 +110,9 @@ export function LazyImage({
 
   if (!resolvedSrc) {
     return (
-      <div
+      <Skeleton
         aria-hidden="true"
-        className="bg-muted"
+        className="rounded-none"
         style={{
           width: `${width}px`,
           height: `${height}px`,
