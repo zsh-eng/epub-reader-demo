@@ -3,9 +3,9 @@ import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type {
-  FontFamily,
-  ReaderSettings,
-  TextAlign,
+    FontFamily,
+    ReaderSettings,
+    TextAlign,
 } from "@/types/reader.types";
 import { AlignCenter, AlignJustify, AlignLeft, AlignRight } from "lucide-react";
 import { InspectorSection } from "./InspectorSection";
@@ -39,6 +39,10 @@ interface SettingsSectionProps {
   onViewportAutoModeChange: (auto: boolean) => void;
   paragraphSpacingFactor: number;
   onParagraphSpacingFactorChange: (value: number) => void;
+  spreadColumns: 1 | 2 | 3;
+  onSpreadColumnsChange: (columns: 1 | 2 | 3) => void;
+  columnSpacingPx: number;
+  onColumnSpacingPxChange: (value: number) => void;
 }
 
 function SliderRow({
@@ -91,6 +95,10 @@ export function SettingsSection({
   onViewportAutoModeChange,
   paragraphSpacingFactor,
   onParagraphSpacingFactorChange,
+  spreadColumns,
+  onSpreadColumnsChange,
+  columnSpacingPx,
+  onColumnSpacingPxChange,
 }: SettingsSectionProps) {
   return (
     <InspectorSection title="Reader Settings">
@@ -249,6 +257,41 @@ export function SettingsSection({
             onParagraphSpacingFactorChange(Math.round(v * 10) / 10)
           }
         />
+          <>
+            <div className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">Columns</span>
+              <ToggleGroup
+                type="single"
+                value={String(spreadColumns)}
+                onValueChange={(value) => {
+                  if (value === "1" || value === "2" || value === "3") {
+                    onSpreadColumnsChange(Number.parseInt(value, 10) as 1 | 2 | 3);
+                  }
+                }}
+                className="w-full"
+              >
+                <ToggleGroupItem value="1" className="flex-1 h-8">
+                  1
+                </ToggleGroupItem>
+                <ToggleGroupItem value="2" className="flex-1 h-8">
+                  2
+                </ToggleGroupItem>
+                <ToggleGroupItem value="3" className="flex-1 h-8">
+                  3
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            <SliderRow
+              label="Column Spacing"
+              value={columnSpacingPx}
+              min={0}
+              max={64}
+              step={1}
+              format={(v) => `${Math.round(v)}px`}
+              onChange={(v) => onColumnSpacingPxChange(Math.round(v))}
+            />
+          </>
       </div>
     </InspectorSection>
   );

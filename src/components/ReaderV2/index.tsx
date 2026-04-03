@@ -13,7 +13,11 @@ import {
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import { parseChapterHtml } from "@/lib/pagination";
-import { usePagination, type PaginationConfig } from "@/lib/pagination-v2";
+import {
+  usePagination,
+  type PaginationConfig,
+  type SpreadConfig,
+} from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
@@ -77,6 +81,13 @@ function buildPaginationConfig(
   };
 }
 
+function buildSpreadConfig(): SpreadConfig {
+  return {
+    columns: 1,
+    chapterFlow: "continuous",
+  };
+}
+
 function buildChapterEntries(book: Book | null): ChapterEntry[] {
   if (!book) return [];
   return book.spine
@@ -123,6 +134,8 @@ export function ReaderV2() {
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(1.2);
+  const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
+  const [columnSpacingPx, setColumnSpacingPx] = useState(16);
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
   const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<
     number | null
@@ -140,10 +153,21 @@ export function ReaderV2() {
     [settings, paragraphSpacingFactor, viewport],
   );
 
-  const pagination = usePagination({ config: paginationConfig });
+  const spreadConfig = useMemo<SpreadConfig>(
+    () => ({
+      ...buildSpreadConfig(),
+      columns: spreadColumns,
+    }),
+    [spreadColumns],
+  );
+
+  const pagination = usePagination({
+    paginationConfig,
+    spreadConfig,
+  });
   usePaginationKeyboardNav({
-    onPrevPage: pagination.prevPage,
-    onNextPage: pagination.nextPage,
+    onPrevSpread: pagination.prevSpread,
+    onNextSpread: pagination.nextSpread,
   });
 
   // Load all chapters at once, then init + addChapter
@@ -234,10 +258,10 @@ export function ReaderV2() {
     );
   }
 
-  const currentPage = pagination.page?.currentPage ?? 1;
-  const totalPages = pagination.page?.totalPages ?? 0;
-  const currentChapterIndex = pagination.page?.chapterIndex ?? 0;
-  const content = pagination.page?.content ?? [];
+  const currentPage = pagination.spread?.currentPage ?? 1;
+  const totalPages = pagination.spread?.totalPages ?? 0;
+  const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
+  const slots = pagination.spread?.slots ?? [];
 
   const panelProps = {
     currentPage,
@@ -245,8 +269,8 @@ export function ReaderV2() {
     paginationStatus: pagination.status,
     onGoToPage: pagination.goToPage,
     onGoToChapterIndex: pagination.goToChapter,
-    onNextPage: pagination.nextPage,
-    onPrevPage: pagination.prevPage,
+    onNextSpread: pagination.nextSpread,
+    onPrevSpread: pagination.prevSpread,
     chapterEntries,
     currentChapterIndex,
     settings,
@@ -262,6 +286,10 @@ export function ReaderV2() {
     onViewportAutoModeChange: setViewportAutoMode,
     paragraphSpacingFactor,
     onParagraphSpacingFactorChange: setParagraphSpacingFactor,
+    spreadColumns,
+    onSpreadColumnsChange: setSpreadColumns,
+    columnSpacingPx,
+    onColumnSpacingPxChange: setColumnSpacingPx,
   };
 
   const debugSectionProps = {
@@ -311,26 +339,50 @@ export function ReaderV2() {
         )}
 
         <main className="flex-1 overflow-auto">
-          <div className="flex justify-center pt-6 pb-6 px-4">
+          <div className="w-full overflow-x-auto pt-6 pb-6 px-4">
             <div
-              key={`${viewport.width}-${viewport.height}`}
-              className="reader-container-outline overflow-hidden"
+              key={`${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}`}
+              className="reader-container-outline mx-auto overflow-hidden"
               style={{
-                width: `${viewport.width}px`,
+                width: `${viewport.width * spreadConfig.columns + columnSpacingPx * (spreadConfig.columns - 1)}px`,
                 height: `${viewport.height}px`,
               }}
             >
-              <div className="h-full w-full overflow-hidden">
-                {content.map((slice, i) => (
-                  <PageSliceView
-                    key={`${slice.blockId}-${i}`}
-                    slice={slice}
-                    sliceIndex={i}
-                    bookId={bookId}
-                    deferredImageCache={deferredImageCacheRef.current}
-                    baseFontSize={paginationConfig.fontConfig.baseSizePx}
-                  />
-                ))}
+              <div
+                className="h-full w-full overflow-hidden grid"
+                style={{
+                  gridTemplateColumns: `repeat(${spreadConfig.columns}, minmax(0, 1fr))`,
+                  columnGap: `${columnSpacingPx}px`,
+                }}
+              >
+                {slots.map((slot) => {
+                  if (slot.kind === "gap") {
+                    return (
+                      <div
+                        key={`gap-${slot.slotIndex}`}
+                        className="h-full w-full border border-border/60 bg-muted/20"
+                      />
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
+                      className="h-full w-full overflow-hidden border border-border/60"
+                    >
+                      {slot.page.content.map((slice, i) => (
+                        <PageSliceView
+                          key={`${slice.blockId}-${slot.slotIndex}-${i}`}
+                          slice={slice}
+                          sliceIndex={i}
+                          bookId={bookId}
+                          deferredImageCache={deferredImageCacheRef.current}
+                          baseFontSize={paginationConfig.fontConfig.baseSizePx}
+                        />
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

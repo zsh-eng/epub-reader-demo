@@ -16,8 +16,8 @@ export interface InspectorPanelProps {
   paginationStatus: string;
   onGoToPage: (page: number) => void;
   onGoToChapterIndex: (chapterIndex: number) => void;
-  onNextPage: () => void;
-  onPrevPage: () => void;
+  onNextSpread: () => void;
+  onPrevSpread: () => void;
   chapterEntries: ChapterEntry[];
   currentChapterIndex: number;
 
@@ -34,6 +34,10 @@ export interface InspectorPanelProps {
   // Layout
   paragraphSpacingFactor: number;
   onParagraphSpacingFactorChange: (value: number) => void;
+  spreadColumns?: 1 | 2 | 3;
+  onSpreadColumnsChange?: (columns: 1 | 2 | 3) => void;
+  columnSpacingPx?: number;
+  onColumnSpacingPxChange?: (value: number) => void;
 }
 
 export function InspectorPanel(props: InspectorPanelProps) {
@@ -45,8 +49,8 @@ export function InspectorPanel(props: InspectorPanelProps) {
         paginationStatus={props.paginationStatus}
         onGoToPage={props.onGoToPage}
         onGoToChapterIndex={props.onGoToChapterIndex}
-        onNextPage={props.onNextPage}
-        onPrevPage={props.onPrevPage}
+        onNextSpread={props.onNextSpread}
+        onPrevSpread={props.onPrevSpread}
         chapterEntries={props.chapterEntries}
         currentChapterIndex={props.currentChapterIndex}
       />
@@ -62,6 +66,10 @@ export function InspectorPanel(props: InspectorPanelProps) {
         onViewportAutoModeChange={props.onViewportAutoModeChange}
         paragraphSpacingFactor={props.paragraphSpacingFactor}
         onParagraphSpacingFactorChange={props.onParagraphSpacingFactorChange}
+        spreadColumns={props.spreadColumns}
+        onSpreadColumnsChange={props.onSpreadColumnsChange}
+        columnSpacingPx={props.columnSpacingPx}
+        onColumnSpacingPxChange={props.onColumnSpacingPxChange}
       />
     </div>
   );

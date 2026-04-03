@@ -1,11 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { useCallback, useState } from "react";
@@ -23,8 +23,8 @@ interface NavigationSectionProps {
   paginationStatus: string;
   onGoToPage: (page: number) => void;
   onGoToChapterIndex: (chapterIndex: number) => void;
-  onNextPage: () => void;
-  onPrevPage: () => void;
+  onNextSpread: () => void;
+  onPrevSpread: () => void;
   chapterEntries: ChapterEntry[];
   currentChapterIndex: number;
 }
@@ -35,8 +35,8 @@ export function NavigationSection({
   paginationStatus,
   onGoToPage,
   onGoToChapterIndex,
-  onPrevPage,
-  onNextPage,
+  onPrevSpread,
+  onNextSpread,
   chapterEntries,
   currentChapterIndex,
 }: NavigationSectionProps) {
@@ -87,19 +87,19 @@ export function NavigationSection({
             variant="outline"
             size="sm"
             className="flex-1 rounded-lg"
-            onClick={onPrevPage}
+            onClick={onPrevSpread}
             disabled={currentPage <= 1}
           >
-            Prev
+            Prev Spread
           </Button>
           <Button
             variant="outline"
             size="sm"
             className="flex-1 rounded-lg"
-            onClick={onNextPage}
+            onClick={onNextSpread}
             disabled={paginationStatus === "ready" && currentPage >= totalPages}
           >
-            Next
+            Next Spread
           </Button>
         </div>
 
@@ -152,7 +152,7 @@ export function NavigationSection({
         </p>
 
         <p className="text-[10px] text-muted-foreground/60">
-          Arrow keys (left / right) to turn pages
+          Arrow keys (left / right) to turn spreads
         </p>
       </div>
     </InspectorSection>
