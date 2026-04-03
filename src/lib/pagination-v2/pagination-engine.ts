@@ -79,7 +79,7 @@ export class PaginationEngine {
   }
 
   get receivedChapters(): number {
-    return this.blocksByChapter.reduce((count, blocks) => count + (blocks === null ? 1 : 0), 0)
+    return this.blocksByChapter.reduce((count, blocks) => count + (blocks === null ? 0 : 1), 0)
   }
 
   // -------------------------------------------------------------------------
@@ -404,7 +404,7 @@ export class PaginationEngine {
           type: "partialReady",
           epoch: this.epoch,
           page,
-  
+
           chapterDiagnostics: diag,
         });
         emittedPartial = true;
@@ -414,7 +414,7 @@ export class PaginationEngine {
           epoch: this.epoch,
           chaptersCompleted: this.receivedChapters,
           totalChapters: this.totalChapters,
-  
+
           chapterDiagnostics: diag,
         });
       }
