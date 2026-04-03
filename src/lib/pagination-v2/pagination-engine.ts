@@ -70,8 +70,6 @@ export class PaginationEngine {
   private pagesByChapter: (Page[] | null)[] = [];
   private chapterDiagnosticsByChapter: (PaginationChapterDiagnostics | null)[] =
     [];
-  // I think this can be a computed property as well based on pages by chapter
-  private chapterPageOffsets: number[] = [];
 
   /** Always non-null after init(). Updated only by navigation commands. */
   private anchor!: ContentAnchor;
@@ -157,7 +155,6 @@ export class PaginationEngine {
     this.blocksByChapter[this.initialChapterIndex] = firstChapterBlocks;
 
     const diagnostics = this.prepareAndLayoutChapter(this.initialChapterIndex);
-    this.recomputeOffsets();
 
     // Establish anchor — use initialAnchor if it resolves, else pick page 0.
     if (initialAnchor) {
@@ -185,7 +182,7 @@ export class PaginationEngine {
         type: "partialReady",
         epoch: this.epoch,
         page,
-        estimatedTotalPages: this.estimateTotalPages(),
+        estimatedTotalPages: this.estimatedTotalPages,
         chapterDiagnostics: diagnostics,
       });
     }
@@ -206,7 +203,6 @@ export class PaginationEngine {
 
     this.blocksByChapter[chapterIndex] = blocks;
     const diagnostics = this.prepareAndLayoutChapter(chapterIndex);
-    this.recomputeOffsets();
 
     const page = this.buildResolvedPage();
     if (!page) return;
@@ -226,7 +222,7 @@ export class PaginationEngine {
         epoch: this.epoch,
         chaptersCompleted: this.receivedChapters,
         totalChapters: this.totalChapters,
-        estimatedTotalPages: this.estimateTotalPages(),
+        estimatedTotalPages: this.estimatedTotalPages,
         chapterDiagnostics: diagnostics,
       });
     }
@@ -401,8 +397,6 @@ export class PaginationEngine {
       const diag = relayoutChapter(ch);
       if (!diag) continue;
 
-      this.recomputeOffsets();
-
       const page = this.buildResolvedPage();
 
       if (!emittedPartial && page) {
@@ -410,7 +404,7 @@ export class PaginationEngine {
           type: "partialReady",
           epoch: this.epoch,
           page,
-          estimatedTotalPages: this.estimateTotalPages(),
+          estimatedTotalPages: this.estimatedTotalPages,
           chapterDiagnostics: diag,
         });
         emittedPartial = true;
@@ -420,7 +414,7 @@ export class PaginationEngine {
           epoch: this.epoch,
           chaptersCompleted: this.receivedChapters,
           totalChapters: this.totalChapters,
-          estimatedTotalPages: this.estimateTotalPages(),
+          estimatedTotalPages: this.estimatedTotalPages,
           chapterDiagnostics: diag,
         });
       }
@@ -431,7 +425,6 @@ export class PaginationEngine {
 
     if (runtime.isStale()) return;
 
-    this.recomputeOffsets();
     const page = this.buildResolvedPage();
     if (!page) return;
 
@@ -490,19 +483,21 @@ export class PaginationEngine {
     return diag;
   }
 
-  private recomputeOffsets(): void {
+  // -------------------------------------------------------------------------
+  // Computed properties
+  // -------------------------------------------------------------------------
+
+  private get chapterPageOffsets(): number[] {
+    const offsets: number[] = [];
     let running = 0;
     for (let i = 0; i < this.totalChapters; i++) {
-      this.chapterPageOffsets[i] = running;
+      offsets[i] = running;
       running += this.pagesByChapter[i]?.length ?? 0;
     }
+    return offsets;
   }
 
-  // -------------------------------------------------------------------------
-  // Page count helpers (computed on demand, never cached)
-  // -------------------------------------------------------------------------
-
-  private getTotalPages(): number {
+  private get totalPages(): number {
     let total = 0;
     for (const pages of this.pagesByChapter) {
       total += pages?.length ?? 0;
@@ -510,7 +505,7 @@ export class PaginationEngine {
     return Math.max(1, total);
   }
 
-  private estimateTotalPages(): number {
+  private get estimatedTotalPages(): number {
     let loadedCount = 0;
     let loadedPages = 0;
     for (let i = 0; i < this.totalChapters; i++) {
@@ -650,7 +645,7 @@ export class PaginationEngine {
 
     return {
       currentPage: offset + localPageIndex + 1,
-      totalPages: this.getTotalPages(),
+      totalPages: this.totalPages,
       currentPageInChapter: localPageIndex + 1,
       totalPagesInChapter: pages.length,
       chapterIndex,

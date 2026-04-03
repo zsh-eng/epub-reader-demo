@@ -98,7 +98,7 @@ export function createCommandRuntime(
 
   return {
     isStale: () => getLayoutEpoch() > activeEpoch,
-    maybeYield: () => {
+    maybeYield: async () => {
       const elapsed = now() - lastYieldAt;
       if (elapsed < relayoutYieldBudgetMs) return;
 
