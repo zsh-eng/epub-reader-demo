@@ -27,7 +27,7 @@ import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import {
     Fragment,
-    useCallback,
+
     useEffect,
     useMemo,
     useRef,
@@ -210,22 +210,6 @@ export function ReaderV2() {
     number | null
   >(null);
 
-  // Toggle button inactivity fade
-  const [headerActive, setHeaderActive] = useState(true);
-  const inactivityTimerRef = useRef<number>(undefined);
-  const resetInactivityTimer = useCallback(() => {
-    setHeaderActive(true);
-    clearTimeout(inactivityTimerRef.current);
-    inactivityTimerRef.current = window.setTimeout(
-      () => setHeaderActive(false),
-      3000,
-    );
-  }, []);
-
-  useEffect(() => {
-    resetInactivityTimer();
-    return () => clearTimeout(inactivityTimerRef.current);
-  }, [resetInactivityTimer]);
 
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
   const {
@@ -456,7 +440,6 @@ export function ReaderV2() {
     <div className="flex h-screen flex-col bg-background text-foreground">
       <header
         className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur-sm"
-        onMouseMove={resetInactivityTimer}
       >
         <div className="flex items-center gap-3 px-4 py-2.5">
           <button
@@ -472,7 +455,7 @@ export function ReaderV2() {
             onClick={() => setIsPanelOpen((o) => !o)}
             className={cn(
               "rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-500",
-              headerActive || isPanelOpen ? "opacity-100" : "opacity-30",
+
               isPanelOpen && "bg-muted text-foreground",
             )}
           >
