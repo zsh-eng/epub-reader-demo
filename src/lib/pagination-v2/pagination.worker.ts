@@ -35,8 +35,22 @@ const engine = new PaginationEngine(emitEvent);
 
 async function yieldToEventLoop(): Promise<void> {
   const scheduler = (
-    globalThis as { scheduler?: { yield?: () => Promise<void> } }
+    globalThis as {
+      scheduler?: {
+        postTask?: (
+          callback: () => void,
+          options?: {
+            priority?: "user-blocking" | "user-visible" | "background";
+          },
+        ) => Promise<void>;
+        yield?: () => Promise<void>;
+      };
+    }
   ).scheduler;
+  if (typeof scheduler?.postTask === "function") {
+    await scheduler.postTask(() => undefined, { priority: "background" });
+    return;
+  }
   if (typeof scheduler?.yield === "function") {
     await scheduler.yield();
     return;
@@ -66,6 +80,10 @@ function drainNavigationCommands(): void {
 
   engine.epoch = layoutEpoch;
   void engine.handleCommand(last.command);
+}
+
+function hasPendingLayoutAdvancingCommand(): boolean {
+  return pendingCommands.some((q) => LAYOUT_ADVANCING.has(q.command.type));
 }
 
 // ---------------------------------------------------------------------------
@@ -104,6 +122,7 @@ async function flush(): Promise<void> {
         const runtime = createCommandRuntime(command, {
           getLayoutEpoch: () => layoutEpoch,
           activeEpoch: layoutEpoch,
+          hasPendingLayoutAdvancingCommand,
           yieldToEventLoop,
           now: () => performance.now(),
           onYield: drainNavigationCommands,

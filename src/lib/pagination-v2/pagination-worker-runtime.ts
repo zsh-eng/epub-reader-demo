@@ -62,6 +62,7 @@ export function coalesceQueuedCommands(
 interface CreateRuntimeOptions {
   getLayoutEpoch: () => number;
   activeEpoch: number;
+  hasPendingLayoutAdvancingCommand?: () => boolean;
   yieldToEventLoop: () => Promise<void>;
   now: () => number;
   onYield?: () => void;
@@ -88,6 +89,7 @@ export function createCommandRuntime(
   const {
     getLayoutEpoch,
     activeEpoch,
+    hasPendingLayoutAdvancingCommand = () => false,
     yieldToEventLoop,
     now,
     onYield,
@@ -97,15 +99,16 @@ export function createCommandRuntime(
   let lastYieldAt = now();
 
   return {
-    isStale: () => getLayoutEpoch() > activeEpoch,
+    // A queued relayout command supersedes the one currently in progress.
+    isStale: () =>
+      getLayoutEpoch() > activeEpoch || hasPendingLayoutAdvancingCommand(),
     maybeYield: async () => {
       const elapsed = now() - lastYieldAt;
       if (elapsed < relayoutYieldBudgetMs) return;
 
-      return yieldToEventLoop().then(() => {
-        lastYieldAt = now();
-        onYield?.();
-      });
+      await yieldToEventLoop();
+      lastYieldAt = now();
+      onYield?.();
     },
   };
 }
