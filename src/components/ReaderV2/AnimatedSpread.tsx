@@ -49,9 +49,16 @@ export function AnimatedSpread({
   const direction = (usePresenceData() as NavDirection | undefined) ?? "instant";
   const isPresent = useIsPresent();
 
-  // During backward navigation the exiting page must sit on top so it appears
-  // to slide away revealing the incoming page beneath.
-  const zIndex = direction === "backward" && !isPresent ? 1 : 0;
+  // Z-index rules:
+  //   backward exit  → 1 (slides away on top, revealing the incoming page beneath)
+  //   forward enter  → 2 (slides in on top; must beat any stale backward-exit at 1)
+  //   everything else → 0
+  // The forward-enter value is intentionally higher than backward-exit so that an
+  // interrupted prev→next sequence doesn't leave a stale exiting page above the
+  // new incoming page.
+  const zIndex = isPresent && direction === "forward" ? 2
+    : !isPresent && direction === "backward" ? 1
+    : 0;
 
   return (
     <motion.div
