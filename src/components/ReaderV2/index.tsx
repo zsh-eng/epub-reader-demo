@@ -2,21 +2,21 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-  getBookFile,
-  getBookFilesByPaths,
-  getBookImageDimensionsMap,
-  type Book,
-  type BookFile,
+    getBookFile,
+    getBookFilesByPaths,
+    getBookImageDimensionsMap,
+    type Book,
+    type BookFile,
 } from "@/lib/db";
 import {
-  cleanupResourceUrls,
-  processEmbeddedResources,
+    cleanupResourceUrls,
+    processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import { parseChapterHtml } from "@/lib/pagination";
 import {
-  usePagination,
-  type PaginationConfig,
-  type SpreadConfig,
+    usePagination,
+    type PaginationConfig,
+    type SpreadConfig,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
@@ -27,8 +27,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { DebugSection } from "../ReaderPrototype/DebugSection";
 import { InspectorDrawer } from "../ReaderPrototype/InspectorDrawer";
 import { InspectorPanel } from "../ReaderPrototype/InspectorPanel";
-import { PageSliceView } from "./PageSliceView";
+import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
+import { SpreadStage } from "./SpreadStage";
+import { useNavDirection } from "./hooks/use-nav-direction";
 import { usePaginationKeyboardNav } from "./hooks/use-pagination-keyboard-nav";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 
@@ -165,9 +167,18 @@ export function ReaderV2() {
     paginationConfig,
     spreadConfig,
   });
+  const { directionRef, handleNextSpread, handlePrevSpread, handleGoToPage, handleGoToChapter } =
+    useNavDirection(pagination);
+  // Reset direction to "instant" after each spread transition so that background
+  // chapter relayout events (which also change currentSpread) don't replay the
+  // last navigation animation.
+  useEffect(() => {
+    directionRef.current = "instant";
+  }, [pagination.spread?.currentSpread]);
+
   usePaginationKeyboardNav({
-    onPrevSpread: pagination.prevSpread,
-    onNextSpread: pagination.nextSpread,
+    onPrevSpread: handlePrevSpread,
+    onNextSpread: handleNextSpread,
   });
 
   // Load all chapters at once, then init + addChapter
@@ -261,35 +272,47 @@ export function ReaderV2() {
   const currentPage = pagination.spread?.currentPage ?? 1;
   const totalPages = pagination.spread?.totalPages ?? 0;
   const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
-  const slots = pagination.spread?.slots ?? [];
 
   const panelProps = {
     currentPage,
     totalPages,
     paginationStatus: pagination.status,
-    onGoToPage: pagination.goToPage,
-    onGoToChapterIndex: pagination.goToChapter,
-    onNextSpread: pagination.nextSpread,
-    onPrevSpread: pagination.prevSpread,
+    onGoToPage: handleGoToPage,
+    onGoToChapterIndex: handleGoToChapter,
+    onNextSpread: handleNextSpread,
+    onPrevSpread: handlePrevSpread,
     chapterEntries,
     currentChapterIndex,
     settings,
     onUpdateSettings: (patch: Partial<ReaderSettings>) => {
+      directionRef.current = "instant";
       if (patch.fontFamily && patch.fontFamily !== settings.fontFamily) {
         pagination.markFontSwitchIntent(settings.fontFamily, patch.fontFamily);
       }
       updateSettings(patch);
     },
     viewport,
-    onViewportChange: setViewport,
+    onViewportChange: (v: { width: number; height: number }) => {
+      directionRef.current = "instant";
+      setViewport(v);
+    },
     viewportAutoMode,
     onViewportAutoModeChange: setViewportAutoMode,
     paragraphSpacingFactor,
-    onParagraphSpacingFactorChange: setParagraphSpacingFactor,
+    onParagraphSpacingFactorChange: (v: number) => {
+      directionRef.current = "instant";
+      setParagraphSpacingFactor(v);
+    },
     spreadColumns,
-    onSpreadColumnsChange: setSpreadColumns,
+    onSpreadColumnsChange: (v: 1 | 2 | 3) => {
+      directionRef.current = "instant";
+      setSpreadColumns(v);
+    },
     columnSpacingPx,
-    onColumnSpacingPxChange: setColumnSpacingPx,
+    onColumnSpacingPxChange: (v: number) => {
+      directionRef.current = "instant";
+      setColumnSpacingPx(v);
+    },
   };
 
   const debugSectionProps = {
@@ -344,46 +367,19 @@ export function ReaderV2() {
               key={`${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}`}
               className="reader-container-outline mx-auto overflow-hidden"
               style={{
-                width: `${viewport.width * spreadConfig.columns + columnSpacingPx * (spreadConfig.columns - 1)}px`,
-                height: `${viewport.height}px`,
+                width: `${viewport.width * spreadConfig.columns + columnSpacingPx * (spreadConfig.columns - 1) + PAGE_PADDING_X * 2}px`,
+                height: `${viewport.height + PAGE_PADDING_Y * 2}px`,
               }}
             >
-              <div
-                className="h-full w-full overflow-hidden grid"
-                style={{
-                  gridTemplateColumns: `repeat(${spreadConfig.columns}, minmax(0, 1fr))`,
-                  columnGap: `${columnSpacingPx}px`,
-                }}
-              >
-                {slots.map((slot) => {
-                  if (slot.kind === "gap") {
-                    return (
-                      <div
-                        key={`gap-${slot.slotIndex}`}
-                        className="h-full w-full bg-muted/20 reader-container-outline"
-                      />
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
-                      className="h-full w-full overflow-hidden reader-container-outline"
-                    >
-                      {slot.page.content.map((slice, i) => (
-                        <PageSliceView
-                          key={`${slice.blockId}-${slot.slotIndex}-${i}`}
-                          slice={slice}
-                          sliceIndex={i}
-                          bookId={bookId}
-                          deferredImageCache={deferredImageCacheRef.current}
-                          baseFontSize={paginationConfig.fontConfig.baseSizePx}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+              <SpreadStage
+                spread={pagination.spread}
+                directionRef={directionRef}
+                spreadConfig={spreadConfig}
+                columnSpacingPx={columnSpacingPx}
+                paginationConfig={paginationConfig}
+                bookId={bookId}
+                deferredImageCache={deferredImageCacheRef.current}
+              />
             </div>
           </div>
         </main>
