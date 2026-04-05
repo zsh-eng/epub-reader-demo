@@ -1,13 +1,10 @@
 import type { PaginationConfig } from "@/lib/pagination-v2";
 import type { ResolvedSpread, SpreadConfig } from "@/lib/pagination-v2/types";
 import { AnimatePresence, MotionConfig } from "motion/react";
-import type { MutableRefObject } from "react";
-import { AnimatedSpread } from "./AnimatedSpread";
-import type { NavDirection } from "./hooks/use-nav-direction";
+import { AnimatedSpread, type NavDirection } from "./AnimatedSpread";
 
 interface SpreadStageProps {
   spread: ResolvedSpread | null;
-  directionRef: MutableRefObject<NavDirection>;
   spreadConfig: SpreadConfig;
   columnSpacingPx: number;
   paginationConfig: PaginationConfig;
@@ -15,20 +12,27 @@ interface SpreadStageProps {
   deferredImageCache: Map<string, string>;
 }
 
+function toNavDirection(cause: ResolvedSpread["cause"] | undefined): NavDirection {
+  if (cause === "nextSpread") return "forward";
+  if (cause === "prevSpread") return "backward";
+  return "instant";
+}
+
 export function SpreadStage({
   spread,
-  directionRef,
   spreadConfig,
   columnSpacingPx,
   paginationConfig,
   bookId,
   deferredImageCache,
 }: SpreadStageProps) {
+  const direction = toNavDirection(spread?.cause);
+
   return (
     <MotionConfig reducedMotion="user">
       {/* position:relative + overflow:hidden clips pages as they slide in/out */}
       <div className="relative h-full w-full overflow-hidden">
-        <AnimatePresence custom={directionRef.current} mode="sync">
+        <AnimatePresence custom={direction} mode="sync">
           {spread && (
             <AnimatedSpread
               key={spread.currentSpread}

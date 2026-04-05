@@ -1,25 +1,25 @@
 import { layoutPages } from "../pagination/layout-pages";
 import { prepareBlocks } from "../pagination/prepare-blocks";
 import type {
-  Block,
-  Page,
-  PaginationChapterDiagnostics,
-  PreparedBlock,
-  TextCursorOffset,
+    Block,
+    Page,
+    PaginationChapterDiagnostics,
+    PreparedBlock,
+    TextCursorOffset,
 } from "../pagination/types";
 import { areFontConfigsEqual } from "../pagination/types";
 import type {
-  ChapterUnavailableEvent,
-  PaginationCommand,
-  PaginationEvent,
+    ChapterUnavailableEvent,
+    PaginationCommand,
+    PaginationEvent,
 } from "./engine-types";
 import type {
-  ContentAnchor,
-  PaginationConfig,
-  ResolvedLeafPage,
-  ResolvedSpread,
-  SpreadConfig,
-  SpreadGapReason,
+    ContentAnchor,
+    PaginationConfig,
+    ResolvedLeafPage,
+    ResolvedSpread,
+    SpreadConfig,
+    SpreadGapReason,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -84,6 +84,8 @@ function compareOffsets(a: TextCursorOffset, b: TextCursorOffset): number {
   return 0;
 }
 
+type PaginationCause = PaginationCommand["type"];
+
 // ---------------------------------------------------------------------------
 // PaginationEngine
 // ---------------------------------------------------------------------------
@@ -129,10 +131,13 @@ export class PaginationEngine {
     cmd: PaginationCommand,
     runtime: Partial<PaginationRuntime> = {},
   ): Promise<void> {
+    const cause = cmd.type;
+
     try {
-      switch (cmd.type) {
+      switch (cause) {
         case "init":
           this.init(
+            cause,
             cmd.totalChapters,
             cmd.paginationConfig,
             cmd.spreadConfig,
@@ -142,30 +147,31 @@ export class PaginationEngine {
           );
           break;
         case "addChapter":
-          this.addChapter(cmd.chapterIndex, cmd.blocks);
+          this.addChapter(cause, cmd.chapterIndex, cmd.blocks);
           break;
         case "updatePaginationConfig":
-          await this.updatePaginationConfig(cmd.paginationConfig, runtime);
+          await this.updatePaginationConfig(cause, cmd.paginationConfig, runtime);
           break;
         case "updateSpreadConfig":
-          this.updateSpreadConfig(cmd.spreadConfig);
+          this.updateSpreadConfig(cause, cmd.spreadConfig);
           break;
         case "nextSpread":
-          this.nextSpread();
+          this.nextSpread(cause);
           break;
         case "prevSpread":
-          this.prevSpread();
+          this.prevSpread(cause);
           break;
         case "goToPage":
-          this.goToPage(cmd.page);
+          this.goToPage(cause, cmd.page);
           break;
         case "goToChapter":
-          this.goToChapter(cmd.chapterIndex);
+          this.goToChapter(cause, cmd.chapterIndex);
           break;
       }
     } catch (err) {
       this.emit({
         type: "error",
+        cause,
         message: err instanceof Error ? err.message : String(err),
       });
     }
@@ -176,6 +182,7 @@ export class PaginationEngine {
   // -------------------------------------------------------------------------
 
   init(
+    cause: "init",
     totalChapters: number,
     paginationConfig: PaginationConfig,
     spreadConfig: SpreadConfig,
@@ -221,10 +228,11 @@ export class PaginationEngine {
       this.anchor = this.pickAnchorForPage(this.initialChapterIndex, 0);
     }
 
-    const spread = this.buildResolvedSpread();
+    const spread = this.buildResolvedSpread(cause);
     if (!spread) {
       this.emit({
         type: "error",
+        cause,
         message: "Failed to build initial spread after init",
       });
       return;
@@ -233,6 +241,7 @@ export class PaginationEngine {
     if (this.totalChapters === 1) {
       this.emit({
         type: "ready",
+        cause,
         epoch: this.epoch,
         spread,
         chapterDiagnostics: diagnostics ? [diagnostics] : [],
@@ -240,6 +249,7 @@ export class PaginationEngine {
     } else {
       this.emit({
         type: "partialReady",
+        cause,
         epoch: this.epoch,
         spread,
         chapterDiagnostics: diagnostics,
@@ -247,10 +257,11 @@ export class PaginationEngine {
     }
   }
 
-  addChapter(chapterIndex: number, blocks: Block[]): void {
+  addChapter(cause: "addChapter", chapterIndex: number, blocks: Block[]): void {
     if (chapterIndex < 0 || chapterIndex >= this.totalChapters) {
       this.emit({
         type: "error",
+        cause,
         message: `addChapter: index ${chapterIndex} out of bounds`,
       });
       return;
@@ -261,13 +272,14 @@ export class PaginationEngine {
 
     this.blocksByChapter[chapterIndex] = blocks;
     const diagnostics = this.prepareAndLayoutChapter(chapterIndex);
-    const resolvedSpread = this.buildResolvedSpread();
+    const resolvedSpread = this.buildResolvedSpread(cause);
 
     if (this.receivedChapters === this.totalChapters) {
       if (!resolvedSpread) return;
 
       this.emit({
         type: "ready",
+        cause,
         epoch: this.epoch,
         spread: resolvedSpread,
         chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
@@ -277,6 +289,7 @@ export class PaginationEngine {
     } else {
       this.emit({
         type: "progress",
+        cause,
         epoch: this.epoch,
         chaptersCompleted: this.receivedChapters,
         totalChapters: this.totalChapters,
@@ -290,6 +303,7 @@ export class PaginationEngine {
   }
 
   async updatePaginationConfig(
+    cause: "updatePaginationConfig",
     nextConfig: PaginationConfig,
     runtime: Partial<PaginationRuntime> = {},
   ): Promise<void> {
@@ -321,7 +335,7 @@ export class PaginationEngine {
       }
     }
 
-    await this.runRelayout((ch) => {
+    await this.runRelayout(cause, (ch) => {
       if (!this.blocksByChapter[ch]) return null;
 
       const prepared = this.preparedByChapter[ch];
@@ -335,49 +349,52 @@ export class PaginationEngine {
     }, rt);
   }
 
-  updateSpreadConfig(nextSpreadConfig: SpreadConfig): void {
+  updateSpreadConfig(
+    cause: "updateSpreadConfig",
+    nextSpreadConfig: SpreadConfig,
+  ): void {
     if (this.areSpreadConfigsEqual(this.spreadConfig, nextSpreadConfig)) return;
     this.spreadConfig = nextSpreadConfig;
     if (this.receivedChapters === 0) return;
 
     // Spread projection is presentation-only. Re-emit the current position
     // immediately without forcing relayout.
-    this.emitPageContent();
+    this.emitPageContent(cause);
   }
 
-  nextSpread(): void {
+  nextSpread(cause: "nextSpread"): void {
     const currentSpreadIndex = this.resolveCurrentSpreadIndex();
     if (currentSpreadIndex === null) {
-      this.emitPageUnavailable();
+      this.emitPageUnavailable(cause);
       return;
     }
 
     const nextIndex = currentSpreadIndex + 1;
     if (!this.setAnchorFromSpreadIndex(nextIndex)) {
-      this.emitPageUnavailable();
+      this.emitPageUnavailable(cause);
       return;
     }
 
-    this.emitPageContent();
+    this.emitPageContent(cause);
   }
 
-  prevSpread(): void {
+  prevSpread(cause: "prevSpread"): void {
     const currentSpreadIndex = this.resolveCurrentSpreadIndex();
     if (currentSpreadIndex === null) {
-      this.emitPageUnavailable();
+      this.emitPageUnavailable(cause);
       return;
     }
 
     const prevIndex = currentSpreadIndex - 1;
     if (!this.setAnchorFromSpreadIndex(prevIndex)) {
-      this.emitPageUnavailable();
+      this.emitPageUnavailable(cause);
       return;
     }
 
-    this.emitPageContent();
+    this.emitPageContent(cause);
   }
 
-  goToPage(globalPage: number): void {
+  goToPage(cause: "goToPage", globalPage: number): void {
     const page1 = Math.max(1, Math.floor(globalPage));
     const pageIndex = page1 - 1;
 
@@ -390,18 +407,19 @@ export class PaginationEngine {
       if (!pages || localIndex >= pages.length) continue;
 
       this.anchor = this.pickAnchorForPage(ch, localIndex);
-      this.emitPageContent();
+      this.emitPageContent(cause);
       return;
     }
 
-    this.emitPageUnavailable();
+    this.emitPageUnavailable(cause);
   }
 
-  goToChapter(chapterIndex: number): void {
+  goToChapter(cause: "goToChapter", chapterIndex: number): void {
     const ch = Math.floor(chapterIndex);
     if (ch < 0 || ch >= this.totalChapters) {
       const event: ChapterUnavailableEvent = {
         type: "chapterUnavailable",
+        cause,
         epoch: this.epoch,
         chapterIndex: ch,
       };
@@ -413,6 +431,7 @@ export class PaginationEngine {
     if (!pages || pages.length === 0) {
       const event: ChapterUnavailableEvent = {
         type: "chapterUnavailable",
+        cause,
         epoch: this.epoch,
         chapterIndex: ch,
       };
@@ -421,7 +440,7 @@ export class PaginationEngine {
     }
 
     this.anchor = this.pickAnchorForPage(ch, 0);
-    this.emitPageContent();
+    this.emitPageContent(cause);
   }
 
   // -------------------------------------------------------------------------
@@ -429,6 +448,7 @@ export class PaginationEngine {
   // -------------------------------------------------------------------------
 
   private async runRelayout(
+    cause: PaginationCause,
     relayoutChapter: (
       chapterIndex: number,
     ) => PaginationChapterDiagnostics | null,
@@ -445,7 +465,7 @@ export class PaginationEngine {
 
       // TODO: Remove this nullish coalescing?
       // Doesn't seem to be useful
-      const spread = this.buildResolvedSpread();
+      const spread = this.buildResolvedSpread(cause);
       const currentPage = spread?.currentPage ?? 1;
       const totalPages = spread?.totalPages ?? this.totalPages;
       const currentSpread = spread?.currentSpread ?? 1;
@@ -454,6 +474,7 @@ export class PaginationEngine {
       if (!emittedPartial && spread) {
         this.emit({
           type: "partialReady",
+          cause,
           epoch: this.epoch,
           spread,
           chapterDiagnostics: diag,
@@ -462,6 +483,7 @@ export class PaginationEngine {
       } else {
         this.emit({
           type: "progress",
+          cause,
           epoch: this.epoch,
           chaptersCompleted: this.receivedChapters,
           totalChapters: this.totalChapters,
@@ -479,11 +501,12 @@ export class PaginationEngine {
 
     if (runtime.isStale()) return;
 
-    const spread = this.buildResolvedSpread();
+    const spread = this.buildResolvedSpread(cause);
     if (!spread) return;
 
     this.emit({
       type: "ready",
+      cause,
       epoch: this.epoch,
       spread,
       chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
@@ -730,7 +753,7 @@ export class PaginationEngine {
   // Spread projection
   // -------------------------------------------------------------------------
 
-  private buildResolvedSpread(): ResolvedSpread | null {
+  private buildResolvedSpread(cause: PaginationCause): ResolvedSpread | null {
     const anchorGlobalPage = this.resolveAnchorToGlobalPage(this.anchor);
     if (anchorGlobalPage === null) return null;
 
@@ -769,6 +792,7 @@ export class PaginationEngine {
 
     return {
       slots,
+      cause,
       currentPage: firstVisiblePage,
       totalPages: this.totalPages,
       currentSpread: spreadIndex + 1,
@@ -902,17 +926,17 @@ export class PaginationEngine {
   // Emit helpers
   // -------------------------------------------------------------------------
 
-  private emitPageContent(): void {
-    const spread = this.buildResolvedSpread();
+  private emitPageContent(cause: PaginationCause): void {
+    const spread = this.buildResolvedSpread(cause);
     if (!spread) {
-      this.emitPageUnavailable();
+      this.emitPageUnavailable(cause);
       return;
     }
-    this.emit({ type: "pageContent", epoch: this.epoch, spread });
+    this.emit({ type: "pageContent", cause, epoch: this.epoch, spread });
   }
 
-  private emitPageUnavailable(): void {
-    this.emit({ type: "pageUnavailable", epoch: this.epoch });
+  private emitPageUnavailable(cause: PaginationCause): void {
+    this.emit({ type: "pageUnavailable", cause, epoch: this.epoch });
   }
 
   // -------------------------------------------------------------------------

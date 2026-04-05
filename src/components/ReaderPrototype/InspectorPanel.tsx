@@ -41,6 +41,11 @@ export interface InspectorPanelProps {
 }
 
 export function InspectorPanel(props: InspectorPanelProps) {
+  const spreadColumns = props.spreadColumns ?? 1;
+  const onSpreadColumnsChange = props.onSpreadColumnsChange ?? (() => {});
+  const columnSpacingPx = props.columnSpacingPx ?? 16;
+  const onColumnSpacingPxChange = props.onColumnSpacingPxChange ?? (() => {});
+
   return (
     <div className="space-y-1 py-2">
       <NavigationSection
@@ -66,10 +71,10 @@ export function InspectorPanel(props: InspectorPanelProps) {
         onViewportAutoModeChange={props.onViewportAutoModeChange}
         paragraphSpacingFactor={props.paragraphSpacingFactor}
         onParagraphSpacingFactorChange={props.onParagraphSpacingFactorChange}
-        spreadColumns={props.spreadColumns}
-        onSpreadColumnsChange={props.onSpreadColumnsChange}
-        columnSpacingPx={props.columnSpacingPx}
-        onColumnSpacingPxChange={props.onColumnSpacingPxChange}
+        spreadColumns={spreadColumns}
+        onSpreadColumnsChange={onSpreadColumnsChange}
+        columnSpacingPx={columnSpacingPx}
+        onColumnSpacingPxChange={onColumnSpacingPxChange}
       />
     </div>
   );

@@ -60,26 +60,30 @@ export type PaginationCommand =
   | GoToPageCommand
   | GoToChapterCommand;
 
+interface PaginationEventMetadata {
+  cause: PaginationCommand["type"];
+}
+
 // ---------------------------------------------------------------------------
 // Events (worker → main thread)
 // All events carry the `epoch` so the hook can discard stale responses.
 // ---------------------------------------------------------------------------
 
-export interface PartialReadyEvent {
+export interface PartialReadyEvent extends PaginationEventMetadata {
   type: "partialReady";
   epoch: number;
   spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
-export interface ReadyEvent {
+export interface ReadyEvent extends PaginationEventMetadata {
   type: "ready";
   epoch: number;
   spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics[];
 }
 
-export interface ProgressEvent {
+export interface ProgressEvent extends PaginationEventMetadata {
   type: "progress";
   epoch: number;
   chaptersCompleted: number;
@@ -91,24 +95,24 @@ export interface ProgressEvent {
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
-export interface PageContentEvent {
+export interface PageContentEvent extends PaginationEventMetadata {
   type: "pageContent";
   epoch: number;
   spread: ResolvedSpread;
 }
 
-export interface PageUnavailableEvent {
+export interface PageUnavailableEvent extends PaginationEventMetadata {
   type: "pageUnavailable";
   epoch: number;
 }
 
-export interface ChapterUnavailableEvent {
+export interface ChapterUnavailableEvent extends PaginationEventMetadata {
   type: "chapterUnavailable";
   epoch: number;
   chapterIndex: number;
 }
 
-export interface ErrorEvent {
+export interface ErrorEvent extends PaginationEventMetadata {
   type: "error";
   message: string;
 }

@@ -2,7 +2,8 @@ import type { PaginationConfig } from "@/lib/pagination-v2";
 import type { ResolvedSpread, SpreadConfig } from "@/lib/pagination-v2/types";
 import { motion, useIsPresent, usePresenceData } from "motion/react";
 import { PageSliceView } from "./PageSliceView";
-import type { NavDirection } from "./hooks/use-nav-direction";
+
+export type NavDirection = "forward" | "backward" | "instant";
 
 interface AnimatedSpreadProps {
   spread: ResolvedSpread;

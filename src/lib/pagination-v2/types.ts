@@ -4,6 +4,7 @@ import type {
     PageSlice,
     TextCursorOffset,
 } from "../pagination/types";
+import type { PaginationCommand } from "./engine-types";
 
 // Re-export types that are unchanged from pagination v1
 export { areFontConfigsEqual } from "../pagination/types";
@@ -108,6 +109,7 @@ export type SpreadSlot =
 
 export interface ResolvedSpread {
   slots: ReadonlyArray<SpreadSlot>;
+  cause: PaginationCommand["type"];
   currentPage: number;
   totalPages: number;
   currentSpread: number;

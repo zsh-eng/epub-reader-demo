@@ -30,7 +30,6 @@ import { InspectorPanel } from "../ReaderPrototype/InspectorPanel";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
-import { useNavDirection } from "./hooks/use-nav-direction";
 import { usePaginationKeyboardNav } from "./hooks/use-pagination-keyboard-nav";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 
@@ -167,18 +166,10 @@ export function ReaderV2() {
     paginationConfig,
     spreadConfig,
   });
-  const { directionRef, handleNextSpread, handlePrevSpread, handleGoToPage, handleGoToChapter } =
-    useNavDirection(pagination);
-  // Reset direction to "instant" after each spread transition so that background
-  // chapter relayout events (which also change currentSpread) don't replay the
-  // last navigation animation.
-  useEffect(() => {
-    directionRef.current = "instant";
-  }, [pagination.spread?.currentSpread]);
 
   usePaginationKeyboardNav({
-    onPrevSpread: handlePrevSpread,
-    onNextSpread: handleNextSpread,
+    onPrevSpread: pagination.prevSpread,
+    onNextSpread: pagination.nextSpread,
   });
 
   // Load all chapters at once, then init + addChapter
@@ -277,42 +268,29 @@ export function ReaderV2() {
     currentPage,
     totalPages,
     paginationStatus: pagination.status,
-    onGoToPage: handleGoToPage,
-    onGoToChapterIndex: handleGoToChapter,
-    onNextSpread: handleNextSpread,
-    onPrevSpread: handlePrevSpread,
+    onGoToPage: pagination.goToPage,
+    onGoToChapterIndex: pagination.goToChapter,
+    onNextSpread: pagination.nextSpread,
+    onPrevSpread: pagination.prevSpread,
     chapterEntries,
     currentChapterIndex,
     settings,
     onUpdateSettings: (patch: Partial<ReaderSettings>) => {
-      directionRef.current = "instant";
       if (patch.fontFamily && patch.fontFamily !== settings.fontFamily) {
         pagination.markFontSwitchIntent(settings.fontFamily, patch.fontFamily);
       }
       updateSettings(patch);
     },
     viewport,
-    onViewportChange: (v: { width: number; height: number }) => {
-      directionRef.current = "instant";
-      setViewport(v);
-    },
+    onViewportChange: setViewport,
     viewportAutoMode,
     onViewportAutoModeChange: setViewportAutoMode,
     paragraphSpacingFactor,
-    onParagraphSpacingFactorChange: (v: number) => {
-      directionRef.current = "instant";
-      setParagraphSpacingFactor(v);
-    },
+    onParagraphSpacingFactorChange: setParagraphSpacingFactor,
     spreadColumns,
-    onSpreadColumnsChange: (v: 1 | 2 | 3) => {
-      directionRef.current = "instant";
-      setSpreadColumns(v);
-    },
+    onSpreadColumnsChange: setSpreadColumns,
     columnSpacingPx,
-    onColumnSpacingPxChange: (v: number) => {
-      directionRef.current = "instant";
-      setColumnSpacingPx(v);
-    },
+    onColumnSpacingPxChange: setColumnSpacingPx,
   };
 
   const debugSectionProps = {
@@ -373,7 +351,6 @@ export function ReaderV2() {
             >
               <SpreadStage
                 spread={pagination.spread}
-                directionRef={directionRef}
                 spreadConfig={spreadConfig}
                 columnSpacingPx={columnSpacingPx}
                 paginationConfig={paginationConfig}

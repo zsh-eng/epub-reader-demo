@@ -174,6 +174,18 @@ function getPageContentEvent(events: PaginationEvent[]) {
   );
 }
 
+function getLastEventOfType<T extends PaginationEvent["type"]>(
+  events: PaginationEvent[],
+  type: T,
+) {
+  return [...events]
+    .reverse()
+    .find(
+      (event): event is Extract<PaginationEvent, { type: T }> =>
+        event.type === type,
+    );
+}
+
 // ---------------------------------------------------------------------------
 // 1. Init / addChapter lifecycle
 // ---------------------------------------------------------------------------
@@ -186,12 +198,20 @@ describe("init + addChapter lifecycle", () => {
 
     const partial = events.find((e) => e.type === "partialReady");
     expect(partial?.type).toBe("partialReady");
+    expect(partial?.cause).toBe("init");
+    if (partial?.type === "partialReady") {
+      expect(partial.spread.cause).toBe("init");
+    }
   });
 
   it("emits ready immediately when totalChapters === 1", () => {
     const { events } = createEngine({ totalChapters: 1 });
     expect(countEvents(events, "ready")).toBe(1);
     expect(countEvents(events, "partialReady")).toBe(0);
+
+    const ready = getReadyEvent(events);
+    expect(ready?.cause).toBe("init");
+    expect(ready?.spread.cause).toBe("init");
   });
 
   it("transitions from partial to ready once all chapters are added", () => {
@@ -200,7 +220,10 @@ describe("init + addChapter lifecycle", () => {
     addChapter(engine, 2);
 
     expect(countEvents(events, "ready")).toBe(1);
-    expect(lastEvent(events)?.type).toBe("ready");
+    const ready = getLastEventOfType(events, "ready");
+    expect(ready).toBeDefined();
+    expect(ready?.cause).toBe("addChapter");
+    expect(ready?.spread.cause).toBe("addChapter");
   });
 
   it("emits progress with both leaf and spread counters", () => {
@@ -214,6 +237,7 @@ describe("init + addChapter lifecycle", () => {
     );
 
     expect(progress).toBeDefined();
+    expect(progress?.cause).toBe("addChapter");
     expect(progress!.currentPage).toBeGreaterThanOrEqual(1);
     expect(progress!.totalPages).toBeGreaterThanOrEqual(progress!.currentPage);
     expect(progress!.currentSpread).toBeGreaterThanOrEqual(1);
@@ -230,7 +254,9 @@ describe("init + addChapter lifecycle", () => {
     );
 
     expect(partial).toBeDefined();
+    expect(partial?.cause).toBe("init");
     expect(partial!.spread.slots.length).toBe(1);
+    expect(partial!.spread.cause).toBe("init");
     expect(partial!.spread.currentPage).toBeGreaterThanOrEqual(1);
     expect(partial!.spread.totalPages).toBeGreaterThanOrEqual(1);
   });
@@ -241,6 +267,26 @@ describe("init + addChapter lifecycle", () => {
 
     addChapter(engine, 0);
     expect(events.length).toBe(eventsLenBefore);
+  });
+
+  it("progress events overwrite stale navigation cause with addChapter", () => {
+    const { engine, events } = createEngine({
+      totalChapters: 3,
+      blocks: makeLongTextBlocks("cause-regression"),
+    });
+    events.length = 0;
+
+    engine.handleCommand({ type: "nextSpread" });
+    const navigationEvent = getPageContentEvent(events);
+    expect(navigationEvent?.cause).toBe("nextSpread");
+    expect(navigationEvent?.spread.cause).toBe("nextSpread");
+
+    events.length = 0;
+    addChapter(engine, 1);
+
+    const progress = getLastEventOfType(events, "progress");
+    expect(progress).toBeDefined();
+    expect(progress?.cause).toBe("addChapter");
   });
 });
 
@@ -263,6 +309,8 @@ describe("navigation", () => {
 
     const pageContent = getPageContentEvent(events);
     expect(pageContent).toBeDefined();
+    expect(pageContent?.cause).toBe("nextSpread");
+    expect(pageContent?.spread.cause).toBe("nextSpread");
     expect(pageContent!.spread.currentSpread).toBe(2);
   });
 
@@ -281,6 +329,8 @@ describe("navigation", () => {
 
     const pageContent = getPageContentEvent(events);
     expect(pageContent).toBeDefined();
+    expect(pageContent?.cause).toBe("nextSpread");
+    expect(pageContent?.spread.cause).toBe("nextSpread");
     expect(pageContent!.spread.currentSpread).toBe(2);
   });
 
@@ -291,6 +341,7 @@ describe("navigation", () => {
     engine.handleCommand({ type: "prevSpread" });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageUnavailable");
+    expect(events[0]?.cause).toBe("prevSpread");
   });
 
   it("goToPage remains leaf-based and emits containing spread", () => {
@@ -306,6 +357,8 @@ describe("navigation", () => {
     engine.handleCommand({ type: "goToPage", page: 2 });
 
     const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.cause).toBe("goToPage");
+    expect(pageContent.spread.cause).toBe("goToPage");
     expect(spreadContainsLeafPage(pageContent.spread, 2)).toBe(true);
     expect(pageContent.spread.totalPages).toBe(readyEvent.spread.totalPages);
   });
@@ -317,6 +370,7 @@ describe("navigation", () => {
     engine.handleCommand({ type: "goToPage", page: 999 });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageUnavailable");
+    expect(events[0]?.cause).toBe("goToPage");
   });
 
   it("goToChapter jumps to the chapter's first leaf page in a spread", () => {
@@ -327,6 +381,8 @@ describe("navigation", () => {
 
     engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
     const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.cause).toBe("goToChapter");
+    expect(pageContent.spread.cause).toBe("goToChapter");
 
     const first = firstPageSlot(pageContent.spread)!;
     expect(first.page.chapterIndex).toBe(2);
@@ -340,6 +396,7 @@ describe("navigation", () => {
     engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("chapterUnavailable");
+    expect(events[0]?.cause).toBe("goToChapter");
     if (events[0]?.type === "chapterUnavailable") {
       expect(events[0].chapterIndex).toBe(2);
     }
@@ -448,9 +505,11 @@ describe("spread projection", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageContent");
+    expect(events[0]?.cause).toBe("updateSpreadConfig");
 
     const pageContent = getPageContentEvent(events)!;
     expect(pageContent.epoch).toBe(before.epoch);
+    expect(pageContent.spread.cause).toBe("updateSpreadConfig");
     expect(pageContent.spread.slots.length).toBe(3);
   });
 });
@@ -481,6 +540,8 @@ describe("anchor preservation across relayout", () => {
     });
 
     const readyEvent = getReadyEvent(events)!;
+    expect(readyEvent.cause).toBe("updatePaginationConfig");
+    expect(readyEvent.spread.cause).toBe("updatePaginationConfig");
     expect(readyEvent.spread.currentPage).toBeGreaterThan(1);
     expect(readyEvent.spread.currentSpread).toBeGreaterThan(1);
   });
@@ -513,6 +574,8 @@ describe("anchor preservation across relayout", () => {
         e.type === "ready",
     );
     expect(readyEvents.length).toBeGreaterThanOrEqual(1);
+    expect(readyEvents.at(-1)!.cause).toBe("updatePaginationConfig");
+    expect(readyEvents.at(-1)!.spread.cause).toBe("updatePaginationConfig");
     expect(readyEvents.at(-1)!.spread.currentPage).toBeGreaterThan(1);
   });
 });
@@ -555,6 +618,16 @@ describe("middle-out relayout order", () => {
 
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(1);
+    expect(
+      events.every(
+        (event) =>
+          event.type === "partialReady" ||
+          event.type === "progress" ||
+          event.type === "ready"
+            ? event.cause === "updatePaginationConfig"
+            : true,
+      ),
+    ).toBe(true);
     expect(lastEvent(events)?.type).toBe("ready");
   });
 });

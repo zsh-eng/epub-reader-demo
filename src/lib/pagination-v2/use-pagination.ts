@@ -117,6 +117,7 @@ export function usePagination(
           prev
             ? {
                 ...prev,
+                cause: event.cause,
                 currentPage: event.currentPage,
                 totalPages: event.totalPages,
                 currentSpread: event.currentSpread,
