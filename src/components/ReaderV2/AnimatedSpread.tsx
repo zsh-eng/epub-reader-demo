@@ -1,6 +1,7 @@
 import type { PaginationConfig } from "@/lib/pagination-v2";
 import type { ResolvedSpread, SpreadConfig } from "@/lib/pagination-v2/types";
 import { motion, useIsPresent, usePresenceData } from "motion/react";
+import { useRef } from "react";
 import { PageSliceView } from "./PageSliceView";
 
 export type NavDirection = "forward" | "backward" | "instant";
@@ -47,8 +48,26 @@ export function AnimatedSpread({
   bookId,
   deferredImageCache,
 }: AnimatedSpreadProps) {
-  const direction = (usePresenceData() as NavDirection | undefined) ?? "instant";
+  const rawDirection = (usePresenceData() as NavDirection | undefined) ?? "instant";
   const isPresent = useIsPresent();
+
+  // Freeze the direction the moment a component starts exiting so that rapid
+  // navigation (which changes AnimatePresence's `custom` prop) cannot redirect
+  // a mid-flight exit animation or flip its z-index.
+  //
+  // Why this is needed: PresenceChild's useMemo depends on `onExitComplete`,
+  // which AnimatePresence recreates on every render. This means usePresenceData()
+  // is effectively live — all components (including ones already exiting) see the
+  // latest `custom` value after any parent re-render. Without freezing, pressing
+  // prev while page 1 is still exiting forward causes it to redirect rightward
+  // and pop to z=1, appearing incorrectly on top of the incoming page.
+  const frozenExitDir = useRef<NavDirection | null>(null);
+  if (isPresent) {
+    frozenExitDir.current = null; // reset when re-entering
+  } else if (frozenExitDir.current === null) {
+    frozenExitDir.current = rawDirection; // freeze on first exit render
+  }
+  const direction = isPresent ? rawDirection : (frozenExitDir.current ?? rawDirection);
 
   // Z-index rules:
   //   backward exit  → 1 (slides away on top, revealing the incoming page beneath)
