@@ -1,11 +1,11 @@
 import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
-import { getBlockSpacing, getLineHeight } from "./spacing";
+import { getBlockInsetLeft, getBlockSpacing, getLineHeight } from "./spacing";
 import type {
-  LayoutTheme,
-  Page,
-  PaginationResult,
-  PreparedBlock,
-  PreparedTextBlock,
+    LayoutTheme,
+    Page,
+    PaginationResult,
+    PreparedBlock,
+    PreparedTextBlock,
 } from "./types";
 
 function createPage(index: number): Page & { usedHeight: number } {
@@ -139,9 +139,13 @@ export function layoutPages(
         : Math.max(prevMarginBelow, spacing.above);
     if (effectiveGap > 0) addSpacer(textBlock.id, effectiveGap);
 
+    const textLayoutWidth = Math.max(
+      1,
+      safeWidth - getBlockInsetLeft(textBlock.tag, theme),
+    );
     const lines = textBlock.containsNewlines
-      ? layoutPreWrapLines(textBlock.items, safeWidth)
-      : layoutTextLines(textBlock.items, safeWidth);
+      ? layoutPreWrapLines(textBlock.items, textLayoutWidth)
+      : layoutTextLines(textBlock.items, textLayoutWidth);
     totalLineCount += lines.length;
 
     if (lines.length === 0) {
@@ -179,6 +183,7 @@ export function layoutPages(
       current.slices.push({
         type: "text",
         blockId: textBlock.id,
+        tag: textBlock.tag,
         lineHeight,
         textAlign: theme.textAlign,
         lines: sliceLines,

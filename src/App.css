@@ -120,6 +120,19 @@
   color: var(--muted-foreground);
 }
 
+/*
+ * ReaderV2 quote decoration.
+ * Keep this in sync with src/lib/pagination-v2/shared/spacing.ts (BLOCKQUOTE_*),
+ * since pagination width/spacing math depends on the same border+padding values.
+ * TODO: make this shared/dynamic so CSS and pagination constants cannot drift.
+ */
+.reader-v2-blockquote {
+  border-left: 4px solid var(--border);
+  padding-left: 1.5em;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
 /* Some ebooks wrap the paragraph text in a link tag. TODO: we have to handle this. */
 /*.reader-content a {
     color: #2563eb;

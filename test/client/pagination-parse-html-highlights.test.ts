@@ -2,6 +2,23 @@ import { parseChapterHtml } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
 describe("parseChapterHtml highlight extraction", () => {
+  it("preserves blockquote block tags", () => {
+    const blocks = parseChapterHtml(
+      "<blockquote>Quoted text for styling parity.</blockquote>",
+    );
+
+    expect(blocks).toHaveLength(1);
+
+    const block = blocks[0];
+    expect(block?.type).toBe("text");
+    if (!block || block.type !== "text") return;
+
+    expect(block.tag).toBe("blockquote");
+    expect(block.runs[0]).toMatchObject({
+      text: "Quoted text for styling parity.",
+    });
+  });
+
   it("captures highlight mark metadata on inline runs", () => {
     const html =
       '<p>Hello <mark data-highlight-id="h1" data-color="yellow">world</mark>!</p>';

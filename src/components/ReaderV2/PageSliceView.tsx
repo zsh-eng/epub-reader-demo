@@ -42,7 +42,9 @@ export function PageSliceView({
 
   return (
     <p
-      className="m-0"
+      className={cn("m-0 box-border", {
+        "reader-v2-blockquote": slice.tag === "blockquote",
+      })}
       style={{
         lineHeight: `${slice.lineHeight}px`,
         textAlign: slice.textAlign,

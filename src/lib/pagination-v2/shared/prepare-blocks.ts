@@ -1,22 +1,22 @@
 import {
-  layoutNextLine,
-  prepareWithSegments,
-  type LayoutCursor,
-  type PreparedTextWithSegments,
+    layoutNextLine,
+    prepareWithSegments,
+    type LayoutCursor,
+    type PreparedTextWithSegments,
 } from "@chenglou/pretext";
 import {
-  clearMeasureCache,
-  LINE_START_CURSOR,
-  measureCollapsedSpaceWidth,
+    clearMeasureCache,
+    LINE_START_CURSOR,
+    measureCollapsedSpaceWidth,
 } from "./measure";
 import { CODE_CHROME_PX, headingScale } from "./spacing";
 import type {
-  Block,
-  FontConfig,
-  InlineRun,
-  PreparedBlock,
-  PreparedInlineItem,
-  PreparedTextBlock,
+    Block,
+    FontConfig,
+    InlineRun,
+    PreparedBlock,
+    PreparedInlineItem,
+    PreparedTextBlock,
 } from "./types";
 
 const UNBOUNDED_WIDTH = 100_000;
@@ -102,7 +102,7 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   }
 
   const weight = run.bold ? 700 : isHeading ? 600 : 400;
-  const style = run.italic ? "italic " : "";
+  const style = run.italic || tag === "blockquote" ? "italic " : "";
 
   return `${style}${weight} ${Math.round(sizePx * 100) / 100}px ${family}`;
 }

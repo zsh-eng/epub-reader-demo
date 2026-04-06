@@ -4,6 +4,9 @@ export const CODE_CHROME_PX = 14;
 export const DEFAULT_INTRINSIC_WIDTH = 600;
 export const DEFAULT_INTRINSIC_HEIGHT = 400;
 export const DEFAULT_ASPECT_RATIO = 3 / 4;
+export const BLOCKQUOTE_BORDER_LEFT_PX = 4;
+export const BLOCKQUOTE_PADDING_LEFT_EM = 1.5;
+export const BLOCKQUOTE_MARGIN_Y_EM = 1.5;
 
 export function headingScale(tag: string): number {
   switch (tag) {
@@ -29,6 +32,14 @@ export function getBlockSpacing(
   tag: string,
   theme: LayoutTheme,
 ): { above: number; below: number } {
+  if (tag === "blockquote") {
+    const quoteSpacing = theme.baseFontSizePx * BLOCKQUOTE_MARGIN_Y_EM;
+    return {
+      above: quoteSpacing,
+      below: quoteSpacing,
+    };
+  }
+
   if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) {
     return {
       above: theme.baseFontSizePx * theme.headingSpaceAbove * headingScale(tag),
@@ -39,4 +50,12 @@ export function getBlockSpacing(
     above: 0,
     below: theme.baseFontSizePx * theme.paragraphSpacingFactor,
   };
+}
+
+export function getBlockInsetLeft(tag: string, theme: LayoutTheme): number {
+  if (tag !== "blockquote") return 0;
+
+  return (
+    theme.baseFontSizePx * BLOCKQUOTE_PADDING_LEFT_EM + BLOCKQUOTE_BORDER_LEFT_PX
+  );
 }

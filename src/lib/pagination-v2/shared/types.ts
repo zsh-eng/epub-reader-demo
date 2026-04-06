@@ -99,7 +99,7 @@ export type PreparedInlineItem = PreparedTextItem | PreparedAtomicItem;
 export interface PreparedTextBlock {
   type: "text";
   id: string;
-  tag: string;
+  tag: BlockTag;
   items: PreparedInlineItem[];
   containsNewlines: boolean;
 }
@@ -173,6 +173,7 @@ export interface PageLine {
 export interface TextSlice {
   type: "text";
   blockId: string;
+  tag: BlockTag;
   lineHeight: number;
   textAlign: "left" | "center" | "right" | "justify";
   lines: PageLine[];
