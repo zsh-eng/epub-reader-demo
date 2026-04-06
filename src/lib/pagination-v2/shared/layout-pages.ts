@@ -1,11 +1,11 @@
 import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
 import { getBlockSpacing, getLineHeight } from "./spacing";
 import type {
-    LayoutTheme,
-    Page,
-    PaginationResult,
-    PreparedBlock,
-    PreparedTextBlock,
+  LayoutTheme,
+  Page,
+  PaginationResult,
+  PreparedBlock,
+  PreparedTextBlock,
 } from "./types";
 
 function createPage(index: number): Page & { usedHeight: number } {

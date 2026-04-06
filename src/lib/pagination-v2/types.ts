@@ -1,39 +1,39 @@
 import type {
-    FontConfig,
-    LayoutTheme,
-    PageSlice,
-    TextCursorOffset,
+  FontConfig,
+  LayoutTheme,
+  PageSlice,
+  TextCursorOffset,
 } from "./shared/types";
 import type { PaginationCommand } from "./protocol";
 
 // Re-export types that are unchanged from pagination v1
 export { areFontConfigsEqual } from "./shared/types";
 export type {
-    Block,
-    BlockTag,
-    FontConfig,
-    ImageBlock,
-    ImageSlice,
-    InlineRun,
-    LayoutTheme,
-    Page,
-    PageFragment,
-    PageLine,
-    PageSlice,
-    PaginationChapterDiagnostics,
-    PaginationDiagnostics,
-    PaginationResult,
-    PreparedBlock,
-    PreparedImageBlock,
-    PreparedInlineItem,
-    PreparedSpacerBlock,
-    PreparedTextBlock,
-    PreparedTextItem,
-    SpacerBlock,
-    SpacerSlice,
-    TextBlock,
-    TextCursorOffset,
-    TextSlice
+  Block,
+  BlockTag,
+  FontConfig,
+  ImageBlock,
+  ImageSlice,
+  InlineRun,
+  LayoutTheme,
+  Page,
+  PageFragment,
+  PageLine,
+  PageSlice,
+  PaginationChapterDiagnostics,
+  PaginationDiagnostics,
+  PaginationResult,
+  PreparedBlock,
+  PreparedImageBlock,
+  PreparedInlineItem,
+  PreparedSpacerBlock,
+  PreparedTextBlock,
+  PreparedTextItem,
+  SpacerBlock,
+  SpacerSlice,
+  TextBlock,
+  TextCursorOffset,
+  TextSlice,
 } from "./shared/types";
 
 // ---------------------------------------------------------------------------
@@ -90,10 +90,7 @@ export interface ResolvedLeafPage {
   content: PageSlice[];
 }
 
-export type SpreadGapReason =
-  | "chapter-boundary"
-  | "end-of-book"
-  | "unloaded";
+export type SpreadGapReason = "chapter-boundary" | "end-of-book" | "unloaded";
 
 export type SpreadSlot =
   | {

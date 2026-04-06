@@ -12,7 +12,9 @@ interface SpreadStageProps {
   deferredImageCache: Map<string, string>;
 }
 
-function toNavDirection(cause: ResolvedSpread["cause"] | undefined): NavDirection {
+function toNavDirection(
+  cause: ResolvedSpread["cause"] | undefined,
+): NavDirection {
   if (cause === "nextSpread") return "forward";
   if (cause === "prevSpread") return "backward";
   return "instant";

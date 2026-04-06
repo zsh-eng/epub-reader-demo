@@ -1,4 +1,7 @@
-import type { PaginationCommand, PaginationEvent } from "@/lib/pagination-v2/protocol";
+import type {
+  PaginationCommand,
+  PaginationEvent,
+} from "@/lib/pagination-v2/protocol";
 import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import {
   coalesceQueuedCommands,
@@ -6,7 +9,12 @@ import {
   RELAYOUT_YIELD_BUDGET_MS,
   type QueuedPaginationCommand,
 } from "@/lib/pagination-v2/worker/runtime";
-import type { Block, FontConfig, LayoutTheme, PaginationConfig } from "@/lib/pagination-v2/types";
+import type {
+  Block,
+  FontConfig,
+  LayoutTheme,
+  PaginationConfig,
+} from "@/lib/pagination-v2/types";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -55,8 +63,12 @@ function countEvents(events: PaginationEvent[], type: PaginationEvent["type"]) {
 function getChapterOrder(events: PaginationEvent[]): number[] {
   return events
     .filter(
-      (event): event is Extract<PaginationEvent, { type: "partialReady" | "progress" }> =>
-        event.type === "partialReady" || event.type === "progress",
+      (
+        event,
+      ): event is Extract<
+        PaginationEvent,
+        { type: "partialReady" | "progress" }
+      > => event.type === "partialReady" || event.type === "progress",
     )
     .map((event) => event.chapterDiagnostics?.chapterIndex ?? -1);
 }

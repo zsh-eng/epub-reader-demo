@@ -2,12 +2,12 @@ import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
 import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import type {
-    Block,
-    FontConfig,
-    LayoutTheme,
-    PaginationConfig,
-    ResolvedSpread,
-    SpreadConfig,
+  Block,
+  FontConfig,
+  LayoutTheme,
+  PaginationConfig,
+  ResolvedSpread,
+  SpreadConfig,
 } from "@/lib/pagination-v2/types";
 import { describe, expect, it } from "vitest";
 
@@ -126,7 +126,8 @@ function createEngine(options?: {
     spreadConfig,
     initialChapterIndex,
     initialAnchor: options?.initialAnchor,
-    firstChapterBlocks: options?.blocks ?? makeSpacerBlocks(initialChapterIndex),
+    firstChapterBlocks:
+      options?.blocks ?? makeSpacerBlocks(initialChapterIndex),
   });
 
   return { engine, events };
@@ -688,13 +689,12 @@ describe("middle-out relayout order", () => {
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(1);
     expect(
-      events.every(
-        (event) =>
-          event.type === "partialReady" ||
-          event.type === "progress" ||
-          event.type === "ready"
-            ? event.cause === "updatePaginationConfig"
-            : true,
+      events.every((event) =>
+        event.type === "partialReady" ||
+        event.type === "progress" ||
+        event.type === "ready"
+          ? event.cause === "updatePaginationConfig"
+          : true,
       ),
     ).toBe(true);
     expect(lastEvent(events)?.type).toBe("ready");
@@ -805,13 +805,10 @@ describe("stale relayout detection", () => {
     const getPreparedBodyFontsByChapter = (target: PaginationEngine) => {
       const preparedByChapter = (
         target as unknown as {
-          preparedByChapter: Array<
-            | Array<{
-                type: string;
-                items?: Array<{ kind: string; font?: string }>;
-              }>
-            | null
-          >;
+          preparedByChapter: Array<Array<{
+            type: string;
+            items?: Array<{ kind: string; font?: string }>;
+          }> | null>;
         }
       ).preparedByChapter;
 

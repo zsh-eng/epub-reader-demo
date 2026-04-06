@@ -1,25 +1,25 @@
 import { layoutPages } from "./shared/layout-pages";
 import { prepareBlocks } from "./shared/prepare-blocks";
 import type {
-    Block,
-    Page,
-    PaginationChapterDiagnostics,
-    PreparedBlock,
-    TextCursorOffset,
+  Block,
+  Page,
+  PaginationChapterDiagnostics,
+  PreparedBlock,
+  TextCursorOffset,
 } from "./shared/types";
 import { areFontConfigsEqual } from "./shared/types";
 import type {
-    ChapterUnavailableEvent,
-    PaginationCommand,
-    PaginationEvent,
+  ChapterUnavailableEvent,
+  PaginationCommand,
+  PaginationEvent,
 } from "./protocol";
 import type {
-    ContentAnchor,
-    PaginationConfig,
-    ResolvedLeafPage,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadGapReason,
+  ContentAnchor,
+  PaginationConfig,
+  ResolvedLeafPage,
+  ResolvedSpread,
+  SpreadConfig,
+  SpreadGapReason,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -150,7 +150,11 @@ export class PaginationEngine {
           this.addChapter(cause, cmd.chapterIndex, cmd.blocks);
           break;
         case "updatePaginationConfig":
-          await this.updatePaginationConfig(cause, cmd.paginationConfig, runtime);
+          await this.updatePaginationConfig(
+            cause,
+            cmd.paginationConfig,
+            runtime,
+          );
           break;
         case "updateSpreadConfig":
           this.updateSpreadConfig(cause, cmd.spreadConfig);
@@ -335,18 +339,22 @@ export class PaginationEngine {
       }
     }
 
-    await this.runRelayout(cause, (ch) => {
-      if (!this.blocksByChapter[ch]) return null;
+    await this.runRelayout(
+      cause,
+      (ch) => {
+        if (!this.blocksByChapter[ch]) return null;
 
-      const prepared = this.preparedByChapter[ch];
-      if (!prepared) {
-        return this.prepareAndLayoutChapter(ch);
-      }
+        const prepared = this.preparedByChapter[ch];
+        if (!prepared) {
+          return this.prepareAndLayoutChapter(ch);
+        }
 
-      const stage2PrepareMs =
-        this.chapterDiagnosticsByChapter[ch]?.stage2PrepareMs ?? 0;
-      return this.layoutPreparedChapter(ch, prepared, stage2PrepareMs);
-    }, rt);
+        const stage2PrepareMs =
+          this.chapterDiagnosticsByChapter[ch]?.stage2PrepareMs ?? 0;
+        return this.layoutPreparedChapter(ch, prepared, stage2PrepareMs);
+      },
+      rt,
+    );
   }
 
   updateSpreadConfig(
@@ -840,7 +848,11 @@ export class PaginationEngine {
     const offsets = this.chapterPageOffsets;
 
     const chapterLeaves: LeafRef[][] = [];
-    for (let chapterIndex = 0; chapterIndex < this.totalChapters; chapterIndex++) {
+    for (
+      let chapterIndex = 0;
+      chapterIndex < this.totalChapters;
+      chapterIndex++
+    ) {
       const pages = this.pagesByChapter[chapterIndex] ?? [];
       const offset = offsets[chapterIndex] ?? 0;
       const leaves = pages.map((_, localPageIndex) => ({
@@ -872,7 +884,11 @@ export class PaginationEngine {
     };
 
     if (chapterFlow === "continuous") {
-      for (let chapterIndex = 0; chapterIndex < this.totalChapters; chapterIndex++) {
+      for (
+        let chapterIndex = 0;
+        chapterIndex < this.totalChapters;
+        chapterIndex++
+      ) {
         for (const leaf of chapterLeaves[chapterIndex] ?? []) {
           pushCell({ kind: "page", leaf });
         }
@@ -882,7 +898,11 @@ export class PaginationEngine {
         flushWithGap(this.isFullyLoaded() ? "end-of-book" : "unloaded");
       }
     } else {
-      for (let chapterIndex = 0; chapterIndex < this.totalChapters; chapterIndex++) {
+      for (
+        let chapterIndex = 0;
+        chapterIndex < this.totalChapters;
+        chapterIndex++
+      ) {
         const leaves = chapterLeaves[chapterIndex] ?? [];
         if (leaves.length === 0) continue;
 

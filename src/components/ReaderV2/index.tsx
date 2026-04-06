@@ -2,21 +2,21 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-    getBookFile,
-    getBookFilesByPaths,
-    getBookImageDimensionsMap,
-    type Book,
-    type BookFile,
+  getBookFile,
+  getBookFilesByPaths,
+  getBookImageDimensionsMap,
+  type Book,
+  type BookFile,
 } from "@/lib/db";
 import {
-    cleanupResourceUrls,
-    processEmbeddedResources,
+  cleanupResourceUrls,
+  processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import {
-    parseChapterHtml,
-    usePagination,
-    type PaginationConfig,
-    type SpreadConfig,
+  parseChapterHtml,
+  usePagination,
+  type PaginationConfig,
+  type SpreadConfig,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";

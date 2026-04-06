@@ -1,5 +1,11 @@
 import type { PaginationChapterDiagnostics } from "./shared/types";
-import type { Block, ContentAnchor, PaginationConfig, ResolvedSpread, SpreadConfig } from "./types";
+import type {
+  Block,
+  ContentAnchor,
+  PaginationConfig,
+  ResolvedSpread,
+  SpreadConfig,
+} from "./types";
 
 // ---------------------------------------------------------------------------
 // Commands (main thread → worker)

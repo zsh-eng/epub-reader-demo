@@ -1,22 +1,22 @@
 import {
-    layoutNextLine,
-    prepareWithSegments,
-    type LayoutCursor,
-    type PreparedTextWithSegments,
+  layoutNextLine,
+  prepareWithSegments,
+  type LayoutCursor,
+  type PreparedTextWithSegments,
 } from "@chenglou/pretext";
 import {
-    clearMeasureCache,
-    LINE_START_CURSOR,
-    measureCollapsedSpaceWidth,
+  clearMeasureCache,
+  LINE_START_CURSOR,
+  measureCollapsedSpaceWidth,
 } from "./measure";
 import { CODE_CHROME_PX, headingScale } from "./spacing";
 import type {
-    Block,
-    FontConfig,
-    InlineRun,
-    PreparedBlock,
-    PreparedInlineItem,
-    PreparedTextBlock,
+  Block,
+  FontConfig,
+  InlineRun,
+  PreparedBlock,
+  PreparedInlineItem,
+  PreparedTextBlock,
 } from "./types";
 
 const UNBOUNDED_WIDTH = 100_000;

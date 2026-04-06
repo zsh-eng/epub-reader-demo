@@ -15,7 +15,12 @@ interface AnimatedSpreadProps {
   deferredImageCache: Map<string, string>;
 }
 
-const EASE_OUT_QUAD = [0.25, 0.46, 0.45, 0.94] as [number, number, number, number];
+const EASE_OUT_QUAD = [0.25, 0.46, 0.45, 0.94] as [
+  number,
+  number,
+  number,
+  number,
+];
 
 /** Padding added around the text area so text doesn't sit at the edge of the page. */
 export const PAGE_PADDING_X = 32;
@@ -48,7 +53,8 @@ export function AnimatedSpread({
   bookId,
   deferredImageCache,
 }: AnimatedSpreadProps) {
-  const rawDirection = (usePresenceData() as NavDirection | undefined) ?? "instant";
+  const rawDirection =
+    (usePresenceData() as NavDirection | undefined) ?? "instant";
   const isPresent = useIsPresent();
 
   // Freeze the direction the moment a component starts exiting so that rapid
@@ -67,7 +73,9 @@ export function AnimatedSpread({
   } else if (frozenExitDir.current === null) {
     frozenExitDir.current = rawDirection; // freeze on first exit render
   }
-  const direction = isPresent ? rawDirection : (frozenExitDir.current ?? rawDirection);
+  const direction = isPresent
+    ? rawDirection
+    : (frozenExitDir.current ?? rawDirection);
 
   // Z-index rules:
   //   backward exit  → 1 (slides away on top, revealing the incoming page beneath)
@@ -76,9 +84,12 @@ export function AnimatedSpread({
   // The forward-enter value is intentionally higher than backward-exit so that an
   // interrupted prev→next sequence doesn't leave a stale exiting page above the
   // new incoming page.
-  const zIndex = isPresent && direction === "forward" ? 2
-    : !isPresent && direction === "backward" ? 1
-    : 0;
+  const zIndex =
+    isPresent && direction === "forward"
+      ? 2
+      : !isPresent && direction === "backward"
+        ? 1
+        : 0;
 
   return (
     <motion.div
@@ -95,42 +106,42 @@ export function AnimatedSpread({
         className="h-full w-full overflow-hidden"
         style={{ padding: `${PAGE_PADDING_Y}px ${PAGE_PADDING_X}px` }}
       >
-      <div
-        className="h-full w-full overflow-hidden grid"
-        style={{
-          gridTemplateColumns: `repeat(${spreadConfig.columns}, minmax(0, 1fr))`,
-          columnGap: `${columnSpacingPx}px`,
-        }}
-      >
-        {spread.slots.map((slot) => {
-          if (slot.kind === "gap") {
+        <div
+          className="h-full w-full overflow-hidden grid"
+          style={{
+            gridTemplateColumns: `repeat(${spreadConfig.columns}, minmax(0, 1fr))`,
+            columnGap: `${columnSpacingPx}px`,
+          }}
+        >
+          {spread.slots.map((slot) => {
+            if (slot.kind === "gap") {
+              return (
+                <div
+                  key={`gap-${slot.slotIndex}`}
+                  className="h-full w-full bg-muted/20 reader-container-outline"
+                />
+              );
+            }
+
             return (
               <div
-                key={`gap-${slot.slotIndex}`}
-                className="h-full w-full bg-muted/20 reader-container-outline"
-              />
+                key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
+                className="h-full w-full overflow-hidden reader-container-outline"
+              >
+                {slot.page.content.map((slice, i) => (
+                  <PageSliceView
+                    key={`${slice.blockId}-${slot.slotIndex}-${i}`}
+                    slice={slice}
+                    sliceIndex={i}
+                    bookId={bookId}
+                    deferredImageCache={deferredImageCache}
+                    baseFontSize={paginationConfig.fontConfig.baseSizePx}
+                  />
+                ))}
+              </div>
             );
-          }
-
-          return (
-            <div
-              key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
-              className="h-full w-full overflow-hidden reader-container-outline"
-            >
-              {slot.page.content.map((slice, i) => (
-                <PageSliceView
-                  key={`${slice.blockId}-${slot.slotIndex}-${i}`}
-                  slice={slice}
-                  sliceIndex={i}
-                  bookId={bookId}
-                  deferredImageCache={deferredImageCache}
-                  baseFontSize={paginationConfig.fontConfig.baseSizePx}
-                />
-              ))}
-            </div>
-          );
-        })}
-      </div>
+          })}
+        </div>
       </div>
     </motion.div>
   );

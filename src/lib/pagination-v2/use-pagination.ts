@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PaginationTracer } from "./diagnostics/tracer";
 import type { PaginationCommand, PaginationEvent } from "./protocol";
 import type {
-    Block,
-    ContentAnchor,
-    PaginationConfig,
-    PaginationStatus,
-    ResolvedSpread,
-    SpreadConfig,
+  Block,
+  ContentAnchor,
+  PaginationConfig,
+  PaginationStatus,
+  ResolvedSpread,
+  SpreadConfig,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 

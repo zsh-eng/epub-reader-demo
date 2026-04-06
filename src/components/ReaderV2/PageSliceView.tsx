@@ -60,7 +60,7 @@ export function PageSliceView({
                     ? `${fragment.leadingGap}px`
                     : undefined,
                 font: fragment.font,
-                lineHeight: "inherit"
+                lineHeight: "inherit",
               }}
               className={cn({
                 underline: fragment.isLink,
