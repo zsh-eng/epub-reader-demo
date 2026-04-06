@@ -99,6 +99,36 @@ describe("Pagination command history", () => {
     expect(summary).not.toContain(largeText);
   });
 
+  it("keeps updateChapter history lightweight via summary only", () => {
+    const largeText = "x".repeat(5000);
+    const updateChapterCommand: PaginationCommand = {
+      type: "updateChapter",
+      chapterIndex: 3,
+      blocks: [
+        {
+          type: "text",
+          id: "b-3",
+          tag: "p",
+          runs: [
+            {
+              text: largeText,
+              bold: false,
+              italic: false,
+              isCode: false,
+              isLink: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    const summary = summarizePaginationCommand(updateChapterCommand);
+
+    expect(summary).toContain("chapter=4");
+    expect(summary).toContain("blocks=1");
+    expect(summary).not.toContain(largeText);
+  });
+
   it("resets history when init command is sent", () => {
     const beforeInit = nextPaginationCommandHistory(
       [],

@@ -3,6 +3,7 @@ import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import type {
   Block,
+  ContentAnchor,
   FontConfig,
   LayoutTheme,
   PaginationConfig,
@@ -290,6 +291,99 @@ describe("init + addChapter lifecycle", () => {
     const progress = getLastEventOfType(events, "progress");
     expect(progress).toBeDefined();
     expect(progress?.cause).toBe("addChapter");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 1b. updateChapter lifecycle
+// ---------------------------------------------------------------------------
+
+describe("updateChapter lifecycle", () => {
+  it("re-layouts one loaded chapter and emits updateChapter causes", async () => {
+    const { engine, events } = createEngine({
+      totalChapters: 2,
+      blocks: makeLongTextBlocks("chapter-0"),
+    });
+    addChapter(engine, 1, makeLongTextBlocks("chapter-1"));
+
+    events.length = 0;
+
+    await engine.handleCommand({
+      type: "updateChapter",
+      chapterIndex: 0,
+      blocks: makeLongTextBlocks("chapter-0-updated"),
+    });
+
+    expect(countEvents(events, "partialReady")).toBe(1);
+    expect(countEvents(events, "ready")).toBe(1);
+
+    const partial = getLastEventOfType(events, "partialReady");
+    const ready = getLastEventOfType(events, "ready");
+
+    expect(partial?.cause).toBe("updateChapter");
+    expect(partial?.spread.cause).toBe("updateChapter");
+    expect(ready?.cause).toBe("updateChapter");
+    expect(ready?.spread.cause).toBe("updateChapter");
+  });
+
+  it("keeps anchor chapter stable when another chapter is updated", async () => {
+    const { engine, events } = createEngine({ totalChapters: 3 });
+    addChapter(engine, 1, makeSpacerBlocks(1));
+    addChapter(engine, 2, makeSpacerBlocks(2));
+
+    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+    events.length = 0;
+
+    await engine.handleCommand({
+      type: "updateChapter",
+      chapterIndex: 0,
+      blocks: makeLongTextBlocks("updated-ch-0"),
+    });
+
+    const ready = getLastEventOfType(events, "ready");
+    expect(ready).toBeDefined();
+    expect(ready?.cause).toBe("updateChapter");
+    expect(ready?.spread.cause).toBe("updateChapter");
+    expect(ready?.spread.chapterIndexStart).toBe(2);
+
+    const first = ready ? firstPageSlot(ready.spread) : undefined;
+    expect(first?.page.chapterIndex).toBe(2);
+  });
+
+  it("emits error when updateChapter targets an unloaded chapter", async () => {
+    const { engine, events } = createEngine({ totalChapters: 3 });
+    events.length = 0;
+
+    await engine.handleCommand({
+      type: "updateChapter",
+      chapterIndex: 2,
+      blocks: makeSpacerBlocks(2),
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("error");
+    expect(events[0]?.cause).toBe("updateChapter");
+    if (events[0]?.type === "error") {
+      expect(events[0].message).toContain("has not been loaded");
+    }
+  });
+
+  it("emits error when updateChapter index is out of bounds", async () => {
+    const { engine, events } = createEngine({ totalChapters: 2 });
+    events.length = 0;
+
+    await engine.handleCommand({
+      type: "updateChapter",
+      chapterIndex: 99,
+      blocks: makeSpacerBlocks(99),
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("error");
+    expect(events[0]?.cause).toBe("updateChapter");
+    if (events[0]?.type === "error") {
+      expect(events[0].message).toContain("out of bounds");
+    }
   });
 });
 

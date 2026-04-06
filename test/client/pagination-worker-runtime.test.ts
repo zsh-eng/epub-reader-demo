@@ -80,6 +80,9 @@ describe("Pagination worker runtime", () => {
         command: { type: "addChapter", chapterIndex: 0, blocks: [] },
       },
       {
+        command: { type: "updateChapter", chapterIndex: 2, blocks: [] },
+      },
+      {
         command: { type: "goToPage", page: 2 },
       },
       {
@@ -96,6 +99,12 @@ describe("Pagination worker runtime", () => {
       },
       {
         command: { type: "goToChapter", chapterIndex: 2 },
+      },
+      {
+        command: { type: "updateChapter", chapterIndex: 2, blocks: [] },
+      },
+      {
+        command: { type: "updateChapter", chapterIndex: 1, blocks: [] },
       },
       {
         command: {
@@ -119,10 +128,81 @@ describe("Pagination worker runtime", () => {
       "addChapter",
       "goToPage",
       "goToChapter",
+      "updateChapter",
+      "updateChapter",
       "updatePaginationConfig",
       "addChapter",
       "updateSpreadConfig",
     ]);
+
+    expect(coalesced[3]?.command).toMatchObject({
+      type: "updateChapter",
+      chapterIndex: 2,
+    });
+    expect(coalesced[4]?.command).toMatchObject({
+      type: "updateChapter",
+      chapterIndex: 1,
+    });
+  });
+
+  it("marks updateChapter runtime stale when a newer epoch arrives", () => {
+    let layoutEpoch = 20;
+
+    const runtime = createCommandRuntime(
+      {
+        type: "updateChapter",
+        chapterIndex: 1,
+        blocks: [],
+      },
+      {
+        getLayoutEpoch: () => layoutEpoch,
+        activeEpoch: 20,
+        hasPendingLayoutAdvancingCommand: () => false,
+        yieldToEventLoop: async () => {},
+        now: () => 0,
+      },
+    );
+
+    expect(runtime.isStale()).toBe(false);
+
+    layoutEpoch = 21;
+    expect(runtime.isStale()).toBe(true);
+  });
+
+  it("marks updateChapter runtime stale when a newer layout command is queued", () => {
+    const runtime = createCommandRuntime(
+      {
+        type: "updateChapter",
+        chapterIndex: 1,
+        blocks: [],
+      },
+      {
+        getLayoutEpoch: () => 7,
+        activeEpoch: 7,
+        hasPendingLayoutAdvancingCommand: () => true,
+        yieldToEventLoop: async () => {},
+        now: () => 0,
+      },
+    );
+
+    expect(runtime.isStale()).toBe(true);
+  });
+
+  it("navigation-only commands still use no-op runtime", () => {
+    const runtime = createCommandRuntime(
+      { type: "goToPage", page: 42 },
+      {
+        getLayoutEpoch: () => 1,
+        activeEpoch: 1,
+        hasPendingLayoutAdvancingCommand: () => true,
+        yieldToEventLoop: async () => {
+          throw new Error("should not be called");
+        },
+        now: () => 100,
+      },
+    );
+
+    expect(runtime.isStale()).toBe(false);
   });
 
   it("marks updatePaginationConfig runtime stale when a newer epoch arrives", () => {

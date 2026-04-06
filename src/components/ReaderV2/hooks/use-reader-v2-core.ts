@@ -1,4 +1,5 @@
 import { useBookLoader } from "@/hooks/use-book-loader";
+import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
   getBookFile,
@@ -19,6 +20,13 @@ import {
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
+import type { Highlight } from "@/types/highlight";
+import {
+  applyChapterHighlights,
+  buildHighlightSignature,
+  buildHighlightsBySpineItemId,
+  type VirtualChapterSource,
+} from "../highlight-virtualization";
 import {
   useCallback,
   useEffect,
@@ -31,6 +39,7 @@ import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 
 export interface ChapterEntry {
   index: number;
+  spineItemId: string;
   href: string;
   title: string;
 }
@@ -125,6 +134,7 @@ function buildChapterEntries(book: Book | null): ChapterEntry[] {
 
       return {
         index,
+        spineItemId: spineItem.idref,
         href: manifestItem.href,
         title: getChapterTitleFromSpine(book, index) || `Chapter ${index + 1}`,
       };
@@ -167,9 +177,21 @@ export function useReaderV2Core(
     number | null
   >(null);
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
+  const chapterSourcesRef = useRef<Map<number, VirtualChapterSource>>(new Map());
+  const chapterHighlightSignaturesRef = useRef<Map<number, string>>(new Map());
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
+
+  const { data: bookHighlights = [] } = useBookHighlightsQuery(bookId);
+
+  const highlightsBySpineItemId = useMemo(
+    () => buildHighlightsBySpineItemId(bookHighlights),
+    [bookHighlights],
+  );
+
+  const highlightsBySpineItemIdRef = useRef<Map<string, Highlight[]>>(new Map());
+  highlightsBySpineItemIdRef.current = highlightsBySpineItemId;
 
   const paginationConfig = useMemo(
     () => buildPaginationConfig(settings, paragraphSpacingFactor, viewport),
@@ -206,6 +228,8 @@ export function useReaderV2Core(
 
     let cancelled = false;
     setSourceLoadWallClockMs(null);
+    chapterSourcesRef.current.clear();
+    chapterHighlightSignaturesRef.current.clear();
 
     const cleanupAllResources = () => {
       cleanupResourceUrls(deferredImageCacheRef.current);
@@ -233,7 +257,20 @@ export function useReaderV2Core(
         );
         if (cancelled) return;
 
-        const firstBlocks = parseChapterHtml(firstHtml);
+        const firstEntry = chapterEntries[0]!;
+        const firstHighlights =
+          highlightsBySpineItemIdRef.current.get(firstEntry.spineItemId) ?? [];
+        const firstSource = applyChapterHighlights(
+          { html: firstHtml, highlightedHtml: firstHtml },
+          firstHighlights,
+        );
+        chapterSourcesRef.current.set(0, firstSource);
+        chapterHighlightSignaturesRef.current.set(
+          0,
+          buildHighlightSignature(firstHighlights),
+        );
+
+        const firstBlocks = parseChapterHtml(firstSource.highlightedHtml);
         pagination.init({
           totalChapters: chapterEntries.length,
           initialChapterIndex: 0,
@@ -250,7 +287,19 @@ export function useReaderV2Core(
           );
           if (cancelled) return;
 
-          const blocks = parseChapterHtml(html);
+          const chapterHighlights =
+            highlightsBySpineItemIdRef.current.get(chapter.spineItemId) ?? [];
+          const source = applyChapterHighlights(
+            { html, highlightedHtml: html },
+            chapterHighlights,
+          );
+          chapterSourcesRef.current.set(i, source);
+          chapterHighlightSignaturesRef.current.set(
+            i,
+            buildHighlightSignature(chapterHighlights),
+          );
+
+          const blocks = parseChapterHtml(source.highlightedHtml);
           pagination.addChapter(i, blocks);
         }
 
@@ -271,6 +320,46 @@ export function useReaderV2Core(
       cleanupAllResources();
     };
   }, [bookId, chapterEntries, pagination.addChapter, pagination.init]);
+
+  useEffect(() => {
+    if (!bookId || chapterEntries.length === 0) return;
+
+    const validChapterIndices = new Set(chapterEntries.map((entry) => entry.index));
+
+    for (const [chapterIndex] of chapterSourcesRef.current) {
+      if (!validChapterIndices.has(chapterIndex)) {
+        chapterSourcesRef.current.delete(chapterIndex);
+        chapterHighlightSignaturesRef.current.delete(chapterIndex);
+      }
+    }
+
+    for (const chapter of chapterEntries) {
+      const source = chapterSourcesRef.current.get(chapter.index);
+      if (!source) continue;
+
+      const chapterHighlights =
+        highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
+      const nextSignature = buildHighlightSignature(chapterHighlights);
+      const prevSignature = chapterHighlightSignaturesRef.current.get(
+        chapter.index,
+      );
+      if (prevSignature === nextSignature) continue;
+
+      const nextSource = applyChapterHighlights(source, chapterHighlights);
+      chapterSourcesRef.current.set(chapter.index, nextSource);
+      chapterHighlightSignaturesRef.current.set(chapter.index, nextSignature);
+
+      if (nextSource.highlightedHtml === source.highlightedHtml) continue;
+
+      const nextBlocks = parseChapterHtml(nextSource.highlightedHtml);
+      pagination.updateChapter(chapter.index, nextBlocks);
+    }
+  }, [
+    bookId,
+    chapterEntries,
+    highlightsBySpineItemId,
+    pagination.updateChapter,
+  ]);
 
   const currentPage = pagination.spread?.currentPage ?? 1;
   const totalPages = pagination.spread?.totalPages ?? 0;
