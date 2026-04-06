@@ -32,7 +32,7 @@ export function SpreadStage({
     <MotionConfig reducedMotion="user">
       {/* position:relative + overflow:hidden clips pages as they slide in/out */}
       <div className="relative h-full w-full overflow-hidden">
-        <AnimatePresence custom={direction}>
+        <AnimatePresence custom={direction} mode="sync">
           {spread && (
             <AnimatedSpread
               key={spread.currentSpread}
