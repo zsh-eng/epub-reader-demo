@@ -24,6 +24,12 @@ export interface InlineRun {
   italic: boolean;
   isCode: boolean;
   isLink: boolean;
+  highlightMarks?: HighlightMark[];
+}
+
+export interface HighlightMark {
+  id: string;
+  color?: string;
 }
 
 export interface TextBlock {
@@ -70,6 +76,7 @@ export interface PreparedTextItem {
   font: string;
   isLink: boolean;
   isCode: boolean;
+  highlightMarks?: HighlightMark[];
   chromeWidth: number;
   prepared: PreparedTextWithSegments;
   rawText: string;
@@ -147,6 +154,7 @@ export interface PageFragment {
   leadingGap: number;
   isLink: boolean;
   isCode: boolean;
+  highlightMarks?: HighlightMark[];
 }
 
 export interface TextCursorOffset {

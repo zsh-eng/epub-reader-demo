@@ -12,6 +12,7 @@ export type {
   Block,
   BlockTag,
   FontConfig,
+  HighlightMark,
   ImageBlock,
   ImageSlice,
   InlineRun,

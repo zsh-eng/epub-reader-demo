@@ -1,4 +1,41 @@
-import type { Block, BlockTag, InlineRun, TextBlock } from "./types";
+/**
+ * Parse chapter HTML into pagination `Block[]`.
+ *
+ * This parser is intentionally opinionated and only materializes the subset of
+ * HTML needed by the pagination pipeline.
+ *
+ * Parsing contract:
+ * - Block-level text nodes are produced for tags in `BLOCK_TAGS`.
+ * - Container nodes in `CONTAINER_TAGS` are traversed recursively.
+ * - Nodes in `IGNORE_TAGS` are dropped entirely.
+ * - Images are extracted from:
+ *   - `<img src="...">`
+ *   - SVG `<image href|xlink:href="...">`
+ * - Image sizing prefers numeric `width`/`height`, then
+ *   `data-epub-intrinsic-width` / `data-epub-intrinsic-height`, then defaults.
+ * - Inline formatting currently preserved in runs:
+ *   - bold (`<strong>`, `<b>`)
+ *   - italic (`<em>`, `<i>`)
+ *   - link (`<a>`)
+ *   - code (`<code>`, `<kbd>`, `<samp>`)
+ *   - hard break (`<br>`)
+ * - Highlight metadata is captured from mark wrappers that provide
+ *   `data-highlight-id` (and optional `data-color`). Nested marks are preserved
+ *   as an ordered stack in `highlightMarks`.
+ *
+ * Important dependency notes:
+ * - This stage preserves text and mark boundaries; whitespace normalization and
+ *   collapsing happen later in `prepare-blocks.ts`.
+ * - If supported HTML semantics change in Reader rendering, update this module's
+ *   tag sets and inline extraction rules so pagination output stays consistent.
+ */
+import type {
+  Block,
+  BlockTag,
+  HighlightMark,
+  InlineRun,
+  TextBlock,
+} from "./types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
 
 const BLOCK_TAGS = new Set<string>([
@@ -48,6 +85,7 @@ interface InlineContext {
   italic: boolean;
   isCode: boolean;
   isLink: boolean;
+  highlightMarks: HighlightMark[];
 }
 
 const DEFAULT_CONTEXT: InlineContext = {
@@ -55,7 +93,22 @@ const DEFAULT_CONTEXT: InlineContext = {
   italic: false,
   isCode: false,
   isLink: false,
+  highlightMarks: [],
 };
+
+function marksMatch(a: HighlightMark[] | undefined, b: HighlightMark[] | undefined) {
+  if (!a || a.length === 0) return !b || b.length === 0;
+  if (!b || b.length !== a.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    const left = a[i];
+    const right = b[i];
+    if (!left || !right) return false;
+    if (left.id !== right.id || left.color !== right.color) return false;
+  }
+
+  return true;
+}
 
 function runsMatch(a: InlineRun, b: InlineRun): boolean {
   return (
@@ -63,7 +116,8 @@ function runsMatch(a: InlineRun, b: InlineRun): boolean {
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.isCode === b.isCode &&
-    a.isLink === b.isLink
+    a.isLink === b.isLink &&
+    marksMatch(a.highlightMarks, b.highlightMarks)
   );
 }
 
@@ -77,13 +131,29 @@ function appendRun(runs: InlineRun[], run: InlineRun): void {
   runs.push(run);
 }
 
+function readHighlightMark(element: Element): HighlightMark | null {
+  const id = element.getAttribute("data-highlight-id")?.trim();
+  if (!id) return null;
+
+  const color = element.getAttribute("data-color")?.trim() || undefined;
+  return {
+    id,
+    ...(color ? { color } : {}),
+  };
+}
+
 function extractInlineRuns(
   node: Node,
   ctx: InlineContext,
   output: InlineRun[],
 ): void {
   if (node.nodeType === Node.TEXT_NODE) {
-    appendRun(output, { text: node.textContent ?? "", ...ctx });
+    appendRun(output, {
+      text: node.textContent ?? "",
+      ...ctx,
+      highlightMarks:
+        ctx.highlightMarks.length > 0 ? [...ctx.highlightMarks] : undefined,
+    });
     return;
   }
 
@@ -97,7 +167,21 @@ function extractInlineRuns(
     return;
   }
 
-  const next: InlineContext = { ...ctx };
+  const next: InlineContext = {
+    ...ctx,
+    highlightMarks: [...ctx.highlightMarks],
+  };
+
+  const highlightMark = readHighlightMark(node);
+  if (highlightMark) {
+    const alreadyActive = next.highlightMarks.some(
+      (mark) => mark.id === highlightMark.id,
+    );
+    if (!alreadyActive) {
+      next.highlightMarks.push(highlightMark);
+    }
+  }
+
   if (tag === "strong" || tag === "b") next.bold = true;
   if (tag === "em" || tag === "i") next.italic = true;
   if (tag === "a") next.isLink = true;

@@ -150,6 +150,10 @@ function prepareTextBlock(
       font,
       isLink: run.isLink,
       isCode: run.isCode,
+      highlightMarks:
+        run.highlightMarks && run.highlightMarks.length > 0
+          ? [...run.highlightMarks]
+          : undefined,
       chromeWidth: run.isCode ? CODE_CHROME_PX : 0,
       prepared: cached.prepared,
       rawText: preparedText,

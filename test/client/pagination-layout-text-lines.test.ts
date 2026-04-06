@@ -1,4 +1,8 @@
-import { layoutPreWrapLines, prepareBlocks } from "@/lib/pagination-v2";
+import {
+  layoutPreWrapLines,
+  layoutTextLines,
+  prepareBlocks,
+} from "@/lib/pagination-v2";
 import type { Block, FontConfig, TextCursorOffset } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
@@ -73,5 +77,53 @@ describe("layoutPreWrapLines cursor offsets", () => {
         compareOffsets(previous.endOffset, current.startOffset),
       ).toBeLessThanOrEqual(0);
     }
+  });
+
+  it("preserves highlight mark metadata on wrapped text fragments", () => {
+    const blocks: Block[] = [
+      {
+        type: "text",
+        id: "highlighted-block",
+        tag: "p",
+        runs: [
+          {
+            text: "alpha ",
+            bold: false,
+            italic: false,
+            isCode: false,
+            isLink: false,
+          },
+          {
+            text: "beta gamma delta epsilon zeta eta theta",
+            bold: false,
+            italic: false,
+            isCode: false,
+            isLink: false,
+            highlightMarks: [{ id: "h1", color: "yellow" }],
+          },
+        ],
+      },
+    ];
+
+    const prepared = prepareBlocks(blocks, BASE_FONT_CONFIG);
+    const textBlock = prepared[0];
+    expect(textBlock?.type).toBe("text");
+    if (!textBlock || textBlock.type !== "text") return;
+
+    const lines = layoutTextLines(textBlock.items, 170);
+    expect(lines.length).toBeGreaterThan(1);
+
+    const markedFragments = lines
+      .flatMap((line) => line.fragments)
+      .filter((fragment) =>
+        fragment.highlightMarks?.some((mark) => mark.id === "h1"),
+      );
+
+    expect(markedFragments.length).toBeGreaterThan(0);
+    expect(
+      markedFragments.every(
+        (fragment) => fragment.highlightMarks?.[0]?.color === "yellow",
+      ),
+    ).toBe(true);
   });
 });

@@ -1,11 +1,11 @@
-import {
-  layoutNextLine,
-  layoutWithLines,
-  prepareWithSegments,
-} from "@chenglou/pretext";
 import type { LayoutCursor } from "@chenglou/pretext";
-import type { PageLine, PreparedInlineItem, TextCursorOffset } from "./types";
+import {
+    layoutNextLine,
+    layoutWithLines,
+    prepareWithSegments,
+} from "@chenglou/pretext";
 import { LINE_START_CURSOR, cursorsMatch } from "./measure";
+import type { PageLine, PreparedInlineItem, TextCursorOffset } from "./types";
 
 function createOffset(
   itemIndex: number,
@@ -84,6 +84,7 @@ export function layoutTextLines(
             leadingGap,
             isLink: item.isLink,
             isCode: item.isCode,
+            highlightMarks: item.highlightMarks,
           });
           remainingWidth -= fullWidth;
           itemIndex++;
@@ -116,6 +117,7 @@ export function layoutTextLines(
         leadingGap,
         isLink: item.isLink,
         isCode: item.isCode,
+        highlightMarks: item.highlightMarks,
       });
       remainingWidth -= leadingGap + line.width + item.chromeWidth;
 
@@ -168,6 +170,7 @@ export function layoutPreWrapLines(
         leadingGap: 0,
         isLink: firstText.isLink,
         isCode: true,
+        highlightMarks: firstText.highlightMarks,
       },
     ],
     startOffset: createOffset(0, line.start),

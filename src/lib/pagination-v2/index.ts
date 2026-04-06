@@ -4,6 +4,7 @@ export type {
   Block,
   ContentAnchor,
   FontConfig,
+  HighlightMark,
   LayoutTheme,
   Page,
   PageSlice,
