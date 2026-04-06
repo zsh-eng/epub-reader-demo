@@ -8,7 +8,7 @@ import type {
   PaginationCommandHistoryEntry,
   PaginationTracer,
   PaginationTracerSnapshot,
-} from "@/lib/pagination";
+} from "@/lib/pagination-v2";
 import { ChevronRight } from "lucide-react";
 import { memo, useMemo, useState, useSyncExternalStore } from "react";
 import { InspectorSection } from "./InspectorSection";

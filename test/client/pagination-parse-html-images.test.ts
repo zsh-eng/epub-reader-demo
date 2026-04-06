@@ -1,4 +1,4 @@
-import { parseChapterHtml } from "@/lib/pagination/parse-html";
+import { parseChapterHtml } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
 describe("parseChapterHtml image extraction", () => {

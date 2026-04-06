@@ -106,6 +106,7 @@ function spreadContainsLeafPage(spread: ResolvedSpread, pageNumber: number) {
 function createEngine(options?: {
   totalChapters?: number;
   initialChapterIndex?: number;
+  initialAnchor?: ContentAnchor;
   blocks?: Block[];
   paginationConfig?: PaginationConfig;
   spreadConfig?: SpreadConfig;
@@ -124,6 +125,7 @@ function createEngine(options?: {
     paginationConfig,
     spreadConfig,
     initialChapterIndex,
+    initialAnchor: options?.initialAnchor,
     firstChapterBlocks: options?.blocks ?? makeSpacerBlocks(initialChapterIndex),
   });
 
@@ -519,6 +521,73 @@ describe("spread projection", () => {
 // ---------------------------------------------------------------------------
 
 describe("anchor preservation across relayout", () => {
+  it("keeps relayout anchored to the visible spread after an unresolved page request", async () => {
+    const { engine, events } = createEngine({ totalChapters: 2 });
+
+    events.length = 0;
+    engine.handleCommand({ type: "goToPage", page: 2 });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("pageUnavailable");
+
+    events.length = 0;
+    await engine.handleCommand({
+      type: "updatePaginationConfig",
+      paginationConfig: {
+        ...BASE_PAGINATION_CONFIG,
+        viewport: { width: 700, height: 900 },
+      },
+    });
+
+    const partialReadyEvent = getLastEventOfType(events, "partialReady");
+    const readyEvent = getReadyEvent(events);
+
+    expect(partialReadyEvent?.spread.currentPage).toBe(1);
+    expect(partialReadyEvent?.spread.chapterIndexStart).toBe(0);
+    expect(readyEvent?.spread.currentPage).toBe(1);
+    expect(readyEvent?.spread.chapterIndexStart).toBe(0);
+  });
+
+  it("falls back to the existing anchor when goToChapter targets an unloaded chapter", async () => {
+    const { engine, events } = createEngine({ totalChapters: 5 });
+    addChapter(engine, 1);
+    addChapter(engine, 4);
+
+    engine.handleCommand({ type: "goToChapter", chapterIndex: 1 });
+    events.length = 0;
+
+    engine.handleCommand({ type: "goToChapter", chapterIndex: 3 });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("chapterUnavailable");
+
+    events.length = 0;
+    await engine.handleCommand({
+      type: "updatePaginationConfig",
+      paginationConfig: {
+        ...BASE_PAGINATION_CONFIG,
+        viewport: { width: 680, height: 820 },
+      },
+    });
+
+    expect(getChapterOrder(events)).toEqual([1, 0, 4]);
+    expect(countEvents(events, "partialReady")).toBe(1);
+    expect(countEvents(events, "ready")).toBe(1);
+  });
+
+  it("keeps block-anchor fallback behavior when anchor has no text offset", () => {
+    const { events } = createEngine({
+      blocks: makeLongTextBlocks("text-fallback"),
+      initialAnchor: {
+        type: "block",
+        chapterIndex: 0,
+        blockId: "text-fallback",
+      },
+    });
+
+    const readyEvent = getReadyEvent(events);
+    expect(readyEvent).toBeDefined();
+    expect(readyEvent?.spread.currentPage).toBe(1);
+  });
+
   it("anchor survives an updatePaginationConfig relayout", async () => {
     const { engine, events } = createEngine({
       blocks: makeLongTextBlocks("anchor-stable"),

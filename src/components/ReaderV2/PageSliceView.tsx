@@ -1,4 +1,4 @@
-import { LazyImage } from "@/components/ReaderPrototype/LazyImage";
+import { LazyImage } from "./shared/LazyImage";
 import { cn } from "@/lib/utils";
 import type { PageSlice } from "@/lib/pagination-v2";
 import { Fragment } from "react";

@@ -1,7 +1,7 @@
 import {
   PaginationTracer,
   type PaginationTracerSnapshot,
-} from "@/lib/pagination";
+} from "@/lib/pagination-v2";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 const BASE_FONT_CONFIG = {
@@ -25,6 +25,10 @@ const BASE_CONFIG = {
   layoutTheme: BASE_LAYOUT_THEME,
   viewport: { width: 620, height: 860 },
 };
+const BASE_SPREAD_CONFIG = {
+  columns: 1 as const,
+  chapterFlow: "continuous" as const,
+};
 
 describe("PaginationTracer", () => {
   beforeEach(() => {
@@ -45,7 +49,7 @@ describe("PaginationTracer", () => {
       notifications.push(tracer.getSnapshot().commandHistory.length);
     });
 
-    tracer.recordPostedCommand({ type: "getPage", globalPage: 3 });
+    tracer.recordPostedCommand({ type: "goToPage", page: 3 });
     const afterFirstCommand = tracer.getSnapshot().commandHistory;
     expect(afterFirstCommand).toHaveLength(1);
     expect(afterFirstCommand[0]?.summary).toContain("page=3");
@@ -54,8 +58,10 @@ describe("PaginationTracer", () => {
       {
         type: "init",
         totalChapters: 8,
-        config: BASE_CONFIG,
+        paginationConfig: BASE_CONFIG,
+        spreadConfig: BASE_SPREAD_CONFIG,
         initialChapterIndex: 2,
+        firstChapterBlocks: [],
       },
       { immediate: true },
     );
@@ -73,7 +79,7 @@ describe("PaginationTracer", () => {
     const tracer = new PaginationTracer(12);
 
     tracer.recordPostedCommand(
-      { type: "getPage", globalPage: 1 },
+      { type: "goToPage", page: 1 },
       { immediate: true },
     );
 
@@ -83,7 +89,7 @@ describe("PaginationTracer", () => {
     tracer.reset();
 
     tracer.recordPostedCommand(
-      { type: "getPage", globalPage: 2 },
+      { type: "goToPage", page: 2 },
       { immediate: true },
     );
 
@@ -138,7 +144,7 @@ describe("PaginationTracer", () => {
     const onChange = vi.fn();
 
     tracer.subscribe(onChange);
-    tracer.recordPostedCommand({ type: "getPage", globalPage: 3 });
+    tracer.recordPostedCommand({ type: "goToPage", page: 3 });
     tracer.cleanup();
 
     vi.advanceTimersByTime(500);

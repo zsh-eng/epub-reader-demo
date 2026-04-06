@@ -2,8 +2,8 @@ import {
   MAX_PAGINATION_COMMAND_HISTORY,
   nextPaginationCommandHistory,
   summarizePaginationCommand,
-} from "@/lib/pagination/command-history";
-import type { PaginationCommand } from "@/lib/pagination/engine-types";
+} from "@/lib/pagination-v2";
+import type { PaginationCommand } from "@/lib/pagination-v2/engine-types";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG = {
@@ -28,10 +28,15 @@ const BASE_CONFIG = {
   viewport: { width: 620, height: 860 },
 };
 
+const BASE_SPREAD_CONFIG = {
+  columns: 1 as const,
+  chapterFlow: "continuous" as const,
+};
+
 describe("Pagination command history", () => {
   it("records sent commands in newest-first order", () => {
-    const commandA: PaginationCommand = { type: "getPage", globalPage: 3 };
-    const commandB: PaginationCommand = { type: "getPage", globalPage: 4 };
+    const commandA: PaginationCommand = { type: "goToPage", page: 3 };
+    const commandB: PaginationCommand = { type: "goToPage", page: 4 };
 
     const withA = nextPaginationCommandHistory([], commandA, 1, 1000);
     const withB = nextPaginationCommandHistory(withA, commandB, 2, 1100);
@@ -49,7 +54,7 @@ describe("Pagination command history", () => {
     for (let i = 1; i <= MAX_PAGINATION_COMMAND_HISTORY + 5; i++) {
       history = nextPaginationCommandHistory(
         history,
-        { type: "getPage", globalPage: i },
+        { type: "goToPage", page: i },
         i,
         1000 + i,
       );
@@ -97,7 +102,7 @@ describe("Pagination command history", () => {
   it("resets history when init command is sent", () => {
     const beforeInit = nextPaginationCommandHistory(
       [],
-      { type: "getPage", globalPage: 12 },
+      { type: "goToPage", page: 12 },
       1,
       1000,
     );
@@ -105,8 +110,10 @@ describe("Pagination command history", () => {
     const initCommand: PaginationCommand = {
       type: "init",
       totalChapters: 8,
-      config: BASE_CONFIG,
+      paginationConfig: BASE_CONFIG,
+      spreadConfig: BASE_SPREAD_CONFIG,
       initialChapterIndex: 2,
+      firstChapterBlocks: [],
     };
 
     const afterInit = nextPaginationCommandHistory(
@@ -121,10 +128,10 @@ describe("Pagination command history", () => {
     expect(afterInit[0]?.summary).toContain("chapters=8");
   });
 
-  it("summarizes updateConfig with merged config fields", () => {
+  it("summarizes updatePaginationConfig with merged config fields", () => {
     const summary = summarizePaginationCommand({
-      type: "updateConfig",
-      config: {
+      type: "updatePaginationConfig",
+      paginationConfig: {
         ...BASE_CONFIG,
         fontConfig: {
           ...BASE_FONT_CONFIG,

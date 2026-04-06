@@ -1,20 +1,12 @@
-import type {
-  PaginationCommand,
-  PaginationEvent,
-} from "@/lib/pagination/engine-types";
-import { PaginationEngine } from "@/lib/pagination/pagination-engine";
+import type { PaginationCommand, PaginationEvent } from "@/lib/pagination-v2/engine-types";
+import { PaginationEngine } from "@/lib/pagination-v2/pagination-engine";
 import {
   coalesceQueuedCommands,
   createCommandRuntime,
   RELAYOUT_YIELD_BUDGET_MS,
   type QueuedPaginationCommand,
-} from "@/lib/pagination/pagination-worker-runtime";
-import type {
-  Block,
-  FontConfig,
-  LayoutTheme,
-  PaginationConfig,
-} from "@/lib/pagination/types";
+} from "@/lib/pagination-v2/pagination-worker-runtime";
+import type { Block, FontConfig, LayoutTheme, PaginationConfig } from "@/lib/pagination-v2/types";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -33,24 +25,27 @@ const BASE_LAYOUT_THEME: LayoutTheme = {
   textAlign: "left",
 };
 
+const BASE_SPREAD_CONFIG = {
+  columns: 1 as const,
+  chapterFlow: "continuous" as const,
+};
+
 function buildConfig(baseSizePx: number): PaginationConfig {
   return {
     fontConfig: {
       ...BASE_FONT_CONFIG,
       baseSizePx,
     },
-    layoutTheme: BASE_LAYOUT_THEME,
+    layoutTheme: {
+      ...BASE_LAYOUT_THEME,
+      baseFontSizePx: baseSizePx,
+    },
     viewport: { width: 620, height: 860 },
   };
 }
 
 function buildChapterBlocks(chapterIndex: number): Block[] {
-  return [
-    {
-      type: "spacer",
-      id: `spacer-${chapterIndex}`,
-    },
-  ];
+  return [{ type: "spacer", id: `spacer-${chapterIndex}` }];
 }
 
 function countEvents(events: PaginationEvent[], type: PaginationEvent["type"]) {
@@ -60,72 +55,84 @@ function countEvents(events: PaginationEvent[], type: PaginationEvent["type"]) {
 function getChapterOrder(events: PaginationEvent[]): number[] {
   return events
     .filter(
-      (event): event is Extract<PaginationEvent, { chapterIndex: number }> =>
+      (event): event is Extract<PaginationEvent, { type: "partialReady" | "progress" }> =>
         event.type === "partialReady" || event.type === "progress",
     )
-    .map((event) => event.chapterIndex);
+    .map((event) => event.chapterDiagnostics?.chapterIndex ?? -1);
 }
 
 describe("Pagination worker runtime", () => {
   it("coalesces supersedable commands while preserving non-supersedable order", () => {
     const commands: QueuedPaginationCommand[] = [
       {
-        revision: 1,
         command: { type: "addChapter", chapterIndex: 0, blocks: [] },
       },
       {
-        revision: 1,
-        command: { type: "getPage", globalPage: 2 },
+        command: { type: "goToPage", page: 2 },
       },
       {
-        revision: 2,
-        command: { type: "updateConfig", config: buildConfig(17) },
+        command: {
+          type: "updatePaginationConfig",
+          paginationConfig: buildConfig(17),
+        },
       },
       {
-        revision: 1,
-        command: { type: "getPage", globalPage: 7 },
+        command: { type: "goToPage", page: 7 },
       },
       {
-        revision: 1,
         command: { type: "goToChapter", chapterIndex: 5 },
       },
       {
-        revision: 1,
         command: { type: "goToChapter", chapterIndex: 2 },
       },
       {
-        revision: 3,
-        command: { type: "updateConfig", config: buildConfig(18) },
+        command: {
+          type: "updatePaginationConfig",
+          paginationConfig: buildConfig(18),
+        },
       },
       {
-        revision: 3,
         command: { type: "addChapter", chapterIndex: 1, blocks: [] },
+      },
+      {
+        command: {
+          type: "updateSpreadConfig",
+          spreadConfig: { columns: 2, chapterFlow: "continuous" },
+        },
       },
     ];
 
     const coalesced = coalesceQueuedCommands(commands);
-    expect(coalesced.map((entry) => entry.revision)).toEqual([1, 1, 1, 3, 3]);
+    expect(coalesced.map((entry) => entry.command.type)).toEqual([
+      "addChapter",
+      "goToPage",
+      "goToChapter",
+      "updatePaginationConfig",
+      "addChapter",
+      "updateSpreadConfig",
+    ]);
   });
 
-  it("marks updateConfig runtime stale when a newer revision arrives", () => {
-    let latestLayoutRevision = 10;
+  it("marks updatePaginationConfig runtime stale when a newer epoch arrives", () => {
+    let layoutEpoch = 10;
 
-    const runtime = createCommandRuntime({
-      queuedCommand: {
-        revision: 10,
-        command: {
-          type: "updateConfig",
-          config: buildConfig(18),
-        },
+    const runtime = createCommandRuntime(
+      {
+        type: "updatePaginationConfig",
+        paginationConfig: buildConfig(18),
       },
-      getLatestLayoutRevision: () => latestLayoutRevision,
-      yieldToEventLoop: async () => {},
-      now: () => 0,
-    });
+      {
+        getLayoutEpoch: () => layoutEpoch,
+        activeEpoch: 10,
+        hasPendingLayoutAdvancingCommand: () => false,
+        yieldToEventLoop: async () => {},
+        now: () => 0,
+      },
+    );
 
     expect(runtime.isStale()).toBe(false);
 
-    latestLayoutRevision = 11;
+    layoutEpoch = 11;
     expect(runtime.isStale()).toBe(true);
   });
 
@@ -133,20 +140,21 @@ describe("Pagination worker runtime", () => {
     let nowMs = 0;
     let yieldCalls = 0;
 
-    const runtime = createCommandRuntime({
-      queuedCommand: {
-        revision: 3,
-        command: {
-          type: "updateConfig",
-          config: buildConfig(19),
+    const runtime = createCommandRuntime(
+      {
+        type: "updatePaginationConfig",
+        paginationConfig: buildConfig(19),
+      },
+      {
+        getLayoutEpoch: () => 3,
+        activeEpoch: 3,
+        hasPendingLayoutAdvancingCommand: () => false,
+        yieldToEventLoop: async () => {
+          yieldCalls += 1;
         },
+        now: () => nowMs,
       },
-      getLatestLayoutRevision: () => 3,
-      yieldToEventLoop: async () => {
-        yieldCalls += 1;
-      },
-      now: () => nowMs,
-    });
+    );
 
     await runtime.maybeYield();
     nowMs = RELAYOUT_YIELD_BUDGET_MS - 1;
@@ -173,11 +181,13 @@ describe("Pagination worker runtime", () => {
     await engine.handleCommand({
       type: "init",
       totalChapters: 5,
-      config: buildConfig(16),
+      paginationConfig: buildConfig(16),
+      spreadConfig: BASE_SPREAD_CONFIG,
       initialChapterIndex: 0,
+      firstChapterBlocks: buildChapterBlocks(0),
     });
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 1; i < 5; i++) {
       await engine.handleCommand({
         type: "addChapter",
         chapterIndex: i,
@@ -185,29 +195,27 @@ describe("Pagination worker runtime", () => {
       });
     }
 
-    await engine.handleCommand({ type: "getPage", globalPage: 3 });
+    await engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
     events.length = 0;
 
     const updateConfigA: PaginationCommand = {
-      type: "updateConfig",
-      config: buildConfig(18),
+      type: "updatePaginationConfig",
+      paginationConfig: buildConfig(18),
     };
     const updateConfigB: PaginationCommand = {
-      type: "updateConfig",
-      config: buildConfig(20),
+      type: "updatePaginationConfig",
+      paginationConfig: buildConfig(20),
     };
 
-    let latestLayoutRevision = 1;
-    const staleRuntime = createCommandRuntime({
-      queuedCommand: {
-        revision: 1,
-        command: updateConfigA,
-      },
-      getLatestLayoutRevision: () => latestLayoutRevision,
+    let layoutEpoch = 1;
+    const staleRuntime = createCommandRuntime(updateConfigA, {
+      getLayoutEpoch: () => layoutEpoch,
+      activeEpoch: 1,
+      hasPendingLayoutAdvancingCommand: () => false,
       relayoutYieldBudgetMs: 0,
       now: () => 0,
       yieldToEventLoop: async () => {
-        latestLayoutRevision = 2;
+        layoutEpoch = 2;
       },
     });
 
@@ -217,12 +225,10 @@ describe("Pagination worker runtime", () => {
 
     events.length = 0;
 
-    const freshRuntime = createCommandRuntime({
-      queuedCommand: {
-        revision: 2,
-        command: updateConfigB,
-      },
-      getLatestLayoutRevision: () => latestLayoutRevision,
+    const freshRuntime = createCommandRuntime(updateConfigB, {
+      getLayoutEpoch: () => layoutEpoch,
+      activeEpoch: 2,
+      hasPendingLayoutAdvancingCommand: () => false,
       relayoutYieldBudgetMs: 0,
       now: () => 0,
       yieldToEventLoop: async () => {},

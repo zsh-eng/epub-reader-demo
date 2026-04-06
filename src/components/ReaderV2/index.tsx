@@ -12,8 +12,8 @@ import {
     cleanupResourceUrls,
     processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
-import { parseChapterHtml } from "@/lib/pagination";
 import {
+    parseChapterHtml,
     usePagination,
     type PaginationConfig,
     type SpreadConfig,
@@ -24,9 +24,9 @@ import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { DebugSection } from "../ReaderPrototype/DebugSection";
-import { InspectorDrawer } from "../ReaderPrototype/InspectorDrawer";
-import { InspectorPanel } from "../ReaderPrototype/InspectorPanel";
+import { DebugSection } from "./shared/DebugSection";
+import { InspectorDrawer } from "./shared/InspectorDrawer";
+import { InspectorPanel } from "./shared/InspectorPanel";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";

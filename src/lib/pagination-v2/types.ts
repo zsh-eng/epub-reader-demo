@@ -3,11 +3,11 @@ import type {
     LayoutTheme,
     PageSlice,
     TextCursorOffset,
-} from "../pagination/types";
+} from "./shared/types";
 import type { PaginationCommand } from "./engine-types";
 
 // Re-export types that are unchanged from pagination v1
-export { areFontConfigsEqual } from "../pagination/types";
+export { areFontConfigsEqual } from "./shared/types";
 export type {
     Block,
     BlockTag,
@@ -34,7 +34,7 @@ export type {
     TextBlock,
     TextCursorOffset,
     TextSlice
-} from "../pagination/types";
+} from "./shared/types";
 
 // ---------------------------------------------------------------------------
 // PaginationConfig (relayout-affecting) and SpreadConfig (projection only)

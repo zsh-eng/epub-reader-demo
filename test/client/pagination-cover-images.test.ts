@@ -1,12 +1,13 @@
-import { PaginationEngine } from "@/lib/pagination/pagination-engine";
-import { parseChapterHtml } from "@/lib/pagination/parse-html";
-import type { PaginationEvent } from "@/lib/pagination/engine-types";
+import type { PaginationEvent } from "@/lib/pagination-v2/engine-types";
+import { PaginationEngine } from "@/lib/pagination-v2/pagination-engine";
 import type {
   FontConfig,
   LayoutTheme,
   PageSlice,
   PaginationConfig,
-} from "@/lib/pagination/types";
+  SpreadConfig,
+} from "@/lib/pagination-v2";
+import { parseChapterHtml } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -31,14 +32,26 @@ const BASE_CONFIG: PaginationConfig = {
   viewport: { width: 620, height: 860 },
 };
 
+const BASE_SPREAD_CONFIG: SpreadConfig = {
+  columns: 1,
+  chapterFlow: "continuous",
+};
+
 function collectRenderedImageSlices(events: PaginationEvent[]): PageSlice[] {
   const slices: PageSlice[] = [];
 
   for (const event of events) {
-    if (event.type === "partialReady" || event.type === "ready") {
-      for (const slice of event.slices) {
-        if (slice.type === "image") {
-          slices.push(slice);
+    if (
+      event.type === "partialReady" ||
+      event.type === "ready" ||
+      event.type === "pageContent"
+    ) {
+      for (const slot of event.spread.slots) {
+        if (slot.kind !== "page") continue;
+        for (const slice of slot.page.content) {
+          if (slice.type === "image") {
+            slices.push(slice);
+          }
         }
       }
     }
@@ -50,18 +63,15 @@ function collectRenderedImageSlices(events: PaginationEvent[]): PageSlice[] {
 function renderSingleChapter(html: string): PageSlice[] {
   const events: PaginationEvent[] = [];
   const engine = new PaginationEngine((event) => events.push(event));
+  const blocks = parseChapterHtml(html);
 
   engine.handleCommand({
     type: "init",
     totalChapters: 1,
-    config: BASE_CONFIG,
+    paginationConfig: BASE_CONFIG,
+    spreadConfig: BASE_SPREAD_CONFIG,
     initialChapterIndex: 0,
-  });
-
-  engine.handleCommand({
-    type: "addChapter",
-    chapterIndex: 0,
-    blocks: parseChapterHtml(html),
+    firstChapterBlocks: blocks,
   });
 
   return collectRenderedImageSlices(events);

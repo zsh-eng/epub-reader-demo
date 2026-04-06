@@ -1,4 +1,4 @@
-import type { PaginationChapterDiagnostics } from "../pagination/types";
+import type { PaginationChapterDiagnostics } from "./shared/types";
 import type { Block, ContentAnchor, PaginationConfig, ResolvedSpread, SpreadConfig } from "./types";
 
 // ---------------------------------------------------------------------------

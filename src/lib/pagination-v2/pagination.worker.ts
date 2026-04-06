@@ -1,4 +1,4 @@
-import { ensurePaginationWorkerFontsReady } from "../pagination/pagination-worker-fonts";
+import { ensurePaginationWorkerFontsReady } from "./shared/pagination-worker-fonts";
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import { PaginationEngine } from "./pagination-engine";
 import {

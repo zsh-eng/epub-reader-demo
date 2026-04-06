@@ -1,10 +1,9 @@
-import { layoutPreWrapLines } from "@/lib/pagination/layout-text-lines";
-import { prepareBlocks } from "@/lib/pagination/prepare-blocks";
+import { layoutPreWrapLines, prepareBlocks } from "@/lib/pagination-v2";
 import type {
   Block,
   FontConfig,
   TextCursorOffset,
-} from "@/lib/pagination/types";
+} from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {

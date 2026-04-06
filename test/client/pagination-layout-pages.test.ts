@@ -1,6 +1,4 @@
-import { layoutPages } from "@/lib/pagination/layout-pages";
-import { prepareBlocks } from "@/lib/pagination/prepare-blocks";
-import type { Block, FontConfig, LayoutTheme } from "@/lib/pagination/types";
+import { layoutPages, prepareBlocks, type Block, type FontConfig, type LayoutTheme } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
 const FONT_CONFIG: FontConfig = {

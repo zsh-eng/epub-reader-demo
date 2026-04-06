@@ -1,13 +1,13 @@
-import { layoutPages } from "../pagination/layout-pages";
-import { prepareBlocks } from "../pagination/prepare-blocks";
+import { layoutPages } from "./shared/layout-pages";
+import { prepareBlocks } from "./shared/prepare-blocks";
 import type {
     Block,
     Page,
     PaginationChapterDiagnostics,
     PreparedBlock,
     TextCursorOffset,
-} from "../pagination/types";
-import { areFontConfigsEqual } from "../pagination/types";
+} from "./shared/types";
+import { areFontConfigsEqual } from "./shared/types";
 import type {
     ChapterUnavailableEvent,
     PaginationCommand,

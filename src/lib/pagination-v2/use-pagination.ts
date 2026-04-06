@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PaginationTracer } from "../pagination/pagination-tracer";
-import type { Block } from "../pagination/types";
+import { PaginationTracer } from "./shared/pagination-tracer";
 import type { PaginationCommand, PaginationEvent } from "./engine-types";
 import type {
+    Block,
     ContentAnchor,
     PaginationConfig,
     PaginationStatus,
