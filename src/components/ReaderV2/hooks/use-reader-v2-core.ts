@@ -2,39 +2,39 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-  getBookFile,
-  getBookFilesByPaths,
-  getBookImageDimensionsMap,
-  type Book,
-  type BookFile,
+    getBookFile,
+    getBookFilesByPaths,
+    getBookImageDimensionsMap,
+    type Book,
+    type BookFile,
 } from "@/lib/db";
 import {
-  cleanupResourceUrls,
-  processEmbeddedResources,
+    cleanupResourceUrls,
+    processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import {
-  parseChapterHtml,
-  usePagination,
-  type PaginationConfig,
-  type SpreadConfig,
+    parseChapterHtml,
+    usePagination,
+    type PaginationConfig,
+    type SpreadConfig,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
-import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import type { Highlight } from "@/types/highlight";
+import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import {
-  applyChapterHighlights,
-  buildHighlightSignature,
-  buildHighlightsBySpineItemId,
-  type VirtualChapterSource,
-} from "../highlight-virtualization";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MutableRefObject,
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type RefObject
 } from "react";
+import {
+    applyChapterHighlights,
+    buildHighlightSignature,
+    buildHighlightsBySpineItemId,
+    type VirtualChapterSource,
+} from "../highlight-virtualization";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 
 export interface ChapterEntry {
@@ -57,10 +57,11 @@ interface UseReaderV2CoreResult {
   settings: ReaderSettings;
   onUpdateSettings: (patch: Partial<ReaderSettings>) => void;
   chapterEntries: ChapterEntry[];
+  bookHighlights: Highlight[];
   spreadConfig: SpreadConfig;
   paginationConfig: PaginationConfig;
   pagination: ReturnType<typeof usePagination>;
-  deferredImageCacheRef: MutableRefObject<Map<string, string>>;
+  deferredImageCacheRef: RefObject<Map<string, string>>;
   sourceLoadWallClockMs: number | null;
   currentPage: number;
   totalPages: number;
@@ -324,7 +325,9 @@ export function useReaderV2Core(
   useEffect(() => {
     if (!bookId || chapterEntries.length === 0) return;
 
-    const validChapterIndices = new Set(chapterEntries.map((entry) => entry.index));
+    const validChapterIndices = new Set(
+      chapterEntries.map((_, chapterIndex) => chapterIndex),
+    );
 
     for (const [chapterIndex] of chapterSourcesRef.current) {
       if (!validChapterIndices.has(chapterIndex)) {
@@ -333,26 +336,26 @@ export function useReaderV2Core(
       }
     }
 
-    for (const chapter of chapterEntries) {
-      const source = chapterSourcesRef.current.get(chapter.index);
+    for (const [chapterIndex, chapter] of chapterEntries.entries()) {
+      const source = chapterSourcesRef.current.get(chapterIndex);
       if (!source) continue;
 
       const chapterHighlights =
         highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
       const nextSignature = buildHighlightSignature(chapterHighlights);
       const prevSignature = chapterHighlightSignaturesRef.current.get(
-        chapter.index,
+        chapterIndex,
       );
       if (prevSignature === nextSignature) continue;
 
       const nextSource = applyChapterHighlights(source, chapterHighlights);
-      chapterSourcesRef.current.set(chapter.index, nextSource);
-      chapterHighlightSignaturesRef.current.set(chapter.index, nextSignature);
+      chapterSourcesRef.current.set(chapterIndex, nextSource);
+      chapterHighlightSignaturesRef.current.set(chapterIndex, nextSignature);
 
       if (nextSource.highlightedHtml === source.highlightedHtml) continue;
 
       const nextBlocks = parseChapterHtml(nextSource.highlightedHtml);
-      pagination.updateChapter(chapter.index, nextBlocks);
+      pagination.updateChapter(chapterIndex, nextBlocks);
     }
   }, [
     bookId,
@@ -371,6 +374,7 @@ export function useReaderV2Core(
     settings,
     onUpdateSettings,
     chapterEntries,
+    bookHighlights,
     spreadConfig,
     paginationConfig,
     pagination,

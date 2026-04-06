@@ -1,6 +1,17 @@
+import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import {
+    EPUB_HIGHLIGHT_ACTIVE_CLASS,
+    EPUB_HIGHLIGHT_CLASS,
+    EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+    EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+} from "@/types/reader.types";
+import {
+    createHighlightInteractionManager,
+    type HighlightInteractionManager,
+} from "@zsh-eng/text-highlighter";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -23,6 +34,11 @@ function clamp(value: number, min: number, max: number): number {
 interface ReaderViewport {
   width: number;
   height: number;
+}
+
+interface ActiveHighlightState {
+  id: string;
+  position: { x: number; y: number };
 }
 
 function computeViewport(
@@ -65,10 +81,14 @@ export function ReaderV2() {
   const isMobile = useIsMobile();
   const [spreadColumns, setSpreadColumns] = useState<1 | 2>(1);
   const stageSlotRef = useRef<HTMLDivElement>(null);
+  const stageContentRef = useRef<HTMLDivElement>(null);
+  const highlightManagerRef = useRef<HighlightInteractionManager | null>(null);
   const [viewport, setViewport] = useState<ReaderViewport>({
     width: 620,
     height: 860,
   });
+  const [activeHighlight, setActiveHighlight] =
+    useState<ActiveHighlightState | null>(null);
 
   const effectiveSpreadColumns: 1 | 2 = isMobile ? 1 : spreadColumns;
 
@@ -77,6 +97,8 @@ export function ReaderV2() {
     isBookLoading,
     settings,
     onUpdateSettings,
+    chapterEntries,
+    bookHighlights,
     spreadConfig,
     pagination,
     paginationConfig,
@@ -88,6 +110,71 @@ export function ReaderV2() {
     viewport,
     spreadColumns: effectiveSpreadColumns,
   });
+
+  const visibleSpineItemIds = useMemo(() => {
+    if (!pagination.spread) return new Set<string>();
+
+    const ids = new Set<string>();
+    const start = pagination.spread.chapterIndexStart;
+    const end = pagination.spread.chapterIndexEnd;
+    if (start === null || end === null) return ids;
+
+    for (let chapterIndex = start; chapterIndex <= end; chapterIndex++) {
+      const chapterEntry = chapterEntries[chapterIndex];
+      if (!chapterEntry) continue;
+      ids.add(chapterEntry.spineItemId);
+    }
+    return ids;
+  }, [chapterEntries, pagination.spread]);
+
+  const visibleHighlights = useMemo(
+    () =>
+      bookHighlights.filter((highlight) =>
+        visibleSpineItemIds.has(highlight.spineItemId),
+      ),
+    [bookHighlights, visibleSpineItemIds],
+  );
+
+  const activeHighlightData = activeHighlight
+    ? bookHighlights.find((highlight) => highlight.id === activeHighlight.id) ?? null
+    : null;
+
+  useEffect(() => {
+    const container = stageContentRef.current;
+    if (!container) return;
+
+    const manager = createHighlightInteractionManager(container, {
+      highlightClass: EPUB_HIGHLIGHT_CLASS,
+      idAttribute: EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+      hoverClass: EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+      activeClass: EPUB_HIGHLIGHT_ACTIVE_CLASS,
+      onHighlightClick: (id, position) => {
+        setActiveHighlight((prev) =>
+          prev?.id === id ? null : { id, position },
+        );
+      },
+    });
+
+    highlightManagerRef.current = manager;
+    return () => {
+      manager.destroy();
+      if (highlightManagerRef.current === manager) {
+        highlightManagerRef.current = null;
+      }
+    };
+  }, [pagination.spread]);
+
+  useEffect(() => {
+    highlightManagerRef.current?.setActiveHighlight(activeHighlight?.id ?? null);
+  }, [activeHighlight, pagination.spread]);
+
+  useEffect(() => {
+    if (!activeHighlight) return;
+    const stillVisible = visibleHighlights.some(
+      (highlight) => highlight.id === activeHighlight.id,
+    );
+    if (!stillVisible) setActiveHighlight(null);
+  }, [activeHighlight, visibleHighlights]);
 
   useLayoutEffect(() => {
     const stageSlot = stageSlotRef.current;
@@ -196,6 +283,7 @@ export function ReaderV2() {
                 paginationConfig={paginationConfig}
                 bookId={bookId}
                 deferredImageCache={deferredImageCacheRef.current}
+                stageContentRef={stageContentRef}
               />
             </div>
           </div>
@@ -231,6 +319,22 @@ export function ReaderV2() {
           </div>
         </div>
       </main>
+
+      <HighlightToolbarContainer
+        bookId={bookId}
+        spineItemId={activeHighlightData?.spineItemId ?? undefined}
+        highlights={bookHighlights}
+        isCreatingHighlight={false}
+        creationPosition={{ x: 0, y: 0 }}
+        onCreateColorSelect={(_color) => {
+          // ReaderV2 creation flow is handled separately.
+        }}
+        onCreateClose={() => {}}
+        activeHighlight={activeHighlight}
+        onEditClose={() => setActiveHighlight(null)}
+        isNavVisible={true}
+        onCreateNoteSubmit={undefined}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import type { PaginationConfig } from "@/lib/pagination-v2";
 import type { ResolvedSpread, SpreadConfig } from "@/lib/pagination-v2/types";
 import { AnimatePresence, MotionConfig } from "motion/react";
+import type { RefObject } from "react";
 import { AnimatedSpread, type NavDirection } from "./AnimatedSpread";
 
 interface SpreadStageProps {
@@ -10,6 +11,7 @@ interface SpreadStageProps {
   paginationConfig: PaginationConfig;
   bookId: string;
   deferredImageCache: Map<string, string>;
+  stageContentRef?: RefObject<HTMLDivElement | null>;
   showDebugOutlines?: boolean;
 }
 
@@ -28,6 +30,7 @@ export function SpreadStage({
   paginationConfig,
   bookId,
   deferredImageCache,
+  stageContentRef,
   showDebugOutlines = false,
 }: SpreadStageProps) {
   const direction = toNavDirection(spread?.cause);
@@ -35,7 +38,7 @@ export function SpreadStage({
   return (
     <MotionConfig reducedMotion="user">
       {/* position:relative + overflow:hidden clips pages as they slide in/out */}
-      <div className="relative h-full w-full overflow-hidden">
+      <div ref={stageContentRef} className="relative h-full w-full overflow-hidden">
         <AnimatePresence custom={direction} mode="sync">
           {spread && (
             <AnimatedSpread

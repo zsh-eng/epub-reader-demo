@@ -1,7 +1,7 @@
-import { LazyImage } from "./shared/LazyImage";
-import { cn } from "@/lib/utils";
 import type { PageSlice } from "@/lib/pagination-v2";
+import { cn } from "@/lib/utils";
 import { Fragment } from "react";
+import { LazyImage } from "./shared/LazyImage";
 
 interface PageSliceViewProps {
   slice: PageSlice;
@@ -67,7 +67,22 @@ export function PageSliceView({
                 "font-medium": fragment.isCode,
               })}
             >
-              {fragment.text}
+              {fragment.highlightMarks && fragment.highlightMarks.length > 0 ? (
+                fragment.highlightMarks.reduceRight<React.ReactNode>(
+                  (content, mark) => (
+                    <mark
+                      className="epub-highlight"
+                      data-highlight-id={mark.id}
+                      data-color={mark.color}
+                    >
+                      {content}
+                    </mark>
+                  ),
+                  fragment.text,
+                )
+              ) : (
+                fragment.text
+              )}
             </span>
           ))}
         </Fragment>
