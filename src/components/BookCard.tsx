@@ -50,7 +50,7 @@ function BookCoverVisual({
           <img
             src={coverUrl}
             alt={`Cover of ${title}`}
-            className="h-full w-full object-cover"
+            className="absolute inset-0 block h-full w-full object-cover"
             loading="lazy"
           />
         ) : isLoadingCover ? (
