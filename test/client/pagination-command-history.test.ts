@@ -3,7 +3,7 @@ import {
   nextPaginationCommandHistory,
   summarizePaginationCommand,
 } from "@/lib/pagination-v2";
-import type { PaginationCommand } from "@/lib/pagination-v2/engine-types";
+import type { PaginationCommand } from "@/lib/pagination-v2/protocol";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG = {

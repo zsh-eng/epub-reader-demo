@@ -1,6 +1,6 @@
-import type { PaginationEvent } from "@/lib/pagination-v2/engine-types";
-import { PaginationEngine } from "@/lib/pagination-v2/pagination-engine";
-import { createCommandRuntime } from "@/lib/pagination-v2/pagination-worker-runtime";
+import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
+import { PaginationEngine } from "@/lib/pagination-v2/engine";
+import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import type {
     Block,
     FontConfig,

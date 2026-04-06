@@ -12,7 +12,7 @@ import type {
     ChapterUnavailableEvent,
     PaginationCommand,
     PaginationEvent,
-} from "./engine-types";
+} from "./protocol";
 import type {
     ContentAnchor,
     PaginationConfig,

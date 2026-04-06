@@ -1,4 +1,4 @@
-export type { PaginationCommand, PaginationEvent } from "./engine-types";
+export type { PaginationCommand, PaginationEvent } from "./protocol";
 export { DEFAULT_SPREAD_CONFIG } from "./types";
 export type {
     Block,
@@ -26,16 +26,16 @@ export {
     createPaginationCommandHistoryEntry,
     nextPaginationCommandHistory,
     summarizePaginationCommand
-} from "./shared/command-history";
-export type { PaginationCommandHistoryEntry } from "./shared/command-history";
+} from "./diagnostics/command-history";
+export type { PaginationCommandHistoryEntry } from "./diagnostics/command-history";
 export { layoutPages } from "./shared/layout-pages";
 export { layoutPreWrapLines, layoutTextLines } from "./shared/layout-text-lines";
 export { measureCollapsedSpaceWidth, measureSingleLineWidth } from "./shared/measure";
 export { parseChapterHtml } from "./shared/parse-html";
 export { clearPrepareCache, prepareBlocks } from "./shared/prepare-blocks";
-export { PaginationTracer } from "./shared/pagination-tracer";
+export { PaginationTracer } from "./diagnostics/tracer";
 export type {
     PaginationFontSwitchLatencyTrace,
     PaginationTracerSnapshot
-} from "./shared/pagination-tracer";
+} from "./diagnostics/tracer";
 export { getBlockSpacing, getLineHeight, headingScale } from "./shared/spacing";

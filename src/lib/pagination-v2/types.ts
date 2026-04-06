@@ -4,7 +4,7 @@ import type {
     PageSlice,
     TextCursorOffset,
 } from "./shared/types";
-import type { PaginationCommand } from "./engine-types";
+import type { PaginationCommand } from "./protocol";
 
 // Re-export types that are unchanged from pagination v1
 export { areFontConfigsEqual } from "./shared/types";

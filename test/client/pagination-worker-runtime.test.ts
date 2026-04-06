@@ -1,11 +1,11 @@
-import type { PaginationCommand, PaginationEvent } from "@/lib/pagination-v2/engine-types";
-import { PaginationEngine } from "@/lib/pagination-v2/pagination-engine";
+import type { PaginationCommand, PaginationEvent } from "@/lib/pagination-v2/protocol";
+import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import {
   coalesceQueuedCommands,
   createCommandRuntime,
   RELAYOUT_YIELD_BUDGET_MS,
   type QueuedPaginationCommand,
-} from "@/lib/pagination-v2/pagination-worker-runtime";
+} from "@/lib/pagination-v2/worker/runtime";
 import type { Block, FontConfig, LayoutTheme, PaginationConfig } from "@/lib/pagination-v2/types";
 import { describe, expect, it } from "vitest";
 

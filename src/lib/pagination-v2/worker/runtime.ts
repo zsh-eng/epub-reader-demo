@@ -1,5 +1,5 @@
-import type { PaginationCommand } from "./engine-types";
-import type { PaginationRuntime } from "./pagination-engine";
+import type { PaginationCommand } from "../protocol";
+import type { PaginationRuntime } from "../engine";
 
 export const RELAYOUT_YIELD_BUDGET_MS = 24;
 

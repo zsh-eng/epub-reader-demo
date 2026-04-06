@@ -7,7 +7,7 @@ import type {
   PaginationChapterDiagnostics,
   PaginationConfig,
   PaginationDiagnostics,
-} from "./types";
+} from "../shared/types";
 
 // ---------------------------------------------------------------------------
 // Types

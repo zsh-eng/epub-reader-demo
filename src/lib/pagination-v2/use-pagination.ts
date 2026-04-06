@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PaginationTracer } from "./shared/pagination-tracer";
-import type { PaginationCommand, PaginationEvent } from "./engine-types";
+import { PaginationTracer } from "./diagnostics/tracer";
+import type { PaginationCommand, PaginationEvent } from "./protocol";
 import type {
     Block,
     ContentAnchor,
@@ -151,7 +151,7 @@ export function usePagination(
 
   useEffect(() => {
     const worker = new Worker(
-      new URL("./pagination.worker.ts", import.meta.url),
+      new URL("./worker/pagination.worker.ts", import.meta.url),
       { type: "module" },
     );
 

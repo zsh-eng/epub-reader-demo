@@ -1,5 +1,5 @@
-import type { PaginationEvent } from "@/lib/pagination-v2/engine-types";
-import { PaginationEngine } from "@/lib/pagination-v2/pagination-engine";
+import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
+import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import type {
   FontConfig,
   LayoutTheme,

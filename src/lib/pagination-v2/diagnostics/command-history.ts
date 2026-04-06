@@ -1,4 +1,4 @@
-import type { PaginationCommand } from "../engine-types";
+import type { PaginationCommand } from "../protocol";
 
 export type TrackedPaginationCommand = PaginationCommand;
 

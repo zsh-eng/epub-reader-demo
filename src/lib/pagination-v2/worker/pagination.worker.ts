@@ -1,13 +1,13 @@
-import { ensurePaginationWorkerFontsReady } from "./shared/pagination-worker-fonts";
-import type { PaginationCommand, PaginationEvent } from "./engine-types";
-import { PaginationEngine } from "./pagination-engine";
+import { ensurePaginationWorkerFontsReady } from "./fonts";
+import type { PaginationCommand, PaginationEvent } from "../protocol";
+import { PaginationEngine } from "../engine";
 import {
   coalesceQueuedCommands,
   createCommandRuntime,
   LAYOUT_ADVANCING,
   NAVIGATION_COMMANDS,
   type QueuedPaginationCommand,
-} from "./pagination-worker-runtime";
+} from "./runtime";
 
 const workerFontsReady = ensurePaginationWorkerFontsReady();
 
