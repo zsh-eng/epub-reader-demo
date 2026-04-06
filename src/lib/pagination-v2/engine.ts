@@ -1,25 +1,25 @@
+import type {
+    ChapterUnavailableEvent,
+    PaginationCommand,
+    PaginationEvent,
+} from "./protocol";
 import { layoutPages } from "./shared/layout-pages";
 import { prepareBlocks } from "./shared/prepare-blocks";
 import type {
-  Block,
-  Page,
-  PaginationChapterDiagnostics,
-  PreparedBlock,
-  TextCursorOffset,
+    Block,
+    Page,
+    PaginationChapterDiagnostics,
+    PreparedBlock,
+    TextCursorOffset,
 } from "./shared/types";
 import { areFontConfigsEqual } from "./shared/types";
 import type {
-  ChapterUnavailableEvent,
-  PaginationCommand,
-  PaginationEvent,
-} from "./protocol";
-import type {
-  ContentAnchor,
-  PaginationConfig,
-  ResolvedLeafPage,
-  ResolvedSpread,
-  SpreadConfig,
-  SpreadGapReason,
+    ContentAnchor,
+    PaginationConfig,
+    ResolvedLeafPage,
+    ResolvedSpread,
+    SpreadConfig,
+    SpreadGapReason,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -148,6 +148,9 @@ export class PaginationEngine {
           break;
         case "addChapter":
           this.addChapter(cause, cmd.chapterIndex, cmd.blocks);
+          break;
+        case "updateChapter":
+          await this.updateChapter(cause, cmd.chapterIndex, cmd.blocks, runtime);
           break;
         case "updatePaginationConfig":
           await this.updatePaginationConfig(
@@ -304,6 +307,44 @@ export class PaginationEngine {
         chapterDiagnostics: diagnostics,
       });
     }
+  }
+
+  async updateChapter(
+    cause: "updateChapter",
+    chapterIndex: number,
+    blocks: Block[],
+    runtime: Partial<PaginationRuntime> = {},
+  ): Promise<void> {
+    if (chapterIndex < 0 || chapterIndex >= this.totalChapters) {
+      this.emit({
+        type: "error",
+        cause,
+        message: `updateChapter: index ${chapterIndex} out of bounds`,
+      });
+      return;
+    }
+
+    if (this.blocksByChapter[chapterIndex] === null) {
+      this.emit({
+        type: "error",
+        cause,
+        message: `updateChapter: chapter ${chapterIndex} has not been loaded yet`,
+      });
+      return;
+    }
+
+    this.blocksByChapter[chapterIndex] = blocks;
+
+    const rt = this.resolveRuntime(runtime);
+    await this.runRelayout(
+      cause,
+      (ch) => {
+        if (ch !== chapterIndex) return null;
+        if (!this.blocksByChapter[ch]) return null;
+        return this.prepareAndLayoutChapter(ch);
+      },
+      rt,
+    );
   }
 
   async updatePaginationConfig(

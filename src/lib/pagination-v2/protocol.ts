@@ -28,6 +28,12 @@ export interface AddChapterCommand {
   blocks: Block[];
 }
 
+export interface UpdateChapterCommand {
+  type: "updateChapter";
+  chapterIndex: number;
+  blocks: Block[];
+}
+
 export interface UpdatePaginationConfigCommand {
   type: "updatePaginationConfig";
   paginationConfig: PaginationConfig;
@@ -59,6 +65,7 @@ export interface GoToChapterCommand {
 export type PaginationCommand =
   | InitCommand
   | AddChapterCommand
+  | UpdateChapterCommand
   | UpdatePaginationConfigCommand
   | UpdateSpreadConfigCommand
   | NextSpreadCommand

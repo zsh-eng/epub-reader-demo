@@ -3,20 +3,28 @@ import type { PaginationRuntime } from "../engine";
 
 export const RELAYOUT_YIELD_BUDGET_MS = 24;
 
-/** Command types where only the last occurrence matters. */
-const SUPERSEDABLE = new Set<PaginationCommand["type"]>([
-  "updatePaginationConfig",
-  "updateSpreadConfig",
-  "nextSpread",
-  "prevSpread",
-  "goToPage",
-  "goToChapter",
-]);
+/** Command coalescing key. Null means command is never coalesced. */
+function getCoalesceKey(command: PaginationCommand): string | null {
+  switch (command.type) {
+    case "updatePaginationConfig":
+    case "updateSpreadConfig":
+    case "nextSpread":
+    case "prevSpread":
+    case "goToPage":
+    case "goToChapter":
+      return command.type;
+    case "updateChapter":
+      return `${command.type}:${command.chapterIndex}`;
+    default:
+      return null;
+  }
+}
 
 /** Command types that advance the layout epoch (require relayout). */
 export const LAYOUT_ADVANCING = new Set<PaginationCommand["type"]>([
   "init",
   "updatePaginationConfig",
+  "updateChapter",
 ]);
 
 /** Navigation command types — drained at yield boundaries during relayout. */
@@ -32,30 +40,31 @@ export interface QueuedPaginationCommand {
 }
 
 /**
- * Keep only the last occurrence of each supersedable command type.
+ * Keep only the last occurrence of each coalescable command key.
  * `init` and `addChapter` are never coalesced (always kept in order).
  */
 export function coalesceQueuedCommands(
   commands: QueuedPaginationCommand[],
 ): QueuedPaginationCommand[] {
-  const lastIndex = new Map<PaginationCommand["type"], number>();
+  const lastIndex = new Map<string, number>();
   for (let i = commands.length - 1; i >= 0; i--) {
-    const type = commands[i]?.command.type;
-    if (!type) continue;
-    if (SUPERSEDABLE.has(type) && !lastIndex.has(type)) {
-      lastIndex.set(type, i);
-    }
+    const command = commands[i]?.command;
+    if (!command) continue;
+    const key = getCoalesceKey(command);
+    if (!key || lastIndex.has(key)) continue;
+    lastIndex.set(key, i);
   }
 
   const result: QueuedPaginationCommand[] = [];
   for (let i = 0; i < commands.length; i++) {
     const item = commands[i];
     if (!item) continue;
-    if (SUPERSEDABLE.has(item.command.type)) {
-      if (lastIndex.get(item.command.type) === i) result.push(item);
+    const key = getCoalesceKey(item.command);
+    if (!key) {
+      result.push(item);
       continue;
     }
-    result.push(item);
+    if (lastIndex.get(key) === i) result.push(item);
   }
   return result;
 }
@@ -77,14 +86,18 @@ const NOOP_RUNTIME: PaginationRuntime = {
 
 /**
  * Build a PaginationRuntime for a relayout command
- * (updatePaginationConfig / init).
+ * (updatePaginationConfig / updateChapter / init).
  * Navigation-only commands (nextSpread, prevSpread, etc.) use the no-op runtime.
  */
 export function createCommandRuntime(
   cmd: PaginationCommand,
   opts: CreateRuntimeOptions,
 ): PaginationRuntime {
-  if (cmd.type !== "updatePaginationConfig" && cmd.type !== "init") {
+  if (
+    cmd.type !== "updatePaginationConfig" &&
+    cmd.type !== "updateChapter" &&
+    cmd.type !== "init"
+  ) {
     return NOOP_RUNTIME;
   }
 

@@ -22,6 +22,8 @@ export function summarizePaginationCommand(
     }
     case "addChapter":
       return `chapter=${command.chapterIndex + 1}, blocks=${command.blocks.length}`;
+    case "updateChapter":
+      return `chapter=${command.chapterIndex + 1}, blocks=${command.blocks.length}`;
     case "updatePaginationConfig":
       return `base=${command.paginationConfig.fontConfig.baseSizePx.toFixed(1)}px, lineHeight=${command.paginationConfig.layoutTheme.lineHeightFactor.toFixed(2)}, para=${command.paginationConfig.layoutTheme.paragraphSpacingFactor.toFixed(2)}, align=${command.paginationConfig.layoutTheme.textAlign}, viewport=${Math.round(command.paginationConfig.viewport.width)}x${Math.round(command.paginationConfig.viewport.height)}`;
     case "updateSpreadConfig":

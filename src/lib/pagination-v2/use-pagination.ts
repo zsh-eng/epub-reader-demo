@@ -32,6 +32,8 @@ export interface UsePaginationResult {
   }) => void;
   /** Called by the shell once per chapter after HTML processing is complete. */
   addChapter: (chapterIndex: number, blocks: Block[]) => void;
+  /** Called to relayout a single already-loaded chapter after content updates. */
+  updateChapter: (chapterIndex: number, blocks: Block[]) => void;
 
   tracer: PaginationTracer;
   markFontSwitchIntent: (from: string, to: string) => void;
@@ -249,6 +251,14 @@ export function usePagination(
     [postCommand],
   );
 
+  const updateChapter = useCallback(
+    (chapterIndex: number, blocks: Block[]) => {
+      tracerRef.current.recordChapterQueued(chapterIndex);
+      postCommand({ type: "updateChapter", chapterIndex, blocks });
+    },
+    [postCommand],
+  );
+
   const nextSpread = useCallback(() => {
     postCommand({ type: "nextSpread" });
   }, [postCommand]);
@@ -283,6 +293,7 @@ export function usePagination(
     goToChapter,
     init,
     addChapter,
+    updateChapter,
     tracer: tracerRef.current,
     markFontSwitchIntent,
   };
