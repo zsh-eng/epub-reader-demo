@@ -149,6 +149,7 @@ export function ReaderV2Debug() {
                 paginationConfig={paginationConfig}
                 bookId={bookId}
                 deferredImageCache={deferredImageCacheRef.current}
+                showDebugOutlines
               />
             </div>
           </div>

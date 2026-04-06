@@ -13,6 +13,7 @@ interface AnimatedSpreadProps {
   paginationConfig: PaginationConfig;
   bookId: string;
   deferredImageCache: Map<string, string>;
+  showDebugOutlines?: boolean;
 }
 
 const EASE_OUT_QUAD = [0.25, 0.46, 0.45, 0.94] as [
@@ -52,6 +53,7 @@ export function AnimatedSpread({
   paginationConfig,
   bookId,
   deferredImageCache,
+  showDebugOutlines = false,
 }: AnimatedSpreadProps) {
   const rawDirection =
     (usePresenceData() as NavDirection | undefined) ?? "instant";
@@ -118,7 +120,11 @@ export function AnimatedSpread({
               return (
                 <div
                   key={`gap-${slot.slotIndex}`}
-                  className="h-full w-full bg-muted/20 reader-container-outline"
+                  className={
+                    showDebugOutlines
+                      ? "h-full w-full bg-muted/20 reader-container-outline"
+                      : "h-full w-full bg-muted/20"
+                  }
                 />
               );
             }
@@ -126,7 +132,11 @@ export function AnimatedSpread({
             return (
               <div
                 key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
-                className="h-full w-full overflow-hidden reader-container-outline"
+                className={
+                  showDebugOutlines
+                    ? "h-full w-full overflow-hidden reader-container-outline"
+                    : "h-full w-full overflow-hidden"
+                }
               >
                 {slot.page.content.map((slice, i) => (
                   <PageSliceView

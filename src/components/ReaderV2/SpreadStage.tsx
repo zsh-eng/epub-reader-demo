@@ -10,6 +10,7 @@ interface SpreadStageProps {
   paginationConfig: PaginationConfig;
   bookId: string;
   deferredImageCache: Map<string, string>;
+  showDebugOutlines?: boolean;
 }
 
 function toNavDirection(
@@ -27,6 +28,7 @@ export function SpreadStage({
   paginationConfig,
   bookId,
   deferredImageCache,
+  showDebugOutlines = false,
 }: SpreadStageProps) {
   const direction = toNavDirection(spread?.cause);
 
@@ -44,6 +46,7 @@ export function SpreadStage({
               paginationConfig={paginationConfig}
               bookId={bookId}
               deferredImageCache={deferredImageCache}
+              showDebugOutlines={showDebugOutlines}
             />
           )}
         </AnimatePresence>
