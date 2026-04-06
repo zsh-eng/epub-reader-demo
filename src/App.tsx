@@ -10,6 +10,7 @@ import { useTransferQueue } from "@/hooks/use-transfer-queue";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ReaderV2 } from "./components/ReaderV2";
+import { ReaderV2Debug } from "./components/ReaderV2/debug";
 
 const queryClient = new QueryClient();
 
@@ -33,7 +34,11 @@ function App() {
           <Routes>
             <Route path="/" element={<Library />} />
             <Route path="/reader/:bookId" element={<Reader />} />
-            <Route path="/reader-prototype/:bookId" element={<ReaderV2 />} />
+            <Route path="/reader-v2/:bookId" element={<ReaderV2 />} />
+            <Route
+              path="/reader-v2/debug/:bookId"
+              element={<ReaderV2Debug />}
+            />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
           </Routes>
