@@ -1,6 +1,7 @@
 import {
   addHighlight as addHighlightToDb,
   deleteHighlight as deleteHighlightFromDb,
+  getBookHighlights,
   getHighlights,
   updateHighlight as updateHighlightInDb,
 } from "@/lib/db";
@@ -12,9 +13,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
  */
 export const highlightKeys = {
   all: ["highlights"] as const,
+  book: (bookId: string) => [...highlightKeys.all, bookId] as const,
   chapter: (bookId: string, spineItemId: string) =>
     [...highlightKeys.all, bookId, spineItemId] as const,
 };
+
+/**
+ * Hook for fetching all highlights for a specific book.
+ */
+export function useBookHighlightsQuery(bookId: string | undefined) {
+  return useQuery({
+    queryKey: highlightKeys.book(bookId ?? ""),
+    queryFn: () => getBookHighlights(bookId!),
+    enabled: !!bookId,
+  });
+}
 
 /**
  * Hook for fetching highlights for a specific chapter
@@ -39,6 +52,7 @@ export function useAddHighlightMutation(
 ) {
   const queryClient = useQueryClient();
   const queryKey = highlightKeys.chapter(bookId ?? "", spineItemId ?? "");
+  const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
     mutationFn: async (highlight: Highlight) => {
@@ -72,6 +86,7 @@ export function useAddHighlightMutation(
     onSettled: () => {
       // Refetch after error or success to ensure consistency
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: bookQueryKey });
     },
   });
 }
@@ -85,6 +100,7 @@ export function useDeleteHighlightMutation(
 ) {
   const queryClient = useQueryClient();
   const queryKey = highlightKeys.chapter(bookId ?? "", spineItemId ?? "");
+  const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
     mutationFn: async (highlightId: string) => {
@@ -115,6 +131,7 @@ export function useDeleteHighlightMutation(
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: bookQueryKey });
     },
   });
 }
@@ -128,6 +145,7 @@ export function useUpdateHighlightMutation(
 ) {
   const queryClient = useQueryClient();
   const queryKey = highlightKeys.chapter(bookId ?? "", spineItemId ?? "");
+  const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
     mutationFn: async ({
@@ -164,6 +182,7 @@ export function useUpdateHighlightMutation(
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: bookQueryKey });
     },
   });
 }

@@ -601,6 +601,16 @@ export async function getHighlights(
     .toArray();
 }
 
+export async function getBookHighlights(
+  bookId: string,
+): Promise<SyncedHighlight[]> {
+  return db.highlights
+    .where("bookId")
+    .equals(bookId)
+    .filter(isNotDeleted)
+    .toArray();
+}
+
 export async function deleteHighlight(id: string): Promise<void> {
   const highlight = await db.highlights.get(id);
   if (!highlight) return;
