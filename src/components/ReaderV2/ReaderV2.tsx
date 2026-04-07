@@ -17,6 +17,7 @@ import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
+import { usePaginationTapNav } from "./hooks/use-pagination-tap-nav";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { ReaderV2SettingsPopover } from "./shared/ReaderV2SettingsPopover";
 
@@ -220,6 +221,22 @@ export function ReaderV2() {
     return `Page ${currentPage} / ${totalPages}`;
   }, [currentPage, totalPages]);
 
+  const canGoPrev = currentPage > 1;
+  const canGoNext = !(
+    pagination.status === "ready" &&
+    totalPages > 0 &&
+    currentPage >= totalPages
+  );
+
+  usePaginationTapNav({
+    containerRef: stageSlotRef,
+    enabled: isMobile,
+    onPrevSpread: pagination.prevSpread,
+    onNextSpread: pagination.nextSpread,
+    canGoPrev,
+    canGoNext,
+  });
+
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner title="Loading book" />;
   }
@@ -300,7 +317,7 @@ export function ReaderV2() {
             size="icon"
             aria-label="Previous page"
             onClick={pagination.prevSpread}
-            disabled={currentPage <= 1}
+            disabled={!canGoPrev}
           >
             <ChevronLeft className="size-4" />
           </Button>
@@ -312,11 +329,7 @@ export function ReaderV2() {
             size="icon"
             aria-label="Next page"
             onClick={pagination.nextSpread}
-            disabled={
-              pagination.status === "ready" &&
-              totalPages > 0 &&
-              currentPage >= totalPages
-            }
+            disabled={!canGoNext}
           >
             <ChevronRight className="size-4" />
           </Button>
