@@ -11,12 +11,34 @@ interface FooterScrubberCanvasProps {
 const TICK_SPACING = 10;
 const PLAYHEAD_H = 6;
 const TOP_PAD = 4;
-// Friction constant for momentum deceleration (higher = stops faster)
-const MOMENTUM_FRICTION = 6;
-// Minimum velocity (pages/sec) to trigger momentum scroll on release
+// --- Momentum deceleration ---
+//
+// We model deceleration as exponential decay:  vel *= exp(-k * dt)
+//
+// Apple documents two UIScrollView.DecelerationRate presets:
+//   .normal = 0.998
+//   .fast   = 0.99
+// These are per-frame multiplicative factors, but Apple does not publicly
+// document the exact time unit (per ms? per 1/60s?). Best available
+// interpretation treats them as per-millisecond, which maps to this formula via:
+//   k = -ln(rate) * 1000
+//   normal → k ≈ 2.0
+//   fast   → k ≈ 10.0
+//
+// For a scrubber the user navigates to a target position — coasting past it
+// feels wrong — so we lean toward the "fast" end. k=8 is a best-effort
+// approximation; tune upward (toward 10) if it feels too slidey, or down
+// (toward 5) if it feels too abrupt.
+const MOMENTUM_FRICTION = 8;
+// Minimum fling velocity (pages/sec) required to trigger momentum on release.
+// Below this the release is treated as a deliberate stop.
 const MOMENTUM_THRESHOLD = 3;
-// Maximum initial momentum velocity cap (pages/sec)
-const MOMENTUM_MAX_VELOCITY = 60;
+// Cap on initial momentum velocity (pages/sec). At TICK_SPACING=10, this is
+// equivalent to a pixel velocity cap of MAX_VELOCITY * 10. A typical fast
+// finger swipe is ~1500–3000 px/sec (150–300 pages/sec), so 60 was far too
+// low — it capped nearly every real fling, making k=8 produce only ~7 pages
+// of travel total. 400 lets fast flings reach ~50 pages of travel at k=8.
+const MOMENTUM_MAX_VELOCITY = 400;
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
@@ -165,7 +187,14 @@ export function FooterScrubberCanvas({
 }: FooterScrubberCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const displayPageRef = useRef<number>(currentPage);
+  // Two separate RAF handles: spring owns rafRef, momentum owns momentumRafRef.
+  // This prevents the spring useEffect cleanup (which fires on every currentPage
+  // change) from cancelling a live momentum animation — critical because
+  // onScrubPreview is often wired to the same setter as onScrubCommit, meaning
+  // currentPage can change on every momentum frame.
   const rafRef = useRef<number>(0);
+  const momentumRafRef = useRef<number>(0);
+  const isMomentumRef = useRef(false);
   const colorsRef = useRef<CanvasColors | null>(null);
   const chapterStartSet = useRef<Set<number>>(new Set());
 
@@ -198,7 +227,7 @@ export function FooterScrubberCanvas({
 
   // Spring animation toward currentPage (idle / post-commit state)
   useEffect(() => {
-    if (isDraggingRef.current) return;
+    if (isDraggingRef.current || isMomentumRef.current) return;
     const target = currentPage;
     let velocity = 0;
     let lastTime: number | null = null;
@@ -251,31 +280,36 @@ export function FooterScrubberCanvas({
     let vel = capped;
     let lastTime: number | null = null;
 
-    cancelAnimationFrame(rafRef.current);
+    isMomentumRef.current = true;
+    cancelAnimationFrame(momentumRafRef.current);
 
     const tick = (now: number) => {
       const dt = Math.min((now - (lastTime ?? now)) / 1000, 0.05);
       lastTime = now;
 
-      // Exponential friction: v *= e^(-friction * dt)
+      // Exponential decay: vel *= e^(-k*dt)  — equivalent to iOS's per-frame
+      // multiplicative rate, assuming k = -ln(rate) * 1000 (per-ms interpretation).
       vel *= Math.exp(-MOMENTUM_FRICTION * dt);
       displayPageRef.current = Math.max(1, Math.min(totalPages, displayPageRef.current + vel * dt));
       redraw();
       emitPreviewIfChanged(displayPageRef.current);
 
       if (Math.abs(vel) > 0.4) {
-        rafRef.current = requestAnimationFrame(tick);
+        momentumRafRef.current = requestAnimationFrame(tick);
       } else {
-        // Momentum settled — commit and let spring snap to final page
+        // Momentum settled — commit and let spring snap to nearest page
+        isMomentumRef.current = false;
         onScrubCommit(Math.round(displayPageRef.current));
       }
     };
 
-    rafRef.current = requestAnimationFrame(tick);
+    momentumRafRef.current = requestAnimationFrame(tick);
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     cancelAnimationFrame(rafRef.current);
+    cancelAnimationFrame(momentumRafRef.current);
+    isMomentumRef.current = false;
     isDraggingRef.current = true;
     dragStartXRef.current = e.clientX;
     dragStartPageRef.current = displayPageRef.current;
