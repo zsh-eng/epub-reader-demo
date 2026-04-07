@@ -29,14 +29,14 @@ const MAX_VIEWPORT_HEIGHT_PX = 980;
 /** Height of the floating header (h-14), inside the safe-area-adjusted root. */
 const HEADER_HEIGHT_PX = 56;
 /** Height of the floating footer (chapter row + page indicator + scrubber), excluding safe-area. */
-const TOOLBAR_HEIGHT_PX = 140;
+const TOOLBAR_HEIGHT_PX = 124;
 /** Visual breathing room between overlay edge and text. */
 const MIN_PADDING_Y = 20;
 /** Minimum horizontal margin between screen edge and text. */
 const MIN_PADDING_X = 20;
 
 const PADDING_TOP = HEADER_HEIGHT_PX + MIN_PADDING_Y;
-const PADDING_BOTTOM = TOOLBAR_HEIGHT_PX + MIN_PADDING_Y;
+const PADDING_BOTTOM = TOOLBAR_HEIGHT_PX;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
