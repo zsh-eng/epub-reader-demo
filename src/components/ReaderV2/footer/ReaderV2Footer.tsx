@@ -25,6 +25,7 @@ export function ReaderV2Footer({
   chapterEntries,
   chapterStartPages,
   onGoToPage,
+  onGoToChapter,
   onPrevChapter,
   onNextChapter,
 }: ReaderV2FooterProps) {
@@ -48,6 +49,7 @@ export function ReaderV2Footer({
             chapterStartPages={chapterStartPages}
             currentPage={currentPage}
             totalPages={totalPages}
+            onGoToChapter={onGoToChapter}
             onPrevChapter={onPrevChapter}
             onNextChapter={onNextChapter}
           />

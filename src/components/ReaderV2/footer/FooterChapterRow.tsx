@@ -8,6 +8,7 @@ interface FooterChapterRowProps {
   chapterStartPages: (number | null)[];
   currentPage: number;
   totalPages: number;
+  onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
 }
@@ -18,23 +19,40 @@ export function FooterChapterRow({
   chapterStartPages,
   currentPage,
   totalPages,
+  onGoToChapter,
   onPrevChapter,
   onNextChapter,
 }: FooterChapterRowProps) {
   const hasPrev = currentChapterIndex > 0;
   const hasNext = currentChapterIndex < chapterEntries.length - 1;
 
+  const prevChapterStart = chapterStartPages[currentChapterIndex - 1];
   const currentChapterStart = chapterStartPages[currentChapterIndex];
   const nextChapterStart = chapterStartPages[currentChapterIndex + 1];
 
-  const pagesBack =
+  const pagesFromCurrentChapterStart =
     currentChapterStart != null ? currentPage - currentChapterStart : null;
+  const isPastCurrentChapterStart =
+    pagesFromCurrentChapterStart != null && pagesFromCurrentChapterStart > 0;
+  const pagesBack = isPastCurrentChapterStart
+    ? pagesFromCurrentChapterStart
+    : prevChapterStart != null
+      ? currentPage - prevChapterStart
+      : null;
   const pagesForward =
     nextChapterStart != null
       ? nextChapterStart - currentPage
       : hasNext
         ? null
         : totalPages - currentPage;
+
+  const handlePrevClick = () => {
+    if (isPastCurrentChapterStart) {
+      onGoToChapter(currentChapterIndex);
+      return;
+    }
+    onPrevChapter();
+  };
 
   const currentChapterTitle = chapterEntries[currentChapterIndex]?.title ?? "";
 
@@ -44,9 +62,9 @@ export function FooterChapterRow({
       {/* Prev chapter — hidden entirely when not available */}
       {hasPrev && (
         <button
-          onClick={onPrevChapter}
+          onClick={handlePrevClick}
           className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-muted-foreground hover:bg-muted/60 transition-colors flex-shrink-0"
-          aria-label="Previous chapter"
+          aria-label={isPastCurrentChapterStart ? "Start of current chapter" : "Previous chapter"}
         >
           <ChevronLeft className="size-3.5 flex-shrink-0" />
           {pagesBack !== null && pagesBack > 0 && (
