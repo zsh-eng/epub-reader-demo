@@ -8,12 +8,15 @@ interface FooterScrubberCanvasProps {
   onScrubPreview?: (page: number) => void;
 }
 
-// ~10px between pages → ~30 visible at once in a ~300px canvas
 const TICK_SPACING = 10;
-// Playhead nub height — very short, sits at top of canvas
 const PLAYHEAD_H = 6;
-// Where ticks and playhead begin (top of canvas)
 const TOP_PAD = 4;
+// Friction constant for momentum deceleration (higher = stops faster)
+const MOMENTUM_FRICTION = 6;
+// Minimum velocity (pages/sec) to trigger momentum scroll on release
+const MOMENTUM_THRESHOLD = 3;
+// Maximum initial momentum velocity cap (pages/sec)
+const MOMENTUM_MAX_VELOCITY = 60;
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
@@ -79,43 +82,48 @@ function drawCanvas(
     const edgeAlpha = smoothstep(0, FADE_ZONE, distFromEdge);
     if (edgeAlpha <= 0) continue;
 
-    // Tick type
+    // Tick type — chapters are thicker/shorter, not taller
     const isChapter = chapterStartSet.has(p);
     const isMod20 = p % 20 === 0;
     const isMod10 = p % 10 === 0;
 
     let tickH: number;
+    let tickTopOffset: number; // extra top offset so chapter ticks cover "middle" of range
     let lineWidth: number;
     let color: string;
     let baseAlpha: number;
 
     if (isChapter) {
-      tickH = 36;
+      // Slightly thicker, shorter — covers roughly the middle 2/3 of the tick range
+      tickH = 18;
+      tickTopOffset = 3;
       lineWidth = 2;
       color = colors.fg;
       baseAlpha = 0.85;
     } else if (isMod20) {
-      tickH = 26;
+      tickH = 28;
+      tickTopOffset = 0;
       lineWidth = 0.9;
       color = colors.mutedFg;
       baseAlpha = 0.7;
     } else if (isMod10) {
-      tickH = 22;
+      tickH = 25;
+      tickTopOffset = 0;
       lineWidth = 0.9;
       color = colors.mutedFg;
       baseAlpha = 0.5;
     } else {
-      tickH = 18;
+      tickH = 22;
+      tickTopOffset = 0;
       lineWidth = 0.75;
       color = colors.mutedFg;
       baseAlpha = 0.3;
     }
 
-    // Dip effect: ticks near the playhead start below the playhead nub.
-    // At dist=0 the tick is pushed down by PLAYHEAD_H; smoothly recovers by dist=1.5.
+    // Dip: ticks near the playhead start below the nub and appear shorter
     const dist = Math.abs(p - displayPage);
     const dipOffset = PLAYHEAD_H * Math.max(0, 1 - dist / 1.5);
-    const tickTop = TOP_PAD + dipOffset;
+    const tickTop = TOP_PAD + tickTopOffset + dipOffset;
 
     ctx.globalAlpha = edgeAlpha * baseAlpha;
     ctx.strokeStyle = color;
@@ -132,11 +140,11 @@ function drawCanvas(
       ctx.font = `9px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillText(String(p), x, TOP_PAD + tickH + 5);
+      ctx.fillText(String(p), x, TOP_PAD + 28 + 5);
     }
   }
 
-  // Playhead nub — drawn on top, very short, at top of canvas
+  // Playhead nub — very short, anchored to top, drawn last (on top)
   ctx.globalAlpha = 1;
   ctx.strokeStyle = colors.fg;
   ctx.lineWidth = 2;
@@ -161,7 +169,6 @@ export function FooterScrubberCanvas({
   const colorsRef = useRef<CanvasColors | null>(null);
   const chapterStartSet = useRef<Set<number>>(new Set());
 
-  // Keep chapter set in sync (render-phase update is fine for a ref)
   chapterStartSet.current = new Set(
     chapterStartPages.filter((p): p is number => p !== null),
   );
@@ -171,6 +178,8 @@ export function FooterScrubberCanvas({
   const dragStartXRef = useRef(0);
   const dragStartPageRef = useRef<number>(currentPage);
   const lastPreviewPageRef = useRef<number>(currentPage);
+  // Velocity tracking: recent pointer positions for momentum computation
+  const dragHistoryRef = useRef<{ x: number; t: number }[]>([]);
 
   function redraw() {
     const canvas = canvasRef.current;
@@ -179,22 +188,28 @@ export function FooterScrubberCanvas({
     drawCanvas(canvas, displayPageRef.current, totalPages, chapterStartSet.current, colorsRef.current);
   }
 
-  // Spring animation toward currentPage (only when not dragging)
+  function emitPreviewIfChanged(page: number) {
+    const intPage = Math.round(page);
+    if (intPage !== lastPreviewPageRef.current) {
+      lastPreviewPageRef.current = intPage;
+      onScrubPreview?.(intPage);
+    }
+  }
+
+  // Spring animation toward currentPage (idle / post-commit state)
   useEffect(() => {
     if (isDraggingRef.current) return;
     const target = currentPage;
     let velocity = 0;
     let lastTime: number | null = null;
-    const STIFFNESS = 280;
-    const DAMPING = 32;
 
     cancelAnimationFrame(rafRef.current);
 
     const tick = (now: number) => {
       const dt = Math.min((now - (lastTime ?? now)) / 1000, 0.05);
       lastTime = now;
-      const force = STIFFNESS * (target - displayPageRef.current);
-      velocity = (velocity + force * dt) * (1 - DAMPING * dt);
+      const force = 280 * (target - displayPageRef.current);
+      velocity = (velocity + force * dt) * (1 - 32 * dt);
       displayPageRef.current = Math.max(1, Math.min(totalPages, displayPageRef.current + velocity * dt));
       redraw();
       if (Math.abs(target - displayPageRef.current) > 0.005 || Math.abs(velocity) > 0.05) {
@@ -209,7 +224,7 @@ export function FooterScrubberCanvas({
     return () => cancelAnimationFrame(rafRef.current);
   }, [currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resize observer — re-resolve colors and redraw
+  // Resize observer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -221,7 +236,7 @@ export function FooterScrubberCanvas({
     return () => ro.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Theme observer — re-resolve colors on class/attribute change
+  // Theme observer
   useEffect(() => {
     const mo = new MutationObserver(() => {
       colorsRef.current = null;
@@ -231,35 +246,82 @@ export function FooterScrubberCanvas({
     return () => mo.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  function startMomentum(initialVelocity: number) {
+    const capped = Math.sign(initialVelocity) * Math.min(Math.abs(initialVelocity), MOMENTUM_MAX_VELOCITY);
+    let vel = capped;
+    let lastTime: number | null = null;
+
+    cancelAnimationFrame(rafRef.current);
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - (lastTime ?? now)) / 1000, 0.05);
+      lastTime = now;
+
+      // Exponential friction: v *= e^(-friction * dt)
+      vel *= Math.exp(-MOMENTUM_FRICTION * dt);
+      displayPageRef.current = Math.max(1, Math.min(totalPages, displayPageRef.current + vel * dt));
+      redraw();
+      emitPreviewIfChanged(displayPageRef.current);
+
+      if (Math.abs(vel) > 0.4) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        // Momentum settled — commit and let spring snap to final page
+        onScrubCommit(Math.round(displayPageRef.current));
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+  }
+
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    cancelAnimationFrame(rafRef.current);
     isDraggingRef.current = true;
     dragStartXRef.current = e.clientX;
-    // Start from current float position for seamless pickup
     dragStartPageRef.current = displayPageRef.current;
     lastPreviewPageRef.current = Math.round(displayPageRef.current);
+    dragHistoryRef.current = [{ x: e.clientX, t: performance.now() }];
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
-    cancelAnimationFrame(rafRef.current);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isDraggingRef.current) return;
+    const now = performance.now();
+
+    // Track history for velocity; keep only the last 80ms
+    dragHistoryRef.current.push({ x: e.clientX, t: now });
+    const cutoff = now - 80;
+    dragHistoryRef.current = dragHistoryRef.current.filter((h) => h.t >= cutoff);
+
     const dx = e.clientX - dragStartXRef.current;
-    // Continuous float — no rounding, smooth scrolling feel
     const page = Math.max(1, Math.min(totalPages, dragStartPageRef.current - dx / TICK_SPACING));
     displayPageRef.current = page;
     redraw();
-    // Only fire preview callback when the integer page actually changes
-    const intPage = Math.round(page);
-    if (intPage !== lastPreviewPageRef.current) {
-      lastPreviewPageRef.current = intPage;
-      onScrubPreview?.(intPage);
-    }
+    emitPreviewIfChanged(page);
   }
 
   function handlePointerUp() {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
-    onScrubCommit(Math.round(displayPageRef.current));
+
+    // Compute fling velocity from recent history
+    const history = dragHistoryRef.current;
+    let velocityPagesPerSec = 0;
+    if (history.length >= 2) {
+      const oldest = history[0]!;
+      const newest = history[history.length - 1]!;
+      const dtSec = (newest.t - oldest.t) / 1000;
+      if (dtSec > 0.001) {
+        const dxPx = newest.x - oldest.x;
+        velocityPagesPerSec = -(dxPx / dtSec) / TICK_SPACING;
+      }
+    }
+
+    if (Math.abs(velocityPagesPerSec) > MOMENTUM_THRESHOLD) {
+      startMomentum(velocityPagesPerSec);
+    } else {
+      onScrubCommit(Math.round(displayPageRef.current));
+    }
   }
 
   return (
