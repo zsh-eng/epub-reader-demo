@@ -8,14 +8,17 @@ interface FooterScrubberCanvasProps {
   onScrubPreview?: (page: number) => void;
 }
 
-const TICK_SPACING = 6;
-const PLAYHEAD_H = 6;
-const TOP_PAD = 4;
-const PLAYHEAD_RISE = 1;
-const PLAYHEAD_TICK_GAP = 4;
+const TICK_SPACING = 6; // Pixels between page ticks; lower = denser ticks and faster scrub for same drag distance.
+const PLAYHEAD_H = 6; // Playhead nub height in pixels.
+const TOP_PAD = 4; // Baseline top inset where normal ticks begin.
+const PLAYHEAD_RISE = 1; // How far the playhead rises above TOP_PAD.
+const PLAYHEAD_TICK_GAP = 4; // Required center gap (px) between playhead bottom and the centered tick.
 const PLAYHEAD_TOP = TOP_PAD - PLAYHEAD_RISE;
 const PLAYHEAD_BOTTOM = PLAYHEAD_TOP + PLAYHEAD_H;
-const MAX_CENTER_DIP_OFFSET = PLAYHEAD_BOTTOM - TOP_PAD + PLAYHEAD_TICK_GAP;
+const MAX_CENTER_DIP_OFFSET = PLAYHEAD_BOTTOM - TOP_PAD + PLAYHEAD_TICK_GAP; // Full dip at exact center.
+const DIP_RADIUS_PAGES = 2.6; // Width of the bump in pages (typical: 1.2-3).
+const DIP_FALLOFF_POWER = 1; // Bump shoulder curve (1=linear, 2-3=tighter, >4 is very concentrated at center).
+const BOTTOM_DIP_FRACTION = 0.35; // How much of dip applies to tick bottoms (0=anchor bottoms, 1=no shortening).
 // --- Momentum deceleration ---
 //
 // We model deceleration as exponential decay:  vel *= exp(-k * dt)
@@ -156,17 +159,20 @@ function drawCanvas(
       baseAlpha = 0.3;
     }
 
-    // Dip: ticks near the playhead start below the nub and appear shorter
+    // Dip: top keeps full playhead gap; bottom can dip less to keep the bump shallower.
     const dist = Math.abs(p - displayPage);
-    const dipOffset = MAX_CENTER_DIP_OFFSET * Math.max(0, 1 - dist / 1.5);
+    const dipT = Math.max(0, 1 - dist / DIP_RADIUS_PAGES);
+    const dipOffset = MAX_CENTER_DIP_OFFSET * dipT ** DIP_FALLOFF_POWER;
+    const bottomDipOffset = dipOffset * BOTTOM_DIP_FRACTION;
     const tickTop = TOP_PAD + tickTopOffset + dipOffset;
+    const tickBottom = TOP_PAD + tickTopOffset + tickH + bottomDipOffset;
 
     ctx.globalAlpha = edgeAlpha * baseAlpha;
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.moveTo(x, tickTop);
-    ctx.lineTo(x, tickTop + tickH);
+    ctx.lineTo(x, tickBottom);
     ctx.stroke();
 
     // Number label every 20 pages
