@@ -36,7 +36,7 @@ export function ReaderV2SettingsPopover({
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           className={cn(
             "rounded-full",
             isOpen && "bg-accent text-accent-foreground",

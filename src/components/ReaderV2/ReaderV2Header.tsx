@@ -1,12 +1,11 @@
 import { Button } from "@/components/ui/button";
 import type { ReaderSettings } from "@/types/reader.types";
-import { ArrowLeft } from "lucide-react";
+import { Bookmark, ChevronLeft, List, Search } from "lucide-react";
 import { ReaderV2SettingsPopover } from "./shared/ReaderV2SettingsPopover";
 
 interface ReaderV2HeaderProps {
   chromeVisible: boolean;
   bookTitle: string;
-  currentPageLabel: string;
   onBackToLibrary: () => void;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
@@ -18,7 +17,6 @@ interface ReaderV2HeaderProps {
 export function ReaderV2Header({
   chromeVisible,
   bookTitle,
-  currentPageLabel,
   onBackToLibrary,
   settings,
   onUpdateSettings,
@@ -35,28 +33,65 @@ export function ReaderV2Header({
         pointerEvents: chromeVisible ? "auto" : "none",
       }}
     >
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:px-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBackToLibrary}
-          aria-label="Back to library"
-        >
-          <ArrowLeft className="size-4" />
-        </Button>
+      <div className="mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
 
-        <div className="min-w-0 flex-1 px-2">
-          <p className="truncate text-sm font-medium">{bookTitle}</p>
-          <p className="text-xs text-muted-foreground">{currentPageLabel}</p>
+        {/* Zone 1 — Left: Back button */}
+        <div className="flex items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onBackToLibrary}
+            aria-label="Back to library"
+          >
+            <ChevronLeft className="size-5" />
+          </Button>
         </div>
 
-        <ReaderV2SettingsPopover
-          settings={settings}
-          onUpdateSettings={onUpdateSettings}
-          showColumnSelector={showColumnSelector}
-          spreadColumns={spreadColumns}
-          onSpreadColumnsChange={onSpreadColumnsChange}
-        />
+        {/* Zone 2 — Center: Book title */}
+        <p className="max-w-[40vw] truncate font-serif text-sm font-medium">
+          {bookTitle}
+        </p>
+
+        {/* Zone 3 — Right: Pill cluster */}
+        <div className="flex items-center justify-end">
+          <div className="flex items-center gap-0.5 rounded-full bg-muted p-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full"
+              aria-label="Table of contents"
+              onClick={() => {}}
+            >
+              <List className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full"
+              aria-label="Search"
+              onClick={() => {}}
+            >
+              <Search className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="rounded-full"
+              aria-label="Bookmark"
+              onClick={() => {}}
+            >
+              <Bookmark className="size-4" />
+            </Button>
+            <ReaderV2SettingsPopover
+              settings={settings}
+              onUpdateSettings={onUpdateSettings}
+              showColumnSelector={showColumnSelector}
+              spreadColumns={spreadColumns}
+              onSpreadColumnsChange={onSpreadColumnsChange}
+            />
+          </div>
+        </div>
+
       </div>
     </header>
   );

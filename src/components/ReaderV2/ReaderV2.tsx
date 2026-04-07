@@ -217,11 +217,6 @@ export function ReaderV2() {
     }
   }, [isMobile, spreadColumns]);
 
-  const currentPageLabel = useMemo(() => {
-    if (totalPages <= 0) return "Page - / -";
-    return `Page ${currentPage} / ${totalPages}`;
-  }, [currentPage, totalPages]);
-
   const canGoPrev = currentPage > 1;
   const canGoNext = !(
     pagination.status === "ready" &&
@@ -290,7 +285,6 @@ export function ReaderV2() {
           <ReaderV2Header
             chromeVisible={chromeVisible}
             bookTitle={book.title}
-            currentPageLabel={currentPageLabel}
             onBackToLibrary={() => navigate("/")}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
