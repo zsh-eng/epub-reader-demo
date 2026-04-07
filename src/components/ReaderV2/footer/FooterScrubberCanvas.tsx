@@ -8,15 +8,16 @@ interface FooterScrubberCanvasProps {
   onScrubPreview?: (page: number) => void;
 }
 
-const TICK_SPACING = 11;
+// ~10px between pages → ~30 visible at once in a ~300px canvas
+const TICK_SPACING = 10;
+// Playhead nub height — very short, sits at top of canvas
+const PLAYHEAD_H = 6;
+// Where ticks and playhead begin (top of canvas)
+const TOP_PAD = 4;
 
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
 }
 
 interface CanvasColors {
@@ -63,8 +64,7 @@ function drawCanvas(
   ctx.scale(dpr, dpr);
 
   const cx = W / 2;
-  const midY = H * 0.44;
-  const FADE_ZONE = 72;
+  const FADE_ZONE = 64;
 
   const halfVisible = Math.ceil(cx / TICK_SPACING) + 2;
   const startPg = Math.max(1, Math.floor(displayPage - halfVisible));
@@ -84,66 +84,65 @@ function drawCanvas(
     const isMod20 = p % 20 === 0;
     const isMod10 = p % 10 === 0;
 
-    let halfH: number;
+    let tickH: number;
     let lineWidth: number;
     let color: string;
     let baseAlpha: number;
 
     if (isChapter) {
-      halfH = 13;
+      tickH = 36;
       lineWidth = 2;
       color = colors.fg;
-      baseAlpha = 0.82;
+      baseAlpha = 0.85;
     } else if (isMod20) {
-      halfH = 8;
-      lineWidth = 0.8;
+      tickH = 26;
+      lineWidth = 0.9;
       color = colors.mutedFg;
-      baseAlpha = 0.65;
+      baseAlpha = 0.7;
     } else if (isMod10) {
-      halfH = 6;
-      lineWidth = 0.8;
+      tickH = 22;
+      lineWidth = 0.9;
       color = colors.mutedFg;
-      baseAlpha = 0.45;
+      baseAlpha = 0.5;
     } else {
-      halfH = 3;
-      lineWidth = 0.7;
+      tickH = 18;
+      lineWidth = 0.75;
       color = colors.mutedFg;
-      baseAlpha = 0.28;
+      baseAlpha = 0.3;
     }
 
-    // Dip effect near playhead
+    // Dip effect: ticks near the playhead start below the playhead nub.
+    // At dist=0 the tick is pushed down by PLAYHEAD_H; smoothly recovers by dist=1.5.
     const dist = Math.abs(p - displayPage);
-    if (dist < 2) {
-      const dipFactor = lerp(0.42, 1.0, smoothstep(0, 2, dist));
-      halfH = halfH * dipFactor;
-    }
+    const dipOffset = PLAYHEAD_H * Math.max(0, 1 - dist / 1.5);
+    const tickTop = TOP_PAD + dipOffset;
 
     ctx.globalAlpha = edgeAlpha * baseAlpha;
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
-    ctx.moveTo(x, midY - halfH);
-    ctx.lineTo(x, midY + halfH);
+    ctx.moveTo(x, tickTop);
+    ctx.lineTo(x, tickTop + tickH);
     ctx.stroke();
 
     // Number label every 20 pages
-    if (isMod20 && distFromEdge > FADE_ZONE * 0.4) {
-      ctx.globalAlpha = edgeAlpha * 0.5;
+    if (isMod20 && distFromEdge > FADE_ZONE * 0.35) {
+      ctx.globalAlpha = edgeAlpha * 0.55;
       ctx.fillStyle = colors.mutedFg;
       ctx.font = `9px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillText(String(p), x, midY + halfH + 4);
+      ctx.fillText(String(p), x, TOP_PAD + tickH + 5);
     }
   }
 
-  // Playhead — fixed center line
+  // Playhead nub — drawn on top, very short, at top of canvas
   ctx.globalAlpha = 1;
   ctx.strokeStyle = colors.fg;
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(cx, midY - 16);
-  ctx.lineTo(cx, midY + 16);
+  ctx.moveTo(cx, TOP_PAD);
+  ctx.lineTo(cx, TOP_PAD + PLAYHEAD_H);
   ctx.stroke();
 
   ctx.restore();
@@ -157,12 +156,12 @@ export function FooterScrubberCanvas({
   onScrubPreview,
 }: FooterScrubberCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const displayPageRef = useRef(currentPage);
+  const displayPageRef = useRef<number>(currentPage);
   const rafRef = useRef<number>(0);
   const colorsRef = useRef<CanvasColors | null>(null);
   const chapterStartSet = useRef<Set<number>>(new Set());
 
-  // Keep chapter set in sync
+  // Keep chapter set in sync (render-phase update is fine for a ref)
   chapterStartSet.current = new Set(
     chapterStartPages.filter((p): p is number => p !== null),
   );
@@ -170,25 +169,17 @@ export function FooterScrubberCanvas({
   // Drag state
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
-  const dragStartPageRef = useRef(currentPage);
-  const previewPageRef = useRef(currentPage);
+  const dragStartPageRef = useRef<number>(currentPage);
+  const lastPreviewPageRef = useRef<number>(currentPage);
 
   function redraw() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (!colorsRef.current) {
-      colorsRef.current = resolveColors(canvas);
-    }
-    drawCanvas(
-      canvas,
-      displayPageRef.current,
-      totalPages,
-      chapterStartSet.current,
-      colorsRef.current,
-    );
+    if (!colorsRef.current) colorsRef.current = resolveColors(canvas);
+    drawCanvas(canvas, displayPageRef.current, totalPages, chapterStartSet.current, colorsRef.current);
   }
 
-  // Spring animation toward currentPage
+  // Spring animation toward currentPage (only when not dragging)
   useEffect(() => {
     if (isDraggingRef.current) return;
     const target = currentPage;
@@ -202,20 +193,11 @@ export function FooterScrubberCanvas({
     const tick = (now: number) => {
       const dt = Math.min((now - (lastTime ?? now)) / 1000, 0.05);
       lastTime = now;
-
       const force = STIFFNESS * (target - displayPageRef.current);
       velocity = (velocity + force * dt) * (1 - DAMPING * dt);
-      displayPageRef.current = Math.max(
-        1,
-        Math.min(totalPages, displayPageRef.current + velocity * dt),
-      );
-
+      displayPageRef.current = Math.max(1, Math.min(totalPages, displayPageRef.current + velocity * dt));
       redraw();
-
-      if (
-        Math.abs(target - displayPageRef.current) > 0.01 ||
-        Math.abs(velocity) > 0.05
-      ) {
+      if (Math.abs(target - displayPageRef.current) > 0.005 || Math.abs(velocity) > 0.05) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
         displayPageRef.current = target;
@@ -227,19 +209,19 @@ export function FooterScrubberCanvas({
     return () => cancelAnimationFrame(rafRef.current);
   }, [currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Resize observer
+  // Resize observer — re-resolve colors and redraw
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ro = new ResizeObserver(() => {
-      colorsRef.current = null; // re-resolve on resize (DPR may change)
+      colorsRef.current = null;
       redraw();
     });
     ro.observe(canvas);
     return () => ro.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Theme change observer
+  // Theme observer — re-resolve colors on class/attribute change
   useEffect(() => {
     const mo = new MutationObserver(() => {
       colorsRef.current = null;
@@ -249,12 +231,12 @@ export function FooterScrubberCanvas({
     return () => mo.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Pointer events for scrubbing
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     isDraggingRef.current = true;
     dragStartXRef.current = e.clientX;
-    dragStartPageRef.current = Math.round(displayPageRef.current);
-    previewPageRef.current = dragStartPageRef.current;
+    // Start from current float position for seamless pickup
+    dragStartPageRef.current = displayPageRef.current;
+    lastPreviewPageRef.current = Math.round(displayPageRef.current);
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
     cancelAnimationFrame(rafRef.current);
   }
@@ -262,18 +244,22 @@ export function FooterScrubberCanvas({
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
     if (!isDraggingRef.current) return;
     const dx = e.clientX - dragStartXRef.current;
-    const deltaPages = -Math.round(dx / TICK_SPACING);
-    const page = Math.max(1, Math.min(totalPages, dragStartPageRef.current + deltaPages));
+    // Continuous float — no rounding, smooth scrolling feel
+    const page = Math.max(1, Math.min(totalPages, dragStartPageRef.current - dx / TICK_SPACING));
     displayPageRef.current = page;
-    previewPageRef.current = page;
     redraw();
-    onScrubPreview?.(page);
+    // Only fire preview callback when the integer page actually changes
+    const intPage = Math.round(page);
+    if (intPage !== lastPreviewPageRef.current) {
+      lastPreviewPageRef.current = intPage;
+      onScrubPreview?.(intPage);
+    }
   }
 
   function handlePointerUp() {
     if (!isDraggingRef.current) return;
     isDraggingRef.current = false;
-    onScrubCommit(previewPageRef.current);
+    onScrubCommit(Math.round(displayPageRef.current));
   }
 
   return (

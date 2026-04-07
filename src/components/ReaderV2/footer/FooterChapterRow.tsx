@@ -28,36 +28,35 @@ export function FooterChapterRow({
   const nextChapterStart = chapterStartPages[currentChapterIndex + 1];
 
   const pagesBack =
-    currentChapterStart !== null && currentChapterStart !== undefined
-      ? currentPage - currentChapterStart
-      : null;
+    currentChapterStart != null ? currentPage - currentChapterStart : null;
   const pagesForward =
-    nextChapterStart !== null && nextChapterStart !== undefined
+    nextChapterStart != null
       ? nextChapterStart - currentPage
       : hasNext
         ? null
         : totalPages - currentPage;
 
-  const currentChapterTitle =
-    chapterEntries[currentChapterIndex]?.title ?? "";
+  const currentChapterTitle = chapterEntries[currentChapterIndex]?.title ?? "";
 
   return (
-    <div className="flex items-center px-2 py-1 gap-1">
-      {/* Prev chapter */}
-      <button
-        onClick={onPrevChapter}
-        disabled={!hasPrev}
-        className="flex items-center gap-0.5 px-1.5 py-1.5 rounded-md text-muted-foreground hover:bg-muted/60 disabled:opacity-30 disabled:pointer-events-none transition-colors flex-shrink-0"
-        aria-label="Previous chapter"
-      >
-        <ChevronLeft className="size-3.5 flex-shrink-0" />
-        {pagesBack !== null && pagesBack > 0 && (
-          <span className="text-[11px] leading-none tabular-nums">{pagesBack}p</span>
-        )}
-      </button>
+    // relative container: buttons sit at edges, title is absolutely centered
+    <div className="relative flex items-center h-9 px-2">
+      {/* Prev chapter — hidden entirely when not available */}
+      {hasPrev && (
+        <button
+          onClick={onPrevChapter}
+          className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-muted-foreground hover:bg-muted/60 transition-colors flex-shrink-0"
+          aria-label="Previous chapter"
+        >
+          <ChevronLeft className="size-3.5 flex-shrink-0" />
+          {pagesBack !== null && pagesBack > 0 && (
+            <span className="text-[11px] leading-none tabular-nums">{pagesBack}p</span>
+          )}
+        </button>
+      )}
 
-      {/* Chapter title */}
-      <div className="flex-1 min-w-0 text-center px-1">
+      {/* Chapter title — absolutely centered so it's unaffected by button presence */}
+      <div className="absolute inset-x-0 flex justify-center pointer-events-none px-16">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={currentChapterIndex}
@@ -65,25 +64,26 @@ export function FooterChapterRow({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
-            className="block text-[12px] font-medium text-foreground truncate leading-tight"
+            className="text-[12px] font-medium text-foreground truncate leading-tight"
           >
             {currentChapterTitle}
           </motion.span>
         </AnimatePresence>
       </div>
 
-      {/* Next chapter */}
-      <button
-        onClick={onNextChapter}
-        disabled={!hasNext}
-        className="flex items-center gap-0.5 px-1.5 py-1.5 rounded-md text-muted-foreground hover:bg-muted/60 disabled:opacity-30 disabled:pointer-events-none transition-colors flex-shrink-0"
-        aria-label="Next chapter"
-      >
-        {pagesForward !== null && pagesForward > 0 && (
-          <span className="text-[11px] leading-none tabular-nums">{pagesForward}p</span>
-        )}
-        <ChevronRight className="size-3.5 flex-shrink-0" />
-      </button>
+      {/* Next chapter — hidden entirely when not available */}
+      {hasNext && (
+        <button
+          onClick={onNextChapter}
+          className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-muted-foreground hover:bg-muted/60 transition-colors flex-shrink-0 ml-auto"
+          aria-label="Next chapter"
+        >
+          {pagesForward !== null && pagesForward > 0 && (
+            <span className="text-[11px] leading-none tabular-nums">{pagesForward}p</span>
+          )}
+          <ChevronRight className="size-3.5 flex-shrink-0" />
+        </button>
+      )}
     </div>
   );
 }
