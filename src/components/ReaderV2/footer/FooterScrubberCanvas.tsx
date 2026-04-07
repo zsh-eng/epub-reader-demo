@@ -11,6 +11,11 @@ interface FooterScrubberCanvasProps {
 const TICK_SPACING = 6;
 const PLAYHEAD_H = 6;
 const TOP_PAD = 4;
+const PLAYHEAD_RISE = 1;
+const PLAYHEAD_TICK_GAP = 4;
+const PLAYHEAD_TOP = TOP_PAD - PLAYHEAD_RISE;
+const PLAYHEAD_BOTTOM = PLAYHEAD_TOP + PLAYHEAD_H;
+const MAX_CENTER_DIP_OFFSET = PLAYHEAD_BOTTOM - TOP_PAD + PLAYHEAD_TICK_GAP;
 // --- Momentum deceleration ---
 //
 // We model deceleration as exponential decay:  vel *= exp(-k * dt)
@@ -153,7 +158,7 @@ function drawCanvas(
 
     // Dip: ticks near the playhead start below the nub and appear shorter
     const dist = Math.abs(p - displayPage);
-    const dipOffset = PLAYHEAD_H * Math.max(0, 1 - dist / 1.5);
+    const dipOffset = MAX_CENTER_DIP_OFFSET * Math.max(0, 1 - dist / 1.5);
     const tickTop = TOP_PAD + tickTopOffset + dipOffset;
 
     ctx.globalAlpha = edgeAlpha * baseAlpha;
@@ -180,8 +185,8 @@ function drawCanvas(
   ctx.strokeStyle = colors.fg;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(cx, TOP_PAD);
-  ctx.lineTo(cx, TOP_PAD + PLAYHEAD_H);
+  ctx.moveTo(cx, PLAYHEAD_TOP);
+  ctx.lineTo(cx, PLAYHEAD_BOTTOM);
   ctx.stroke();
 
   ctx.restore();
