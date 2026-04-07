@@ -10,12 +10,12 @@ import {
     createHighlightInteractionManager,
     type HighlightInteractionManager,
 } from "@zsh-eng/text-highlighter";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
 import { ReaderController } from "./ReaderController";
 import { ReaderStateScreen } from "./ReaderStateScreen";
-import { ReaderV2Footer } from "./ReaderV2Footer";
+import { ReaderV2Footer } from "./footer";
 import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
@@ -28,8 +28,8 @@ const MAX_VIEWPORT_HEIGHT_PX = 980;
 
 /** Height of the floating header (h-14), inside the safe-area-adjusted root. */
 const HEADER_HEIGHT_PX = 56;
-/** Height of the floating toolbar row (pill + pt-2 wrapper), excluding safe-area. */
-const TOOLBAR_HEIGHT_PX = 56;
+/** Height of the floating footer (chapter row + page indicator + scrubber), excluding safe-area. */
+const TOOLBAR_HEIGHT_PX = 140;
 /** Visual breathing room between overlay edge and text. */
 const MIN_PADDING_Y = 20;
 /** Minimum horizontal margin between screen edge and text. */
@@ -119,6 +119,8 @@ export function ReaderV2() {
     deferredImageCacheRef,
     currentPage,
     totalPages,
+    currentChapterIndex,
+    chapterStartPages,
   } = useReaderV2Core({
     bookId,
     viewport,
@@ -227,6 +229,15 @@ export function ReaderV2() {
     currentPage >= totalPages
   );
 
+  const onPrevChapter = useCallback(() => {
+    if (currentChapterIndex > 0) pagination.goToChapter(currentChapterIndex - 1);
+  }, [currentChapterIndex, pagination]);
+
+  const onNextChapter = useCallback(() => {
+    if (currentChapterIndex < chapterEntries.length - 1)
+      pagination.goToChapter(currentChapterIndex + 1);
+  }, [currentChapterIndex, chapterEntries.length, pagination]);
+
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner title="Loading book" />;
   }
@@ -288,14 +299,18 @@ export function ReaderV2() {
             onSpreadColumnsChange={setSpreadColumns}
           />
 
-          {/* Floating toolbar — paddingBottom handles safe-area home bar, content is pt-2 + pill */}
+          {/* Floating footer — chapter nav, page indicator, scrubber */}
           <ReaderV2Footer
             chromeVisible={chromeVisible}
-            currentPageLabel={currentPageLabel}
-            canGoPrev={canGoPrev}
-            canGoNext={canGoNext}
-            onPrevPage={pagination.prevSpread}
-            onNextPage={pagination.nextSpread}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            currentChapterIndex={currentChapterIndex}
+            chapterEntries={chapterEntries}
+            chapterStartPages={chapterStartPages}
+            onGoToPage={pagination.goToPage}
+            onGoToChapter={pagination.goToChapter}
+            onPrevChapter={onPrevChapter}
+            onNextChapter={onNextChapter}
           />
 
           <HighlightToolbarContainer

@@ -66,6 +66,8 @@ interface UseReaderV2CoreResult {
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
+  /** Start page for each chapter (by chapterIndex), null if not yet laid out. */
+  chapterStartPages: (number | null)[];
 }
 
 const DEFAULT_PARAGRAPH_SPACING = 1.2;
@@ -368,6 +370,21 @@ export function useReaderV2Core(
   const totalPages = pagination.spread?.totalPages ?? 0;
   const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
 
+  const chapterStartPages = useMemo<(number | null)[]>(() => {
+    const result: (number | null)[] = [];
+    let runningPage = 1;
+    for (let i = 0; i < chapterEntries.length; i++) {
+      const count = pagination.chapterPageCounts.get(i);
+      if (count === undefined) {
+        for (let j = i; j < chapterEntries.length; j++) result.push(null);
+        break;
+      }
+      result.push(runningPage);
+      runningPage += count;
+    }
+    return result;
+  }, [chapterEntries.length, pagination.chapterPageCounts]);
+
   return {
     book,
     isBookLoading,
@@ -383,5 +400,6 @@ export function useReaderV2Core(
     currentPage,
     totalPages,
     currentChapterIndex,
+    chapterStartPages,
   };
 }

@@ -18,6 +18,8 @@ import { DEFAULT_SPREAD_CONFIG } from "./types";
 export interface UsePaginationResult {
   spread: ResolvedSpread | null;
   status: PaginationStatus;
+  /** Maps chapterIndex → page count for that chapter, populated progressively as chapters are laid out. */
+  chapterPageCounts: Map<number, number>;
 
   nextSpread: () => void;
   prevSpread: () => void;
@@ -55,6 +57,7 @@ export function usePagination(
 
   const [spread, setSpread] = useState<ResolvedSpread | null>(null);
   const [status, setStatus] = useState<PaginationStatus>("idle");
+  const [chapterPageCounts, setChapterPageCounts] = useState<Map<number, number>>(new Map());
 
   const workerRef = useRef<Worker | null>(null);
   const currentEpochRef = useRef(0);
@@ -103,6 +106,10 @@ export function usePagination(
         setSpread(event.spread);
         setStatus("partial");
         tracerRef.current.updateDiagnostics(null);
+        if (event.chapterDiagnostics) {
+          const { chapterIndex, pageCount } = event.chapterDiagnostics;
+          setChapterPageCounts((prev) => new Map(prev).set(chapterIndex, pageCount));
+        }
         break;
 
       case "ready":
@@ -112,6 +119,15 @@ export function usePagination(
         tracerRef.current.markReady(
           prevPaginationConfigRef.current?.fontConfig.bodyFamily ?? "",
         );
+        if (event.chapterDiagnostics.length > 0) {
+          setChapterPageCounts((prev) => {
+            const next = new Map(prev);
+            for (const d of event.chapterDiagnostics) {
+              next.set(d.chapterIndex, d.pageCount);
+            }
+            return next;
+          });
+        }
         break;
 
       case "progress":
@@ -128,6 +144,10 @@ export function usePagination(
             : prev,
         );
         tracerRef.current.updateDiagnostics(null);
+        if (event.chapterDiagnostics) {
+          const { chapterIndex, pageCount } = event.chapterDiagnostics;
+          setChapterPageCounts((prev) => new Map(prev).set(chapterIndex, pageCount));
+        }
         break;
 
       case "pageContent":
@@ -229,6 +249,7 @@ export function usePagination(
 
       setSpread(null);
       setStatus("idle");
+      setChapterPageCounts(new Map());
 
       postCommand({
         type: "init",
@@ -287,6 +308,7 @@ export function usePagination(
   return {
     spread,
     status,
+    chapterPageCounts,
     nextSpread,
     prevSpread,
     goToPage,
