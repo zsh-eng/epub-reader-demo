@@ -1,5 +1,4 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
-import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
     EPUB_HIGHLIGHT_ACTIVE_CLASS,
@@ -11,15 +10,15 @@ import {
     createHighlightInteractionManager,
     type HighlightInteractionManager,
 } from "@zsh-eng/text-highlighter";
-import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
+import { ReaderController } from "./ReaderController";
 import { ReaderStateScreen } from "./ReaderStateScreen";
+import { ReaderV2Footer } from "./ReaderV2Footer";
+import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
-import { usePaginationTapNav } from "./hooks/use-pagination-tap-nav";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
-import { ReaderV2SettingsPopover } from "./shared/ReaderV2SettingsPopover";
 
 const COLUMN_GAP_PX = 20;
 const MIN_VIEWPORT_WIDTH_PX = 200;
@@ -228,15 +227,6 @@ export function ReaderV2() {
     currentPage >= totalPages
   );
 
-  usePaginationTapNav({
-    containerRef: stageSlotRef,
-    enabled: isMobile,
-    onPrevSpread: pagination.prevSpread,
-    onNextSpread: pagination.nextSpread,
-    canGoPrev,
-    canGoNext,
-  });
-
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner title="Loading book" />;
   }
@@ -251,106 +241,80 @@ export function ReaderV2() {
   }
 
   return (
-    <div className="relative h-[100dvh] overflow-hidden bg-background text-foreground">
-      {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
-      <div
-        ref={stageSlotRef}
-        className="absolute inset-x-0"
-        style={{
-          top: "env(safe-area-inset-top)",
-          bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
-        }}
-      >
-        <SpreadStage
-          spread={pagination.spread}
-          spreadConfig={spreadConfig}
-          columnSpacingPx={COLUMN_GAP_PX}
-          paginationConfig={paginationConfig}
-          bookId={bookId}
-          deferredImageCache={deferredImageCacheRef.current}
-          stageContentRef={stageContentRef}
-          paddingTopPx={viewport.paddingTop}
-          paddingBottomPx={viewport.paddingBottom}
-          paddingLeftPx={viewport.paddingX}
-          paddingRightPx={viewport.paddingX}
-        />
-      </div>
-
-      {/* Floating header — paddingTop handles safe-area notch, content is h-14 = 56px */}
-      <header
-        className="absolute top-0 inset-x-0 z-20 border-b bg-background/95 backdrop-blur-sm"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:px-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate("/")}
-            aria-label="Back to library"
+    <ReaderController
+      onNextPage={pagination.nextSpread}
+      onPrevPage={pagination.prevSpread}
+      canGoPrev={canGoPrev}
+      canGoNext={canGoNext}
+      tapNavEnabled={isMobile}
+      containerRef={stageSlotRef}
+    >
+      {({ chromeVisible }) => (
+        <div className="relative h-[100dvh] overflow-hidden bg-background text-foreground">
+          {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
+          <div
+            ref={stageSlotRef}
+            className="absolute inset-x-0"
+            style={{
+              top: "env(safe-area-inset-top)",
+              bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
+            }}
           >
-            <ArrowLeft className="size-4" />
-          </Button>
-
-          <div className="min-w-0 flex-1 px-2">
-            <p className="truncate text-sm font-medium">{book.title}</p>
-            <p className="text-xs text-muted-foreground">{currentPageLabel}</p>
+            <SpreadStage
+              spread={pagination.spread}
+              spreadConfig={spreadConfig}
+              columnSpacingPx={COLUMN_GAP_PX}
+              paginationConfig={paginationConfig}
+              bookId={bookId}
+              deferredImageCache={deferredImageCacheRef.current}
+              stageContentRef={stageContentRef}
+              paddingTopPx={viewport.paddingTop}
+              paddingBottomPx={viewport.paddingBottom}
+              paddingLeftPx={viewport.paddingX}
+              paddingRightPx={viewport.paddingX}
+            />
           </div>
 
-          <ReaderV2SettingsPopover
+          {/* Floating header — paddingTop handles safe-area notch, content is h-14 = 56px */}
+          <ReaderV2Header
+            chromeVisible={chromeVisible}
+            bookTitle={book.title}
+            currentPageLabel={currentPageLabel}
+            onBackToLibrary={() => navigate("/")}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
             showColumnSelector={!isMobile}
             spreadColumns={spreadColumns}
             onSpreadColumnsChange={setSpreadColumns}
           />
-        </div>
-      </header>
 
-      {/* Floating toolbar — paddingBottom handles safe-area home bar, content is pt-2 + pill */}
-      <div
-        className="absolute bottom-0 inset-x-0 z-20 flex items-center justify-center pt-2"
-        style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0.625rem)" }}
-      >
-        <div className="flex items-center gap-2 rounded-full border bg-background/90 p-1.5 shadow backdrop-blur-sm">
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Previous page"
-            onClick={pagination.prevSpread}
-            disabled={!canGoPrev}
-          >
-            <ChevronLeft className="size-4" />
-          </Button>
-          <span className="min-w-24 px-2 text-center text-xs tabular-nums text-muted-foreground">
-            {currentPageLabel}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Next page"
-            onClick={pagination.nextSpread}
-            disabled={!canGoNext}
-          >
-            <ChevronRight className="size-4" />
-          </Button>
-        </div>
-      </div>
+          {/* Floating toolbar — paddingBottom handles safe-area home bar, content is pt-2 + pill */}
+          <ReaderV2Footer
+            chromeVisible={chromeVisible}
+            currentPageLabel={currentPageLabel}
+            canGoPrev={canGoPrev}
+            canGoNext={canGoNext}
+            onPrevPage={pagination.prevSpread}
+            onNextPage={pagination.nextSpread}
+          />
 
-      <HighlightToolbarContainer
-        bookId={bookId}
-        spineItemId={activeHighlightData?.spineItemId ?? undefined}
-        highlights={bookHighlights}
-        isCreatingHighlight={false}
-        creationPosition={{ x: 0, y: 0 }}
-        onCreateColorSelect={(_color) => {
-          // ReaderV2 creation flow is handled separately.
-        }}
-        onCreateClose={() => {}}
-        activeHighlight={activeHighlight}
-        onEditClose={() => setActiveHighlight(null)}
-        isNavVisible={true}
-        onCreateNoteSubmit={undefined}
-      />
-    </div>
+          <HighlightToolbarContainer
+            bookId={bookId}
+            spineItemId={activeHighlightData?.spineItemId ?? undefined}
+            highlights={bookHighlights}
+            isCreatingHighlight={false}
+            creationPosition={{ x: 0, y: 0 }}
+            onCreateColorSelect={(_color) => {
+              // ReaderV2 creation flow is handled separately.
+            }}
+            onCreateClose={() => {}}
+            activeHighlight={activeHighlight}
+            onEditClose={() => setActiveHighlight(null)}
+            isNavVisible={chromeVisible}
+            onCreateNoteSubmit={undefined}
+          />
+        </div>
+      )}
+    </ReaderController>
   );
 }
