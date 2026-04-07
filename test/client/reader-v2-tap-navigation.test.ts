@@ -87,10 +87,8 @@ describe("ReaderV2 tap navigation", () => {
       ).toBe("next");
     });
 
-    it("returns null for center taps, interactive taps, or prevented events", () => {
+    it("returns toggleChrome for center taps", () => {
       const plain = document.createElement("p");
-      const highlight = document.createElement("mark");
-      highlight.setAttribute("data-highlight-id", "h2");
 
       expect(
         resolveTapNavigationAction({
@@ -101,7 +99,13 @@ describe("ReaderV2 tap navigation", () => {
           canGoPrev: true,
           canGoNext: true,
         }),
-      ).toBeNull();
+      ).toBe("toggleChrome");
+    });
+
+    it("returns null for interactive taps or prevented events", () => {
+      const plain = document.createElement("p");
+      const highlight = document.createElement("mark");
+      highlight.setAttribute("data-highlight-id", "h2");
 
       expect(
         resolveTapNavigationAction({

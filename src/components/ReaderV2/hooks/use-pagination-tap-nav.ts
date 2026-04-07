@@ -1,13 +1,14 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 type TapZone = "left" | "center" | "right";
-type TapNavigationAction = "prev" | "next" | null;
+type TapNavigationAction = "prev" | "next" | "toggleChrome" | null;
 
 interface UsePaginationTapNavOptions {
   containerRef: RefObject<HTMLElement | null>;
   enabled: boolean;
   onNextSpread: () => void;
   onPrevSpread: () => void;
+  onToggleChrome?: () => void;
   canGoNext: boolean;
   canGoPrev: boolean;
 }
@@ -81,7 +82,7 @@ export function resolveTapNavigationAction(
 
   if (zone === "left") return canGoPrev ? "prev" : null;
   if (zone === "right") return canGoNext ? "next" : null;
-  return null;
+  return "toggleChrome";
 }
 
 export function usePaginationTapNav(options: UsePaginationTapNavOptions) {
@@ -90,18 +91,21 @@ export function usePaginationTapNav(options: UsePaginationTapNavOptions) {
     enabled,
     onNextSpread,
     onPrevSpread,
+    onToggleChrome,
     canGoNext,
     canGoPrev,
   } = options;
 
   const nextSpreadRef = useRef(onNextSpread);
   const prevSpreadRef = useRef(onPrevSpread);
+  const toggleChromeRef = useRef(onToggleChrome);
   const canGoNextRef = useRef(canGoNext);
   const canGoPrevRef = useRef(canGoPrev);
   const lastHandledTapRef = useRef<{ at: number; x: number } | null>(null);
 
   nextSpreadRef.current = onNextSpread;
   prevSpreadRef.current = onPrevSpread;
+  toggleChromeRef.current = onToggleChrome;
   canGoNextRef.current = canGoNext;
   canGoPrevRef.current = canGoPrev;
 
@@ -145,7 +149,12 @@ export function usePaginationTapNav(options: UsePaginationTapNavOptions) {
         prevSpreadRef.current();
         return true;
       }
-      nextSpreadRef.current();
+      if (action === "next") {
+        nextSpreadRef.current();
+        return true;
+      }
+
+      toggleChromeRef.current?.();
       return true;
     };
 
