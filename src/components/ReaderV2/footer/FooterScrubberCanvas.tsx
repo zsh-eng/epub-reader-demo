@@ -50,13 +50,21 @@ interface CanvasColors {
   mutedFg: string;
 }
 
+function toCanvasColor(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  if (/^(#|rgb\(|rgba\(|hsl\(|hsla\(|oklch\(|oklab\(|lch\(|lab\(|color\()/i.test(trimmed)) {
+    return trimmed;
+  }
+  // Support raw HSL channel tokens like "0 0% 5%".
+  return `hsl(${trimmed})`;
+}
+
 function resolveColors(el: HTMLElement): CanvasColors {
   const style = getComputedStyle(el);
-  const fg = style.getPropertyValue("--foreground").trim();
-  const mutedFg = style.getPropertyValue("--muted-foreground").trim();
   return {
-    fg: fg ? `hsl(${fg})` : "hsl(0 0% 5%)",
-    mutedFg: mutedFg ? `hsl(${mutedFg})` : "hsl(0 0% 45%)",
+    fg: toCanvasColor(style.getPropertyValue("--foreground"), "oklch(0.145 0 0)"),
+    mutedFg: toCanvasColor(style.getPropertyValue("--muted-foreground"), "oklch(0.556 0 0)"),
   };
 }
 
@@ -94,6 +102,7 @@ function drawCanvas(
   const halfVisible = Math.ceil(cx / TICK_SPACING) + 2;
   const startPg = Math.max(1, Math.floor(displayPage - halfVisible));
   const endPg = Math.min(totalPages, Math.ceil(displayPage + halfVisible));
+  ctx.lineCap = "round";
 
   for (let p = startPg; p <= endPg; p++) {
     const x = cx + (p - displayPage) * TICK_SPACING;
