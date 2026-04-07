@@ -29,7 +29,7 @@ const TOP_PAD = 4;
 // feels wrong — so we lean toward the "fast" end. k=8 is a best-effort
 // approximation; tune upward (toward 10) if it feels too slidey, or down
 // (toward 5) if it feels too abrupt.
-const MOMENTUM_FRICTION = 8;
+const MOMENTUM_FRICTION = 6;
 // Minimum fling velocity (pages/sec) required to trigger momentum on release.
 // Below this the release is treated as a deliberate stop.
 const MOMENTUM_THRESHOLD = 3;
@@ -297,9 +297,17 @@ export function FooterScrubberCanvas({
       if (Math.abs(vel) > 0.4) {
         momentumRafRef.current = requestAnimationFrame(tick);
       } else {
-        // Momentum settled — commit and let spring snap to nearest page
+        // Momentum settled. Snap displayPage to the integer immediately — at
+        // this velocity (<0.4 pages/sec) the sub-pixel jump is imperceptible.
+        // We must do this here because onScrubPreview (fired each frame above)
+        // is often wired to the same setter as onScrubCommit, meaning
+        // currentPage may already equal Math.round(displayPage). If so, the
+        // spring useEffect won't re-fire (deps unchanged) and the playhead
+        // would be stuck between ticks.
         isMomentumRef.current = false;
-        onScrubCommit(Math.round(displayPageRef.current));
+        displayPageRef.current = Math.round(displayPageRef.current);
+        redraw();
+        onScrubCommit(displayPageRef.current);
       }
     };
 
@@ -354,7 +362,11 @@ export function FooterScrubberCanvas({
     if (Math.abs(velocityPagesPerSec) > MOMENTUM_THRESHOLD) {
       startMomentum(velocityPagesPerSec);
     } else {
-      onScrubCommit(Math.round(displayPageRef.current));
+      // Same snap-before-commit pattern as momentum settle: if preview already
+      // updated currentPage to this value, the spring won't re-fire.
+      displayPageRef.current = Math.round(displayPageRef.current);
+      redraw();
+      onScrubCommit(displayPageRef.current);
     }
   }
 
