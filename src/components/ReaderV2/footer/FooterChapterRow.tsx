@@ -58,7 +58,7 @@ export function FooterChapterRow({
 
   return (
     // relative container: buttons sit at edges, title is absolutely centered
-    <div className="relative flex items-center h-9 px-2">
+    <div className="relative flex items-center h-8 px-2">
       {/* Prev chapter — hidden entirely when not available */}
       {hasPrev && (
         <button

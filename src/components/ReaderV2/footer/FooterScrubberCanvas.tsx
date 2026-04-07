@@ -19,6 +19,9 @@ const MAX_CENTER_DIP_OFFSET = PLAYHEAD_BOTTOM - TOP_PAD + PLAYHEAD_TICK_GAP; // 
 const DIP_RADIUS_PAGES = 2.6; // Width of the bump in pages (typical: 1.2-3).
 const DIP_FALLOFF_POWER = 1; // Bump shoulder curve (1=linear, 2-3=tighter, >4 is very concentrated at center).
 const BOTTOM_DIP_FRACTION = 0.35; // How much of dip applies to tick bottoms (0=anchor bottoms, 1=no shortening).
+const CHAPTER_MARKER_H = 8; // Chapter marker height in pixels (playhead-like, but longer).
+const CHAPTER_MARKER_W = 2; // Chapter marker width in pixels.
+const CHAPTER_MARKER_ALPHA = 0.9;
 // --- Momentum deceleration ---
 //
 // We model deceleration as exponential decay:  vel *= exp(-k * dt)
@@ -121,7 +124,7 @@ function drawCanvas(
     const edgeAlpha = smoothstep(0, FADE_ZONE, distFromEdge);
     if (edgeAlpha <= 0) continue;
 
-    // Tick type — chapters are thicker/shorter, not taller
+    // Tick type
     const isChapter = chapterStartSet.has(p);
     const isMod20 = p % 20 === 0;
     const isMod10 = p % 10 === 0;
@@ -132,27 +135,20 @@ function drawCanvas(
     let color: string;
     let baseAlpha: number;
 
-    if (isChapter) {
-      // Slightly thicker, shorter — covers roughly the middle 2/3 of the tick range
-      tickH = 18;
-      tickTopOffset = 3;
-      lineWidth = 2;
-      color = colors.fg;
-      baseAlpha = 0.85;
-    } else if (isMod20) {
-      tickH = 28;
+    if (isMod20) {
+      tickH = 34;
       tickTopOffset = 0;
       lineWidth = 0.9;
       color = colors.mutedFg;
       baseAlpha = 0.7;
     } else if (isMod10) {
-      tickH = 25;
+      tickH = 31;
       tickTopOffset = 0;
       lineWidth = 0.9;
       color = colors.mutedFg;
       baseAlpha = 0.5;
     } else {
-      tickH = 22;
+      tickH = 28;
       tickTopOffset = 0;
       lineWidth = 0.75;
       color = colors.mutedFg;
@@ -175,6 +171,20 @@ function drawCanvas(
     ctx.lineTo(x, tickBottom);
     ctx.stroke();
 
+    if (isChapter) {
+      const markerCenterY = (tickTop + tickBottom) / 2;
+      const markerTop = markerCenterY - CHAPTER_MARKER_H / 2;
+      const markerBottom = markerCenterY + CHAPTER_MARKER_H / 2;
+
+      ctx.globalAlpha = edgeAlpha * CHAPTER_MARKER_ALPHA;
+      ctx.strokeStyle = colors.fg;
+      ctx.lineWidth = CHAPTER_MARKER_W;
+      ctx.beginPath();
+      ctx.moveTo(x, markerTop);
+      ctx.lineTo(x, markerBottom);
+      ctx.stroke();
+    }
+
     // Number label every 20 pages
     if (isMod20 && distFromEdge > FADE_ZONE * 0.35) {
       ctx.globalAlpha = edgeAlpha * 0.55;
@@ -182,7 +192,7 @@ function drawCanvas(
       ctx.font = `9px system-ui, sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
-      ctx.fillText(String(p), x, TOP_PAD + 28 + 5);
+      ctx.fillText(String(p), x, TOP_PAD + 34 + 5);
     }
   }
 
@@ -419,7 +429,7 @@ export function FooterScrubberCanvas({
     <canvas
       ref={canvasRef}
       className="w-full cursor-ew-resize touch-none"
-      style={{ height: 48, display: "block" }}
+      style={{ height: 52, display: "block" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
