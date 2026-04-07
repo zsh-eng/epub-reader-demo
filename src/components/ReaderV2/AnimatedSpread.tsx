@@ -14,6 +14,10 @@ interface AnimatedSpreadProps {
   bookId: string;
   deferredImageCache: Map<string, string>;
   showDebugOutlines?: boolean;
+  paddingTopPx: number;
+  paddingBottomPx: number;
+  paddingLeftPx: number;
+  paddingRightPx: number;
 }
 
 const EASE_OUT_QUAD = [0.25, 0.46, 0.45, 0.94] as [
@@ -54,6 +58,10 @@ export function AnimatedSpread({
   bookId,
   deferredImageCache,
   showDebugOutlines = false,
+  paddingTopPx,
+  paddingBottomPx,
+  paddingLeftPx,
+  paddingRightPx,
 }: AnimatedSpreadProps) {
   const rawDirection =
     (usePresenceData() as NavDirection | undefined) ?? "instant";
@@ -106,7 +114,12 @@ export function AnimatedSpread({
       {/* Padding wrapper — keeps text away from the page edges */}
       <div
         className="h-full w-full overflow-hidden"
-        style={{ padding: `${PAGE_PADDING_Y}px ${PAGE_PADDING_X}px` }}
+        style={{
+          paddingTop: `${paddingTopPx}px`,
+          paddingBottom: `${paddingBottomPx}px`,
+          paddingLeft: `${paddingLeftPx}px`,
+          paddingRight: `${paddingRightPx}px`,
+        }}
       >
         <div
           className="h-full w-full overflow-hidden grid"

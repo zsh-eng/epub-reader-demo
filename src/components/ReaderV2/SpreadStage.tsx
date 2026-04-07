@@ -13,6 +13,10 @@ interface SpreadStageProps {
   deferredImageCache: Map<string, string>;
   stageContentRef?: RefObject<HTMLDivElement | null>;
   showDebugOutlines?: boolean;
+  paddingTopPx: number;
+  paddingBottomPx: number;
+  paddingLeftPx: number;
+  paddingRightPx: number;
 }
 
 function toNavDirection(
@@ -32,6 +36,10 @@ export function SpreadStage({
   deferredImageCache,
   stageContentRef,
   showDebugOutlines = false,
+  paddingTopPx,
+  paddingBottomPx,
+  paddingLeftPx,
+  paddingRightPx,
 }: SpreadStageProps) {
   const direction = toNavDirection(spread?.cause);
 
@@ -50,6 +58,10 @@ export function SpreadStage({
               bookId={bookId}
               deferredImageCache={deferredImageCache}
               showDebugOutlines={showDebugOutlines}
+              paddingTopPx={paddingTopPx}
+              paddingBottomPx={paddingBottomPx}
+              paddingLeftPx={paddingLeftPx}
+              paddingRightPx={paddingRightPx}
             />
           )}
         </AnimatePresence>

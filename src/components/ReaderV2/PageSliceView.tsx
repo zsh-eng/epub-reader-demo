@@ -26,7 +26,7 @@ export function PageSliceView({
 
   if (slice.type === "image") {
     return (
-      <div className="flex justify-center">
+      <div className="flex justify-center w-full h-full">
         <LazyImage
           bookId={bookId}
           src={slice.src}

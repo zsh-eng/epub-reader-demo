@@ -238,6 +238,10 @@ export function ReaderV2Debug() {
                 deferredImageCache={deferredImageCacheRef.current}
                 stageContentRef={stageContentRef}
                 showDebugOutlines
+                paddingTopPx={PAGE_PADDING_Y}
+                paddingBottomPx={PAGE_PADDING_Y}
+                paddingLeftPx={PAGE_PADDING_X}
+                paddingRightPx={PAGE_PADDING_X}
               />
             </div>
           </div>
