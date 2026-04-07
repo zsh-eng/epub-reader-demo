@@ -8,7 +8,7 @@ interface FooterScrubberCanvasProps {
   onScrubPreview?: (page: number) => void;
 }
 
-const TICK_SPACING = 10;
+const TICK_SPACING = 6;
 const PLAYHEAD_H = 6;
 const TOP_PAD = 4;
 // --- Momentum deceleration ---
@@ -276,38 +276,63 @@ export function FooterScrubberCanvas({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startMomentum(initialVelocity: number) {
-    const capped = Math.sign(initialVelocity) * Math.min(Math.abs(initialVelocity), MOMENTUM_MAX_VELOCITY);
-    let vel = capped;
+    let vel = Math.sign(initialVelocity) * Math.min(Math.abs(initialVelocity), MOMENTUM_MAX_VELOCITY);
     let lastTime: number | null = null;
 
     isMomentumRef.current = true;
     cancelAnimationFrame(momentumRafRef.current);
 
+    function commit(page: number) {
+      isMomentumRef.current = false;
+      displayPageRef.current = page;
+      redraw();
+      onScrubCommit(page);
+    }
+
     const tick = (now: number) => {
       const dt = Math.min((now - (lastTime ?? now)) / 1000, 0.05);
       lastTime = now;
 
-      // Exponential decay: vel *= e^(-k*dt)  — equivalent to iOS's per-frame
-      // multiplicative rate, assuming k = -ln(rate) * 1000 (per-ms interpretation).
+      // Exponential decay: vel *= e^(-k*dt)
       vel *= Math.exp(-MOMENTUM_FRICTION * dt);
-      displayPageRef.current = Math.max(1, Math.min(totalPages, displayPageRef.current + vel * dt));
+      const prevPage = displayPageRef.current;
+      const rawNext = Math.max(1, Math.min(totalPages, prevPage + vel * dt));
+
+      // Hard boundary — already an integer, stop cleanly.
+      if (rawNext === 1 || rawNext === totalPages) {
+        commit(rawNext);
+        return;
+      }
+
+      // Per-tick stopping rule:
+      // At each integer tick crossed, check whether the remaining momentum
+      // (|vel| / k = total area left under the decay curve = total distance left)
+      // is enough to reach the *next* tick (1 page away). If not, stop here.
+      //
+      // Because we stop exactly at the integer we just crossed, no snap is needed —
+      // the playhead is already on a tick. This is the user's natural deceleration
+      // rather than a pre-computed target with an adjusted velocity.
+      const firstTickAhead = vel > 0 ? Math.floor(prevPage) + 1 : Math.ceil(prevPage) - 1;
+      const crossedTick = (vel > 0 ? rawNext >= firstTickAhead : rawNext <= firstTickAhead)
+        ? firstTickAhead
+        : null;
+
+      if (crossedTick !== null && Math.abs(vel) / MOMENTUM_FRICTION < 1) {
+        commit(Math.max(1, Math.min(totalPages, crossedTick)));
+        return;
+      }
+
+      displayPageRef.current = rawNext;
       redraw();
-      emitPreviewIfChanged(displayPageRef.current);
+      emitPreviewIfChanged(rawNext);
 
       if (Math.abs(vel) > 0.4) {
         momentumRafRef.current = requestAnimationFrame(tick);
       } else {
-        // Momentum settled. Snap displayPage to the integer immediately — at
-        // this velocity (<0.4 pages/sec) the sub-pixel jump is imperceptible.
-        // We must do this here because onScrubPreview (fired each frame above)
-        // is often wired to the same setter as onScrubCommit, meaning
-        // currentPage may already equal Math.round(displayPage). If so, the
-        // spring useEffect won't re-fire (deps unchanged) and the playhead
-        // would be stuck between ticks.
-        isMomentumRef.current = false;
-        displayPageRef.current = Math.round(displayPageRef.current);
-        redraw();
-        onScrubCommit(displayPageRef.current);
+        // Fallback: velocity decayed to near-zero without crossing a tick boundary.
+        // Only happens when starting between ticks with low velocity that can't
+        // reach the next tick. Snap to nearest integer; jump is at most half a tick.
+        commit(Math.round(rawNext));
       }
     };
 
