@@ -23,9 +23,21 @@ const CHROME_SHELL_HEIGHT_PX =
   BOOKMARK_RIBBON_BASE_TOP_PX +
   BOOKMARK_RIBBON_ACTIVE_DROP_PX +
   BOOKMARK_RIBBON_HEIGHT_PX;
-const CHROME_TRANSITION = {
-  duration: 0.22,
+const CHROME_ENTER_TRANSITION = {
+  duration: 0.26,
+  ease: [0.16, 1, 0.3, 1] as const,
+};
+const CHROME_EXIT_TRANSITION = {
+  duration: 0.18,
   ease: [0.32, 0, 0.67, 0] as const,
+};
+const CHROME_FADE_IN_TRANSITION = {
+  duration: 0.18,
+  ease: "easeOut" as const,
+};
+const CHROME_FADE_OUT_TRANSITION = {
+  duration: 0.14,
+  ease: "easeIn" as const,
 };
 const CHROME_BUTTON_CLASS_NAME =
   "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:bg-background hover:text-foreground";
@@ -52,12 +64,22 @@ export function ReaderV2Header({
     : isBookmarked
       ? `calc(-100% + ${BOOKMARK_RIBBON_PEEK_OFFSET_PX}px)`
       : "-100%";
+  const chromeShellTransition = chromeVisible
+    ? CHROME_ENTER_TRANSITION
+    : CHROME_EXIT_TRANSITION;
+  const bookmarkRibbonYTransition = isBookmarked
+    ? CHROME_ENTER_TRANSITION
+    : CHROME_EXIT_TRANSITION;
+  const bookmarkRibbonOpacityTransition =
+    chromeVisible || isBookmarked
+      ? CHROME_FADE_IN_TRANSITION
+      : CHROME_FADE_OUT_TRANSITION;
 
   return (
     <motion.div
       className="absolute inset-x-0 top-0 z-20 overflow-visible"
       animate={{ y: chromeShellY }}
-      transition={CHROME_TRANSITION}
+      transition={{ y: chromeShellTransition }}
       style={{
         height: `calc(env(safe-area-inset-top) + ${CHROME_SHELL_HEIGHT_PX}px)`,
       }}
@@ -70,8 +92,8 @@ export function ReaderV2Header({
           opacity: chromeVisible || isBookmarked ? 1 : 0,
         }}
         transition={{
-          y: CHROME_TRANSITION,
-          opacity: { duration: 0.16, ease: "easeOut" },
+          y: bookmarkRibbonYTransition,
+          opacity: bookmarkRibbonOpacityTransition,
         }}
         style={{
           top: `calc(env(safe-area-inset-top) + ${BOOKMARK_RIBBON_BASE_TOP_PX}px)`,
