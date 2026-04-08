@@ -95,10 +95,9 @@ function drawCanvas(
   if (W === 0 || H === 0) return;
 
   if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+    // Keep layout sizing in CSS so responsive width changes can recenter the playhead.
     canvas.width = W * dpr;
     canvas.height = H * dpr;
-    canvas.style.width = `${W}px`;
-    canvas.style.height = `${H}px`;
   }
 
   const ctx = canvas.getContext("2d");
