@@ -103,7 +103,7 @@ export function AnimatedSpread({
 
   return (
     <motion.div
-      className="absolute inset-0 h-full w-full overflow-hidden bg-card"
+      className="absolute inset-0 h-full w-full overflow-hidden bg-background"
       style={{ zIndex }}
       custom={direction}
       variants={pageVariants}
@@ -135,8 +135,8 @@ export function AnimatedSpread({
                   key={`gap-${slot.slotIndex}`}
                   className={
                     showDebugOutlines
-                      ? "h-full w-full bg-muted/20 reader-container-outline"
-                      : "h-full w-full bg-muted/20"
+                      ? "h-full w-full bg-transparent reader-container-outline"
+                      : "h-full w-full bg-transparent"
                   }
                 />
               );
@@ -147,20 +147,26 @@ export function AnimatedSpread({
                 key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
                 className={
                   showDebugOutlines
-                    ? "h-full w-full overflow-hidden reader-container-outline"
-                    : "h-full w-full overflow-hidden"
+                    ? "relative h-full w-full overflow-hidden reader-container-outline"
+                    : "relative h-full w-full overflow-hidden"
                 }
               >
-                {slot.page.content.map((slice, i) => (
-                  <PageSliceView
-                    key={`${slice.blockId}-${slot.slotIndex}-${i}`}
-                    slice={slice}
-                    sliceIndex={i}
-                    bookId={bookId}
-                    deferredImageCache={deferredImageCache}
-                    baseFontSize={paginationConfig.fontConfig.baseSizePx}
-                  />
-                ))}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  aria-hidden="true"
+                />
+                <div className="relative z-10 h-full w-full overflow-hidden">
+                  {slot.page.content.map((slice, i) => (
+                    <PageSliceView
+                      key={`${slice.blockId}-${slot.slotIndex}-${i}`}
+                      slice={slice}
+                      sliceIndex={i}
+                      bookId={bookId}
+                      deferredImageCache={deferredImageCache}
+                      baseFontSize={paginationConfig.fontConfig.baseSizePx}
+                    />
+                  ))}
+                </div>
               </div>
             );
           })}

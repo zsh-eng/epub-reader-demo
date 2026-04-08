@@ -28,7 +28,7 @@ export function PageSliceView({
 
   if (slice.type === "image") {
     return (
-      <div className="flex justify-center w-full h-full">
+      <div className="flex h-full w-full items-center justify-center">
         <LazyImage
           bookId={bookId}
           src={slice.src}
@@ -36,7 +36,12 @@ export function PageSliceView({
           cache={deferredImageCache}
           width={slice.width}
           height={slice.height}
-          style={{ objectFit: "contain" }}
+          style={{
+            objectFit: "contain",
+            borderRadius: "1.25rem",
+            outline: "1px solid var(--border)",
+            background: "var(--secondary)",
+          }}
         />
       </div>
     );
@@ -49,8 +54,9 @@ export function PageSliceView({
 
   return (
     <p
-      className={cn("m-0 box-border", {
+      className={cn("m-0 box-border text-foreground", {
         "reader-v2-blockquote": slice.tag === "blockquote",
+        "reader-v2-figcaption": slice.tag === "figcaption",
       })}
       style={{
         lineHeight: `${slice.lineHeight}px`,
@@ -72,8 +78,8 @@ export function PageSliceView({
                 lineHeight: "inherit",
               }}
               className={cn({
-                underline: fragment.isLink,
-                "font-medium": fragment.isCode,
+                "reader-v2-inline-link": fragment.isLink,
+                "reader-v2-inline-code": fragment.isCode,
               })}
             >
               {fragment.highlightMarks && fragment.highlightMarks.length > 0

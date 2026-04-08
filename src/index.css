@@ -6,7 +6,7 @@
 @theme inline {
     /* Font families */
     --font-serif: "EB Garamond", "Garamond", serif;
-    --font-sans: "Inter", system-ui, sans-serif;
+    --font-sans: "DM Sans", "Inter", system-ui, sans-serif;
 
     /* Custom CSS for this reader app */
     --text-tiny: 0.625rem;
@@ -157,7 +157,13 @@
         @apply border-border outline-ring/50;
     }
     body {
-        @apply bg-background text-foreground;
+        @apply bg-background text-foreground font-sans;
+    }
+    button,
+    input,
+    select,
+    textarea {
+        font: inherit;
     }
     /* Only apply theme transition on devices with hover (desktop/laptop) to avoid
        staggered repainting on mobile browsers that struggle with many simultaneous transitions */

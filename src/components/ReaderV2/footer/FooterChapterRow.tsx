@@ -58,12 +58,12 @@ export function FooterChapterRow({
 
   return (
     // relative container: buttons sit at edges, title is absolutely centered
-    <div className="relative flex items-center h-8 px-2">
+    <div className="relative flex h-8 items-center">
       {/* Prev chapter — hidden entirely when not available */}
       {hasPrev && (
         <button
           onClick={handlePrevClick}
-          className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-muted-foreground hover:bg-muted/60 transition-colors flex-shrink-0"
+          className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           aria-label={
             isPastCurrentChapterStart
               ? "Start of current chapter"
@@ -72,7 +72,7 @@ export function FooterChapterRow({
         >
           <ChevronLeft className="size-3.5 flex-shrink-0" />
           {pagesBack !== null && pagesBack > 0 && (
-            <span className="text-[11px] leading-none tabular-nums">
+            <span className="leading-none">
               {pagesBack}p
             </span>
           )}
@@ -80,7 +80,7 @@ export function FooterChapterRow({
       )}
 
       {/* Chapter title — absolutely centered so it's unaffected by button presence */}
-      <div className="absolute inset-x-0 flex justify-center pointer-events-none px-16">
+      <div className="pointer-events-none absolute inset-x-0 flex justify-center px-20">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={currentChapterIndex}
@@ -88,7 +88,7 @@ export function FooterChapterRow({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
-            className="text-[12px] font-medium text-foreground truncate leading-tight"
+            className="truncate text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground leading-tight"
           >
             {currentChapterTitle}
           </motion.span>
@@ -99,11 +99,11 @@ export function FooterChapterRow({
       {hasNext && (
         <button
           onClick={onNextChapter}
-          className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-muted-foreground hover:bg-muted/60 transition-colors flex-shrink-0 ml-auto"
+          className="ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
           aria-label="Next chapter"
         >
           {pagesForward !== null && pagesForward > 0 && (
-            <span className="text-[11px] leading-none tabular-nums">
+            <span className="leading-none">
               {pagesForward}p
             </span>
           )}

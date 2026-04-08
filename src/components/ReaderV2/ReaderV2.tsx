@@ -1,22 +1,22 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-  EPUB_HIGHLIGHT_ACTIVE_CLASS,
-  EPUB_HIGHLIGHT_CLASS,
-  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+    EPUB_HIGHLIGHT_ACTIVE_CLASS,
+    EPUB_HIGHLIGHT_CLASS,
+    EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+    EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
 } from "@/types/reader.types";
 import {
-  createHighlightInteractionManager,
-  type HighlightInteractionManager,
+    createHighlightInteractionManager,
+    type HighlightInteractionManager,
 } from "@zsh-eng/text-highlighter";
 import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
@@ -24,9 +24,9 @@ import { ReaderControlMenu } from "./ReaderControlMenu";
 import { ReaderController } from "./ReaderController";
 import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import { ReaderStateScreen } from "./ReaderStateScreen";
-import { ReaderV2Footer } from "./footer";
 import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
+import { ReaderV2Footer } from "./footer";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 
 const COLUMN_GAP_PX = 20;
@@ -282,11 +282,16 @@ export function ReaderV2() {
       containerRef={stageSlotRef}
     >
       {({ chromeVisible }) => (
-        <div className="relative h-[100dvh] overflow-hidden bg-background text-foreground">
+        <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-b from-background via-background to-muted/20 font-sans text-foreground">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-secondary/45 to-transparent" />
+            <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem] bg-gradient-to-t from-muted/35 to-transparent" />
+          </div>
+
           {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
           <div
             ref={stageSlotRef}
-            className="absolute inset-x-0"
+            className="absolute inset-x-0 z-10"
             style={{
               top: "env(safe-area-inset-top)",
               bottom: "max(env(safe-area-inset-bottom), 0.625rem)",

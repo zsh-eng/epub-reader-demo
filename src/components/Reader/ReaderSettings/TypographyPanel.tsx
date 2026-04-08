@@ -29,6 +29,11 @@ export function TypographyPanel({
   settings,
   onUpdateSettings,
 }: TypographyPanelProps) {
+  const sectionLabelClassName =
+    "text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground";
+  const segmentedGroupClassName = "w-full rounded-full bg-secondary/40 p-1";
+  const segmentedItemClassName =
+    "h-9 rounded-full text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground";
   const fonts: { value: FontFamily; label: string; stack: string }[] = [
     { value: "lora", label: "Lora", stack: '"Lora", serif' },
     {
@@ -75,15 +80,15 @@ export function TypographyPanel({
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-2">
       {/* Font Family */}
-      <div className="space-y-2">
-        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+      <div className="space-y-2.5">
+        <h4 className={sectionLabelClassName}>
           Font Family
         </h4>
         <div
           ref={scrollContainerRef}
-          className="flex gap-2 overflow-x-auto px-4 py-2 -mx-5 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         >
           {fonts.map((font) => {
             const isSelected = settings.fontFamily === font.value;
@@ -93,19 +98,19 @@ export function TypographyPanel({
                 data-state={isSelected ? "on" : "off"}
                 onClick={() => onUpdateSettings({ fontFamily: font.value })}
                 className={cn(
-                  "flex flex-col items-center justify-center w-26 h-20 rounded-lg border-2 transition-all duration-200 ease-in-out flex-shrink-0 p-3 cursor-pointer active:scale-[0.98]",
+                  "flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-colors active:scale-[0.98]",
                   isSelected
-                    ? "border-primary bg-muted scale-105 shadow-sm"
-                    : "border-transparent",
+                    ? "border-border bg-background ring-1 ring-border/70"
+                    : "border-border/40 bg-secondary/20 hover:bg-secondary/35",
                 )}
               >
                 <span
-                  className="text-xl mb-1"
+                  className="text-3xl leading-none text-foreground"
                   style={{ fontFamily: font.stack }}
                 >
                   Aa
                 </span>
-                <span className="text-[9px] text-muted-foreground font-medium uppercase tracking-wide opacity-70">
+                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   {font.label}
                 </span>
               </button>
@@ -116,7 +121,7 @@ export function TypographyPanel({
 
       {/* Line Height */}
       <div className="space-y-2">
-        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+        <h4 className={sectionLabelClassName}>
           Line Height
         </h4>
         <div className="flex items-center gap-2">
@@ -127,13 +132,13 @@ export function TypographyPanel({
             onValueChange={(value) =>
               value && onUpdateSettings({ lineHeight: parseFloat(value) })
             }
-            className="flex-1 h-12"
+            className={cn("flex-1", segmentedGroupClassName)}
           >
             {lineHeights.map((lh) => (
               <ToggleGroupItem
                 key={lh}
                 value={lh.toString()}
-                className="flex-1 text-xs h-full"
+                className={cn("flex-1 text-xs", segmentedItemClassName)}
               >
                 {lh}
               </ToggleGroupItem>
@@ -144,7 +149,7 @@ export function TypographyPanel({
 
       {/* Content Width */}
       <div className="space-y-2 hidden sm:block">
-        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+        <h4 className={sectionLabelClassName}>
           Content Width
         </h4>
         <div className="flex items-center gap-2">
@@ -155,13 +160,13 @@ export function TypographyPanel({
             onValueChange={(value) =>
               value && onUpdateSettings({ contentWidth: value as ContentWidth })
             }
-            className="flex-1 h-12"
+            className={cn("flex-1", segmentedGroupClassName)}
           >
             {contentWidths.map((width) => (
               <ToggleGroupItem
                 key={width.value}
                 value={width.value}
-                className="flex-1 text-xs h-full"
+                className={cn("flex-1 text-[10px]", segmentedItemClassName)}
               >
                 {width.label}
               </ToggleGroupItem>
@@ -172,7 +177,7 @@ export function TypographyPanel({
 
       {/* Text Align */}
       <div className="space-y-2">
-        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+        <h4 className={sectionLabelClassName}>
           Alignment
         </h4>
         <ToggleGroup
@@ -181,37 +186,49 @@ export function TypographyPanel({
           onValueChange={(value) =>
             value && onUpdateSettings({ textAlign: value as TextAlign })
           }
-          className="w-full h-12"
+          className={segmentedGroupClassName}
         >
-          <ToggleGroupItem value="left" className="flex-1 text-xs h-full">
-            <AlignLeft className="h-4 w-4 mr-2" />
-            Left
+          <ToggleGroupItem
+            value="left"
+            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+          >
+            <AlignLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">Left</span>
           </ToggleGroupItem>
-          <ToggleGroupItem value="center" className="flex-1 text-xs h-full">
-            <AlignCenter className="h-4 w-4 mr-2" />
-            Center
+          <ToggleGroupItem
+            value="center"
+            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+          >
+            <AlignCenter className="h-4 w-4" />
+            <span className="hidden sm:inline">Center</span>
           </ToggleGroupItem>
-          <ToggleGroupItem value="right" className="flex-1 text-xs h-full">
-            <AlignRight className="h-4 w-4 mr-2" />
-            Right
+          <ToggleGroupItem
+            value="right"
+            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+          >
+            <AlignRight className="h-4 w-4" />
+            <span className="hidden sm:inline">Right</span>
           </ToggleGroupItem>
-          <ToggleGroupItem value="justify" className="flex-1 text-xs h-full">
-            <AlignJustify className="h-4 w-4 mr-2" />
-            Justify
+          <ToggleGroupItem
+            value="justify"
+            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+          >
+            <AlignJustify className="h-4 w-4" />
+            <span className="hidden sm:inline">Justify</span>
           </ToggleGroupItem>
         </ToggleGroup>
       </div>
 
       {/* Font Size */}
       <div className="space-y-2">
-        <h4 className="text-muted-foreground text-tiny font-semibold uppercase tracking-wider dark:opacity-50 opacity-80">
+        <h4 className={sectionLabelClassName}>
           Font Size
         </h4>
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-between rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
           <Button
             variant="outline"
             size="icon"
-            className="rounded-md"
+            className="rounded-full border-border/60 bg-background/80 hover:bg-background"
             onClick={() =>
               onUpdateSettings({
                 fontSize: Math.max(50, settings.fontSize - 10),
@@ -222,7 +239,7 @@ export function TypographyPanel({
             <Minus className="h-4 w-4" />
             <span className="sr-only">Decrease font size</span>
           </Button>
-          <span className="text-sm font-medium text-center tabular-nums min-w-[4rem] w-[50%]">
+          <span className="min-w-[4rem] text-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
             <AnimatedNumber
               value={settings.fontSize}
               format={(v) => `${Math.round(v)}%`}
@@ -231,7 +248,7 @@ export function TypographyPanel({
           <Button
             variant="outline"
             size="icon"
-            className="rounded-md"
+            className="rounded-full border-border/60 bg-background/80 hover:bg-background"
             onClick={() =>
               onUpdateSettings({
                 fontSize: Math.min(200, settings.fontSize + 10),

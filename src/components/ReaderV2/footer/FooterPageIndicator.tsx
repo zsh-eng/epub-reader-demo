@@ -10,9 +10,9 @@ export function FooterPageIndicator({
   totalPages,
 }: FooterPageIndicatorProps) {
   return (
-    <div className="flex items-center justify-center py-1">
-      <span className="text-xs text-muted-foreground tabular-nums">
-        <span className="text-foreground font-medium">
+    <div className="flex items-center justify-center pb-1 pt-0.5">
+      <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground tabular-nums">
+        <span className="text-foreground">
           p.{" "}
           <AnimatedNumber
             value={currentPage}

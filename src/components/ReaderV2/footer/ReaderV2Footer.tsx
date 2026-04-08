@@ -63,33 +63,37 @@ export function ReaderV2Footer({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: "100%", opacity: 0 }}
           transition={{ duration: 0.22, ease: [0.32, 0, 0.67, 0] }}
-          className="absolute bottom-0 inset-x-0 z-20 bg-background border-t border-border"
+          className="absolute inset-x-0 bottom-0 z-20 border-t border-border/70 bg-background/88 backdrop-blur-xl"
           style={{
             paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
           }}
         >
-          <FooterChapterRow
-            currentChapterIndex={currentChapterIndex}
-            chapterEntries={chapterEntries}
-            chapterStartPages={chapterStartPages}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onGoToChapter={handleGoToChapter}
-            onPrevChapter={handlePrevChapter}
-            onNextChapter={handleNextChapter}
-          />
-          <FooterPageIndicator
-            currentPage={currentPage}
-            totalPages={totalPages}
-          />
-          <FooterScrubberCanvas
-            currentPage={currentPage}
-            totalPages={totalPages}
-            chapterStartPages={chapterStartPages}
-            onScrubCommit={onGoToPage}
-            onScrubPreview={onGoToPage}
-            cancelMomentumSignal={cancelMomentumSignal}
-          />
+          <div className="mx-auto flex max-w-7xl flex-col px-3 pt-2 sm:px-4">
+            <FooterChapterRow
+              currentChapterIndex={currentChapterIndex}
+              chapterEntries={chapterEntries}
+              chapterStartPages={chapterStartPages}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onGoToChapter={handleGoToChapter}
+              onPrevChapter={handlePrevChapter}
+              onNextChapter={handleNextChapter}
+            />
+            <div className="px-1">
+              <FooterScrubberCanvas
+                currentPage={currentPage}
+                totalPages={totalPages}
+                chapterStartPages={chapterStartPages}
+                onScrubCommit={onGoToPage}
+                onScrubPreview={onGoToPage}
+                cancelMomentumSignal={cancelMomentumSignal}
+              />
+            </div>
+            <FooterPageIndicator
+              currentPage={currentPage}
+              totalPages={totalPages}
+            />
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

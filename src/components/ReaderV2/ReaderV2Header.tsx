@@ -27,6 +27,8 @@ const CHROME_TRANSITION = {
   duration: 0.22,
   ease: [0.32, 0, 0.67, 0] as const,
 };
+const CHROME_BUTTON_CLASS_NAME =
+  "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:bg-background hover:text-foreground";
 
 interface ReaderV2HeaderProps {
   chromeVisible: boolean;
@@ -104,18 +106,18 @@ export function ReaderV2Header({
       </motion.button>
 
       <header
-        className="absolute inset-x-0 top-0 z-20 bg-background/95 backdrop-blur-sm"
+        className="absolute inset-x-0 top-0 z-20 bg-background/88 backdrop-blur-xl"
         style={{
           paddingTop: "env(safe-area-inset-top)",
           pointerEvents: chromeVisible ? "auto" : "none",
         }}
       >
         <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border/70"
           aria-hidden="true"
         />
         <div
-          className="pointer-events-none absolute bottom-0 h-px bg-background/95"
+          className="pointer-events-none absolute bottom-0 h-px bg-background/88"
           aria-hidden="true"
           style={{
             right: `${HEADER_BORDER_GAP_RIGHT_PX}px`,
@@ -127,16 +129,17 @@ export function ReaderV2Header({
           <div className="flex items-center">
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={onBackToLibrary}
               aria-label="Back to library"
+              className={CHROME_BUTTON_CLASS_NAME}
             >
-              <ChevronLeft className="size-5" />
+              <ChevronLeft className="size-4" />
             </Button>
           </div>
 
           {/* Zone 2 — Center: Book title */}
-          <p className="max-w-[40vw] truncate font-serif text-sm font-medium">
+          <p className="max-w-[min(64vw,36rem)] truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {bookTitle}
           </p>
 
@@ -144,12 +147,12 @@ export function ReaderV2Header({
           <div className="flex items-center justify-end">
             <Button
               variant="ghost"
-              size="icon"
+              size="icon-sm"
               onClick={onOpenMenu}
               aria-label="Open menu"
-              className="rounded-full"
+              className={CHROME_BUTTON_CLASS_NAME}
             >
-              <MoreHorizontal className="size-5" />
+              <MoreHorizontal className="size-4" />
             </Button>
           </div>
         </div>

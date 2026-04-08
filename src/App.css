@@ -113,7 +113,7 @@
 }
 
 .reader-content blockquote {
-  border-left: 4px solid #e5e7eb;
+  border-left: 4px solid var(--border);
   padding-left: 1.5em;
   margin: 1.5em 0;
   font-style: italic;
@@ -129,8 +129,25 @@
 .reader-v2-blockquote {
   border-left: 4px solid var(--border);
   padding-left: 1.5em;
+  background: linear-gradient(90deg, var(--secondary), transparent 72%);
   font-style: italic;
   color: var(--muted-foreground);
+}
+
+.reader-v2-figcaption {
+  color: var(--muted-foreground);
+}
+
+.reader-v2-inline-link {
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 0.18em;
+}
+
+.reader-v2-inline-code {
+  border-radius: 0.35em;
+  background: var(--secondary);
+  color: var(--foreground);
 }
 
 /* Some ebooks wrap the paragraph text in a link tag. TODO: we have to handle this. */
@@ -170,7 +187,7 @@
 
 .reader-content th,
 .reader-content td {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   padding: 0.5em;
   text-align: left;
 }

@@ -70,6 +70,7 @@ function getDipFactor(signedDistanceInPages: number): number {
 interface CanvasColors {
   fg: string;
   mutedFg: string;
+  uiFont: string;
 }
 
 function toCanvasColor(value: string, fallback: string): string {
@@ -97,6 +98,9 @@ function resolveColors(el: HTMLElement): CanvasColors {
       style.getPropertyValue("--muted-foreground"),
       "oklch(0.556 0 0)",
     ),
+    uiFont:
+      style.getPropertyValue("--font-sans").trim() ||
+      '"DM Sans", "Inter", system-ui, sans-serif',
   };
 }
 
@@ -208,7 +212,7 @@ function drawCanvas(
     if (isMod20 && distFromEdge > FADE_ZONE * 0.35) {
       ctx.globalAlpha = edgeAlpha * 0.55;
       ctx.fillStyle = colors.mutedFg;
-      ctx.font = `9px system-ui, sans-serif`;
+      ctx.font = `500 9px ${colors.uiFont}`;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(String(p), x, TOP_PAD + 34 + 5);
@@ -481,8 +485,8 @@ export function FooterScrubberCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="w-full cursor-ew-resize touch-none"
-      style={{ height: 52, display: "block" }}
+      className="block w-full cursor-ew-resize touch-none"
+      style={{ height: 48 }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
