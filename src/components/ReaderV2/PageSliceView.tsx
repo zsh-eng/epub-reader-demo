@@ -82,8 +82,16 @@ export function PageSliceView({
         "reader-v2-blockquote": slice.tag === "blockquote",
         "reader-v2-figcaption": slice.tag === "figcaption",
       })}
+      // There is a difference between the line height CSS property and the actual line height
+      // that is rendered out.
+      // For instance, with "Iowan Old Style" font on 17px, the rendered height of the box is
+      // always 0.5px taller than the line height. E.g. 25px line height renders at 25.5px,
+      // 24px line height renders at 24.5px, 28px line height renders at 28.5px, and so on.
+      // Thus we need to set the `height` property to match the number of lines and line height
+      // such that we don't get overflow in these cases.
       style={{
         lineHeight: `${slice.lineHeight}px`,
+        height: `${slice.lines.length * slice.lineHeight}px`,
         textAlign,
         fontSize: Math.round(baseFontSize),
       }}
