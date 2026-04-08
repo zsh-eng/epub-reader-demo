@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@chenglou/pretext": "^0.0.3",
+    "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/eb-garamond": "^5.2.7",
     "@fontsource/inter": "^5.2.8",
     "@fontsource/jetbrains-mono": "^5.2.8",

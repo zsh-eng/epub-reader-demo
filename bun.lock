@@ -6,6 +6,7 @@
       "name": "epub-reader-demo",
       "dependencies": {
         "@chenglou/pretext": "^0.0.3",
+        "@fontsource/dm-sans": "^5.2.8",
         "@fontsource/eb-garamond": "^5.2.7",
         "@fontsource/inter": "^5.2.8",
         "@fontsource/jetbrains-mono": "^5.2.8",
@@ -464,6 +465,8 @@
     "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.6", "", { "dependencies": { "@floating-ui/dom": "^1.7.4" }, "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-4JX6rEatQEvlmgU80wZyq9RT96HZJa88q8hp0pBd+LrczeDI4o6uA2M+uvxngVHo4Ihr8uibXxH6+70zhAFrVw=="],
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ=="],
+
+    "@fontsource/dm-sans": ["@fontsource/dm-sans@5.2.8", "", {}, "sha512-tlovG42m9ESG28WiHpLq3F5umAlm64rv0RkqTbYowRn70e9OlRr5a3yTJhrhrY+k5lftR/OFJjPzOLQzk8EfCA=="],
 
     "@fontsource/eb-garamond": ["@fontsource/eb-garamond@5.2.7", "", {}, "sha512-V42tTlHDbnDo0+lENnXKWMx63Llq6Gfl2l7ozkoeRQN60S0jm6hEgCLlOT/5YyKAN9QZ0e2ofpy0rGKlz9jBrw=="],
 
