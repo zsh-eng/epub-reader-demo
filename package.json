@@ -27,7 +27,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,md}\""
   },
   "dependencies": {
-    "@chenglou/pretext": "^0.0.3",
+    "@chenglou/pretext": "^0.0.4",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/eb-garamond": "^5.2.7",
     "@fontsource/inter": "^5.2.8",
