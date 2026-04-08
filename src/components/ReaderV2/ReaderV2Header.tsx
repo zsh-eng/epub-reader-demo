@@ -1,40 +1,54 @@
 import { Button } from "@/components/ui/button";
-import type { ReaderSettings } from "@/types/reader.types";
-import { Bookmark, ChevronLeft, List, Search } from "lucide-react";
-import { ReaderV2SettingsPopover } from "./shared/ReaderV2SettingsPopover";
+import { ChevronLeft, MoreHorizontal } from "lucide-react";
+import { motion } from "motion/react";
 
 interface ReaderV2HeaderProps {
   chromeVisible: boolean;
   bookTitle: string;
   onBackToLibrary: () => void;
-  settings: ReaderSettings;
-  onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
-  showColumnSelector: boolean;
-  spreadColumns: 1 | 2;
-  onSpreadColumnsChange: (columns: 1 | 2) => void;
+  isBookmarked: boolean;
+  onToggleBookmark: () => void;
+  onOpenMenu: () => void;
 }
 
 export function ReaderV2Header({
   chromeVisible,
   bookTitle,
   onBackToLibrary,
-  settings,
-  onUpdateSettings,
-  showColumnSelector,
-  spreadColumns,
-  onSpreadColumnsChange,
+  isBookmarked,
+  onToggleBookmark,
+  onOpenMenu,
 }: ReaderV2HeaderProps) {
   return (
-    <header
-      className="absolute top-0 inset-x-0 z-20 border-b bg-background/95 backdrop-blur-sm"
+    <motion.header
+      className="absolute top-0 inset-x-0 z-20 border-b bg-background/95 backdrop-blur-sm overflow-visible"
+      animate={{ y: chromeVisible ? 0 : "-100%" }}
+      transition={{ duration: 0.22, ease: [0.32, 0, 0.67, 0] }}
       style={{
         paddingTop: "env(safe-area-inset-top)",
-        opacity: chromeVisible ? 1 : 0,
         pointerEvents: chromeVisible ? "auto" : "none",
       }}
     >
-      <div className="mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
+      {/* Bookmark ribbon — hangs below header, peeks when header is hidden + bookmarked */}
+      <div
+        className="absolute right-5 top-0 w-7"
+        style={{
+          height: "calc(100% + 44px)",
+          clipPath:
+            "polygon(0 0, 100% 0, 100% calc(100% - 12px), 50% 100%, 0 calc(100% - 12px))",
+          backgroundColor: isBookmarked ? "var(--foreground)" : "var(--border)",
+          opacity: !isBookmarked && !chromeVisible ? 0 : 1,
+          transition: "opacity 200ms, background-color 200ms",
+          pointerEvents: "auto",
+          cursor: "pointer",
+        }}
+        onClick={onToggleBookmark}
+        role="button"
+        aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
+        aria-pressed={isBookmarked}
+      />
 
+      <div className="relative z-10 mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
         {/* Zone 1 — Left: Back button */}
         <div className="flex items-center">
           <Button
@@ -52,47 +66,19 @@ export function ReaderV2Header({
           {bookTitle}
         </p>
 
-        {/* Zone 3 — Right: Pill cluster */}
+        {/* Zone 3 — Right: Menu button */}
         <div className="flex items-center justify-end">
-          <div className="flex items-center gap-0.5 rounded-full bg-muted p-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="rounded-full"
-              aria-label="Table of contents"
-              onClick={() => {}}
-            >
-              <List className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="rounded-full"
-              aria-label="Search"
-              onClick={() => {}}
-            >
-              <Search className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="rounded-full"
-              aria-label="Bookmark"
-              onClick={() => {}}
-            >
-              <Bookmark className="size-4" />
-            </Button>
-            <ReaderV2SettingsPopover
-              settings={settings}
-              onUpdateSettings={onUpdateSettings}
-              showColumnSelector={showColumnSelector}
-              spreadColumns={spreadColumns}
-              onSpreadColumnsChange={onSpreadColumnsChange}
-            />
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onOpenMenu}
+            aria-label="Open menu"
+            className="rounded-full"
+          >
+            <MoreHorizontal className="size-5" />
+          </Button>
         </div>
-
       </div>
-    </header>
+    </motion.header>
   );
 }

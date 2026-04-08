@@ -13,7 +13,9 @@ import {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
+import { ReaderControlMenu } from "./ReaderControlMenu";
 import { ReaderController } from "./ReaderController";
+import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { ReaderV2Footer } from "./footer";
 import { ReaderV2Header } from "./ReaderV2Header";
@@ -91,6 +93,9 @@ export function ReaderV2() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [spreadColumns, setSpreadColumns] = useState<1 | 2>(1);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
   const highlightManagerRef = useRef<HighlightInteractionManager | null>(null);
@@ -286,6 +291,20 @@ export function ReaderV2() {
             chromeVisible={chromeVisible}
             bookTitle={book.title}
             onBackToLibrary={() => navigate("/")}
+            isBookmarked={isBookmarked}
+            onToggleBookmark={() => setIsBookmarked((b) => !b)}
+            onOpenMenu={() => setIsMenuOpen(true)}
+          />
+
+          <ReaderControlMenu
+            isOpen={isMenuOpen}
+            onClose={() => setIsMenuOpen(false)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+
+          <ReaderSettingsSheet
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
             showColumnSelector={!isMobile}
