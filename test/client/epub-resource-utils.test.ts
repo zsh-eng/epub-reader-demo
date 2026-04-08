@@ -1,5 +1,6 @@
 import { EPUB_LINK } from "@/types/reader.types";
 import {
+  DEFERRED_EPUB_IMAGE_ATTR,
   getMimeTypeForContent,
   processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
@@ -122,12 +123,42 @@ describe("processEmbeddedResources", () => {
     });
 
     const svgImage = document.querySelector("image");
-    const expectedDeferredSrc = "epub-deferred://OEBPS/Images/cover.jpg";
+    const expectedDeferredPath = "OEBPS/Images/cover.jpg";
 
-    expect(svgImage?.getAttribute("xlink:href")).toBe(expectedDeferredSrc);
-    expect(svgImage?.getAttribute("href")).toBe(expectedDeferredSrc);
+    expect(svgImage?.getAttribute(DEFERRED_EPUB_IMAGE_ATTR)).toBe(
+      expectedDeferredPath,
+    );
+    expect(svgImage?.getAttribute("xlink:href")).toBeNull();
+    expect(svgImage?.getAttribute("href")).toBeNull();
     expect(svgImage?.getAttribute("data-epub-intrinsic-width")).toBe("1200");
     expect(svgImage?.getAttribute("data-epub-intrinsic-height")).toBe("1800");
+  });
+
+  it("marks img resources for deferred loading without leaving a live src", async () => {
+    const content = `<html><body>
+      <img src="../Images/inline.jpg" />
+    </body></html>`;
+
+    const { document } = await processEmbeddedResources({
+      content,
+      mediaType: "text/html",
+      basePath: "OEBPS/Text/Chapter1.xhtml",
+      loadResource: async () => null,
+      skipImages: true,
+      loadLinkedResources: false,
+      imageDimensionsByPath: new Map([
+        ["OEBPS/Images/inline.jpg", { width: 640, height: 360 }],
+      ]),
+    });
+
+    const img = document.querySelector("img");
+
+    expect(img?.getAttribute(DEFERRED_EPUB_IMAGE_ATTR)).toBe(
+      "OEBPS/Images/inline.jpg",
+    );
+    expect(img?.getAttribute("src")).toBeNull();
+    expect(img?.getAttribute("data-epub-intrinsic-width")).toBe("640");
+    expect(img?.getAttribute("data-epub-intrinsic-height")).toBe("360");
   });
 
   it("injects intrinsic metadata for img and svg image elements by resolved path", async () => {

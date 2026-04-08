@@ -5,6 +5,7 @@
 import { EPUB_LINK } from "@/types/reader.types";
 
 export const DEFERRED_EPUB_IMAGE_PREFIX = "epub-deferred://";
+export const DEFERRED_EPUB_IMAGE_ATTR = "data-epub-deferred-src";
 
 export function createDeferredEpubImageSrc(resourcePath: string): string {
   return `${DEFERRED_EPUB_IMAGE_PREFIX}${resourcePath}`;
@@ -255,19 +256,16 @@ export async function processEmbeddedResources(
     }
 
     if (skipImages && src && tagName === "img") {
-      element.setAttribute("src", createDeferredEpubImageSrc(resolvedPath));
+      element.setAttribute(DEFERRED_EPUB_IMAGE_ATTR, resolvedPath);
+      element.removeAttribute("src");
       continue;
     }
 
     if (skipImages && tagName === "image" && (xlinkHref || href)) {
-      const deferredSrc = createDeferredEpubImageSrc(resolvedPath);
-      element.setAttribute("href", deferredSrc);
-      element.setAttributeNS(
-        "http://www.w3.org/1999/xlink",
-        "xlink:href",
-        deferredSrc,
-      );
-      element.setAttribute("xlink:href", deferredSrc);
+      element.setAttribute(DEFERRED_EPUB_IMAGE_ATTR, resolvedPath);
+      element.removeAttribute("href");
+      element.removeAttribute("xlink:href");
+      element.removeAttributeNS("http://www.w3.org/1999/xlink", "href");
       continue;
     }
 

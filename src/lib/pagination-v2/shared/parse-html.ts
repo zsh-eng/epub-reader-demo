@@ -29,6 +29,10 @@
  * - If supported HTML semantics change in Reader rendering, update this module's
  *   tag sets and inline extraction rules so pagination output stays consistent.
  */
+import {
+  createDeferredEpubImageSrc,
+  DEFERRED_EPUB_IMAGE_ATTR,
+} from "@/lib/epub-resource-utils";
 import type {
   Block,
   BlockTag,
@@ -208,6 +212,11 @@ function parseNumeric(value: string | null): number | null {
 }
 
 function getImageSource(element: Element, tag: string): string | null {
+  const deferredPath = element.getAttribute(DEFERRED_EPUB_IMAGE_ATTR)?.trim();
+  if (deferredPath) {
+    return createDeferredEpubImageSrc(deferredPath);
+  }
+
   if (tag === "img") {
     return element.getAttribute("src");
   }
