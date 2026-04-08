@@ -37,15 +37,15 @@ const MAX_VIEWPORT_HEIGHT_PX = 980;
 
 /** Height of the floating header (h-14), inside the safe-area-adjusted root. */
 const HEADER_HEIGHT_PX = 56;
-/** Height of the floating footer (chapter row + page indicator + scrubber), excluding safe-area. */
-const TOOLBAR_HEIGHT_PX = 124;
 /** Visual breathing room between overlay edge and text. */
-const MIN_PADDING_Y = 20;
+const MIN_PADDING_Y = 4;
 /** Minimum horizontal margin between screen edge and text. */
 const MIN_PADDING_X = 20;
 
+// Symmetry in the vertical padding
+// It's ok for the footer to overlap the text - it's not to be shown all the time
 const PADDING_TOP = HEADER_HEIGHT_PX + MIN_PADDING_Y;
-const PADDING_BOTTOM = TOOLBAR_HEIGHT_PX;
+const PADDING_BOTTOM = PADDING_TOP;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
