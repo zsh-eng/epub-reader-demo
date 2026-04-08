@@ -40,7 +40,6 @@ export function PageSliceView({
             objectFit: "contain",
             borderRadius: "1.25rem",
             outline: "1px solid var(--border)",
-            background: "var(--secondary)",
           }}
         />
       </div>

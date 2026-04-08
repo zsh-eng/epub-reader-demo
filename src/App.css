@@ -146,7 +146,7 @@
 
 .reader-v2-inline-code {
   border-radius: 0.35em;
-  background: var(--secondary);
+  /*background: var(--secondary);*/
   color: var(--foreground);
 }
 
