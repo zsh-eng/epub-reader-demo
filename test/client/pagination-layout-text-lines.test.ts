@@ -110,7 +110,7 @@ describe("layoutPreWrapLines cursor offsets", () => {
     expect(textBlock?.type).toBe("text");
     if (!textBlock || textBlock.type !== "text") return;
 
-    const lines = layoutTextLines(textBlock.items, 170);
+    const { lines } = layoutTextLines(textBlock.items, 170);
     expect(lines.length).toBeGreaterThan(1);
 
     const markedFragments = lines

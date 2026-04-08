@@ -8,6 +8,16 @@ import type {
   PreparedTextBlock,
 } from "./types";
 
+const JUSTIFY_DISABLED_TAGS = new Set([
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "pre",
+]);
+
 function createPage(index: number): Page & { usedHeight: number } {
   return { index, slices: [], usedHeight: 0 };
 }
@@ -143,9 +153,17 @@ export function layoutPages(
       1,
       safeWidth - getBlockInsetLeft(textBlock.tag, theme),
     );
-    const lines = textBlock.containsNewlines
-      ? layoutPreWrapLines(textBlock.items, textLayoutWidth)
-      : layoutTextLines(textBlock.items, textLayoutWidth);
+    const lineLayout = textBlock.containsNewlines
+      ? {
+          lines: layoutPreWrapLines(textBlock.items, textLayoutWidth),
+          renderMode: "native" as const,
+        }
+      : layoutTextLines(textBlock.items, textLayoutWidth, {
+          useOptimalJustify:
+            theme.textAlign === "justify" &&
+            !JUSTIFY_DISABLED_TAGS.has(textBlock.tag),
+        });
+    const { lines, renderMode } = lineLayout;
     totalLineCount += lines.length;
 
     if (lines.length === 0) {
@@ -186,6 +204,7 @@ export function layoutPages(
         tag: textBlock.tag,
         lineHeight,
         textAlign: theme.textAlign,
+        renderMode,
         lines: sliceLines,
       });
       current.usedHeight += take * lineHeight;

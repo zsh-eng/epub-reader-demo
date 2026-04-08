@@ -7,6 +7,7 @@ export type {
   HighlightMark,
   LayoutTheme,
   Page,
+  PageFragment,
   PageSlice,
   PaginationConfig,
   PaginationStatus,
@@ -16,6 +17,7 @@ export type {
   SpreadGapReason,
   SpreadSlot,
   TextCursorOffset,
+  TextRenderMode,
 } from "./types";
 export { usePagination } from "./use-pagination";
 export type {

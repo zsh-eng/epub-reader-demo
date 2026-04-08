@@ -34,6 +34,7 @@ export type {
   SpacerSlice,
   TextBlock,
   TextCursorOffset,
+  TextRenderMode,
   TextSlice,
 } from "./shared/types";
 

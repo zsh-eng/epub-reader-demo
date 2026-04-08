@@ -149,12 +149,14 @@ export interface PaginationConfig {
 }
 
 export interface PageFragment {
+  kind: "text" | "space";
   text: string;
   font: string;
   leadingGap: number;
   isLink: boolean;
   isCode: boolean;
   highlightMarks?: HighlightMark[];
+  marginRightPx?: number;
 }
 
 export interface TextCursorOffset {
@@ -168,7 +170,10 @@ export interface PageLine {
   startOffset?: TextCursorOffset;
   endOffset?: TextCursorOffset;
   isLastInBlock: boolean;
+  wordSpacingPx?: number;
 }
+
+export type TextRenderMode = "native" | "manual-justify";
 
 export interface TextSlice {
   type: "text";
@@ -176,6 +181,7 @@ export interface TextSlice {
   tag: BlockTag;
   lineHeight: number;
   textAlign: "left" | "center" | "right" | "justify";
+  renderMode: TextRenderMode;
   lines: PageLine[];
 }
 

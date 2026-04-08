@@ -1,6 +1,7 @@
-import type { PageSlice } from "@/lib/pagination-v2";
+import type { PageFragment, PageSlice } from "@/lib/pagination-v2";
 import { cn } from "@/lib/utils";
 import { Fragment } from "react";
+import type { ReactNode } from "react";
 import { LazyImage } from "./shared/LazyImage";
 
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
@@ -11,6 +12,25 @@ interface PageSliceViewProps {
   bookId: string;
   deferredImageCache: Map<string, string>;
   baseFontSize: number;
+}
+
+function renderFragmentContent(fragment: PageFragment) {
+  if (!fragment.highlightMarks || fragment.highlightMarks.length === 0) {
+    return fragment.text;
+  }
+
+  return fragment.highlightMarks.reduceRight<ReactNode>(
+    (content: ReactNode, mark: NonNullable<PageFragment["highlightMarks"]>[number]) => (
+      <mark
+        className="epub-highlight"
+        data-highlight-id={mark.id}
+        data-color={mark.color}
+      >
+        {content}
+      </mark>
+    ),
+    fragment.text,
+  );
 }
 
 export function PageSliceView({
@@ -47,7 +67,9 @@ export function PageSliceView({
   }
 
   const textAlign =
-    HEADING_TAGS.has(slice.tag) && slice.textAlign === "justify"
+    slice.renderMode === "manual-justify"
+      ? "left"
+      : HEADING_TAGS.has(slice.tag) && slice.textAlign === "justify"
       ? "left"
       : slice.textAlign;
 
@@ -60,45 +82,88 @@ export function PageSliceView({
       style={{
         lineHeight: `${slice.lineHeight}px`,
         textAlign,
-        fontSize: baseFontSize,
+        fontSize: Math.round(baseFontSize),
       }}
     >
-      {slice.lines.map((line, lineIndex) => (
-        <Fragment key={`${key}-line-${lineIndex}`}>
-          {line.fragments.map((fragment, fragmentIndex) => (
-            <span
-              key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
-              style={{
-                marginLeft:
-                  fragment.leadingGap > 0
-                    ? `${fragment.leadingGap}px`
-                    : undefined,
-                font: fragment.font,
-                lineHeight: "inherit",
-              }}
-              className={cn({
-                "reader-v2-inline-link": fragment.isLink,
-                "reader-v2-inline-code": fragment.isCode,
-              })}
-            >
-              {fragment.highlightMarks && fragment.highlightMarks.length > 0
-                ? fragment.highlightMarks.reduceRight<React.ReactNode>(
-                    (content, mark) => (
-                      <mark
-                        className="epub-highlight"
-                        data-highlight-id={mark.id}
-                        data-color={mark.color}
-                      >
-                        {content}
-                      </mark>
-                    ),
-                    fragment.text,
-                  )
-                : fragment.text}
-            </span>
+      {slice.renderMode === "manual-justify"
+        ? slice.lines.map((line, lineIndex) => {
+            const trailingBoundaryFragment =
+              line.fragments[line.fragments.length - 1]?.kind === "space"
+                ? line.fragments[line.fragments.length - 1]
+                : null;
+            const contentFragments = trailingBoundaryFragment
+              ? line.fragments.slice(0, -1)
+              : line.fragments;
+
+            return (
+              <Fragment key={`${key}-line-${lineIndex}`}>
+                <span
+                  style={{
+                    whiteSpace: "nowrap",
+                    wordSpacing:
+                      line.wordSpacingPx !== undefined &&
+                      Math.abs(line.wordSpacingPx) > 0.01
+                        ? `${line.wordSpacingPx}px`
+                        : undefined,
+                  }}
+                >
+                  {contentFragments.map((fragment, fragmentIndex) => (
+                    <span
+                      key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
+                      style={{
+                        font: fragment.font,
+                        lineHeight: "inherit",
+                        marginRight:
+                          fragment.marginRightPx !== undefined &&
+                          Math.abs(fragment.marginRightPx) > 0.01
+                            ? `${fragment.marginRightPx}px`
+                            : undefined,
+                      }}
+                      className={cn({
+                        "reader-v2-inline-link": fragment.isLink,
+                        "reader-v2-inline-code": fragment.isCode,
+                      })}
+                    >
+                      {renderFragmentContent(fragment)}
+                    </span>
+                  ))}
+                </span>
+                {trailingBoundaryFragment ? (
+                  <span
+                    style={{
+                      font: trailingBoundaryFragment.font,
+                      lineHeight: "inherit",
+                    }}
+                  >
+                    {renderFragmentContent(trailingBoundaryFragment)}
+                  </span>
+                ) : null}
+              </Fragment>
+            );
+          })
+        : slice.lines.map((line, lineIndex) => (
+            <Fragment key={`${key}-line-${lineIndex}`}>
+              {line.fragments.map((fragment, fragmentIndex) => (
+                <span
+                  key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
+                  style={{
+                    marginLeft:
+                      fragment.leadingGap > 0
+                        ? `${fragment.leadingGap}px`
+                        : undefined,
+                    font: fragment.font,
+                    lineHeight: "inherit",
+                  }}
+                  className={cn({
+                    "reader-v2-inline-link": fragment.isLink,
+                    "reader-v2-inline-code": fragment.isCode,
+                  })}
+                >
+                  {renderFragmentContent(fragment)}
+                </span>
+              ))}
+            </Fragment>
           ))}
-        </Fragment>
-      ))}
     </p>
   );
 }
