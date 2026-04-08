@@ -7,6 +7,7 @@
     /* Font families */
     --font-serif: "EB Garamond", "Garamond", serif;
     --font-sans: "DM Sans", "Inter", system-ui, sans-serif;
+    --font-numeric: "Inter", system-ui, sans-serif;
 
     /* Custom CSS for this reader app */
     --text-tiny: 0.625rem;
