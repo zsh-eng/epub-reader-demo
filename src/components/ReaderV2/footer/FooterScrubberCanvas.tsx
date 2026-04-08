@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 interface FooterScrubberCanvasProps {
   currentPage: number;
@@ -6,6 +6,7 @@ interface FooterScrubberCanvasProps {
   chapterStartPages: (number | null)[];
   onScrubCommit: (page: number) => void;
   onScrubPreview?: (page: number) => void;
+  cancelMomentumSignal?: number;
 }
 
 const TICK_SPACING = 6; // Pixels between page ticks; lower = denser ticks and faster scrub for same drag distance.
@@ -214,6 +215,7 @@ export function FooterScrubberCanvas({
   chapterStartPages,
   onScrubCommit,
   onScrubPreview,
+  cancelMomentumSignal,
 }: FooterScrubberCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const displayPageRef = useRef<number>(currentPage);
@@ -304,6 +306,14 @@ export function FooterScrubberCanvas({
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
     return () => mo.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useLayoutEffect(() => {
+    cancelAnimationFrame(rafRef.current);
+    cancelAnimationFrame(momentumRafRef.current);
+    isMomentumRef.current = false;
+    isDraggingRef.current = false;
+    dragHistoryRef.current = [];
+  }, [cancelMomentumSignal]);
 
   function startMomentum(initialVelocity: number) {
     let vel = Math.sign(initialVelocity) * Math.min(Math.abs(initialVelocity), MOMENTUM_MAX_VELOCITY);

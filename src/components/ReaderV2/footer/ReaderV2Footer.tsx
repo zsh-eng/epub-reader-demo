@@ -1,5 +1,6 @@
 import type { ChapterEntry } from "@/components/ReaderV2/hooks/use-reader-v2-core";
 import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
 import { FooterPageIndicator } from "./FooterPageIndicator";
 import { FooterScrubberCanvas } from "./FooterScrubberCanvas";
@@ -29,6 +30,30 @@ export function ReaderV2Footer({
   onPrevChapter,
   onNextChapter,
 }: ReaderV2FooterProps) {
+  const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
+
+  const interruptScrubberMomentum = useCallback(() => {
+    setCancelMomentumSignal((signal) => signal + 1);
+  }, []);
+
+  const handleGoToChapter = useCallback(
+    (chapterIndex: number) => {
+      interruptScrubberMomentum();
+      onGoToChapter(chapterIndex);
+    },
+    [interruptScrubberMomentum, onGoToChapter],
+  );
+
+  const handlePrevChapter = useCallback(() => {
+    interruptScrubberMomentum();
+    onPrevChapter();
+  }, [interruptScrubberMomentum, onPrevChapter]);
+
+  const handleNextChapter = useCallback(() => {
+    interruptScrubberMomentum();
+    onNextChapter();
+  }, [interruptScrubberMomentum, onNextChapter]);
+
   return (
     <AnimatePresence>
       {chromeVisible && (
@@ -49,9 +74,9 @@ export function ReaderV2Footer({
             chapterStartPages={chapterStartPages}
             currentPage={currentPage}
             totalPages={totalPages}
-            onGoToChapter={onGoToChapter}
-            onPrevChapter={onPrevChapter}
-            onNextChapter={onNextChapter}
+            onGoToChapter={handleGoToChapter}
+            onPrevChapter={handlePrevChapter}
+            onNextChapter={handleNextChapter}
           />
           <FooterPageIndicator currentPage={currentPage} totalPages={totalPages} />
           <FooterScrubberCanvas
@@ -60,6 +85,7 @@ export function ReaderV2Footer({
             chapterStartPages={chapterStartPages}
             onScrubCommit={onGoToPage}
             onScrubPreview={onGoToPage}
+            cancelMomentumSignal={cancelMomentumSignal}
           />
         </motion.div>
       )}
