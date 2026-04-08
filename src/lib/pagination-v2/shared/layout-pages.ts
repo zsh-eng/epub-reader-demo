@@ -160,7 +160,7 @@ export function layoutPages(
         }
       : layoutTextLines(textBlock.items, textLayoutWidth, {
           useOptimalJustify:
-            theme.textAlign === "justify" &&
+            theme.textAlign === "justify-knuth-plass" &&
             !JUSTIFY_DISABLED_TAGS.has(textBlock.tag),
         });
     const { lines, renderMode } = lineLayout;

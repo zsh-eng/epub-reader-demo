@@ -91,11 +91,26 @@ export const FONT_STACKS: Record<FontFamily, string> = {
 export const TEXT_ALIGN = {
   left: "left",
   justify: "justify",
+  // Uses the custom Knuth-Plass line-breaking path in ReaderV2 while still
+  // falling back to CSS justify anywhere we only support native layout.
+  justifyKnuthPlass: "justify-knuth-plass",
   center: "center",
   right: "right",
 } as const;
 
 export type TextAlign = (typeof TEXT_ALIGN)[keyof typeof TEXT_ALIGN];
+
+export function isJustifiedTextAlign(
+  value: TextAlign,
+): value is "justify" | "justify-knuth-plass" {
+  return value === "justify" || value === "justify-knuth-plass";
+}
+
+export function toCssTextAlign(
+  value: TextAlign,
+): "left" | "center" | "right" | "justify" {
+  return value === "justify-knuth-plass" ? "justify" : value;
+}
 
 export interface ReaderSettings {
   fontSize: number; // percentage, e.g. 100

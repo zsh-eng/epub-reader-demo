@@ -1,23 +1,24 @@
+import { AnimatedNumber } from "@/components/ui/animated-number";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import type {
-  ContentWidth,
-  FontFamily,
-  ReaderSettings,
-  TextAlign,
+    ContentWidth,
+    FontFamily,
+    ReaderSettings,
+    TextAlign,
 } from "@/types/reader.types";
+import { isJustifiedTextAlign } from "@/types/reader.types";
 import {
-  AlignCenter,
-  AlignJustify,
-  AlignLeft,
-  AlignRight,
-  Minus,
-  MoveHorizontal,
-  MoveVertical,
-  Plus,
+    AlignCenter,
+    AlignJustify,
+    AlignLeft,
+    AlignRight,
+    Minus,
+    MoveHorizontal,
+    MoveVertical,
+    Plus,
 } from "lucide-react";
-import { AnimatedNumber } from "@/components/ui/animated-number";
 import { useEffect, useRef } from "react";
 
 interface TypographyPanelProps {
@@ -29,6 +30,9 @@ export function TypographyPanel({
   settings,
   onUpdateSettings,
 }: TypographyPanelProps) {
+  const alignmentValue = isJustifiedTextAlign(settings.textAlign)
+    ? "justify"
+    : settings.textAlign;
   const sectionLabelClassName =
     "text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground";
   const segmentedGroupClassName = "w-full rounded-full bg-secondary/40 p-1";
@@ -182,9 +186,15 @@ export function TypographyPanel({
         </h4>
         <ToggleGroup
           type="single"
-          value={settings.textAlign}
+          value={alignmentValue}
           onValueChange={(value) =>
-            value && onUpdateSettings({ textAlign: value as TextAlign })
+            value &&
+            onUpdateSettings({
+              textAlign:
+                value === "justify"
+                  ? "justify-knuth-plass"
+                  : (value as Exclude<TextAlign, "justify-knuth-plass">),
+            })
           }
           className={segmentedGroupClassName}
         >

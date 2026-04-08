@@ -1,8 +1,9 @@
 import {
-  CONTENT_WIDTH_VALUES,
-  EPUB_LINK,
-  FONT_STACKS,
-  type ReaderSettings,
+    CONTENT_WIDTH_VALUES,
+    EPUB_LINK,
+    FONT_STACKS,
+    type ReaderSettings,
+    toCssTextAlign,
 } from "@/types/reader.types";
 import { forwardRef, useCallback } from "react";
 
@@ -36,7 +37,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
           fontSize: `${settings.fontSize}%`,
           lineHeight: settings.lineHeight,
           fontFamily: FONT_STACKS[settings.fontFamily],
-          textAlign: settings.textAlign,
+          textAlign: toCssTextAlign(settings.textAlign),
           maxWidth: CONTENT_WIDTH_VALUES[settings.contentWidth],
         }
       : baseStyle;

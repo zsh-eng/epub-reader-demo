@@ -1,7 +1,8 @@
 import type { PageFragment, PageSlice } from "@/lib/pagination-v2";
 import { cn } from "@/lib/utils";
-import { Fragment } from "react";
+import { toCssTextAlign } from "@/types/reader.types";
 import type { ReactNode } from "react";
+import { Fragment } from "react";
 import { LazyImage } from "./shared/LazyImage";
 
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
@@ -69,9 +70,11 @@ export function PageSliceView({
   const textAlign =
     slice.renderMode === "manual-justify"
       ? "left"
-      : HEADING_TAGS.has(slice.tag) && slice.textAlign === "justify"
+      : HEADING_TAGS.has(slice.tag) &&
+        (slice.textAlign === "justify" ||
+          slice.textAlign === "justify-knuth-plass")
       ? "left"
-      : slice.textAlign;
+      : toCssTextAlign(slice.textAlign);
 
   return (
     <p

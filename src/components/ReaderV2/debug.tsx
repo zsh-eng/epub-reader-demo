@@ -221,7 +221,7 @@ export function ReaderV2Debug() {
         <main className="flex-1 overflow-auto">
           <div className="w-full overflow-x-auto px-4 pb-6 pt-6">
             <div
-              key={`${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}`}
+              key={`${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}-${settings.textAlign}`}
               className="reader-container-outline mx-auto overflow-hidden"
               style={{
                 width: `${

@@ -138,7 +138,7 @@ export interface LayoutTheme {
   paragraphSpacingFactor: number;
   headingSpaceAbove: number;
   headingSpaceBelow: number;
-  textAlign: "left" | "center" | "right" | "justify";
+  textAlign: "left" | "center" | "right" | "justify" | "justify-knuth-plass";
   baseFontSizePx: number;
 }
 
@@ -180,7 +180,7 @@ export interface TextSlice {
   blockId: string;
   tag: BlockTag;
   lineHeight: number;
-  textAlign: "left" | "center" | "right" | "justify";
+  textAlign: "left" | "center" | "right" | "justify" | "justify-knuth-plass";
   renderMode: TextRenderMode;
   lines: PageLine[];
 }

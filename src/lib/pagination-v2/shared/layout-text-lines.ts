@@ -1,20 +1,20 @@
 import type { LayoutCursor } from "@chenglou/pretext";
 import {
-  layoutNextLine,
-  layoutWithLines,
-  prepareWithSegments,
+    layoutNextLine,
+    layoutWithLines,
+    prepareWithSegments,
 } from "@chenglou/pretext";
 import {
-  LINE_START_CURSOR,
-  cursorsMatch,
-  measureTextWidth,
+    LINE_START_CURSOR,
+    cursorsMatch,
+    measureTextWidth,
 } from "./measure";
 import type {
-  PageFragment,
-  PageLine,
-  PreparedInlineItem,
-  TextCursorOffset,
-  TextRenderMode,
+    PageFragment,
+    PageLine,
+    PreparedInlineItem,
+    TextCursorOffset,
+    TextRenderMode,
 } from "./types";
 
 const HUGE_BADNESS = 1e8;

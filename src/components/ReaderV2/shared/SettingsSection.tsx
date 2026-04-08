@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
+import { isJustifiedTextAlign } from "@/types/reader.types";
 import type {
   FontFamily,
   ReaderSettings,
@@ -100,6 +101,10 @@ export function SettingsSection({
   columnSpacingPx,
   onColumnSpacingPxChange,
 }: SettingsSectionProps) {
+  const alignmentValue = isJustifiedTextAlign(settings.textAlign)
+    ? "justify"
+    : settings.textAlign;
+
   return (
     <InspectorSection title="Reader Settings">
       <div className="space-y-4 pb-1">
@@ -164,9 +169,15 @@ export function SettingsSection({
           <span className="text-[11px] text-muted-foreground">Alignment</span>
           <ToggleGroup
             type="single"
-            value={settings.textAlign}
+            value={alignmentValue}
             onValueChange={(v) => {
-              if (v) onUpdateSettings({ textAlign: v as TextAlign });
+              if (!v) return;
+              onUpdateSettings({
+                textAlign:
+                  v === "justify"
+                    ? "justify-knuth-plass"
+                    : (v as Exclude<TextAlign, "justify-knuth-plass">),
+              });
             }}
             className="w-full"
           >
@@ -184,6 +195,34 @@ export function SettingsSection({
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
+
+        {isJustifiedTextAlign(settings.textAlign) ? (
+          <div className="space-y-1">
+            <span className="text-[11px] text-muted-foreground">
+              Justification
+            </span>
+            <ToggleGroup
+              type="single"
+              value={settings.textAlign}
+              onValueChange={(value) => {
+                if (value === "justify" || value === "justify-knuth-plass") {
+                  onUpdateSettings({ textAlign: value });
+                }
+              }}
+              className="w-full"
+            >
+              <ToggleGroupItem value="justify" className="h-8 flex-1 text-[11px]">
+                Original
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="justify-knuth-plass"
+                className="h-8 flex-1 text-[11px]"
+              >
+                Knuth-Plass
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+        ) : null}
 
         {/* Content width */}
         <div className="space-y-1">
