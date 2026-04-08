@@ -3,6 +3,8 @@ import { cn } from "@/lib/utils";
 import { Fragment } from "react";
 import { LazyImage } from "./shared/LazyImage";
 
+const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+
 interface PageSliceViewProps {
   slice: PageSlice;
   sliceIndex: number;
@@ -40,6 +42,11 @@ export function PageSliceView({
     );
   }
 
+  const textAlign =
+    HEADING_TAGS.has(slice.tag) && slice.textAlign === "justify"
+      ? "left"
+      : slice.textAlign;
+
   return (
     <p
       className={cn("m-0 box-border", {
@@ -47,7 +54,7 @@ export function PageSliceView({
       })}
       style={{
         lineHeight: `${slice.lineHeight}px`,
-        textAlign: slice.textAlign,
+        textAlign,
         fontSize: baseFontSize,
       }}
     >
