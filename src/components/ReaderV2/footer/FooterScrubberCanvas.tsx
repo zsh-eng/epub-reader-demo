@@ -486,7 +486,7 @@ export function FooterScrubberCanvas({
     <canvas
       ref={canvasRef}
       className="block w-full cursor-ew-resize touch-none"
-      style={{ height: 48 }}
+      style={{ height: 56 }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

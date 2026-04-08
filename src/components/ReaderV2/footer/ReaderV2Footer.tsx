@@ -98,7 +98,7 @@ export function ReaderV2Footer({
             paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
           }}
         >
-          <div className="mx-auto flex max-w-7xl flex-col px-3 pt-2 sm:px-4">
+          <div className="mx-auto flex max-w-7xl flex-col px-3 pt-1 sm:px-4">
             <FooterChapterRow
               currentChapterIndex={currentChapterIndex}
               chapterEntries={chapterEntries}
