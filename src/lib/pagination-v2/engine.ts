@@ -357,6 +357,13 @@ export class PaginationEngine {
     nextConfig: PaginationConfig,
     runtime: Partial<PaginationRuntime> = {},
   ): Promise<void> {
+    if (this.totalChapters === 0) {
+      // Config updates can arrive before init() on first load. Accept the latest
+      // config, but defer all comparisons and relayout work until initialization.
+      this.paginationConfig = nextConfig;
+      return;
+    }
+
     if (
       this.arePaginationConfigsEqual(this.paginationConfig, nextConfig) &&
       this.hasPreparedForLoadedChapters()
