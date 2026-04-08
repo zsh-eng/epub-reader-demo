@@ -12,13 +12,13 @@ interface FooterScrubberCanvasProps {
 const TICK_SPACING = 6; // Pixels between page ticks; lower = denser ticks and faster scrub for same drag distance.
 const PLAYHEAD_H = 6; // Playhead nub height in pixels.
 const TOP_PAD = 4; // Baseline top inset where normal ticks begin.
-const PLAYHEAD_RISE = 1; // How far the playhead rises above TOP_PAD.
+const PLAYHEAD_RISE = 3; // How far the playhead rises above TOP_PAD.
 const PLAYHEAD_TICK_GAP = 4; // Required center gap (px) between playhead bottom and the centered tick.
 const PLAYHEAD_TOP = TOP_PAD - PLAYHEAD_RISE;
 const PLAYHEAD_BOTTOM = PLAYHEAD_TOP + PLAYHEAD_H;
 const MAX_CENTER_DIP_OFFSET = PLAYHEAD_BOTTOM - TOP_PAD + PLAYHEAD_TICK_GAP; // Full dip at exact center.
-const DIP_RADIUS_PAGES = 2.6; // Width of the bump in pages (typical: 1.2-3).
-const DIP_FALLOFF_POWER = 1; // Bump shoulder curve (1=linear, 2-3=tighter, >4 is very concentrated at center).
+const DIP_RADIUS_PAGES = 3.6; // Width of the single raised-cosine lobe in pages.
+const DIP_FALLOFF_POWER = 1; // 1 = pure raised cosine, higher = tighter center.
 const BOTTOM_DIP_FRACTION = 0.35; // How much of dip applies to tick bottoms (0=anchor bottoms, 1=no shortening).
 const CHAPTER_MARKER_H = 8; // Chapter marker height in pixels (playhead-like, but longer).
 const CHAPTER_MARKER_W = 2; // Chapter marker width in pixels.
@@ -55,6 +55,16 @@ const MOMENTUM_MAX_VELOCITY = 400;
 function smoothstep(edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
   return t * t * (3 - 2 * t);
+}
+
+function getDipFactor(signedDistanceInPages: number): number {
+  const normalizedDistance = Math.abs(signedDistanceInPages) / DIP_RADIUS_PAGES;
+  if (normalizedDistance >= 1) return 0;
+
+  // One raised-cosine lobe keeps a wave-like profile without introducing
+  // multiple crests inside the active scrub region.
+  const raisedCosine = 0.5 + 0.5 * Math.cos(normalizedDistance * Math.PI);
+  return raisedCosine ** DIP_FALLOFF_POWER;
 }
 
 interface CanvasColors {
@@ -166,9 +176,8 @@ function drawCanvas(
     }
 
     // Dip: top keeps full playhead gap; bottom can dip less to keep the bump shallower.
-    const dist = Math.abs(p - displayPage);
-    const dipT = Math.max(0, 1 - dist / DIP_RADIUS_PAGES);
-    const dipOffset = MAX_CENTER_DIP_OFFSET * dipT ** DIP_FALLOFF_POWER;
+    const dist = p - displayPage;
+    const dipOffset = MAX_CENTER_DIP_OFFSET * getDipFactor(dist);
     const bottomDipOffset = dipOffset * BOTTOM_DIP_FRACTION;
     const tickTop = TOP_PAD + tickTopOffset + dipOffset;
     const tickBottom = TOP_PAD + tickTopOffset + tickH + bottomDipOffset;
