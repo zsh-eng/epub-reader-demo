@@ -10,6 +10,7 @@ import {
     measureTextWidth,
 } from "./measure";
 import type {
+    LayoutTheme,
     PageFragment,
     PageLine,
     PreparedInlineItem,
@@ -26,6 +27,10 @@ const TIGHT_SPACE_RATIO = 0.65;
 type TextLineLayoutResult = {
   lines: PageLine[];
   renderMode: TextRenderMode;
+};
+
+type TextLineLayoutOptions = {
+  textAlign?: LayoutTheme["textAlign"];
 };
 
 type InlineLayoutToken = {
@@ -70,15 +75,15 @@ function createOffset(
 export function layoutTextLines(
   items: PreparedInlineItem[],
   maxWidth: number,
-  options?: { useOptimalJustify?: boolean },
+  options?: TextLineLayoutOptions,
 ): TextLineLayoutResult {
   const safeWidth = Math.max(1, maxWidth);
 
-  if (options?.useOptimalJustify) {
-    const optimalLines = layoutTextLinesOptimal(items, safeWidth);
-    if (optimalLines !== null) {
+  if (options?.textAlign === "justify-knuth-plass") {
+    const knuthPlassLines = layoutTextLinesKnuthPlass(items, safeWidth);
+    if (knuthPlassLines !== null) {
       return {
-        lines: optimalLines,
+        lines: knuthPlassLines,
         renderMode: "manual-justify",
       };
     }
@@ -217,18 +222,22 @@ function layoutTextLinesGreedy(
   return lines;
 }
 
-function canUseOptimalJustify(items: PreparedInlineItem[]): boolean {
+function canUseKnuthPlassJustification(items: PreparedInlineItem[]): boolean {
   return (
     items.length > 0 &&
     items.every((item) => item.kind === "text" && item.chromeWidth === 0)
   );
 }
 
-function layoutTextLinesOptimal(
+// ---------------------------------------------------------------------------
+// Knuth-Plass justification
+// ---------------------------------------------------------------------------
+
+function layoutTextLinesKnuthPlass(
   items: PreparedInlineItem[],
   maxWidth: number,
 ): PageLine[] | null {
-  if (!canUseOptimalJustify(items)) return null;
+  if (!canUseKnuthPlassJustification(items)) return null;
 
   const tokens = flattenInlineTokens(items);
   if (tokens.length === 0) return [];
@@ -332,7 +341,7 @@ function layoutTextLinesOptimal(
   const lines: PageLine[] = [];
   let fromCandidate = 0;
   for (const toCandidate of chosenBreaks) {
-    const line = buildOptimalLine(
+    const line = buildKnuthPlassLine(
       tokens,
       breakCandidates,
       fromCandidate,
@@ -512,7 +521,7 @@ function lineBadness(
   return badness + riverPenalty + tightPenalty + hyphenPenalty;
 }
 
-function buildOptimalLine(
+function buildKnuthPlassLine(
   tokens: readonly InlineLayoutToken[],
   breakCandidates: readonly BreakCandidate[],
   fromCandidate: number,

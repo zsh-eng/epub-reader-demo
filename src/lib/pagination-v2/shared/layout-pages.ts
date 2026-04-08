@@ -1,11 +1,11 @@
 import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
 import { getBlockInsetLeft, getBlockSpacing, getLineHeight } from "./spacing";
 import type {
-  LayoutTheme,
-  Page,
-  PaginationResult,
-  PreparedBlock,
-  PreparedTextBlock,
+    LayoutTheme,
+    Page,
+    PaginationResult,
+    PreparedBlock,
+    PreparedTextBlock,
 } from "./types";
 
 const JUSTIFY_DISABLED_TAGS = new Set([
@@ -17,6 +17,20 @@ const JUSTIFY_DISABLED_TAGS = new Set([
   "h6",
   "pre",
 ]);
+
+function resolveTextAlignForBlock(
+  textAlign: LayoutTheme["textAlign"],
+  tag: PreparedTextBlock["tag"],
+): LayoutTheme["textAlign"] {
+  if (
+    textAlign === "justify-knuth-plass" &&
+    JUSTIFY_DISABLED_TAGS.has(tag)
+  ) {
+    return "justify";
+  }
+
+  return textAlign;
+}
 
 function createPage(index: number): Page & { usedHeight: number } {
   return { index, slices: [], usedHeight: 0 };
@@ -153,16 +167,13 @@ export function layoutPages(
       1,
       safeWidth - getBlockInsetLeft(textBlock.tag, theme),
     );
+    const textAlign = resolveTextAlignForBlock(theme.textAlign, textBlock.tag);
     const lineLayout = textBlock.containsNewlines
       ? {
           lines: layoutPreWrapLines(textBlock.items, textLayoutWidth),
           renderMode: "native" as const,
         }
-      : layoutTextLines(textBlock.items, textLayoutWidth, {
-          useOptimalJustify:
-            theme.textAlign === "justify-knuth-plass" &&
-            !JUSTIFY_DISABLED_TAGS.has(textBlock.tag),
-        });
+      : layoutTextLines(textBlock.items, textLayoutWidth, { textAlign });
     const { lines, renderMode } = lineLayout;
     totalLineCount += lines.length;
 
@@ -203,7 +214,7 @@ export function layoutPages(
         blockId: textBlock.id,
         tag: textBlock.tag,
         lineHeight,
-        textAlign: theme.textAlign,
+        textAlign,
         renderMode,
         lines: sliceLines,
       });
