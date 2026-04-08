@@ -60,8 +60,9 @@ describe("ReaderV2 highlight virtualization", () => {
     expect(textBlock).toBeDefined();
 
     const runStacks =
-      textBlock?.runs.map((run) => run.highlightMarks?.map((m) => m.id) ?? []) ??
-      [];
+      textBlock?.runs.map(
+        (run) => run.highlightMarks?.map((m) => m.id) ?? [],
+      ) ?? [];
 
     expect(runStacks.some((stack) => stack.includes("h1"))).toBe(true);
     expect(runStacks.some((stack) => stack.includes("h2"))).toBe(true);

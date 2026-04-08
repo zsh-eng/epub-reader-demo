@@ -1,9 +1,9 @@
 import {
-    layoutPages,
-    prepareBlocks,
-    type Block,
-    type FontConfig,
-    type LayoutTheme,
+  layoutPages,
+  prepareBlocks,
+  type Block,
+  type FontConfig,
+  type LayoutTheme,
 } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
@@ -223,7 +223,9 @@ describe("layoutPages — blockquote parity", () => {
     const { pages } = layoutPages(prepared, 620, 120, LAYOUT_THEME);
     const quoteSlices = pages
       .flatMap((page) => page.slices)
-      .filter((slice) => slice.type === "text" && slice.blockId === "quote-long");
+      .filter(
+        (slice) => slice.type === "text" && slice.blockId === "quote-long",
+      );
 
     expect(quoteSlices.length).toBeGreaterThan(1);
     for (const slice of quoteSlices) {

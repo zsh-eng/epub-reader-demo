@@ -50,7 +50,9 @@ export function ReaderSettingsSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1.5rem)" }}
+            style={{
+              paddingBottom: "max(env(safe-area-inset-bottom), 1.5rem)",
+            }}
           >
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-1">

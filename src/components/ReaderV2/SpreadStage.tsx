@@ -46,7 +46,10 @@ export function SpreadStage({
   return (
     <MotionConfig reducedMotion="user">
       {/* position:relative + overflow:hidden clips pages as they slide in/out */}
-      <div ref={stageContentRef} className="relative h-full w-full overflow-hidden">
+      <div
+        ref={stageContentRef}
+        className="relative h-full w-full overflow-hidden"
+      >
         <AnimatePresence custom={direction} mode="sync">
           {spread && (
             <AnimatedSpread

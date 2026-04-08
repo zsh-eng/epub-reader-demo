@@ -56,6 +56,7 @@ export function getBlockInsetLeft(tag: string, theme: LayoutTheme): number {
   if (tag !== "blockquote") return 0;
 
   return (
-    theme.baseFontSizePx * BLOCKQUOTE_PADDING_LEFT_EM + BLOCKQUOTE_BORDER_LEFT_PX
+    theme.baseFontSizePx * BLOCKQUOTE_PADDING_LEFT_EM +
+    BLOCKQUOTE_BORDER_LEFT_PX
   );
 }

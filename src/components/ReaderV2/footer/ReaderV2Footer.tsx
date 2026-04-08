@@ -78,7 +78,10 @@ export function ReaderV2Footer({
             onPrevChapter={handlePrevChapter}
             onNextChapter={handleNextChapter}
           />
-          <FooterPageIndicator currentPage={currentPage} totalPages={totalPages} />
+          <FooterPageIndicator
+            currentPage={currentPage}
+            totalPages={totalPages}
+          />
           <FooterScrubberCanvas
             currentPage={currentPage}
             totalPages={totalPages}

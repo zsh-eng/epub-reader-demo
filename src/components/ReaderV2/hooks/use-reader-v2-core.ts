@@ -2,38 +2,38 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import {
-    getBookFile,
-    getBookFilesByPaths,
-    getBookImageDimensionsMap,
-    type Book,
-    type BookFile,
+  getBookFile,
+  getBookFilesByPaths,
+  getBookImageDimensionsMap,
+  type Book,
+  type BookFile,
 } from "@/lib/db";
 import {
-    cleanupResourceUrls,
-    processEmbeddedResources,
+  cleanupResourceUrls,
+  processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import {
-    parseChapterHtml,
-    usePagination,
-    type PaginationConfig,
-    type SpreadConfig,
+  parseChapterHtml,
+  usePagination,
+  type PaginationConfig,
+  type SpreadConfig,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-    type RefObject
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
 } from "react";
 import {
-    applyChapterHighlights,
-    buildHighlightSignature,
-    buildHighlightsBySpineItemId,
-    type VirtualChapterSource,
+  applyChapterHighlights,
+  buildHighlightSignature,
+  buildHighlightsBySpineItemId,
+  type VirtualChapterSource,
 } from "../highlight-virtualization";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 
@@ -180,7 +180,9 @@ export function useReaderV2Core(
     number | null
   >(null);
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
-  const chapterSourcesRef = useRef<Map<number, VirtualChapterSource>>(new Map());
+  const chapterSourcesRef = useRef<Map<number, VirtualChapterSource>>(
+    new Map(),
+  );
   const chapterHighlightSignaturesRef = useRef<Map<number, string>>(new Map());
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
 
@@ -193,7 +195,9 @@ export function useReaderV2Core(
     [bookHighlights],
   );
 
-  const highlightsBySpineItemIdRef = useRef<Map<string, Highlight[]>>(new Map());
+  const highlightsBySpineItemIdRef = useRef<Map<string, Highlight[]>>(
+    new Map(),
+  );
   highlightsBySpineItemIdRef.current = highlightsBySpineItemId;
 
   const paginationConfig = useMemo(
@@ -345,9 +349,8 @@ export function useReaderV2Core(
       const chapterHighlights =
         highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
       const nextSignature = buildHighlightSignature(chapterHighlights);
-      const prevSignature = chapterHighlightSignaturesRef.current.get(
-        chapterIndex,
-      );
+      const prevSignature =
+        chapterHighlightSignaturesRef.current.get(chapterIndex);
       if (prevSignature === nextSignature) continue;
 
       const nextSource = applyChapterHighlights(source, chapterHighlights);

@@ -66,14 +66,8 @@ export function isInteractiveTapTarget(target: EventTarget | null): boolean {
 export function resolveTapNavigationAction(
   options: ResolveTapNavigationActionOptions,
 ): TapNavigationAction {
-  const {
-    clientX,
-    rect,
-    target,
-    isDefaultPrevented,
-    canGoNext,
-    canGoPrev,
-  } = options;
+  const { clientX, rect, target, isDefaultPrevented, canGoNext, canGoPrev } =
+    options;
 
   if (isDefaultPrevented) return null;
   if (isInteractiveTapTarget(target)) return null;

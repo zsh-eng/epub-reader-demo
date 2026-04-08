@@ -1,14 +1,14 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import {
-    EPUB_HIGHLIGHT_ACTIVE_CLASS,
-    EPUB_HIGHLIGHT_CLASS,
-    EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-    EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+  EPUB_HIGHLIGHT_ACTIVE_CLASS,
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
 } from "@/types/reader.types";
 import {
-    createHighlightInteractionManager,
-    type HighlightInteractionManager,
+  createHighlightInteractionManager,
+  type HighlightInteractionManager,
 } from "@zsh-eng/text-highlighter";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -117,7 +117,9 @@ export function ReaderV2Debug() {
   }, [pagination.spread]);
 
   useEffect(() => {
-    highlightManagerRef.current?.setActiveHighlight(activeHighlight?.id ?? null);
+    highlightManagerRef.current?.setActiveHighlight(
+      activeHighlight?.id ?? null,
+    );
   }, [activeHighlight, pagination.spread]);
 
   useEffect(() => {
@@ -129,8 +131,9 @@ export function ReaderV2Debug() {
   }, [activeHighlight, visibleHighlights]);
 
   const activeHighlightData = activeHighlight
-    ? bookHighlights.find((highlight) => highlight.id === activeHighlight.id) ??
-      null
+    ? (bookHighlights.find(
+        (highlight) => highlight.id === activeHighlight.id,
+      ) ?? null)
     : null;
 
   if (isBookLoading) {

@@ -57,7 +57,9 @@ export function usePagination(
 
   const [spread, setSpread] = useState<ResolvedSpread | null>(null);
   const [status, setStatus] = useState<PaginationStatus>("idle");
-  const [chapterPageCounts, setChapterPageCounts] = useState<Map<number, number>>(new Map());
+  const [chapterPageCounts, setChapterPageCounts] = useState<
+    Map<number, number>
+  >(new Map());
 
   const workerRef = useRef<Worker | null>(null);
   const currentEpochRef = useRef(0);
@@ -108,7 +110,9 @@ export function usePagination(
         tracerRef.current.updateDiagnostics(null);
         if (event.chapterDiagnostics) {
           const { chapterIndex, pageCount } = event.chapterDiagnostics;
-          setChapterPageCounts((prev) => new Map(prev).set(chapterIndex, pageCount));
+          setChapterPageCounts((prev) =>
+            new Map(prev).set(chapterIndex, pageCount),
+          );
         }
         break;
 
@@ -146,7 +150,9 @@ export function usePagination(
         tracerRef.current.updateDiagnostics(null);
         if (event.chapterDiagnostics) {
           const { chapterIndex, pageCount } = event.chapterDiagnostics;
-          setChapterPageCounts((prev) => new Map(prev).set(chapterIndex, pageCount));
+          setChapterPageCounts((prev) =>
+            new Map(prev).set(chapterIndex, pageCount),
+          );
         }
         break;
 

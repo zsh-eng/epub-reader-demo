@@ -1,16 +1,23 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
-    EPUB_HIGHLIGHT_ACTIVE_CLASS,
-    EPUB_HIGHLIGHT_CLASS,
-    EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-    EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+  EPUB_HIGHLIGHT_ACTIVE_CLASS,
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
 } from "@/types/reader.types";
 import {
-    createHighlightInteractionManager,
-    type HighlightInteractionManager,
+  createHighlightInteractionManager,
+  type HighlightInteractionManager,
 } from "@zsh-eng/text-highlighter";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
 import { ReaderControlMenu } from "./ReaderControlMenu";
@@ -77,7 +84,10 @@ function computeViewport(
   // Horizontal: center content within screen, constrained to max readable width
   const maxContentWidth =
     MAX_VIEWPORT_WIDTH_PX * spreadColumns + COLUMN_GAP_PX * (spreadColumns - 1);
-  const contentWidth = Math.min(availableWidth - MIN_PADDING_X * 2, maxContentWidth);
+  const contentWidth = Math.min(
+    availableWidth - MIN_PADDING_X * 2,
+    maxContentWidth,
+  );
   const paddingX = Math.max(MIN_PADDING_X, (availableWidth - contentWidth) / 2);
   const nextWidth = clamp(
     (contentWidth - COLUMN_GAP_PX * (spreadColumns - 1)) / spreadColumns,
@@ -85,7 +95,13 @@ function computeViewport(
     MAX_VIEWPORT_WIDTH_PX,
   );
 
-  return { width: nextWidth, height: nextHeight, paddingX, paddingTop, paddingBottom };
+  return {
+    width: nextWidth,
+    height: nextHeight,
+    paddingX,
+    paddingTop,
+    paddingBottom,
+  };
 }
 
 export function ReaderV2() {
@@ -157,7 +173,9 @@ export function ReaderV2() {
   );
 
   const activeHighlightData = activeHighlight
-    ? bookHighlights.find((highlight) => highlight.id === activeHighlight.id) ?? null
+    ? (bookHighlights.find(
+        (highlight) => highlight.id === activeHighlight.id,
+      ) ?? null)
     : null;
 
   useEffect(() => {
@@ -186,7 +204,9 @@ export function ReaderV2() {
   }, [pagination.spread]);
 
   useEffect(() => {
-    highlightManagerRef.current?.setActiveHighlight(activeHighlight?.id ?? null);
+    highlightManagerRef.current?.setActiveHighlight(
+      activeHighlight?.id ?? null,
+    );
   }, [activeHighlight, pagination.spread]);
 
   useEffect(() => {
@@ -230,7 +250,8 @@ export function ReaderV2() {
   );
 
   const onPrevChapter = useCallback(() => {
-    if (currentChapterIndex > 0) pagination.goToChapter(currentChapterIndex - 1);
+    if (currentChapterIndex > 0)
+      pagination.goToChapter(currentChapterIndex - 1);
   }, [currentChapterIndex, pagination]);
 
   const onNextChapter = useCallback(() => {

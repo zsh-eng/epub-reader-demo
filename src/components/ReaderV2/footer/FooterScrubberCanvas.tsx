@@ -65,7 +65,11 @@ interface CanvasColors {
 function toCanvasColor(value: string, fallback: string): string {
   const trimmed = value.trim();
   if (!trimmed) return fallback;
-  if (/^(#|rgb\(|rgba\(|hsl\(|hsla\(|oklch\(|oklab\(|lch\(|lab\(|color\()/i.test(trimmed)) {
+  if (
+    /^(#|rgb\(|rgba\(|hsl\(|hsla\(|oklch\(|oklab\(|lch\(|lab\(|color\()/i.test(
+      trimmed,
+    )
+  ) {
     return trimmed;
   }
   // Support raw HSL channel tokens like "0 0% 5%".
@@ -75,8 +79,14 @@ function toCanvasColor(value: string, fallback: string): string {
 function resolveColors(el: HTMLElement): CanvasColors {
   const style = getComputedStyle(el);
   return {
-    fg: toCanvasColor(style.getPropertyValue("--foreground"), "oklch(0.145 0 0)"),
-    mutedFg: toCanvasColor(style.getPropertyValue("--muted-foreground"), "oklch(0.556 0 0)"),
+    fg: toCanvasColor(
+      style.getPropertyValue("--foreground"),
+      "oklch(0.145 0 0)",
+    ),
+    mutedFg: toCanvasColor(
+      style.getPropertyValue("--muted-foreground"),
+      "oklch(0.556 0 0)",
+    ),
   };
 }
 
@@ -245,7 +255,13 @@ export function FooterScrubberCanvas({
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (!colorsRef.current) colorsRef.current = resolveColors(canvas);
-    drawCanvas(canvas, displayPageRef.current, totalPages, chapterStartSet.current, colorsRef.current);
+    drawCanvas(
+      canvas,
+      displayPageRef.current,
+      totalPages,
+      chapterStartSet.current,
+      colorsRef.current,
+    );
   }
 
   function emitPreviewIfChanged(page: number) {
@@ -270,9 +286,15 @@ export function FooterScrubberCanvas({
       lastTime = now;
       const force = 280 * (target - displayPageRef.current);
       velocity = (velocity + force * dt) * (1 - 32 * dt);
-      displayPageRef.current = Math.max(1, Math.min(totalPages, displayPageRef.current + velocity * dt));
+      displayPageRef.current = Math.max(
+        1,
+        Math.min(totalPages, displayPageRef.current + velocity * dt),
+      );
       redraw();
-      if (Math.abs(target - displayPageRef.current) > 0.005 || Math.abs(velocity) > 0.05) {
+      if (
+        Math.abs(target - displayPageRef.current) > 0.005 ||
+        Math.abs(velocity) > 0.05
+      ) {
         rafRef.current = requestAnimationFrame(tick);
       } else {
         displayPageRef.current = target;
@@ -302,7 +324,10 @@ export function FooterScrubberCanvas({
       colorsRef.current = null;
       redraw();
     });
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class", "data-theme"],
+    });
     return () => mo.disconnect();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -315,7 +340,9 @@ export function FooterScrubberCanvas({
   }, [cancelMomentumSignal]);
 
   function startMomentum(initialVelocity: number) {
-    let vel = Math.sign(initialVelocity) * Math.min(Math.abs(initialVelocity), MOMENTUM_MAX_VELOCITY);
+    let vel =
+      Math.sign(initialVelocity) *
+      Math.min(Math.abs(initialVelocity), MOMENTUM_MAX_VELOCITY);
     let lastTime: number | null = null;
 
     isMomentumRef.current = true;
@@ -351,8 +378,11 @@ export function FooterScrubberCanvas({
       // Because we stop exactly at the integer we just crossed, no snap is needed —
       // the playhead is already on a tick. This is the user's natural deceleration
       // rather than a pre-computed target with an adjusted velocity.
-      const firstTickAhead = vel > 0 ? Math.floor(prevPage) + 1 : Math.ceil(prevPage) - 1;
-      const crossedTick = (vel > 0 ? rawNext >= firstTickAhead : rawNext <= firstTickAhead)
+      const firstTickAhead =
+        vel > 0 ? Math.floor(prevPage) + 1 : Math.ceil(prevPage) - 1;
+      const crossedTick = (
+        vel > 0 ? rawNext >= firstTickAhead : rawNext <= firstTickAhead
+      )
         ? firstTickAhead
         : null;
 
@@ -397,10 +427,15 @@ export function FooterScrubberCanvas({
     // Track history for velocity; keep only the last 80ms
     dragHistoryRef.current.push({ x: e.clientX, t: now });
     const cutoff = now - 80;
-    dragHistoryRef.current = dragHistoryRef.current.filter((h) => h.t >= cutoff);
+    dragHistoryRef.current = dragHistoryRef.current.filter(
+      (h) => h.t >= cutoff,
+    );
 
     const dx = e.clientX - dragStartXRef.current;
-    const page = Math.max(1, Math.min(totalPages, dragStartPageRef.current - dx / TICK_SPACING));
+    const page = Math.max(
+      1,
+      Math.min(totalPages, dragStartPageRef.current - dx / TICK_SPACING),
+    );
     displayPageRef.current = page;
     redraw();
     emitPreviewIfChanged(page);

@@ -1,8 +1,8 @@
 import type { LayoutCursor } from "@chenglou/pretext";
 import {
-    layoutNextLine,
-    layoutWithLines,
-    prepareWithSegments,
+  layoutNextLine,
+  layoutWithLines,
+  prepareWithSegments,
 } from "@chenglou/pretext";
 import { LINE_START_CURSOR, cursorsMatch } from "./measure";
 import type { PageLine, PreparedInlineItem, TextCursorOffset } from "./types";

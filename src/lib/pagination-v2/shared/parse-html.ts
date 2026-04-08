@@ -100,7 +100,10 @@ const DEFAULT_CONTEXT: InlineContext = {
   highlightMarks: [],
 };
 
-function marksMatch(a: HighlightMark[] | undefined, b: HighlightMark[] | undefined) {
+function marksMatch(
+  a: HighlightMark[] | undefined,
+  b: HighlightMark[] | undefined,
+) {
   if (!a || a.length === 0) return !b || b.length === 0;
   if (!b || b.length !== a.length) return false;
 

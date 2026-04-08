@@ -76,22 +76,20 @@ export function PageSliceView({
                 "font-medium": fragment.isCode,
               })}
             >
-              {fragment.highlightMarks && fragment.highlightMarks.length > 0 ? (
-                fragment.highlightMarks.reduceRight<React.ReactNode>(
-                  (content, mark) => (
-                    <mark
-                      className="epub-highlight"
-                      data-highlight-id={mark.id}
-                      data-color={mark.color}
-                    >
-                      {content}
-                    </mark>
-                  ),
-                  fragment.text,
-                )
-              ) : (
-                fragment.text
-              )}
+              {fragment.highlightMarks && fragment.highlightMarks.length > 0
+                ? fragment.highlightMarks.reduceRight<React.ReactNode>(
+                    (content, mark) => (
+                      <mark
+                        className="epub-highlight"
+                        data-highlight-id={mark.id}
+                        data-color={mark.color}
+                      >
+                        {content}
+                      </mark>
+                    ),
+                    fragment.text,
+                  )
+                : fragment.text}
             </span>
           ))}
         </Fragment>

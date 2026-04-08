@@ -64,11 +64,17 @@ export function FooterChapterRow({
         <button
           onClick={handlePrevClick}
           className="flex items-center gap-0.5 px-1.5 py-1 rounded-md text-muted-foreground hover:bg-muted/60 transition-colors flex-shrink-0"
-          aria-label={isPastCurrentChapterStart ? "Start of current chapter" : "Previous chapter"}
+          aria-label={
+            isPastCurrentChapterStart
+              ? "Start of current chapter"
+              : "Previous chapter"
+          }
         >
           <ChevronLeft className="size-3.5 flex-shrink-0" />
           {pagesBack !== null && pagesBack > 0 && (
-            <span className="text-[11px] leading-none tabular-nums">{pagesBack}p</span>
+            <span className="text-[11px] leading-none tabular-nums">
+              {pagesBack}p
+            </span>
           )}
         </button>
       )}
@@ -97,7 +103,9 @@ export function FooterChapterRow({
           aria-label="Next chapter"
         >
           {pagesForward !== null && pagesForward > 0 && (
-            <span className="text-[11px] leading-none tabular-nums">{pagesForward}p</span>
+            <span className="text-[11px] leading-none tabular-nums">
+              {pagesForward}p
+            </span>
           )}
           <ChevronRight className="size-3.5 flex-shrink-0" />
         </button>

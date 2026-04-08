@@ -1,25 +1,25 @@
 import type {
-    ChapterUnavailableEvent,
-    PaginationCommand,
-    PaginationEvent,
+  ChapterUnavailableEvent,
+  PaginationCommand,
+  PaginationEvent,
 } from "./protocol";
 import { layoutPages } from "./shared/layout-pages";
 import { prepareBlocks } from "./shared/prepare-blocks";
 import type {
-    Block,
-    Page,
-    PaginationChapterDiagnostics,
-    PreparedBlock,
-    TextCursorOffset,
+  Block,
+  Page,
+  PaginationChapterDiagnostics,
+  PreparedBlock,
+  TextCursorOffset,
 } from "./shared/types";
 import { areFontConfigsEqual } from "./shared/types";
 import type {
-    ContentAnchor,
-    PaginationConfig,
-    ResolvedLeafPage,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadGapReason,
+  ContentAnchor,
+  PaginationConfig,
+  ResolvedLeafPage,
+  ResolvedSpread,
+  SpreadConfig,
+  SpreadGapReason,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -150,7 +150,12 @@ export class PaginationEngine {
           this.addChapter(cause, cmd.chapterIndex, cmd.blocks);
           break;
         case "updateChapter":
-          await this.updateChapter(cause, cmd.chapterIndex, cmd.blocks, runtime);
+          await this.updateChapter(
+            cause,
+            cmd.chapterIndex,
+            cmd.blocks,
+            runtime,
+          );
           break;
         case "updatePaginationConfig":
           await this.updatePaginationConfig(
