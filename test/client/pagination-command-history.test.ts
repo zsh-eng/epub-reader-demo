@@ -77,11 +77,11 @@ describe("Pagination command history", () => {
           tag: "p",
           runs: [
             {
+              kind: "text",
               text: largeText,
               bold: false,
               italic: false,
               isCode: false,
-              isLink: false,
             },
           ],
         },
@@ -111,11 +111,11 @@ describe("Pagination command history", () => {
           tag: "p",
           runs: [
             {
+              kind: "text",
               text: largeText,
               bold: false,
               italic: false,
               isCode: false,
-              isLink: false,
             },
           ],
         },
@@ -191,5 +191,16 @@ describe("Pagination command history", () => {
     });
 
     expect(summary).toContain("chapter=5");
+  });
+
+  it("summarizes goToTarget with chapter and target id", () => {
+    const summary = summarizePaginationCommand({
+      type: "goToTarget",
+      chapterIndex: 1,
+      targetId: "note-1",
+    });
+
+    expect(summary).toContain("chapter=2");
+    expect(summary).toContain("target=note-1");
   });
 });

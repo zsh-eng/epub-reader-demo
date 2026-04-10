@@ -32,6 +32,8 @@ export function summarizePaginationCommand(
       return `page=${command.page}`;
     case "goToChapter":
       return `chapter=${command.chapterIndex + 1}`;
+    case "goToTarget":
+      return `chapter=${command.chapterIndex + 1}, target=${command.targetId}`;
     case "nextSpread":
       return "next-spread";
     case "prevSpread":

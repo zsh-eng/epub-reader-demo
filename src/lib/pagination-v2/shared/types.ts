@@ -17,15 +17,23 @@ export type BlockTag =
   | "pre"
   | "figcaption";
 
-export interface InlineRun {
+export interface LinkRef {
+  href: string;
+}
+
+export interface TextRun {
+  kind: "text";
   text: string;
   hardBreak?: boolean;
   bold: boolean;
   italic: boolean;
   isCode: boolean;
-  isLink: boolean;
+  link?: LinkRef;
+  targetIds?: string[];
   highlightMarks?: HighlightMark[];
 }
+
+export type InlineRun = TextRun;
 
 export interface HighlightMark {
   id: string;
@@ -36,12 +44,14 @@ export interface TextBlock {
   type: "text";
   id: string;
   tag: BlockTag;
+  targetIds?: string[];
   runs: InlineRun[];
 }
 
 export interface ImageBlock {
   type: "image";
   id: string;
+  targetIds?: string[];
   src: string;
   alt?: string;
   intrinsicWidth: number;
@@ -51,11 +61,13 @@ export interface ImageBlock {
 export interface SpacerBlock {
   type: "spacer";
   id: string;
+  targetIds?: string[];
 }
 
 export interface PageBreakBlock {
   type: "page-break";
   id: string;
+  targetIds?: string[];
 }
 
 export type Block = TextBlock | ImageBlock | SpacerBlock | PageBreakBlock;
@@ -74,7 +86,8 @@ export interface FontConfig {
 export interface PreparedTextItem {
   kind: "text";
   font: string;
-  isLink: boolean;
+  link?: LinkRef;
+  targetIds?: string[];
   isCode: boolean;
   highlightMarks?: HighlightMark[];
   chromeWidth: number;
@@ -86,14 +99,13 @@ export interface PreparedTextItem {
   leadingGap: number;
 }
 
-// Pagination v2 currently supports text-only inline items. Images are laid out
-// as block content; inline images mixed with text are intentionally unsupported.
 export type PreparedInlineItem = PreparedTextItem;
 
 export interface PreparedTextBlock {
   type: "text";
   id: string;
   tag: BlockTag;
+  targetIds?: string[];
   items: PreparedInlineItem[];
   containsNewlines: boolean;
 }
@@ -101,6 +113,7 @@ export interface PreparedTextBlock {
 export interface PreparedImageBlock {
   type: "image";
   id: string;
+  targetIds?: string[];
   src: string;
   alt?: string;
   intrinsicWidth: number;
@@ -110,11 +123,13 @@ export interface PreparedImageBlock {
 export interface PreparedSpacerBlock {
   type: "spacer";
   id: string;
+  targetIds?: string[];
 }
 
 export interface PreparedPageBreakBlock {
   type: "page-break";
   id: string;
+  targetIds?: string[];
 }
 
 export type PreparedBlock =
@@ -147,7 +162,7 @@ export interface PageFragment {
   text: string;
   font: string;
   leadingGap: number;
-  isLink: boolean;
+  link?: LinkRef;
   isCode: boolean;
   highlightMarks?: HighlightMark[];
   marginRightPx?: number;

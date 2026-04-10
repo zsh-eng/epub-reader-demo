@@ -1,9 +1,5 @@
 import type { LayoutCursor } from "@chenglou/pretext";
-import {
-    layoutNextLine,
-    layoutWithLines,
-    prepareWithSegments,
-} from "@chenglou/pretext";
+import { layoutNextLine } from "@chenglou/pretext";
 import {
     LINE_START_CURSOR,
     cursorsMatch,
@@ -38,7 +34,7 @@ type InlineLayoutToken = {
   text: string;
   width: number;
   font: string;
-  isLink: boolean;
+  link?: PageFragment["link"];
   isCode: boolean;
   highlightMarks?: PageFragment["highlightMarks"];
   startOffset: TextCursorOffset;
@@ -70,6 +66,10 @@ function createOffset(
     segmentIndex: cursor.segmentIndex,
     graphemeIndex: cursor.graphemeIndex,
   };
+}
+
+function itemHasForcedBreak(item: PreparedInlineItem): boolean {
+  return item.prepared.kinds.includes("hard-break");
 }
 
 export function layoutTextLines(
@@ -127,7 +127,7 @@ function layoutTextLinesGreedy(
       }
 
       // Fast path: whole run fits
-      if (!textCursor) {
+      if (!textCursor && !itemHasForcedBreak(item)) {
         const fullWidth = leadingGap + item.fullWidth + item.chromeWidth;
         if (fullWidth <= remainingWidth) {
           if (!lineStartOffset) {
@@ -140,7 +140,7 @@ function layoutTextLinesGreedy(
             text: item.fullText,
             font: item.font,
             leadingGap,
-            isLink: item.isLink,
+            link: item.link,
             isCode: item.isCode,
             highlightMarks: item.highlightMarks,
           });
@@ -174,7 +174,7 @@ function layoutTextLinesGreedy(
         text: line.text,
         font: item.font,
         leadingGap,
-        isLink: item.isLink,
+        link: item.link,
         isCode: item.isCode,
         highlightMarks: item.highlightMarks,
       });
@@ -203,7 +203,12 @@ function layoutTextLinesGreedy(
 }
 
 function canUseKnuthPlassJustification(items: PreparedInlineItem[]): boolean {
-  return items.length > 0 && items.every((item) => item.chromeWidth === 0);
+  return (
+    items.length > 0 &&
+    items.every(
+      (item) => item.chromeWidth === 0 && !itemHasForcedBreak(item),
+    )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +352,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
         text: " ",
         width: item.leadingGap,
         font: item.font,
-        isLink: item.isLink,
+        link: item.link,
         isCode: item.isCode,
         highlightMarks: item.highlightMarks,
         startOffset: itemStartOffset,
@@ -375,7 +380,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
           text,
           width: 0,
           font: item.font,
-          isLink: item.isLink,
+          link: item.link,
           isCode: item.isCode,
           highlightMarks: item.highlightMarks,
           startOffset,
@@ -389,7 +394,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
         text,
         width,
         font: item.font,
-        isLink: item.isLink,
+        link: item.link,
         isCode: item.isCode,
         highlightMarks: item.highlightMarks,
         startOffset,
@@ -546,7 +551,7 @@ function buildKnuthPlassLine(
       text: token.kind === "space" ? " " : token.text,
       font: token.font,
       leadingGap: 0,
-      isLink: token.isLink,
+      link: token.link,
       isCode: token.isCode,
       highlightMarks: token.highlightMarks,
     };
@@ -562,7 +567,7 @@ function buildKnuthPlassLine(
       text: "-",
       font: softHyphenToken?.font ?? "",
       leadingGap: 0,
-      isLink: softHyphenToken?.isLink ?? false,
+      ...(softHyphenToken?.link ? { link: softHyphenToken.link } : {}),
       isCode: softHyphenToken?.isCode ?? false,
       highlightMarks: softHyphenToken?.highlightMarks,
     });
@@ -586,35 +591,7 @@ export function layoutPreWrapLines(
   items: PreparedInlineItem[],
   maxWidth: number,
 ): PageLine[] {
-  if (items.length === 0) return [];
-
-  const firstText = items[0];
-  if (!firstText) return [];
-
-  const combinedText = items.map((item) => item.rawText).join("");
-  const font = firstText.font;
-
-  const prepared = prepareWithSegments(combinedText, font, {
-    whiteSpace: "pre-wrap",
-  });
-  const result = layoutWithLines(prepared, Math.max(1, maxWidth), 1);
-
-  return result.lines.map((line) => ({
-    fragments: [
-      {
-        kind: "text",
-        text: line.text,
-        font,
-        leadingGap: 0,
-        isLink: firstText.isLink,
-        isCode: true,
-        highlightMarks: firstText.highlightMarks,
-      },
-    ],
-    startOffset: createOffset(0, line.start),
-    endOffset: createOffset(0, line.end),
-    isLastInBlock: false,
-  }));
+  return layoutTextLinesGreedy(items, Math.max(1, maxWidth));
 }
 
 function isSpaceText(text: string): boolean {

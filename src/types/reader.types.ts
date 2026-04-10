@@ -130,8 +130,6 @@ export const HIGHLIGHT_TOOLBAR_CLASS = "highlight-toolbar";
 export const EPUB_LINK = {
   /** Data attribute name for marking internal EPUB links */
   linkAttribute: "data-epub-link",
-  /** Data attribute name for the resolved href path */
+  /** Data attribute name for the resolved internal href */
   hrefAttribute: "data-epub-href",
-  /** Data attribute name for the fragment identifier */
-  fragmentAttribute: "data-epub-fragment",
 } as const;

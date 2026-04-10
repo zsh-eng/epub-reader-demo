@@ -1,25 +1,22 @@
 import {
-  layoutNextLine,
-  prepareWithSegments,
-  type LayoutCursor,
-  type PreparedTextWithSegments,
+    prepareWithSegments,
+    type LayoutCursor,
+    type PreparedTextWithSegments,
 } from "@chenglou/pretext";
 import {
-  clearMeasureCache,
-  LINE_START_CURSOR,
-  measureCollapsedSpaceWidth,
+    clearMeasureCache,
+    measureCollapsedSpaceWidth,
 } from "./measure";
 import { CODE_CHROME_PX, headingScale } from "./spacing";
 import type {
-  Block,
-  FontConfig,
-  InlineRun,
-  PreparedBlock,
-  PreparedInlineItem,
-  PreparedTextBlock,
+    Block,
+    FontConfig,
+    InlineRun,
+    PreparedBlock,
+    PreparedInlineItem,
+    PreparedTextBlock,
 } from "./types";
 
-const UNBOUNDED_WIDTH = 100_000;
 const PREPARED_TEXT_CACHE_MAX = 12_000;
 
 interface PreparedTextCacheEntry {
@@ -34,28 +31,32 @@ const preparedTextCache = new Map<string, PreparedTextCacheEntry | null>();
 function getPreparedText(
   text: string,
   font: string,
+  whiteSpace: "normal" | "pre-wrap" = "normal",
 ): PreparedTextCacheEntry | null {
-  const cacheKey = `${font}\n${text}`;
+  const cacheKey = `${whiteSpace}\n${font}\n${text}`;
 
   if (preparedTextCache.has(cacheKey)) {
     return preparedTextCache.get(cacheKey) ?? null;
   }
 
-  const prepared = prepareWithSegments(text, font);
-  const wholeLine = layoutNextLine(
-    prepared,
-    LINE_START_CURSOR,
-    UNBOUNDED_WIDTH,
-  );
-
+  const prepared =
+    whiteSpace === "pre-wrap"
+      ? prepareWithSegments(text, font, { whiteSpace })
+      : prepareWithSegments(text, font);
   const cached =
-    wholeLine === null
+    prepared.segments.length === 0
       ? null
       : {
           prepared,
-          fullText: wholeLine.text,
-          fullWidth: wholeLine.width,
-          endCursor: wholeLine.end,
+          fullText: text,
+          fullWidth: prepared.widths.reduce(
+            (total, width) => total + width,
+            0,
+          ),
+          endCursor: {
+            segmentIndex: prepared.segments.length,
+            graphemeIndex: 0,
+          },
         };
 
   if (preparedTextCache.size >= PREPARED_TEXT_CACHE_MAX) {
@@ -132,6 +133,7 @@ function prepareTextBlock(
       isPreformatted || isHardBreak ? normalizedText : normalizedText.trim();
 
     const font = resolveFont(run, block.tag, fonts);
+    const whiteSpace = isPreformatted || isHardBreak ? "pre-wrap" : "normal";
     const needsCollapsedSpaceWidth =
       hasTrailingWhitespace || hasLeadingWhitespace || carryGap > 0;
     const collapsedSpaceWidth = needsCollapsedSpaceWidth
@@ -142,13 +144,16 @@ function prepareTextBlock(
     if (isHardBreak) containsNewlines = true;
     if (!preparedText) continue;
 
-    const cached = getPreparedText(preparedText, font);
+    const cached = getPreparedText(preparedText, font, whiteSpace);
     if (!cached) continue;
 
     items.push({
       kind: "text",
       font,
-      isLink: run.isLink,
+      ...(run.link ? { link: { ...run.link } } : {}),
+      ...(run.targetIds && run.targetIds.length > 0
+        ? { targetIds: [...run.targetIds] }
+        : {}),
       isCode: run.isCode,
       highlightMarks:
         run.highlightMarks && run.highlightMarks.length > 0
@@ -165,7 +170,7 @@ function prepareTextBlock(
     });
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && (!block.targetIds || block.targetIds.length === 0)) {
     return null;
   }
 
@@ -173,6 +178,9 @@ function prepareTextBlock(
     type: "text",
     id: block.id,
     tag: block.tag,
+    ...(block.targetIds && block.targetIds.length > 0
+      ? { targetIds: [...block.targetIds] }
+      : {}),
     items,
     containsNewlines,
   };

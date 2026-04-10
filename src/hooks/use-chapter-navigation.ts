@@ -1,9 +1,10 @@
 import { useProgressMutation } from "@/hooks/use-progress-mutation";
 import {
-  type Book,
-  type ProgressTriggerType,
-  type ReadingProgress,
+    type Book,
+    type ProgressTriggerType,
+    type ReadingProgress,
 } from "@/lib/db";
+import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import { findSpineIndexByHref } from "@/lib/toc-utils";
 import { type ScrollTarget } from "@/types/scroll-target";
 import { useCallback } from "react";
@@ -12,7 +13,7 @@ export interface UseChapterNavigationReturn {
   goToPreviousChapter: () => void;
   goToNextChapter: () => void;
   goToChapterByHref: (href: string) => void;
-  goToChapterWithFragment: (href: string, fragment?: string) => void;
+  goToChapterWithFragment: (href: string) => void;
   goToHighlight: (spineItemId: string, highlightId: string) => void;
   goToSearchResult: (chapterPath: string, textOffset: number) => void;
 }
@@ -86,9 +87,10 @@ export function useChapterNavigation(
   const goToChapterByHref = useCallback(
     (href: string) => {
       if (!book || !bookId) return;
+      const { path } = splitHrefFragment(href);
 
       // Find the spine index for this href
-      const spineIndex = findSpineIndexByHref(book, href);
+      const spineIndex = findSpineIndexByHref(book, path);
       if (spineIndex === null) return;
 
       setCurrentChapterIndex(spineIndex);
@@ -102,11 +104,12 @@ export function useChapterNavigation(
   );
 
   const goToChapterWithFragment = useCallback(
-    (href: string, fragment?: string) => {
+    (href: string) => {
       if (!book || !bookId) return;
+      const { path, fragment } = splitHrefFragment(href);
 
       // Find the spine index for this href
-      const spineIndex = findSpineIndexByHref(book, href);
+      const spineIndex = findSpineIndexByHref(book, path);
       if (spineIndex === null) return;
 
       // Same chapter with fragment - just scroll to the fragment

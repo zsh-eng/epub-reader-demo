@@ -1,25 +1,26 @@
 import type {
-  ChapterUnavailableEvent,
-  PaginationCommand,
-  PaginationEvent,
+    ChapterUnavailableEvent,
+    PaginationCommand,
+    PaginationEvent,
 } from "./protocol";
 import { layoutPages } from "./shared/layout-pages";
 import { prepareBlocks } from "./shared/prepare-blocks";
 import type {
-  Block,
-  Page,
-  PaginationChapterDiagnostics,
-  PreparedBlock,
-  TextCursorOffset,
+    Block,
+    Page,
+    PaginationChapterDiagnostics,
+    PreparedBlock,
+    PreparedTextBlock,
+    TextCursorOffset,
 } from "./shared/types";
 import { areFontConfigsEqual } from "./shared/types";
 import type {
-  ContentAnchor,
-  PaginationConfig,
-  ResolvedLeafPage,
-  ResolvedSpread,
-  SpreadConfig,
-  SpreadGapReason,
+    ContentAnchor,
+    PaginationConfig,
+    ResolvedLeafPage,
+    ResolvedSpread,
+    SpreadConfig,
+    SpreadGapReason,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -178,6 +179,9 @@ export class PaginationEngine {
           break;
         case "goToChapter":
           this.goToChapter(cause, cmd.chapterIndex);
+          break;
+        case "goToTarget":
+          this.goToTarget(cause, cmd.chapterIndex, cmd.targetId);
           break;
       }
     } catch (err) {
@@ -504,6 +508,40 @@ export class PaginationEngine {
     this.emitPageContent(cause);
   }
 
+  goToTarget(
+    cause: "goToTarget",
+    chapterIndex: number,
+    targetId: string,
+  ): void {
+    const ch = Math.floor(chapterIndex);
+    if (ch < 0 || ch >= this.totalChapters) {
+      const event: ChapterUnavailableEvent = {
+        type: "chapterUnavailable",
+        cause,
+        epoch: this.epoch,
+        chapterIndex: ch,
+      };
+      this.emit(event);
+      return;
+    }
+
+    const pages = this.pagesByChapter[ch];
+    if (!pages || pages.length === 0) {
+      const event: ChapterUnavailableEvent = {
+        type: "chapterUnavailable",
+        cause,
+        epoch: this.epoch,
+        chapterIndex: ch,
+      };
+      this.emit(event);
+      return;
+    }
+
+    this.anchor =
+      this.resolveTargetToAnchor(ch, targetId) ?? this.pickAnchorForPage(ch, 0);
+    this.emitPageContent(cause);
+  }
+
   // -------------------------------------------------------------------------
   // Relayout
   // -------------------------------------------------------------------------
@@ -776,6 +814,103 @@ export class PaginationEngine {
     }
 
     return { type: "block", chapterIndex, blockId: midSlice.blockId };
+  }
+
+  private resolveTargetToAnchor(
+    chapterIndex: number,
+    targetId: string,
+  ): ContentAnchor | null {
+    const prepared = this.preparedByChapter[chapterIndex];
+    if (!prepared) return null;
+
+    // Targets are normalized during parse: by the time they reach the engine,
+    // a fragment id belongs either to a block or to a concrete text item.
+    // That lets navigation resolve directly to an existing block/text anchor
+    // without synthesizing extra zero-width positions at runtime.
+    for (const block of prepared) {
+      const matchesBlockTarget = block.targetIds?.includes(targetId) ?? false;
+      if (matchesBlockTarget) {
+        if (block.type === "text") {
+          // Block-owned text targets land at the first renderable text item in
+          // the block so pagination can reuse the normal text-offset anchor path.
+          const firstTextAnchor = this.resolveFirstTextAnchor(
+            chapterIndex,
+            block,
+          );
+          if (firstTextAnchor) return firstTextAnchor;
+          return null;
+        }
+
+        if (block.type !== "page-break") {
+          // Non-text blocks only support block-level anchoring.
+          return { type: "block", chapterIndex, blockId: block.id };
+        }
+        continue;
+      }
+
+      if (block.type === "text") {
+        const textItemTargetAnchor = this.resolveTextItemTargetAnchor(
+          chapterIndex,
+          block,
+          targetId,
+        );
+        if (textItemTargetAnchor) return textItemTargetAnchor;
+      }
+    }
+
+    return null;
+  }
+
+  private resolveFirstTextAnchor(
+    chapterIndex: number,
+    block: PreparedTextBlock,
+  ): ContentAnchor | null {
+    // "Start of block" means the first prepared text item, which is the same
+    // ownership boundary the parser used when normalizing fragment targets.
+    for (let itemIndex = 0; itemIndex < block.items.length; itemIndex++) {
+      const item = block.items[itemIndex];
+      if (!item) continue;
+
+      return {
+        type: "text",
+        chapterIndex,
+        blockId: block.id,
+        offset: {
+          itemIndex,
+          segmentIndex: 0,
+          graphemeIndex: 0,
+        },
+      };
+    }
+
+    return null;
+  }
+
+  private resolveTextItemTargetAnchor(
+    chapterIndex: number,
+    block: PreparedTextBlock,
+    targetId: string,
+  ): ContentAnchor | null {
+    // Item-owned targets are already attached to the nearest renderable text
+    // run during parse, so resolving them is just "jump to the start of that
+    // prepared text item".
+    for (let itemIndex = 0; itemIndex < block.items.length; itemIndex++) {
+      const item = block.items[itemIndex];
+      if (item?.targetIds?.includes(targetId)) {
+        return {
+          type: "text",
+          chapterIndex,
+          blockId: block.id,
+          offset: {
+            itemIndex,
+            segmentIndex: 0,
+            graphemeIndex: 0,
+          },
+        };
+      }
+    }
+
+    return null;
   }
 
   private resolveCurrentSpreadIndex(): number | null {

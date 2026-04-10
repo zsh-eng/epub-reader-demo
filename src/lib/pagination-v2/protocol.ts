@@ -1,10 +1,10 @@
 import type { PaginationChapterDiagnostics } from "./shared/types";
 import type {
-  Block,
-  ContentAnchor,
-  PaginationConfig,
-  ResolvedSpread,
-  SpreadConfig,
+    Block,
+    ContentAnchor,
+    PaginationConfig,
+    ResolvedSpread,
+    SpreadConfig,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +62,12 @@ export interface GoToChapterCommand {
   chapterIndex: number;
 }
 
+export interface GoToTargetCommand {
+  type: "goToTarget";
+  chapterIndex: number;
+  targetId: string;
+}
+
 export type PaginationCommand =
   | InitCommand
   | AddChapterCommand
@@ -71,7 +77,8 @@ export type PaginationCommand =
   | NextSpreadCommand
   | PrevSpreadCommand
   | GoToPageCommand
-  | GoToChapterCommand;
+  | GoToChapterCommand
+  | GoToTargetCommand;
 
 interface PaginationEventMetadata {
   cause: PaginationCommand["type"];

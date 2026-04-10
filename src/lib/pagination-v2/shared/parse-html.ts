@@ -22,6 +22,10 @@
  *   - link (`<a>`)
  *   - code (`<code>`, `<kbd>`, `<samp>`)
  *   - hard break (`<br>`)
+ * - Fragment targets (`id`, `xml:id`, `name`) are normalized onto the nearest
+ *   renderable block or text run during parsing. Empty target-only wrappers are
+ *   only preserved as standalone empty blocks when there is no adjacent content
+ *   to attach them to.
  * - Highlight metadata is captured from mark wrappers that provide
  *   `data-highlight-id` (and optional `data-color`). Nested marks are preserved
  *   as an ordered stack in `highlightMarks`.
@@ -33,17 +37,19 @@
  *   tag sets and inline extraction rules so pagination output stays consistent.
  */
 import {
-  createDeferredEpubImageSrc,
-  DEFERRED_EPUB_IMAGE_ATTR,
+    createDeferredEpubImageSrc,
+    DEFERRED_EPUB_IMAGE_ATTR,
 } from "@/lib/epub-resource-utils";
-import type {
-  Block,
-  BlockTag,
-  HighlightMark,
-  InlineRun,
-  TextBlock,
-} from "./types";
+import { EPUB_LINK } from "@/types/reader.types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
+import type {
+    Block,
+    BlockTag,
+    HighlightMark,
+    InlineRun,
+    LinkRef,
+    TextBlock,
+} from "./types";
 
 const BLOCK_TAGS = new Set<string>([
   "p",
@@ -91,7 +97,7 @@ interface InlineContext {
   bold: boolean;
   italic: boolean;
   isCode: boolean;
-  isLink: boolean;
+  link?: LinkRef;
   highlightMarks: HighlightMark[];
 }
 
@@ -99,7 +105,6 @@ const DEFAULT_CONTEXT: InlineContext = {
   bold: false,
   italic: false,
   isCode: false,
-  isLink: false,
   highlightMarks: [],
 };
 
@@ -120,18 +125,34 @@ function marksMatch(
   return true;
 }
 
+function linksMatch(a: LinkRef | undefined, b: LinkRef | undefined): boolean {
+  return a?.href === b?.href;
+}
+
+function targetIdsMatch(a: string[] | undefined, b: string[] | undefined): boolean {
+  if (!a || a.length === 0) return !b || b.length === 0;
+  if (!b || b.length !== a.length) return false;
+
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+
+  return true;
+}
+
 function runsMatch(a: InlineRun, b: InlineRun): boolean {
   return (
     (a.hardBreak ?? false) === (b.hardBreak ?? false) &&
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.isCode === b.isCode &&
-    a.isLink === b.isLink &&
+    linksMatch(a.link, b.link) &&
+    targetIdsMatch(a.targetIds, b.targetIds) &&
     marksMatch(a.highlightMarks, b.highlightMarks)
   );
 }
 
-function appendRun(runs: InlineRun[], run: InlineRun): void {
+function appendTextRun(runs: InlineRun[], run: InlineRun): void {
   if (!run.text) return;
   const prev = runs[runs.length - 1];
   if (prev && runsMatch(prev, run)) {
@@ -139,6 +160,25 @@ function appendRun(runs: InlineRun[], run: InlineRun): void {
     return;
   }
   runs.push(run);
+}
+
+function createTextRun(
+  text: string,
+  ctx: InlineContext,
+  targetIds: string[] = [],
+): InlineRun {
+  return {
+    kind: "text",
+    text,
+    hardBreak: undefined,
+    bold: ctx.bold,
+    italic: ctx.italic,
+    isCode: ctx.isCode,
+    ...(ctx.link ? { link: { ...ctx.link } } : {}),
+    ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
+    highlightMarks:
+      ctx.highlightMarks.length > 0 ? [...ctx.highlightMarks] : undefined,
+  };
 }
 
 function readHighlightMark(element: Element): HighlightMark | null {
@@ -152,36 +192,136 @@ function readHighlightMark(element: Element): HighlightMark | null {
   };
 }
 
-function extractInlineRuns(
-  node: Node,
-  ctx: InlineContext,
-  output: InlineRun[],
-): void {
-  if (node.nodeType === Node.TEXT_NODE) {
-    appendRun(output, {
-      text: node.textContent ?? "",
-      ...ctx,
-      highlightMarks:
-        ctx.highlightMarks.length > 0 ? [...ctx.highlightMarks] : undefined,
-    });
-    return;
+function readLinkHref(element: Element): LinkRef | undefined {
+  const internalHref = element.getAttribute(EPUB_LINK.hrefAttribute)?.trim();
+  if (internalHref) {
+    return { href: internalHref };
   }
 
-  if (!(node instanceof Element)) return;
+  const rawHref = element.getAttribute("href")?.trim();
+  if (rawHref) {
+    return { href: rawHref };
+  }
+
+  return undefined;
+}
+
+function readTargetIds(element: Element): string[] {
+  const candidates = [
+    element.getAttribute("id"),
+    element.getAttribute("xml:id"),
+    element.getAttribute("name"),
+  ];
+  const targetIds: string[] = [];
+
+  for (const candidate of candidates) {
+    const trimmed = candidate?.trim();
+    if (!trimmed || targetIds.includes(trimmed)) continue;
+    targetIds.push(trimmed);
+  }
+
+  return targetIds;
+}
+
+function mergeTargetIds(a: string[], b: string[]): string[] {
+  if (a.length === 0) return [...b];
+  if (b.length === 0) return [...a];
+
+  const merged = [...a];
+  for (const targetId of b) {
+    if (!merged.includes(targetId)) {
+      merged.push(targetId);
+    }
+  }
+  return merged;
+}
+
+function attachTargetsToRun(run: InlineRun, targetIds: string[]): void {
+  if (targetIds.length === 0) return;
+  run.targetIds = mergeTargetIds(run.targetIds ?? [], targetIds);
+}
+
+function attachTargetsToLastRun(runs: InlineRun[], targetIds: string[]): boolean {
+  const last = runs[runs.length - 1];
+  if (!last) return false;
+  attachTargetsToRun(last, targetIds);
+  return true;
+}
+
+interface InlineExtractionResult {
+  runs: InlineRun[];
+  trailingTargets: string[];
+}
+
+function extractInlineNodes(
+  nodes: Node[],
+  ctx: InlineContext,
+  pendingTargets: string[] = [],
+): InlineExtractionResult {
+  const runs: InlineRun[] = [];
+  let trailingTargets = [...pendingTargets];
+
+  for (const node of nodes) {
+    const result = extractInlineNode(node, ctx, trailingTargets);
+    for (const run of result.runs) {
+      appendTextRun(runs, run);
+    }
+    trailingTargets = result.trailingTargets;
+  }
+
+  if (trailingTargets.length > 0 && attachTargetsToLastRun(runs, trailingTargets)) {
+    trailingTargets = [];
+  }
+
+  return { runs, trailingTargets };
+}
+
+function extractInlineNode(
+  node: Node,
+  ctx: InlineContext,
+  pendingTargets: string[],
+): InlineExtractionResult {
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? "";
+    if (!text) {
+      return { runs: [], trailingTargets: [...pendingTargets] };
+    }
+
+    if (!text.trim()) {
+      return {
+        runs: [createTextRun(text, ctx)],
+        trailingTargets: [...pendingTargets],
+      };
+    }
+
+    return {
+      runs: [createTextRun(text, ctx, pendingTargets)],
+      trailingTargets: [],
+    };
+  }
+
+  if (!(node instanceof Element)) {
+    return { runs: [], trailingTargets: [...pendingTargets] };
+  }
 
   const tag = node.tagName.toLowerCase();
-  if (IGNORE_TAGS.has(tag)) return;
+  if (IGNORE_TAGS.has(tag)) {
+    return { runs: [], trailingTargets: [...pendingTargets] };
+  }
+
+  const targetIds = mergeTargetIds(pendingTargets, readTargetIds(node));
 
   if (tag === "br") {
-    appendRun(output, { text: "\n", hardBreak: true, ...ctx });
-    return;
+    const run = createTextRun("\n", ctx, targetIds);
+    run.hardBreak = true;
+    return { runs: [run], trailingTargets: [] };
   }
 
   if (tag === "img" || tag === "image") {
     // Inline images are intentionally unsupported in the text-layout pipeline.
-    // If a block-level wrapper contains only images, walk() will still revisit
-    // them and lift them out as standalone image blocks.
-    return;
+    // Leave any pending targets unconsumed so the surrounding block walker can
+    // attach them to the nearest renderable block instead.
+    return { runs: [], trailingTargets: targetIds };
   }
 
   const next: InlineContext = {
@@ -201,12 +341,12 @@ function extractInlineRuns(
 
   if (tag === "strong" || tag === "b") next.bold = true;
   if (tag === "em" || tag === "i") next.italic = true;
-  if (tag === "a") next.isLink = true;
+  if (tag === "a") {
+    next.link = readLinkHref(node);
+  }
   if (tag === "code" || tag === "kbd" || tag === "samp") next.isCode = true;
 
-  for (const child of Array.from(node.childNodes)) {
-    extractInlineRuns(child, next, output);
-  }
+  return extractInlineNodes(Array.from(node.childNodes), next, targetIds);
 }
 
 function parseNumeric(value: string | null): number | null {
@@ -245,7 +385,11 @@ function getImageSource(element: Element, tag: string): string | null {
   );
 }
 
-function createImageBlock(element: Element, id: string): Block | null {
+function createImageBlock(
+  element: Element,
+  id: string,
+  targetIds: string[] = [],
+): Block | null {
   const tag = element.tagName.toLowerCase();
   const src = getImageSource(element, tag);
   if (!src) return null;
@@ -262,6 +406,7 @@ function createImageBlock(element: Element, id: string): Block | null {
   return {
     type: "image",
     id,
+    ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
     src,
     alt: element.getAttribute("alt") || undefined,
     intrinsicWidth,
@@ -273,55 +418,138 @@ function createTextBlock(
   element: Element,
   tag: BlockTag,
   id: string,
+  targetIds: string[] = [],
 ): TextBlock | null {
-  const runs: InlineRun[] = [];
-  for (const child of Array.from(element.childNodes)) {
-    extractInlineRuns(child, DEFAULT_CONTEXT, runs);
+  const result = extractInlineNodes(Array.from(element.childNodes), DEFAULT_CONTEXT);
+  const hasRenderableText = result.runs.some(
+    (run) => run.hardBreak === true || run.text.trim().length > 0,
+  );
+  const hasRunTargets = result.runs.some(
+    (run) => (run.targetIds?.length ?? 0) > 0,
+  );
+  if (!hasRenderableText && !hasRunTargets && targetIds.length === 0) {
+    return null;
   }
 
-  const filtered = runs.filter((r) => r.text.length > 0);
-  const combined = filtered.map((r) => r.text).join("");
-  if (!combined.trim()) return null;
+  return {
+    type: "text",
+    id,
+    tag,
+    ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
+    runs: result.runs.filter((run) => run.text.length > 0),
+  };
+}
 
-  return { type: "text", id, tag, runs: filtered };
+function hasVisibleInlineText(block: TextBlock): boolean {
+  return block.runs.some(
+    (run) => run.hardBreak === true || run.text.trim().length > 0,
+  );
+}
+
+function createEmptyTargetBlock(id: string, targetIds: string[]): TextBlock {
+  return {
+    type: "text",
+    id,
+    tag: "p",
+    targetIds: [...targetIds],
+    runs: [],
+  };
+}
+
+interface WalkResult {
+  blocks: Block[];
+  remainingTargets: string[];
+}
+
+function attachTargetsToBlock(block: Block, targetIds: string[]): void {
+  if (targetIds.length === 0) return;
+  block.targetIds = mergeTargetIds(block.targetIds ?? [], targetIds);
+}
+
+function attachTargetsToLastBlock(blocks: Block[], targetIds: string[]): boolean {
+  const last = blocks[blocks.length - 1];
+  if (!last) return false;
+  attachTargetsToBlock(last, targetIds);
+  return true;
 }
 
 export function parseChapterHtml(html: string): Block[] {
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<body>${html}</body>`, "text/html");
-  const blocks: Block[] = [];
   const counter = { value: 1 };
 
-  function walk(node: Node): void {
+  function walkChildren(nodes: Node[], pendingTargets: string[]): WalkResult {
+    const blocks: Block[] = [];
+    let remainingTargets = [...pendingTargets];
+
+    for (const child of nodes) {
+      const result = walk(child, remainingTargets);
+      blocks.push(...result.blocks);
+      remainingTargets = result.remainingTargets;
+    }
+
+    if (
+      remainingTargets.length > 0 &&
+      attachTargetsToLastBlock(blocks, remainingTargets)
+    ) {
+      remainingTargets = [];
+    }
+
+    return { blocks, remainingTargets };
+  }
+
+  function walk(node: Node, pendingTargets: string[] = []): WalkResult {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent ?? "";
-      if (!text.trim()) return;
+      if (!text.trim()) {
+        return { blocks: [], remainingTargets: [...pendingTargets] };
+      }
 
       const p = document.createElement("p");
       p.textContent = text;
-      const block = createTextBlock(p, "p", `text-${counter.value++}`);
-      if (block) blocks.push(block);
-      return;
+      const block = createTextBlock(
+        p,
+        "p",
+        `text-${counter.value++}`,
+        pendingTargets,
+      );
+      return block
+        ? { blocks: [block], remainingTargets: [] }
+        : { blocks: [], remainingTargets: [...pendingTargets] };
     }
 
-    if (!(node instanceof Element)) return;
+    if (!(node instanceof Element)) {
+      return { blocks: [], remainingTargets: [...pendingTargets] };
+    }
 
     const tag = node.tagName.toLowerCase();
-    if (IGNORE_TAGS.has(tag)) return;
+    if (IGNORE_TAGS.has(tag)) {
+      return { blocks: [], remainingTargets: [...pendingTargets] };
+    }
 
-    const imageBlock = createImageBlock(node, `image-${counter.value}`);
+    const targetIds = mergeTargetIds(pendingTargets, readTargetIds(node));
+
+    const imageBlock = createImageBlock(
+      node,
+      `image-${counter.value}`,
+      targetIds,
+    );
     if (imageBlock) {
       counter.value += 1;
-      blocks.push(imageBlock);
-      return;
+      return { blocks: [imageBlock], remainingTargets: [] };
     }
 
     if (tag === "hr") {
-      blocks.push({
-        type: "spacer",
-        id: `spacer-${counter.value++}`,
-      });
-      return;
+      return {
+        blocks: [
+          {
+            type: "spacer",
+            id: `spacer-${counter.value++}`,
+            ...(targetIds.length > 0 ? { targetIds } : {}),
+          },
+        ],
+        remainingTargets: [],
+      };
     }
 
     if (BLOCK_TAGS.has(tag)) {
@@ -329,45 +557,54 @@ export function parseChapterHtml(html: string): Block[] {
         node,
         tag as BlockTag,
         `text-${counter.value++}`,
+        targetIds,
       );
-      if (block) {
-        blocks.push(block);
-        return;
+      if (block && hasVisibleInlineText(block)) {
+        return { blocks: [block], remainingTargets: [] };
       }
 
-      // Some books wrap cover images in heading/paragraph tags.
-      for (const child of Array.from(node.childNodes)) {
-        if (child.nodeType === Node.ELEMENT_NODE) {
-          walk(child);
-        }
+      const childrenResult = walkChildren(Array.from(node.childNodes), targetIds);
+      if (childrenResult.blocks.length > 0) {
+        return childrenResult;
       }
-      return;
+
+      return {
+        blocks: [],
+        remainingTargets: [...childrenResult.remainingTargets],
+      };
     }
 
     if (tag === "table") {
       const p = document.createElement("p");
       p.textContent = node.textContent;
-      const block = createTextBlock(p, "p", `text-${counter.value++}`);
-      if (block) blocks.push(block);
-      return;
+      const block = createTextBlock(p, "p", `text-${counter.value++}`, targetIds);
+      return block
+        ? { blocks: [block], remainingTargets: [] }
+        : { blocks: [], remainingTargets: [...targetIds] };
     }
 
     if (CONTAINER_TAGS.has(tag)) {
-      for (const child of Array.from(node.childNodes)) {
-        walk(child);
+      const childrenResult = walkChildren(Array.from(node.childNodes), targetIds);
+      if (childrenResult.blocks.length > 0) {
+        return childrenResult;
       }
-      return;
+
+      return { blocks: [], remainingTargets: childrenResult.remainingTargets };
     }
 
-    // Unknown elements: recurse into children
-    for (const child of Array.from(node.childNodes)) {
-      walk(child);
+    const childrenResult = walkChildren(Array.from(node.childNodes), targetIds);
+    if (childrenResult.blocks.length > 0) {
+      return childrenResult;
     }
+
+    return { blocks: [], remainingTargets: childrenResult.remainingTargets };
   }
 
-  for (const child of Array.from(doc.body.childNodes)) {
-    walk(child);
+  const result = walkChildren(Array.from(doc.body.childNodes), []);
+  if (result.remainingTargets.length > 0) {
+    result.blocks.push(
+      createEmptyTargetBlock(`text-${counter.value++}`, result.remainingTargets),
+    );
   }
-
-  return blocks;
+  return result.blocks;
 }

@@ -1,15 +1,15 @@
-import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
 import { PaginationEngine } from "@/lib/pagination-v2/engine";
-import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
+import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
 import type {
-  Block,
-  ContentAnchor,
-  FontConfig,
-  LayoutTheme,
-  PaginationConfig,
-  ResolvedSpread,
-  SpreadConfig,
+    Block,
+    ContentAnchor,
+    FontConfig,
+    LayoutTheme,
+    PaginationConfig,
+    ResolvedSpread,
+    SpreadConfig,
 } from "@/lib/pagination-v2/types";
+import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import { describe, expect, it } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -56,11 +56,88 @@ function makeLongTextBlocks(blockId: string): Block[] {
       tag: "p",
       runs: [
         {
+          kind: "text",
           text: paragraph.repeat(260),
           bold: false,
           italic: false,
           isCode: false,
-          isLink: false,
+        },
+      ],
+    },
+  ];
+}
+
+function makeInlineTargetedLongBlocks(targetId: string): Block[] {
+  const paragraph = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+  return [
+    {
+      type: "text",
+      id: `inline-target-${targetId}`,
+      tag: "p",
+      runs: [
+        {
+          kind: "text",
+          text: paragraph.repeat(220),
+          bold: false,
+          italic: false,
+          isCode: false,
+        },
+        {
+          kind: "text",
+          text: paragraph.repeat(140),
+          bold: false,
+          italic: false,
+          isCode: false,
+          targetIds: [targetId],
+        },
+      ],
+    },
+  ];
+}
+
+function makePreTargetedLongBlocks(targetId: string): Block[] {
+  const repeatedLine = "const value = alpha + beta + gamma + delta;\n";
+  return [
+    {
+      type: "text",
+      id: `pre-target-${targetId}`,
+      tag: "pre",
+      runs: [
+        {
+          kind: "text",
+          text: repeatedLine.repeat(80),
+          bold: false,
+          italic: false,
+          isCode: true,
+        },
+        {
+          kind: "text",
+          text: repeatedLine.repeat(60),
+          bold: false,
+          italic: false,
+          isCode: true,
+          targetIds: [targetId],
+        },
+      ],
+    },
+  ];
+}
+
+function makeBlockTargetBlocks(targetId: string): Block[] {
+  return [
+    ...makeLongTextBlocks("before-block-target"),
+    {
+      type: "text",
+      id: "block-target",
+      tag: "p",
+      targetIds: [targetId],
+      runs: [
+        {
+          kind: "text",
+          text: "This block owns the fragment target.",
+          bold: false,
+          italic: false,
+          isCode: false,
         },
       ],
     },
@@ -496,6 +573,96 @@ describe("navigation", () => {
     expect(events[0]?.cause).toBe("goToChapter");
     if (events[0]?.type === "chapterUnavailable") {
       expect(events[0].chapterIndex).toBe(2);
+    }
+  });
+
+  it("goToTarget lands on a later page for inline targets inside long blocks", () => {
+    const { engine, events } = createEngine({
+      blocks: makeInlineTargetedLongBlocks("midpoint"),
+    });
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "goToTarget",
+      chapterIndex: 0,
+      targetId: "midpoint",
+    });
+
+    const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.spread.cause).toBe("goToTarget");
+    expect(pageContent.spread.currentPage).toBeGreaterThan(1);
+  });
+
+  it("goToTarget works inside multi-page preformatted blocks", () => {
+    const { engine, events } = createEngine({
+      blocks: makePreTargetedLongBlocks("mid-pre"),
+    });
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "goToTarget",
+      chapterIndex: 0,
+      targetId: "mid-pre",
+    });
+
+    const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.spread.currentPage).toBeGreaterThan(1);
+  });
+
+  it("goToTarget jumps to the first page containing a block-level target", () => {
+    const { engine, events } = createEngine({
+      blocks: makeBlockTargetBlocks("chapter-section"),
+    });
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "goToTarget",
+      chapterIndex: 0,
+      targetId: "chapter-section",
+    });
+
+    const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.spread.currentPage).toBeGreaterThan(1);
+    const first = firstPageSlot(pageContent.spread)!;
+    const blockIds = first.page.content.map((slice) => slice.blockId);
+    expect(blockIds).toContain("block-target");
+  });
+
+  it("goToTarget falls back to chapter start when the target is missing", () => {
+    const { engine, events } = createEngine({
+      blocks: makeInlineTargetedLongBlocks("existing-target"),
+    });
+
+    events.length = 0;
+    engine.handleCommand({
+      type: "goToTarget",
+      chapterIndex: 0,
+      targetId: "missing-target",
+    });
+
+    const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.spread.currentPage).toBe(1);
+  });
+
+  it("goToTarget emits chapterUnavailable for an unloaded chapter", () => {
+    const { engine, events } = createEngine({ totalChapters: 2 });
+    events.length = 0;
+
+    engine.handleCommand({
+      type: "goToTarget",
+      chapterIndex: 1,
+      targetId: "missing",
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("chapterUnavailable");
+    expect(events[0]?.cause).toBe("goToTarget");
+    if (events[0]?.type === "chapterUnavailable") {
+      expect(events[0].chapterIndex).toBe(1);
     }
   });
 });

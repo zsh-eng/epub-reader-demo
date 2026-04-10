@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PaginationTracer } from "./diagnostics/tracer";
 import type { PaginationCommand, PaginationEvent } from "./protocol";
 import type {
-  Block,
-  ContentAnchor,
-  PaginationConfig,
-  PaginationStatus,
-  ResolvedSpread,
-  SpreadConfig,
+    Block,
+    ContentAnchor,
+    PaginationConfig,
+    PaginationStatus,
+    ResolvedSpread,
+    SpreadConfig,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -25,6 +25,7 @@ export interface UsePaginationResult {
   prevSpread: () => void;
   goToPage: (page: number) => void;
   goToChapter: (chapterIndex: number) => void;
+  goToTarget: (chapterIndex: number, targetId: string) => void;
 
   init: (options: {
     totalChapters: number;
@@ -311,6 +312,17 @@ export function usePagination(
     [postCommand],
   );
 
+  const goToTarget = useCallback(
+    (chapterIndex: number, targetId: string) => {
+      postCommand({
+        type: "goToTarget",
+        chapterIndex: Math.floor(chapterIndex),
+        targetId,
+      });
+    },
+    [postCommand],
+  );
+
   return {
     spread,
     status,
@@ -319,6 +331,7 @@ export function usePagination(
     prevSpread,
     goToPage,
     goToChapter,
+    goToTarget,
     init,
     addChapter,
     updateChapter,

@@ -43,11 +43,11 @@ describe("layoutPages — image overflow spacing", () => {
         tag: "p",
         runs: [
           {
+            kind: "text",
             text: "Short paragraph.",
             bold: false,
             italic: false,
             isCode: false,
-            isLink: false,
           },
         ],
       },
@@ -94,11 +94,11 @@ describe("layoutPages — blockquote parity", () => {
         tag: "p",
         runs: [
           {
+            kind: "text",
             text: "Intro paragraph.",
             bold: false,
             italic: false,
             isCode: false,
-            isLink: false,
           },
         ],
       },
@@ -108,11 +108,11 @@ describe("layoutPages — blockquote parity", () => {
         tag: "blockquote",
         runs: [
           {
+            kind: "text",
             text: "Quoted sentence.",
             bold: false,
             italic: false,
             isCode: false,
-            isLink: false,
           },
         ],
       },
@@ -122,11 +122,11 @@ describe("layoutPages — blockquote parity", () => {
         tag: "p",
         runs: [
           {
+            kind: "text",
             text: "After paragraph.",
             bold: false,
             italic: false,
             isCode: false,
-            isLink: false,
           },
         ],
       },
@@ -171,18 +171,18 @@ describe("layoutPages — blockquote parity", () => {
         tag: "blockquote",
         runs: [
           {
+            kind: "text",
             text: "normal ",
             bold: false,
             italic: false,
             isCode: false,
-            isLink: false,
           },
           {
+            kind: "text",
             text: "bold",
             bold: true,
             italic: false,
             isCode: false,
-            isLink: false,
           },
         ],
       },
@@ -209,11 +209,11 @@ describe("layoutPages — blockquote parity", () => {
         tag: "blockquote",
         runs: [
           {
+            kind: "text",
             text: "This quote should span multiple pages. ".repeat(160),
             bold: false,
             italic: false,
             isCode: false,
-            isLink: false,
           },
         ],
       },

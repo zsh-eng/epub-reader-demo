@@ -12,6 +12,7 @@ function getCoalesceKey(command: PaginationCommand): string | null {
     case "prevSpread":
     case "goToPage":
     case "goToChapter":
+    case "goToTarget":
       return command.type;
     case "updateChapter":
       return `${command.type}:${command.chapterIndex}`;
@@ -33,6 +34,7 @@ export const NAVIGATION_COMMANDS = new Set<PaginationCommand["type"]>([
   "prevSpread",
   "goToPage",
   "goToChapter",
+  "goToTarget",
 ]);
 
 export interface QueuedPaginationCommand {

@@ -97,10 +97,27 @@ describe("processEmbeddedResources", () => {
     const link = document.querySelector("a");
     expect(link?.getAttribute(EPUB_LINK.linkAttribute)).toBe("true");
     expect(link?.getAttribute(EPUB_LINK.hrefAttribute)).toBe(
-      "OEBPS/Text/Chapter2.xhtml",
+      "OEBPS/Text/Chapter2.xhtml#sec-1",
     );
-    expect(link?.getAttribute(EPUB_LINK.fragmentAttribute)).toBe("sec-1");
-    expect(link?.getAttribute("href")).toBe("#");
+    expect(link?.getAttribute("href")).toBe("OEBPS/Text/Chapter2.xhtml#sec-1");
+  });
+
+  it("normalizes same-chapter fragment links to the current chapter href", async () => {
+    const content = `<html><body><a href="#note-1">Footnote</a></body></html>`;
+
+    const { document } = await processEmbeddedResources({
+      content,
+      mediaType: "text/html",
+      basePath: "OEBPS/Text/Chapter1.xhtml",
+      loadResource: async () => null,
+    });
+
+    const link = document.querySelector("a");
+    expect(link?.getAttribute(EPUB_LINK.linkAttribute)).toBe("true");
+    expect(link?.getAttribute(EPUB_LINK.hrefAttribute)).toBe(
+      "OEBPS/Text/Chapter1.xhtml#note-1",
+    );
+    expect(link?.getAttribute("href")).toBe("OEBPS/Text/Chapter1.xhtml#note-1");
   });
 
   it("marks svg image resources for deferred loading when skipImages is enabled", async () => {

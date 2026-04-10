@@ -156,13 +156,6 @@ export function layoutPages(
     const textBlock = block as PreparedTextBlock;
     const spacing = getBlockSpacing(textBlock.tag, theme);
 
-    // Margin collapsing
-    const effectiveGap =
-      current.slices.length === 0
-        ? 0
-        : Math.max(prevMarginBelow, spacing.above);
-    if (effectiveGap > 0) addSpacer(textBlock.id, effectiveGap);
-
     const textLayoutWidth = Math.max(
       1,
       safeWidth - getBlockInsetLeft(textBlock.tag, theme),
@@ -178,9 +171,15 @@ export function layoutPages(
     totalLineCount += lines.length;
 
     if (lines.length === 0) {
-      prevMarginBelow = spacing.below;
       continue;
     }
+
+    // Margin collapsing
+    const effectiveGap =
+      current.slices.length === 0
+        ? 0
+        : Math.max(prevMarginBelow, spacing.above);
+    if (effectiveGap > 0) addSpacer(textBlock.id, effectiveGap);
 
     const lastLine = lines[lines.length - 1];
     if (lastLine) {
