@@ -243,3 +243,7 @@
 .epub-highlight[data-color="magenta"] {
   background-color: var(--magenta-secondary);
 }
+
+mark {
+  color: inherit;
+}
