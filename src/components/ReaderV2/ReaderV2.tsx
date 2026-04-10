@@ -1,5 +1,6 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { isExternalHref, splitHrefFragment } from "@/lib/epub-resource-utils";
 import {
     EPUB_HIGHLIGHT_ACTIVE_CLASS,
     EPUB_HIGHLIGHT_CLASS,
@@ -17,6 +18,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type MouseEvent,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
@@ -28,6 +30,7 @@ import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
+import { resolvePaginatedLinkTarget } from "./link-navigation";
 
 const COLUMN_GAP_PX = 20;
 const MIN_VIEWPORT_WIDTH_PX = 200;
@@ -178,6 +181,14 @@ export function ReaderV2() {
       ) ?? null)
     : null;
 
+  const chapterIndexByHrefPath = useMemo(() => {
+    const hrefMap = new Map<string, number>();
+    for (const chapter of chapterEntries) {
+      hrefMap.set(splitHrefFragment(chapter.href).path, chapter.index);
+    }
+    return hrefMap;
+  }, [chapterEntries]);
+
   useEffect(() => {
     const container = stageContentRef.current;
     if (!container) return;
@@ -259,6 +270,38 @@ export function ReaderV2() {
       pagination.goToChapter(currentChapterIndex + 1);
   }, [currentChapterIndex, chapterEntries.length, pagination]);
 
+  const onPageContentClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (!anchor) return;
+
+      const href = anchor.getAttribute("href")?.trim();
+      if (!href) return;
+      if (isExternalHref(href)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const resolvedTarget = resolvePaginatedLinkTarget(
+        href,
+        chapterIndexByHrefPath,
+      );
+      if (!resolvedTarget) return;
+
+      if (resolvedTarget.targetId) {
+        pagination.goToTarget(
+          resolvedTarget.chapterIndex,
+          resolvedTarget.targetId,
+        );
+        return;
+      }
+
+      pagination.goToChapter(resolvedTarget.chapterIndex);
+    },
+    [chapterIndexByHrefPath, pagination],
+  );
+
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner title="Loading book" />;
   }
@@ -305,6 +348,7 @@ export function ReaderV2() {
               bookId={bookId}
               deferredImageCache={deferredImageCacheRef.current}
               stageContentRef={stageContentRef}
+              onPageContentClick={onPageContentClick}
               paddingTopPx={viewport.paddingTop}
               paddingBottomPx={viewport.paddingBottom}
               paddingLeftPx={viewport.paddingX}

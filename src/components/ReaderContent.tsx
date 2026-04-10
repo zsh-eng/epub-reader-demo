@@ -13,7 +13,7 @@ interface ReaderContentProps {
   title?: string;
   settings?: ReaderSettings;
   /** Callback for internal EPUB link clicks */
-  onInternalLinkClick?: (href: string, fragment?: string) => void;
+  onInternalLinkClick?: (href: string) => void;
 }
 
 /**
@@ -59,10 +59,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
         if (!onInternalLinkClick) return;
 
         const href = linkElement.getAttribute(EPUB_LINK.hrefAttribute) || "";
-        const fragment =
-          linkElement.getAttribute(EPUB_LINK.fragmentAttribute) || undefined;
-
-        onInternalLinkClick(href, fragment);
+        onInternalLinkClick(href);
       },
       [onInternalLinkClick],
     );

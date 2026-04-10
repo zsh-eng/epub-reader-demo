@@ -1,7 +1,7 @@
 import type { PageFragment, PageSlice } from "@/lib/pagination-v2";
 import { cn } from "@/lib/utils";
 import { toCssTextAlign } from "@/types/reader.types";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Fragment } from "react";
 import { LazyImage } from "./shared/LazyImage";
 
@@ -31,6 +31,32 @@ function renderFragmentContent(fragment: PageFragment) {
       </mark>
     ),
     fragment.text,
+  );
+}
+
+function renderInlineFragment(
+  fragment: PageFragment,
+  key: string,
+  style: CSSProperties,
+) {
+  const className = cn({
+    "reader-v2-inline-link": Boolean(fragment.link),
+    "reader-v2-inline-code": fragment.isCode,
+  });
+  const content = renderFragmentContent(fragment);
+
+  if (fragment.link) {
+    return (
+      <a key={key} href={fragment.link.href} style={style} className={className}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <span key={key} style={style} className={className}>
+      {content}
+    </span>
   );
 }
 
@@ -119,9 +145,10 @@ export function PageSliceView({
                   }}
                 >
                   {contentFragments.map((fragment, fragmentIndex) => (
-                    <span
-                      key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
-                      style={{
+                    renderInlineFragment(
+                      fragment,
+                      `${key}-line-${lineIndex}-frag-${fragmentIndex}`,
+                      {
                         font: fragment.font,
                         lineHeight: "inherit",
                         marginRight:
@@ -129,25 +156,19 @@ export function PageSliceView({
                           Math.abs(fragment.marginRightPx) > 0.01
                             ? `${fragment.marginRightPx}px`
                             : undefined,
-                      }}
-                      className={cn({
-                        "reader-v2-inline-link": fragment.isLink,
-                        "reader-v2-inline-code": fragment.isCode,
-                      })}
-                    >
-                      {renderFragmentContent(fragment)}
-                    </span>
+                      },
+                    )
                   ))}
                 </span>
                 {trailingBoundaryFragment ? (
-                  <span
-                    style={{
+                  renderInlineFragment(
+                    trailingBoundaryFragment,
+                    `${key}-line-${lineIndex}-trailing`,
+                    {
                       font: trailingBoundaryFragment.font,
                       lineHeight: "inherit",
-                    }}
-                  >
-                    {renderFragmentContent(trailingBoundaryFragment)}
-                  </span>
+                    },
+                  )
                 ) : null}
               </Fragment>
             );
@@ -155,23 +176,18 @@ export function PageSliceView({
         : slice.lines.map((line, lineIndex) => (
             <Fragment key={`${key}-line-${lineIndex}`}>
               {line.fragments.map((fragment, fragmentIndex) => (
-                <span
-                  key={`${key}-line-${lineIndex}-frag-${fragmentIndex}`}
-                  style={{
+                renderInlineFragment(
+                  fragment,
+                  `${key}-line-${lineIndex}-frag-${fragmentIndex}`,
+                  {
                     marginLeft:
                       fragment.leadingGap > 0
                         ? `${fragment.leadingGap}px`
                         : undefined,
                     font: fragment.font,
                     lineHeight: "inherit",
-                  }}
-                  className={cn({
-                    "reader-v2-inline-link": fragment.isLink,
-                    "reader-v2-inline-code": fragment.isCode,
-                  })}
-                >
-                  {renderFragmentContent(fragment)}
-                </span>
+                  },
+                )
               ))}
             </Fragment>
           ))}
