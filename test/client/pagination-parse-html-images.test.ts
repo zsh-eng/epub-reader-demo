@@ -88,4 +88,32 @@ describe("parseChapterHtml image extraction", () => {
       intrinsicHeight: 1536,
     });
   });
+
+  it("ignores inline images mixed with text because only block images are supported", () => {
+    const html = `
+      <p>
+        Before
+        <img alt="inline" src="../Images/inline.jpg" />
+        after
+      </p>
+    `;
+
+    const blocks = parseChapterHtml(html);
+
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0]).toMatchObject({
+      type: "text",
+      tag: "p",
+    });
+
+    const block = blocks[0];
+    expect(block?.type).toBe("text");
+    if (block?.type !== "text") {
+      throw new Error("Expected a text block");
+    }
+
+    expect(block.runs.map((run) => run.text).join("")).toContain("Before");
+    expect(block.runs.map((run) => run.text).join("")).toContain("after");
+    expect(blocks.some((candidate) => candidate.type === "image")).toBe(false);
+  });
 });

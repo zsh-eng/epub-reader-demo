@@ -11,6 +11,9 @@
  * - Images are extracted from:
  *   - `<img src="...">`
  *   - SVG `<image href|xlink:href="...">`
+ * - Inline images mixed with text are not supported by pagination v2.
+ *   Image-only wrappers like `<p><img /></p>` are still lifted out as block
+ *   images during tree walking.
  * - Image sizing prefers numeric `width`/`height`, then
  *   `data-epub-intrinsic-width` / `data-epub-intrinsic-height`, then defaults.
  * - Inline formatting currently preserved in runs:
@@ -171,6 +174,13 @@ function extractInlineRuns(
 
   if (tag === "br") {
     appendRun(output, { text: "\n", hardBreak: true, ...ctx });
+    return;
+  }
+
+  if (tag === "img" || tag === "image") {
+    // Inline images are intentionally unsupported in the text-layout pipeline.
+    // If a block-level wrapper contains only images, walk() will still revisit
+    // them and lift them out as standalone image blocks.
     return;
   }
 

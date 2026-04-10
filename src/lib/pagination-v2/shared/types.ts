@@ -86,15 +86,9 @@ export interface PreparedTextItem {
   leadingGap: number;
 }
 
-export interface PreparedAtomicItem {
-  kind: "atomic";
-  width: number;
-  height: number;
-  leadingGap: number;
-  content: { type: "inline-image"; src: string; alt?: string };
-}
-
-export type PreparedInlineItem = PreparedTextItem | PreparedAtomicItem;
+// Pagination v2 currently supports text-only inline items. Images are laid out
+// as block content; inline images mixed with text are intentionally unsupported.
+export type PreparedInlineItem = PreparedTextItem;
 
 export interface PreparedTextBlock {
   type: "text";

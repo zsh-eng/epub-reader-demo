@@ -113,26 +113,6 @@ function layoutTextLinesGreedy(
     lineLoop: while (itemIndex < items.length) {
       const item = items[itemIndex];
       if (!item) break;
-
-      if (item.kind === "atomic") {
-        const leadingGap = fragments.length === 0 ? 0 : item.leadingGap;
-        if (fragments.length > 0 && leadingGap + item.width > remainingWidth) {
-          break lineLoop;
-        }
-        fragments.push({
-          kind: "text",
-          text: item.content.alt ?? "",
-          font: "",
-          leadingGap,
-          isLink: false,
-          isCode: false,
-        });
-        remainingWidth -= leadingGap + item.width;
-        itemIndex++;
-        continue;
-      }
-
-      // kind === 'text'
       if (textCursor && cursorsMatch(textCursor, item.endCursor)) {
         itemIndex++;
         textCursor = null;
@@ -223,10 +203,7 @@ function layoutTextLinesGreedy(
 }
 
 function canUseKnuthPlassJustification(items: PreparedInlineItem[]): boolean {
-  return (
-    items.length > 0 &&
-    items.every((item) => item.kind === "text" && item.chromeWidth === 0)
-  );
+  return items.length > 0 && items.every((item) => item.chromeWidth === 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -361,9 +338,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
 
   for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
     const item = items[itemIndex];
-    if (!item || item.kind !== "text") {
-      return [];
-    }
+    if (!item) continue;
 
     if (tokens.length > 0 && item.leadingGap > 0) {
       const itemStartOffset = createOffset(itemIndex, LINE_START_CURSOR);
@@ -613,12 +588,10 @@ export function layoutPreWrapLines(
 ): PageLine[] {
   if (items.length === 0) return [];
 
-  const firstText = items.find((i) => i.kind === "text");
-  if (!firstText || firstText.kind !== "text") return [];
+  const firstText = items[0];
+  if (!firstText) return [];
 
-  const combinedText = items
-    .map((i) => (i.kind === "text" ? i.rawText : ""))
-    .join("");
+  const combinedText = items.map((item) => item.rawText).join("");
   const font = firstText.font;
 
   const prepared = prepareWithSegments(combinedText, font, {
