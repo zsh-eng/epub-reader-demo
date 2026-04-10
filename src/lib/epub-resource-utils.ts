@@ -20,6 +20,32 @@ export function getDeferredEpubImagePath(src: string): string | null {
   return resourcePath.length > 0 ? resourcePath : null;
 }
 
+export function splitHrefFragment(href: string): {
+  path: string;
+  fragment?: string;
+} {
+  const hashIndex = href.indexOf("#");
+  if (hashIndex === -1) {
+    return { path: href };
+  }
+
+  const path = href.slice(0, hashIndex);
+  const fragment = href.slice(hashIndex + 1) || undefined;
+  return { path, fragment };
+}
+
+export function isExternalHref(href: string): boolean {
+  const trimmed = href.trim().toLowerCase();
+  return (
+    trimmed.startsWith("http://") ||
+    trimmed.startsWith("https://") ||
+    trimmed.startsWith("mailto:") ||
+    trimmed.startsWith("tel:") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
+  );
+}
+
 /**
  * Returns the MIME type for parsing EPUB content.
  * XHTML content must be parsed as XML to correctly handle self-closing tags.
@@ -118,6 +144,15 @@ export function resolvePath(basePath: string, relativePath: string): string {
   return resolvedParts.join("/");
 }
 
+export function normalizeInternalEpubHref(
+  basePath: string,
+  href: string,
+): string {
+  const { path, fragment } = splitHrefFragment(href);
+  const resolvedPath = path ? resolvePath(basePath, path) : basePath.split(/[#?]/)[0] ?? basePath;
+  return fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
+}
+
 /**
  * Options for processing embedded resources in EPUB content
  */
@@ -205,39 +240,18 @@ export async function processEmbeddedResources(
 
     // Handle anchor elements specially
     if (tagName === "a" && href) {
-      // Pure same-page anchor links (e.g., #footnote1) - leave them as-is
-      if (href.startsWith("#")) {
+      if (isExternalHref(href)) {
         continue;
       }
 
-      // Skip external links
-      if (
-        href.startsWith("http") ||
-        href.startsWith("mailto:") ||
-        href.startsWith("tel:")
-      ) {
-        continue;
-      }
-
-      // This is an internal EPUB link - mark it with data attributes
-      const [pathPart, fragment] = href.split("#");
-      const resolvedHref = pathPart ? resolvePath(basePath, pathPart) : "";
-
+      const resolvedHref = normalizeInternalEpubHref(basePath, href);
       element.setAttribute(EPUB_LINK.linkAttribute, "true");
       element.setAttribute(EPUB_LINK.hrefAttribute, resolvedHref);
-      if (fragment) {
-        element.setAttribute(EPUB_LINK.fragmentAttribute, fragment);
-      }
-      // Prevent native navigation; handled by ReaderContent click handler.
-      element.setAttribute("href", "#");
+      element.setAttribute("href", resolvedHref);
       continue;
     }
 
-    if (
-      resourcePath.startsWith("http") ||
-      resourcePath.startsWith("data:") ||
-      resourcePath.startsWith("blob:")
-    ) {
+    if (isExternalHref(resourcePath)) {
       continue;
     }
 
