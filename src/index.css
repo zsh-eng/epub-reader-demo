@@ -202,17 +202,17 @@
     --orange-primary: hsl(22 80% 41%);
     --orange-secondary: hsl(23 70% 51%);
     --yellow-primary: hsl(45 99% 34%);
-    --yellow-secondary: hsl(45 82% 45%);
+    --yellow-secondary: #eccb60;
     --green-primary: hsl(73 84% 27%);
-    --green-secondary: hsl(72 46% 41%);
+    --green-secondary: #bec97e;
     --cyan-primary: hsl(175 57% 33%);
     --cyan-secondary: hsl(175 49% 45%);
     --blue-primary: hsl(212 68% 39%);
-    --blue-secondary: hsl(208 49% 50%);
+    --blue-secondary: #92bfdb;
     --purple-primary: hsl(259 42% 43%);
     --purple-secondary: hsl(251 40% 64%);
     --magenta-primary: hsl(326 55% 41%);
-    --magenta-secondary: hsl(329 54% 59%);
+    --magenta-secondary: #f4a4c2;
 }
 
 .flexoki-dark {
@@ -241,17 +241,17 @@
     --orange-primary: hsl(23 70% 51%);
     --orange-secondary: hsl(22 80% 41%);
     --yellow-primary: hsl(45 82% 45%);
-    --yellow-secondary: hsl(45 99% 34%);
+    --yellow-secondary: #664d01;
     --green-primary: hsl(72 46% 41%);
-    --green-secondary: hsl(73 84% 27%);
+    --green-secondary: #3d4c07;
     --cyan-primary: hsl(175 49% 45%);
     --cyan-secondary: hsl(175 57% 33%);
     --blue-primary: hsl(208 49% 50%);
-    --blue-secondary: hsl(212 68% 39%);
+    --blue-secondary: #163b66;
     --purple-primary: hsl(251 40% 64%);
     --purple-secondary: hsl(259 42% 43%);
     --magenta-primary: hsl(329 54% 59%);
-    --magenta-secondary: hsl(326 55% 41%);
+    --magenta-secondary: #641f46;
 }
 
 @layer utilities {
