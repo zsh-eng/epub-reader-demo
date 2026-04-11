@@ -60,6 +60,7 @@ export function useReaderActiveHighlight({
   chapterEntries,
   bookHighlights,
 }: UseReaderActiveHighlightOptions) {
+  // Keeps DOM-driven highlight interaction state in sync with the current spread.
   const [activeHighlight, setActiveHighlight] =
     useState<ActiveHighlightState | null>(null);
   const highlightManagerRef = useRef<HighlightInteractionManager | null>(null);

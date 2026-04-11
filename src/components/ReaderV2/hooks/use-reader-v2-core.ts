@@ -94,6 +94,7 @@ function buildSpreadConfig(columns: 1 | 2 | 3): SpreadConfig {
 export function useReaderV2Core(
   options: UseReaderV2CoreOptions,
 ): UseReaderV2CoreResult {
+  // Composes the reader's top-level state: settings, chapter sources, and pagination.
   const {
     bookId,
     viewport,

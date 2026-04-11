@@ -184,6 +184,7 @@ export function useReaderV2ChapterSources({
   addPaginationChapter,
   updatePaginationChapter,
 }: UseReaderV2ChapterSourcesOptions): UseReaderV2ChapterSourcesResult {
+  // Owns chapter HTML loading, EPUB resource cleanup, and highlight-driven source refreshes.
   const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<
     number | null
   >(null);
@@ -207,6 +208,7 @@ export function useReaderV2ChapterSources({
   highlightsBySpineItemIdRef.current = highlightsBySpineItemId;
 
   useEffect(() => {
+    // Initial load populates pagination chapter-by-chapter from storage-backed sources.
     if (!bookId || chapterEntries.length === 0) return;
 
     let cancelled = false;
@@ -294,6 +296,7 @@ export function useReaderV2ChapterSources({
   }, [bookId, chapterEntries, addPaginationChapter, initializePagination]);
 
   useEffect(() => {
+    // Highlight edits only reparse chapters whose highlighted HTML actually changed.
     if (!bookId || chapterEntries.length === 0) return;
 
     pruneRemovedChapterSources(
