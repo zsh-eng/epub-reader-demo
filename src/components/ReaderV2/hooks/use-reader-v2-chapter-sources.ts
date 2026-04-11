@@ -1,35 +1,39 @@
 import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import {
-  getBookFile,
-  getBookFilesByPaths,
-  getBookImageDimensionsMap,
-  type Book,
-  type BookFile,
+    getBookFile,
+    getBookFilesByPaths,
+    getBookImageDimensionsMap,
+    getCurrentDeviceReadingCheckpoint,
+    type Book,
+    type BookFile,
 } from "@/lib/db";
 import {
-  cleanupResourceUrls,
-  processEmbeddedResources,
+    cleanupResourceUrls,
+    processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
+import type { SpreadIntent } from "@/lib/pagination-v2";
 import { parseChapterHtml } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MutableRefObject,
-  type RefObject,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type MutableRefObject,
+    type RefObject,
 } from "react";
 import {
-  applyChapterHighlights,
-  buildHighlightSignature,
-  buildHighlightsBySpineItemId,
-  type VirtualChapterSource,
+    applyChapterHighlights,
+    buildHighlightSignature,
+    buildHighlightsBySpineItemId,
+    type VirtualChapterSource,
 } from "../highlight-virtualization";
 import type { ChapterEntry } from "../types";
 
 type ParsedChapterBlocks = ReturnType<typeof parseChapterHtml>;
+const DEFAULT_INITIAL_INTENT: SpreadIntent = { kind: "replace" };
+const RESTORE_INTENT: SpreadIntent = { kind: "restore" };
 
 interface LoadedChapterSource {
   source: VirtualChapterSource;
@@ -43,6 +47,8 @@ interface UseReaderV2ChapterSourcesOptions {
   initializePagination: (options: {
     totalChapters: number;
     initialChapterIndex: number;
+    initialChapterProgress?: number;
+    intent?: SpreadIntent;
     firstChapterBlocks: ParsedChapterBlocks;
   }) => void;
   addPaginationChapter: (
@@ -225,40 +231,59 @@ export function useReaderV2ChapterSources({
 
       try {
         clearDeferredResources();
-        const imageDimensionsByPath = await getBookImageDimensionsMap(bookId);
+        const [imageDimensionsByPath, checkpoint] = await Promise.all([
+          getBookImageDimensionsMap(bookId),
+          getCurrentDeviceReadingCheckpoint(bookId),
+        ]);
+        if (cancelled) return;
 
-        const chapterPaths = chapterEntries.map((chapter) => chapter.href);
-        const [firstChapterFile, remainingChapterFiles] = await Promise.all([
-          getBookFile(bookId, chapterEntries[0]!.href),
-          getBookFilesByPaths(bookId, chapterPaths.slice(1)),
+        const initialChapterIndex = Math.max(
+          0,
+          Math.min(
+            checkpoint?.currentSpineIndex ?? 0,
+            chapterEntries.length - 1,
+          ),
+        );
+        const initialChapter = chapterEntries[initialChapterIndex]!;
+        const remainingChapterPaths = chapterEntries
+          .filter((chapter) => chapter.index !== initialChapterIndex)
+          .map((chapter) => chapter.href);
+
+        const [initialChapterFile, remainingChapterFiles] = await Promise.all([
+          getBookFile(bookId, initialChapter.href),
+          getBookFilesByPaths(bookId, remainingChapterPaths),
         ]);
         if (cancelled) return;
 
         const firstLoadedChapter = await loadChapterSource({
-          chapterFile: firstChapterFile,
-          chapter: chapterEntries[0]!,
+          chapterFile: initialChapterFile,
+          chapter: initialChapter,
           imageDimensionsByPath,
           highlightsBySpineItemId: highlightsBySpineItemIdRef.current,
         });
         if (cancelled) return;
 
         storeLoadedChapterSource(
-          0,
+          initialChapterIndex,
           firstLoadedChapter,
           chapterSourcesRef,
           chapterHighlightSignaturesRef,
         );
         initializePagination({
           totalChapters: chapterEntries.length,
-          initialChapterIndex: 0,
+          intent: checkpoint ? RESTORE_INTENT : DEFAULT_INITIAL_INTENT,
+          initialChapterIndex,
+          initialChapterProgress: checkpoint?.scrollProgress,
           firstChapterBlocks: firstLoadedChapter.blocks,
         });
 
         for (
-          let chapterIndex = 1;
+          let chapterIndex = 0;
           chapterIndex < chapterEntries.length;
           chapterIndex++
         ) {
+          if (chapterIndex === initialChapterIndex) continue;
+
           const chapter = chapterEntries[chapterIndex]!;
           const loadedChapter = await loadChapterSource({
             chapterFile: remainingChapterFiles.get(chapter.href),
@@ -293,7 +318,12 @@ export function useReaderV2ChapterSources({
       cancelled = true;
       clearDeferredResources();
     };
-  }, [bookId, chapterEntries, addPaginationChapter, initializePagination]);
+  }, [
+    bookId,
+    chapterEntries,
+    addPaginationChapter,
+    initializePagination,
+  ]);
 
   useEffect(() => {
     // Highlight edits only reparse chapters whose highlighted HTML actually changed.

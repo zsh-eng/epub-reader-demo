@@ -2,9 +2,9 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
-  usePagination,
-  type PaginationConfig,
-  type SpreadConfig,
+    usePagination,
+    type PaginationConfig,
+    type SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
@@ -12,6 +12,7 @@ import { useCallback, useMemo, type RefObject } from "react";
 import type { ChapterEntry } from "../types";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 import { useReaderV2ChapterSources } from "./use-reader-v2-chapter-sources";
+import { useReaderV2CheckpointController } from "./use-reader-v2-checkpoint-controller";
 
 interface UseReaderV2CoreOptions {
   bookId?: string;
@@ -102,7 +103,9 @@ export function useReaderV2Core(
     paragraphSpacingFactor = DEFAULT_PARAGRAPH_SPACING,
   } = options;
   const { settings, updateSettings } = useReaderSettings();
-  const { book, isLoading: isBookLoading } = useBookLoader(bookId);
+  const { book, isLoading: isBookLoading } = useBookLoader(bookId, {
+    includeInitialProgress: false,
+  });
 
   const paginationConfig = useMemo(
     () => buildPaginationConfig(settings, paragraphSpacingFactor, viewport),
@@ -117,6 +120,11 @@ export function useReaderV2Core(
   const pagination = usePagination({
     paginationConfig,
     spreadConfig,
+  });
+
+  useReaderV2CheckpointController({
+    bookId,
+    spread: pagination.spread,
   });
 
   usePaginationKeyboardNav({

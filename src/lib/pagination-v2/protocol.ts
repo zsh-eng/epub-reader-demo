@@ -4,8 +4,8 @@ import type {
     ContentAnchor,
     PaginationConfig,
     ResolvedSpread,
-    SpreadIntent,
     SpreadConfig,
+    SpreadIntent,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -19,6 +19,7 @@ export interface InitCommand {
   spreadConfig: SpreadConfig;
   intent?: SpreadIntent;
   initialChapterIndex: number;
+  initialChapterProgress?: number;
   initialAnchor?: ContentAnchor;
   // First chapter's blocks are included so the engine is immediately live.
   firstChapterBlocks: Block[];

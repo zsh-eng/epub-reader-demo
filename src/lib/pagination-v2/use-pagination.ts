@@ -7,8 +7,8 @@ import type {
     PaginationConfig,
     PaginationStatus,
     ResolvedSpread,
-    SpreadIntent,
     SpreadConfig,
+    SpreadIntent,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
 
@@ -48,6 +48,7 @@ export interface UsePaginationResult {
   init: (options: {
     totalChapters: number;
     initialChapterIndex: number;
+    initialChapterProgress?: number;
     initialAnchor?: ContentAnchor;
     intent?: SpreadIntent;
     firstChapterBlocks: Block[];
@@ -263,6 +264,7 @@ export function usePagination(
     (opts: {
       totalChapters: number;
       initialChapterIndex: number;
+      initialChapterProgress?: number;
       initialAnchor?: ContentAnchor;
       intent?: SpreadIntent;
       firstChapterBlocks: Block[];
@@ -285,6 +287,7 @@ export function usePagination(
         paginationConfig: currentPaginationConfig,
         spreadConfig: currentSpreadConfig,
         initialChapterIndex: opts.initialChapterIndex,
+        initialChapterProgress: opts.initialChapterProgress,
         initialAnchor: opts.initialAnchor,
         firstChapterBlocks: opts.firstChapterBlocks,
       });

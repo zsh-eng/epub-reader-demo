@@ -52,6 +52,17 @@ function clamp(value: number, min: number, max: number): number {
 
 const REPLACE_INTENT: SpreadIntent = { kind: "replace" };
 
+function resolveInitialChapterPageIndex(
+  pageCount: number,
+  chapterProgress: number | undefined,
+): number {
+  if (pageCount <= 1 || chapterProgress === undefined) return 0;
+  if (!Number.isFinite(chapterProgress)) return 0;
+
+  const clampedProgress = clamp(chapterProgress, 0, 100);
+  return Math.round((clampedProgress / 100) * (pageCount - 1));
+}
+
 function resolveIntent(command: PaginationCommand): SpreadIntent {
   switch (command.type) {
     case "init":
@@ -118,6 +129,7 @@ export class PaginationEngine {
             cmd.paginationConfig,
             cmd.spreadConfig,
             cmd.initialChapterIndex,
+            cmd.initialChapterProgress,
             cmd.initialAnchor,
             cmd.firstChapterBlocks,
           );
@@ -169,6 +181,7 @@ export class PaginationEngine {
     paginationConfig: PaginationConfig,
     spreadConfig: SpreadConfig,
     initialChapterIndex: number,
+    initialChapterProgress: number | undefined,
     initialAnchor: ContentAnchor | undefined,
     firstChapterBlocks: Block[],
   ): void {
@@ -206,10 +219,16 @@ export class PaginationEngine {
         ? initialAnchor
         : pickAnchorForPage(this.pagesByChapter, this.initialChapterIndex, 0);
     } else {
+      const initialChapterPages =
+        this.pagesByChapter[this.initialChapterIndex] ?? [];
+      const initialPageIndex = resolveInitialChapterPageIndex(
+        initialChapterPages.length,
+        initialChapterProgress,
+      );
       this.anchor = pickAnchorForPage(
         this.pagesByChapter,
         this.initialChapterIndex,
-        0,
+        initialPageIndex,
       );
     }
 

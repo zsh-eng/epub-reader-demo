@@ -1,10 +1,10 @@
 import { useToast } from "@/hooks/use-toast";
 import {
-  getAllBooks,
-  getBook,
-  getReadingProgress,
-  type Book,
-  type ReadingProgress,
+    getAllBooks,
+    getBook,
+    getReadingProgress,
+    type Book,
+    type ReadingProgress,
 } from "@/lib/db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
@@ -71,7 +71,10 @@ function useBook(bookId: string | undefined) {
 /**
  * Hook for querying reading progress
  */
-function useReadingProgress(bookId: string | undefined) {
+function useReadingProgress(
+  bookId: string | undefined,
+  enabled: boolean = true,
+) {
   return useQuery({
     queryKey: bookKeys.progress(bookId ?? ""),
     queryFn: async () => {
@@ -81,7 +84,7 @@ function useReadingProgress(bookId: string | undefined) {
       const progress = await getReadingProgress(bookId);
       return progress ?? null;
     },
-    enabled: !!bookId,
+    enabled: enabled && !!bookId,
     staleTime: 1 * 60 * 1000, // Consider data fresh for 1 minute
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
     refetchOnWindowFocus: false,
@@ -99,12 +102,20 @@ function useReadingProgress(bookId: string | undefined) {
  *
  * Scroll restoration is handled separately by the useScrollTarget and useProgressPersistence hooks.
  */
-export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
+interface UseBookLoaderOptions {
+  includeInitialProgress?: boolean;
+}
+
+export function useBookLoader(
+  bookId: string | undefined,
+  options: UseBookLoaderOptions = {},
+): UseBookLoaderReturn {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { includeInitialProgress = true } = options;
 
   const bookQuery = useBook(bookId);
-  const progressQuery = useReadingProgress(bookId);
+  const progressQuery = useReadingProgress(bookId, includeInitialProgress);
 
   // Handle errors and navigation
   useEffect(() => {
@@ -132,11 +143,12 @@ export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
     }
   }, [bookId, bookQuery.error, navigate, toast]);
 
-  const isLoading = bookQuery.isLoading || progressQuery.isLoading;
+  const isLoading =
+    bookQuery.isLoading || (includeInitialProgress && progressQuery.isLoading);
 
   return {
     book: bookQuery.data ?? null,
-    initialProgress: progressQuery.data ?? null,
+    initialProgress: includeInitialProgress ? progressQuery.data ?? null : null,
     isLoading,
   };
 }
