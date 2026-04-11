@@ -4,6 +4,7 @@ import type {
     ContentAnchor,
     PaginationConfig,
     ResolvedSpread,
+    SpreadIntent,
     SpreadConfig,
 } from "./types";
 
@@ -16,6 +17,7 @@ export interface InitCommand {
   totalChapters: number;
   paginationConfig: PaginationConfig;
   spreadConfig: SpreadConfig;
+  intent?: SpreadIntent;
   initialChapterIndex: number;
   initialAnchor?: ContentAnchor;
   // First chapter's blocks are included so the engine is immediately live.
@@ -46,26 +48,31 @@ export interface UpdateSpreadConfigCommand {
 
 export interface NextSpreadCommand {
   type: "nextSpread";
+  intent: SpreadIntent;
 }
 
 export interface PrevSpreadCommand {
   type: "prevSpread";
+  intent: SpreadIntent;
 }
 
 export interface GoToPageCommand {
   type: "goToPage";
   page: number;
+  intent: SpreadIntent;
 }
 
 export interface GoToChapterCommand {
   type: "goToChapter";
   chapterIndex: number;
+  intent: SpreadIntent;
 }
 
 export interface GoToTargetCommand {
   type: "goToTarget";
   chapterIndex: number;
   targetId: string;
+  intent: SpreadIntent;
 }
 
 export type PaginationCommand =
@@ -81,7 +88,7 @@ export type PaginationCommand =
   | GoToTargetCommand;
 
 interface PaginationEventMetadata {
-  cause: PaginationCommand["type"];
+  intent: SpreadIntent;
 }
 
 // ---------------------------------------------------------------------------

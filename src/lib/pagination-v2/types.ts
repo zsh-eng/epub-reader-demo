@@ -1,4 +1,3 @@
-import type { PaginationCommand } from "./protocol";
 import type {
     FontConfig,
     LayoutTheme,
@@ -78,6 +77,32 @@ export type ContentAnchor =
       blockId: string;
     };
 
+export type SpreadIntent =
+  | {
+      kind: "linear";
+      direction: "forward" | "backward";
+    }
+  | {
+      kind: "jump";
+      source:
+        | "chapter"
+        | "toc"
+        | "search"
+        | "highlight"
+        | "internal-link"
+        | "scrubber";
+    }
+  | {
+      kind: "preview";
+      source: "scrubber";
+    }
+  | {
+      kind: "restore";
+    }
+  | {
+      kind: "replace";
+    };
+
 // ---------------------------------------------------------------------------
 // ResolvedLeafPage / ResolvedSpread — what the hook exposes and events carry.
 // All numeric fields are computed on demand by the engine; nothing is cached.
@@ -108,7 +133,7 @@ export type SpreadSlot =
 
 export interface ResolvedSpread {
   slots: ReadonlyArray<SpreadSlot>;
-  cause: PaginationCommand["type"];
+  intent: SpreadIntent;
   currentPage: number;
   totalPages: number;
   currentSpread: number;

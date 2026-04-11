@@ -44,6 +44,7 @@ export type {
     ResolvedSpread,
     SpacerSlice,
     SpreadConfig,
+    SpreadIntent,
     SpreadGapReason,
     SpreadSlot,
     TextBlock,

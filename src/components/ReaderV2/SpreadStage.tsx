@@ -21,10 +21,14 @@ interface SpreadStageProps {
 }
 
 function toNavDirection(
-  cause: ResolvedSpread["cause"] | undefined,
+  intent: ResolvedSpread["intent"] | undefined,
 ): NavDirection {
-  if (cause === "nextSpread") return "forward";
-  if (cause === "prevSpread") return "backward";
+  if (intent?.kind === "linear" && intent.direction === "forward") {
+    return "forward";
+  }
+  if (intent?.kind === "linear" && intent.direction === "backward") {
+    return "backward";
+  }
   return "instant";
 }
 
@@ -43,7 +47,7 @@ export function SpreadStage({
   paddingLeftPx,
   paddingRightPx,
 }: SpreadStageProps) {
-  const direction = toNavDirection(spread?.cause);
+  const direction = toNavDirection(spread?.intent);
 
   return (
     <MotionConfig reducedMotion="user">

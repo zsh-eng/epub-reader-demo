@@ -7,9 +7,20 @@ import type {
     PaginationConfig,
     PaginationStatus,
     ResolvedSpread,
+    SpreadIntent,
     SpreadConfig,
 } from "./types";
 import { DEFAULT_SPREAD_CONFIG } from "./types";
+
+const REPLACE_INTENT: SpreadIntent = { kind: "replace" };
+const FORWARD_LINEAR_INTENT: SpreadIntent = {
+  kind: "linear",
+  direction: "forward",
+};
+const BACKWARD_LINEAR_INTENT: SpreadIntent = {
+  kind: "linear",
+  direction: "backward",
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,14 +34,22 @@ export interface UsePaginationResult {
 
   nextSpread: () => void;
   prevSpread: () => void;
-  goToPage: (page: number) => void;
-  goToChapter: (chapterIndex: number) => void;
-  goToTarget: (chapterIndex: number, targetId: string) => void;
+  goToPage: (page: number, options: { intent: SpreadIntent }) => void;
+  goToChapter: (
+    chapterIndex: number,
+    options: { intent: SpreadIntent },
+  ) => void;
+  goToTarget: (
+    chapterIndex: number,
+    targetId: string,
+    options: { intent: SpreadIntent },
+  ) => void;
 
   init: (options: {
     totalChapters: number;
     initialChapterIndex: number;
     initialAnchor?: ContentAnchor;
+    intent?: SpreadIntent;
     firstChapterBlocks: Block[];
   }) => void;
   /** Called by the shell once per chapter after HTML processing is complete. */
@@ -140,7 +159,7 @@ export function usePagination(
           prev
             ? {
                 ...prev,
-                cause: event.cause,
+                intent: event.intent,
                 currentPage: event.currentPage,
                 totalPages: event.totalPages,
                 currentSpread: event.currentSpread,
@@ -245,6 +264,7 @@ export function usePagination(
       totalChapters: number;
       initialChapterIndex: number;
       initialAnchor?: ContentAnchor;
+      intent?: SpreadIntent;
       firstChapterBlocks: Block[];
     }) => {
       const currentPaginationConfig = paginationConfigRef.current;
@@ -260,6 +280,7 @@ export function usePagination(
 
       postCommand({
         type: "init",
+        intent: opts.intent ?? REPLACE_INTENT,
         totalChapters: opts.totalChapters,
         paginationConfig: currentPaginationConfig,
         spreadConfig: currentSpreadConfig,
@@ -288,36 +309,46 @@ export function usePagination(
   );
 
   const nextSpread = useCallback(() => {
-    postCommand({ type: "nextSpread" });
+    postCommand({ type: "nextSpread", intent: FORWARD_LINEAR_INTENT });
   }, [postCommand]);
 
   const prevSpread = useCallback(() => {
-    postCommand({ type: "prevSpread" });
+    postCommand({ type: "prevSpread", intent: BACKWARD_LINEAR_INTENT });
   }, [postCommand]);
 
   const goToPage = useCallback(
-    (p: number) => {
-      postCommand({ type: "goToPage", page: Math.max(1, Math.floor(p)) });
+    (p: number, options: { intent: SpreadIntent }) => {
+      postCommand({
+        type: "goToPage",
+        page: Math.max(1, Math.floor(p)),
+        intent: options.intent,
+      });
     },
     [postCommand],
   );
 
   const goToChapter = useCallback(
-    (chapterIndex: number) => {
+    (chapterIndex: number, options: { intent: SpreadIntent }) => {
       postCommand({
         type: "goToChapter",
         chapterIndex: Math.floor(chapterIndex),
+        intent: options.intent,
       });
     },
     [postCommand],
   );
 
   const goToTarget = useCallback(
-    (chapterIndex: number, targetId: string) => {
+    (
+      chapterIndex: number,
+      targetId: string,
+      options: { intent: SpreadIntent },
+    ) => {
       postCommand({
         type: "goToTarget",
         chapterIndex: Math.floor(chapterIndex),
         targetId,
+        intent: options.intent,
       });
     },
     [postCommand],

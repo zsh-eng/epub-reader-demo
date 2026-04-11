@@ -183,14 +183,47 @@ export function ReaderV2() {
   );
 
   const onPrevChapter = useCallback(() => {
-    if (currentChapterIndex > 0)
-      pagination.goToChapter(currentChapterIndex - 1);
+    if (currentChapterIndex > 0) {
+      pagination.goToChapter(currentChapterIndex - 1, {
+        intent: { kind: "jump", source: "chapter" },
+      });
+    }
   }, [currentChapterIndex, pagination]);
 
   const onNextChapter = useCallback(() => {
-    if (currentChapterIndex < chapterEntries.length - 1)
-      pagination.goToChapter(currentChapterIndex + 1);
+    if (currentChapterIndex < chapterEntries.length - 1) {
+      pagination.goToChapter(currentChapterIndex + 1, {
+        intent: { kind: "jump", source: "chapter" },
+      });
+    }
   }, [currentChapterIndex, chapterEntries.length, pagination]);
+
+  const onScrubPreview = useCallback(
+    (page: number) => {
+      pagination.goToPage(page, {
+        intent: { kind: "preview", source: "scrubber" },
+      });
+    },
+    [pagination],
+  );
+
+  const onScrubCommit = useCallback(
+    (page: number) => {
+      pagination.goToPage(page, {
+        intent: { kind: "jump", source: "scrubber" },
+      });
+    },
+    [pagination],
+  );
+
+  const onGoToChapter = useCallback(
+    (chapterIndex: number) => {
+      pagination.goToChapter(chapterIndex, {
+        intent: { kind: "jump", source: "chapter" },
+      });
+    },
+    [pagination],
+  );
 
   const onPageContentClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -215,11 +248,14 @@ export function ReaderV2() {
         pagination.goToTarget(
           resolvedTarget.chapterIndex,
           resolvedTarget.targetId,
+          { intent: { kind: "jump", source: "internal-link" } },
         );
         return;
       }
 
-      pagination.goToChapter(resolvedTarget.chapterIndex);
+      pagination.goToChapter(resolvedTarget.chapterIndex, {
+        intent: { kind: "jump", source: "internal-link" },
+      });
     },
     [chapterIndexByHrefPath, pagination],
   );
@@ -312,8 +348,9 @@ export function ReaderV2() {
             currentChapterIndex={currentChapterIndex}
             chapterEntries={chapterEntries}
             chapterStartPages={chapterStartPages}
-            onGoToPage={pagination.goToPage}
-            onGoToChapter={pagination.goToChapter}
+            onScrubPreview={onScrubPreview}
+            onScrubCommit={onScrubCommit}
+            onGoToChapter={onGoToChapter}
             onPrevChapter={onPrevChapter}
             onNextChapter={onNextChapter}
           />

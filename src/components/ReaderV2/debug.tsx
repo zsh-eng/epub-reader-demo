@@ -75,8 +75,14 @@ export function ReaderV2Debug() {
     currentPage,
     totalPages,
     paginationStatus: pagination.status,
-    onGoToPage: pagination.goToPage,
-    onGoToChapterIndex: pagination.goToChapter,
+    onGoToPage: (page: number) =>
+      pagination.goToPage(page, {
+        intent: { kind: "jump", source: "scrubber" },
+      }),
+    onGoToChapterIndex: (chapterIndex: number) =>
+      pagination.goToChapter(chapterIndex, {
+        intent: { kind: "jump", source: "chapter" },
+      }),
     onNextSpread: pagination.nextSpread,
     onPrevSpread: pagination.prevSpread,
     chapterEntries,

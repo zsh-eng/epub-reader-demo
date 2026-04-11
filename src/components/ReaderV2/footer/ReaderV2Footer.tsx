@@ -29,7 +29,8 @@ export interface ReaderV2FooterProps {
   currentChapterIndex: number;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
-  onGoToPage: (page: number) => void;
+  onScrubPreview: (page: number) => void;
+  onScrubCommit: (page: number) => void;
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
@@ -42,7 +43,8 @@ export function ReaderV2Footer({
   currentChapterIndex,
   chapterEntries,
   chapterStartPages,
-  onGoToPage,
+  onScrubPreview,
+  onScrubCommit,
   onGoToChapter,
   onPrevChapter,
   onNextChapter,
@@ -114,8 +116,8 @@ export function ReaderV2Footer({
                 currentPage={currentPage}
                 totalPages={totalPages}
                 chapterStartPages={chapterStartPages}
-                onScrubCommit={onGoToPage}
-                onScrubPreview={onGoToPage}
+                onScrubCommit={onScrubCommit}
+                onScrubPreview={onScrubPreview}
                 cancelMomentumSignal={cancelMomentumSignal}
               />
             </div>

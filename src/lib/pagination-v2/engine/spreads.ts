@@ -1,6 +1,5 @@
 // Spread helpers for the pagination engine: project laid-out pages into
 // spreads and resolve spread-level navigation and serialization details.
-import type { PaginationCommand } from "../protocol";
 import type { Page } from "../shared/types";
 import type {
   ContentAnchor,
@@ -8,6 +7,7 @@ import type {
   ResolvedSpread,
   SpreadConfig,
   SpreadGapReason,
+  SpreadIntent,
 } from "../types";
 import { pickAnchorForPage, resolveAnchorToGlobalPage } from "./anchors";
 
@@ -156,7 +156,7 @@ function buildSpreadProjection(
 }
 
 export function buildResolvedSpread(
-  cause: PaginationCommand["type"],
+  intent: SpreadIntent,
   state: SpreadComputationState,
 ): ResolvedSpread | null {
   const anchorGlobalPage = resolveAnchorToGlobalPage(
@@ -200,7 +200,7 @@ export function buildResolvedSpread(
 
   return {
     slots,
-    cause,
+    intent,
     currentPage: firstVisiblePage,
     totalPages: state.totalPages,
     currentSpread: spreadIndex + 1,
