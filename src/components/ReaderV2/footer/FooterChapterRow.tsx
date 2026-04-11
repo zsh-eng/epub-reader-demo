@@ -1,4 +1,4 @@
-import type { ChapterEntry } from "@/components/ReaderV2/hooks/use-reader-v2-core";
+import type { ChapterEntry } from "@/components/ReaderV2/types";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 

@@ -18,7 +18,7 @@ import {
   useState,
   type RefObject,
 } from "react";
-import type { ChapterEntry } from "./use-reader-v2-core";
+import type { ChapterEntry } from "../types";
 
 export interface ActiveHighlightState {
   id: string;
