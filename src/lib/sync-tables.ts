@@ -28,6 +28,17 @@ export const SYNC_TABLES = {
     entityKey: "bookId", // For scoped sync by book
   } satisfies SyncTableDef,
 
+  readingCheckpoints: {
+    primaryKey: "id",
+    indices: ["bookId", "deviceId", "lastRead"],
+    compoundIndices: [
+      ["bookId", "deviceId"],
+      ["bookId", "lastRead"],
+      ["bookId", "_hlc"],
+    ],
+    entityKey: "bookId",
+  } satisfies SyncTableDef,
+
   highlights: {
     primaryKey: "id",
     indices: ["bookId", "spineItemId", "createdAt"],

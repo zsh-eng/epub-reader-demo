@@ -9,13 +9,14 @@
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
 import { extractImageDimensionsFromBlob } from "@/lib/image-dimensions";
-import { isNotDeleted } from "@/lib/sync/hlc/middleware";
+import { isNotDeleted, markAsRemoteWrite } from "@/lib/sync/hlc/middleware";
 import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
 import type { Note } from "@/types/note";
 import type { ReadingState } from "@/types/reading-state";
 import Dexie, { type Table } from "dexie";
+import { getOrCreateDeviceId } from "./device";
 import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
 
 // ============================================================================
@@ -75,7 +76,7 @@ export interface ReadingProgress {
   id: string; // Primary key (auto-generated UUID)
   bookId: string; // Foreign key to Book
   currentSpineIndex: number; // Current position in spine
-  scrollProgress: number; // 0-1 for scroll mode
+  scrollProgress: number; // Legacy data may be either 0-1 fraction or 0-100 percentage
   pageNumber?: number; // For paginated mode
   lastRead: number; // Timestamp when this progress was recorded
   createdAt: number; // When this record was created
@@ -83,6 +84,15 @@ export interface ReadingProgress {
   triggerType?: ProgressTriggerType;
   /** Fragment or highlight ID for precise scroll restoration */
   targetElementId?: string;
+}
+
+export interface ReadingCheckpoint {
+  id: string; // Stable primary key: `resume:${deviceId}:${bookId}`
+  bookId: string; // Foreign key to Book
+  deviceId: string; // Device that owns this checkpoint
+  currentSpineIndex: number; // Current chapter/spine index
+  scrollProgress: number; // Chapter-local percentage in the range 0-100
+  lastRead: number; // Timestamp when this checkpoint was last updated
 }
 
 export interface ReadingSettings {
@@ -150,6 +160,7 @@ export interface BookImageDimension {
 // Add sync metadata to synced types
 export type SyncedBook = WithSyncMetadata<Book>;
 export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
+export type SyncedReadingCheckpoint = WithSyncMetadata<ReadingCheckpoint>;
 export type SyncedHighlight = WithSyncMetadata<Highlight>;
 export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
 export type SyncedReadingState = WithSyncMetadata<ReadingState>;
@@ -245,6 +256,7 @@ class EPUBReaderDB extends Dexie {
   // Synced tables (with metadata)
   books!: Table<SyncedBook, string>;
   readingProgress!: Table<SyncedReadingProgress, string>;
+  readingCheckpoints!: Table<SyncedReadingCheckpoint, string>;
   highlights!: Table<SyncedHighlight, string>;
   readingSettings!: Table<SyncedReadingSettings, string>;
   readingState!: Table<SyncedReadingState, string>;
@@ -344,11 +356,106 @@ class EPUBReaderDB extends Dexie {
         await tx.table("bookImageDimensions").bulkPut(rows);
       });
 
+    // Version 8: Add per-device reading checkpoints seeded from legacy readingProgress
+    this.version(8)
+      .stores({
+        ...syncSchemas,
+        ...LOCAL_TABLES,
+      })
+      .upgrade(async (tx) => {
+        const checkpointTable = tx.table(
+          "readingCheckpoints",
+        ) as Table<SyncedReadingCheckpoint, string>;
+        const existingCount = await checkpointTable.count();
+        if (existingCount > 0) return;
+
+        const progressRecords = (await tx
+          .table("readingProgress")
+          .toArray()) as SyncedReadingProgress[];
+        if (progressRecords.length === 0) return;
+
+        const latestByCheckpointId = new Map<string, SyncedReadingProgress>();
+
+        for (const record of progressRecords) {
+          if (!isNotDeleted(record)) continue;
+          if (!record.bookId || !record._deviceId) continue;
+
+          const checkpointId = createReadingCheckpointId(
+            record.bookId,
+            record._deviceId,
+          );
+          const existing = latestByCheckpointId.get(checkpointId);
+
+          if (!existing || isLegacyProgressNewer(record, existing)) {
+            latestByCheckpointId.set(checkpointId, record);
+          }
+        }
+
+        if (latestByCheckpointId.size === 0) return;
+
+        const checkpoints = Array.from(latestByCheckpointId.values()).map(
+          (record) =>
+            markAsRemoteWrite({
+              id: createReadingCheckpointId(record.bookId, record._deviceId),
+              bookId: record.bookId,
+              deviceId: record._deviceId,
+              currentSpineIndex: record.currentSpineIndex,
+              scrollProgress: normalizeCheckpointScrollProgress(
+                record.scrollProgress,
+              ),
+              lastRead: record.lastRead,
+              _hlc: record._hlc,
+              _deviceId: record._deviceId,
+              _serverTimestamp: record._serverTimestamp,
+              _isDeleted: 0,
+            }) as SyncedReadingCheckpoint,
+        );
+
+        await checkpointTable.bulkPut(checkpoints);
+      });
+
     // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
 }
 
 export const db = new EPUBReaderDB();
+
+export function createReadingCheckpointId(
+  bookId: string,
+  deviceId: string,
+): string {
+  return `resume:${deviceId}:${bookId}`;
+}
+
+function clampPercentage(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function normalizeCheckpointScrollProgress(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+
+  // Legacy readingProgress rows may still store fractional 0-1 values.
+  if (value >= 0 && value <= 1) {
+    return clampPercentage(value * 100);
+  }
+
+  return clampPercentage(value);
+}
+
+function isLegacyProgressNewer(
+  candidate: SyncedReadingProgress,
+  current: SyncedReadingProgress,
+): boolean {
+  if (candidate.lastRead !== current.lastRead) {
+    return candidate.lastRead > current.lastRead;
+  }
+
+  if (candidate.createdAt !== current.createdAt) {
+    return candidate.createdAt > current.createdAt;
+  }
+
+  return candidate._hlc > current._hlc;
+}
 
 // ============================================================================
 // Helper Functions (Book operations)
@@ -547,6 +654,50 @@ export async function getReadingProgressHistory(
   // Reverse to get newest first (descending order by lastRead)
   const reversed = results.reverse();
   return limit ? reversed.slice(0, limit) : reversed;
+}
+
+// ============================================================================
+// Helper Functions (Reading Checkpoints)
+// ============================================================================
+
+export async function getReadingCheckpointForDevice(
+  bookId: string,
+  deviceId: string,
+): Promise<SyncedReadingCheckpoint | undefined> {
+  const checkpoint = await db.readingCheckpoints.get(
+    createReadingCheckpointId(bookId, deviceId),
+  );
+  return checkpoint && isNotDeleted(checkpoint) ? checkpoint : undefined;
+}
+
+export async function getCurrentDeviceReadingCheckpoint(
+  bookId: string,
+): Promise<SyncedReadingCheckpoint | undefined> {
+  return getReadingCheckpointForDevice(bookId, getOrCreateDeviceId());
+}
+
+export async function upsertReadingCheckpoint(
+  checkpoint: Omit<ReadingCheckpoint, "id">,
+): Promise<string> {
+  const normalizedCheckpoint: ReadingCheckpoint = {
+    ...checkpoint,
+    id: createReadingCheckpointId(checkpoint.bookId, checkpoint.deviceId),
+    scrollProgress: normalizeCheckpointScrollProgress(
+      checkpoint.scrollProgress,
+    ),
+  };
+
+  await db.readingCheckpoints.put(normalizedCheckpoint as SyncedReadingCheckpoint);
+  return normalizedCheckpoint.id;
+}
+
+export async function upsertCurrentDeviceReadingCheckpoint(
+  checkpoint: Omit<ReadingCheckpoint, "id" | "deviceId">,
+): Promise<string> {
+  return upsertReadingCheckpoint({
+    ...checkpoint,
+    deviceId: getOrCreateDeviceId(),
+  });
 }
 
 // ============================================================================

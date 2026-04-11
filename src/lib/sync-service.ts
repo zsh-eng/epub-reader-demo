@@ -301,6 +301,8 @@ class SyncService {
       this.queryClient.invalidateQueries({ queryKey: ["books"] }),
       this.queryClient.invalidateQueries({ queryKey: ["book"] }),
       this.queryClient.invalidateQueries({ queryKey: ["readingProgress"] }),
+      this.queryClient.invalidateQueries({ queryKey: ["readingCheckpoint"] }),
+      this.queryClient.invalidateQueries({ queryKey: ["readingCheckpoints"] }),
       this.queryClient.invalidateQueries({ queryKey: ["highlights"] }),
       this.queryClient.invalidateQueries({ queryKey: ["readingSettings"] }),
     ]);
