@@ -1,32 +1,18 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import {
-  EPUB_HIGHLIGHT_ACTIVE_CLASS,
-  EPUB_HIGHLIGHT_CLASS,
-  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
-} from "@/types/reader.types";
-import {
-  createHighlightInteractionManager,
-  type HighlightInteractionManager,
-} from "@zsh-eng/text-highlighter";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HighlightToolbarContainer } from "../Reader/HighlightToolbarContainer";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
+import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 import { DebugSection } from "./shared/DebugSection";
 import { InspectorDrawer } from "./shared/InspectorDrawer";
 import { InspectorPanel } from "./shared/InspectorPanel";
-
-interface ActiveHighlightState {
-  id: string;
-  position: { x: number; y: number };
-}
 
 export function ReaderV2Debug() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -37,10 +23,7 @@ export function ReaderV2Debug() {
   const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(1.2);
   const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
-  const [activeHighlight, setActiveHighlight] =
-    useState<ActiveHighlightState | null>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
-  const highlightManagerRef = useRef<HighlightInteractionManager | null>(null);
 
   const { viewport, setViewport, viewportAutoMode, setViewportAutoMode } =
     useReaderViewport({ isMobile, isPanelOpen });
@@ -67,74 +50,13 @@ export function ReaderV2Debug() {
     paragraphSpacingFactor,
   });
 
-  const visibleSpineItemIds = useMemo(() => {
-    if (!pagination.spread) return new Set<string>();
-
-    const ids = new Set<string>();
-    const start = pagination.spread.chapterIndexStart;
-    const end = pagination.spread.chapterIndexEnd;
-    if (start === null || end === null) return ids;
-
-    for (let chapterIndex = start; chapterIndex <= end; chapterIndex++) {
-      const chapter = chapterEntries[chapterIndex];
-      if (!chapter) continue;
-      ids.add(chapter.spineItemId);
-    }
-    return ids;
-  }, [chapterEntries, pagination.spread]);
-
-  const visibleHighlights = useMemo(
-    () =>
-      bookHighlights.filter((highlight) =>
-        visibleSpineItemIds.has(highlight.spineItemId),
-      ),
-    [bookHighlights, visibleSpineItemIds],
-  );
-
-  useEffect(() => {
-    const container = stageContentRef.current;
-    if (!container) return;
-
-    const manager = createHighlightInteractionManager(container, {
-      highlightClass: EPUB_HIGHLIGHT_CLASS,
-      idAttribute: EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-      hoverClass: EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
-      activeClass: EPUB_HIGHLIGHT_ACTIVE_CLASS,
-      onHighlightClick: (id, position) => {
-        setActiveHighlight((prev) =>
-          prev?.id === id ? null : { id, position },
-        );
-      },
+  const { activeHighlight, activeHighlightData, clearActiveHighlight } =
+    useReaderActiveHighlight({
+      spread: pagination.spread,
+      stageContentRef,
+      chapterEntries,
+      bookHighlights,
     });
-
-    highlightManagerRef.current = manager;
-    return () => {
-      manager.destroy();
-      if (highlightManagerRef.current === manager) {
-        highlightManagerRef.current = null;
-      }
-    };
-  }, [pagination.spread]);
-
-  useEffect(() => {
-    highlightManagerRef.current?.setActiveHighlight(
-      activeHighlight?.id ?? null,
-    );
-  }, [activeHighlight, pagination.spread]);
-
-  useEffect(() => {
-    if (!activeHighlight) return;
-    const stillVisible = visibleHighlights.some(
-      (highlight) => highlight.id === activeHighlight.id,
-    );
-    if (!stillVisible) setActiveHighlight(null);
-  }, [activeHighlight, visibleHighlights]);
-
-  const activeHighlightData = activeHighlight
-    ? (bookHighlights.find(
-        (highlight) => highlight.id === activeHighlight.id,
-      ) ?? null)
-    : null;
 
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner />;
@@ -277,7 +199,7 @@ export function ReaderV2Debug() {
         }}
         onCreateClose={() => {}}
         activeHighlight={activeHighlight}
-        onEditClose={() => setActiveHighlight(null)}
+        onEditClose={clearActiveHighlight}
         isNavVisible={isMobile}
         onCreateNoteSubmit={undefined}
       />

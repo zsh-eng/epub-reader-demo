@@ -2,16 +2,6 @@ import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarC
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isExternalHref, splitHrefFragment } from "@/lib/epub-resource-utils";
 import {
-    EPUB_HIGHLIGHT_ACTIVE_CLASS,
-    EPUB_HIGHLIGHT_CLASS,
-    EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-    EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
-} from "@/types/reader.types";
-import {
-    createHighlightInteractionManager,
-    type HighlightInteractionManager,
-} from "@zsh-eng/text-highlighter";
-import {
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -29,6 +19,7 @@ import { ReaderStateScreen } from "./ReaderStateScreen";
 import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
+import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { resolvePaginatedLinkTarget } from "./link-navigation";
 
@@ -60,11 +51,6 @@ interface ReaderViewport {
   paddingX: number;
   paddingTop: number;
   paddingBottom: number;
-}
-
-interface ActiveHighlightState {
-  id: string;
-  position: { x: number; y: number };
 }
 
 function computeViewport(
@@ -117,7 +103,6 @@ export function ReaderV2() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
-  const highlightManagerRef = useRef<HighlightInteractionManager | null>(null);
   const [viewport, setViewport] = useState<ReaderViewport>({
     width: 620,
     height: 860,
@@ -125,8 +110,6 @@ export function ReaderV2() {
     paddingTop: PADDING_TOP,
     paddingBottom: PADDING_BOTTOM,
   });
-  const [activeHighlight, setActiveHighlight] =
-    useState<ActiveHighlightState | null>(null);
 
   const effectiveSpreadColumns: 1 | 2 = isMobile ? 1 : spreadColumns;
 
@@ -151,35 +134,13 @@ export function ReaderV2() {
     spreadColumns: effectiveSpreadColumns,
   });
 
-  const visibleSpineItemIds = useMemo(() => {
-    if (!pagination.spread) return new Set<string>();
-
-    const ids = new Set<string>();
-    const start = pagination.spread.chapterIndexStart;
-    const end = pagination.spread.chapterIndexEnd;
-    if (start === null || end === null) return ids;
-
-    for (let chapterIndex = start; chapterIndex <= end; chapterIndex++) {
-      const chapterEntry = chapterEntries[chapterIndex];
-      if (!chapterEntry) continue;
-      ids.add(chapterEntry.spineItemId);
-    }
-    return ids;
-  }, [chapterEntries, pagination.spread]);
-
-  const visibleHighlights = useMemo(
-    () =>
-      bookHighlights.filter((highlight) =>
-        visibleSpineItemIds.has(highlight.spineItemId),
-      ),
-    [bookHighlights, visibleSpineItemIds],
-  );
-
-  const activeHighlightData = activeHighlight
-    ? (bookHighlights.find(
-        (highlight) => highlight.id === activeHighlight.id,
-      ) ?? null)
-    : null;
+  const { activeHighlight, activeHighlightData, clearActiveHighlight } =
+    useReaderActiveHighlight({
+      spread: pagination.spread,
+      stageContentRef,
+      chapterEntries,
+      bookHighlights,
+    });
 
   const chapterIndexByHrefPath = useMemo(() => {
     const hrefMap = new Map<string, number>();
@@ -188,45 +149,6 @@ export function ReaderV2() {
     }
     return hrefMap;
   }, [chapterEntries]);
-
-  useEffect(() => {
-    const container = stageContentRef.current;
-    if (!container) return;
-
-    const manager = createHighlightInteractionManager(container, {
-      highlightClass: EPUB_HIGHLIGHT_CLASS,
-      idAttribute: EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-      hoverClass: EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
-      activeClass: EPUB_HIGHLIGHT_ACTIVE_CLASS,
-      onHighlightClick: (id, position) => {
-        setActiveHighlight((prev) =>
-          prev?.id === id ? null : { id, position },
-        );
-      },
-    });
-
-    highlightManagerRef.current = manager;
-    return () => {
-      manager.destroy();
-      if (highlightManagerRef.current === manager) {
-        highlightManagerRef.current = null;
-      }
-    };
-  }, [pagination.spread]);
-
-  useEffect(() => {
-    highlightManagerRef.current?.setActiveHighlight(
-      activeHighlight?.id ?? null,
-    );
-  }, [activeHighlight, pagination.spread]);
-
-  useEffect(() => {
-    if (!activeHighlight) return;
-    const stillVisible = visibleHighlights.some(
-      (highlight) => highlight.id === activeHighlight.id,
-    );
-    if (!stillVisible) setActiveHighlight(null);
-  }, [activeHighlight, visibleHighlights]);
 
   useLayoutEffect(() => {
     const stageSlot = stageSlotRef.current;
@@ -407,7 +329,7 @@ export function ReaderV2() {
             }}
             onCreateClose={() => {}}
             activeHighlight={activeHighlight}
-            onEditClose={() => setActiveHighlight(null)}
+            onEditClose={clearActiveHighlight}
             isNavVisible={chromeVisible}
             onCreateNoteSubmit={undefined}
           />
