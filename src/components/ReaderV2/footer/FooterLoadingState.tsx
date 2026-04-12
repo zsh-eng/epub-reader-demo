@@ -39,7 +39,7 @@ export function FooterScrubberLoading() {
       >
         <div
           className="absolute left-1/2 w-[2px] -translate-x-1/2 rounded-full bg-foreground/90"
-          style={{ top: 1, height: 6 }}
+          style={{ top: -1, height: 8 }}
         />
 
         <motion.div
