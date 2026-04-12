@@ -1,7 +1,8 @@
 import type { ChapterEntry } from "@/components/ReaderV2/types";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
+import { FooterScrubberLoading } from "./FooterLoadingState";
 import { FooterPageIndicator } from "./FooterPageIndicator";
 import { FooterScrubberCanvas } from "./FooterScrubberCanvas";
 
@@ -34,6 +35,7 @@ export interface ReaderV2FooterProps {
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
   onNextChapter: () => void;
+  isLoading?: boolean;
 }
 
 export function ReaderV2Footer({
@@ -48,8 +50,15 @@ export function ReaderV2Footer({
   onGoToChapter,
   onPrevChapter,
   onNextChapter,
+  isLoading = false,
 }: ReaderV2FooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
+  const prevIsLoadingRef = useRef(isLoading);
+  const animateReadyTransition = prevIsLoadingRef.current && !isLoading;
+
+  useEffect(() => {
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const interruptScrubberMomentum = useCallback(() => {
     setCancelMomentumSignal((signal) => signal + 1);
@@ -110,20 +119,89 @@ export function ReaderV2Footer({
               onGoToChapter={handleGoToChapter}
               onPrevChapter={handlePrevChapter}
               onNextChapter={handleNextChapter}
+              isLoading={isLoading}
+              animateReadyDetails={animateReadyTransition}
             />
             <div className="px-1">
-              <FooterScrubberCanvas
-                currentPage={currentPage}
-                totalPages={totalPages}
-                chapterStartPages={chapterStartPages}
-                onScrubCommit={onScrubCommit}
-                onScrubPreview={onScrubPreview}
-                cancelMomentumSignal={cancelMomentumSignal}
-              />
+              <div className="relative h-14">
+                <AnimatePresence>
+                  {isLoading ? (
+                    <motion.div
+                      key="loading"
+                      className="absolute inset-0"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0, filter: "blur(6px)" }}
+                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <FooterScrubberLoading />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="ready"
+                      className="absolute inset-0"
+                      initial={
+                        animateReadyTransition
+                          ? {
+                              opacity: 0,
+                              filter: "blur(8px)",
+                              clipPath: "inset(0 50% 0 50%)",
+                            }
+                          : false
+                      }
+                      animate={{
+                        opacity: 1,
+                        filter: "blur(0px)",
+                        clipPath: "inset(0 0% 0 0%)",
+                      }}
+                      exit={{ opacity: 0, filter: "blur(4px)" }}
+                      transition={
+                        animateReadyTransition
+                          ? {
+                              opacity: {
+                                duration: 0.22,
+                                ease: [0.22, 1, 0.36, 1],
+                              },
+                              filter: {
+                                duration: 0.22,
+                                ease: [0.22, 1, 0.36, 1],
+                              },
+                              clipPath: {
+                                duration: 0.46,
+                                ease: [0.22, 1, 0.36, 1],
+                              },
+                            }
+                          : undefined
+                      }
+                    >
+                      <motion.div
+                        initial={animateReadyTransition ? { opacity: 0.72 } : false}
+                        animate={{ opacity: 1 }}
+                        transition={
+                          animateReadyTransition
+                            ? { duration: 0.18 }
+                            : undefined
+                        }
+                      >
+                        <FooterScrubberCanvas
+                          currentPage={currentPage}
+                          totalPages={totalPages}
+                          chapterStartPages={chapterStartPages}
+                          onScrubCommit={onScrubCommit}
+                          onScrubPreview={onScrubPreview}
+                          cancelMomentumSignal={cancelMomentumSignal}
+                        />
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
             <FooterPageIndicator
               currentPage={currentPage}
               totalPages={totalPages}
+              isLoading={isLoading}
+              animateReadyDetails={animateReadyTransition}
             />
           </div>
         </motion.div>

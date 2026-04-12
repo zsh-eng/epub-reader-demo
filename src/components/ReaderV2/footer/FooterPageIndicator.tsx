@@ -1,16 +1,43 @@
 import { AnimatedNumber } from "@/components/ui/animated-number";
+import { motion } from "motion/react";
+import { FOOTER_READY_DETAIL_DELAY } from "./FooterLoadingState";
 
 interface FooterPageIndicatorProps {
   currentPage: number;
   totalPages: number;
+  isLoading?: boolean;
+  animateReadyDetails?: boolean;
 }
 
 export function FooterPageIndicator({
   currentPage,
   totalPages,
+  isLoading = false,
+  animateReadyDetails = false,
 }: FooterPageIndicatorProps) {
+  if (isLoading) {
+    return <div aria-hidden="true" className="h-[18px] pb-1 pt-0.5" />;
+  }
+
   return (
-    <div className="flex items-center justify-center pb-1 pt-0.5">
+    <motion.div
+      className="flex items-center justify-center pb-1 pt-0.5"
+      initial={
+        animateReadyDetails
+          ? { opacity: 0, y: 4, filter: "blur(4px)" }
+          : false
+      }
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={
+        animateReadyDetails
+          ? {
+              duration: 0.24,
+              delay: FOOTER_READY_DETAIL_DELAY,
+              ease: [0.22, 1, 0.36, 1],
+            }
+          : undefined
+      }
+    >
       {/* Sadly we can't use DM Sans here as it doesn't support tabular-nums
         See: https://github.com/googlefonts/dm-fonts/issues/25 */}
       <span className="text-[10px] font-numeric font-medium uppercase tracking-[0.14em] text-muted-foreground tabular-nums">
@@ -24,6 +51,6 @@ export function FooterPageIndicator({
         {" of "}
         {totalPages > 0 ? totalPages : "—"}
       </span>
-    </div>
+    </motion.div>
   );
 }
