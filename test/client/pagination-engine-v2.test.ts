@@ -8,6 +8,7 @@ import type {
     PaginationConfig,
     ResolvedSpread,
     SpreadConfig,
+    SpreadIntent,
 } from "@/lib/pagination-v2/types";
 import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import { describe, expect, it } from "vitest";
@@ -41,6 +42,28 @@ const BASE_PAGINATION_CONFIG: PaginationConfig = {
 const BASE_SPREAD_CONFIG: SpreadConfig = {
   columns: 1,
   chapterFlow: "continuous",
+};
+
+const REPLACE_INTENT: SpreadIntent = { kind: "replace" };
+const FORWARD_LINEAR_INTENT: SpreadIntent = {
+  kind: "linear",
+  direction: "forward",
+};
+const BACKWARD_LINEAR_INTENT: SpreadIntent = {
+  kind: "linear",
+  direction: "backward",
+};
+const CHAPTER_JUMP_INTENT: SpreadIntent = {
+  kind: "jump",
+  source: "chapter",
+};
+const SCRUBBER_JUMP_INTENT: SpreadIntent = {
+  kind: "jump",
+  source: "scrubber",
+};
+const INTERNAL_LINK_JUMP_INTENT: SpreadIntent = {
+  kind: "jump",
+  source: "internal-link",
 };
 
 function makeSpacerBlocks(chapterIndex: number): Block[] {
@@ -279,9 +302,9 @@ describe("init + addChapter lifecycle", () => {
 
     const partial = events.find((e) => e.type === "partialReady");
     expect(partial?.type).toBe("partialReady");
-    expect(partial?.cause).toBe("init");
+    expect(partial?.intent).toEqual(REPLACE_INTENT);
     if (partial?.type === "partialReady") {
-      expect(partial.spread.cause).toBe("init");
+      expect(partial.spread.intent).toEqual(REPLACE_INTENT);
     }
   });
 
@@ -291,8 +314,8 @@ describe("init + addChapter lifecycle", () => {
     expect(countEvents(events, "partialReady")).toBe(0);
 
     const ready = getReadyEvent(events);
-    expect(ready?.cause).toBe("init");
-    expect(ready?.spread.cause).toBe("init");
+    expect(ready?.intent).toEqual(REPLACE_INTENT);
+    expect(ready?.spread.intent).toEqual(REPLACE_INTENT);
   });
 
   it("transitions from partial to ready once all chapters are added", () => {
@@ -303,8 +326,8 @@ describe("init + addChapter lifecycle", () => {
     expect(countEvents(events, "ready")).toBe(1);
     const ready = getLastEventOfType(events, "ready");
     expect(ready).toBeDefined();
-    expect(ready?.cause).toBe("addChapter");
-    expect(ready?.spread.cause).toBe("addChapter");
+    expect(ready?.intent).toEqual(REPLACE_INTENT);
+    expect(ready?.spread.intent).toEqual(REPLACE_INTENT);
   });
 
   it("emits progress with both leaf and spread counters", () => {
@@ -318,7 +341,7 @@ describe("init + addChapter lifecycle", () => {
     );
 
     expect(progress).toBeDefined();
-    expect(progress?.cause).toBe("addChapter");
+    expect(progress?.intent).toEqual(REPLACE_INTENT);
     expect(progress!.currentPage).toBeGreaterThanOrEqual(1);
     expect(progress!.totalPages).toBeGreaterThanOrEqual(progress!.currentPage);
     expect(progress!.currentSpread).toBeGreaterThanOrEqual(1);
@@ -335,9 +358,9 @@ describe("init + addChapter lifecycle", () => {
     );
 
     expect(partial).toBeDefined();
-    expect(partial?.cause).toBe("init");
+    expect(partial?.intent).toEqual(REPLACE_INTENT);
     expect(partial!.spread.slots.length).toBe(1);
-    expect(partial!.spread.cause).toBe("init");
+    expect(partial!.spread.intent).toEqual(REPLACE_INTENT);
     expect(partial!.spread.currentPage).toBeGreaterThanOrEqual(1);
     expect(partial!.spread.totalPages).toBeGreaterThanOrEqual(1);
   });
@@ -350,24 +373,27 @@ describe("init + addChapter lifecycle", () => {
     expect(events.length).toBe(eventsLenBefore);
   });
 
-  it("progress events overwrite stale navigation cause with addChapter", () => {
+  it("progress events overwrite stale navigation intent with replace", () => {
     const { engine, events } = createEngine({
       totalChapters: 3,
       blocks: makeLongTextBlocks("cause-regression"),
     });
     events.length = 0;
 
-    engine.handleCommand({ type: "nextSpread" });
+    engine.handleCommand({
+      type: "nextSpread",
+      intent: FORWARD_LINEAR_INTENT,
+    });
     const navigationEvent = getPageContentEvent(events);
-    expect(navigationEvent?.cause).toBe("nextSpread");
-    expect(navigationEvent?.spread.cause).toBe("nextSpread");
+    expect(navigationEvent?.intent).toEqual(FORWARD_LINEAR_INTENT);
+    expect(navigationEvent?.spread.intent).toEqual(FORWARD_LINEAR_INTENT);
 
     events.length = 0;
     addChapter(engine, 1);
 
     const progress = getLastEventOfType(events, "progress");
     expect(progress).toBeDefined();
-    expect(progress?.cause).toBe("addChapter");
+    expect(progress?.intent).toEqual(REPLACE_INTENT);
   });
 });
 
@@ -376,7 +402,7 @@ describe("init + addChapter lifecycle", () => {
 // ---------------------------------------------------------------------------
 
 describe("updateChapter lifecycle", () => {
-  it("re-layouts one loaded chapter and emits updateChapter causes", async () => {
+  it("re-layouts one loaded chapter and emits replace intent", async () => {
     const { engine, events } = createEngine({
       totalChapters: 2,
       blocks: makeLongTextBlocks("chapter-0"),
@@ -397,10 +423,10 @@ describe("updateChapter lifecycle", () => {
     const partial = getLastEventOfType(events, "partialReady");
     const ready = getLastEventOfType(events, "ready");
 
-    expect(partial?.cause).toBe("updateChapter");
-    expect(partial?.spread.cause).toBe("updateChapter");
-    expect(ready?.cause).toBe("updateChapter");
-    expect(ready?.spread.cause).toBe("updateChapter");
+    expect(partial?.intent).toEqual(REPLACE_INTENT);
+    expect(partial?.spread.intent).toEqual(REPLACE_INTENT);
+    expect(ready?.intent).toEqual(REPLACE_INTENT);
+    expect(ready?.spread.intent).toEqual(REPLACE_INTENT);
   });
 
   it("keeps anchor chapter stable when another chapter is updated", async () => {
@@ -408,7 +434,11 @@ describe("updateChapter lifecycle", () => {
     addChapter(engine, 1, makeSpacerBlocks(1));
     addChapter(engine, 2, makeSpacerBlocks(2));
 
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 2,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     events.length = 0;
 
     await engine.handleCommand({
@@ -419,8 +449,8 @@ describe("updateChapter lifecycle", () => {
 
     const ready = getLastEventOfType(events, "ready");
     expect(ready).toBeDefined();
-    expect(ready?.cause).toBe("updateChapter");
-    expect(ready?.spread.cause).toBe("updateChapter");
+    expect(ready?.intent).toEqual(REPLACE_INTENT);
+    expect(ready?.spread.intent).toEqual(REPLACE_INTENT);
     expect(ready?.spread.chapterIndexStart).toBe(2);
 
     const first = ready ? firstPageSlot(ready.spread) : undefined;
@@ -439,7 +469,7 @@ describe("updateChapter lifecycle", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("error");
-    expect(events[0]?.cause).toBe("updateChapter");
+    expect(events[0]?.intent).toEqual(REPLACE_INTENT);
     if (events[0]?.type === "error") {
       expect(events[0].message).toContain("has not been loaded");
     }
@@ -457,7 +487,7 @@ describe("updateChapter lifecycle", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("error");
-    expect(events[0]?.cause).toBe("updateChapter");
+    expect(events[0]?.intent).toEqual(REPLACE_INTENT);
     if (events[0]?.type === "error") {
       expect(events[0].message).toContain("out of bounds");
     }
@@ -479,12 +509,15 @@ describe("navigation", () => {
     expect(ready.spread.totalPages).toBeGreaterThan(3);
 
     events.length = 0;
-    engine.handleCommand({ type: "nextSpread" });
+    engine.handleCommand({
+      type: "nextSpread",
+      intent: FORWARD_LINEAR_INTENT,
+    });
 
     const pageContent = getPageContentEvent(events);
     expect(pageContent).toBeDefined();
-    expect(pageContent?.cause).toBe("nextSpread");
-    expect(pageContent?.spread.cause).toBe("nextSpread");
+    expect(pageContent?.intent).toEqual(FORWARD_LINEAR_INTENT);
+    expect(pageContent?.spread.intent).toEqual(FORWARD_LINEAR_INTENT);
     expect(pageContent!.spread.currentSpread).toBe(2);
   });
 
@@ -499,12 +532,15 @@ describe("navigation", () => {
     expect(ready.spread.currentSpread).toBe(1);
 
     events.length = 0;
-    engine.handleCommand({ type: "nextSpread" });
+    engine.handleCommand({
+      type: "nextSpread",
+      intent: FORWARD_LINEAR_INTENT,
+    });
 
     const pageContent = getPageContentEvent(events);
     expect(pageContent).toBeDefined();
-    expect(pageContent?.cause).toBe("nextSpread");
-    expect(pageContent?.spread.cause).toBe("nextSpread");
+    expect(pageContent?.intent).toEqual(FORWARD_LINEAR_INTENT);
+    expect(pageContent?.spread.intent).toEqual(FORWARD_LINEAR_INTENT);
     expect(pageContent!.spread.currentSpread).toBe(2);
   });
 
@@ -512,10 +548,13 @@ describe("navigation", () => {
     const { engine, events } = createEngine();
     events.length = 0;
 
-    engine.handleCommand({ type: "prevSpread" });
+    engine.handleCommand({
+      type: "prevSpread",
+      intent: BACKWARD_LINEAR_INTENT,
+    });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageUnavailable");
-    expect(events[0]?.cause).toBe("prevSpread");
+    expect(events[0]?.intent).toEqual(BACKWARD_LINEAR_INTENT);
   });
 
   it("goToPage remains leaf-based and emits containing spread", () => {
@@ -528,11 +567,15 @@ describe("navigation", () => {
     expect(readyEvent.spread.totalPages).toBeGreaterThan(2);
 
     events.length = 0;
-    engine.handleCommand({ type: "goToPage", page: 2 });
+    engine.handleCommand({
+      type: "goToPage",
+      page: 2,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
 
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.cause).toBe("goToPage");
-    expect(pageContent.spread.cause).toBe("goToPage");
+    expect(pageContent.intent).toEqual(SCRUBBER_JUMP_INTENT);
+    expect(pageContent.spread.intent).toEqual(SCRUBBER_JUMP_INTENT);
     expect(spreadContainsLeafPage(pageContent.spread, 2)).toBe(true);
     expect(pageContent.spread.totalPages).toBe(readyEvent.spread.totalPages);
   });
@@ -541,10 +584,14 @@ describe("navigation", () => {
     const { engine, events } = createEngine();
     events.length = 0;
 
-    engine.handleCommand({ type: "goToPage", page: 999 });
+    engine.handleCommand({
+      type: "goToPage",
+      page: 999,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageUnavailable");
-    expect(events[0]?.cause).toBe("goToPage");
+    expect(events[0]?.intent).toEqual(SCRUBBER_JUMP_INTENT);
   });
 
   it("goToChapter jumps to the chapter's first leaf page in a spread", () => {
@@ -553,10 +600,14 @@ describe("navigation", () => {
     addChapter(engine, 2);
     events.length = 0;
 
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 2,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.cause).toBe("goToChapter");
-    expect(pageContent.spread.cause).toBe("goToChapter");
+    expect(pageContent.intent).toEqual(CHAPTER_JUMP_INTENT);
+    expect(pageContent.spread.intent).toEqual(CHAPTER_JUMP_INTENT);
 
     const first = firstPageSlot(pageContent.spread)!;
     expect(first.page.chapterIndex).toBe(2);
@@ -567,10 +618,14 @@ describe("navigation", () => {
     const { engine, events } = createEngine({ totalChapters: 3 });
     events.length = 0;
 
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 2,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("chapterUnavailable");
-    expect(events[0]?.cause).toBe("goToChapter");
+    expect(events[0]?.intent).toEqual(CHAPTER_JUMP_INTENT);
     if (events[0]?.type === "chapterUnavailable") {
       expect(events[0].chapterIndex).toBe(2);
     }
@@ -586,11 +641,12 @@ describe("navigation", () => {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "midpoint",
+      intent: INTERNAL_LINK_JUMP_INTENT,
     });
 
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.cause).toBe("goToTarget");
-    expect(pageContent.spread.cause).toBe("goToTarget");
+    expect(pageContent.intent).toEqual(INTERNAL_LINK_JUMP_INTENT);
+    expect(pageContent.spread.intent).toEqual(INTERNAL_LINK_JUMP_INTENT);
     expect(pageContent.spread.currentPage).toBeGreaterThan(1);
   });
 
@@ -604,10 +660,11 @@ describe("navigation", () => {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "mid-pre",
+      intent: INTERNAL_LINK_JUMP_INTENT,
     });
 
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.intent).toEqual(INTERNAL_LINK_JUMP_INTENT);
     expect(pageContent.spread.currentPage).toBeGreaterThan(1);
   });
 
@@ -621,10 +678,11 @@ describe("navigation", () => {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "chapter-section",
+      intent: INTERNAL_LINK_JUMP_INTENT,
     });
 
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.intent).toEqual(INTERNAL_LINK_JUMP_INTENT);
     expect(pageContent.spread.currentPage).toBeGreaterThan(1);
     const first = firstPageSlot(pageContent.spread)!;
     const blockIds = first.page.content.map((slice) => slice.blockId);
@@ -641,10 +699,11 @@ describe("navigation", () => {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "missing-target",
+      intent: INTERNAL_LINK_JUMP_INTENT,
     });
 
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.cause).toBe("goToTarget");
+    expect(pageContent.intent).toEqual(INTERNAL_LINK_JUMP_INTENT);
     expect(pageContent.spread.currentPage).toBe(1);
   });
 
@@ -656,11 +715,12 @@ describe("navigation", () => {
       type: "goToTarget",
       chapterIndex: 1,
       targetId: "missing",
+      intent: INTERNAL_LINK_JUMP_INTENT,
     });
 
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("chapterUnavailable");
-    expect(events[0]?.cause).toBe("goToTarget");
+    expect(events[0]?.intent).toEqual(INTERNAL_LINK_JUMP_INTENT);
     if (events[0]?.type === "chapterUnavailable") {
       expect(events[0].chapterIndex).toBe(1);
     }
@@ -701,7 +761,11 @@ describe("spread projection", () => {
     expect(gaps.every((g) => g.reason === "chapter-boundary")).toBe(true);
 
     events.length = 0;
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 1 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 1,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     const chapterSpread = getPageContentEvent(events)!.spread;
     const chapterFirst = firstPageSlot(chapterSpread)!;
 
@@ -769,11 +833,11 @@ describe("spread projection", () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageContent");
-    expect(events[0]?.cause).toBe("updateSpreadConfig");
+    expect(events[0]?.intent).toEqual(REPLACE_INTENT);
 
     const pageContent = getPageContentEvent(events)!;
     expect(pageContent.epoch).toBe(before.epoch);
-    expect(pageContent.spread.cause).toBe("updateSpreadConfig");
+    expect(pageContent.spread.intent).toEqual(REPLACE_INTENT);
     expect(pageContent.spread.slots.length).toBe(3);
   });
 });
@@ -787,7 +851,11 @@ describe("anchor preservation across relayout", () => {
     const { engine, events } = createEngine({ totalChapters: 2 });
 
     events.length = 0;
-    engine.handleCommand({ type: "goToPage", page: 2 });
+    engine.handleCommand({
+      type: "goToPage",
+      page: 2,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("pageUnavailable");
 
@@ -814,10 +882,18 @@ describe("anchor preservation across relayout", () => {
     addChapter(engine, 1);
     addChapter(engine, 4);
 
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 1 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 1,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     events.length = 0;
 
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 3 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 3,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     expect(events).toHaveLength(1);
     expect(events[0]?.type).toBe("chapterUnavailable");
 
@@ -856,7 +932,10 @@ describe("anchor preservation across relayout", () => {
       spreadConfig: { columns: 3, chapterFlow: "continuous" },
     });
 
-    engine.handleCommand({ type: "nextSpread" });
+    engine.handleCommand({
+      type: "nextSpread",
+      intent: FORWARD_LINEAR_INTENT,
+    });
     const pc = getPageContentEvent(events)!;
     expect(pc.spread.currentSpread).toBe(2);
 
@@ -871,8 +950,8 @@ describe("anchor preservation across relayout", () => {
     });
 
     const readyEvent = getReadyEvent(events)!;
-    expect(readyEvent.cause).toBe("updatePaginationConfig");
-    expect(readyEvent.spread.cause).toBe("updatePaginationConfig");
+    expect(readyEvent.intent).toEqual(REPLACE_INTENT);
+    expect(readyEvent.spread.intent).toEqual(REPLACE_INTENT);
     expect(readyEvent.spread.currentPage).toBeGreaterThan(1);
     expect(readyEvent.spread.currentSpread).toBeGreaterThan(1);
   });
@@ -882,7 +961,10 @@ describe("anchor preservation across relayout", () => {
       blocks: makeLongTextBlocks("anchor-rapid"),
     });
 
-    engine.handleCommand({ type: "nextSpread" });
+    engine.handleCommand({
+      type: "nextSpread",
+      intent: FORWARD_LINEAR_INTENT,
+    });
     events.length = 0;
 
     await engine.handleCommand({
@@ -905,8 +987,8 @@ describe("anchor preservation across relayout", () => {
         e.type === "ready",
     );
     expect(readyEvents.length).toBeGreaterThanOrEqual(1);
-    expect(readyEvents.at(-1)!.cause).toBe("updatePaginationConfig");
-    expect(readyEvents.at(-1)!.spread.cause).toBe("updatePaginationConfig");
+    expect(readyEvents.at(-1)!.intent).toEqual(REPLACE_INTENT);
+    expect(readyEvents.at(-1)!.spread.intent).toEqual(REPLACE_INTENT);
     expect(readyEvents.at(-1)!.spread.currentPage).toBeGreaterThan(1);
   });
 });
@@ -920,7 +1002,11 @@ describe("middle-out relayout order", () => {
     const { engine, events } = createEngine({ totalChapters: 5 });
     for (let i = 1; i < 5; i++) addChapter(engine, i);
 
-    engine.handleCommand({ type: "goToChapter", chapterIndex: 2 });
+    engine.handleCommand({
+      type: "goToChapter",
+      chapterIndex: 2,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     events.length = 0;
 
     await engine.handleCommand({
@@ -949,15 +1035,16 @@ describe("middle-out relayout order", () => {
 
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(1);
-    expect(
-      events.every((event) =>
-        event.type === "partialReady" ||
-        event.type === "progress" ||
-        event.type === "ready"
-          ? event.cause === "updatePaginationConfig"
-          : true,
-      ),
-    ).toBe(true);
+    for (const event of events) {
+      if (
+        event.type !== "partialReady" &&
+        event.type !== "progress" &&
+        event.type !== "ready"
+      ) {
+        continue;
+      }
+      expect(event.intent).toEqual(REPLACE_INTENT);
+    }
     expect(lastEvent(events)?.type).toBe("ready");
   });
 });
