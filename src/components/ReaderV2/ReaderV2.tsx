@@ -353,6 +353,7 @@ export function ReaderV2() {
             onGoToChapter={onGoToChapter}
             onPrevChapter={onPrevChapter}
             onNextChapter={onNextChapter}
+            isLoading={pagination.status !== "ready"}
           />
 
           <HighlightToolbarContainer

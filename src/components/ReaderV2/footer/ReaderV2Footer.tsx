@@ -54,11 +54,42 @@ export function ReaderV2Footer({
 }: ReaderV2FooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
   const prevIsLoadingRef = useRef(isLoading);
+  const [hasBeenReady, setHasBeenReady] = useState(!isLoading);
+  const lastReadyDetailsRef = useRef<{
+    currentPage: number;
+    totalPages: number;
+    currentChapterIndex: number;
+    chapterStartPages: (number | null)[];
+  } | null>(
+    !isLoading
+      ? {
+          currentPage,
+          totalPages,
+          currentChapterIndex,
+          chapterStartPages: [...chapterStartPages],
+        }
+      : null,
+  );
   const animateReadyTransition = prevIsLoadingRef.current && !isLoading;
+  const animateLoadingTransition = !prevIsLoadingRef.current && isLoading;
+  const preserveDetailsWhileLoading =
+    isLoading && hasBeenReady && !!lastReadyDetailsRef.current;
 
   useEffect(() => {
     prevIsLoadingRef.current = isLoading;
   }, [isLoading]);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setHasBeenReady(true);
+      lastReadyDetailsRef.current = {
+        currentPage,
+        totalPages,
+        currentChapterIndex,
+        chapterStartPages: [...chapterStartPages],
+      };
+    }
+  }, [chapterStartPages, currentChapterIndex, currentPage, isLoading, totalPages]);
 
   const interruptScrubberMomentum = useCallback(() => {
     setCancelMomentumSignal((signal) => signal + 1);
@@ -81,6 +112,23 @@ export function ReaderV2Footer({
     interruptScrubberMomentum();
     onNextChapter();
   }, [interruptScrubberMomentum, onNextChapter]);
+
+  const detailCurrentPage =
+    preserveDetailsWhileLoading && lastReadyDetailsRef.current
+      ? lastReadyDetailsRef.current.currentPage
+      : currentPage;
+  const detailTotalPages =
+    preserveDetailsWhileLoading && lastReadyDetailsRef.current
+      ? lastReadyDetailsRef.current.totalPages
+      : totalPages;
+  const detailCurrentChapterIndex =
+    preserveDetailsWhileLoading && lastReadyDetailsRef.current
+      ? lastReadyDetailsRef.current.currentChapterIndex
+      : currentChapterIndex;
+  const detailChapterStartPages =
+    preserveDetailsWhileLoading && lastReadyDetailsRef.current
+      ? lastReadyDetailsRef.current.chapterStartPages
+      : chapterStartPages;
 
   return (
     <AnimatePresence>
@@ -113,13 +161,15 @@ export function ReaderV2Footer({
             <FooterChapterRow
               currentChapterIndex={currentChapterIndex}
               chapterEntries={chapterEntries}
-              chapterStartPages={chapterStartPages}
-              currentPage={currentPage}
-              totalPages={totalPages}
+              detailCurrentChapterIndex={detailCurrentChapterIndex}
+              chapterStartPages={detailChapterStartPages}
+              currentPage={detailCurrentPage}
+              totalPages={detailTotalPages}
               onGoToChapter={handleGoToChapter}
               onPrevChapter={handlePrevChapter}
               onNextChapter={handleNextChapter}
               isLoading={isLoading}
+              preserveDetailsWhileLoading={preserveDetailsWhileLoading}
               animateReadyDetails={animateReadyTransition}
             />
             <div className="px-1">
@@ -129,10 +179,18 @@ export function ReaderV2Footer({
                     <motion.div
                       key="loading"
                       className="absolute inset-0"
-                      initial={{ opacity: 0 }}
+                      initial={
+                        animateLoadingTransition
+                          ? { opacity: 0, filter: "blur(6px)" }
+                          : false
+                      }
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0, filter: "blur(6px)" }}
-                      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                      transition={
+                        animateLoadingTransition
+                          ? { duration: 0.22, ease: [0.22, 1, 0.36, 1] }
+                          : undefined
+                      }
                     >
                       <FooterScrubberLoading />
                     </motion.div>
@@ -198,9 +256,10 @@ export function ReaderV2Footer({
               </div>
             </div>
             <FooterPageIndicator
-              currentPage={currentPage}
-              totalPages={totalPages}
+              currentPage={detailCurrentPage}
+              totalPages={detailTotalPages}
               isLoading={isLoading}
+              preserveDetailsWhileLoading={preserveDetailsWhileLoading}
               animateReadyDetails={animateReadyTransition}
             />
           </div>

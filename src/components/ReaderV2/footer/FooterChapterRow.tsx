@@ -1,10 +1,12 @@
 import type { ChapterEntry } from "@/components/ReaderV2/types";
+import { cn } from "@/lib/utils";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { FOOTER_READY_DETAIL_DELAY } from "./FooterLoadingState";
 
 interface FooterChapterRowProps {
   currentChapterIndex: number;
+  detailCurrentChapterIndex?: number;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   currentPage: number;
@@ -13,11 +15,13 @@ interface FooterChapterRowProps {
   onPrevChapter: () => void;
   onNextChapter: () => void;
   isLoading?: boolean;
+  preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
 }
 
 export function FooterChapterRow({
   currentChapterIndex,
+  detailCurrentChapterIndex,
   chapterEntries,
   chapterStartPages,
   currentPage,
@@ -26,14 +30,18 @@ export function FooterChapterRow({
   onPrevChapter,
   onNextChapter,
   isLoading = false,
+  preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
 }: FooterChapterRowProps) {
-  const hasPrev = currentChapterIndex > 0;
-  const hasNext = currentChapterIndex < chapterEntries.length - 1;
+  const metricsChapterIndex = detailCurrentChapterIndex ?? currentChapterIndex;
+  const hasPrev = metricsChapterIndex > 0;
+  const hasNext = metricsChapterIndex < chapterEntries.length - 1;
+  const showBlurredLoadingDetails = isLoading && preserveDetailsWhileLoading;
+  const showDetails = !isLoading || showBlurredLoadingDetails;
 
-  const prevChapterStart = chapterStartPages[currentChapterIndex - 1];
-  const currentChapterStart = chapterStartPages[currentChapterIndex];
-  const nextChapterStart = chapterStartPages[currentChapterIndex + 1];
+  const prevChapterStart = chapterStartPages[metricsChapterIndex - 1];
+  const currentChapterStart = chapterStartPages[metricsChapterIndex];
+  const nextChapterStart = chapterStartPages[metricsChapterIndex + 1];
 
   const pagesFromCurrentChapterStart =
     currentChapterStart != null ? currentPage - currentChapterStart : null;
@@ -53,7 +61,7 @@ export function FooterChapterRow({
 
   const handlePrevClick = () => {
     if (isPastCurrentChapterStart) {
-      onGoToChapter(currentChapterIndex);
+      onGoToChapter(metricsChapterIndex);
       return;
     }
     onPrevChapter();
@@ -66,25 +74,34 @@ export function FooterChapterRow({
     <div className="relative flex h-8 items-center">
       {/* Prev chapter — hidden entirely when not available */}
       <AnimatePresence initial={false}>
-        {hasPrev && !isLoading && (
+        {hasPrev && showDetails && (
           <motion.button
             key="prev"
             onClick={handlePrevClick}
-            className="flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+            className={cn(
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors",
+              showBlurredLoadingDetails
+                ? "pointer-events-none"
+                : "hover:bg-secondary/70 hover:text-foreground",
+            )}
             aria-label={
               isPastCurrentChapterStart
                 ? "Start of current chapter"
                 : "Previous chapter"
             }
+            disabled={showBlurredLoadingDetails}
             initial={
               animateReadyDetails
-                ? { opacity: 0, x: -8, filter: "blur(4px)" }
+                ? { opacity: 0, filter: "blur(8px)" }
                 : false
             }
-            animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, x: -6, filter: "blur(3px)" }}
+            animate={{
+              opacity: showBlurredLoadingDetails ? 0.76 : 1,
+              filter: showBlurredLoadingDetails ? "blur(6px)" : "blur(0px)",
+            }}
+            exit={{ opacity: 0, filter: "blur(4px)" }}
             transition={
-              animateReadyDetails
+              animateReadyDetails || showBlurredLoadingDetails
                 ? {
                     duration: 0.24,
                     delay: FOOTER_READY_DETAIL_DELAY,
@@ -121,21 +138,30 @@ export function FooterChapterRow({
 
       {/* Next chapter — hidden entirely when not available */}
       <AnimatePresence initial={false}>
-        {hasNext && !isLoading && (
+        {hasNext && showDetails && (
           <motion.button
             key="next"
             onClick={onNextChapter}
-            className="ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors hover:bg-secondary/70 hover:text-foreground"
+            className={cn(
+              "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors",
+              showBlurredLoadingDetails
+                ? "pointer-events-none"
+                : "hover:bg-secondary/70 hover:text-foreground",
+            )}
             aria-label="Next chapter"
+            disabled={showBlurredLoadingDetails}
             initial={
               animateReadyDetails
-                ? { opacity: 0, x: 8, filter: "blur(4px)" }
+                ? { opacity: 0, filter: "blur(8px)" }
                 : false
             }
-            animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, x: 6, filter: "blur(3px)" }}
+            animate={{
+              opacity: showBlurredLoadingDetails ? 0.76 : 1,
+              filter: showBlurredLoadingDetails ? "blur(6px)" : "blur(0px)",
+            }}
+            exit={{ opacity: 0, filter: "blur(4px)" }}
             transition={
-              animateReadyDetails
+              animateReadyDetails || showBlurredLoadingDetails
                 ? {
                     duration: 0.24,
                     delay: FOOTER_READY_DETAIL_DELAY,

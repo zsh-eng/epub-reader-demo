@@ -6,6 +6,7 @@ interface FooterPageIndicatorProps {
   currentPage: number;
   totalPages: number;
   isLoading?: boolean;
+  preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
 }
 
@@ -13,9 +14,12 @@ export function FooterPageIndicator({
   currentPage,
   totalPages,
   isLoading = false,
+  preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
 }: FooterPageIndicatorProps) {
-  if (isLoading) {
+  const showBlurredLoadingDetails = isLoading && preserveDetailsWhileLoading;
+
+  if (isLoading && !showBlurredLoadingDetails) {
     return <div aria-hidden="true" className="h-[18px] pb-1 pt-0.5" />;
   }
 
@@ -24,12 +28,15 @@ export function FooterPageIndicator({
       className="flex items-center justify-center pb-1 pt-0.5"
       initial={
         animateReadyDetails
-          ? { opacity: 0, y: 4, filter: "blur(4px)" }
+          ? { opacity: 0, filter: "blur(8px)" }
           : false
       }
-      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      animate={{
+        opacity: showBlurredLoadingDetails ? 0.78 : 1,
+        filter: showBlurredLoadingDetails ? "blur(6px)" : "blur(0px)",
+      }}
       transition={
-        animateReadyDetails
+        animateReadyDetails || showBlurredLoadingDetails
           ? {
               duration: 0.24,
               delay: FOOTER_READY_DETAIL_DELAY,

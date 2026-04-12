@@ -16,7 +16,9 @@ const MARK_HEIGHTS = [14, 18, 22, 28, 34, 38, 34, 28, 22, 18, 14];
 const CENTER_INDEX = Math.floor(MARK_HEIGHTS.length / 2);
 const MARK_CENTER_SPACING = 10;
 
-export const FOOTER_READY_DETAIL_DELAY = 0.55;
+export const FOOTER_READY_DETAIL_DELAY = 0;
+const MARK_PULSE_TIMES = [0, 0.24, 1];
+const SHIMMER_TIMES = [0, 0.26, 1];
 
 export function FooterScrubberLoading() {
   return (
@@ -37,17 +39,18 @@ export function FooterScrubberLoading() {
       >
         <div
           className="absolute left-1/2 w-[2px] -translate-x-1/2 rounded-full bg-foreground/90"
-          style={{ top: -1, height: 8 }}
+          style={{ top: 1, height: 6 }}
         />
 
         <motion.div
           className="pointer-events-none absolute left-1/2 top-0 h-10 w-40 -translate-x-1/2 bg-gradient-to-r from-transparent via-foreground/14 to-transparent blur-[7px]"
           animate={{
-            x: [-120, 0, 120],
-            opacity: [0, 0.55, 0],
+            x: [-88, 14, 116],
+            opacity: [0.08, 0.48, 0],
           }}
           transition={{
             ...SHIMMER_LOOP,
+            times: SHIMMER_TIMES,
           }}
         />
         <div className="relative h-10">
@@ -102,6 +105,7 @@ export function FooterScrubberLoading() {
                 }}
                 transition={{
                   ...LOADING_LOOP,
+                  times: MARK_PULSE_TIMES,
                   delay: distanceFromCenter * 0.06,
                 }}
               />
