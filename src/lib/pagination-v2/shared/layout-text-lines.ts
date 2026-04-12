@@ -143,6 +143,8 @@ function layoutTextLinesGreedy(
             link: item.link,
             isCode: item.isCode,
             highlightMarks: item.highlightMarks,
+            anchorStart: createOffset(itemIndex, LINE_START_CURSOR),
+            anchorEnd: createOffset(itemIndex, item.endCursor),
           });
           remainingWidth -= fullWidth;
           itemIndex++;
@@ -177,6 +179,8 @@ function layoutTextLinesGreedy(
         link: item.link,
         isCode: item.isCode,
         highlightMarks: item.highlightMarks,
+        anchorStart: createOffset(itemIndex, start),
+        anchorEnd: createOffset(itemIndex, line.end),
       });
       remainingWidth -= leadingGap + line.width + item.chromeWidth;
 
@@ -554,6 +558,8 @@ function buildKnuthPlassLine(
       link: token.link,
       isCode: token.isCode,
       highlightMarks: token.highlightMarks,
+      anchorStart: token.startOffset,
+      anchorEnd: token.endOffset,
     };
 
     fragments.push(fragment);
@@ -570,6 +576,12 @@ function buildKnuthPlassLine(
       ...(softHyphenToken?.link ? { link: softHyphenToken.link } : {}),
       isCode: softHyphenToken?.isCode ?? false,
       highlightMarks: softHyphenToken?.highlightMarks,
+      ...(softHyphenToken
+        ? {
+            anchorStart: softHyphenToken.startOffset,
+            anchorEnd: softHyphenToken.endOffset,
+          }
+        : {}),
     });
     lastRenderableFragment = fragments[fragments.length - 1] ?? lastRenderableFragment;
   }

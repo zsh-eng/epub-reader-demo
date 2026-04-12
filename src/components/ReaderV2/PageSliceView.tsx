@@ -1,4 +1,10 @@
 import type { PageFragment, PageSlice } from "@/lib/pagination-v2";
+import {
+    CONTENT_ANCHOR_BLOCK_ID_ATTR,
+    CONTENT_ANCHOR_END_ATTR,
+    CONTENT_ANCHOR_START_ATTR,
+    serializeTextCursorOffset,
+} from "@/lib/pagination-v2/content-anchor-dom";
 import { cn } from "@/lib/utils";
 import { toCssTextAlign } from "@/types/reader.types";
 import type { CSSProperties, ReactNode } from "react";
@@ -34,6 +40,23 @@ function renderFragmentContent(fragment: PageFragment) {
   );
 }
 
+function getFragmentAnchorData(fragment: PageFragment) {
+  return {
+    ...(fragment.anchorStart
+      ? {
+          [CONTENT_ANCHOR_START_ATTR]: serializeTextCursorOffset(
+            fragment.anchorStart,
+          ),
+        }
+      : {}),
+    ...(fragment.anchorEnd
+      ? {
+          [CONTENT_ANCHOR_END_ATTR]: serializeTextCursorOffset(fragment.anchorEnd),
+        }
+      : {}),
+  };
+}
+
 function renderInlineFragment(
   fragment: PageFragment,
   key: string,
@@ -44,17 +67,24 @@ function renderInlineFragment(
     "reader-v2-inline-code": fragment.isCode,
   });
   const content = renderFragmentContent(fragment);
+  const anchorData = getFragmentAnchorData(fragment);
 
   if (fragment.link) {
     return (
-      <a key={key} href={fragment.link.href} style={style} className={className}>
+      <a
+        key={key}
+        href={fragment.link.href}
+        style={style}
+        className={className}
+        {...anchorData}
+      >
         {content}
       </a>
     );
   }
 
   return (
-    <span key={key} style={style} className={className}>
+    <span key={key} style={style} className={className} {...anchorData}>
       {content}
     </span>
   );
@@ -108,6 +138,7 @@ export function PageSliceView({
         "reader-v2-blockquote": slice.tag === "blockquote",
         "reader-v2-figcaption": slice.tag === "figcaption",
       })}
+      {...{ [CONTENT_ANCHOR_BLOCK_ID_ATTR]: slice.blockId }}
       // There is a difference between the line height CSS property and the actual line height
       // that is rendered out.
       // For instance, with "Iowan Old Style" font on 17px, the rendered height of the box is

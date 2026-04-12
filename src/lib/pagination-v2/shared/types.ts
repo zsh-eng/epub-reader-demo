@@ -166,6 +166,8 @@ export interface PageFragment {
   isCode: boolean;
   highlightMarks?: HighlightMark[];
   marginRightPx?: number;
+  anchorStart?: TextCursorOffset;
+  anchorEnd?: TextCursorOffset;
 }
 
 export interface TextCursorOffset {
