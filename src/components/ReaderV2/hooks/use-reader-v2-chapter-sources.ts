@@ -66,6 +66,7 @@ interface UseReaderV2ChapterSourcesResult {
   bookHighlights: Highlight[];
   deferredImageCacheRef: RefObject<Map<string, string>>;
   sourceLoadWallClockMs: number | null;
+  initialChapterIndex: number | null;
 }
 
 function buildChapterEntries(book: Book | null): ChapterEntry[] {
@@ -194,6 +195,9 @@ export function useReaderV2ChapterSources({
   const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<
     number | null
   >(null);
+  const [initialChapterIndex, setInitialChapterIndex] = useState<number | null>(
+    null,
+  );
   const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
   const chapterSourcesRef = useRef<Map<number, VirtualChapterSource>>(
     new Map(),
@@ -219,6 +223,7 @@ export function useReaderV2ChapterSources({
 
     let cancelled = false;
     setSourceLoadWallClockMs(null);
+    setInitialChapterIndex(null);
     chapterSourcesRef.current.clear();
     chapterHighlightSignaturesRef.current.clear();
 
@@ -244,6 +249,7 @@ export function useReaderV2ChapterSources({
             chapterEntries.length - 1,
           ),
         );
+        setInitialChapterIndex(initialChapterIndex);
         const initialChapter = chapterEntries[initialChapterIndex]!;
         const remainingChapterPaths = chapterEntries
           .filter((chapter) => chapter.index !== initialChapterIndex)
@@ -372,5 +378,6 @@ export function useReaderV2ChapterSources({
     bookHighlights,
     deferredImageCacheRef,
     sourceLoadWallClockMs,
+    initialChapterIndex,
   };
 }

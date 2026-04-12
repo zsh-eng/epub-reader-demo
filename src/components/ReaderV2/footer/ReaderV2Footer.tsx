@@ -28,6 +28,7 @@ export interface ReaderV2FooterProps {
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
+  currentTitleChapterIndex: number | null;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   onScrubPreview: (page: number) => void;
@@ -43,6 +44,7 @@ export function ReaderV2Footer({
   currentPage,
   totalPages,
   currentChapterIndex,
+  currentTitleChapterIndex,
   chapterEntries,
   chapterStartPages,
   onScrubPreview,
@@ -160,6 +162,7 @@ export function ReaderV2Footer({
           <div className="mx-auto flex max-w-7xl flex-col px-3 pt-1 sm:px-4">
             <FooterChapterRow
               currentChapterIndex={currentChapterIndex}
+              currentTitleChapterIndex={currentTitleChapterIndex}
               chapterEntries={chapterEntries}
               detailCurrentChapterIndex={detailCurrentChapterIndex}
               chapterStartPages={detailChapterStartPages}

@@ -6,6 +6,7 @@ import { FOOTER_READY_DETAIL_DELAY } from "./FooterLoadingState";
 
 interface FooterChapterRowProps {
   currentChapterIndex: number;
+  currentTitleChapterIndex: number | null;
   detailCurrentChapterIndex?: number;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
@@ -21,6 +22,7 @@ interface FooterChapterRowProps {
 
 export function FooterChapterRow({
   currentChapterIndex,
+  currentTitleChapterIndex,
   detailCurrentChapterIndex,
   chapterEntries,
   chapterStartPages,
@@ -67,7 +69,10 @@ export function FooterChapterRow({
     onPrevChapter();
   };
 
-  const currentChapterTitle = chapterEntries[currentChapterIndex]?.title ?? "";
+  const currentChapterTitle =
+    currentTitleChapterIndex != null
+      ? chapterEntries[currentTitleChapterIndex]?.title ?? ""
+      : "";
 
   return (
     // relative container: buttons sit at edges, title is absolutely centered
@@ -124,7 +129,7 @@ export function FooterChapterRow({
       <div className="pointer-events-none absolute inset-x-0 flex justify-center px-20">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
-            key={currentChapterIndex}
+            key={currentTitleChapterIndex ?? "unknown"}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}

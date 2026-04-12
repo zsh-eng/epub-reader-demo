@@ -36,6 +36,7 @@ interface UseReaderV2CoreResult {
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
+  currentTitleChapterIndex: number | null;
   /** Start page for each chapter (by chapterIndex), null if not yet laid out. */
   chapterStartPages: (number | null)[];
 }
@@ -137,6 +138,7 @@ export function useReaderV2Core(
     bookHighlights,
     deferredImageCacheRef,
     sourceLoadWallClockMs,
+    initialChapterIndex,
   } = useReaderV2ChapterSources({
     bookId,
     book,
@@ -158,6 +160,8 @@ export function useReaderV2Core(
   const currentPage = pagination.spread?.currentPage ?? 1;
   const totalPages = pagination.spread?.totalPages ?? 0;
   const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
+  const currentTitleChapterIndex =
+    pagination.spread?.chapterIndexStart ?? initialChapterIndex;
 
   const chapterStartPages = useMemo<(number | null)[]>(() => {
     const result: (number | null)[] = [];
@@ -189,6 +193,7 @@ export function useReaderV2Core(
     currentPage,
     totalPages,
     currentChapterIndex,
+    currentTitleChapterIndex,
     chapterStartPages,
   };
 }

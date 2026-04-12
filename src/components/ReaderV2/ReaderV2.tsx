@@ -127,6 +127,7 @@ export function ReaderV2() {
     currentPage,
     totalPages,
     currentChapterIndex,
+    currentTitleChapterIndex,
     chapterStartPages,
   } = useReaderV2Core({
     bookId,
@@ -346,6 +347,7 @@ export function ReaderV2() {
             currentPage={currentPage}
             totalPages={totalPages}
             currentChapterIndex={currentChapterIndex}
+            currentTitleChapterIndex={currentTitleChapterIndex}
             chapterEntries={chapterEntries}
             chapterStartPages={chapterStartPages}
             onScrubPreview={onScrubPreview}
