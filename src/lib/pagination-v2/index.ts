@@ -14,6 +14,8 @@ export {
     layoutPreWrapLines,
     layoutTextLines
 } from "./shared/layout-text-lines";
+export { resolveContentAnchorRangeToHighlight } from "./engine/highlight-selection";
+export type { ResolvedHighlightSelection } from "./engine/highlight-selection";
 export {
     measureCollapsedSpaceWidth,
     measureSingleLineWidth
