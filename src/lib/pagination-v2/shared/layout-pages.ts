@@ -36,6 +36,28 @@ function createPage(index: number): Page & { usedHeight: number } {
   return { index, slices: [], usedHeight: 0 };
 }
 
+function fitImageToBounds(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number,
+): { width: number; height: number } {
+  const safeWidth = Math.max(1, maxWidth);
+  const safeHeight = Math.max(1, maxHeight);
+  const safeIntrinsicWidth = Math.max(1, width);
+  const safeIntrinsicHeight = Math.max(1, height);
+  const scale = Math.min(
+    1,
+    safeWidth / safeIntrinsicWidth,
+    safeHeight / safeIntrinsicHeight,
+  );
+
+  return {
+    width: safeIntrinsicWidth * scale,
+    height: safeIntrinsicHeight * scale,
+  };
+}
+
 export function layoutPages(
   preparedBlocks: PreparedBlock[],
   pageWidth: number,
@@ -103,6 +125,12 @@ export function layoutPages(
     if (block.type === "image") {
       const spacing = getBlockSpacing("p", theme);
       const gap = Math.max(prevMarginBelow, spacing.above);
+      const fittedImage = fitImageToBounds(
+        block.intrinsicWidth,
+        block.intrinsicHeight,
+        safeWidth,
+        safeHeight,
+      );
 
       // Only emit the gap when there is already content on this page. Crucially,
       // check whether the image will overflow *before* emitting the spacer: if
@@ -112,7 +140,7 @@ export function layoutPages(
       // This matches standard print layout — top-of-page margins are suppressed.
       if (current.slices.length > 0) {
         const available = safeHeight - current.usedHeight;
-        if (gap + block.intrinsicHeight <= available) {
+        if (gap + fittedImage.height <= available) {
           if (gap > 0) addSpacer(block.id, gap);
         } else {
           pushPage();
@@ -120,33 +148,26 @@ export function layoutPages(
       }
 
       let available = safeHeight - current.usedHeight;
-
-      // Scale image to fit if larger than page
-      let displayHeight = block.intrinsicHeight;
-      let displayWidth = block.intrinsicWidth;
-      if (displayHeight > safeHeight) {
-        const scale = safeHeight / displayHeight;
-        displayHeight = safeHeight;
-        displayWidth = block.intrinsicWidth * scale;
-      }
-      displayWidth = Math.min(displayWidth, safeWidth);
-
-      available = safeHeight - current.usedHeight;
       if (available <= 0) {
         pushPage();
         available = safeHeight;
       }
-      displayHeight = Math.min(displayHeight, available);
+      const displaySize = fitImageToBounds(
+        block.intrinsicWidth,
+        block.intrinsicHeight,
+        safeWidth,
+        available,
+      );
 
       current.slices.push({
         type: "image",
         blockId: block.id,
         src: block.src,
         alt: block.alt,
-        width: displayWidth,
-        height: displayHeight,
+        width: displaySize.width,
+        height: displaySize.height,
       });
-      current.usedHeight += displayHeight;
+      current.usedHeight += displaySize.height;
 
       prevMarginBelow = spacing.below;
       continue;

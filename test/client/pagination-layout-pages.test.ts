@@ -83,6 +83,49 @@ describe("layoutPages — image overflow spacing", () => {
 
     expect(pagesWithOrphanedSpacer).toHaveLength(0);
   });
+
+  it("scales wide images by page width before laying out the remaining text", () => {
+    const blocks: Block[] = [
+      {
+        type: "image",
+        id: "wide-image",
+        src: "wide-image.jpg",
+        intrinsicWidth: 1000,
+        intrinsicHeight: 500,
+      },
+      {
+        type: "text",
+        id: "text-1",
+        tag: "p",
+        runs: [
+          {
+            kind: "text",
+            text: "Opening paragraph after a decorative chapter image.",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+        ],
+      },
+    ];
+
+    const prepared = prepareBlocks(blocks, FONT_CONFIG);
+    const { pages } = layoutPages(prepared, 300, 260, LAYOUT_THEME);
+    const firstPage = pages[0];
+
+    expect(firstPage).toBeDefined();
+    expect(firstPage?.slices.some((slice) => slice.type === "image")).toBe(true);
+    expect(firstPage?.slices.some((slice) => slice.type === "text")).toBe(true);
+
+    const imageSlice = firstPage?.slices.find(
+      (slice) => slice.type === "image" && slice.blockId === "wide-image",
+    );
+    expect(imageSlice?.type).toBe("image");
+    if (imageSlice?.type !== "image") return;
+
+    expect(imageSlice.width).toBeCloseTo(300, 5);
+    expect(imageSlice.height).toBeCloseTo(150, 5);
+  });
 });
 
 describe("layoutPages — blockquote parity", () => {

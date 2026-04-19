@@ -105,7 +105,10 @@ export function PageSliceView({
 
   if (slice.type === "image") {
     return (
-      <div className="flex h-full w-full items-center justify-center">
+      <div
+        className="flex w-full items-center justify-center"
+        style={{ height: `${slice.height}px` }}
+      >
         <LazyImage
           bookId={bookId}
           src={slice.src}
