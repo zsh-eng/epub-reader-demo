@@ -118,8 +118,6 @@ export function PageSliceView({
           height={slice.height}
           style={{
             objectFit: "contain",
-            borderRadius: "1.25rem",
-            outline: "1px solid var(--border)",
           }}
         />
       </div>
