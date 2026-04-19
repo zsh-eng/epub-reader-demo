@@ -2,6 +2,38 @@ import { parseChapterHtml } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
 describe("parseChapterHtml image extraction", () => {
+  it("preserves figcaptions as text blocks after figure images", () => {
+    const html = `
+      <figure>
+        <img alt="battle" src="../Images/image029.jpg" />
+        <figcaption>Figure 29. Carefully researched illustration.</figcaption>
+      </figure>
+    `;
+
+    const blocks = parseChapterHtml(html);
+
+    expect(blocks).toHaveLength(2);
+    expect(blocks[0]).toMatchObject({
+      type: "image",
+      src: "../Images/image029.jpg",
+      alt: "battle",
+    });
+    expect(blocks[1]).toMatchObject({
+      type: "text",
+      tag: "figcaption",
+    });
+
+    const captionBlock = blocks[1];
+    expect(captionBlock?.type).toBe("text");
+    if (captionBlock?.type !== "text") {
+      throw new Error("Expected a figcaption text block");
+    }
+
+    expect(captionBlock.runs.map((run) => run.text).join("")).toContain(
+      "Figure 29.",
+    );
+  });
+
   it("keeps cover images nested inside heading tags", () => {
     const html = `
       <h1 class="cubierta" title="Book One: The Way of Kings">

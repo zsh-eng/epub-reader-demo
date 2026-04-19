@@ -128,6 +128,82 @@ describe("layoutPages — image overflow spacing", () => {
   });
 });
 
+describe("layoutPages — figcaption treatment", () => {
+  it("keeps captions visually grouped with their figure image", () => {
+    const blocks: Block[] = [
+      {
+        type: "image",
+        id: "figure-image",
+        src: "figure.jpg",
+        intrinsicWidth: 620,
+        intrinsicHeight: 240,
+      },
+      {
+        type: "text",
+        id: "figure-caption",
+        tag: "figcaption",
+        runs: [
+          {
+            kind: "text",
+            text: "Figure 29. Caption text that should feel secondary to body copy.",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+        ],
+      },
+      {
+        type: "text",
+        id: "after-caption",
+        tag: "p",
+        runs: [
+          {
+            kind: "text",
+            text: "Body text after the figure.",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+        ],
+      },
+    ];
+
+    const prepared = prepareBlocks(blocks, FONT_CONFIG);
+    const preparedCaption = prepared.find(
+      (block) => block.type === "text" && block.id === "figure-caption",
+    );
+    expect(preparedCaption?.type).toBe("text");
+    if (!preparedCaption || preparedCaption.type !== "text") return;
+
+    const captionText = preparedCaption.items.find((item) => item.kind === "text");
+    expect(captionText?.font).toContain(" 15px ");
+
+    const { pages } = layoutPages(prepared, 620, 860, {
+      ...LAYOUT_THEME,
+      textAlign: "justify",
+    });
+    const slices = pages.flatMap((page) => page.slices);
+
+    const captionSpacer = slices.find(
+      (slice) => slice.type === "spacer" && slice.blockId === "figure-caption",
+    );
+    expect(captionSpacer?.type).toBe("spacer");
+    if (captionSpacer && captionSpacer.type === "spacer") {
+      expect(captionSpacer.height).toBeCloseTo(8.8, 5);
+    }
+
+    const captionSlice = slices.find(
+      (slice) => slice.type === "text" && slice.blockId === "figure-caption",
+    );
+    expect(captionSlice?.type).toBe("text");
+    if (!captionSlice || captionSlice.type !== "text") return;
+
+    expect(captionSlice.tag).toBe("figcaption");
+    expect(captionSlice.lineHeight).toBeCloseTo(20, 5);
+    expect(captionSlice.textAlign).toBe("left");
+  });
+});
+
 describe("layoutPages — blockquote parity", () => {
   it("uses blockquote spacing and carries tag into text slices", () => {
     const blocks: Block[] = [

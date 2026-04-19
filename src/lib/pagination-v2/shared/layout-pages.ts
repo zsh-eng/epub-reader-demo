@@ -1,5 +1,10 @@
 import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
-import { getBlockInsetLeft, getBlockSpacing, getLineHeight } from "./spacing";
+import {
+    getBlockInsetLeft,
+    getBlockSpacing,
+    getCollapsedBlockGap,
+    getLineHeight,
+} from "./spacing";
 import type {
     LayoutTheme,
     Page,
@@ -22,6 +27,13 @@ function resolveTextAlignForBlock(
   textAlign: LayoutTheme["textAlign"],
   tag: PreparedTextBlock["tag"],
 ): LayoutTheme["textAlign"] {
+  if (
+    tag === "figcaption" &&
+    (textAlign === "justify" || textAlign === "justify-knuth-plass")
+  ) {
+    return "left";
+  }
+
   if (
     textAlign === "justify-knuth-plass" &&
     JUSTIFY_DISABLED_TAGS.has(tag)
@@ -79,6 +91,7 @@ export function layoutPages(
   const pages: Page[] = [];
   let current = createPage(0);
   let prevMarginBelow = 0;
+  let previousBlockKind: PreparedTextBlock["tag"] | "image" | null = null;
   let totalLineCount = 0;
 
   const pushPage = () => {
@@ -86,6 +99,7 @@ export function layoutPages(
     pages.push(page);
     current = createPage(pages.length);
     prevMarginBelow = 0;
+    previousBlockKind = null;
   };
 
   const addSpacer = (blockId: string, height: number) => {
@@ -113,18 +127,25 @@ export function layoutPages(
     if (block.type === "page-break") {
       if (current.slices.length > 0) pushPage();
       prevMarginBelow = 0;
+      previousBlockKind = null;
       continue;
     }
 
     if (block.type === "spacer") {
       addSpacer(block.id, theme.baseFontSizePx * 0.9);
       prevMarginBelow = 0;
+      previousBlockKind = null;
       continue;
     }
 
     if (block.type === "image") {
-      const spacing = getBlockSpacing("p", theme);
-      const gap = Math.max(prevMarginBelow, spacing.above);
+      const spacing = getBlockSpacing("image", theme);
+      const gap = getCollapsedBlockGap(
+        previousBlockKind,
+        "image",
+        theme,
+        prevMarginBelow,
+      );
       const fittedImage = fitImageToBounds(
         block.intrinsicWidth,
         block.intrinsicHeight,
@@ -170,6 +191,7 @@ export function layoutPages(
       current.usedHeight += displaySize.height;
 
       prevMarginBelow = spacing.below;
+      previousBlockKind = "image";
       continue;
     }
 
@@ -199,7 +221,12 @@ export function layoutPages(
     const effectiveGap =
       current.slices.length === 0
         ? 0
-        : Math.max(prevMarginBelow, spacing.above);
+        : getCollapsedBlockGap(
+            previousBlockKind,
+            textBlock.tag,
+            theme,
+            prevMarginBelow,
+          );
     if (effectiveGap > 0) addSpacer(textBlock.id, effectiveGap);
 
     const lastLine = lines[lines.length - 1];
@@ -243,6 +270,7 @@ export function layoutPages(
     }
 
     prevMarginBelow = spacing.below;
+    previousBlockKind = textBlock.tag;
   }
 
   if (current.slices.length > 0 || pages.length === 0) {
