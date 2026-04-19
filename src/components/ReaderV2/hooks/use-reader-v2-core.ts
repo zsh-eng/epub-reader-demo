@@ -2,6 +2,7 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
+    DEFAULT_PARAGRAPH_SPACING,
     usePagination,
     type Block,
     type ChapterCanonicalText,
@@ -47,8 +48,6 @@ interface UseReaderV2CoreResult {
   ) => ChapterCanonicalText | null;
 }
 
-const DEFAULT_PARAGRAPH_SPACING = 1.2;
-
 function getNamedBodyFont(fontFamily: FontFamily): string {
   switch (fontFamily) {
     case "sans-serif":
@@ -84,8 +83,6 @@ function buildPaginationConfig(
       baseFontSizePx: 16 * (settings.fontSize / 100),
       lineHeightFactor: settings.lineHeight,
       paragraphSpacingFactor,
-      headingSpaceAbove: 1.5,
-      headingSpaceBelow: 0.7,
       textAlign: settings.textAlign,
     },
     viewport,

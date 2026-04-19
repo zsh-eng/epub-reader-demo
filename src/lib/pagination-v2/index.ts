@@ -26,7 +26,12 @@ export {
     parseChapterHtmlWithCanonicalText
 } from "./shared/parse-html";
 export { clearPrepareCache, prepareBlocks } from "./shared/prepare-blocks";
-export { getBlockSpacing, getLineHeight, headingScale } from "./shared/spacing";
+export {
+    DEFAULT_PARAGRAPH_SPACING,
+    getBlockSpacing,
+    getLineHeight,
+    headingScale
+} from "./shared/spacing";
 export { DEFAULT_SPREAD_CONFIG } from "./types";
 export type {
     Block,

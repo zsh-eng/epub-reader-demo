@@ -722,8 +722,6 @@ export class PaginationEngine {
       a.layoutTheme.lineHeightFactor === b.layoutTheme.lineHeightFactor &&
       a.layoutTheme.paragraphSpacingFactor ===
         b.layoutTheme.paragraphSpacingFactor &&
-      a.layoutTheme.headingSpaceAbove === b.layoutTheme.headingSpaceAbove &&
-      a.layoutTheme.headingSpaceBelow === b.layoutTheme.headingSpaceBelow &&
       a.layoutTheme.textAlign === b.layoutTheme.textAlign &&
       a.layoutTheme.baseFontSizePx === b.layoutTheme.baseFontSizePx &&
       a.viewport.width === b.viewport.width &&

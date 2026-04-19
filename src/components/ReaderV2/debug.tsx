@@ -13,6 +13,7 @@ import { useReaderViewport } from "./hooks/use-reader-viewport";
 import { DebugSection } from "./shared/DebugSection";
 import { InspectorDrawer } from "./shared/InspectorDrawer";
 import { InspectorPanel } from "./shared/InspectorPanel";
+import { DEFAULT_PARAGRAPH_SPACING } from "@/lib/pagination-v2";
 
 export function ReaderV2Debug() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -20,7 +21,9 @@ export function ReaderV2Debug() {
   const isMobile = useIsMobile();
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
-  const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(1.2);
+  const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(
+    DEFAULT_PARAGRAPH_SPACING,
+  );
   const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
   const stageContentRef = useRef<HTMLDivElement>(null);

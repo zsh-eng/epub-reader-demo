@@ -6,31 +6,94 @@ export const DEFAULT_INTRINSIC_HEIGHT = 400;
 export const DEFAULT_ASPECT_RATIO = 3 / 4;
 export const BLOCKQUOTE_BORDER_LEFT_PX = 4;
 export const BLOCKQUOTE_PADDING_LEFT_EM = 1.5;
-export const BLOCKQUOTE_MARGIN_Y_EM = 1.5;
+export const DEFAULT_PARAGRAPH_SPACING = 0.8;
+export const BLOCKQUOTE_MARGIN_Y_LINES = 1.0;
 // Keep captions visually secondary without making them look detached from the figure.
-export const FIGCAPTION_FONT_SCALE = 0.8;
+export const FIGCAPTION_FONT_SCALE = 0.82;
 export const FIGCAPTION_MAX_LINE_HEIGHT_FACTOR = 1.35;
-export const FIGCAPTION_MARGIN_TOP_EM = 0.55;
-export const FIGCAPTION_MARGIN_BOTTOM_EM = 1.5;
-export const LARGE_HEADING_LINE_HEIGHT_FACTOR = 1.12;
-export const MEDIUM_HEADING_LINE_HEIGHT_FACTOR = 1.18;
-export const SMALL_HEADING_LINE_HEIGHT_FACTOR = 1.24;
+export const FIGCAPTION_MARGIN_TOP_LINES = 0.4;
+export const FIGCAPTION_MARGIN_BOTTOM_LINES = 0.85;
+export const LIST_ITEM_GAP_LINES = 0.32;
+export const PRE_MARGIN_Y_LINES = 1.0;
+
+type HeadingTag = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 
 type LayoutBlockKind = BlockTag | "image";
 
-export function headingScale(tag: string): number {
+interface HeadingTypographySpec {
+  scale: number;
+  lineHeightFactor: number;
+  aboveLines: number;
+  belowLines: number;
+}
+
+/**
+ * Reader V2 typography is intentionally opinionated: users control the broad
+ * reading settings, while the engine owns the vertical rhythm for each block
+ * type so pagination and rendering stay in sync.
+ */
+const HEADING_TYPOGRAPHY: Record<HeadingTag, HeadingTypographySpec> = {
+  h1: { scale: 2.0, lineHeightFactor: 1.1, aboveLines: 2.2, belowLines: 0.9 },
+  h2: {
+    scale: 1.55,
+    lineHeightFactor: 1.14,
+    aboveLines: 1.7,
+    belowLines: 0.75,
+  },
+  h3: {
+    scale: 1.28,
+    lineHeightFactor: 1.18,
+    aboveLines: 1.3,
+    belowLines: 0.6,
+  },
+  h4: {
+    scale: 1.12,
+    lineHeightFactor: 1.22,
+    aboveLines: 1.1,
+    belowLines: 0.55,
+  },
+  h5: {
+    scale: 1.0,
+    lineHeightFactor: 1.24,
+    aboveLines: 1.0,
+    belowLines: 0.5,
+  },
+  h6: {
+    scale: 1.0,
+    lineHeightFactor: 1.24,
+    aboveLines: 0.9,
+    belowLines: 0.45,
+  },
+};
+
+function getHeadingTypography(tag: string): HeadingTypographySpec | null {
   switch (tag) {
     case "h1":
-      return 2;
     case "h2":
-      return 1.5;
     case "h3":
-      return 1.25;
     case "h4":
-      return 1.1;
+    case "h5":
+    case "h6":
+      return HEADING_TYPOGRAPHY[tag];
     default:
-      return 1;
+      return null;
   }
+}
+
+function getBodyLineHeight(theme: LayoutTheme): number {
+  return Math.round(theme.baseFontSizePx * theme.lineHeightFactor);
+}
+
+function rhythmLinesToPixels(lines: number, theme: LayoutTheme): number {
+  return getBodyLineHeight(theme) * lines;
+}
+
+export function isHeadingTag(tag: string): boolean {
+  return getHeadingTypography(tag) !== null;
+}
+
+export function headingScale(tag: string): number {
+  return getHeadingTypography(tag)?.scale ?? 1;
 }
 
 export function getBlockFontScale(tag: string): number {
@@ -45,24 +108,16 @@ function getBlockLineHeightFactor(
   tag: string,
   theme: LayoutTheme,
 ): number | null {
-  switch (tag) {
-    case "h1":
-    case "h2":
-      return LARGE_HEADING_LINE_HEIGHT_FACTOR;
-    case "h3":
-    case "h4":
-      return MEDIUM_HEADING_LINE_HEIGHT_FACTOR;
-    case "h5":
-    case "h6":
-      return SMALL_HEADING_LINE_HEIGHT_FACTOR;
-    case "figcaption":
-      return Math.min(
-        theme.lineHeightFactor,
-        FIGCAPTION_MAX_LINE_HEIGHT_FACTOR,
-      );
-    default:
-      return null;
+  const headingTypography = getHeadingTypography(tag);
+  if (headingTypography) {
+    return headingTypography.lineHeightFactor;
   }
+
+  if (tag === "figcaption") {
+    return Math.min(theme.lineHeightFactor, FIGCAPTION_MAX_LINE_HEIGHT_FACTOR);
+  }
+
+  return null;
 }
 
 export function getLineHeight(tag: string, theme: LayoutTheme): number {
@@ -80,34 +135,50 @@ export function getBlockSpacing(
   if (tag === "image") {
     return {
       above: 0,
-      below: theme.baseFontSizePx * theme.paragraphSpacingFactor,
+      below: rhythmLinesToPixels(theme.paragraphSpacingFactor, theme),
     };
   }
 
   if (tag === "blockquote") {
-    const quoteSpacing = theme.baseFontSizePx * BLOCKQUOTE_MARGIN_Y_EM;
+    const quoteSpacing = rhythmLinesToPixels(BLOCKQUOTE_MARGIN_Y_LINES, theme);
     return {
       above: quoteSpacing,
       below: quoteSpacing,
     };
   }
 
-  if (tag === "figcaption") {
+  if (tag === "pre") {
     return {
-      above: theme.baseFontSizePx * FIGCAPTION_MARGIN_TOP_EM,
-      below: theme.baseFontSizePx * FIGCAPTION_MARGIN_BOTTOM_EM,
+      above: rhythmLinesToPixels(PRE_MARGIN_Y_LINES, theme),
+      below: rhythmLinesToPixels(PRE_MARGIN_Y_LINES, theme),
     };
   }
 
-  if (["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag)) {
+  if (tag === "li") {
     return {
-      above: theme.baseFontSizePx * theme.headingSpaceAbove * headingScale(tag),
-      below: theme.baseFontSizePx * theme.headingSpaceBelow,
+      above: 0,
+      below: rhythmLinesToPixels(LIST_ITEM_GAP_LINES, theme),
     };
   }
+
+  if (tag === "figcaption") {
+    return {
+      above: rhythmLinesToPixels(FIGCAPTION_MARGIN_TOP_LINES, theme),
+      below: rhythmLinesToPixels(FIGCAPTION_MARGIN_BOTTOM_LINES, theme),
+    };
+  }
+
+  const headingTypography = getHeadingTypography(tag);
+  if (headingTypography) {
+    return {
+      above: rhythmLinesToPixels(headingTypography.aboveLines, theme),
+      below: rhythmLinesToPixels(headingTypography.belowLines, theme),
+    };
+  }
+
   return {
     above: 0,
-    below: theme.baseFontSizePx * theme.paragraphSpacingFactor,
+    below: rhythmLinesToPixels(theme.paragraphSpacingFactor, theme),
   };
 }
 
@@ -122,7 +193,26 @@ export function getCollapsedBlockGap(
   }
 
   if (previousKind === "image" && currentKind === "figcaption") {
-    return theme.baseFontSizePx * FIGCAPTION_MARGIN_TOP_EM;
+    return rhythmLinesToPixels(FIGCAPTION_MARGIN_TOP_LINES, theme);
+  }
+
+  if (previousKind === "li" && currentKind === "li") {
+    return previousMarginBelow;
+  }
+
+  if (currentKind === "li") {
+    return Math.max(
+      previousMarginBelow,
+      rhythmLinesToPixels(theme.paragraphSpacingFactor, theme),
+    );
+  }
+
+  if (previousKind === "li") {
+    return Math.max(
+      previousMarginBelow,
+      rhythmLinesToPixels(theme.paragraphSpacingFactor, theme),
+      getBlockSpacing(currentKind, theme).above,
+    );
   }
 
   return Math.max(

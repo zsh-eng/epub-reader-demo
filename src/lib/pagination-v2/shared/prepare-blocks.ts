@@ -7,7 +7,11 @@ import {
     clearMeasureCache,
     measureCollapsedSpaceWidth,
 } from "./measure";
-import { CODE_CHROME_PX, getBlockFontScale, headingScale } from "./spacing";
+import {
+    CODE_CHROME_PX,
+    getBlockFontScale,
+    isHeadingTag,
+} from "./spacing";
 import type {
     Block,
     FontConfig,
@@ -68,7 +72,7 @@ function getPreparedText(
 
 function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   const scale = getBlockFontScale(tag);
-  const isHeading = headingScale(tag) > 1;
+  const isHeading = isHeadingTag(tag);
 
   let family: string;
   let sizePx: number;

@@ -152,8 +152,6 @@ export interface ChapterCanonicalText {
 export interface LayoutTheme {
   lineHeightFactor: number;
   paragraphSpacingFactor: number;
-  headingSpaceAbove: number;
-  headingSpaceBelow: number;
   textAlign: "left" | "center" | "right" | "justify" | "justify-knuth-plass";
   baseFontSizePx: number;
 }
