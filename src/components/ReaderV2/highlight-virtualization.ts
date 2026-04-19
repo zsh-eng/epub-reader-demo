@@ -54,7 +54,6 @@ export function applyHighlightsToChapterHtml(
   if (highlights.length === 0) return html;
 
   const container = createVirtualContainer(html);
-
   const sortedHighlights = highlights.slice().sort(sortHighlightsByOffset);
 
   applyHighlights(

@@ -1,9 +1,9 @@
 import {
-  addHighlight as addHighlightToDb,
-  deleteHighlight as deleteHighlightFromDb,
-  getBookHighlights,
-  getHighlights,
-  updateHighlight as updateHighlightInDb,
+    addHighlight as addHighlightToDb,
+    deleteHighlight as deleteHighlightFromDb,
+    getBookHighlights,
+    getHighlights,
+    updateHighlight as updateHighlightInDb,
 } from "@/lib/db";
 import type { Highlight } from "@/types/highlight";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";

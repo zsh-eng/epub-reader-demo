@@ -8,25 +8,29 @@ export type {
     PaginationFontSwitchLatencyTrace,
     PaginationTracerSnapshot
 } from "./diagnostics/tracer";
+export { resolveContentAnchorRangeToHighlight } from "./engine/highlight-selection";
+export type { ResolvedHighlightSelection } from "./engine/highlight-selection";
+export { resolveDomEndpointToContentAnchor } from "./engine/selection-anchors";
 export type { PaginationCommand, PaginationEvent } from "./protocol";
 export { layoutPages } from "./shared/layout-pages";
 export {
     layoutPreWrapLines,
     layoutTextLines
 } from "./shared/layout-text-lines";
-export { resolveDomEndpointToContentAnchor } from "./engine/selection-anchors";
-export { resolveContentAnchorRangeToHighlight } from "./engine/highlight-selection";
-export type { ResolvedHighlightSelection } from "./engine/highlight-selection";
 export {
     measureCollapsedSpaceWidth,
     measureSingleLineWidth
 } from "./shared/measure";
-export { parseChapterHtml } from "./shared/parse-html";
+export {
+    parseChapterHtml,
+    parseChapterHtmlWithCanonicalText
+} from "./shared/parse-html";
 export { clearPrepareCache, prepareBlocks } from "./shared/prepare-blocks";
 export { getBlockSpacing, getLineHeight, headingScale } from "./shared/spacing";
 export { DEFAULT_SPREAD_CONFIG } from "./types";
 export type {
     Block,
+    ChapterCanonicalText,
     ContentAnchor,
     FontConfig,
     HighlightMark,
@@ -46,10 +50,7 @@ export type {
     ResolvedLeafPage,
     ResolvedSpread,
     SpacerSlice,
-    SpreadConfig,
-    SpreadIntent,
-    SpreadGapReason,
-    SpreadSlot,
+    SpreadConfig, SpreadGapReason, SpreadIntent, SpreadSlot,
     TextBlock,
     TextCursorOffset,
     TextRenderMode,

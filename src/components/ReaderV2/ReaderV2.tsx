@@ -21,8 +21,8 @@ import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
 import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
-import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { useReaderTextSelection } from "./hooks/use-reader-text-selection";
+import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { resolvePaginatedLinkTarget } from "./link-navigation";
 
 const COLUMN_GAP_PX = 20;
@@ -132,6 +132,7 @@ export function ReaderV2() {
     currentTitleChapterIndex,
     chapterStartPages,
     getChapterBlocks,
+    getChapterCanonicalText,
   } = useReaderV2Core({
     bookId,
     viewport,
@@ -160,9 +161,8 @@ export function ReaderV2() {
     chapterEntries,
     fontConfig: paginationConfig.fontConfig,
     getChapterBlocks,
-    onHighlightCreate: (highlight) => {
-      addHighlightMutation.mutate(highlight);
-    },
+    getChapterCanonicalText,
+    onHighlightCreate: (highlight) => addHighlightMutation.mutate(highlight),
   });
 
   const chapterIndexByHrefPath = useMemo(() => {

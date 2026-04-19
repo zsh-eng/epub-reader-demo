@@ -45,6 +45,7 @@ import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
 import type {
     Block,
     BlockTag,
+    ChapterCanonicalText,
     HighlightMark,
     InlineRun,
     LinkRef,
@@ -461,6 +462,12 @@ interface WalkResult {
   remainingTargets: string[];
 }
 
+interface ParseChapterContext {
+  counter: { value: number };
+  currentCanonicalOffset: number;
+  blockStarts: Map<string, number> | null;
+}
+
 function attachTargetsToBlock(block: Block, targetIds: string[]): void {
   if (targetIds.length === 0) return;
   block.targetIds = mergeTargetIds(block.targetIds ?? [], targetIds);
@@ -473,10 +480,29 @@ function attachTargetsToLastBlock(blocks: Block[], targetIds: string[]): boolean
   return true;
 }
 
-export function parseChapterHtml(html: string): Block[] {
+function getNodeTextLength(node: Node): number {
+  return node.textContent?.length ?? 0;
+}
+
+function recordBlockStart(
+  context: ParseChapterContext,
+  blockId: string,
+  offset: number,
+): void {
+  context.blockStarts?.set(blockId, offset);
+}
+
+function parseChapterHtmlInternal(html: string): {
+  blocks: Block[];
+  canonicalText: ChapterCanonicalText;
+} {
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<body>${html}</body>`, "text/html");
-  const counter = { value: 1 };
+  const context: ParseChapterContext = {
+    counter: { value: 1 },
+    currentCanonicalOffset: 0,
+    blockStarts: new Map<string, number>(),
+  };
 
   function walkChildren(nodes: Node[], pendingTargets: string[]): WalkResult {
     const blocks: Block[] = [];
@@ -501,6 +527,8 @@ export function parseChapterHtml(html: string): Block[] {
   function walk(node: Node, pendingTargets: string[] = []): WalkResult {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent ?? "";
+      const blockStart = context.currentCanonicalOffset;
+      context.currentCanonicalOffset += text.length;
       if (!text.trim()) {
         return { blocks: [], remainingTargets: [...pendingTargets] };
       }
@@ -510,9 +538,12 @@ export function parseChapterHtml(html: string): Block[] {
       const block = createTextBlock(
         p,
         "p",
-        `text-${counter.value++}`,
+        `text-${context.counter.value++}`,
         pendingTargets,
       );
+      if (block) {
+        recordBlockStart(context, block.id, blockStart);
+      }
       return block
         ? { blocks: [block], remainingTargets: [] }
         : { blocks: [], remainingTargets: [...pendingTargets] };
@@ -523,7 +554,10 @@ export function parseChapterHtml(html: string): Block[] {
     }
 
     const tag = node.tagName.toLowerCase();
+    const blockStart = context.currentCanonicalOffset;
+    const nodeTextLength = getNodeTextLength(node);
     if (IGNORE_TAGS.has(tag)) {
+      context.currentCanonicalOffset += nodeTextLength;
       return { blocks: [], remainingTargets: [...pendingTargets] };
     }
 
@@ -531,20 +565,25 @@ export function parseChapterHtml(html: string): Block[] {
 
     const imageBlock = createImageBlock(
       node,
-      `image-${counter.value}`,
+      `image-${context.counter.value}`,
       targetIds,
     );
     if (imageBlock) {
-      counter.value += 1;
+      context.counter.value += 1;
+      recordBlockStart(context, imageBlock.id, blockStart);
+      context.currentCanonicalOffset += nodeTextLength;
       return { blocks: [imageBlock], remainingTargets: [] };
     }
 
     if (tag === "hr") {
+      const spacerId = `spacer-${context.counter.value++}`;
+      recordBlockStart(context, spacerId, blockStart);
+      context.currentCanonicalOffset += nodeTextLength;
       return {
         blocks: [
           {
             type: "spacer",
-            id: `spacer-${counter.value++}`,
+            id: spacerId,
             ...(targetIds.length > 0 ? { targetIds } : {}),
           },
         ],
@@ -556,10 +595,12 @@ export function parseChapterHtml(html: string): Block[] {
       const block = createTextBlock(
         node,
         tag as BlockTag,
-        `text-${counter.value++}`,
+        `text-${context.counter.value++}`,
         targetIds,
       );
       if (block && hasVisibleInlineText(block)) {
+        recordBlockStart(context, block.id, blockStart);
+        context.currentCanonicalOffset += nodeTextLength;
         return { blocks: [block], remainingTargets: [] };
       }
 
@@ -577,7 +618,16 @@ export function parseChapterHtml(html: string): Block[] {
     if (tag === "table") {
       const p = document.createElement("p");
       p.textContent = node.textContent;
-      const block = createTextBlock(p, "p", `text-${counter.value++}`, targetIds);
+      const block = createTextBlock(
+        p,
+        "p",
+        `text-${context.counter.value++}`,
+        targetIds,
+      );
+      if (block) {
+        recordBlockStart(context, block.id, blockStart);
+      }
+      context.currentCanonicalOffset += nodeTextLength;
       return block
         ? { blocks: [block], remainingTargets: [] }
         : { blocks: [], remainingTargets: [...targetIds] };
@@ -602,9 +652,27 @@ export function parseChapterHtml(html: string): Block[] {
 
   const result = walkChildren(Array.from(doc.body.childNodes), []);
   if (result.remainingTargets.length > 0) {
-    result.blocks.push(
-      createEmptyTargetBlock(`text-${counter.value++}`, result.remainingTargets),
-    );
+    const blockId = `text-${context.counter.value++}`;
+    recordBlockStart(context, blockId, context.currentCanonicalOffset);
+    result.blocks.push(createEmptyTargetBlock(blockId, result.remainingTargets));
   }
-  return result.blocks;
+
+  return {
+    blocks: result.blocks,
+    canonicalText: {
+      fullText: doc.body.textContent ?? "",
+      blockStarts: context.blockStarts ?? new Map<string, number>(),
+    },
+  };
+}
+
+export function parseChapterHtmlWithCanonicalText(html: string): {
+  blocks: Block[];
+  canonicalText: ChapterCanonicalText;
+} {
+  return parseChapterHtmlInternal(html);
+}
+
+export function parseChapterHtml(html: string): Block[] {
+  return parseChapterHtmlInternal(html).blocks;
 }

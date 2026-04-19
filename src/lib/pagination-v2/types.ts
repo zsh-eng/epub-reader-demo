@@ -10,6 +10,7 @@ export { areFontConfigsEqual } from "./shared/types";
 export type {
     Block,
     BlockTag,
+    ChapterCanonicalText,
     FontConfig,
     HighlightMark,
     ImageBlock,

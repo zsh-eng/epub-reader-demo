@@ -138,6 +138,11 @@ export type PreparedBlock =
   | PreparedSpacerBlock
   | PreparedPageBreakBlock;
 
+export interface ChapterCanonicalText {
+  fullText: string;
+  blockStarts: ReadonlyMap<string, number>;
+}
+
 // ---------------------------------------------------------------------------
 // Stage 3: LayoutTheme + output types
 // ---------------------------------------------------------------------------

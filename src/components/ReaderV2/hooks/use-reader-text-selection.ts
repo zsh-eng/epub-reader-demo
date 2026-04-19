@@ -1,20 +1,21 @@
 import type { AnnotationColor } from "@/lib/highlight-constants";
 import {
-  prepareBlocks,
-  resolveContentAnchorRangeToHighlight,
-  resolveDomEndpointToContentAnchor,
-  type Block,
-  type FontConfig,
-  type PreparedBlock,
-  type ResolvedSpread,
+    prepareBlocks,
+    resolveContentAnchorRangeToHighlight,
+    resolveDomEndpointToContentAnchor,
+    type Block,
+    type ChapterCanonicalText,
+    type FontConfig,
+    type PreparedBlock,
+    type ResolvedSpread,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import { getSelectionPosition } from "@zsh-eng/text-highlighter";
 import {
-  useCallback,
-  useEffect,
-  useState,
-  type RefObject,
+    useCallback,
+    useEffect,
+    useState,
+    type RefObject,
 } from "react";
 import type { ChapterEntry } from "../types";
 
@@ -33,6 +34,9 @@ interface UseReaderTextSelectionOptions {
   chapterEntries: ChapterEntry[];
   fontConfig: FontConfig;
   getChapterBlocks: (chapterIndex: number) => Block[] | null;
+  getChapterCanonicalText: (
+    chapterIndex: number,
+  ) => ChapterCanonicalText | null;
   onHighlightCreate?: (highlight: Highlight) => void;
 }
 
@@ -91,6 +95,7 @@ export function useReaderTextSelection({
   chapterEntries,
   fontConfig,
   getChapterBlocks,
+  getChapterCanonicalText,
   onHighlightCreate,
 }: UseReaderTextSelectionOptions): UseReaderTextSelectionResult {
   const [pendingHighlight, setPendingHighlight] =
@@ -138,14 +143,18 @@ export function useReaderTextSelection({
       if (startAnchor.chapterIndex !== endAnchor.chapterIndex) return null;
 
       const chapterBlocks = getChapterBlocks(startAnchor.chapterIndex);
+      const chapterCanonicalText = getChapterCanonicalText(
+        startAnchor.chapterIndex,
+      );
       const preparedChapter = preparedByChapter[startAnchor.chapterIndex];
-      if (!chapterBlocks || !preparedChapter) return null;
+      if (!chapterBlocks || !chapterCanonicalText || !preparedChapter) return null;
 
       const highlight = resolveContentAnchorRangeToHighlight({
         startAnchor,
         endAnchor,
         chapterBlocks,
         preparedChapter,
+        chapterCanonicalText,
       });
       if (!highlight) return null;
 
@@ -158,7 +167,14 @@ export function useReaderTextSelection({
         highlight,
       };
     },
-    [chapterEntries, fontConfig, getChapterBlocks, spread, stageContentRef],
+    [
+      chapterEntries,
+      fontConfig,
+      getChapterBlocks,
+      getChapterCanonicalText,
+      spread,
+      stageContentRef,
+    ],
   );
 
   useEffect(() => {
@@ -218,7 +234,7 @@ export function useReaderTextSelection({
         return;
       }
 
-      onHighlightCreate?.({
+      const highlight: Highlight = {
         id: crypto.randomUUID(),
         bookId,
         spineItemId: pendingHighlight.spineItemId,
@@ -229,7 +245,9 @@ export function useReaderTextSelection({
         textAfter: pendingHighlight.highlight.textAfter,
         color,
         createdAt: new Date(),
-      });
+      };
+
+      onHighlightCreate?.(highlight);
 
       clearPendingHighlight(true);
     },

@@ -1,5 +1,6 @@
 import type {
     Block,
+    ChapterCanonicalText,
     PreparedBlock,
     PreparedTextBlock,
     PreparedTextItem,
@@ -36,14 +37,6 @@ function getSegmentGraphemes(text: string): string[] {
 
 function getPersistedRunText(blockTag: TextBlock["tag"], run: TextRun): string {
   return !run.hardBreak || blockTag === "pre" ? run.text : "";
-}
-
-function getTextBlockContent(block: TextBlock): string {
-  return block.runs.map((run) => getPersistedRunText(block.tag, run)).join("");
-}
-
-function getBlockTextContent(block: Block): string {
-  return isTextBlock(block) ? getTextBlockContent(block) : "";
 }
 
 function findPreparedTextBlock(
@@ -230,27 +223,21 @@ function resolveAnchorToBlockOffset(
   return null;
 }
 
-function resolveTextAnchorToChapterOffset(options: {
+// Projects the content anchor into a canonical offset based on the original HTML
+// This ensures that we can handle inter-block whitespace consistently
+// See the test in pagination-highlight-selection
+function resolveTextAnchorToCanonicalOffset(options: {
   anchor: ContentAnchor;
   chapterBlocks: Block[];
   preparedChapter: PreparedBlock[];
+  chapterCanonicalText: ChapterCanonicalText;
 }): number | null {
-  const { anchor, chapterBlocks, preparedChapter } = options;
+  const { anchor, chapterBlocks, preparedChapter, chapterCanonicalText } = options;
 
   if (anchor.type !== "text") return null;
 
-  let chapterOffset = 0;
-
   for (const block of chapterBlocks) {
-    if (!isTextBlock(block)) {
-      chapterOffset += getBlockTextContent(block).length;
-      continue;
-    }
-
-    if (block.id !== anchor.blockId) {
-      chapterOffset += getTextBlockContent(block).length;
-      continue;
-    }
+    if (!isTextBlock(block) || block.id !== anchor.blockId) continue;
 
     const preparedBlock = findPreparedTextBlock(preparedChapter, block.id);
     if (!preparedBlock) return null;
@@ -262,7 +249,10 @@ function resolveTextAnchorToChapterOffset(options: {
     );
     if (blockOffset === null) return null;
 
-    return chapterOffset + blockOffset;
+    const blockStart = chapterCanonicalText.blockStarts.get(block.id);
+    if (blockStart === undefined) return null;
+
+    return blockStart + blockOffset;
   }
 
   return null;
@@ -273,6 +263,7 @@ export function resolveContentAnchorRangeToHighlight(options: {
   endAnchor: ContentAnchor;
   chapterBlocks: Block[];
   preparedChapter: PreparedBlock[];
+  chapterCanonicalText: ChapterCanonicalText;
   contextLength?: number;
 }): ResolvedHighlightSelection | null {
   const {
@@ -280,6 +271,7 @@ export function resolveContentAnchorRangeToHighlight(options: {
     endAnchor,
     chapterBlocks,
     preparedChapter,
+    chapterCanonicalText,
     contextLength = DEFAULT_CONTEXT_LENGTH,
   } = options;
 
@@ -291,15 +283,17 @@ export function resolveContentAnchorRangeToHighlight(options: {
     return null;
   }
 
-  const startOffset = resolveTextAnchorToChapterOffset({
+  const startOffset = resolveTextAnchorToCanonicalOffset({
     anchor: startAnchor,
     chapterBlocks,
     preparedChapter,
+    chapterCanonicalText,
   });
-  const endOffset = resolveTextAnchorToChapterOffset({
+  const endOffset = resolveTextAnchorToCanonicalOffset({
     anchor: endAnchor,
     chapterBlocks,
     preparedChapter,
+    chapterCanonicalText,
   });
 
   if (startOffset === null || endOffset === null) return null;
@@ -308,7 +302,7 @@ export function resolveContentAnchorRangeToHighlight(options: {
   const rangeEnd = Math.max(startOffset, endOffset);
   if (rangeStart === rangeEnd) return null;
 
-  const fullText = chapterBlocks.map((block) => getBlockTextContent(block)).join("");
+  const fullText = chapterCanonicalText.fullText;
   const selectedText = fullText.slice(rangeStart, rangeEnd).trim();
   if (!selectedText) return null;
 

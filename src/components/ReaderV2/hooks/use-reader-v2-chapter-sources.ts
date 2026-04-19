@@ -11,8 +11,12 @@ import {
     cleanupResourceUrls,
     processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
-import type { SpreadIntent } from "@/lib/pagination-v2";
-import { parseChapterHtml } from "@/lib/pagination-v2";
+import {
+    parseChapterHtml,
+    parseChapterHtmlWithCanonicalText,
+    type ChapterCanonicalText,
+    type SpreadIntent,
+} from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import {
@@ -39,6 +43,7 @@ const RESTORE_INTENT: SpreadIntent = { kind: "restore" };
 interface LoadedChapterSource {
   source: VirtualChapterSource;
   blocks: ParsedChapterBlocks;
+  canonicalText: ChapterCanonicalText;
   highlightSignature: string;
 }
 
@@ -69,6 +74,9 @@ interface UseReaderV2ChapterSourcesResult {
   sourceLoadWallClockMs: number | null;
   initialChapterIndex: number | null;
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
+  getChapterCanonicalText: (
+    chapterIndex: number,
+  ) => ChapterCanonicalText | null;
 }
 
 function buildChapterEntries(book: Book | null): ChapterEntry[] {
@@ -127,10 +135,12 @@ function storeLoadedChapterSource(
   loadedChapter: LoadedChapterSource,
   chapterSourcesRef: MutableRefObject<Map<number, VirtualChapterSource>>,
   chapterBlocksRef: MutableRefObject<Map<number, ParsedChapterBlocks>>,
+  chapterCanonicalTextRef: MutableRefObject<Map<number, ChapterCanonicalText>>,
   chapterHighlightSignaturesRef: MutableRefObject<Map<number, string>>,
 ) {
   chapterSourcesRef.current.set(chapterIndex, loadedChapter.source);
   chapterBlocksRef.current.set(chapterIndex, loadedChapter.blocks);
+  chapterCanonicalTextRef.current.set(chapterIndex, loadedChapter.canonicalText);
   chapterHighlightSignaturesRef.current.set(
     chapterIndex,
     loadedChapter.highlightSignature,
@@ -155,6 +165,7 @@ async function loadChapterSource(options: {
     chapter,
     imageDimensionsByPath,
   );
+  const { canonicalText } = parseChapterHtmlWithCanonicalText(html);
   const chapterHighlights = getChapterHighlights(
     chapter,
     highlightsBySpineItemId,
@@ -167,6 +178,7 @@ async function loadChapterSource(options: {
   return {
     source,
     blocks: parseChapterHtml(source.highlightedHtml),
+    canonicalText,
     highlightSignature: buildHighlightSignature(chapterHighlights),
   };
 }
@@ -175,6 +187,7 @@ function pruneRemovedChapterSources(
   chapterEntries: ChapterEntry[],
   chapterSourcesRef: MutableRefObject<Map<number, VirtualChapterSource>>,
   chapterBlocksRef: MutableRefObject<Map<number, ParsedChapterBlocks>>,
+  chapterCanonicalTextRef: MutableRefObject<Map<number, ChapterCanonicalText>>,
   chapterHighlightSignaturesRef: MutableRefObject<Map<number, string>>,
 ) {
   const validChapterIndices = new Set(
@@ -186,6 +199,7 @@ function pruneRemovedChapterSources(
 
     chapterSourcesRef.current.delete(chapterIndex);
     chapterBlocksRef.current.delete(chapterIndex);
+    chapterCanonicalTextRef.current.delete(chapterIndex);
     chapterHighlightSignaturesRef.current.delete(chapterIndex);
   }
 }
@@ -209,6 +223,9 @@ export function useReaderV2ChapterSources({
     new Map(),
   );
   const chapterBlocksRef = useRef<Map<number, ParsedChapterBlocks>>(new Map());
+  const chapterCanonicalTextRef = useRef<Map<number, ChapterCanonicalText>>(
+    new Map(),
+  );
   const chapterHighlightSignaturesRef = useRef<Map<number, string>>(new Map());
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
@@ -233,6 +250,7 @@ export function useReaderV2ChapterSources({
     setInitialChapterIndex(null);
     chapterSourcesRef.current.clear();
     chapterBlocksRef.current.clear();
+    chapterCanonicalTextRef.current.clear();
     chapterHighlightSignaturesRef.current.clear();
 
     const clearDeferredResources = () => {
@@ -282,6 +300,7 @@ export function useReaderV2ChapterSources({
           firstLoadedChapter,
           chapterSourcesRef,
           chapterBlocksRef,
+          chapterCanonicalTextRef,
           chapterHighlightSignaturesRef,
         );
         initializePagination({
@@ -313,6 +332,7 @@ export function useReaderV2ChapterSources({
             loadedChapter,
             chapterSourcesRef,
             chapterBlocksRef,
+            chapterCanonicalTextRef,
             chapterHighlightSignaturesRef,
           );
           addPaginationChapter(chapterIndex, loadedChapter.blocks);
@@ -349,6 +369,7 @@ export function useReaderV2ChapterSources({
       chapterEntries,
       chapterSourcesRef,
       chapterBlocksRef,
+      chapterCanonicalTextRef,
       chapterHighlightSignaturesRef,
     );
 
@@ -367,15 +388,20 @@ export function useReaderV2ChapterSources({
 
       const nextSource = applyChapterHighlights(source, chapterHighlights);
       const nextBlocks = parseChapterHtml(nextSource.highlightedHtml);
+
       storeLoadedChapterSource(
         chapterIndex,
         {
           source: nextSource,
           blocks: nextBlocks,
+          canonicalText:
+            chapterCanonicalTextRef.current.get(chapterIndex) ??
+            parseChapterHtmlWithCanonicalText(source.html).canonicalText,
           highlightSignature: nextSignature,
         },
         chapterSourcesRef,
         chapterBlocksRef,
+        chapterCanonicalTextRef,
         chapterHighlightSignaturesRef,
       );
 
@@ -391,6 +417,12 @@ export function useReaderV2ChapterSources({
     [],
   );
 
+  const getChapterCanonicalText = useCallback(
+    (chapterIndex: number): ChapterCanonicalText | null =>
+      chapterCanonicalTextRef.current.get(chapterIndex) ?? null,
+    [],
+  );
+
   return {
     chapterEntries,
     bookHighlights,
@@ -398,5 +430,6 @@ export function useReaderV2ChapterSources({
     sourceLoadWallClockMs,
     initialChapterIndex,
     getChapterBlocks,
+    getChapterCanonicalText,
   };
 }

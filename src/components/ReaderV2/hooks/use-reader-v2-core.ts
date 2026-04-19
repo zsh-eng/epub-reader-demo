@@ -4,6 +4,7 @@ import type { Book } from "@/lib/db";
 import {
     usePagination,
     type Block,
+    type ChapterCanonicalText,
     type PaginationConfig,
     type SpreadConfig,
 } from "@/lib/pagination-v2";
@@ -41,6 +42,9 @@ interface UseReaderV2CoreResult {
   /** Start page for each chapter (by chapterIndex), null if not yet laid out. */
   chapterStartPages: (number | null)[];
   getChapterBlocks: (chapterIndex: number) => Block[] | null;
+  getChapterCanonicalText: (
+    chapterIndex: number,
+  ) => ChapterCanonicalText | null;
 }
 
 const DEFAULT_PARAGRAPH_SPACING = 1.2;
@@ -142,6 +146,7 @@ export function useReaderV2Core(
     sourceLoadWallClockMs,
     initialChapterIndex,
     getChapterBlocks,
+    getChapterCanonicalText,
   } = useReaderV2ChapterSources({
     bookId,
     book,
@@ -199,5 +204,6 @@ export function useReaderV2Core(
     currentTitleChapterIndex,
     chapterStartPages,
     getChapterBlocks,
+    getChapterCanonicalText,
   };
 }

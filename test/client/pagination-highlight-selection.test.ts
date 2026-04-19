@@ -1,11 +1,15 @@
+import { applyHighlightsToChapterHtml } from "@/components/ReaderV2/highlight-virtualization";
 import {
-    parseChapterHtml,
+    parseChapterHtmlWithCanonicalText,
     prepareBlocks,
     resolveContentAnchorRangeToHighlight,
+    type ChapterCanonicalText,
     type ContentAnchor,
     type FontConfig,
     type PreparedBlock,
 } from "@/lib/pagination-v2";
+import type { Highlight } from "@/types/highlight";
+import { createHighlightFromRange } from "@zsh-eng/text-highlighter";
 import { describe, expect, it } from "vitest";
 
 const BASE_FONT_CONFIG: FontConfig = {
@@ -16,12 +20,13 @@ const BASE_FONT_CONFIG: FontConfig = {
 };
 
 function buildChapter(html: string): {
-  blocks: ReturnType<typeof parseChapterHtml>;
+  blocks: ReturnType<typeof parseChapterHtmlWithCanonicalText>["blocks"];
+  canonicalText: ChapterCanonicalText;
   prepared: PreparedBlock[];
 } {
-  const blocks = parseChapterHtml(html);
+  const { blocks, canonicalText } = parseChapterHtmlWithCanonicalText(html);
   const prepared = prepareBlocks(blocks, BASE_FONT_CONFIG);
-  return { blocks, prepared };
+  return { blocks, canonicalText, prepared };
 }
 
 function createTextAnchor(
@@ -43,9 +48,36 @@ function createTextAnchor(
   };
 }
 
+function buildHighlight(
+  id: string,
+  spineItemId: string,
+  result: {
+    startOffset: number;
+    endOffset: number;
+    selectedText: string;
+    textBefore: string;
+    textAfter: string;
+  },
+): Highlight {
+  return {
+    id,
+    bookId: "book-1",
+    spineItemId,
+    startOffset: result.startOffset,
+    endOffset: result.endOffset,
+    selectedText: result.selectedText,
+    textBefore: result.textBefore,
+    textAfter: result.textAfter,
+    color: "yellow",
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+  };
+}
+
 describe("resolveContentAnchorRangeToHighlight", () => {
   it("computes persisted offsets and context inside a single block", () => {
-    const { blocks, prepared } = buildChapter("<p>alpha beta gamma</p>");
+    const { blocks, canonicalText, prepared } = buildChapter(
+      "<p>alpha beta gamma</p>",
+    );
     const blockId = blocks[0]?.id;
     expect(blockId).toBeDefined();
     if (!blockId) return;
@@ -55,6 +87,7 @@ describe("resolveContentAnchorRangeToHighlight", () => {
       endAnchor: createTextAnchor(0, blockId, 0, 2, 4),
       chapterBlocks: blocks,
       preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
     });
 
     expect(result).toEqual({
@@ -68,7 +101,9 @@ describe("resolveContentAnchorRangeToHighlight", () => {
   });
 
   it("maps collapsed whitespace back to the raw chapter offsets", () => {
-    const { blocks, prepared } = buildChapter("<p>alpha   beta gamma</p>");
+    const { blocks, canonicalText, prepared } = buildChapter(
+      "<p>alpha   beta gamma</p>",
+    );
     const blockId = blocks[0]?.id;
     expect(blockId).toBeDefined();
     if (!blockId) return;
@@ -78,6 +113,7 @@ describe("resolveContentAnchorRangeToHighlight", () => {
       endAnchor: createTextAnchor(0, blockId, 0, 2, 4),
       chapterBlocks: blocks,
       preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
     });
 
     expect(result).toEqual({
@@ -91,7 +127,7 @@ describe("resolveContentAnchorRangeToHighlight", () => {
   });
 
   it("spans multiple text blocks within the same chapter", () => {
-    const { blocks, prepared } = buildChapter(
+    const { blocks, canonicalText, prepared } = buildChapter(
       "<p>alpha beta</p><p>gamma delta</p>",
     );
     const firstBlockId = blocks[0]?.id;
@@ -105,6 +141,7 @@ describe("resolveContentAnchorRangeToHighlight", () => {
       endAnchor: createTextAnchor(0, secondBlockId, 0, 0, 5),
       chapterBlocks: blocks,
       preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
     });
 
     expect(result).toEqual({
@@ -118,7 +155,9 @@ describe("resolveContentAnchorRangeToHighlight", () => {
   });
 
   it("does not count hard-break-only runs in persisted offsets", () => {
-    const { blocks, prepared } = buildChapter("<p>alpha<br>beta</p>");
+    const { blocks, canonicalText, prepared } = buildChapter(
+      "<p>alpha<br>beta</p>",
+    );
     const blockId = blocks[0]?.id;
     expect(blockId).toBeDefined();
     if (!blockId) return;
@@ -128,6 +167,7 @@ describe("resolveContentAnchorRangeToHighlight", () => {
       endAnchor: createTextAnchor(0, blockId, 2, 0, 4),
       chapterBlocks: blocks,
       preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
     });
 
     expect(result).toEqual({
@@ -141,7 +181,9 @@ describe("resolveContentAnchorRangeToHighlight", () => {
   });
 
   it("rejects anchor pairs from different chapters", () => {
-    const { blocks, prepared } = buildChapter("<p>alpha beta gamma</p>");
+    const { blocks, canonicalText, prepared } = buildChapter(
+      "<p>alpha beta gamma</p>",
+    );
     const blockId = blocks[0]?.id;
     expect(blockId).toBeDefined();
     if (!blockId) return;
@@ -151,8 +193,126 @@ describe("resolveContentAnchorRangeToHighlight", () => {
       endAnchor: createTextAnchor(1, blockId, 0, 2, 4),
       chapterBlocks: blocks,
       preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
     });
 
     expect(result).toBeNull();
+  });
+
+  it("matches the canonical DOM highlight contract after a hard break", () => {
+    const html = "<p>alpha<br>beta</p>";
+    const { blocks, canonicalText, prepared } = buildChapter(html);
+    const blockId = blocks[0]?.id;
+    expect(blockId).toBeDefined();
+    if (!blockId) return;
+
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    const paragraph = container.querySelector("p");
+    const betaTextNode = paragraph?.lastChild;
+    expect(betaTextNode?.nodeType).toBe(Node.TEXT_NODE);
+    if (!(betaTextNode instanceof Text)) return;
+
+    const range = document.createRange();
+    range.setStart(betaTextNode, 0);
+    range.setEnd(betaTextNode, betaTextNode.textContent?.length ?? 0);
+
+    const canonical = createHighlightFromRange(range, container);
+    expect(canonical).not.toBeNull();
+    if (!canonical) return;
+
+    const projected = resolveContentAnchorRangeToHighlight({
+      startAnchor: createTextAnchor(0, blockId, 2, 0, 0),
+      endAnchor: createTextAnchor(0, blockId, 2, 0, 4),
+      chapterBlocks: blocks,
+      preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
+    });
+
+    expect(projected).not.toBeNull();
+    if (!projected) return;
+
+    expect({
+      startOffset: projected.startOffset,
+      endOffset: projected.endOffset,
+      selectedText: projected.selectedText,
+    }).toEqual({
+      startOffset: canonical.startOffset,
+      endOffset: canonical.endOffset,
+      selectedText: canonical.selectedText,
+    });
+
+    const projectedHtml = applyHighlightsToChapterHtml(html, [
+      buildHighlight("projected", "spine-1", projected),
+    ]);
+    const canonicalHtml = applyHighlightsToChapterHtml(html, [
+      buildHighlight("canonical", "spine-1", canonical),
+    ]);
+
+    expect(canonicalHtml).toContain('data-highlight-id="canonical"');
+    expect(projectedHtml).toContain('data-highlight-id="projected"');
+  });
+
+  it("matches the canonical DOM highlight contract when source HTML includes inter-block whitespace", () => {
+    const html = `
+      <section>
+        <p>alpha</p>
+        <p>beta</p>
+      </section>
+    `;
+    const { blocks, canonicalText, prepared } = buildChapter(html);
+    const secondBlockId = blocks[1]?.id;
+    expect(secondBlockId).toBeDefined();
+    if (!secondBlockId) return;
+
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    const paragraphs = container.querySelectorAll("p");
+    const betaTextNode = paragraphs[1]?.firstChild;
+    expect(betaTextNode?.nodeType).toBe(Node.TEXT_NODE);
+    if (!(betaTextNode instanceof Text)) return;
+
+    const range = document.createRange();
+    range.setStart(betaTextNode, 0);
+    range.setEnd(betaTextNode, betaTextNode.textContent?.length ?? 0);
+
+    const canonical = createHighlightFromRange(range, container);
+    expect(canonical).not.toBeNull();
+    if (!canonical) return;
+
+    const projected = resolveContentAnchorRangeToHighlight({
+      startAnchor: createTextAnchor(0, secondBlockId, 0, 0, 0),
+      endAnchor: createTextAnchor(0, secondBlockId, 0, 0, 4),
+      chapterBlocks: blocks,
+      preparedChapter: prepared,
+      chapterCanonicalText: canonicalText,
+    });
+
+    expect(projected).not.toBeNull();
+    if (!projected) return;
+
+    expect({
+      startOffset: projected.startOffset,
+      endOffset: projected.endOffset,
+      selectedText: projected.selectedText,
+      textBefore: projected.textBefore,
+    }).toEqual({
+      startOffset: canonical.startOffset,
+      endOffset: canonical.endOffset,
+      selectedText: canonical.selectedText,
+      textBefore: canonical.textBefore,
+    });
+
+    const projectedHtml = applyHighlightsToChapterHtml(html, [
+      buildHighlight("projected", "spine-1", projected),
+    ]);
+    const canonicalHtml = applyHighlightsToChapterHtml(html, [
+      buildHighlight("canonical", "spine-1", canonical),
+    ]);
+
+    expect(canonicalHtml).toContain('data-highlight-id="canonical"');
+    expect(projectedHtml).toContain('data-highlight-id="projected"');
   });
 });
