@@ -34,7 +34,7 @@ const ReaderContent = forwardRef<HTMLDivElement, ReaderContentProps>(
     const style = settings
       ? {
           ...baseStyle,
-          fontSize: `${settings.fontSize}%`,
+          fontSize: `${settings.fontSize}px`,
           lineHeight: settings.lineHeight,
           fontFamily: FONT_STACKS[settings.fontFamily],
           textAlign: toCssTextAlign(settings.textAlign),

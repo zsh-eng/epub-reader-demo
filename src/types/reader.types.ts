@@ -88,6 +88,10 @@ export const FONT_STACKS: Record<FontFamily, string> = {
   inter: '"Inter", sans-serif',
 };
 
+export const READER_FONT_SIZE_MIN_PX = 8;
+export const READER_FONT_SIZE_DEFAULT_PX = 16;
+export const READER_FONT_SIZE_MAX_PX = 32;
+
 export const TEXT_ALIGN = {
   left: "left",
   justify: "justify",
@@ -113,7 +117,7 @@ export function toCssTextAlign(
 }
 
 export interface ReaderSettings {
-  fontSize: number; // percentage, e.g. 100
+  fontSize: number; // base font size in pixels, e.g. 18
   lineHeight: number; // multiplier, e.g. 1.5
   fontFamily: FontFamily;
   theme: ReaderTheme;

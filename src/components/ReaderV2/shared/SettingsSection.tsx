@@ -2,7 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
-import { isJustifiedTextAlign } from "@/types/reader.types";
+import {
+  isJustifiedTextAlign,
+  READER_FONT_SIZE_MAX_PX,
+  READER_FONT_SIZE_MIN_PX,
+} from "@/types/reader.types";
 import type {
   FontFamily,
   ReaderSettings,
@@ -144,10 +148,10 @@ export function SettingsSection({
         <SliderRow
           label="Font Size"
           value={settings.fontSize}
-          min={50}
-          max={200}
+          min={READER_FONT_SIZE_MIN_PX}
+          max={READER_FONT_SIZE_MAX_PX}
           step={1}
-          format={(v) => `${Math.round(v)}%`}
+          format={(v) => `${Math.round(v)}px`}
           onChange={(v) => onUpdateSettings({ fontSize: v })}
         />
 

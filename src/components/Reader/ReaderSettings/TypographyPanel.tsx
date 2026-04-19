@@ -8,7 +8,11 @@ import type {
     ReaderSettings,
     TextAlign,
 } from "@/types/reader.types";
-import { isJustifiedTextAlign } from "@/types/reader.types";
+import {
+  isJustifiedTextAlign,
+  READER_FONT_SIZE_MAX_PX,
+  READER_FONT_SIZE_MIN_PX,
+} from "@/types/reader.types";
 import {
     AlignCenter,
     AlignJustify,
@@ -241,10 +245,13 @@ export function TypographyPanel({
             className="rounded-full border-border/60 bg-background/80 hover:bg-background"
             onClick={() =>
               onUpdateSettings({
-                fontSize: Math.max(50, settings.fontSize - 10),
+                fontSize: Math.max(
+                  READER_FONT_SIZE_MIN_PX,
+                  settings.fontSize - 1,
+                ),
               })
             }
-            disabled={settings.fontSize <= 50}
+            disabled={settings.fontSize <= READER_FONT_SIZE_MIN_PX}
           >
             <Minus className="h-4 w-4" />
             <span className="sr-only">Decrease font size</span>
@@ -252,7 +259,7 @@ export function TypographyPanel({
           <span className="min-w-[4rem] text-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
             <AnimatedNumber
               value={settings.fontSize}
-              format={(v) => `${Math.round(v)}%`}
+              format={(v) => `${Math.round(v)}px`}
             />
           </span>
           <Button
@@ -261,10 +268,13 @@ export function TypographyPanel({
             className="rounded-full border-border/60 bg-background/80 hover:bg-background"
             onClick={() =>
               onUpdateSettings({
-                fontSize: Math.min(200, settings.fontSize + 10),
+                fontSize: Math.min(
+                  READER_FONT_SIZE_MAX_PX,
+                  settings.fontSize + 1,
+                ),
               })
             }
-            disabled={settings.fontSize >= 200}
+            disabled={settings.fontSize >= READER_FONT_SIZE_MAX_PX}
           >
             <Plus className="h-4 w-4" />
             <span className="sr-only">Increase font size</span>

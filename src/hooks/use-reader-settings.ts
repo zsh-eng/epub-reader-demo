@@ -1,11 +1,18 @@
-import { THEME_CLASSES, type ReaderSettings } from "@/types/reader.types";
+import {
+  READER_FONT_SIZE_DEFAULT_PX,
+  READER_FONT_SIZE_MAX_PX,
+  READER_FONT_SIZE_MIN_PX,
+  THEME_CLASSES,
+  type ReaderSettings,
+} from "@/types/reader.types";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "epub-reader-settings";
 const THEME_TRANSITION_CLASS = "theme-transitioning";
+const LEGACY_FONT_SIZE_BASE_PX = 16;
 
 const DEFAULT_SETTINGS = {
-  fontSize: 100,
+  fontSize: READER_FONT_SIZE_DEFAULT_PX,
   lineHeight: 1.5,
   fontFamily: "lora",
   theme: "light",
@@ -14,6 +21,36 @@ const DEFAULT_SETTINGS = {
 } satisfies ReaderSettings;
 
 const THEME_TRANSITION_DURATION_MS = 300;
+
+function clampFontSizePx(value: number): number {
+  return Math.min(
+    READER_FONT_SIZE_MAX_PX,
+    Math.max(READER_FONT_SIZE_MIN_PX, value),
+  );
+}
+
+// Older builds stored font size as a percentage of a 16px base.
+// Normalize on read/update so saved preferences carry forward cleanly.
+function normalizeFontSize(fontSize: unknown): number {
+  if (typeof fontSize !== "number" || !Number.isFinite(fontSize)) {
+    return READER_FONT_SIZE_DEFAULT_PX;
+  }
+
+  if (fontSize > READER_FONT_SIZE_MAX_PX) {
+    return clampFontSizePx(
+      Math.round((fontSize / 100) * LEGACY_FONT_SIZE_BASE_PX),
+    );
+  }
+
+  return clampFontSizePx(Math.round(fontSize));
+}
+
+function normalizeReaderSettings(settings: ReaderSettings): ReaderSettings {
+  return {
+    ...settings,
+    fontSize: normalizeFontSize(settings.fontSize),
+  };
+}
 
 export function useReaderSettings() {
   // Track timeout for theme transition cleanup
@@ -27,9 +64,14 @@ export function useReaderSettings() {
 
     try {
       const item = window.localStorage.getItem(STORAGE_KEY);
-      return item
-        ? { ...DEFAULT_SETTINGS, ...JSON.parse(item) }
-        : DEFAULT_SETTINGS;
+      if (!item) {
+        return DEFAULT_SETTINGS;
+      }
+
+      return normalizeReaderSettings({
+        ...DEFAULT_SETTINGS,
+        ...JSON.parse(item),
+      });
     } catch (error) {
       console.warn("Error reading settings from localStorage:", error);
       return DEFAULT_SETTINGS;
@@ -78,7 +120,9 @@ export function useReaderSettings() {
   }, [settings]);
 
   const updateSettings = useCallback((newSettings: Partial<ReaderSettings>) => {
-    setSettings((prev) => ({ ...prev, ...newSettings }));
+    setSettings((prev) =>
+      normalizeReaderSettings({ ...prev, ...newSettings }),
+    );
   }, []);
 
   const resetSettings = useCallback(() => {

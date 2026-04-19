@@ -77,10 +77,10 @@ function buildPaginationConfig(
       bodyFamily: getNamedBodyFont(settings.fontFamily),
       headingFamily: getNamedBodyFont(settings.fontFamily),
       codeFamily: `"Courier New", Menlo, Monaco, monospace`,
-      baseSizePx: 16 * (settings.fontSize / 100),
+      baseSizePx: settings.fontSize,
     },
     layoutTheme: {
-      baseFontSizePx: 16 * (settings.fontSize / 100),
+      baseFontSizePx: settings.fontSize,
       lineHeightFactor: settings.lineHeight,
       paragraphSpacingFactor,
       textAlign: settings.textAlign,
