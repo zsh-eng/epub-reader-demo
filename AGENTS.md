@@ -8,6 +8,8 @@ This repository uses **bun** as the package manager and for running scripts.
 - Prefer early returns / guard clauses to avoid nested conditionals
 - Use `bun run build` for type-checking the project. DO NOT run `npx tsc`.
 - There is no need for the agent to do browser testing of new features, the user will manually test them.
+- Include comments and documentation for major pieces of code (not every helper function requires it, use your judgement).
+  For example, hooks that do a lot of work/handle complex behaviour deserve documentation.
 
 ## Styling & UI
 
