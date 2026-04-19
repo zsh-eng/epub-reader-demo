@@ -29,6 +29,11 @@ export interface ApplyHighlightOptions {
   className?: string;
   /** Custom attributes to set on the highlight element */
   attributes?: Record<string, string>;
+  /** Optional attributes to stamp on the first/last DOM segment of a highlight */
+  segmentBoundaryAttributes?: {
+    start: string;
+    end: string;
+  };
 }
 
 /**

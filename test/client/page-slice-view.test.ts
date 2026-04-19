@@ -5,6 +5,10 @@ import {
 } from "@/lib/pagination-v2/content-anchor-dom";
 import { PageSliceView } from "@/components/ReaderV2/PageSliceView";
 import type { TextSlice } from "@/lib/pagination-v2";
+import {
+  EPUB_HIGHLIGHT_END_ATTRIBUTE,
+  EPUB_HIGHLIGHT_START_ATTRIBUTE,
+} from "@/types/reader.types";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -80,7 +84,9 @@ describe("PageSliceView", () => {
               font: '400 16px "Inter", sans-serif',
               leadingGap: 0,
               isCode: false,
-              highlightMarks: [{ id: "h1", color: "yellow" }],
+              highlightMarks: [
+                { id: "h1", color: "yellow", isStart: true, isEnd: true },
+              ],
               anchorStart: {
                 itemIndex: 2,
                 segmentIndex: 3,
@@ -113,5 +119,69 @@ describe("PageSliceView", () => {
     expect(markup).toContain(`${CONTENT_ANCHOR_END_ATTR}="2:4:0"`);
     expect(markup).toContain('data-highlight-id="h1"');
     expect(markup).toContain('data-color="yellow"');
+    expect(markup).toContain(`${EPUB_HIGHLIGHT_START_ATTRIBUTE}="true"`);
+    expect(markup).toContain(`${EPUB_HIGHLIGHT_END_ATTRIBUTE}="true"`);
+  });
+
+  it("marks only the outer edges for consecutive highlight fragments", () => {
+    const slice: TextSlice = {
+      type: "text",
+      blockId: "joined-highlight-block",
+      tag: "p",
+      lineHeight: 24,
+      textAlign: "left",
+      renderMode: "native",
+      lines: [
+        {
+          fragments: [
+            {
+              kind: "text",
+              text: "Great",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              isCode: false,
+              highlightMarks: [{ id: "h1", color: "yellow", isStart: true }],
+            },
+            {
+              kind: "space",
+              text: " ",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              isCode: false,
+              highlightMarks: [{ id: "h1", color: "yellow" }],
+            },
+            {
+              kind: "text",
+              text: "Britain",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              isCode: false,
+              highlightMarks: [{ id: "h1", color: "yellow", isEnd: true }],
+            },
+          ],
+          isLastInBlock: true,
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(PageSliceView, {
+        slice,
+        sliceIndex: 0,
+        bookId: "book-1",
+        deferredImageCache: new Map(),
+        baseFontSize: 16,
+      }),
+    );
+
+    const highlightStarts = markup.match(
+      new RegExp(`${EPUB_HIGHLIGHT_START_ATTRIBUTE}="true"`, "g"),
+    );
+    const highlightEnds = markup.match(
+      new RegExp(`${EPUB_HIGHLIGHT_END_ATTRIBUTE}="true"`, "g"),
+    );
+
+    expect(highlightStarts).toHaveLength(1);
+    expect(highlightEnds).toHaveLength(1);
   });
 });

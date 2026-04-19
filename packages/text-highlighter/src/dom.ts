@@ -5,7 +5,13 @@
 import type { TextHighlight, ApplyHighlightOptions } from "./types";
 import { findRangeByTextOffset, verifyRangeText } from "./offsets";
 
-const DEFAULT_OPTIONS: Required<ApplyHighlightOptions> = {
+type NormalizedApplyHighlightOptions = ApplyHighlightOptions & {
+  tagName: string;
+  className: string;
+  attributes: Record<string, string>;
+};
+
+const DEFAULT_OPTIONS: NormalizedApplyHighlightOptions = {
   tagName: "mark",
   className: "",
   attributes: {},
@@ -16,7 +22,7 @@ const DEFAULT_OPTIONS: Required<ApplyHighlightOptions> = {
  */
 function createHighlightElement(
   doc: Document,
-  options: Required<ApplyHighlightOptions>,
+  options: NormalizedApplyHighlightOptions,
 ): HTMLElement {
   const element = doc.createElement(options.tagName);
   if (options.className) {
@@ -37,6 +43,37 @@ function wrapTextNode(node: Text, wrapper: HTMLElement): void {
   wrapper.appendChild(node);
 }
 
+function clearSegmentBoundaryAttributes(
+  mark: HTMLElement,
+  segmentBoundaryAttributes?: ApplyHighlightOptions["segmentBoundaryAttributes"],
+): void {
+  if (!segmentBoundaryAttributes) {
+    return;
+  }
+
+  mark.removeAttribute(segmentBoundaryAttributes.start);
+  mark.removeAttribute(segmentBoundaryAttributes.end);
+}
+
+function applySegmentBoundaryAttributes(
+  marks: HTMLElement[],
+  segmentBoundaryAttributes?: ApplyHighlightOptions["segmentBoundaryAttributes"],
+): void {
+  if (!segmentBoundaryAttributes || marks.length === 0) {
+    return;
+  }
+
+  for (const mark of marks) {
+    clearSegmentBoundaryAttributes(mark, segmentBoundaryAttributes);
+  }
+
+  const first = marks[0]!;
+  const last = marks[marks.length - 1]!;
+
+  first.setAttribute(segmentBoundaryAttributes.start, "true");
+  last.setAttribute(segmentBoundaryAttributes.end, "true");
+}
+
 /**
  * Wraps a DOM Range with highlight elements, respecting block boundaries.
  * Creates multiple elements as needed to avoid wrapping block elements.
@@ -49,8 +86,18 @@ export function wrapRangeWithHighlight(
   range: Range,
   doc: Document,
   options: ApplyHighlightOptions = {},
-): void {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+): HTMLElement[] {
+  const opts: NormalizedApplyHighlightOptions = {
+    ...DEFAULT_OPTIONS,
+    ...options,
+    tagName: options.tagName ?? DEFAULT_OPTIONS.tagName,
+    className: options.className ?? DEFAULT_OPTIONS.className,
+    attributes: {
+      ...DEFAULT_OPTIONS.attributes,
+      ...(options.attributes ?? {}),
+    },
+  };
+  const createdElements: HTMLElement[] = [];
 
   // Get all text nodes that intersect with the range
   const textNodes: { node: Text; startOffset: number; endOffset: number }[] =
@@ -178,10 +225,15 @@ export function wrapRangeWithHighlight(
         // Entire node: "[abcdef]"
         wrapTextNode(node, element);
       }
+
+      createdElements.unshift(element);
     } catch {
       // Silently skip nodes that can't be wrapped
     }
   }
+
+  applySegmentBoundaryAttributes(createdElements, opts.segmentBoundaryAttributes);
+  return createdElements;
 }
 
 /**

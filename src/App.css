@@ -205,12 +205,24 @@
 
 /* EPUB Highlight Styles */
 .epub-highlight {
-  border-radius: 2px;
-  padding: 0 1px;
+  border-radius: 0;
+  padding: 0;
   cursor: pointer;
   transition:
     opacity 0.15s ease,
     outline 0.15s ease;
+}
+
+.epub-highlight[data-highlight-start="true"] {
+  border-top-left-radius: 0.18em;
+  border-bottom-left-radius: 0.18em;
+  padding-left: 0.08em;
+}
+
+.epub-highlight[data-highlight-end="true"] {
+  border-top-right-radius: 0.18em;
+  border-bottom-right-radius: 0.18em;
+  padding-right: 0.08em;
 }
 
 .epub-highlight:hover {

@@ -6,7 +6,11 @@ import {
     serializeTextCursorOffset,
 } from "@/lib/pagination-v2/content-anchor-dom";
 import { cn } from "@/lib/utils";
-import { toCssTextAlign } from "@/types/reader.types";
+import {
+    EPUB_HIGHLIGHT_END_ATTRIBUTE,
+    EPUB_HIGHLIGHT_START_ATTRIBUTE,
+    toCssTextAlign,
+} from "@/types/reader.types";
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment } from "react";
 import { LazyImage } from "./shared/LazyImage";
@@ -21,21 +25,34 @@ interface PageSliceViewProps {
   baseFontSize: number;
 }
 
-function renderFragmentContent(fragment: PageFragment) {
+function renderFragmentContent(
+  fragment: PageFragment,
+) {
   if (!fragment.highlightMarks || fragment.highlightMarks.length === 0) {
     return fragment.text;
   }
 
   return fragment.highlightMarks.reduceRight<ReactNode>(
-    (content: ReactNode, mark: NonNullable<PageFragment["highlightMarks"]>[number]) => (
-      <mark
-        className="epub-highlight"
-        data-highlight-id={mark.id}
-        data-color={mark.color}
-      >
-        {content}
-      </mark>
-    ),
+    (
+      content: ReactNode,
+      mark: NonNullable<PageFragment["highlightMarks"]>[number],
+    ) => {
+      return (
+        <mark
+          className="epub-highlight"
+          data-highlight-id={mark.id}
+          data-color={mark.color}
+          {...(mark.isStart
+            ? { [EPUB_HIGHLIGHT_START_ATTRIBUTE]: "true" }
+            : {})}
+          {...(mark.isEnd
+            ? { [EPUB_HIGHLIGHT_END_ATTRIBUTE]: "true" }
+            : {})}
+        >
+          {content}
+        </mark>
+      );
+    },
     fragment.text,
   );
 }

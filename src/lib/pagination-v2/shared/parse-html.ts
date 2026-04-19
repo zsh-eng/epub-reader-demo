@@ -40,7 +40,11 @@ import {
     createDeferredEpubImageSrc,
     DEFERRED_EPUB_IMAGE_ATTR,
 } from "@/lib/epub-resource-utils";
-import { EPUB_LINK } from "@/types/reader.types";
+import {
+  EPUB_HIGHLIGHT_END_ATTRIBUTE,
+  EPUB_HIGHLIGHT_START_ATTRIBUTE,
+  EPUB_LINK,
+} from "@/types/reader.types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
 import type {
     Block,
@@ -120,7 +124,14 @@ function marksMatch(
     const left = a[i];
     const right = b[i];
     if (!left || !right) return false;
-    if (left.id !== right.id || left.color !== right.color) return false;
+    if (
+      left.id !== right.id ||
+      left.color !== right.color ||
+      left.isStart !== right.isStart ||
+      left.isEnd !== right.isEnd
+    ) {
+      return false;
+    }
   }
 
   return true;
@@ -187,9 +198,15 @@ function readHighlightMark(element: Element): HighlightMark | null {
   if (!id) return null;
 
   const color = element.getAttribute("data-color")?.trim() || undefined;
+  const isStart =
+    element.getAttribute(EPUB_HIGHLIGHT_START_ATTRIBUTE)?.trim() === "true";
+  const isEnd =
+    element.getAttribute(EPUB_HIGHLIGHT_END_ATTRIBUTE)?.trim() === "true";
   return {
     id,
     ...(color ? { color } : {}),
+    ...(isStart ? { isStart: true } : {}),
+    ...(isEnd ? { isEnd: true } : {}),
   };
 }
 
@@ -332,11 +349,21 @@ function extractInlineNode(
 
   const highlightMark = readHighlightMark(node);
   if (highlightMark) {
-    const alreadyActive = next.highlightMarks.some(
+    const activeMark = next.highlightMarks.find(
       (mark) => mark.id === highlightMark.id,
     );
-    if (!alreadyActive) {
+    if (!activeMark) {
       next.highlightMarks.push(highlightMark);
+    } else {
+      if (highlightMark.color && !activeMark.color) {
+        activeMark.color = highlightMark.color;
+      }
+      if (highlightMark.isStart) {
+        activeMark.isStart = true;
+      }
+      if (highlightMark.isEnd) {
+        activeMark.isEnd = true;
+      }
     }
   }
 

@@ -6,6 +6,7 @@ import {
     measureTextWidth,
 } from "./measure";
 import type {
+    HighlightMark,
     LayoutTheme,
     PageFragment,
     PageLine,
@@ -70,6 +71,25 @@ function createOffset(
 
 function itemHasForcedBreak(item: PreparedInlineItem): boolean {
   return item.prepared.kinds.includes("hard-break");
+}
+
+function projectHighlightMarks(
+  highlightMarks: HighlightMark[] | undefined,
+  options: {
+    preserveStart: boolean;
+    preserveEnd: boolean;
+  },
+): HighlightMark[] | undefined {
+  if (!highlightMarks || highlightMarks.length === 0) {
+    return undefined;
+  }
+
+  return highlightMarks.map((mark) => ({
+    id: mark.id,
+    ...(mark.color ? { color: mark.color } : {}),
+    ...(options.preserveStart && mark.isStart ? { isStart: true } : {}),
+    ...(options.preserveEnd && mark.isEnd ? { isEnd: true } : {}),
+  }));
 }
 
 export function layoutTextLines(
@@ -142,7 +162,10 @@ function layoutTextLinesGreedy(
             leadingGap,
             link: item.link,
             isCode: item.isCode,
-            highlightMarks: item.highlightMarks,
+            highlightMarks: projectHighlightMarks(item.highlightMarks, {
+              preserveStart: true,
+              preserveEnd: true,
+            }),
             anchorStart: createOffset(itemIndex, LINE_START_CURSOR),
             anchorEnd: createOffset(itemIndex, item.endCursor),
           });
@@ -178,7 +201,10 @@ function layoutTextLinesGreedy(
         leadingGap,
         link: item.link,
         isCode: item.isCode,
-        highlightMarks: item.highlightMarks,
+        highlightMarks: projectHighlightMarks(item.highlightMarks, {
+          preserveStart: cursorsMatch(start, LINE_START_CURSOR),
+          preserveEnd: cursorsMatch(line.end, item.endCursor),
+        }),
         anchorStart: createOffset(itemIndex, start),
         anchorEnd: createOffset(itemIndex, line.end),
       });
@@ -349,9 +375,11 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
     const item = items[itemIndex];
     if (!item) continue;
 
+    const itemTokens: InlineLayoutToken[] = [];
+
     if (tokens.length > 0 && item.leadingGap > 0) {
       const itemStartOffset = createOffset(itemIndex, LINE_START_CURSOR);
-      tokens.push({
+      itemTokens.push({
         kind: "space",
         text: " ",
         width: item.leadingGap,
@@ -379,7 +407,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
       });
 
       if (text === SOFT_HYPHEN) {
-        tokens.push({
+        itemTokens.push({
           kind: "soft-hyphen",
           text,
           width: 0,
@@ -393,7 +421,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
         continue;
       }
 
-      tokens.push({
+      itemTokens.push({
         kind: isSpaceText(text) ? "space" : "text",
         text,
         width,
@@ -403,6 +431,20 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
         highlightMarks: item.highlightMarks,
         startOffset,
         endOffset,
+      });
+    }
+
+    const lastTokenIndex = itemTokens.length - 1;
+    for (let tokenIndex = 0; tokenIndex < itemTokens.length; tokenIndex++) {
+      const token = itemTokens[tokenIndex];
+      if (!token) continue;
+
+      tokens.push({
+        ...token,
+        highlightMarks: projectHighlightMarks(item.highlightMarks, {
+          preserveStart: tokenIndex === 0,
+          preserveEnd: tokenIndex === lastTokenIndex,
+        }),
       });
     }
   }

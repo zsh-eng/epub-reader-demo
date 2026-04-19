@@ -1,6 +1,10 @@
 import { parseChapterHtml } from "@/lib/pagination-v2/shared/parse-html";
 import type { Highlight } from "@/types/highlight";
 import {
+  EPUB_HIGHLIGHT_END_ATTRIBUTE,
+  EPUB_HIGHLIGHT_START_ATTRIBUTE,
+} from "@/types/reader.types";
+import {
   applyHighlightsToChapterHtml,
   buildHighlightSignature,
   buildHighlightsBySpineItemId,
@@ -30,7 +34,7 @@ function makeHighlight(
 }
 
 describe("ReaderV2 highlight virtualization", () => {
-  it("applies virtual marks with id and color attributes", () => {
+  it("applies virtual marks with id, color, and boundary attributes", () => {
     const html = "<p>Hello world</p>";
     const highlights: Highlight[] = [
       makeHighlight("h1", "spine-1", 0, 5, "Hello", "yellow"),
@@ -40,6 +44,8 @@ describe("ReaderV2 highlight virtualization", () => {
 
     expect(highlightedHtml).toContain('data-highlight-id="h1"');
     expect(highlightedHtml).toContain('data-color="yellow"');
+    expect(highlightedHtml).toContain(`${EPUB_HIGHLIGHT_START_ATTRIBUTE}="true"`);
+    expect(highlightedHtml).toContain(`${EPUB_HIGHLIGHT_END_ATTRIBUTE}="true"`);
   });
 
   it("preserves overlapping mark stacks through parse", () => {

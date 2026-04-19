@@ -53,6 +53,15 @@ export interface UseHighlighterOptions<T extends SyncableHighlight> {
   activeClass?: string;
 
   /**
+   * Optional attributes to stamp on the first/last DOM segment for each highlight.
+   * Segments between them receive neither attribute.
+   */
+  segmentBoundaryAttributes?: {
+    start: string;
+    end: string;
+  };
+
+  /**
    * Map a highlight to additional DOM attributes.
    *
    * This function is called for each highlight when syncing to the DOM.

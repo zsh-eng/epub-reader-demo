@@ -38,6 +38,8 @@ export type InlineRun = TextRun;
 export interface HighlightMark {
   id: string;
   color?: string;
+  isStart?: boolean;
+  isEnd?: boolean;
 }
 
 export interface TextBlock {

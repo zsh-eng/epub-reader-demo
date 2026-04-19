@@ -5,14 +5,14 @@ import { MobileReaderNav } from "@/components/Reader/MobileReaderNav";
 import ReaderContent from "@/components/ReaderContent";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import {
-  getManifestItemHref,
-  useChapterContent,
+    getManifestItemHref,
+    useChapterContent,
 } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import {
-  useAddHighlightMutation,
-  useHighlightsQuery,
+    useAddHighlightMutation,
+    useHighlightsQuery,
 } from "@/hooks/use-highlights-query";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -30,7 +30,9 @@ import {
   EPUB_HIGHLIGHT_ACTIVE_CLASS,
   EPUB_HIGHLIGHT_CLASS,
   EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_END_ATTRIBUTE,
   EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+  EPUB_HIGHLIGHT_START_ATTRIBUTE,
 } from "@/types/reader.types";
 import { useHighlighter } from "@zsh-eng/text-highlighter/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -165,6 +167,10 @@ export function Reader() {
     idAttribute: EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
     hoverClass: EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
     activeClass: EPUB_HIGHLIGHT_ACTIVE_CLASS,
+    segmentBoundaryAttributes: {
+      start: EPUB_HIGHLIGHT_START_ATTRIBUTE,
+      end: EPUB_HIGHLIGHT_END_ATTRIBUTE,
+    },
     getAttributes: (h) => ({ "data-color": h.color }),
     onHighlightClick: (id, position) => {
       // Toggle behavior: close if clicking same highlight

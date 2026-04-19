@@ -51,6 +51,7 @@ export function useHighlighter<T extends SyncableHighlight>({
   tagName = "mark",
   hoverClass,
   activeClass,
+  segmentBoundaryAttributes,
   onHighlightClick,
   onHighlightHover,
 }: UseHighlighterOptions<T>): UseHighlighterReturn {
@@ -103,6 +104,7 @@ export function useHighlighter<T extends SyncableHighlight>({
           className,
           tagName,
           attributes,
+          segmentBoundaryAttributes,
         });
         continue;
       }
@@ -131,9 +133,16 @@ export function useHighlighter<T extends SyncableHighlight>({
         });
       }
     }
-
     prevHighlightsRef.current = highlights;
-  }, [highlights, containerRef, contentReady, className, idAttribute, tagName]);
+  }, [
+    highlights,
+    containerRef,
+    contentReady,
+    className,
+    idAttribute,
+    tagName,
+    segmentBoundaryAttributes,
+  ]);
 
   // --- Interaction Manager Effect ---
   // Handles hover, click, and active states

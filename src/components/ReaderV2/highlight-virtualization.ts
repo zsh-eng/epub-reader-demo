@@ -1,4 +1,8 @@
 import type { Highlight } from "@/types/highlight";
+import {
+  EPUB_HIGHLIGHT_END_ATTRIBUTE,
+  EPUB_HIGHLIGHT_START_ATTRIBUTE,
+} from "@/types/reader.types";
 import { applyHighlights } from "@zsh-eng/text-highlighter";
 
 export interface VirtualChapterSource {
@@ -68,6 +72,10 @@ export function applyHighlightsToChapterHtml(
       tagName: "mark",
       className: "epub-highlight",
       attributes: {},
+      segmentBoundaryAttributes: {
+        start: EPUB_HIGHLIGHT_START_ATTRIBUTE,
+        end: EPUB_HIGHLIGHT_END_ATTRIBUTE,
+      },
     },
   );
 

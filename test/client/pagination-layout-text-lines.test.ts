@@ -99,7 +99,9 @@ describe("layoutPreWrapLines cursor offsets", () => {
             bold: false,
             italic: false,
             isCode: false,
-            highlightMarks: [{ id: "h1", color: "yellow" }],
+            highlightMarks: [
+              { id: "h1", color: "yellow", isStart: true, isEnd: true },
+            ],
           },
         ],
       },
@@ -124,6 +126,20 @@ describe("layoutPreWrapLines cursor offsets", () => {
       markedFragments.every(
         (fragment) => fragment.highlightMarks?.[0]?.color === "yellow",
       ),
+    ).toBe(true);
+    expect(markedFragments[0]?.highlightMarks?.[0]?.isStart).toBe(true);
+    expect(markedFragments[0]?.highlightMarks?.[0]?.isEnd).not.toBe(true);
+    expect(
+      markedFragments
+        .slice(1, -1)
+        .every(
+          (fragment) =>
+            fragment.highlightMarks?.[0]?.isStart !== true &&
+            fragment.highlightMarks?.[0]?.isEnd !== true,
+        ),
+    ).toBe(true);
+    expect(
+      markedFragments[markedFragments.length - 1]?.highlightMarks?.[0]?.isEnd,
     ).toBe(true);
   });
 

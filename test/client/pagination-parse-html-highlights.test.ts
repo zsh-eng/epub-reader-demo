@@ -21,7 +21,7 @@ describe("parseChapterHtml highlight extraction", () => {
 
   it("captures highlight mark metadata on inline runs", () => {
     const html =
-      '<p>Hello <mark data-highlight-id="h1" data-color="yellow">world</mark>!</p>';
+      '<p>Hello <mark data-highlight-id="h1" data-color="yellow" data-highlight-start="true" data-highlight-end="true">world</mark>!</p>';
 
     const blocks = parseChapterHtml(html);
     expect(blocks).toHaveLength(1);
@@ -34,7 +34,9 @@ describe("parseChapterHtml highlight extraction", () => {
     expect(block.runs[0]).toMatchObject({ text: "Hello " });
     expect(block.runs[1]).toMatchObject({
       text: "world",
-      highlightMarks: [{ id: "h1", color: "yellow" }],
+      highlightMarks: [
+        { id: "h1", color: "yellow", isStart: true, isEnd: true },
+      ],
     });
     expect(block.runs[2]).toMatchObject({ text: "!" });
   });
