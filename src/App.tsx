@@ -33,8 +33,8 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Library />} />
-            <Route path="/reader/:bookId" element={<Reader />} />
-            <Route path="/reader-v2/:bookId" element={<ReaderV2 />} />
+            <Route path="/reader-v1/:bookId" element={<Reader />} />
+            <Route path="/reader/:bookId" element={<ReaderV2 />} />
             <Route
               path="/reader-v2/debug/:bookId"
               element={<ReaderV2Debug />}
