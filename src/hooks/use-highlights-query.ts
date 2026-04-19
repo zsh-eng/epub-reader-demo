@@ -48,10 +48,9 @@ export function useHighlightsQuery(
  */
 export function useAddHighlightMutation(
   bookId: string | undefined,
-  spineItemId: string | undefined,
+  fallbackSpineItemId?: string | undefined,
 ) {
   const queryClient = useQueryClient();
-  const queryKey = highlightKeys.chapter(bookId ?? "", spineItemId ?? "");
   const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
@@ -60,32 +59,59 @@ export function useAddHighlightMutation(
       return highlight;
     },
     onMutate: async (newHighlight) => {
+      const chapterQueryKey = highlightKeys.chapter(
+        bookId ?? "",
+        newHighlight.spineItemId ?? fallbackSpineItemId ?? "",
+      );
+
       // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey });
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: chapterQueryKey }),
+        queryClient.cancelQueries({ queryKey: bookQueryKey }),
+      ]);
 
       // Snapshot the previous value
       const previousHighlights =
-        queryClient.getQueryData<Highlight[]>(queryKey);
+        queryClient.getQueryData<Highlight[]>(chapterQueryKey);
+      const previousBookHighlights =
+        queryClient.getQueryData<Highlight[]>(bookQueryKey);
 
       // Optimistically add the new highlight
-      queryClient.setQueryData<Highlight[]>(queryKey, (old = []) => [
+      queryClient.setQueryData<Highlight[]>(chapterQueryKey, (old = []) => [
+        ...old,
+        newHighlight,
+      ]);
+      queryClient.setQueryData<Highlight[]>(bookQueryKey, (old = []) => [
         ...old,
         newHighlight,
       ]);
 
       // Return context with previous value for rollback
-      return { previousHighlights };
+      return {
+        chapterQueryKey,
+        previousHighlights,
+        previousBookHighlights,
+      };
     },
     onError: (err, _newHighlight, context) => {
       // Rollback to previous value on error
-      if (context?.previousHighlights) {
-        queryClient.setQueryData(queryKey, context.previousHighlights);
+      if (context?.chapterQueryKey) {
+        queryClient.setQueryData(
+          context.chapterQueryKey,
+          context.previousHighlights,
+        );
       }
+      queryClient.setQueryData(bookQueryKey, context?.previousBookHighlights);
       console.error("Failed to add highlight:", err);
     },
-    onSettled: () => {
+    onSettled: (_data, _error, newHighlight) => {
       // Refetch after error or success to ensure consistency
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({
+        queryKey: highlightKeys.chapter(
+          bookId ?? "",
+          newHighlight.spineItemId ?? fallbackSpineItemId ?? "",
+        ),
+      });
       queryClient.invalidateQueries({ queryKey: bookQueryKey });
     },
   });

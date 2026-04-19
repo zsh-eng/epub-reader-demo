@@ -16,6 +16,7 @@ import { parseChapterHtml } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import {
+    useCallback,
     useEffect,
     useMemo,
     useRef,
@@ -67,6 +68,7 @@ interface UseReaderV2ChapterSourcesResult {
   deferredImageCacheRef: RefObject<Map<string, string>>;
   sourceLoadWallClockMs: number | null;
   initialChapterIndex: number | null;
+  getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
 }
 
 function buildChapterEntries(book: Book | null): ChapterEntry[] {
@@ -124,9 +126,11 @@ function storeLoadedChapterSource(
   chapterIndex: number,
   loadedChapter: LoadedChapterSource,
   chapterSourcesRef: MutableRefObject<Map<number, VirtualChapterSource>>,
+  chapterBlocksRef: MutableRefObject<Map<number, ParsedChapterBlocks>>,
   chapterHighlightSignaturesRef: MutableRefObject<Map<number, string>>,
 ) {
   chapterSourcesRef.current.set(chapterIndex, loadedChapter.source);
+  chapterBlocksRef.current.set(chapterIndex, loadedChapter.blocks);
   chapterHighlightSignaturesRef.current.set(
     chapterIndex,
     loadedChapter.highlightSignature,
@@ -170,6 +174,7 @@ async function loadChapterSource(options: {
 function pruneRemovedChapterSources(
   chapterEntries: ChapterEntry[],
   chapterSourcesRef: MutableRefObject<Map<number, VirtualChapterSource>>,
+  chapterBlocksRef: MutableRefObject<Map<number, ParsedChapterBlocks>>,
   chapterHighlightSignaturesRef: MutableRefObject<Map<number, string>>,
 ) {
   const validChapterIndices = new Set(
@@ -180,6 +185,7 @@ function pruneRemovedChapterSources(
     if (validChapterIndices.has(chapterIndex)) continue;
 
     chapterSourcesRef.current.delete(chapterIndex);
+    chapterBlocksRef.current.delete(chapterIndex);
     chapterHighlightSignaturesRef.current.delete(chapterIndex);
   }
 }
@@ -202,6 +208,7 @@ export function useReaderV2ChapterSources({
   const chapterSourcesRef = useRef<Map<number, VirtualChapterSource>>(
     new Map(),
   );
+  const chapterBlocksRef = useRef<Map<number, ParsedChapterBlocks>>(new Map());
   const chapterHighlightSignaturesRef = useRef<Map<number, string>>(new Map());
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
@@ -225,6 +232,7 @@ export function useReaderV2ChapterSources({
     setSourceLoadWallClockMs(null);
     setInitialChapterIndex(null);
     chapterSourcesRef.current.clear();
+    chapterBlocksRef.current.clear();
     chapterHighlightSignaturesRef.current.clear();
 
     const clearDeferredResources = () => {
@@ -273,6 +281,7 @@ export function useReaderV2ChapterSources({
           initialChapterIndex,
           firstLoadedChapter,
           chapterSourcesRef,
+          chapterBlocksRef,
           chapterHighlightSignaturesRef,
         );
         initializePagination({
@@ -303,6 +312,7 @@ export function useReaderV2ChapterSources({
             chapterIndex,
             loadedChapter,
             chapterSourcesRef,
+            chapterBlocksRef,
             chapterHighlightSignaturesRef,
           );
           addPaginationChapter(chapterIndex, loadedChapter.blocks);
@@ -338,6 +348,7 @@ export function useReaderV2ChapterSources({
     pruneRemovedChapterSources(
       chapterEntries,
       chapterSourcesRef,
+      chapterBlocksRef,
       chapterHighlightSignaturesRef,
     );
 
@@ -364,6 +375,7 @@ export function useReaderV2ChapterSources({
           highlightSignature: nextSignature,
         },
         chapterSourcesRef,
+        chapterBlocksRef,
         chapterHighlightSignaturesRef,
       );
 
@@ -373,11 +385,18 @@ export function useReaderV2ChapterSources({
     }
   }, [bookId, chapterEntries, highlightsBySpineItemId, updatePaginationChapter]);
 
+  const getChapterBlocks = useCallback(
+    (chapterIndex: number): ParsedChapterBlocks | null =>
+      chapterBlocksRef.current.get(chapterIndex) ?? null,
+    [],
+  );
+
   return {
     chapterEntries,
     bookHighlights,
     deferredImageCacheRef,
     sourceLoadWallClockMs,
     initialChapterIndex,
+    getChapterBlocks,
   };
 }

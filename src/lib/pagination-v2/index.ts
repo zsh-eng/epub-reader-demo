@@ -14,6 +14,7 @@ export {
     layoutPreWrapLines,
     layoutTextLines
 } from "./shared/layout-text-lines";
+export { resolveDomEndpointToContentAnchor } from "./engine/selection-anchors";
 export { resolveContentAnchorRangeToHighlight } from "./engine/highlight-selection";
 export type { ResolvedHighlightSelection } from "./engine/highlight-selection";
 export {

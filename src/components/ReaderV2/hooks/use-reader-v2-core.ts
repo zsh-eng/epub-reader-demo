@@ -3,6 +3,7 @@ import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
     usePagination,
+    type Block,
     type PaginationConfig,
     type SpreadConfig,
 } from "@/lib/pagination-v2";
@@ -39,6 +40,7 @@ interface UseReaderV2CoreResult {
   currentTitleChapterIndex: number | null;
   /** Start page for each chapter (by chapterIndex), null if not yet laid out. */
   chapterStartPages: (number | null)[];
+  getChapterBlocks: (chapterIndex: number) => Block[] | null;
 }
 
 const DEFAULT_PARAGRAPH_SPACING = 1.2;
@@ -139,6 +141,7 @@ export function useReaderV2Core(
     deferredImageCacheRef,
     sourceLoadWallClockMs,
     initialChapterIndex,
+    getChapterBlocks,
   } = useReaderV2ChapterSources({
     bookId,
     book,
@@ -195,5 +198,6 @@ export function useReaderV2Core(
     currentChapterIndex,
     currentTitleChapterIndex,
     chapterStartPages,
+    getChapterBlocks,
   };
 }

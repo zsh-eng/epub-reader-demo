@@ -1,4 +1,5 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
+import { useAddHighlightMutation } from "@/hooks/use-highlights-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isExternalHref, splitHrefFragment } from "@/lib/epub-resource-utils";
 import {
@@ -21,6 +22,7 @@ import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
 import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
+import { useReaderTextSelection } from "./hooks/use-reader-text-selection";
 import { resolvePaginatedLinkTarget } from "./link-navigation";
 
 const COLUMN_GAP_PX = 20;
@@ -129,11 +131,14 @@ export function ReaderV2() {
     currentChapterIndex,
     currentTitleChapterIndex,
     chapterStartPages,
+    getChapterBlocks,
   } = useReaderV2Core({
     bookId,
     viewport,
     spreadColumns: effectiveSpreadColumns,
   });
+
+  const addHighlightMutation = useAddHighlightMutation(bookId);
 
   const { activeHighlight, activeHighlightData, clearActiveHighlight } =
     useReaderActiveHighlight({
@@ -142,6 +147,23 @@ export function ReaderV2() {
       chapterEntries,
       bookHighlights,
     });
+
+  const {
+    showHighlightToolbar,
+    toolbarPosition,
+    handleHighlightColorSelect,
+    handleCloseHighlightToolbar,
+  } = useReaderTextSelection({
+    bookId,
+    spread: pagination.spread,
+    stageContentRef,
+    chapterEntries,
+    fontConfig: paginationConfig.fontConfig,
+    getChapterBlocks,
+    onHighlightCreate: (highlight) => {
+      addHighlightMutation.mutate(highlight);
+    },
+  });
 
   const chapterIndexByHrefPath = useMemo(() => {
     const hrefMap = new Map<string, number>();
@@ -175,6 +197,12 @@ export function ReaderV2() {
       setSpreadColumns(1);
     }
   }, [isMobile, spreadColumns]);
+
+  useEffect(() => {
+    if (showHighlightToolbar) {
+      clearActiveHighlight();
+    }
+  }, [clearActiveHighlight, showHighlightToolbar]);
 
   const canGoPrev = currentPage > 1;
   const canGoNext = !(
@@ -362,13 +390,11 @@ export function ReaderV2() {
             bookId={bookId}
             spineItemId={activeHighlightData?.spineItemId ?? undefined}
             highlights={bookHighlights}
-            isCreatingHighlight={false}
-            creationPosition={{ x: 0, y: 0 }}
-            onCreateColorSelect={(_color) => {
-              // ReaderV2 creation flow is handled separately.
-            }}
-            onCreateClose={() => {}}
-            activeHighlight={activeHighlight}
+            isCreatingHighlight={showHighlightToolbar}
+            creationPosition={toolbarPosition}
+            onCreateColorSelect={handleHighlightColorSelect}
+            onCreateClose={handleCloseHighlightToolbar}
+            activeHighlight={showHighlightToolbar ? null : activeHighlight}
             onEditClose={clearActiveHighlight}
             isNavVisible={chromeVisible}
             onCreateNoteSubmit={undefined}
