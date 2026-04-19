@@ -7,6 +7,9 @@ export const DEFAULT_ASPECT_RATIO = 3 / 4;
 export const BLOCKQUOTE_BORDER_LEFT_PX = 4;
 export const BLOCKQUOTE_PADDING_LEFT_EM = 1.5;
 export const BLOCKQUOTE_MARGIN_Y_EM = 1.5;
+export const LARGE_HEADING_LINE_HEIGHT_FACTOR = 1.12;
+export const MEDIUM_HEADING_LINE_HEIGHT_FACTOR = 1.18;
+export const SMALL_HEADING_LINE_HEIGHT_FACTOR = 1.24;
 
 export function headingScale(tag: string): number {
   switch (tag) {
@@ -23,9 +26,28 @@ export function headingScale(tag: string): number {
   }
 }
 
+function getHeadingLineHeightFactor(tag: string): number | null {
+  switch (tag) {
+    case "h1":
+    case "h2":
+      return LARGE_HEADING_LINE_HEIGHT_FACTOR;
+    case "h3":
+    case "h4":
+      return MEDIUM_HEADING_LINE_HEIGHT_FACTOR;
+    case "h5":
+    case "h6":
+      return SMALL_HEADING_LINE_HEIGHT_FACTOR;
+    default:
+      return null;
+  }
+}
+
 export function getLineHeight(tag: string, theme: LayoutTheme): number {
   const scale = headingScale(tag);
-  return Math.round(theme.baseFontSizePx * scale * theme.lineHeightFactor);
+  const lineHeightFactor =
+    getHeadingLineHeightFactor(tag) ?? theme.lineHeightFactor;
+
+  return Math.round(theme.baseFontSizePx * scale * lineHeightFactor);
 }
 
 export function getBlockSpacing(
