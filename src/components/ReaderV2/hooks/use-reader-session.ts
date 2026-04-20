@@ -26,12 +26,17 @@ export interface UseReaderSessionOptions {
 export type ReaderSessionStatus = "loading" | "ready" | "not-found";
 
 export interface ReaderSessionChapterAccess {
-  entries: ChapterEntry[];
   getBlocks: (chapterIndex: number) => Block[] | null;
   getCanonicalText: (chapterIndex: number) => ChapterCanonicalText | null;
-  resolveHref: (
-    href: string,
-  ) => { chapterIndex: number; targetId?: string } | null;
+}
+
+export interface ReaderSessionChaptersState {
+  /**
+   * Spine-backed chapter metadata used by reader UI like chapter navigation and
+   * labels. Similar to table-of-contents entries, but aligned to the exact
+   * chapter sources loaded into pagination.
+   */
+  entries: ChapterEntry[];
 }
 
 export interface ReaderSessionNavigationState {
@@ -49,7 +54,6 @@ export interface ReaderSessionPaginationState {
   status: PaginationStatus;
   spreadConfig: SpreadConfig;
   paginationConfig: PaginationConfig;
-  deferredImageCache: Map<string, string>;
 }
 
 export interface ReaderSessionState {
@@ -57,9 +61,14 @@ export interface ReaderSessionState {
   book: Book | null;
   settings: ReaderSettings;
   highlights: Highlight[];
+  chapters: ReaderSessionChaptersState;
   pagination: ReaderSessionPaginationState;
   navigation: ReaderSessionNavigationState;
+}
+
+export interface ReaderSessionResources {
   chapterAccess: ReaderSessionChapterAccess;
+  deferredImageCache: Map<string, string>;
 }
 
 export interface ReaderSessionActions {
@@ -77,6 +86,7 @@ export interface ReaderSessionActions {
 
 export interface UseReaderSessionResult {
   state: ReaderSessionState;
+  resources: ReaderSessionResources;
   actions: ReaderSessionActions;
 }
 
@@ -191,17 +201,10 @@ export function useReaderSession(
 
   const chapterAccess = useMemo<ReaderSessionChapterAccess>(
     () => ({
-      entries: core.chapterEntries,
       getBlocks: core.getChapterBlocks,
       getCanonicalText: core.getChapterCanonicalText,
-      resolveHref,
     }),
-    [
-      core.chapterEntries,
-      core.getChapterBlocks,
-      core.getChapterCanonicalText,
-      resolveHref,
-    ],
+    [core.getChapterBlocks, core.getChapterCanonicalText],
   );
 
   const state = useMemo<ReaderSessionState>(() => {
@@ -216,12 +219,14 @@ export function useReaderSession(
       book: core.book,
       settings: core.settings,
       highlights: core.bookHighlights,
+      chapters: {
+        entries: core.chapterEntries,
+      },
       pagination: {
         spread: core.pagination.spread,
         status: core.pagination.status,
         spreadConfig: core.spreadConfig,
         paginationConfig: core.paginationConfig,
-        deferredImageCache: core.deferredImageCacheRef.current,
       },
       navigation: {
         currentPage: core.currentPage,
@@ -236,17 +241,15 @@ export function useReaderSession(
         currentTitleChapterIndex: core.currentTitleChapterIndex,
         chapterStartPages: core.chapterStartPages,
       },
-      chapterAccess,
     };
   }, [
-    chapterAccess,
     core.book,
     core.bookHighlights,
+    core.chapterEntries,
     core.chapterStartPages,
     core.currentChapterIndex,
     core.currentPage,
     core.currentTitleChapterIndex,
-    core.deferredImageCacheRef,
     core.isBookLoading,
     core.pagination.spread,
     core.pagination.status,
@@ -256,6 +259,14 @@ export function useReaderSession(
     core.totalPages,
     options.bookId,
   ]);
+
+  const resources = useMemo<ReaderSessionResources>(
+    () => ({
+      chapterAccess,
+      deferredImageCache: core.deferredImageCacheRef.current,
+    }),
+    [chapterAccess, core.deferredImageCacheRef],
+  );
 
   const actions = useMemo<ReaderSessionActions>(
     () => ({
@@ -286,6 +297,7 @@ export function useReaderSession(
 
   return {
     state,
+    resources,
     actions,
   };
 }

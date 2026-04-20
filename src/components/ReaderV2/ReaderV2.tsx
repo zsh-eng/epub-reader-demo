@@ -59,6 +59,7 @@ export function ReaderV2() {
 
   const {
     state: sessionState,
+    resources: sessionResources,
     actions: sessionActions,
   } = useReaderSession({
     bookId,
@@ -70,7 +71,7 @@ export function ReaderV2() {
     useReaderActiveHighlight({
       spread: sessionState.pagination.spread,
       stageContentRef,
-      chapterEntries: sessionState.chapterAccess.entries,
+      chapterEntries: sessionState.chapters.entries,
       bookHighlights: sessionState.highlights,
     });
 
@@ -83,10 +84,10 @@ export function ReaderV2() {
     bookId,
     spread: sessionState.pagination.spread,
     stageContentRef,
-    chapterEntries: sessionState.chapterAccess.entries,
+    chapterEntries: sessionState.chapters.entries,
     fontConfig: sessionState.pagination.paginationConfig.fontConfig,
-    getChapterBlocks: sessionState.chapterAccess.getBlocks,
-    getChapterCanonicalText: sessionState.chapterAccess.getCanonicalText,
+    getChapterBlocks: sessionResources.chapterAccess.getBlocks,
+    getChapterCanonicalText: sessionResources.chapterAccess.getCanonicalText,
     onHighlightCreate: sessionActions.createHighlight,
   });
 
@@ -191,7 +192,7 @@ export function ReaderV2() {
               columnSpacingPx={COLUMN_GAP_PX}
               paginationConfig={sessionState.pagination.paginationConfig}
               bookId={bookId}
-              deferredImageCache={sessionState.pagination.deferredImageCache}
+              deferredImageCache={sessionResources.deferredImageCache}
               stageContentRef={stageContentRef}
               onPageContentClick={onPageContentClick}
               paddingTopPx={stagePadding.paddingTop}
@@ -236,7 +237,7 @@ export function ReaderV2() {
             totalPages={sessionState.navigation.totalPages}
             currentChapterIndex={sessionState.navigation.currentChapterIndex}
             currentTitleChapterIndex={sessionState.navigation.currentTitleChapterIndex}
-            chapterEntries={sessionState.chapterAccess.entries}
+            chapterEntries={sessionState.chapters.entries}
             chapterStartPages={sessionState.navigation.chapterStartPages}
             onScrubPreview={sessionActions.previewPage}
             onScrubCommit={sessionActions.commitPage}
