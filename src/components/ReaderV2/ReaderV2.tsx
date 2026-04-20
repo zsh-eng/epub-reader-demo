@@ -1,12 +1,9 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
-import { useAddHighlightMutation } from "@/hooks/use-highlights-query";
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { isExternalHref, splitHrefFragment } from "@/lib/epub-resource-utils";
 import {
     useCallback,
     useEffect,
-    useMemo,
     useRef,
     useState,
     type MouseEvent,
@@ -22,9 +19,8 @@ import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
 import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
+import { useReaderSession } from "./hooks/use-reader-session";
 import { useReaderTextSelection } from "./hooks/use-reader-text-selection";
-import { useReaderV2Core } from "./hooks/use-reader-v2-core";
-import { resolvePaginatedLinkTarget } from "./link-navigation";
 
 const COLUMN_GAP_PX = 20;
 
@@ -62,37 +58,20 @@ export function ReaderV2() {
   });
 
   const {
-    book,
-    isBookLoading,
-    settings,
-    onUpdateSettings,
-    chapterEntries,
-    bookHighlights,
-    spreadConfig,
-    pagination,
-    paginationConfig,
-    deferredImageCacheRef,
-    currentPage,
-    totalPages,
-    currentChapterIndex,
-    currentTitleChapterIndex,
-    chapterStartPages,
-    getChapterBlocks,
-    getChapterCanonicalText,
-  } = useReaderV2Core({
+    state: sessionState,
+    actions: sessionActions,
+  } = useReaderSession({
     bookId,
     viewport: stageViewport,
     spreadColumns: effectiveSpreadColumns,
   });
 
-  const addHighlightMutation = useAddHighlightMutation(bookId);
-
   const { activeHighlight, activeHighlightData, clearActiveHighlight } =
     useReaderActiveHighlight({
-      spread: pagination.spread,
+      spread: sessionState.pagination.spread,
       stageContentRef,
-      chapterEntries,
-      bookHighlights,
+      chapterEntries: sessionState.chapterAccess.entries,
+      bookHighlights: sessionState.highlights,
     });
 
   const {
@@ -102,78 +81,20 @@ export function ReaderV2() {
     handleCloseHighlightToolbar,
   } = useReaderTextSelection({
     bookId,
-    spread: pagination.spread,
+    spread: sessionState.pagination.spread,
     stageContentRef,
-    chapterEntries,
-    fontConfig: paginationConfig.fontConfig,
-    getChapterBlocks,
-    getChapterCanonicalText,
-    onHighlightCreate: (highlight) => addHighlightMutation.mutate(highlight),
+    chapterEntries: sessionState.chapterAccess.entries,
+    fontConfig: sessionState.pagination.paginationConfig.fontConfig,
+    getChapterBlocks: sessionState.chapterAccess.getBlocks,
+    getChapterCanonicalText: sessionState.chapterAccess.getCanonicalText,
+    onHighlightCreate: sessionActions.createHighlight,
   });
-
-  const chapterIndexByHrefPath = useMemo(() => {
-    const hrefMap = new Map<string, number>();
-    for (const chapter of chapterEntries) {
-      hrefMap.set(splitHrefFragment(chapter.href).path, chapter.index);
-    }
-    return hrefMap;
-  }, [chapterEntries]);
 
   useEffect(() => {
     if (showHighlightToolbar) {
       clearActiveHighlight();
     }
   }, [clearActiveHighlight, showHighlightToolbar]);
-
-  const canGoPrev = currentPage > 1;
-  const canGoNext = !(
-    pagination.status === "ready" &&
-    totalPages > 0 &&
-    currentPage >= totalPages
-  );
-
-  const onPrevChapter = useCallback(() => {
-    if (currentChapterIndex > 0) {
-      pagination.goToChapter(currentChapterIndex - 1, {
-        intent: { kind: "jump", source: "chapter" },
-      });
-    }
-  }, [currentChapterIndex, pagination]);
-
-  const onNextChapter = useCallback(() => {
-    if (currentChapterIndex < chapterEntries.length - 1) {
-      pagination.goToChapter(currentChapterIndex + 1, {
-        intent: { kind: "jump", source: "chapter" },
-      });
-    }
-  }, [currentChapterIndex, chapterEntries.length, pagination]);
-
-  const onScrubPreview = useCallback(
-    (page: number) => {
-      pagination.goToPage(page, {
-        intent: { kind: "preview", source: "scrubber" },
-      });
-    },
-    [pagination],
-  );
-
-  const onScrubCommit = useCallback(
-    (page: number) => {
-      pagination.goToPage(page, {
-        intent: { kind: "jump", source: "scrubber" },
-      });
-    },
-    [pagination],
-  );
-
-  const onGoToChapter = useCallback(
-    (chapterIndex: number) => {
-      pagination.goToChapter(chapterIndex, {
-        intent: { kind: "jump", source: "chapter" },
-      });
-    },
-    [pagination],
-  );
 
   const onPageContentClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -183,38 +104,21 @@ export function ReaderV2() {
 
       const href = anchor.getAttribute("href")?.trim();
       if (!href) return;
-      if (isExternalHref(href)) return;
+
+      const handled = sessionActions.openInternalHref(href);
+      if (!handled) return;
 
       event.preventDefault();
       event.stopPropagation();
-
-      const resolvedTarget = resolvePaginatedLinkTarget(
-        href,
-        chapterIndexByHrefPath,
-      );
-      if (!resolvedTarget) return;
-
-      if (resolvedTarget.targetId) {
-        pagination.goToTarget(
-          resolvedTarget.chapterIndex,
-          resolvedTarget.targetId,
-          { intent: { kind: "jump", source: "internal-link" } },
-        );
-        return;
-      }
-
-      pagination.goToChapter(resolvedTarget.chapterIndex, {
-        intent: { kind: "jump", source: "internal-link" },
-      });
     },
-    [chapterIndexByHrefPath, pagination],
+    [sessionActions],
   );
 
-  if (isBookLoading) {
+  if (sessionState.status === "loading") {
     return <ReaderStateScreen showSpinner title="Loading book" />;
   }
 
-  if (!bookId || !book) {
+  if (sessionState.status === "not-found" || !bookId || !sessionState.book) {
     return (
       <ReaderStateScreen
         title="Book not found"
@@ -223,12 +127,14 @@ export function ReaderV2() {
     );
   }
 
+  const book = sessionState.book;
+
   return (
     <ReaderController
-      onNextPage={pagination.nextSpread}
-      onPrevPage={pagination.prevSpread}
-      canGoPrev={canGoPrev}
-      canGoNext={canGoNext}
+      onNextPage={sessionActions.nextSpread}
+      onPrevPage={sessionActions.prevSpread}
+      canGoPrev={sessionState.navigation.canGoPrev}
+      canGoNext={sessionState.navigation.canGoNext}
       chromeInteractionMode={chromeInteractionMode}
       isChromePinned={isChromePinned}
       containerRef={stageSlotRef}
@@ -280,12 +186,12 @@ export function ReaderV2() {
             }}
           >
             <SpreadStage
-              spread={pagination.spread}
-              spreadConfig={spreadConfig}
+              spread={sessionState.pagination.spread}
+              spreadConfig={sessionState.pagination.spreadConfig}
               columnSpacingPx={COLUMN_GAP_PX}
-              paginationConfig={paginationConfig}
+              paginationConfig={sessionState.pagination.paginationConfig}
               bookId={bookId}
-              deferredImageCache={deferredImageCacheRef.current}
+              deferredImageCache={sessionState.pagination.deferredImageCache}
               stageContentRef={stageContentRef}
               onPageContentClick={onPageContentClick}
               paddingTopPx={stagePadding.paddingTop}
@@ -315,8 +221,8 @@ export function ReaderV2() {
           <ReaderSettingsSheet
             isOpen={isSettingsOpen}
             onClose={() => setIsSettingsOpen(false)}
-            settings={settings}
-            onUpdateSettings={onUpdateSettings}
+            settings={sessionState.settings}
+            onUpdateSettings={sessionActions.updateSettings}
             showColumnSelector={showColumnSelector}
             spreadColumns={spreadColumns}
             onSpreadColumnsChange={setSpreadColumns}
@@ -326,24 +232,24 @@ export function ReaderV2() {
           <ReaderV2Footer
             chromeVisible={chromeVisible}
             chromeSurfaceProps={chromeSurfaceProps}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            currentChapterIndex={currentChapterIndex}
-            currentTitleChapterIndex={currentTitleChapterIndex}
-            chapterEntries={chapterEntries}
-            chapterStartPages={chapterStartPages}
-            onScrubPreview={onScrubPreview}
-            onScrubCommit={onScrubCommit}
-            onGoToChapter={onGoToChapter}
-            onPrevChapter={onPrevChapter}
-            onNextChapter={onNextChapter}
-            isLoading={pagination.status !== "ready"}
+            currentPage={sessionState.navigation.currentPage}
+            totalPages={sessionState.navigation.totalPages}
+            currentChapterIndex={sessionState.navigation.currentChapterIndex}
+            currentTitleChapterIndex={sessionState.navigation.currentTitleChapterIndex}
+            chapterEntries={sessionState.chapterAccess.entries}
+            chapterStartPages={sessionState.navigation.chapterStartPages}
+            onScrubPreview={sessionActions.previewPage}
+            onScrubCommit={sessionActions.commitPage}
+            onGoToChapter={sessionActions.goToChapter}
+            onPrevChapter={sessionActions.goToPreviousChapter}
+            onNextChapter={sessionActions.goToNextChapter}
+            isLoading={sessionState.pagination.status !== "ready"}
           />
 
           <HighlightToolbarContainer
             bookId={bookId}
             spineItemId={activeHighlightData?.spineItemId ?? undefined}
-            highlights={bookHighlights}
+            highlights={sessionState.highlights}
             isCreatingHighlight={showHighlightToolbar}
             creationPosition={toolbarPosition}
             onCreateColorSelect={handleHighlightColorSelect}
