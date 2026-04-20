@@ -5,6 +5,11 @@ import {
     CONTENT_ANCHOR_START_ATTR,
     serializeTextCursorOffset,
 } from "@/lib/pagination-v2/content-anchor-dom";
+import {
+    getInlineRaisePx,
+    getNoteRefMetrics,
+} from "@/lib/pagination-v2/shared/inline-presentation";
+import { measureTextWidth } from "@/lib/pagination-v2/shared/measure";
 import { cn } from "@/lib/utils";
 import {
     EPUB_HIGHLIGHT_END_ATTRIBUTE,
@@ -23,6 +28,90 @@ interface PageSliceViewProps {
   bookId: string;
   deferredImageCache: Map<string, string>;
   baseFontSize: number;
+}
+
+function NoteRefBadge({ children }: { children: ReactNode }) {
+  return <span className="reader-v2-note-ref-badge">{children}</span>;
+}
+
+function isClusteredLinkFragment(fragment: PageFragment): boolean {
+  return Boolean(fragment.link) && fragment.inlineRole !== "note-ref";
+}
+
+function renderFragmentSequence(
+  fragments: PageFragment[],
+  keyPrefix: string,
+  getStyle: (
+    fragment: PageFragment,
+    fragmentIndex: number,
+  ) => CSSProperties,
+): ReactNode[] {
+  const nodes: ReactNode[] = [];
+
+  for (let index = 0; index < fragments.length; ) {
+    const fragment = fragments[index];
+    if (!fragment) break;
+
+    if (!isClusteredLinkFragment(fragment)) {
+      nodes.push(
+        renderInlineFragment(
+          fragment,
+          `${keyPrefix}-frag-${index}`,
+          getStyle(fragment, index),
+        ),
+      );
+      index += 1;
+      continue;
+    }
+
+    const href = fragment.link?.href;
+    const group: PageFragment[] = [fragment];
+    let groupEnd = index + 1;
+
+    while (groupEnd < fragments.length) {
+      const nextFragment = fragments[groupEnd];
+      if (
+        !nextFragment ||
+        !isClusteredLinkFragment(nextFragment) ||
+        nextFragment.link?.href !== href
+      ) {
+        break;
+      }
+
+      group.push(nextFragment);
+      groupEnd += 1;
+    }
+
+    if (group.length === 1) {
+      nodes.push(
+        renderInlineFragment(
+          fragment,
+          `${keyPrefix}-frag-${index}`,
+          getStyle(fragment, index),
+        ),
+      );
+      index = groupEnd;
+      continue;
+    }
+
+    nodes.push(
+      <span
+        key={`${keyPrefix}-cluster-${index}`}
+        className="reader-v2-inline-link-cluster"
+      >
+        {group.map((groupFragment, groupOffset) =>
+          renderInlineFragment(
+            groupFragment,
+            `${keyPrefix}-frag-${index + groupOffset}`,
+            getStyle(groupFragment, index + groupOffset),
+          ),
+        )}
+      </span>,
+    );
+    index = groupEnd;
+  }
+
+  return nodes;
 }
 
 function renderFragmentContent(
@@ -80,28 +169,71 @@ function renderInlineFragment(
   style: CSSProperties,
 ) {
   const className = cn({
-    "reader-v2-inline-link": Boolean(fragment.link),
+    "reader-v2-inline-link":
+      Boolean(fragment.link) && fragment.inlineRole !== "note-ref",
     "reader-v2-inline-code": fragment.isCode,
+    "reader-v2-inline-superscript": fragment.inlineRole === "superscript",
+    "reader-v2-note-ref": fragment.inlineRole === "note-ref",
   });
   const content = renderFragmentContent(fragment);
   const anchorData = getFragmentAnchorData(fragment);
+  const raisePx = getInlineRaisePx(fragment.inlineRole, fragment.font);
+  const noteRefMetrics =
+    fragment.inlineRole === "note-ref"
+      ? getNoteRefMetrics(
+          fragment.font,
+          measureTextWidth(fragment.text, fragment.font),
+        )
+      : null;
 
   if (fragment.link) {
     return (
       <a
         key={key}
         href={fragment.link.href}
-        style={style}
+        style={{
+          ...style,
+          ...(fragment.inlineRole === "superscript"
+            ? {
+                display: "inline-block",
+                lineHeight: 1,
+                transform: `translateY(-${raisePx}px)`,
+              }
+            : {}),
+          ...(noteRefMetrics
+            ? {
+                boxSizing: "border-box",
+                minWidth: `${noteRefMetrics.totalWidthPx}px`,
+                height: `${noteRefMetrics.heightPx}px`,
+                lineHeight: 1,
+                transform: `translateY(-${noteRefMetrics.raisePx}px)`,
+              }
+            : {}),
+        }}
         className={className}
         {...anchorData}
       >
-        {content}
+        {noteRefMetrics ? <NoteRefBadge>{content}</NoteRefBadge> : content}
       </a>
     );
   }
 
   return (
-    <span key={key} style={style} className={className} {...anchorData}>
+    <span
+      key={key}
+      style={{
+        ...style,
+        ...(fragment.inlineRole === "superscript"
+          ? {
+              display: "inline-block",
+              lineHeight: 1,
+              transform: `translateY(-${raisePx}px)`,
+            }
+          : {}),
+      }}
+      className={className}
+      {...anchorData}
+    >
       {content}
     </span>
   );
@@ -193,21 +325,19 @@ export function PageSliceView({
                         : undefined,
                   }}
                 >
-                  {contentFragments.map((fragment, fragmentIndex) => (
-                    renderInlineFragment(
-                      fragment,
-                      `${key}-line-${lineIndex}-frag-${fragmentIndex}`,
-                      {
-                        font: fragment.font,
-                        lineHeight: "inherit",
-                        marginRight:
-                          fragment.marginRightPx !== undefined &&
-                          Math.abs(fragment.marginRightPx) > 0.01
-                            ? `${fragment.marginRightPx}px`
-                            : undefined,
-                      },
-                    )
-                  ))}
+                  {renderFragmentSequence(
+                    contentFragments,
+                    `${key}-line-${lineIndex}`,
+                    (fragment) => ({
+                      font: fragment.font,
+                      lineHeight: "inherit",
+                      marginRight:
+                        fragment.marginRightPx !== undefined &&
+                        Math.abs(fragment.marginRightPx) > 0.01
+                          ? `${fragment.marginRightPx}px`
+                          : undefined,
+                    }),
+                  )}
                 </span>
                 {trailingBoundaryFragment ? (
                   renderInlineFragment(
@@ -224,20 +354,18 @@ export function PageSliceView({
           })
         : slice.lines.map((line, lineIndex) => (
             <Fragment key={`${key}-line-${lineIndex}`}>
-              {line.fragments.map((fragment, fragmentIndex) => (
-                renderInlineFragment(
-                  fragment,
-                  `${key}-line-${lineIndex}-frag-${fragmentIndex}`,
-                  {
-                    marginLeft:
-                      fragment.leadingGap > 0
-                        ? `${fragment.leadingGap}px`
-                        : undefined,
-                    font: fragment.font,
-                    lineHeight: "inherit",
-                  },
-                )
-              ))}
+              {renderFragmentSequence(
+                line.fragments,
+                `${key}-line-${lineIndex}`,
+                (fragment) => ({
+                  marginLeft:
+                    fragment.leadingGap > 0
+                      ? `${fragment.leadingGap}px`
+                      : undefined,
+                  font: fragment.font,
+                  lineHeight: "inherit",
+                }),
+              )}
             </Fragment>
           ))}
     </p>

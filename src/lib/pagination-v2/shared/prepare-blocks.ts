@@ -8,9 +8,12 @@ import {
     measureCollapsedSpaceWidth,
 } from "./measure";
 import {
+    getInlineChromeWidthPx,
+    SUPERSCRIPT_FONT_SCALE,
+} from "./inline-presentation";
+import {
     CODE_CHROME_PX,
-    getBlockFontScale,
-    isHeadingTag,
+    getBlockFontScale, isHeadingTag
 } from "./spacing";
 import type {
     Block,
@@ -98,6 +101,9 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   if (run.isCode) {
     family = fonts.codeFamily;
     sizePx = Math.round(Math.max(11, fonts.baseSizePx * scale * 0.92));
+  } else if (run.inlineRole === "superscript" || run.inlineRole === "note-ref") {
+    family = fonts.bodyFamily;
+    sizePx = Math.round(Math.max(9, fonts.baseSizePx * scale * SUPERSCRIPT_FONT_SCALE));
   } else if (isHeading) {
     family = fonts.headingFamily;
     sizePx = Math.round(fonts.baseSizePx * scale);
@@ -107,7 +113,12 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   }
 
   const weight = run.bold ? 700 : isHeading ? 600 : 400;
-  const style = run.italic || tag === "blockquote" ? "italic " : "";
+  const style =
+    run.inlineRole === "note-ref"
+      ? ""
+      : run.italic || tag === "blockquote"
+        ? "italic "
+        : "";
 
   return `${style}${weight} ${Math.round(sizePx * 100) / 100}px ${family}`;
 }
@@ -154,6 +165,7 @@ function prepareTextBlock(
     items.push({
       kind: "text",
       font,
+      ...(run.inlineRole ? { inlineRole: run.inlineRole } : {}),
       ...(run.link ? { link: { ...run.link } } : {}),
       ...(run.targetIds && run.targetIds.length > 0
         ? { targetIds: [...run.targetIds] }
@@ -163,7 +175,9 @@ function prepareTextBlock(
         run.highlightMarks && run.highlightMarks.length > 0
           ? [...run.highlightMarks]
           : undefined,
-      chromeWidth: run.isCode ? CODE_CHROME_PX : 0,
+      chromeWidth: run.isCode
+        ? CODE_CHROME_PX
+        : getInlineChromeWidthPx(run.inlineRole, font, cached.fullWidth),
       prepared: cached.prepared,
       rawText: preparedText,
       fullText: cached.fullText,

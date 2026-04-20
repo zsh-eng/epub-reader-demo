@@ -39,6 +39,7 @@
 import {
     createDeferredEpubImageSrc,
     DEFERRED_EPUB_IMAGE_ATTR,
+    isExternalHref,
 } from "@/lib/epub-resource-utils";
 import {
   EPUB_HIGHLIGHT_END_ATTRIBUTE,
@@ -102,6 +103,7 @@ interface InlineContext {
   bold: boolean;
   italic: boolean;
   isCode: boolean;
+  inlineRole?: InlineRun["inlineRole"];
   link?: LinkRef;
   highlightMarks: HighlightMark[];
 }
@@ -158,6 +160,7 @@ function runsMatch(a: InlineRun, b: InlineRun): boolean {
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.isCode === b.isCode &&
+    a.inlineRole === b.inlineRole &&
     linksMatch(a.link, b.link) &&
     targetIdsMatch(a.targetIds, b.targetIds) &&
     marksMatch(a.highlightMarks, b.highlightMarks)
@@ -186,6 +189,7 @@ function createTextRun(
     bold: ctx.bold,
     italic: ctx.italic,
     isCode: ctx.isCode,
+    ...(ctx.inlineRole ? { inlineRole: ctx.inlineRole } : {}),
     ...(ctx.link ? { link: { ...ctx.link } } : {}),
     ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
     highlightMarks:
@@ -371,6 +375,12 @@ function extractInlineNode(
   if (tag === "em" || tag === "i") next.italic = true;
   if (tag === "a") {
     next.link = readLinkHref(node);
+  }
+  if (tag === "sup") {
+    next.inlineRole =
+      next.link && !isExternalHref(next.link.href)
+        ? "note-ref"
+        : "superscript";
   }
   if (tag === "code" || tag === "kbd" || tag === "samp") next.isCode = true;
 

@@ -35,6 +35,7 @@ type InlineLayoutToken = {
   text: string;
   width: number;
   font: string;
+  inlineRole?: PageFragment["inlineRole"];
   link?: PageFragment["link"];
   isCode: boolean;
   highlightMarks?: PageFragment["highlightMarks"];
@@ -160,6 +161,7 @@ function layoutTextLinesGreedy(
             text: item.fullText,
             font: item.font,
             leadingGap,
+            inlineRole: item.inlineRole,
             link: item.link,
             isCode: item.isCode,
             highlightMarks: projectHighlightMarks(item.highlightMarks, {
@@ -199,6 +201,7 @@ function layoutTextLinesGreedy(
         text: line.text,
         font: item.font,
         leadingGap,
+        inlineRole: item.inlineRole,
         link: item.link,
         isCode: item.isCode,
         highlightMarks: projectHighlightMarks(item.highlightMarks, {
@@ -384,6 +387,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
         text: " ",
         width: item.leadingGap,
         font: item.font,
+        inlineRole: item.inlineRole,
         link: item.link,
         isCode: item.isCode,
         highlightMarks: item.highlightMarks,
@@ -426,6 +430,7 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
         text,
         width,
         font: item.font,
+        inlineRole: item.inlineRole,
         link: item.link,
         isCode: item.isCode,
         highlightMarks: item.highlightMarks,
@@ -597,6 +602,7 @@ function buildKnuthPlassLine(
       text: token.kind === "space" ? " " : token.text,
       font: token.font,
       leadingGap: 0,
+      inlineRole: token.inlineRole,
       link: token.link,
       isCode: token.isCode,
       highlightMarks: token.highlightMarks,
@@ -615,6 +621,9 @@ function buildKnuthPlassLine(
       text: "-",
       font: softHyphenToken?.font ?? "",
       leadingGap: 0,
+      ...(softHyphenToken?.inlineRole
+        ? { inlineRole: softHyphenToken.inlineRole }
+        : {}),
       ...(softHyphenToken?.link ? { link: softHyphenToken.link } : {}),
       isCode: softHyphenToken?.isCode ?? false,
       highlightMarks: softHyphenToken?.highlightMarks,

@@ -181,6 +181,57 @@ describe("layoutPreWrapLines cursor offsets", () => {
     ).toBe(true);
   });
 
+  it("reserves extra width for note-ref hit areas while keeping plain superscripts lightweight", () => {
+    const blocks: Block[] = [
+      {
+        type: "text",
+        id: "sup-block",
+        tag: "p",
+        runs: [
+          {
+            kind: "text",
+            text: "12",
+            bold: false,
+            italic: false,
+            isCode: false,
+            inlineRole: "note-ref",
+            link: { href: "#note-12" },
+          },
+          {
+            kind: "text",
+            text: "2",
+            bold: false,
+            italic: false,
+            isCode: false,
+            inlineRole: "superscript",
+          },
+        ],
+      },
+    ];
+
+    const prepared = prepareBlocks(blocks, BASE_FONT_CONFIG);
+    const textBlock = prepared[0];
+    expect(textBlock?.type).toBe("text");
+    if (!textBlock || textBlock.type !== "text") return;
+
+    expect(textBlock.items).toHaveLength(2);
+    expect(textBlock.items[0]?.inlineRole).toBe("note-ref");
+    expect(textBlock.items[0]?.chromeWidth).toBeGreaterThan(0);
+    expect(textBlock.items[1]?.inlineRole).toBe("superscript");
+    expect(textBlock.items[1]?.chromeWidth).toBe(0);
+    expect(textBlock.items[0]?.font).toContain("12px");
+    expect(textBlock.items[1]?.font).toContain("12px");
+
+    const { lines } = layoutTextLines(textBlock.items, 240);
+    const fragments = lines.flatMap((line) => line.fragments);
+    expect(fragments.find((fragment) => fragment.text === "12")?.inlineRole).toBe(
+      "note-ref",
+    );
+    expect(fragments.find((fragment) => fragment.text === "2")?.inlineRole).toBe(
+      "superscript",
+    );
+  });
+
   it("preserves item boundaries for run-owned targets in pre-wrap layout", () => {
     const blocks: Block[] = [
       {

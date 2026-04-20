@@ -28,6 +28,33 @@ describe("parseChapterHtml link and target extraction", () => {
     });
   });
 
+  it("marks internal-link superscripts as note refs and plain sup as superscript text", () => {
+    const blocks = parseChapterHtml(`
+      <p>
+        studies<a href="#note-12"><sup>12</sup></a>
+        H<sup>2</sup>O
+      </p>
+    `);
+
+    expect(blocks).toHaveLength(1);
+    const block = blocks[0];
+    expect(block?.type).toBe("text");
+    if (!block || block.type !== "text") return;
+
+    const noteRefRun = block.runs.find((run) => run.text === "12");
+    const superscriptRun = block.runs.find((run) => run.text === "2");
+
+    expect(noteRefRun).toMatchObject({
+      text: "12",
+      inlineRole: "note-ref",
+      link: { href: "#note-12" },
+    });
+    expect(superscriptRun).toMatchObject({
+      text: "2",
+      inlineRole: "superscript",
+    });
+  });
+
   it("preserves block target ids from id, xml:id, and name", () => {
     const blocks = parseChapterHtml(`
       <p id="p-1">alpha</p>

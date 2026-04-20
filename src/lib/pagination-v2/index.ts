@@ -40,6 +40,7 @@ export type {
     FontConfig,
     HighlightMark,
     ImageSlice,
+    InlineRole,
     InlineRun,
     LayoutTheme,
     LinkRef,

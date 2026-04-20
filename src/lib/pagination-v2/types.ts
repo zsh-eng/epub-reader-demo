@@ -15,6 +15,7 @@ export type {
     HighlightMark,
     ImageBlock,
     ImageSlice,
+    InlineRole,
     InlineRun,
     LayoutTheme,
     LinkRef,

@@ -21,6 +21,8 @@ export interface LinkRef {
   href: string;
 }
 
+export type InlineRole = "superscript" | "note-ref";
+
 export interface TextRun {
   kind: "text";
   text: string;
@@ -28,6 +30,7 @@ export interface TextRun {
   bold: boolean;
   italic: boolean;
   isCode: boolean;
+  inlineRole?: InlineRole;
   link?: LinkRef;
   targetIds?: string[];
   highlightMarks?: HighlightMark[];
@@ -88,6 +91,7 @@ export interface FontConfig {
 export interface PreparedTextItem {
   kind: "text";
   font: string;
+  inlineRole?: InlineRole;
   link?: LinkRef;
   targetIds?: string[];
   isCode: boolean;
@@ -167,6 +171,7 @@ export interface PageFragment {
   text: string;
   font: string;
   leadingGap: number;
+  inlineRole?: InlineRole;
   link?: LinkRef;
   isCode: boolean;
   highlightMarks?: HighlightMark[];

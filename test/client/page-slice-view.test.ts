@@ -67,6 +67,155 @@ describe("PageSliceView", () => {
     expect(markup).toContain(">Jump<");
   });
 
+  it("wraps adjacent fragments of the same inline link in a shared cluster", () => {
+    const slice: TextSlice = {
+      type: "text",
+      blockId: "clustered-link-block",
+      tag: "p",
+      lineHeight: 24,
+      textAlign: "left",
+      renderMode: "native",
+      lines: [
+        {
+          fragments: [
+            {
+              kind: "text",
+              text: "Figure",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              link: { href: "#Fig29" },
+              isCode: false,
+            },
+            {
+              kind: "space",
+              text: " ",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              link: { href: "#Fig29" },
+              isCode: false,
+            },
+            {
+              kind: "text",
+              text: "29",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              link: { href: "#Fig29" },
+              isCode: false,
+            },
+          ],
+          isLastInBlock: true,
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(PageSliceView, {
+        slice,
+        sliceIndex: 0,
+        bookId: "book-1",
+        deferredImageCache: new Map(),
+        baseFontSize: 16,
+      }),
+    );
+
+    expect(markup).toContain("reader-v2-inline-link-cluster");
+    expect(markup).toContain('href="#Fig29"');
+    expect(markup.match(/href="#Fig29"/g)).toHaveLength(3);
+  });
+
+  it("renders note refs as badge anchors with preserved anchor metadata", () => {
+    const slice: TextSlice = {
+      type: "text",
+      blockId: "note-ref-block",
+      tag: "p",
+      lineHeight: 24,
+      textAlign: "left",
+      renderMode: "native",
+      lines: [
+        {
+          fragments: [
+            {
+              kind: "text",
+              text: "12",
+              font: '400 12px "Inter", sans-serif',
+              leadingGap: 0,
+              inlineRole: "note-ref",
+              link: { href: "#note-12" },
+              isCode: false,
+              anchorStart: {
+                itemIndex: 1,
+                segmentIndex: 0,
+                graphemeIndex: 0,
+              },
+              anchorEnd: {
+                itemIndex: 1,
+                segmentIndex: 1,
+                graphemeIndex: 0,
+              },
+            },
+          ],
+          isLastInBlock: true,
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(PageSliceView, {
+        slice,
+        sliceIndex: 0,
+        bookId: "book-1",
+        deferredImageCache: new Map(),
+        baseFontSize: 16,
+      }),
+    );
+
+    expect(markup).toContain('href="#note-12"');
+    expect(markup).toContain("reader-v2-note-ref");
+    expect(markup).toContain("reader-v2-note-ref-badge");
+    expect(markup).toContain(`${CONTENT_ANCHOR_START_ATTR}="1:0:0"`);
+    expect(markup).toContain(`${CONTENT_ANCHOR_END_ATTR}="1:1:0"`);
+    expect(markup).toContain(">12<");
+  });
+
+  it("renders plain superscripts as raised inline spans", () => {
+    const slice: TextSlice = {
+      type: "text",
+      blockId: "superscript-block",
+      tag: "p",
+      lineHeight: 24,
+      textAlign: "left",
+      renderMode: "native",
+      lines: [
+        {
+          fragments: [
+            {
+              kind: "text",
+              text: "2",
+              font: '400 12px "Inter", sans-serif',
+              leadingGap: 0,
+              inlineRole: "superscript",
+              isCode: false,
+            },
+          ],
+          isLastInBlock: true,
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(PageSliceView, {
+        slice,
+        sliceIndex: 0,
+        bookId: "book-1",
+        deferredImageCache: new Map(),
+        baseFontSize: 16,
+      }),
+    );
+
+    expect(markup).toContain("reader-v2-inline-superscript");
+    expect(markup).toContain(">2<");
+  });
+
   it("keeps fragment anchor metadata when text is wrapped in highlight marks", () => {
     const slice: TextSlice = {
       type: "text",
