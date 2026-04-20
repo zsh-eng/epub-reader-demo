@@ -103,9 +103,8 @@ export function usePaginationTapNav(options: UsePaginationTapNavOptions) {
   canGoNextRef.current = canGoNext;
   canGoPrevRef.current = canGoPrev;
 
-  const container = containerRef.current;
-
   useEffect(() => {
+    const container = containerRef.current;
     if (!container || !enabled) return;
 
     const markHandled = (x: number) => {
@@ -199,5 +198,5 @@ export function usePaginationTapNav(options: UsePaginationTapNavOptions) {
       container.removeEventListener("touchend", onTouchEnd);
       container.removeEventListener("click", onClick);
     };
-  }, [container, enabled]);
+  }, [containerRef, enabled]);
 }

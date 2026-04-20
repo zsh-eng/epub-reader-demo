@@ -1,3 +1,4 @@
+import type { ReaderChromeSurfaceProps } from "@/components/ReaderV2/chrome";
 import type { ChapterEntry } from "@/components/ReaderV2/types";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -25,6 +26,7 @@ const CHROME_FADE_OUT_TRANSITION = {
 
 export interface ReaderV2FooterProps {
   chromeVisible: boolean;
+  chromeSurfaceProps?: ReaderChromeSurfaceProps;
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
@@ -41,6 +43,7 @@ export interface ReaderV2FooterProps {
 
 export function ReaderV2Footer({
   chromeVisible,
+  chromeSurfaceProps,
   currentPage,
   totalPages,
   currentChapterIndex,
@@ -155,6 +158,7 @@ export function ReaderV2Footer({
             },
           }}
           className="absolute inset-x-0 bottom-0 z-20 border-t border-border/70 bg-background/88 backdrop-blur-xl"
+          {...chromeSurfaceProps}
           style={{
             paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
           }}

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import { motion } from "motion/react";
+import type { ReaderChromeSurfaceProps } from "./chrome";
 
 const HEADER_HEIGHT_PX = 56;
 const BOOKMARK_RIBBON_WIDTH_PX = 28;
@@ -44,6 +45,7 @@ const CHROME_BUTTON_CLASS_NAME =
 
 interface ReaderV2HeaderProps {
   chromeVisible: boolean;
+  chromeSurfaceProps?: ReaderChromeSurfaceProps;
   bookTitle: string;
   onBackToLibrary: () => void;
   isBookmarked: boolean;
@@ -53,6 +55,7 @@ interface ReaderV2HeaderProps {
 
 export function ReaderV2Header({
   chromeVisible,
+  chromeSurfaceProps,
   bookTitle,
   onBackToLibrary,
   isBookmarked,
@@ -80,6 +83,7 @@ export function ReaderV2Header({
       className="absolute inset-x-0 top-0 z-20 overflow-visible"
       animate={{ y: chromeShellY }}
       transition={{ y: chromeShellTransition }}
+      {...chromeSurfaceProps}
       style={{
         height: `calc(env(safe-area-inset-top) + ${CHROME_SHELL_HEIGHT_PX}px)`,
       }}

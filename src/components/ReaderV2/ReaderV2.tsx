@@ -1,5 +1,6 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { useAddHighlightMutation } from "@/hooks/use-highlights-query";
+import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isExternalHref, splitHrefFragment } from "@/lib/epub-resource-utils";
 import {
@@ -99,6 +100,7 @@ export function ReaderV2() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { chromeInteractionMode } = useInputBehavior();
   const [spreadColumns, setSpreadColumns] = useState<1 | 2>(1);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -114,6 +116,7 @@ export function ReaderV2() {
   });
 
   const effectiveSpreadColumns: 1 | 2 = isMobile ? 1 : spreadColumns;
+  const isChromePinned = isMenuOpen || isSettingsOpen;
 
   const {
     book,
@@ -308,15 +311,46 @@ export function ReaderV2() {
       onPrevPage={pagination.prevSpread}
       canGoPrev={canGoPrev}
       canGoNext={canGoNext}
-      tapNavEnabled={isMobile}
+      chromeInteractionMode={chromeInteractionMode}
+      isChromePinned={isChromePinned}
       containerRef={stageSlotRef}
+      topRailHeight={viewport.paddingTop}
+      bottomRailHeight={viewport.paddingBottom}
     >
-      {({ chromeVisible }) => (
+      {({
+        chromeVisible,
+        showHoverRails,
+        topRailProps,
+        bottomRailProps,
+        chromeSurfaceProps,
+      }) => (
         <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-b from-background via-background to-muted/20 font-sans text-foreground">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-secondary/45 to-transparent" />
             <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem] bg-gradient-to-t from-muted/35 to-transparent" />
           </div>
+
+          {showHoverRails && (
+            <>
+              {/* Hover rails live in the existing top/bottom non-reading bands. */}
+              <div
+                {...topRailProps}
+                className="absolute inset-x-0 z-[15]"
+                style={{
+                  ...topRailProps.style,
+                  top: "env(safe-area-inset-top)",
+                }}
+              />
+              <div
+                {...bottomRailProps}
+                className="absolute inset-x-0 z-[15]"
+                style={{
+                  ...bottomRailProps.style,
+                  bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
+                }}
+              />
+            </>
+          )}
 
           {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
           <div
@@ -346,6 +380,7 @@ export function ReaderV2() {
           {/* Floating header — paddingTop handles safe-area notch, content is h-14 = 56px */}
           <ReaderV2Header
             chromeVisible={chromeVisible}
+            chromeSurfaceProps={chromeSurfaceProps}
             bookTitle={book.title}
             onBackToLibrary={() => navigate("/")}
             isBookmarked={isBookmarked}
@@ -372,6 +407,7 @@ export function ReaderV2() {
           {/* Floating footer — chapter nav, page indicator, scrubber */}
           <ReaderV2Footer
             chromeVisible={chromeVisible}
+            chromeSurfaceProps={chromeSurfaceProps}
             currentPage={currentPage}
             totalPages={totalPages}
             currentChapterIndex={currentChapterIndex}
