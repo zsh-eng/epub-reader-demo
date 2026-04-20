@@ -8,7 +8,6 @@ import {
     type BookFile,
 } from "@/lib/db";
 import {
-    cleanupResourceUrls,
     processEmbeddedResources,
 } from "@/lib/epub-resource-utils";
 import {
@@ -26,7 +25,6 @@ import {
     useRef,
     useState,
     type MutableRefObject,
-    type RefObject,
 } from "react";
 import {
     applyChapterHighlights,
@@ -70,7 +68,6 @@ interface UseReaderV2ChapterSourcesOptions {
 interface UseReaderV2ChapterSourcesResult {
   chapterEntries: ChapterEntry[];
   bookHighlights: Highlight[];
-  deferredImageCacheRef: RefObject<Map<string, string>>;
   sourceLoadWallClockMs: number | null;
   initialChapterIndex: number | null;
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
@@ -218,7 +215,6 @@ export function useReaderV2ChapterSources({
   const [initialChapterIndex, setInitialChapterIndex] = useState<number | null>(
     null,
   );
-  const deferredImageCacheRef = useRef<Map<string, string>>(new Map());
   const chapterSourcesRef = useRef<Map<number, VirtualChapterSource>>(
     new Map(),
   );
@@ -253,15 +249,10 @@ export function useReaderV2ChapterSources({
     chapterCanonicalTextRef.current.clear();
     chapterHighlightSignaturesRef.current.clear();
 
-    const clearDeferredResources = () => {
-      cleanupResourceUrls(deferredImageCacheRef.current);
-    };
-
     const loadAllChapterSources = async () => {
       const startedAt = performance.now();
 
       try {
-        clearDeferredResources();
         const [imageDimensionsByPath, checkpoint] = await Promise.all([
           getBookImageDimensionsMap(bookId),
           getCurrentDeviceReadingCheckpoint(bookId),
@@ -352,7 +343,6 @@ export function useReaderV2ChapterSources({
 
     return () => {
       cancelled = true;
-      clearDeferredResources();
     };
   }, [
     bookId,
@@ -426,7 +416,6 @@ export function useReaderV2ChapterSources({
   return {
     chapterEntries,
     bookHighlights,
-    deferredImageCacheRef,
     sourceLoadWallClockMs,
     initialChapterIndex,
     getChapterBlocks,

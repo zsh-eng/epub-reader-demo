@@ -11,6 +11,7 @@ import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 import { DebugSection } from "./shared/DebugSection";
+import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 import { InspectorDrawer } from "./shared/InspectorDrawer";
 import { InspectorPanel } from "./shared/InspectorPanel";
 import { DEFAULT_PARAGRAPH_SPACING } from "@/lib/pagination-v2";
@@ -41,7 +42,6 @@ export function ReaderV2Debug() {
     paginationConfig,
     pagination,
     bookHighlights,
-    deferredImageCacheRef,
     sourceLoadWallClockMs,
     currentPage,
     totalPages,
@@ -163,20 +163,20 @@ export function ReaderV2Debug() {
                 height: `${viewport.height + PAGE_PADDING_Y * 2}px`,
               }}
             >
-              <SpreadStage
-                spread={pagination.spread}
-                spreadConfig={spreadConfig}
-                columnSpacingPx={columnSpacingPx}
-                paginationConfig={paginationConfig}
-                bookId={bookId}
-                deferredImageCache={deferredImageCacheRef.current}
-                stageContentRef={stageContentRef}
-                showDebugOutlines
-                paddingTopPx={PAGE_PADDING_Y}
-                paddingBottomPx={PAGE_PADDING_Y}
-                paddingLeftPx={PAGE_PADDING_X}
-                paddingRightPx={PAGE_PADDING_X}
-              />
+              <DeferredEpubImageProvider key={bookId} bookId={bookId}>
+                <SpreadStage
+                  spread={pagination.spread}
+                  spreadConfig={spreadConfig}
+                  columnSpacingPx={columnSpacingPx}
+                  paginationConfig={paginationConfig}
+                  stageContentRef={stageContentRef}
+                  showDebugOutlines
+                  paddingTopPx={PAGE_PADDING_Y}
+                  paddingBottomPx={PAGE_PADDING_Y}
+                  paddingLeftPx={PAGE_PADDING_X}
+                  paddingRightPx={PAGE_PADDING_X}
+                />
+              </DeferredEpubImageProvider>
             </div>
           </div>
         </main>

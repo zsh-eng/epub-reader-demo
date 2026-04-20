@@ -21,6 +21,7 @@ import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderSession } from "./hooks/use-reader-session";
 import { useReaderTextSelection } from "./hooks/use-reader-text-selection";
+import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
 const COLUMN_GAP_PX = 20;
 
@@ -186,20 +187,20 @@ export function ReaderV2() {
               bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
             }}
           >
-            <SpreadStage
-              spread={sessionState.pagination.spread}
-              spreadConfig={sessionState.pagination.spreadConfig}
-              columnSpacingPx={COLUMN_GAP_PX}
-              paginationConfig={sessionState.pagination.paginationConfig}
-              bookId={bookId}
-              deferredImageCache={sessionResources.deferredImageCache}
-              stageContentRef={stageContentRef}
-              onPageContentClick={onPageContentClick}
-              paddingTopPx={stagePadding.paddingTop}
-              paddingBottomPx={stagePadding.paddingBottom}
-              paddingLeftPx={stagePadding.paddingX}
-              paddingRightPx={stagePadding.paddingX}
-            />
+            <DeferredEpubImageProvider key={bookId} bookId={bookId}>
+              <SpreadStage
+                spread={sessionState.pagination.spread}
+                spreadConfig={sessionState.pagination.spreadConfig}
+                columnSpacingPx={COLUMN_GAP_PX}
+                paginationConfig={sessionState.pagination.paginationConfig}
+                stageContentRef={stageContentRef}
+                onPageContentClick={onPageContentClick}
+                paddingTopPx={stagePadding.paddingTop}
+                paddingBottomPx={stagePadding.paddingBottom}
+                paddingLeftPx={stagePadding.paddingX}
+                paddingRightPx={stagePadding.paddingX}
+              />
+            </DeferredEpubImageProvider>
           </div>
 
           {/* Floating header — paddingTop handles safe-area notch, content is h-14 = 56px */}

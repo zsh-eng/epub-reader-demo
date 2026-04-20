@@ -9,8 +9,6 @@ interface SpreadStageProps {
   spreadConfig: SpreadConfig;
   columnSpacingPx: number;
   paginationConfig: PaginationConfig;
-  bookId: string;
-  deferredImageCache: Map<string, string>;
   stageContentRef?: RefObject<HTMLDivElement | null>;
   onPageContentClick?: MouseEventHandler<HTMLDivElement>;
   showDebugOutlines?: boolean;
@@ -37,8 +35,6 @@ export function SpreadStage({
   spreadConfig,
   columnSpacingPx,
   paginationConfig,
-  bookId,
-  deferredImageCache,
   stageContentRef,
   onPageContentClick,
   showDebugOutlines = false,
@@ -65,8 +61,6 @@ export function SpreadStage({
               spreadConfig={spreadConfig}
               columnSpacingPx={columnSpacingPx}
               paginationConfig={paginationConfig}
-              bookId={bookId}
-              deferredImageCache={deferredImageCache}
               showDebugOutlines={showDebugOutlines}
               paddingTopPx={paddingTopPx}
               paddingBottomPx={paddingBottomPx}

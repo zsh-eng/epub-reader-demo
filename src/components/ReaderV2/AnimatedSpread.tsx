@@ -11,8 +11,6 @@ interface AnimatedSpreadProps {
   spreadConfig: SpreadConfig;
   columnSpacingPx: number;
   paginationConfig: PaginationConfig;
-  bookId: string;
-  deferredImageCache: Map<string, string>;
   showDebugOutlines?: boolean;
   paddingTopPx: number;
   paddingBottomPx: number;
@@ -55,8 +53,6 @@ export function AnimatedSpread({
   spreadConfig,
   columnSpacingPx,
   paginationConfig,
-  bookId,
-  deferredImageCache,
   showDebugOutlines = false,
   paddingTopPx,
   paddingBottomPx,
@@ -161,8 +157,6 @@ export function AnimatedSpread({
                       key={`${slice.blockId}-${slot.slotIndex}-${i}`}
                       slice={slice}
                       sliceIndex={i}
-                      bookId={bookId}
-                      deferredImageCache={deferredImageCache}
                       baseFontSize={paginationConfig.fontConfig.baseSizePx}
                     />
                   ))}

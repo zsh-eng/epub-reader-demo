@@ -68,7 +68,6 @@ export interface ReaderSessionState {
 
 export interface ReaderSessionResources {
   chapterAccess: ReaderSessionChapterAccess;
-  deferredImageCache: Map<string, string>;
 }
 
 export interface ReaderSessionActions {
@@ -263,9 +262,8 @@ export function useReaderSession(
   const resources = useMemo<ReaderSessionResources>(
     () => ({
       chapterAccess,
-      deferredImageCache: core.deferredImageCacheRef.current,
     }),
-    [chapterAccess, core.deferredImageCacheRef],
+    [chapterAccess],
   );
 
   const actions = useMemo<ReaderSessionActions>(

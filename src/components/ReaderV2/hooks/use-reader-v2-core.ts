@@ -11,7 +11,7 @@ import {
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
-import { useCallback, useMemo, type RefObject } from "react";
+import { useCallback, useMemo } from "react";
 import type { ChapterEntry } from "../types";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 import { useReaderV2ChapterSources } from "./use-reader-v2-chapter-sources";
@@ -34,7 +34,6 @@ interface UseReaderV2CoreResult {
   spreadConfig: SpreadConfig;
   paginationConfig: PaginationConfig;
   pagination: ReturnType<typeof usePagination>;
-  deferredImageCacheRef: RefObject<Map<string, string>>;
   sourceLoadWallClockMs: number | null;
   currentPage: number;
   totalPages: number;
@@ -139,7 +138,6 @@ export function useReaderV2Core(
   const {
     chapterEntries,
     bookHighlights,
-    deferredImageCacheRef,
     sourceLoadWallClockMs,
     initialChapterIndex,
     getChapterBlocks,
@@ -193,7 +191,6 @@ export function useReaderV2Core(
     spreadConfig,
     paginationConfig,
     pagination,
-    deferredImageCacheRef,
     sourceLoadWallClockMs,
     currentPage,
     totalPages,

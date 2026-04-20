@@ -25,8 +25,6 @@ const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 interface PageSliceViewProps {
   slice: PageSlice;
   sliceIndex: number;
-  bookId: string;
-  deferredImageCache: Map<string, string>;
   baseFontSize: number;
 }
 
@@ -242,8 +240,6 @@ function renderInlineFragment(
 export function PageSliceView({
   slice,
   sliceIndex,
-  bookId,
-  deferredImageCache,
   baseFontSize,
 }: PageSliceViewProps) {
   const key = `${slice.blockId}-${sliceIndex}`;
@@ -259,10 +255,8 @@ export function PageSliceView({
         style={{ height: `${slice.height}px` }}
       >
         <LazyImage
-          bookId={bookId}
           src={slice.src}
           alt={slice.alt || "Chapter image"}
-          cache={deferredImageCache}
           width={slice.width}
           height={slice.height}
           style={{
