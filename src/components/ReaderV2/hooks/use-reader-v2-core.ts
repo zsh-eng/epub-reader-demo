@@ -14,7 +14,8 @@ import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { useCallback, useMemo } from "react";
 import type { ChapterEntry } from "../types";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
-import { useReaderV2ChapterSources } from "./use-reader-v2-chapter-sources";
+import { useReaderChapterContent } from "./use-reader-chapter-content";
+import { useReaderPaginationFeed } from "./use-reader-pagination-feed";
 import { useReaderV2CheckpointController } from "./use-reader-v2-checkpoint-controller";
 
 interface UseReaderV2CoreOptions {
@@ -98,7 +99,7 @@ function buildSpreadConfig(columns: 1 | 2 | 3): SpreadConfig {
 export function useReaderV2Core(
   options: UseReaderV2CoreOptions,
 ): UseReaderV2CoreResult {
-  // Composes the reader's top-level state: settings, chapter sources, and pagination.
+  // Composes the reader's top-level state: settings, chapter content, and pagination.
   const {
     bookId,
     viewport,
@@ -138,16 +139,23 @@ export function useReaderV2Core(
   const {
     chapterEntries,
     bookHighlights,
+    artifactsByChapter,
+    initialLocation,
+    loadVersion,
     sourceLoadWallClockMs,
-    initialChapterIndex,
     getChapterBlocks,
     getChapterCanonicalText,
-  } = useReaderV2ChapterSources({
+  } = useReaderChapterContent({
     bookId,
     book,
-    initializePagination: pagination.init,
-    addPaginationChapter: pagination.addChapter,
-    updatePaginationChapter: pagination.updateChapter,
+  });
+
+  useReaderPaginationFeed({
+    pagination,
+    chapterEntries,
+    artifactsByChapter,
+    initialLocation,
+    loadVersion,
   });
 
   const onUpdateSettings = useCallback(
@@ -164,7 +172,7 @@ export function useReaderV2Core(
   const totalPages = pagination.spread?.totalPages ?? 0;
   const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
   const currentTitleChapterIndex =
-    pagination.spread?.chapterIndexStart ?? initialChapterIndex;
+    pagination.spread?.chapterIndexStart ?? initialLocation?.chapterIndex ?? null;
 
   const chapterStartPages = useMemo<(number | null)[]>(() => {
     const result: (number | null)[] = [];
