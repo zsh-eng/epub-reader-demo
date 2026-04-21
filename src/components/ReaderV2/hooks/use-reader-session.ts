@@ -1,19 +1,21 @@
-import { useAddHighlightMutation } from "@/hooks/use-highlights-query";
-import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import type { Book } from "@/lib/db";
 import type {
-  Block,
-  ChapterCanonicalText,
-  PaginationConfig,
-  PaginationStatus,
-  ResolvedSpread,
-  SpreadConfig,
+    Block,
+    ChapterCanonicalText,
+    PaginationConfig,
+    PaginationStatus,
+    ResolvedSpread,
+    SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { ReaderSettings } from "@/types/reader.types";
-import { useCallback, useMemo } from "react";
-import { resolvePaginatedLinkTarget } from "../link-navigation";
+import { useMemo } from "react";
 import type { ChapterEntry } from "../types";
+import { useReaderHighlightActions } from "./use-reader-highlight-actions";
+import {
+    useReaderNavigationActions,
+    type ReaderNavigationActions,
+} from "./use-reader-navigation-actions";
 import { useReaderV2Core } from "./use-reader-v2-core";
 
 export interface UseReaderSessionOptions {
@@ -72,14 +74,14 @@ export interface ReaderSessionResources {
 
 export interface ReaderSessionActions {
   updateSettings: (patch: Partial<ReaderSettings>) => void;
-  nextSpread: () => void;
-  prevSpread: () => void;
-  previewPage: (page: number) => void;
-  commitPage: (page: number) => void;
-  goToChapter: (chapterIndex: number) => void;
-  goToPreviousChapter: () => void;
-  goToNextChapter: () => void;
-  openInternalHref: (href: string) => boolean;
+  nextSpread: ReaderNavigationActions["nextSpread"];
+  prevSpread: ReaderNavigationActions["prevSpread"];
+  previewPage: ReaderNavigationActions["previewPage"];
+  commitPage: ReaderNavigationActions["commitPage"];
+  goToChapter: ReaderNavigationActions["goToChapter"];
+  goToPreviousChapter: ReaderNavigationActions["goToPreviousChapter"];
+  goToNextChapter: ReaderNavigationActions["goToNextChapter"];
+  openInternalHref: ReaderNavigationActions["openInternalHref"];
   createHighlight: (highlight: Highlight) => void;
 }
 
@@ -101,102 +103,13 @@ export function useReaderSession(
   options: UseReaderSessionOptions,
 ): UseReaderSessionResult {
   const core = useReaderV2Core(options);
-  const addHighlightMutation = useAddHighlightMutation(options.bookId);
+  const { createHighlight } = useReaderHighlightActions(options.bookId);
 
-  const chapterIndexByHrefPath = useMemo(() => {
-    const hrefMap = new Map<string, number>();
-    for (const chapter of core.chapterEntries) {
-      hrefMap.set(splitHrefFragment(chapter.href).path, chapter.index);
-    }
-    return hrefMap;
-  }, [core.chapterEntries]);
-
-  const resolveHref = useCallback(
-    (href: string) => resolvePaginatedLinkTarget(href, chapterIndexByHrefPath),
-    [chapterIndexByHrefPath],
-  );
-
-  const nextSpread = useCallback(() => {
-    core.pagination.nextSpread();
-  }, [core.pagination.nextSpread]);
-
-  const prevSpread = useCallback(() => {
-    core.pagination.prevSpread();
-  }, [core.pagination.prevSpread]);
-
-  const previewPage = useCallback(
-    (page: number) => {
-      core.pagination.goToPage(page, {
-        intent: { kind: "preview", source: "scrubber" },
-      });
-    },
-    [core.pagination.goToPage],
-  );
-
-  const commitPage = useCallback(
-    (page: number) => {
-      core.pagination.goToPage(page, {
-        intent: { kind: "jump", source: "scrubber" },
-      });
-    },
-    [core.pagination.goToPage],
-  );
-
-  const goToChapter = useCallback(
-    (chapterIndex: number) => {
-      core.pagination.goToChapter(chapterIndex, {
-        intent: { kind: "jump", source: "chapter" },
-      });
-    },
-    [core.pagination.goToChapter],
-  );
-
-  const goToPreviousChapter = useCallback(() => {
-    if (core.currentChapterIndex <= 0) return;
-    core.pagination.goToChapter(core.currentChapterIndex - 1, {
-      intent: { kind: "jump", source: "chapter" },
-    });
-  }, [core.currentChapterIndex, core.pagination.goToChapter]);
-
-  const goToNextChapter = useCallback(() => {
-    if (core.currentChapterIndex >= core.chapterEntries.length - 1) return;
-    core.pagination.goToChapter(core.currentChapterIndex + 1, {
-      intent: { kind: "jump", source: "chapter" },
-    });
-  }, [
-    core.chapterEntries.length,
-    core.currentChapterIndex,
-    core.pagination.goToChapter,
-  ]);
-
-  const openInternalHref = useCallback(
-    (href: string): boolean => {
-      const resolvedTarget = resolveHref(href);
-      if (!resolvedTarget) return false;
-
-      if (resolvedTarget.targetId) {
-        core.pagination.goToTarget(
-          resolvedTarget.chapterIndex,
-          resolvedTarget.targetId,
-          { intent: { kind: "jump", source: "internal-link" } },
-        );
-        return true;
-      }
-
-      core.pagination.goToChapter(resolvedTarget.chapterIndex, {
-        intent: { kind: "jump", source: "internal-link" },
-      });
-      return true;
-    },
-    [core.pagination.goToChapter, core.pagination.goToTarget, resolveHref],
-  );
-
-  const createHighlight = useCallback(
-    (highlight: Highlight) => {
-      addHighlightMutation.mutate(highlight);
-    },
-    [addHighlightMutation],
-  );
+  const navigationActions = useReaderNavigationActions({
+    pagination: core.pagination,
+    currentChapterIndex: core.currentChapterIndex,
+    chapterEntries: core.chapterEntries,
+  });
 
   const chapterAccess = useMemo<ReaderSessionChapterAccess>(
     () => ({
@@ -269,28 +182,10 @@ export function useReaderSession(
   const actions = useMemo<ReaderSessionActions>(
     () => ({
       updateSettings: core.onUpdateSettings,
-      nextSpread,
-      prevSpread,
-      previewPage,
-      commitPage,
-      goToChapter,
-      goToPreviousChapter,
-      goToNextChapter,
-      openInternalHref,
+      ...navigationActions,
       createHighlight,
     }),
-    [
-      commitPage,
-      core.onUpdateSettings,
-      createHighlight,
-      goToChapter,
-      goToNextChapter,
-      goToPreviousChapter,
-      nextSpread,
-      openInternalHref,
-      previewPage,
-      prevSpread,
-    ],
+    [core.onUpdateSettings, createHighlight, navigationActions],
   );
 
   return {

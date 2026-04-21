@@ -1,4 +1,3 @@
-import { useAddHighlightMutation } from "@/hooks/use-highlights-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
@@ -9,6 +8,8 @@ import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
+import { useReaderHighlightActions } from "./hooks/use-reader-highlight-actions";
+import { useReaderNavigationActions } from "./hooks/use-reader-navigation-actions";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 import { DebugSection } from "./shared/DebugSection";
@@ -29,7 +30,7 @@ export function ReaderV2Debug() {
   const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
   const stageContentRef = useRef<HTMLDivElement>(null);
-  const addHighlightMutation = useAddHighlightMutation(bookId);
+  const { createHighlight } = useReaderHighlightActions(bookId);
 
   const { viewport, setViewport, viewportAutoMode, setViewportAutoMode } =
     useReaderViewport({ isMobile, isPanelOpen });
@@ -65,6 +66,12 @@ export function ReaderV2Debug() {
     [getChapterBlocks, getChapterCanonicalText],
   );
 
+  const navigationActions = useReaderNavigationActions({
+    pagination,
+    currentChapterIndex,
+    chapterEntries,
+  });
+
   const {
     state: annotationState,
     activeHighlight,
@@ -82,7 +89,7 @@ export function ReaderV2Debug() {
     chapterAccess,
     fontConfig: paginationConfig.fontConfig,
     highlights: bookHighlights,
-    onCreateHighlight: (highlight) => addHighlightMutation.mutate(highlight),
+    onCreateHighlight: createHighlight,
   });
 
   if (isBookLoading) {
@@ -102,16 +109,10 @@ export function ReaderV2Debug() {
     currentPage,
     totalPages,
     paginationStatus: pagination.status,
-    onGoToPage: (page: number) =>
-      pagination.goToPage(page, {
-        intent: { kind: "jump", source: "scrubber" },
-      }),
-    onGoToChapterIndex: (chapterIndex: number) =>
-      pagination.goToChapter(chapterIndex, {
-        intent: { kind: "jump", source: "chapter" },
-      }),
-    onNextSpread: pagination.nextSpread,
-    onPrevSpread: pagination.prevSpread,
+    onGoToPage: navigationActions.commitPage,
+    onGoToChapterIndex: navigationActions.goToChapter,
+    onNextSpread: navigationActions.nextSpread,
+    onPrevSpread: navigationActions.prevSpread,
     chapterEntries,
     currentChapterIndex,
     settings,
