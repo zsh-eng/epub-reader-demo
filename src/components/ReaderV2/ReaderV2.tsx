@@ -3,7 +3,6 @@ import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-// PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
 import { ReaderControlMenu } from "./ReaderControlMenu";
 import { ReaderController } from "./ReaderController";
 import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
@@ -13,6 +12,7 @@ import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
+import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
 import { useReaderSession } from "./hooks/use-reader-session";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
@@ -22,17 +22,16 @@ export function ReaderV2() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  const { state: chromeState, actions: chromeActions } = useReaderChromeState();
   const { chromeInteractionMode } = useInputBehavior();
+
   const [spreadColumns, setSpreadColumns] = useState<1 | 2>(1);
-  const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const [stageSlotElement, setStageSlotElement] = useState<HTMLDivElement | null>(
     null,
   );
   const stageContentRef = useRef<HTMLDivElement>(null);
-  const isChromePinned = isMenuOpen || isSettingsOpen;
 
   const handleStageSlotRef = useCallback((node: HTMLDivElement | null) => {
     stageSlotRef.current = node;
@@ -103,7 +102,7 @@ export function ReaderV2() {
       canGoPrev={sessionState.navigation.canGoPrev}
       canGoNext={sessionState.navigation.canGoNext}
       chromeInteractionMode={chromeInteractionMode}
-      isChromePinned={isChromePinned}
+      isChromePinned={chromeState.isChromePinned}
       containerRef={stageSlotRef}
       topRailHeight={stagePadding.paddingTop}
       bottomRailHeight={stagePadding.paddingBottom}
@@ -174,20 +173,20 @@ export function ReaderV2() {
             chromeSurfaceProps={chromeSurfaceProps}
             bookTitle={book.title}
             onBackToLibrary={() => navigate("/")}
-            isBookmarked={isBookmarked}
-            onToggleBookmark={() => setIsBookmarked((b) => !b)}
-            onOpenMenu={() => setIsMenuOpen(true)}
+            isBookmarked={chromeState.isBookmarked}
+            onToggleBookmark={chromeActions.toggleBookmark}
+            onOpenMenu={chromeActions.openMenu}
           />
 
           <ReaderControlMenu
-            isOpen={isMenuOpen}
-            onClose={() => setIsMenuOpen(false)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
+            isOpen={chromeState.isMenuOpen}
+            onClose={chromeActions.closeMenu}
+            onOpenSettings={chromeActions.openSettings}
           />
 
           <ReaderSettingsSheet
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
+            isOpen={chromeState.isSettingsOpen}
+            onClose={chromeActions.closeSettings}
             settings={sessionState.settings}
             onUpdateSettings={sessionActions.updateSettings}
             showColumnSelector={showColumnSelector}
