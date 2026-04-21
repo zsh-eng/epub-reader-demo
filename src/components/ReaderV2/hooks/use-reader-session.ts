@@ -86,8 +86,18 @@ export interface ReaderSessionActions {
 }
 
 export interface UseReaderSessionResult {
+  /**
+   * State for rendering in the UI.
+   */
   state: ReaderSessionState;
+  /**
+   * Stable helper accessors.
+   * Required for setting up certain advanced logic like handling highlights.
+   */
   resources: ReaderSessionResources;
+  /**
+   * Actions against the reader, such as navigating between pages.
+   */
   actions: ReaderSessionActions;
 }
 
