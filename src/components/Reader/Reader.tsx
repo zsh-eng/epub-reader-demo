@@ -16,8 +16,6 @@ import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
 import { useReaderSession } from "./hooks/use-reader-session";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
-const COLUMN_GAP_PX = 20;
-
 export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -26,7 +24,6 @@ export function Reader() {
   const { state: chromeState, actions: chromeActions } = useReaderChromeState();
   const { chromeInteractionMode } = useInputBehavior();
 
-  const [spreadColumns, setSpreadColumns] = useState<1 | 2>(1);
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const [stageSlotElement, setStageSlotElement] = useState<HTMLDivElement | null>(
     null,
@@ -39,15 +36,15 @@ export function Reader() {
   }, []);
 
   const {
+    resolvedSpreadColumns,
     stageViewport,
     stagePadding,
-    effectiveSpreadColumns,
-    showColumnSelector,
+    topRailHeight,
+    bottomRailHeight,
+    columnGapPx,
   } = usePaginatedReaderLayout({
     stageSlotElement,
     isMobile,
-    spreadColumns,
-    onSpreadColumnsChange: setSpreadColumns,
   });
 
   const {
@@ -57,7 +54,7 @@ export function Reader() {
   } = useReaderSession({
     bookId,
     viewport: stageViewport,
-    spreadColumns: effectiveSpreadColumns,
+    spreadColumns: resolvedSpreadColumns,
   });
 
   const {
@@ -104,8 +101,8 @@ export function Reader() {
       chromeInteractionMode={chromeInteractionMode}
       isChromePinned={chromeState.isChromePinned}
       containerRef={stageSlotRef}
-      topRailHeight={stagePadding.paddingTop}
-      bottomRailHeight={stagePadding.paddingBottom}
+      topRailHeight={topRailHeight}
+      bottomRailHeight={bottomRailHeight}
     >
       {({
         chromeVisible,
@@ -155,7 +152,7 @@ export function Reader() {
               <SpreadStage
                 spread={sessionState.pagination.spread}
                 spreadConfig={sessionState.pagination.spreadConfig}
-                columnSpacingPx={COLUMN_GAP_PX}
+                columnSpacingPx={columnGapPx}
                 paginationConfig={sessionState.pagination.paginationConfig}
                 stageContentRef={stageContentRef}
                 onLinkActivate={sessionActions.openInternalHref}
@@ -167,7 +164,7 @@ export function Reader() {
             </DeferredEpubImageProvider>
           </div>
 
-          {/* Floating header — paddingTop handles safe-area notch, content is h-14 = 56px */}
+          {/* Floating header — reading padding is rail-based, not chrome-height-based. */}
           <ReaderHeader
             chromeVisible={chromeVisible}
             chromeSurfaceProps={chromeSurfaceProps}
@@ -189,9 +186,6 @@ export function Reader() {
             onClose={chromeActions.closeSettings}
             settings={sessionState.settings}
             onUpdateSettings={sessionActions.updateSettings}
-            showColumnSelector={showColumnSelector}
-            spreadColumns={spreadColumns}
-            onSpreadColumnsChange={setSpreadColumns}
           />
 
           {/* Floating footer — chapter nav, page indicator, scrubber */}

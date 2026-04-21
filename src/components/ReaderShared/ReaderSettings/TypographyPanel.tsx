@@ -28,11 +28,13 @@ import { useEffect, useRef } from "react";
 interface TypographyPanelProps {
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
+  showContentWidthControl?: boolean;
 }
 
 export function TypographyPanel({
   settings,
   onUpdateSettings,
+  showContentWidthControl = true,
 }: TypographyPanelProps) {
   const alignmentValue = isJustifiedTextAlign(settings.textAlign)
     ? "justify"
@@ -155,33 +157,36 @@ export function TypographyPanel({
         </div>
       </div>
 
-      {/* Content Width */}
-      <div className="space-y-2 hidden sm:block">
-        <h4 className={sectionLabelClassName}>
-          Content Width
-        </h4>
-        <div className="flex items-center gap-2">
-          <MoveHorizontal className="h-4 w-4 text-muted-foreground" />
-          <ToggleGroup
-            type="single"
-            value={settings.contentWidth}
-            onValueChange={(value) =>
-              value && onUpdateSettings({ contentWidth: value as ContentWidth })
-            }
-            className={cn("flex-1", segmentedGroupClassName)}
-          >
-            {contentWidths.map((width) => (
-              <ToggleGroupItem
-                key={width.value}
-                value={width.value}
-                className={cn("flex-1 text-[10px]", segmentedItemClassName)}
-              >
-                {width.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+      {showContentWidthControl && (
+        <div className="space-y-2 hidden sm:block">
+          <h4 className={sectionLabelClassName}>
+            Content Width
+          </h4>
+          {/* Paginated mode keeps measure automatic; this stays available for scroll layouts. */}
+          <div className="flex items-center gap-2">
+            <MoveHorizontal className="h-4 w-4 text-muted-foreground" />
+            <ToggleGroup
+              type="single"
+              value={settings.contentWidth}
+              onValueChange={(value) =>
+                value &&
+                onUpdateSettings({ contentWidth: value as ContentWidth })
+              }
+              className={cn("flex-1", segmentedGroupClassName)}
+            >
+              {contentWidths.map((width) => (
+                <ToggleGroupItem
+                  key={width.value}
+                  value={width.value}
+                  className={cn("flex-1 text-[10px]", segmentedItemClassName)}
+                >
+                  {width.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Text Align */}
       <div className="space-y-2">

@@ -1,7 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ReaderSettings } from "@/types/reader.types";
-import { Columns2, Palette, Type } from "lucide-react";
+import { Palette, Type } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
 import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
@@ -11,9 +10,6 @@ interface ReaderSettingsSheetProps {
   onClose: () => void;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
-  showColumnSelector: boolean;
-  spreadColumns: 1 | 2;
-  onSpreadColumnsChange: (columns: 1 | 2) => void;
 }
 
 export function ReaderSettingsSheet({
@@ -21,9 +17,6 @@ export function ReaderSettingsSheet({
   onClose,
   settings,
   onUpdateSettings,
-  showColumnSelector,
-  spreadColumns,
-  onSpreadColumnsChange,
 }: ReaderSettingsSheetProps) {
   return (
     <>
@@ -90,6 +83,7 @@ export function ReaderSettingsSheet({
                     <TypographyPanel
                       settings={settings}
                       onUpdateSettings={onUpdateSettings}
+                      showContentWidthControl={false}
                     />
                   </TabsContent>
                   <TabsContent value="theme" className="mt-0">
@@ -99,40 +93,6 @@ export function ReaderSettingsSheet({
                     />
                   </TabsContent>
                 </div>
-
-                {showColumnSelector && (
-                  <div className="border-t border-border/70 px-4 pt-3">
-                    <div className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      <Columns2 className="size-3.5" />
-                      Spread Layout
-                    </div>
-                    <ToggleGroup
-                      type="single"
-                      value={String(spreadColumns)}
-                      onValueChange={(value) => {
-                        if (value === "1" || value === "2") {
-                          onSpreadColumnsChange(
-                            Number.parseInt(value, 10) as 1 | 2,
-                          );
-                        }
-                      }}
-                      className="grid w-full grid-cols-2 rounded-full bg-secondary/50 p-1"
-                    >
-                      <ToggleGroupItem
-                        value="1"
-                        className="h-9 rounded-full text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground"
-                      >
-                        Single
-                      </ToggleGroupItem>
-                      <ToggleGroupItem
-                        value="2"
-                        className="h-9 rounded-full text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground"
-                      >
-                        Spread
-                      </ToggleGroupItem>
-                    </ToggleGroup>
-                  </div>
-                )}
               </Tabs>
             </div>
           </motion.div>

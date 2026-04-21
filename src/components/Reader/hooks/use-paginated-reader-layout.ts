@@ -1,22 +1,19 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
-const COLUMN_GAP_PX = 20;
-const MIN_VIEWPORT_WIDTH_PX = 200;
-const MIN_VIEWPORT_HEIGHT_PX = 200;
-const MAX_VIEWPORT_WIDTH_PX = 1440;
-const MAX_VIEWPORT_HEIGHT_PX = 980;
-
-/** Height of the floating header (h-14), inside the safe-area-adjusted root. */
-const HEADER_HEIGHT_PX = 56;
-/** Visual breathing room between overlay edge and text. */
-const MIN_PADDING_Y = 4;
-/** Minimum horizontal margin between screen edge and text. */
-const MIN_PADDING_X = 20;
-
-// Symmetry in the vertical padding.
-// It's ok for the footer to overlap the text - it's not to be shown all the time.
-const PADDING_TOP = HEADER_HEIGHT_PX + MIN_PADDING_Y;
-const PADDING_BOTTOM = PADDING_TOP;
+const MIN_PAGE_WIDTH_PX = 200;
+const MAX_PAGE_WIDTH_PX = 1440;
+const MIN_PAGE_HEIGHT_PX = 200;
+const MAX_PAGE_HEIGHT_PX = 980;
+const MAX_SINGLE_PAGE_WIDTH_PX = 680;
+const PREFERRED_SPREAD_PAGE_WIDTH_PX = 600;
+const MIN_AUTO_SPREAD_PAGE_WIDTH_PX = 420;
+const MIN_SPREAD_PAGE_HEIGHT_PX = 520;
+const PREFERRED_OUTER_MARGIN_PX = 56;
+const MIN_OUTER_MARGIN_PX = 24;
+const COLUMN_GAP_PX = 72;
+const TOP_RAIL_HEIGHT_PX = 48;
+const BOTTOM_RAIL_HEIGHT_PX = 48;
+const RAIL_PADDING_BUFFER_PX = 8;
 
 export interface ReaderStageViewport {
   width: number;
@@ -29,103 +26,170 @@ export interface ReaderStagePadding {
   paddingBottom: number;
 }
 
-interface ReaderStageLayout {
+export interface PaginatedReaderLayout {
+  resolvedSpreadColumns: 1 | 2;
   stageViewport: ReaderStageViewport;
   stagePadding: ReaderStagePadding;
+  topRailHeight: number;
+  bottomRailHeight: number;
+  columnGapPx: number;
+}
+
+interface ResolvePaginatedReaderLayoutOptions {
+  stageWidth: number;
+  stageHeight: number;
+  isMobile: boolean;
 }
 
 interface UsePaginatedReaderLayoutOptions {
   stageSlotElement: HTMLDivElement | null;
   isMobile: boolean;
-  spreadColumns: 1 | 2;
-  onSpreadColumnsChange?: (columns: 1 | 2) => void;
 }
-
-const DEFAULT_STAGE_LAYOUT: ReaderStageLayout = {
-  stageViewport: {
-    width: 620,
-    height: 860,
-  },
-  stagePadding: {
-    paddingX: MIN_PADDING_X,
-    paddingTop: PADDING_TOP,
-    paddingBottom: PADDING_BOTTOM,
-  },
-};
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function computeStageLayout(
-  stageSlot: HTMLElement,
-  spreadColumns: 1 | 2,
-): ReaderStageLayout {
-  const availableWidth = Math.max(1, stageSlot.clientWidth);
-  const availableHeight = Math.max(1, stageSlot.clientHeight);
-  // stageSlot dimensions are safe-area-adjusted
-  // (root element handles env(safe-area-inset-*)).
+function resolveSpreadColumns(options: {
+  stageWidth: number;
+  pageHeight: number;
+  isMobile: boolean;
+}): 1 | 2 {
+  const { stageWidth, pageHeight, isMobile } = options;
+  if (isMobile) return 1;
 
-  const paddingTop = PADDING_TOP;
-  const paddingBottom = PADDING_BOTTOM;
-  const height = clamp(
-    availableHeight - paddingTop - paddingBottom,
-    MIN_VIEWPORT_HEIGHT_PX,
-    MAX_VIEWPORT_HEIGHT_PX,
-  );
+  const preferredMarginSpreadWidth =
+    (stageWidth - COLUMN_GAP_PX - PREFERRED_OUTER_MARGIN_PX * 2) / 2;
+  const autoSpreadFits =
+    pageHeight >= MIN_SPREAD_PAGE_HEIGHT_PX &&
+    preferredMarginSpreadWidth >= MIN_AUTO_SPREAD_PAGE_WIDTH_PX;
 
-  const maxContentWidth =
-    MAX_VIEWPORT_WIDTH_PX * spreadColumns + COLUMN_GAP_PX * (spreadColumns - 1);
-  const contentWidth = Math.min(
-    availableWidth - MIN_PADDING_X * 2,
-    maxContentWidth,
-  );
-  const paddingX = Math.max(MIN_PADDING_X, (availableWidth - contentWidth) / 2);
-  const width = clamp(
-    (contentWidth - COLUMN_GAP_PX * (spreadColumns - 1)) / spreadColumns,
-    MIN_VIEWPORT_WIDTH_PX,
-    MAX_VIEWPORT_WIDTH_PX,
-  );
+  return autoSpreadFits ? 2 : 1;
+}
 
+export function getDefaultPaginatedReaderLayout(): PaginatedReaderLayout {
   return {
+    resolvedSpreadColumns: 1,
     stageViewport: {
-      width,
-      height,
+      width: 620,
+      height: 860,
     },
     stagePadding: {
-      paddingX,
-      paddingTop,
-      paddingBottom,
+      paddingX: PREFERRED_OUTER_MARGIN_PX,
+      paddingTop: TOP_RAIL_HEIGHT_PX + RAIL_PADDING_BUFFER_PX,
+      paddingBottom: BOTTOM_RAIL_HEIGHT_PX + RAIL_PADDING_BUFFER_PX,
     },
+    topRailHeight: TOP_RAIL_HEIGHT_PX,
+    bottomRailHeight: BOTTOM_RAIL_HEIGHT_PX,
+    columnGapPx: COLUMN_GAP_PX,
   };
 }
 
 /**
- * Computes the paginated reader's stage layout from the available stage slot.
- * Observes the stage container and derives the stage viewport, stage padding,
- * and effective column behavior used by Reader.
+ * Resolves the paginated reading stage from the available safe-area-adjusted
+ * stage slot. Vertical spacing is based on the hover rails rather than the
+ * visible chrome height so the reading measure remains stable as chrome UX
+ * evolves.
+ */
+export function resolvePaginatedReaderLayout(
+  options: ResolvePaginatedReaderLayoutOptions,
+): PaginatedReaderLayout {
+  const availableWidth = Math.max(1, options.stageWidth);
+  const availableHeight = Math.max(1, options.stageHeight);
+  const topRailHeight = TOP_RAIL_HEIGHT_PX;
+  const bottomRailHeight = BOTTOM_RAIL_HEIGHT_PX;
+  const paddingTop = topRailHeight + RAIL_PADDING_BUFFER_PX;
+  const paddingBottom = bottomRailHeight + RAIL_PADDING_BUFFER_PX;
+  const pageHeight = clamp(
+    availableHeight - paddingTop - paddingBottom,
+    MIN_PAGE_HEIGHT_PX,
+    MAX_PAGE_HEIGHT_PX,
+  );
+  const resolvedSpreadColumns = resolveSpreadColumns({
+    stageWidth: availableWidth,
+    pageHeight,
+    isMobile: options.isMobile,
+  });
+
+  if (resolvedSpreadColumns === 1) {
+    const pageWidth = clamp(
+      Math.min(
+        MAX_SINGLE_PAGE_WIDTH_PX,
+        Math.max(MIN_PAGE_WIDTH_PX, availableWidth - MIN_OUTER_MARGIN_PX * 2),
+      ),
+      MIN_PAGE_WIDTH_PX,
+      MAX_PAGE_WIDTH_PX,
+    );
+
+    return {
+      resolvedSpreadColumns,
+      stageViewport: {
+        width: pageWidth,
+        height: pageHeight,
+      },
+      stagePadding: {
+        paddingX: Math.max(
+          MIN_OUTER_MARGIN_PX,
+          (availableWidth - pageWidth) / 2,
+        ),
+        paddingTop,
+        paddingBottom,
+      },
+      topRailHeight,
+      bottomRailHeight,
+      columnGapPx: COLUMN_GAP_PX,
+    };
+  }
+
+  const preferredSpreadPageWidth =
+    (availableWidth - COLUMN_GAP_PX - PREFERRED_OUTER_MARGIN_PX * 2) / 2;
+  const pageWidth = clamp(
+    Math.min(PREFERRED_SPREAD_PAGE_WIDTH_PX, preferredSpreadPageWidth),
+    MIN_AUTO_SPREAD_PAGE_WIDTH_PX,
+    MAX_PAGE_WIDTH_PX,
+  );
+
+  return {
+    resolvedSpreadColumns,
+    stageViewport: {
+      width: pageWidth,
+      height: pageHeight,
+    },
+    stagePadding: {
+      paddingX: Math.max(
+        PREFERRED_OUTER_MARGIN_PX,
+        (availableWidth - (pageWidth * 2 + COLUMN_GAP_PX)) / 2,
+      ),
+      paddingTop,
+      paddingBottom,
+    },
+    topRailHeight,
+    bottomRailHeight,
+    columnGapPx: COLUMN_GAP_PX,
+  };
+}
+
+/**
+ * Observes the paginated reader's stage slot and keeps the derived viewport and
+ * rail-based padding in sync with the available space.
  */
 export function usePaginatedReaderLayout({
   stageSlotElement,
   isMobile,
-  spreadColumns,
-  onSpreadColumnsChange,
 }: UsePaginatedReaderLayoutOptions) {
-  const [layout, setLayout] = useState(DEFAULT_STAGE_LAYOUT);
-
-  const effectiveSpreadColumns: 1 | 2 = isMobile ? 1 : spreadColumns;
-
-  useEffect(() => {
-    if (isMobile && spreadColumns !== 1) {
-      onSpreadColumnsChange?.(1);
-    }
-  }, [isMobile, onSpreadColumnsChange, spreadColumns]);
+  const [layout, setLayout] = useState(getDefaultPaginatedReaderLayout);
 
   useLayoutEffect(() => {
     if (!stageSlotElement) return;
 
     const updateLayout = () => {
-      setLayout(computeStageLayout(stageSlotElement, effectiveSpreadColumns));
+      setLayout(
+        resolvePaginatedReaderLayout({
+          stageWidth: stageSlotElement.clientWidth,
+          stageHeight: stageSlotElement.clientHeight,
+          isMobile,
+        }),
+      );
     };
 
     updateLayout();
@@ -136,12 +200,7 @@ export function usePaginatedReaderLayout({
     return () => {
       observer.disconnect();
     };
-  }, [effectiveSpreadColumns, stageSlotElement]);
+  }, [isMobile, stageSlotElement]);
 
-  return {
-    stageViewport: layout.stageViewport,
-    stagePadding: layout.stagePadding,
-    effectiveSpreadColumns,
-    showColumnSelector: !isMobile,
-  };
+  return layout;
 }
