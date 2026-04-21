@@ -1,13 +1,14 @@
+import { useAddHighlightMutation } from "@/hooks/use-highlights-query";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HighlightToolbarContainer } from "../Reader/HighlightToolbarContainer";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
-import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
+import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderV2Core } from "./hooks/use-reader-v2-core";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 import { DebugSection } from "./shared/DebugSection";
@@ -28,6 +29,7 @@ export function ReaderV2Debug() {
   const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
   const stageContentRef = useRef<HTMLDivElement>(null);
+  const addHighlightMutation = useAddHighlightMutation(bookId);
 
   const { viewport, setViewport, viewportAutoMode, setViewportAutoMode } =
     useReaderViewport({ isMobile, isPanelOpen });
@@ -46,6 +48,8 @@ export function ReaderV2Debug() {
     currentPage,
     totalPages,
     currentChapterIndex,
+    getChapterBlocks,
+    getChapterCanonicalText,
   } = useReaderV2Core({
     bookId,
     viewport,
@@ -53,13 +57,33 @@ export function ReaderV2Debug() {
     paragraphSpacingFactor,
   });
 
-  const { activeHighlight, activeHighlightData, clearActiveHighlight } =
-    useReaderActiveHighlight({
-      spread: pagination.spread,
-      stageContentRef,
-      chapterEntries,
-      bookHighlights,
-    });
+  const chapterAccess = useMemo(
+    () => ({
+      getBlocks: getChapterBlocks,
+      getCanonicalText: getChapterCanonicalText,
+    }),
+    [getChapterBlocks, getChapterCanonicalText],
+  );
+
+  const {
+    state: annotationState,
+    activeHighlight,
+    activeHighlightData,
+    isCreatingHighlight,
+    creationPosition,
+    selectColor,
+    closeCreation,
+    clearActiveHighlight,
+  } = useReaderAnnotations({
+    bookId,
+    spread: pagination.spread,
+    stageContentRef,
+    chapterEntries,
+    chapterAccess,
+    fontConfig: paginationConfig.fontConfig,
+    highlights: bookHighlights,
+    onCreateHighlight: (highlight) => addHighlightMutation.mutate(highlight),
+  });
 
   if (isBookLoading) {
     return <ReaderStateScreen showSpinner />;
@@ -201,13 +225,13 @@ export function ReaderV2Debug() {
         bookId={bookId}
         spineItemId={activeHighlightData?.spineItemId ?? undefined}
         highlights={bookHighlights}
-        isCreatingHighlight={false}
-        creationPosition={{ x: 0, y: 0 }}
-        onCreateColorSelect={(_color) => {
-          // ReaderV2 creation flow is handled separately.
-        }}
-        onCreateClose={() => {}}
-        activeHighlight={activeHighlight}
+        isCreatingHighlight={isCreatingHighlight}
+        creationPosition={creationPosition}
+        onCreateColorSelect={selectColor}
+        onCreateClose={closeCreation}
+        activeHighlight={
+          annotationState.kind === "active" ? activeHighlight : null
+        }
         onEditClose={clearActiveHighlight}
         isNavVisible={isMobile}
         onCreateNoteSubmit={undefined}

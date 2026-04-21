@@ -3,7 +3,6 @@ import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
     useCallback,
-    useEffect,
     useRef,
     useState,
     type MouseEvent,
@@ -17,10 +16,9 @@ import { ReaderStateScreen } from "./ReaderStateScreen";
 import { ReaderV2Header } from "./ReaderV2Header";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderV2Footer } from "./footer";
-import { useReaderActiveHighlight } from "./hooks/use-reader-active-highlight";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
+import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderSession } from "./hooks/use-reader-session";
-import { useReaderTextSelection } from "./hooks/use-reader-text-selection";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
 const COLUMN_GAP_PX = 20;
@@ -59,8 +57,8 @@ export function ReaderV2() {
   });
 
   const {
-    state: sessionState,
     resources: sessionResources,
+    state: sessionState,
     actions: sessionActions,
   } = useReaderSession({
     bookId,
@@ -68,35 +66,25 @@ export function ReaderV2() {
     spreadColumns: effectiveSpreadColumns,
   });
 
-  const { activeHighlight, activeHighlightData, clearActiveHighlight } =
-    useReaderActiveHighlight({
-      spread: sessionState.pagination.spread,
-      stageContentRef,
-      chapterEntries: sessionState.chapters.entries,
-      bookHighlights: sessionState.highlights,
-    });
-
   const {
-    showHighlightToolbar,
-    toolbarPosition,
-    handleHighlightColorSelect,
-    handleCloseHighlightToolbar,
-  } = useReaderTextSelection({
+    state: annotationState,
+    activeHighlight,
+    activeHighlightData,
+    isCreatingHighlight,
+    creationPosition,
+    selectColor,
+    closeCreation,
+    clearActiveHighlight,
+  } = useReaderAnnotations({
     bookId,
     spread: sessionState.pagination.spread,
     stageContentRef,
     chapterEntries: sessionState.chapters.entries,
     fontConfig: sessionState.pagination.paginationConfig.fontConfig,
-    getChapterBlocks: sessionResources.chapterAccess.getBlocks,
-    getChapterCanonicalText: sessionResources.chapterAccess.getCanonicalText,
-    onHighlightCreate: sessionActions.createHighlight,
+    chapterAccess: sessionResources.chapterAccess,
+    highlights: sessionState.highlights,
+    onCreateHighlight: sessionActions.createHighlight,
   });
-
-  useEffect(() => {
-    if (showHighlightToolbar) {
-      clearActiveHighlight();
-    }
-  }, [clearActiveHighlight, showHighlightToolbar]);
 
   const onPageContentClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -252,11 +240,13 @@ export function ReaderV2() {
             bookId={bookId}
             spineItemId={activeHighlightData?.spineItemId ?? undefined}
             highlights={sessionState.highlights}
-            isCreatingHighlight={showHighlightToolbar}
-            creationPosition={toolbarPosition}
-            onCreateColorSelect={handleHighlightColorSelect}
-            onCreateClose={handleCloseHighlightToolbar}
-            activeHighlight={showHighlightToolbar ? null : activeHighlight}
+            isCreatingHighlight={isCreatingHighlight}
+            creationPosition={creationPosition}
+            onCreateColorSelect={selectColor}
+            onCreateClose={closeCreation}
+            activeHighlight={
+              annotationState.kind === "active" ? activeHighlight : null
+            }
             onEditClose={clearActiveHighlight}
             isNavVisible={chromeVisible}
             onCreateNoteSubmit={undefined}
