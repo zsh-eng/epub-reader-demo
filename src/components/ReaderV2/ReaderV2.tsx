@@ -1,12 +1,7 @@
 import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
-import {
-    useCallback,
-    useRef,
-    useState,
-    type MouseEvent,
-} from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 // PAGE_PADDING_X / PAGE_PADDING_Y kept in AnimatedSpread for debug.tsx; not used here.
 import { ReaderControlMenu } from "./ReaderControlMenu";
@@ -86,24 +81,6 @@ export function ReaderV2() {
     onCreateHighlight: sessionActions.createHighlight,
   });
 
-  const onPageContentClick = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      const target = event.target as HTMLElement | null;
-      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
-      if (!anchor) return;
-
-      const href = anchor.getAttribute("href")?.trim();
-      if (!href) return;
-
-      const handled = sessionActions.openInternalHref(href);
-      if (!handled) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    [sessionActions],
-  );
-
   if (sessionState.status === "loading") {
     return <ReaderStateScreen showSpinner title="Loading book" />;
   }
@@ -182,7 +159,7 @@ export function ReaderV2() {
                 columnSpacingPx={COLUMN_GAP_PX}
                 paginationConfig={sessionState.pagination.paginationConfig}
                 stageContentRef={stageContentRef}
-                onPageContentClick={onPageContentClick}
+                onLinkActivate={sessionActions.openInternalHref}
                 paddingTopPx={stagePadding.paddingTop}
                 paddingBottomPx={stagePadding.paddingBottom}
                 paddingLeftPx={stagePadding.paddingX}

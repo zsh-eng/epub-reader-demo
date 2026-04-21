@@ -10,7 +10,7 @@ interface SpreadStageProps {
   columnSpacingPx: number;
   paginationConfig: PaginationConfig;
   stageContentRef?: RefObject<HTMLDivElement | null>;
-  onPageContentClick?: MouseEventHandler<HTMLDivElement>;
+  onLinkActivate?: (href: string) => boolean;
   showDebugOutlines?: boolean;
   paddingTopPx: number;
   paddingBottomPx: number;
@@ -36,7 +36,7 @@ export function SpreadStage({
   columnSpacingPx,
   paginationConfig,
   stageContentRef,
-  onPageContentClick,
+  onLinkActivate,
   showDebugOutlines = false,
   paddingTopPx,
   paddingBottomPx,
@@ -45,12 +45,29 @@ export function SpreadStage({
 }: SpreadStageProps) {
   const direction = toNavDirection(spread?.intent);
 
+  const handlePageContentClick: MouseEventHandler<HTMLDivElement> = (event) => {
+    if (!onLinkActivate) return;
+
+    const target = event.target as HTMLElement | null;
+    const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+    if (!anchor) return;
+
+    const href = anchor.getAttribute("href")?.trim();
+    if (!href) return;
+
+    const handled = onLinkActivate(href);
+    if (!handled) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   return (
     <MotionConfig reducedMotion="user">
       {/* position:relative + overflow:hidden clips pages as they slide in/out */}
       <div
         ref={stageContentRef}
-        onClick={onPageContentClick}
+        onClick={handlePageContentClick}
         className="relative h-full w-full overflow-hidden"
       >
         <AnimatePresence custom={direction} mode="sync">
