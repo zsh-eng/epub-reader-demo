@@ -1,4 +1,4 @@
-import { PageSliceView } from "@/components/ReaderV2/PageSliceView";
+import { PageSliceView } from "@/components/Reader/PageSliceView";
 import { resolveDomEndpointToContentAnchor } from "@/lib/pagination-v2/engine/selection-anchors";
 import {
   layoutTextLines,

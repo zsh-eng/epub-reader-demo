@@ -8,7 +8,7 @@ import {
   applyHighlightsToChapterHtml,
   buildHighlightSignature,
   buildHighlightsBySpineItemId,
-} from "@/components/ReaderV2/highlight-virtualization";
+} from "@/components/Reader/highlight-virtualization";
 import { describe, expect, it } from "vitest";
 
 function makeHighlight(
@@ -33,7 +33,7 @@ function makeHighlight(
   };
 }
 
-describe("ReaderV2 highlight virtualization", () => {
+describe("Reader highlight virtualization", () => {
   it("applies virtual marks with id, color, and boundary attributes", () => {
     const html = "<p>Hello world</p>";
     const highlights: Highlight[] = [

@@ -208,7 +208,7 @@ export function useReaderChapterContent({
         }
       } catch (error) {
         if (!cancelled) {
-          console.error("[ReaderV2] Failed to load chapter content", error);
+          console.error("[Reader] Failed to load chapter content", error);
         }
       }
     };

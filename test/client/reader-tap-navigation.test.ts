@@ -2,10 +2,10 @@ import {
   getHorizontalTapZone,
   isInteractiveTapTarget,
   resolveTapNavigationAction,
-} from "@/components/ReaderV2/hooks/use-pagination-tap-nav";
+} from "@/components/Reader/hooks/use-pagination-tap-nav";
 import { describe, expect, it } from "vitest";
 
-describe("ReaderV2 tap navigation", () => {
+describe("Reader tap navigation", () => {
   describe("getHorizontalTapZone", () => {
     it("resolves left, center, and right thirds", () => {
       const rect = { left: 0, width: 300 };

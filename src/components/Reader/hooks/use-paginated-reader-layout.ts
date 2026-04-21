@@ -103,7 +103,7 @@ function computeStageLayout(
 /**
  * Computes the paginated reader's stage layout from the available stage slot.
  * Observes the stage container and derives the stage viewport, stage padding,
- * and effective column behavior used by ReaderV2.
+ * and effective column behavior used by Reader.
  */
 export function usePaginatedReaderLayout({
   stageSlotElement,

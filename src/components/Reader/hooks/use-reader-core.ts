@@ -16,16 +16,16 @@ import type { ChapterEntry } from "../types";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 import { useReaderChapterContent } from "./use-reader-chapter-content";
 import { useReaderPaginationFeed } from "./use-reader-pagination-feed";
-import { useReaderV2CheckpointController } from "./use-reader-v2-checkpoint-controller";
+import { useReaderCheckpointController } from "./use-reader-checkpoint-controller";
 
-interface UseReaderV2CoreOptions {
+interface UseReaderCoreOptions {
   bookId?: string;
   viewport: { width: number; height: number };
   spreadColumns: 1 | 2 | 3;
   paragraphSpacingFactor?: number;
 }
 
-interface UseReaderV2CoreResult {
+interface UseReaderCoreResult {
   book: Book | null;
   isBookLoading: boolean;
   settings: ReaderSettings;
@@ -96,9 +96,9 @@ function buildSpreadConfig(columns: 1 | 2 | 3): SpreadConfig {
   };
 }
 
-export function useReaderV2Core(
-  options: UseReaderV2CoreOptions,
-): UseReaderV2CoreResult {
+export function useReaderCore(
+  options: UseReaderCoreOptions,
+): UseReaderCoreResult {
   // Composes the reader's top-level state: settings, chapter content, and pagination.
   const {
     bookId,
@@ -126,7 +126,7 @@ export function useReaderV2Core(
     spreadConfig,
   });
 
-  useReaderV2CheckpointController({
+  useReaderCheckpointController({
     bookId,
     spread: pagination.spread,
   });

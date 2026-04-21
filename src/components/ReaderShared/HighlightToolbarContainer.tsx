@@ -1,5 +1,5 @@
 import { HighlightToolbar } from "@/components/HighlightToolbar";
-import { MobileHighlightBar } from "@/components/Reader/MobileHighlightBar";
+import { MobileHighlightBar } from "@/components/ReaderShared/MobileHighlightBar";
 import {
   useDeleteHighlightMutation,
   useUpdateHighlightMutation,
@@ -8,7 +8,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { AnnotationColor } from "@/lib/highlight-constants";
 import type { Highlight } from "@/types/highlight";
 import { AnimatePresence } from "motion/react";
-import type { ActiveHighlightState } from ".";
+
+interface ActiveHighlightState {
+  id: string;
+  position: { x: number; y: number };
+}
 
 interface HighlightToolbarContainerProps {
   bookId: string | undefined;

@@ -29,7 +29,7 @@ interface PageSliceViewProps {
 }
 
 function NoteRefBadge({ children }: { children: ReactNode }) {
-  return <span className="reader-v2-note-ref-badge">{children}</span>;
+  return <span className="reader-note-ref-badge">{children}</span>;
 }
 
 function isClusteredLinkFragment(fragment: PageFragment): boolean {
@@ -95,7 +95,7 @@ function renderFragmentSequence(
     nodes.push(
       <span
         key={`${keyPrefix}-cluster-${index}`}
-        className="reader-v2-inline-link-cluster"
+        className="reader-inline-link-cluster"
       >
         {group.map((groupFragment, groupOffset) =>
           renderInlineFragment(
@@ -167,11 +167,11 @@ function renderInlineFragment(
   style: CSSProperties,
 ) {
   const className = cn({
-    "reader-v2-inline-link":
+    "reader-inline-link":
       Boolean(fragment.link) && fragment.inlineRole !== "note-ref",
-    "reader-v2-inline-code": fragment.isCode,
-    "reader-v2-inline-superscript": fragment.inlineRole === "superscript",
-    "reader-v2-note-ref": fragment.inlineRole === "note-ref",
+    "reader-inline-code": fragment.isCode,
+    "reader-inline-superscript": fragment.inlineRole === "superscript",
+    "reader-note-ref": fragment.inlineRole === "note-ref",
   });
   const content = renderFragmentContent(fragment);
   const anchorData = getFragmentAnchorData(fragment);
@@ -279,8 +279,8 @@ export function PageSliceView({
   return (
     <p
       className={cn("m-0 box-border text-foreground", {
-        "reader-v2-blockquote": slice.tag === "blockquote",
-        "reader-v2-figcaption": slice.tag === "figcaption",
+        "reader-blockquote": slice.tag === "blockquote",
+        "reader-figcaption": slice.tag === "figcaption",
       })}
       {...{ [CONTENT_ANCHOR_BLOCK_ID_ATTR]: slice.blockId }}
       // There is a difference between the line height CSS property and the actual line height

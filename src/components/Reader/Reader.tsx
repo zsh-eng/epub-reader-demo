@@ -1,4 +1,4 @@
-import { HighlightToolbarContainer } from "@/components/Reader/HighlightToolbarContainer";
+import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightToolbarContainer";
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCallback, useRef, useState } from "react";
@@ -7,9 +7,9 @@ import { ReaderControlMenu } from "./ReaderControlMenu";
 import { ReaderController } from "./ReaderController";
 import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import { ReaderStateScreen } from "./ReaderStateScreen";
-import { ReaderV2Header } from "./ReaderV2Header";
+import { ReaderHeader } from "./ReaderHeader";
 import { SpreadStage } from "./SpreadStage";
-import { ReaderV2Footer } from "./footer";
+import { ReaderFooter } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
@@ -18,7 +18,7 @@ import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
 const COLUMN_GAP_PX = 20;
 
-export function ReaderV2() {
+export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -168,7 +168,7 @@ export function ReaderV2() {
           </div>
 
           {/* Floating header — paddingTop handles safe-area notch, content is h-14 = 56px */}
-          <ReaderV2Header
+          <ReaderHeader
             chromeVisible={chromeVisible}
             chromeSurfaceProps={chromeSurfaceProps}
             bookTitle={book.title}
@@ -195,7 +195,7 @@ export function ReaderV2() {
           />
 
           {/* Floating footer — chapter nav, page indicator, scrubber */}
-          <ReaderV2Footer
+          <ReaderFooter
             chromeVisible={chromeVisible}
             chromeSurfaceProps={chromeSurfaceProps}
             currentPage={sessionState.navigation.currentPage}

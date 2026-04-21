@@ -16,7 +16,7 @@ import {
     useReaderNavigationActions,
     type ReaderNavigationActions,
 } from "./use-reader-navigation-actions";
-import { useReaderV2Core } from "./use-reader-v2-core";
+import { useReaderCore } from "./use-reader-core";
 
 export interface UseReaderSessionOptions {
   bookId?: string;
@@ -102,7 +102,7 @@ export interface UseReaderSessionResult {
 }
 
 /**
- * Facade around the current Reader V2 core wiring.
+ * Facade around the current Reader core wiring.
  *
  * The goal is to expose a "reading session" API to UI components rather than
  * the raw mix of pagination internals, chapter source plumbing, and derived
@@ -112,7 +112,7 @@ export interface UseReaderSessionResult {
 export function useReaderSession(
   options: UseReaderSessionOptions,
 ): UseReaderSessionResult {
-  const core = useReaderV2Core(options);
+  const core = useReaderCore(options);
   const { createHighlight } = useReaderHighlightActions(options.bookId);
 
   const navigationActions = useReaderNavigationActions({

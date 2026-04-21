@@ -1,5 +1,5 @@
-import type { ReaderChromeSurfaceProps } from "@/components/ReaderV2/chrome";
-import type { ChapterEntry } from "@/components/ReaderV2/types";
+import type { ReaderChromeSurfaceProps } from "@/components/Reader/chrome";
+import type { ChapterEntry } from "@/components/Reader/types";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
@@ -24,7 +24,7 @@ const CHROME_FADE_OUT_TRANSITION = {
   ease: "easeIn" as const,
 };
 
-export interface ReaderV2FooterProps {
+export interface ReaderFooterProps {
   chromeVisible: boolean;
   chromeSurfaceProps?: ReaderChromeSurfaceProps;
   currentPage: number;
@@ -41,7 +41,7 @@ export interface ReaderV2FooterProps {
   isLoading?: boolean;
 }
 
-export function ReaderV2Footer({
+export function ReaderFooter({
   chromeVisible,
   chromeSurfaceProps,
   currentPage,
@@ -56,7 +56,7 @@ export function ReaderV2Footer({
   onPrevChapter,
   onNextChapter,
   isLoading = false,
-}: ReaderV2FooterProps) {
+}: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
   const prevIsLoadingRef = useRef(isLoading);
   const [hasBeenReady, setHasBeenReady] = useState(!isLoading);

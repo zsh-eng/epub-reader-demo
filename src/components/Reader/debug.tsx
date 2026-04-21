@@ -3,14 +3,14 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { HighlightToolbarContainer } from "../Reader/HighlightToolbarContainer";
+import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightToolbarContainer";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderHighlightActions } from "./hooks/use-reader-highlight-actions";
 import { useReaderNavigationActions } from "./hooks/use-reader-navigation-actions";
-import { useReaderV2Core } from "./hooks/use-reader-v2-core";
+import { useReaderCore } from "./hooks/use-reader-core";
 import { useReaderViewport } from "./hooks/use-reader-viewport";
 import { DebugSection } from "./shared/DebugSection";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
@@ -18,7 +18,7 @@ import { InspectorDrawer } from "./shared/InspectorDrawer";
 import { InspectorPanel } from "./shared/InspectorPanel";
 import { DEFAULT_PARAGRAPH_SPACING } from "@/lib/pagination-v2";
 
-export function ReaderV2Debug() {
+export function ReaderDebug() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -51,7 +51,7 @@ export function ReaderV2Debug() {
     currentChapterIndex,
     getChapterBlocks,
     getChapterCanonicalText,
-  } = useReaderV2Core({
+  } = useReaderCore({
     bookId,
     viewport,
     spreadColumns,

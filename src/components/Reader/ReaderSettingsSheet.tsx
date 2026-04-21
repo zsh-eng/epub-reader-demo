@@ -3,8 +3,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { ReaderSettings } from "@/types/reader.types";
 import { Columns2, Palette, Type } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { ThemePanel } from "../Reader/ReaderSettings/ThemePanel";
-import { TypographyPanel } from "../Reader/ReaderSettings/TypographyPanel";
+import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
+import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 
 interface ReaderSettingsSheetProps {
   isOpen: boolean;

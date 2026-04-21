@@ -49,7 +49,7 @@ export function buildChapterEntries(book: Book | null): ChapterEntry[] {
   for (let index = 0; index < book.spine.length; index++) {
     const spineItem = book.spine[index];
     if (!spineItem) {
-      console.warn("[ReaderV2] Missing spine item while building chapter entries", {
+      console.warn("[Reader] Missing spine item while building chapter entries", {
         bookId: book.id,
         spineIndex: index,
       });
@@ -59,7 +59,7 @@ export function buildChapterEntries(book: Book | null): ChapterEntry[] {
     const manifestItem = book.manifest.find((item) => item.id === spineItem.idref);
     if (!manifestItem?.href) {
       console.warn(
-        "[ReaderV2] Missing manifest href for spine item while building chapter entries",
+        "[Reader] Missing manifest href for spine item while building chapter entries",
         {
           bookId: book.id,
           spineIndex: index,

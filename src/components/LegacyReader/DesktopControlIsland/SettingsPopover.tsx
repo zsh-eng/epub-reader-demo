@@ -10,8 +10,8 @@ import { cn } from "@/lib/utils";
 import { Palette, Settings, Type } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
-import { ThemePanel } from "../ReaderSettings/ThemePanel";
-import { TypographyPanel } from "../ReaderSettings/TypographyPanel";
+import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
+import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 
 interface SettingsPopoverProps {
   settings: ReaderSettings;

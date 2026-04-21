@@ -1,4 +1,4 @@
-# Reader V2
+# Reader
 
 This reader has a small reader-side content pipeline before content reaches `pagination-v2`.
 

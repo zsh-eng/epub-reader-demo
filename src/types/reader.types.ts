@@ -95,7 +95,7 @@ export const READER_FONT_SIZE_MAX_PX = 32;
 export const TEXT_ALIGN = {
   left: "left",
   justify: "justify",
-  // Uses the custom Knuth-Plass line-breaking path in ReaderV2 while still
+  // Uses the custom Knuth-Plass line-breaking path in Reader while still
   // falling back to CSS justify anywhere we only support native layout.
   justifyKnuthPlass: "justify-knuth-plass",
   center: "center",

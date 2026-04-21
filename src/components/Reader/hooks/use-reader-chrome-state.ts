@@ -21,7 +21,7 @@ export interface UseReaderChromeStateResult {
 }
 
 /**
- * Owns ephemeral chrome state for the Reader V2 screen.
+ * Owns ephemeral chrome state for the Reader screen.
  *
  * This hook deliberately stays scoped to screen-local UI concerns like overlays
  * and bookmark affordances. It does not own book/session data, which belongs to

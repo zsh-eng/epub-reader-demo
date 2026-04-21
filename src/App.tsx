@@ -1,7 +1,9 @@
 import "@/App.css";
 import { Highlights } from "@/components/Highlights";
+import { LegacyReader } from "@/components/LegacyReader";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
+import { ReaderDebug } from "@/components/Reader/debug";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Sessions } from "@/components/Sessions";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,8 +11,6 @@ import { useSync } from "@/hooks/use-sync";
 import { useTransferQueue } from "@/hooks/use-transfer-queue";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { ReaderV2 } from "./components/ReaderV2";
-import { ReaderV2Debug } from "./components/ReaderV2/debug";
 
 const queryClient = new QueryClient();
 
@@ -33,12 +33,10 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Library />} />
-            <Route path="/reader-v1/:bookId" element={<Reader />} />
-            <Route path="/reader/:bookId" element={<ReaderV2 />} />
-            <Route
-              path="/reader-v2/debug/:bookId"
-              element={<ReaderV2Debug />}
-            />
+            <Route path="/reader-legacy/:bookId" element={<LegacyReader />} />
+            <Route path="/reader-v1/:bookId" element={<LegacyReader />} />
+            <Route path="/reader/:bookId" element={<Reader />} />
+            <Route path="/reader/debug/:bookId" element={<ReaderDebug />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
           </Routes>

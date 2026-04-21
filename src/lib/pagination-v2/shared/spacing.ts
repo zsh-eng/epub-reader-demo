@@ -28,7 +28,7 @@ interface HeadingTypographySpec {
 }
 
 /**
- * Reader V2 typography is intentionally opinionated: users control the broad
+ * Reader typography is intentionally opinionated: users control the broad
  * reading settings, while the engine owns the vertical rhythm for each block
  * type so pagination and rendering stay in sync.
  */

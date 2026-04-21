@@ -1,4 +1,4 @@
-import { applyHighlightsToChapterHtml } from "@/components/ReaderV2/highlight-virtualization";
+import { applyHighlightsToChapterHtml } from "@/components/Reader/highlight-virtualization";
 import {
     parseChapterHtmlWithCanonicalText,
     prepareBlocks,

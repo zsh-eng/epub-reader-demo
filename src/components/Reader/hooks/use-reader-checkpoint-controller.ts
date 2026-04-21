@@ -78,13 +78,13 @@ function shouldFlushCheckpointImmediately(intent: SpreadIntent): boolean {
   return intent.kind === "jump";
 }
 
-interface UseReaderV2CheckpointControllerOptions {
+interface UseReaderCheckpointControllerOptions {
   bookId?: string;
   spread: ResolvedSpread | null;
 }
 
 /**
- * Keeps the Reader V2 checkpoint in sync with the currently resolved spread.
+ * Keeps the Reader checkpoint in sync with the currently resolved spread.
  *
  * Responsibilities:
  * - derive a persistable `(chapterIndex, scrollProgress)` snapshot from the
@@ -96,10 +96,10 @@ interface UseReaderV2CheckpointControllerOptions {
  * This hook only writes the per-device `readingCheckpoints` row. It does not
  * create legacy `readingProgress` history rows.
  */
-export function useReaderV2CheckpointController({
+export function useReaderCheckpointController({
   bookId,
   spread,
-}: UseReaderV2CheckpointControllerOptions): void {
+}: UseReaderCheckpointControllerOptions): void {
   const latestCheckpointRef = useRef<CheckpointSnapshot | null>(null);
   const lastSavedCheckpointRef = useRef<CheckpointSnapshot | null>(null);
   // Serializes writes so we never have two overlapping checkpoint saves racing
@@ -137,7 +137,7 @@ export function useReaderV2CheckpointController({
           lastSavedCheckpointRef.current = checkpointToPersist;
         })
         .catch((error) => {
-          console.error("Failed to save Reader V2 checkpoint:", error);
+          console.error("Failed to save Reader checkpoint:", error);
         });
     },
     [bookId],

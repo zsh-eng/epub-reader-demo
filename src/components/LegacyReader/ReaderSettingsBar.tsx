@@ -9,8 +9,8 @@ import { cn } from "@/lib/utils";
 import type { ReaderSettings } from "@/types/reader.types";
 import { Palette, Type } from "lucide-react";
 import { useRef, useState } from "react";
-import { ThemePanel } from "./ReaderSettings/ThemePanel";
-import { TypographyPanel } from "./ReaderSettings/TypographyPanel";
+import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
+import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 
 interface ReaderSettingsBarProps {
   settings: ReaderSettings;

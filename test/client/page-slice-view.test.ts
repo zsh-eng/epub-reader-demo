@@ -3,7 +3,7 @@ import {
   CONTENT_ANCHOR_END_ATTR,
   CONTENT_ANCHOR_START_ATTR,
 } from "@/lib/pagination-v2/content-anchor-dom";
-import { PageSliceView } from "@/components/ReaderV2/PageSliceView";
+import { PageSliceView } from "@/components/Reader/PageSliceView";
 import type { TextSlice } from "@/lib/pagination-v2";
 import {
   EPUB_HIGHLIGHT_END_ATTRIBUTE,
@@ -60,7 +60,7 @@ describe("PageSliceView", () => {
     );
 
     expect(markup).toContain('href="OEBPS/Text/Chapter2.xhtml#note-1"');
-    expect(markup).toContain("reader-v2-inline-link");
+    expect(markup).toContain("reader-inline-link");
     expect(markup).toContain(`${CONTENT_ANCHOR_BLOCK_ID_ATTR}="linked-block"`);
     expect(markup).toContain(`${CONTENT_ANCHOR_START_ATTR}="0:0:0"`);
     expect(markup).toContain(`${CONTENT_ANCHOR_END_ATTR}="0:1:0"`);
@@ -118,7 +118,7 @@ describe("PageSliceView", () => {
       }),
     );
 
-    expect(markup).toContain("reader-v2-inline-link-cluster");
+    expect(markup).toContain("reader-inline-link-cluster");
     expect(markup).toContain('href="#Fig29"');
     expect(markup.match(/href="#Fig29"/g)).toHaveLength(3);
   });
@@ -170,8 +170,8 @@ describe("PageSliceView", () => {
     );
 
     expect(markup).toContain('href="#note-12"');
-    expect(markup).toContain("reader-v2-note-ref");
-    expect(markup).toContain("reader-v2-note-ref-badge");
+    expect(markup).toContain("reader-note-ref");
+    expect(markup).toContain("reader-note-ref-badge");
     expect(markup).toContain(`${CONTENT_ANCHOR_START_ATTR}="1:0:0"`);
     expect(markup).toContain(`${CONTENT_ANCHOR_END_ATTR}="1:1:0"`);
     expect(markup).toContain(">12<");
@@ -212,7 +212,7 @@ describe("PageSliceView", () => {
       }),
     );
 
-    expect(markup).toContain("reader-v2-inline-superscript");
+    expect(markup).toContain("reader-inline-superscript");
     expect(markup).toContain(">2<");
   });
 

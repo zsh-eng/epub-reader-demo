@@ -14,8 +14,8 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { ThemePanel } from "./ReaderSettings/ThemePanel";
-import { TypographyPanel } from "./ReaderSettings/TypographyPanel";
+import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
+import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 
 interface MobileReaderNavProps {
   settings: ReaderSettings;

@@ -1,7 +1,7 @@
 import {
   CHROME_HIDE_DELAY_MS,
   ReaderController,
-} from "@/components/ReaderV2/ReaderController";
+} from "@/components/Reader/ReaderController";
 import type { ChromeInteractionMode } from "@/hooks/use-input-behavior";
 import { act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";

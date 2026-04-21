@@ -1,7 +1,7 @@
-import { resolvePaginatedLinkTarget } from "@/components/ReaderV2/link-navigation";
+import { resolvePaginatedLinkTarget } from "@/components/Reader/link-navigation";
 import { describe, expect, it } from "vitest";
 
-describe("ReaderV2 link navigation", () => {
+describe("Reader link navigation", () => {
   const chapterIndexByHrefPath = new Map<string, number>([
     ["OEBPS/Text/Chapter1.xhtml", 0],
     ["OEBPS/Text/Chapter2.xhtml", 1],
