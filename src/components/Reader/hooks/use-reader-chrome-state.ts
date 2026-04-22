@@ -1,18 +1,22 @@
 import { useCallback, useMemo, useState } from "react";
 
+export type ReaderToolsRoute = "root" | "settings";
+export type ReaderToolsRouteDirection = 1 | -1;
+
 export interface ReaderChromeState {
   isBookmarked: boolean;
-  isMenuOpen: boolean;
-  isSettingsOpen: boolean;
+  isToolsOpen: boolean;
+  activeToolsRoute: ReaderToolsRoute;
+  toolsRouteDirection: ReaderToolsRouteDirection;
   isChromePinned: boolean;
 }
 
 export interface ReaderChromeActions {
   toggleBookmark: () => void;
-  openMenu: () => void;
-  closeMenu: () => void;
-  openSettings: () => void;
-  closeSettings: () => void;
+  openTools: () => void;
+  closeTools: () => void;
+  showToolsRoot: () => void;
+  showSettings: () => void;
 }
 
 export interface UseReaderChromeStateResult {
@@ -29,48 +33,57 @@ export interface UseReaderChromeStateResult {
  */
 export function useReaderChromeState(): UseReaderChromeStateResult {
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [activeToolsRoute, setActiveToolsRoute] =
+    useState<ReaderToolsRoute>("root");
+  const [toolsRouteDirection, setToolsRouteDirection] =
+    useState<ReaderToolsRouteDirection>(1);
 
   const toggleBookmark = useCallback(() => {
     setIsBookmarked((bookmarked) => !bookmarked);
   }, []);
 
-  const openMenu = useCallback(() => {
-    setIsMenuOpen(true);
+  const openTools = useCallback(() => {
+    setToolsRouteDirection(1);
+    setActiveToolsRoute("root");
+    setIsToolsOpen(true);
   }, []);
 
-  const closeMenu = useCallback(() => {
-    setIsMenuOpen(false);
+  const closeTools = useCallback(() => {
+    setIsToolsOpen(false);
   }, []);
 
-  const openSettings = useCallback(() => {
-    setIsSettingsOpen(true);
+  const showToolsRoot = useCallback(() => {
+    setToolsRouteDirection(-1);
+    setActiveToolsRoute("root");
   }, []);
 
-  const closeSettings = useCallback(() => {
-    setIsSettingsOpen(false);
+  const showSettings = useCallback(() => {
+    setToolsRouteDirection(1);
+    setActiveToolsRoute("settings");
+    setIsToolsOpen(true);
   }, []);
 
   const state = useMemo<ReaderChromeState>(
     () => ({
       isBookmarked,
-      isMenuOpen,
-      isSettingsOpen,
-      isChromePinned: isMenuOpen || isSettingsOpen,
+      isToolsOpen,
+      activeToolsRoute,
+      toolsRouteDirection,
+      isChromePinned: isToolsOpen,
     }),
-    [isBookmarked, isMenuOpen, isSettingsOpen],
+    [activeToolsRoute, isBookmarked, isToolsOpen, toolsRouteDirection],
   );
 
   const actions = useMemo<ReaderChromeActions>(
     () => ({
       toggleBookmark,
-      openMenu,
-      closeMenu,
-      openSettings,
-      closeSettings,
+      openTools,
+      closeTools,
+      showToolsRoot,
+      showSettings,
     }),
-    [closeMenu, closeSettings, openMenu, openSettings, toggleBookmark],
+    [closeTools, openTools, showSettings, showToolsRoot, toggleBookmark],
   );
 
   return {

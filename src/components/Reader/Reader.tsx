@@ -3,11 +3,10 @@ import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ReaderControlMenu } from "./ReaderControlMenu";
 import { ReaderController } from "./ReaderController";
-import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { ReaderHeader } from "./ReaderHeader";
+import { ReaderToolsSheet } from "./ReaderToolsSheet";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderFooter } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
@@ -172,18 +171,16 @@ export function Reader() {
             onBackToLibrary={() => navigate("/")}
             isBookmarked={chromeState.isBookmarked}
             onToggleBookmark={chromeActions.toggleBookmark}
-            onOpenMenu={chromeActions.openMenu}
+            onOpenMenu={chromeActions.openTools}
           />
 
-          <ReaderControlMenu
-            isOpen={chromeState.isMenuOpen}
-            onClose={chromeActions.closeMenu}
-            onOpenSettings={chromeActions.openSettings}
-          />
-
-          <ReaderSettingsSheet
-            isOpen={chromeState.isSettingsOpen}
-            onClose={chromeActions.closeSettings}
+          <ReaderToolsSheet
+            isOpen={chromeState.isToolsOpen}
+            activeRoute={chromeState.activeToolsRoute}
+            routeDirection={chromeState.toolsRouteDirection}
+            onClose={chromeActions.closeTools}
+            onBack={chromeActions.showToolsRoot}
+            onOpenSettings={chromeActions.showSettings}
             settings={sessionState.settings}
             onUpdateSettings={sessionActions.updateSettings}
           />
