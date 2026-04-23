@@ -30,6 +30,7 @@ export interface ReaderFooterProps {
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
+  currentChapterEndIndex: number;
   currentTitleChapterIndex: number | null;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
@@ -37,7 +38,6 @@ export interface ReaderFooterProps {
   onScrubCommit: (page: number) => void;
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
-  onNextChapter: () => void;
   isLoading?: boolean;
 }
 
@@ -47,6 +47,7 @@ export function ReaderFooter({
   currentPage,
   totalPages,
   currentChapterIndex,
+  currentChapterEndIndex,
   currentTitleChapterIndex,
   chapterEntries,
   chapterStartPages,
@@ -54,7 +55,6 @@ export function ReaderFooter({
   onScrubCommit,
   onGoToChapter,
   onPrevChapter,
-  onNextChapter,
   isLoading = false,
 }: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
@@ -64,6 +64,7 @@ export function ReaderFooter({
     currentPage: number;
     totalPages: number;
     currentChapterIndex: number;
+    currentChapterEndIndex: number;
     chapterStartPages: (number | null)[];
   } | null>(
     !isLoading
@@ -71,6 +72,7 @@ export function ReaderFooter({
           currentPage,
           totalPages,
           currentChapterIndex,
+          currentChapterEndIndex,
           chapterStartPages: [...chapterStartPages],
         }
       : null,
@@ -91,10 +93,18 @@ export function ReaderFooter({
         currentPage,
         totalPages,
         currentChapterIndex,
+        currentChapterEndIndex,
         chapterStartPages: [...chapterStartPages],
       };
     }
-  }, [chapterStartPages, currentChapterIndex, currentPage, isLoading, totalPages]);
+  }, [
+    chapterStartPages,
+    currentChapterEndIndex,
+    currentChapterIndex,
+    currentPage,
+    isLoading,
+    totalPages,
+  ]);
 
   const interruptScrubberMomentum = useCallback(() => {
     setCancelMomentumSignal((signal) => signal + 1);
@@ -113,11 +123,6 @@ export function ReaderFooter({
     onPrevChapter();
   }, [interruptScrubberMomentum, onPrevChapter]);
 
-  const handleNextChapter = useCallback(() => {
-    interruptScrubberMomentum();
-    onNextChapter();
-  }, [interruptScrubberMomentum, onNextChapter]);
-
   const detailCurrentPage =
     preserveDetailsWhileLoading && lastReadyDetailsRef.current
       ? lastReadyDetailsRef.current.currentPage
@@ -130,6 +135,10 @@ export function ReaderFooter({
     preserveDetailsWhileLoading && lastReadyDetailsRef.current
       ? lastReadyDetailsRef.current.currentChapterIndex
       : currentChapterIndex;
+  const detailCurrentChapterEndIndex =
+    preserveDetailsWhileLoading && lastReadyDetailsRef.current
+      ? lastReadyDetailsRef.current.currentChapterEndIndex
+      : currentChapterEndIndex;
   const detailChapterStartPages =
     preserveDetailsWhileLoading && lastReadyDetailsRef.current
       ? lastReadyDetailsRef.current.chapterStartPages
@@ -169,12 +178,13 @@ export function ReaderFooter({
               currentTitleChapterIndex={currentTitleChapterIndex}
               chapterEntries={chapterEntries}
               detailCurrentChapterIndex={detailCurrentChapterIndex}
+              currentChapterEndIndex={currentChapterEndIndex}
+              detailCurrentChapterEndIndex={detailCurrentChapterEndIndex}
               chapterStartPages={detailChapterStartPages}
               currentPage={detailCurrentPage}
               totalPages={detailTotalPages}
               onGoToChapter={handleGoToChapter}
               onPrevChapter={handlePrevChapter}
-              onNextChapter={handleNextChapter}
               isLoading={isLoading}
               preserveDetailsWhileLoading={preserveDetailsWhileLoading}
               animateReadyDetails={animateReadyTransition}

@@ -188,6 +188,10 @@ export function Reader() {
             currentPage={sessionState.navigation.currentPage}
             totalPages={sessionState.navigation.totalPages}
             currentChapterIndex={sessionState.navigation.currentChapterIndex}
+            currentChapterEndIndex={
+              sessionState.pagination.spread?.chapterIndexEnd ??
+              sessionState.navigation.currentChapterIndex
+            }
             currentTitleChapterIndex={sessionState.navigation.currentTitleChapterIndex}
             chapterEntries={sessionState.chapters.entries}
             chapterStartPages={sessionState.navigation.chapterStartPages}
@@ -195,7 +199,6 @@ export function Reader() {
             onScrubCommit={sessionActions.commitPage}
             onGoToChapter={sessionActions.goToChapter}
             onPrevChapter={sessionActions.goToPreviousChapter}
-            onNextChapter={sessionActions.goToNextChapter}
             isLoading={sessionState.pagination.status !== "ready"}
           />
 

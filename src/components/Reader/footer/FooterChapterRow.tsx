@@ -6,15 +6,16 @@ import { FOOTER_READY_DETAIL_DELAY } from "./FooterLoadingState";
 
 interface FooterChapterRowProps {
   currentChapterIndex: number;
+  currentChapterEndIndex: number;
   currentTitleChapterIndex: number | null;
   detailCurrentChapterIndex?: number;
+  detailCurrentChapterEndIndex?: number;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   currentPage: number;
   totalPages: number;
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
-  onNextChapter: () => void;
   isLoading?: boolean;
   preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
@@ -22,28 +23,39 @@ interface FooterChapterRowProps {
 
 export function FooterChapterRow({
   currentChapterIndex,
+  currentChapterEndIndex,
   currentTitleChapterIndex,
   detailCurrentChapterIndex,
+  detailCurrentChapterEndIndex,
   chapterEntries,
   chapterStartPages,
   currentPage,
   totalPages,
   onGoToChapter,
   onPrevChapter,
-  onNextChapter,
   isLoading = false,
   preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
 }: FooterChapterRowProps) {
   const metricsChapterIndex = detailCurrentChapterIndex ?? currentChapterIndex;
+  const metricsChapterEndIndex = Math.max(
+    metricsChapterIndex,
+    detailCurrentChapterEndIndex ?? currentChapterEndIndex,
+  );
+  // In multi-column spreads, the next chapter may already be visible in a later
+  // slot. Keep the CTA actionable by targeting the first chapter not currently
+  // visible on the spread.
+  const nextActionableChapterIndex = metricsChapterEndIndex + 1;
   const hasPrev = metricsChapterIndex > 0;
-  const hasNext = metricsChapterIndex < chapterEntries.length - 1;
+  const hasNext = nextActionableChapterIndex < chapterEntries.length;
   const showBlurredLoadingDetails = isLoading && preserveDetailsWhileLoading;
   const showDetails = !isLoading || showBlurredLoadingDetails;
 
   const prevChapterStart = chapterStartPages[metricsChapterIndex - 1];
   const currentChapterStart = chapterStartPages[metricsChapterIndex];
-  const nextChapterStart = chapterStartPages[metricsChapterIndex + 1];
+  const nextChapterStart = hasNext
+    ? chapterStartPages[nextActionableChapterIndex]
+    : null;
 
   const pagesFromCurrentChapterStart =
     currentChapterStart != null ? currentPage - currentChapterStart : null;
@@ -67,6 +79,11 @@ export function FooterChapterRow({
       return;
     }
     onPrevChapter();
+  };
+
+  const handleNextClick = () => {
+    if (!hasNext) return;
+    onGoToChapter(nextActionableChapterIndex);
   };
 
   const currentChapterTitle =
@@ -146,7 +163,7 @@ export function FooterChapterRow({
         {hasNext && showDetails && (
           <motion.button
             key="next"
-            onClick={onNextChapter}
+            onClick={handleNextClick}
             className={cn(
               "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors",
               showBlurredLoadingDetails
