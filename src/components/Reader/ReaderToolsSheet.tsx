@@ -2,27 +2,30 @@ import { Button } from "@/components/ui/button";
 import type { ReaderSettings } from "@/types/reader.types";
 import { ChevronLeft } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
-import {
-  type ReaderToolsRoute,
-  type ReaderToolsRouteDirection,
-} from "./hooks/use-reader-chrome-state";
+import { type ReactNode, useLayoutEffect, useState } from "react";
 import { ReaderControlMenu } from "./ReaderControlMenu";
 import {
-  ReaderSettingsPanel,
-  type ReaderSettingsPanelTab,
+    ReaderSettingsPanel,
+    type ReaderSettingsPanelTab,
 } from "./ReaderSettingsSheet";
+import {
+    type SheetStackRouterDirection,
+    useSheetStackRouter,
+} from "./hooks/use-sheet-stack-router";
 import { ReaderSheet } from "./shared/ReaderSheet";
+
+type ReaderToolsRoute = "root" | "settings";
 
 interface ReaderToolsSheetProps {
   isOpen: boolean;
-  activeRoute: ReaderToolsRoute;
-  routeDirection: ReaderToolsRouteDirection;
   onClose: () => void;
-  onBack: () => void;
-  onOpenSettings: () => void;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
+}
+
+interface ReaderToolsRouteDefinition {
+  title: string;
+  render: () => ReactNode;
 }
 
 const ROUTE_TRANSITION = {
@@ -31,7 +34,7 @@ const ROUTE_TRANSITION = {
 };
 
 const ROUTE_VARIANTS = {
-  enter: (direction: ReaderToolsRouteDirection) => ({
+  enter: (direction: SheetStackRouterDirection) => ({
     opacity: 0,
     x: direction > 0 ? "100%" : "-100%",
   }),
@@ -39,7 +42,7 @@ const ROUTE_VARIANTS = {
     opacity: 1,
     x: "0%",
   },
-  exit: (direction: ReaderToolsRouteDirection) => ({
+  exit: (direction: SheetStackRouterDirection) => ({
     opacity: 0,
     x: direction > 0 ? "-24%" : "24%",
   }),
@@ -47,24 +50,57 @@ const ROUTE_VARIANTS = {
 
 /**
  * ReaderToolsSheet keeps the reader utilities inside one persistent drawer and
- * animates route changes within that shell so nested tools feel connected.
+ * owns the local stack navigation for content rendered inside that shell.
  */
 export function ReaderToolsSheet({
   isOpen,
-  activeRoute,
-  routeDirection,
   onClose,
-  onBack,
-  onOpenSettings,
   settings,
   onUpdateSettings,
 }: ReaderToolsSheetProps) {
   const [activeSettingsTab, setActiveSettingsTab] =
     useState<ReaderSettingsPanelTab>("typography");
+  const {
+    state: toolsRouterState,
+    actions: toolsRouterActions,
+  } = useSheetStackRouter<ReaderToolsRoute>("root");
 
-  const title =
-    activeRoute === "settings" ? "Reading Settings" : "Reader Tools";
-  const showBackButton = activeRoute !== "root";
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    toolsRouterActions.reset("root", { direction: 1 });
+  }, [isOpen, toolsRouterActions]);
+
+  const activeRoute = toolsRouterState.currentRoute;
+  const routeDirection = toolsRouterState.direction;
+  const canGoBack = toolsRouterState.canGoBack;
+
+  const routeDefinitions: Record<ReaderToolsRoute, ReaderToolsRouteDefinition> = {
+    root: {
+      title: "Reader Tools",
+      render: () => (
+        <ReaderControlMenu
+          onOpenSettings={() => {
+            toolsRouterActions.push("settings");
+          }}
+        />
+      ),
+    },
+    settings: {
+      title: "Reading Settings",
+      render: () => (
+        <ReaderSettingsPanel
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
+          activeTab={activeSettingsTab}
+          onActiveTabChange={setActiveSettingsTab}
+        />
+      ),
+    },
+  };
+  const activeDefinition = routeDefinitions[activeRoute];
 
   return (
     <ReaderSheet
@@ -72,17 +108,17 @@ export function ReaderToolsSheet({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={title}
+      title={activeDefinition.title}
       panelClassName="max-w-md"
       bodyClassName="overflow-hidden"
       header={
         <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
-          {showBackButton ? (
+          {canGoBack ? (
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={onBack}
-              aria-label="Back to reader tools"
+              onClick={toolsRouterActions.pop}
+              aria-label="Go back"
               className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
             >
               <ChevronLeft className="size-4" />
@@ -92,7 +128,7 @@ export function ReaderToolsSheet({
           )}
 
           <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            {title}
+            {activeDefinition.title}
           </p>
 
           <div className="size-8" aria-hidden="true" />
@@ -110,16 +146,7 @@ export function ReaderToolsSheet({
           transition={ROUTE_TRANSITION}
           className="min-h-0"
         >
-          {activeRoute === "settings" ? (
-            <ReaderSettingsPanel
-              settings={settings}
-              onUpdateSettings={onUpdateSettings}
-              activeTab={activeSettingsTab}
-              onActiveTabChange={setActiveSettingsTab}
-            />
-          ) : (
-            <ReaderControlMenu onOpenSettings={onOpenSettings} />
-          )}
+          {activeDefinition.render()}
         </motion.div>
       </AnimatePresence>
     </ReaderSheet>

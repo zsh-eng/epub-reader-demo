@@ -4,8 +4,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
-import { ReaderStateScreen } from "./ReaderStateScreen";
 import { ReaderHeader } from "./ReaderHeader";
+import { ReaderStateScreen } from "./ReaderStateScreen";
 import { ReaderToolsSheet } from "./ReaderToolsSheet";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderFooter } from "./footer";
@@ -176,11 +176,7 @@ export function Reader() {
 
           <ReaderToolsSheet
             isOpen={chromeState.isToolsOpen}
-            activeRoute={chromeState.activeToolsRoute}
-            routeDirection={chromeState.toolsRouteDirection}
             onClose={chromeActions.closeTools}
-            onBack={chromeActions.showToolsRoot}
-            onOpenSettings={chromeActions.showSettings}
             settings={sessionState.settings}
             onUpdateSettings={sessionActions.updateSettings}
           />
