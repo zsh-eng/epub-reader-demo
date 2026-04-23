@@ -8,9 +8,9 @@ import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
 const SEGMENTED_PILL_TRANSITION = {
   type: "spring" as const,
-  stiffness: 420,
-  damping: 34,
-  mass: 0.8,
+  stiffness: 390,
+  damping: 36,
+  mass: 0.9,
 };
 
 interface SegmentedControlContextValue {
