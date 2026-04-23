@@ -42,7 +42,10 @@ export function ReaderSettingsPanel({
         </TabsTrigger>
       </TabsList>
 
-      <div className="max-h-[min(65vh,38rem)] overflow-y-auto px-4 pb-3" data-vaul-no-drag>
+      {/* This region stays content-sized until the sheet reaches its viewport
+          cap, then becomes the scroll container instead of truncating the
+          active settings panel at a fixed intermediate height. */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3" data-vaul-no-drag>
         <TabsContent value="typography" className="mt-0">
           <TypographyPanel
             settings={settings}

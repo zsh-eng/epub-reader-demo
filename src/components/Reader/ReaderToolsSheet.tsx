@@ -1,20 +1,13 @@
 import { Button } from "@/components/ui/button";
 import type { ReaderSettings } from "@/types/reader.types";
 import { ChevronLeft } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
-import { type ReactNode, useLayoutEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ReaderControlMenu } from "./ReaderControlMenu";
 import {
     ReaderSettingsPanel,
     type ReaderSettingsPanelTab,
 } from "./ReaderSettingsSheet";
-import {
-    type SheetStackRouterDirection,
-    useSheetStackRouter,
-} from "./hooks/use-sheet-stack-router";
 import { ReaderSheet } from "./shared/ReaderSheet";
-
-type ReaderToolsRoute = "root" | "settings";
 
 interface ReaderToolsSheetProps {
   isOpen: boolean;
@@ -23,34 +16,10 @@ interface ReaderToolsSheetProps {
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
 }
 
-interface ReaderToolsRouteDefinition {
-  title: string;
-  render: () => ReactNode;
-}
-
-const ROUTE_TRANSITION = {
-  duration: 0.26,
-  ease: [0.16, 1, 0.3, 1] as const,
-};
-
-const ROUTE_VARIANTS = {
-  enter: (direction: SheetStackRouterDirection) => ({
-    opacity: 0,
-    x: direction > 0 ? "100%" : "-100%",
-  }),
-  center: {
-    opacity: 1,
-    x: "0%",
-  },
-  exit: (direction: SheetStackRouterDirection) => ({
-    opacity: 0,
-    x: direction > 0 ? "-24%" : "24%",
-  }),
-};
-
 /**
- * ReaderToolsSheet keeps the reader utilities inside one persistent drawer and
- * owns the local stack navigation for content rendered inside that shell.
+ * ReaderToolsSheet uses a short launcher drawer for quick actions, then opens
+ * deeper configuration in a nested drawer so each surface can keep a stable
+ * height instead of resizing around mismatched content.
  */
 export function ReaderToolsSheet({
   isOpen,
@@ -58,97 +27,86 @@ export function ReaderToolsSheet({
   settings,
   onUpdateSettings,
 }: ReaderToolsSheetProps) {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] =
     useState<ReaderSettingsPanelTab>("typography");
-  const {
-    state: toolsRouterState,
-    actions: toolsRouterActions,
-  } = useSheetStackRouter<ReaderToolsRoute>("root");
 
-  useLayoutEffect(() => {
-    if (!isOpen) {
+  useEffect(() => {
+    if (isOpen) {
       return;
     }
 
-    toolsRouterActions.reset("root", { direction: 1 });
-  }, [isOpen, toolsRouterActions]);
+    setIsSettingsOpen(false);
+  }, [isOpen]);
 
-  const activeRoute = toolsRouterState.currentRoute;
-  const routeDirection = toolsRouterState.direction;
-  const canGoBack = toolsRouterState.canGoBack;
+  const closeSettingsSheet = () => {
+    setIsSettingsOpen(false);
+  };
 
-  const routeDefinitions: Record<ReaderToolsRoute, ReaderToolsRouteDefinition> = {
-    root: {
-      title: "Reader Tools",
-      render: () => (
-        <ReaderControlMenu
-          onOpenSettings={() => {
-            toolsRouterActions.push("settings");
-          }}
-        />
-      ),
-    },
-    settings: {
-      title: "Reading Settings",
-      render: () => (
+  return (
+    <ReaderSheet
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (open) {
+          return;
+        }
+
+        closeSettingsSheet();
+        onClose();
+      }}
+      title="Reader Tools"
+      panelClassName="max-w-md"
+    >
+      <ReaderControlMenu
+        onOpenSettings={() => {
+          setIsSettingsOpen(true);
+        }}
+      />
+
+      {/* The nested drawer grows to fit its content first, then falls back to
+          the sheet max-height with internal scrolling once the content becomes
+          taller than the available viewport. */}
+      <ReaderSheet
+        nested
+        open={isSettingsOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setIsSettingsOpen(true);
+            return;
+          }
+
+          closeSettingsSheet();
+        }}
+        title="Reading Settings"
+        panelClassName="max-w-md"
+        bodyClassName="overflow-hidden"
+        header={
+          <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={closeSettingsSheet}
+              aria-label="Go back"
+              className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+
+            <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              Reading Settings
+            </p>
+
+            <div className="size-8" aria-hidden="true" />
+          </div>
+        }
+      >
         <ReaderSettingsPanel
           settings={settings}
           onUpdateSettings={onUpdateSettings}
           activeTab={activeSettingsTab}
           onActiveTabChange={setActiveSettingsTab}
         />
-      ),
-    },
-  };
-  const activeDefinition = routeDefinitions[activeRoute];
-
-  return (
-    <ReaderSheet
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title={activeDefinition.title}
-      panelClassName="max-w-md"
-      bodyClassName="overflow-hidden"
-      header={
-        <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
-          {canGoBack ? (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={toolsRouterActions.pop}
-              aria-label="Go back"
-              className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-          ) : (
-            <div className="size-8" aria-hidden="true" />
-          )}
-
-          <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            {activeDefinition.title}
-          </p>
-
-          <div className="size-8" aria-hidden="true" />
-        </div>
-      }
-    >
-      <AnimatePresence initial={false} mode="wait" custom={routeDirection}>
-        <motion.div
-          key={activeRoute}
-          custom={routeDirection}
-          variants={ROUTE_VARIANTS}
-          initial="enter"
-          animate="center"
-          exit="exit"
-          transition={ROUTE_TRANSITION}
-          className="min-h-0"
-        >
-          {activeDefinition.render()}
-        </motion.div>
-      </AnimatePresence>
+      </ReaderSheet>
     </ReaderSheet>
   );
 }
