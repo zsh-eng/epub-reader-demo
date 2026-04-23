@@ -261,11 +261,14 @@ export function TypographyPanel({
             <Minus className="h-4 w-4" />
             <span className="sr-only">Decrease font size</span>
           </Button>
-          <span className="min-w-[4rem] text-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
-            <AnimatedNumber
-              value={settings.fontSize}
-              format={(v) => `${Math.round(v)}px`}
-            />
+          <span className="inline-flex min-w-[4rem] items-baseline justify-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
+            <span className="inline-flex w-[2ch] justify-center">
+              <AnimatedNumber
+                value={settings.fontSize}
+                variant="pop"
+              />
+            </span>
+            <span className="ml-0.5 shrink-0">px</span>
           </span>
           <Button
             variant="outline"

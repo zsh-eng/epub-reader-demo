@@ -1,10 +1,18 @@
-import { motion, useSpring, useTransform } from "motion/react";
-import { useEffect } from "react";
+import {
+  AnimatePresence,
+  motion,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+} from "motion/react";
+import { useEffect, useRef } from "react";
 
 interface AnimatedNumberProps {
   value: number;
   /** Format function for the displayed number (e.g., adding suffix like "%") */
   format?: (value: number) => string;
+  /** Animation style for the displayed value */
+  variant?: "spring" | "pop";
   /** Spring animation configuration */
   springConfig?: {
     stiffness?: number;
@@ -14,7 +22,7 @@ interface AnimatedNumberProps {
   className?: string;
 }
 
-export function AnimatedNumber({
+function SpringAnimatedNumber({
   value,
   format = (v) => Math.round(v).toString(),
   springConfig = { stiffness: 300, damping: 30, mass: 1 },
@@ -28,4 +36,96 @@ export function AnimatedNumber({
   }, [spring, value]);
 
   return <motion.span className={className}>{display}</motion.span>;
+}
+
+function PopAnimatedNumber({
+  value,
+  format = (v) => Math.round(v).toString(),
+  className,
+}: AnimatedNumberProps) {
+  const reducedMotion = useReducedMotion() ?? false;
+  const previousValueRef = useRef(value);
+  const previousValue = previousValueRef.current;
+  const direction = value === previousValue ? 0 : value > previousValue ? 1 : -1;
+  const display = format(value);
+
+  useEffect(() => {
+    previousValueRef.current = value;
+  }, [value]);
+
+  return (
+    <span className={className}>
+      <AnimatePresence initial={false} mode="popLayout">
+        <motion.span
+          key={display}
+          className="inline-block"
+          initial={
+            reducedMotion || direction === 0
+              ? false
+              : {
+                  y: direction > 0 ? 6 : -6,
+                  opacity: 0,
+                  scale: 0.96,
+                  filter: "blur(2px)",
+                }
+          }
+          animate={{
+            y: 0,
+            opacity: 1,
+            scale: 1,
+            filter: "blur(0px)",
+          }}
+          exit={
+            reducedMotion || direction === 0
+              ? { opacity: 0 }
+              : {
+                  y: direction > 0 ? -6 : 6,
+                  opacity: 0,
+                  scale: 1.02,
+                  filter: "blur(1px)",
+                }
+          }
+          transition={
+            reducedMotion
+              ? { duration: 0 }
+              : {
+                  type: "spring",
+                  stiffness: 520,
+                  damping: 34,
+                  mass: 0.7,
+                }
+          }
+        >
+          {display}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+export function AnimatedNumber({
+  value,
+  format: formatProp = (v) => Math.round(v).toString(),
+  variant = "spring",
+  springConfig = { stiffness: 300, damping: 30, mass: 1 },
+  className,
+}: AnimatedNumberProps) {
+  if (variant === "pop") {
+    return (
+      <PopAnimatedNumber
+        value={value}
+        format={formatProp}
+        className={className}
+      />
+    );
+  }
+
+  return (
+    <SpringAnimatedNumber
+      value={value}
+      format={formatProp}
+      springConfig={springConfig}
+      className={className}
+    />
+  );
 }
