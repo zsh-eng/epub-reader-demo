@@ -70,6 +70,19 @@ function makeSpacerBlocks(chapterIndex: number): Block[] {
   return [{ type: "spacer", id: `spacer-${chapterIndex}` }];
 }
 
+function makeFixedPageBlocks(chapterIndex: number, pageCount: number): Block[] {
+  const blocks: Block[] = [];
+
+  for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
+    blocks.push({ type: "spacer", id: `spacer-${chapterIndex}-${pageIndex}` });
+    if (pageIndex < pageCount - 1) {
+      blocks.push({ type: "page-break", id: `pb-${chapterIndex}-${pageIndex}` });
+    }
+  }
+
+  return blocks;
+}
+
 function makeLongTextBlocks(blockId: string): Block[] {
   const paragraph = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
   return [
@@ -787,6 +800,40 @@ describe("spread projection", () => {
     const gaps = gapSlots(partial.spread);
     expect(gaps.length).toBeGreaterThan(0);
     expect(gaps.every((g) => g.reason === "unloaded")).toBe(true);
+  });
+
+  it("keeps the visible two-page spread stable when an earlier chapter loads", () => {
+    const { engine, events } = createEngine({
+      totalChapters: 2,
+      initialChapterIndex: 1,
+      blocks: makeFixedPageBlocks(1, 3),
+      spreadConfig: { columns: 2, chapterFlow: "continuous" },
+    });
+
+    const partial = getLastEventOfType(events, "partialReady")!;
+    expect(
+      pageSlots(partial.spread).map((slot) => [
+        slot.page.chapterIndex,
+        slot.page.currentPageInChapter,
+      ]),
+    ).toEqual([
+      [1, 1],
+      [1, 2],
+    ]);
+
+    events.length = 0;
+    addChapter(engine, 0, makeFixedPageBlocks(0, 1));
+
+    const ready = getLastEventOfType(events, "ready")!;
+    expect(
+      pageSlots(ready.spread).map((slot) => [
+        slot.page.chapterIndex,
+        slot.page.currentPageInChapter,
+      ]),
+    ).toEqual([
+      [1, 1],
+      [1, 2],
+    ]);
   });
 
   it("uses end-of-book gaps for the final partial spread", () => {

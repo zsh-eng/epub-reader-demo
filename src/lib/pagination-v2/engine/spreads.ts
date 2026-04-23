@@ -2,12 +2,12 @@
 // spreads and resolve spread-level navigation and serialization details.
 import type { Page } from "../shared/types";
 import type {
-  ContentAnchor,
-  ResolvedLeafPage,
-  ResolvedSpread,
-  SpreadConfig,
-  SpreadGapReason,
-  SpreadIntent,
+    ContentAnchor,
+    ResolvedLeafPage,
+    ResolvedSpread,
+    SpreadConfig,
+    SpreadGapReason,
+    SpreadIntent,
 } from "../types";
 import { pickAnchorForPage, resolveAnchorToGlobalPage } from "./anchors";
 
@@ -25,6 +25,9 @@ type SpreadMapCell =
   | {
       kind: "gap";
       reason: SpreadGapReason;
+    }
+  | {
+      kind: "pad";
     };
 
 type SpreadMap = Array<Array<SpreadMapCell>>;
@@ -38,6 +41,7 @@ interface SpreadComputationState {
   anchor: ContentAnchor;
   chapterPageOffsets: number[];
   isFullyLoaded: boolean;
+  leadingGapSlots: number;
   pagesByChapter: (Page[] | null)[];
   spreadConfig: SpreadConfig;
   totalChapters: number;
@@ -65,8 +69,14 @@ function buildResolvedLeafPage(
 function buildSpreadProjection(
   state: Omit<SpreadComputationState, "anchor" | "totalPages">,
 ): SpreadProjection {
-  const { chapterPageOffsets, isFullyLoaded, pagesByChapter, spreadConfig, totalChapters } =
-    state;
+  const {
+    chapterPageOffsets,
+    isFullyLoaded,
+    leadingGapSlots,
+    pagesByChapter,
+    spreadConfig,
+    totalChapters,
+  } = state;
   const { columns, chapterFlow } = spreadConfig;
 
   const chapterLeaves: LeafRef[][] = [];
@@ -102,6 +112,10 @@ function buildSpreadProjection(
   };
 
   if (chapterFlow === "continuous") {
+    for (let index = 0; index < leadingGapSlots; index++) {
+      pushCell({ kind: "pad" });
+    }
+
     for (let chapterIndex = 0; chapterIndex < totalChapters; chapterIndex++) {
       for (const leaf of chapterLeaves[chapterIndex] ?? []) {
         pushCell({ kind: "page", leaf });
@@ -185,10 +199,17 @@ export function buildResolvedSpread(
         ),
       };
     }
+    if (cell.kind === "gap") {
+      return {
+        kind: "gap" as const,
+        slotIndex,
+        reason: cell.reason,
+      };
+    }
+
     return {
       kind: "gap" as const,
       slotIndex,
-      reason: cell.reason,
     };
   });
 

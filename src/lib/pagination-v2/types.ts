@@ -130,7 +130,7 @@ export type SpreadSlot =
   | {
       kind: "gap";
       slotIndex: number;
-      reason: SpreadGapReason;
+      reason?: SpreadGapReason;
     };
 
 export interface ResolvedSpread {

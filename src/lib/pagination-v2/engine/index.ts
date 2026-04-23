@@ -17,12 +17,14 @@ import { areFontConfigsEqual } from "../shared/types";
 import type {
     ContentAnchor,
     PaginationConfig,
+    ResolvedSpread,
     SpreadConfig,
     SpreadIntent,
 } from "../types";
 import { DEFAULT_SPREAD_CONFIG } from "../types";
 import {
     pickAnchorForPage,
+    resolveAnchorToGlobalPage,
     resolveAnchorToPage,
     resolveTargetToAnchor,
 } from "./anchors";
@@ -102,6 +104,8 @@ export class PaginationEngine {
 
   /** Always non-null after init(). Updated only by navigation commands. */
   private anchor!: ContentAnchor;
+  /** Keeps the current anchor in the same visible slot across 2-up reprojections. */
+  private preferredAnchorSlotIndex: number | null = null;
 
   constructor(emit: (event: PaginationEvent) => void) {
     this.emit = emit;
@@ -231,6 +235,7 @@ export class PaginationEngine {
         initialPageIndex,
       );
     }
+    this.preferredAnchorSlotIndex = null;
 
     const spread = this.buildResolvedSpread(intent);
     if (!spread) {
@@ -241,6 +246,7 @@ export class PaginationEngine {
       });
       return;
     }
+    this.capturePreferredAnchorSlot(spread);
 
     if (this.totalChapters === 1) {
       this.emit({
@@ -276,6 +282,9 @@ export class PaginationEngine {
     this.blocksByChapter[chapterIndex] = blocks;
     const diagnostics = this.prepareAndLayoutChapter(chapterIndex);
     const resolvedSpread = this.buildResolvedSpread(intent);
+    if (resolvedSpread) {
+      this.capturePreferredAnchorSlot(resolvedSpread);
+    }
 
     if (this.receivedChapters === this.totalChapters) {
       if (!resolvedSpread) return;
@@ -405,6 +414,7 @@ export class PaginationEngine {
   ): void {
     if (this.areSpreadConfigsEqual(this.spreadConfig, nextSpreadConfig)) return;
     this.spreadConfig = nextSpreadConfig;
+    this.preferredAnchorSlotIndex = null;
     if (this.receivedChapters === 0) return;
 
     this.emitPageContent(intent);
@@ -451,6 +461,7 @@ export class PaginationEngine {
       const pages = this.pagesByChapter[chapterIndex];
       if (!pages || localIndex >= pages.length) continue;
 
+      this.preferredAnchorSlotIndex = null;
       this.anchor = pickAnchorForPage(this.pagesByChapter, chapterIndex, localIndex);
       this.emitPageContent(intent);
       return;
@@ -472,6 +483,7 @@ export class PaginationEngine {
       return;
     }
 
+    this.preferredAnchorSlotIndex = null;
     this.anchor = pickAnchorForPage(this.pagesByChapter, chapter, 0);
     this.emitPageContent(intent);
   }
@@ -493,6 +505,7 @@ export class PaginationEngine {
       return;
     }
 
+    this.preferredAnchorSlotIndex = null;
     this.anchor =
       resolveTargetToAnchor(this.preparedByChapter, chapter, targetId) ??
       pickAnchorForPage(this.pagesByChapter, chapter, 0);
@@ -516,6 +529,9 @@ export class PaginationEngine {
       if (!diagnostics) continue;
 
       const spread = this.buildResolvedSpread(intent);
+      if (spread) {
+        this.capturePreferredAnchorSlot(spread);
+      }
       const currentPage = spread?.currentPage ?? 1;
       const totalPages = spread?.totalPages ?? this.totalPages;
       const currentSpread = spread?.currentSpread ?? 1;
@@ -553,6 +569,7 @@ export class PaginationEngine {
 
     const spread = this.buildResolvedSpread(intent);
     if (!spread) return;
+    this.capturePreferredAnchorSlot(spread);
 
     this.emit({
       type: "ready",
@@ -628,6 +645,7 @@ export class PaginationEngine {
     return countTotalSpreads({
       chapterPageOffsets: this.chapterPageOffsets,
       isFullyLoaded: this.isFullyLoaded(),
+      leadingGapSlots: this.getLeadingGapSlots(),
       pagesByChapter: this.pagesByChapter,
       spreadConfig: this.spreadConfig,
       totalChapters: this.totalChapters,
@@ -643,6 +661,7 @@ export class PaginationEngine {
       anchor: this.anchor,
       chapterPageOffsets: this.chapterPageOffsets,
       isFullyLoaded: this.isFullyLoaded(),
+      leadingGapSlots: this.getLeadingGapSlots(),
       pagesByChapter: this.pagesByChapter,
       spreadConfig: this.spreadConfig,
       totalChapters: this.totalChapters,
@@ -658,6 +677,7 @@ export class PaginationEngine {
     const anchor = resolveAnchorForSpreadIndex(spreadIndex, {
       chapterPageOffsets: this.chapterPageOffsets,
       isFullyLoaded: this.isFullyLoaded(),
+      leadingGapSlots: this.getLeadingGapSlots(),
       pagesByChapter: this.pagesByChapter,
       spreadConfig: this.spreadConfig,
       totalChapters: this.totalChapters,
@@ -678,6 +698,7 @@ export class PaginationEngine {
       this.emitPageUnavailable(intent);
       return;
     }
+    this.capturePreferredAnchorSlot(spread);
     this.emit({ type: "pageContent", intent, epoch: this.epoch, spread });
   }
 
@@ -739,6 +760,54 @@ export class PaginationEngine {
       if (!this.preparedByChapter[chapterIndex]) return false;
     }
     return true;
+  }
+
+  private capturePreferredAnchorSlot(spread: ResolvedSpread | null): void {
+    if (!spread || !this.shouldPreserveAnchorSlot()) {
+      this.preferredAnchorSlotIndex = null;
+      return;
+    }
+
+    const anchorGlobalPage = resolveAnchorToGlobalPage(
+      this.pagesByChapter,
+      this.chapterPageOffsets,
+      this.anchor,
+    );
+    if (anchorGlobalPage === null) {
+      this.preferredAnchorSlotIndex = null;
+      return;
+    }
+
+    const anchorSlot = spread.slots.find(
+      (slot): slot is Extract<(typeof spread.slots)[number], { kind: "page" }> =>
+        slot.kind === "page" && slot.page.currentPage === anchorGlobalPage,
+    );
+    this.preferredAnchorSlotIndex = anchorSlot?.slotIndex ?? null;
+  }
+
+  private getLeadingGapSlots(): number {
+    if (!this.shouldPreserveAnchorSlot()) return 0;
+    if (this.preferredAnchorSlotIndex === null) return 0;
+
+    const anchorGlobalPage = resolveAnchorToGlobalPage(
+      this.pagesByChapter,
+      this.chapterPageOffsets,
+      this.anchor,
+    );
+    if (anchorGlobalPage === null) return 0;
+
+    const columns = this.spreadConfig.columns;
+    const canonicalSlotIndex = (anchorGlobalPage - 1) % columns;
+    return (
+      (this.preferredAnchorSlotIndex - canonicalSlotIndex + columns) % columns
+    );
+  }
+
+  private shouldPreserveAnchorSlot(): boolean {
+    return (
+      this.spreadConfig.columns === 2 &&
+      this.spreadConfig.chapterFlow === "continuous"
+    );
   }
 
   private resolveRuntime(
