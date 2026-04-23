@@ -73,7 +73,7 @@ export function SegmentedTabsList({
   className,
   ...props
 }: React.ComponentProps<typeof TabsList>) {
-  return <TabsList className={className} {...props} />;
+  return <TabsList className={cn("overflow-hidden", className)} {...props} />;
 }
 
 export function SegmentedTabsTrigger({
@@ -136,6 +136,7 @@ export function SegmentedToggleGroup({
   value,
   defaultValue,
   onValueChange,
+  className,
   ...props
 }: SegmentedToggleGroupProps) {
   const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue);
@@ -155,6 +156,7 @@ export function SegmentedToggleGroup({
             }
             onValueChange?.(nextValue);
           }}
+          className={cn("overflow-hidden", className)}
           {...props}
         />
       </SegmentedToggleGroupContext.Provider>
@@ -183,7 +185,7 @@ export function SegmentedToggleGroupItem({
       asChild
       value={value}
       className={cn(
-        "relative isolate data-[state=on]:bg-transparent data-[state=on]:text-foreground",
+        "relative isolate first:rounded-l-[inherit] last:rounded-r-[inherit] data-[state=on]:bg-transparent data-[state=on]:text-foreground",
         className,
       )}
       {...props}
