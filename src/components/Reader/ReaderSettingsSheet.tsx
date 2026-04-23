@@ -30,17 +30,17 @@ export function ReaderSettingsPanel({
       onValueChange={(value) => onActiveTabChange(value as ReaderSettingsPanelTab)}
       className="flex min-h-0 flex-col h-[30rem]"
     >
-      <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-2 rounded-full bg-secondary/50 p-1">
+      <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-2 rounded-full bg-secondary/50 p-1 self-center">
         <SegmentedTabsTrigger
           value="typography"
-          className="gap-2 rounded-full text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground data-[state=active]:text-foreground"
+          className="h-10 gap-2 rounded-full text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground data-[state=active]:text-foreground"
         >
           <Type className="size-4" />
           Typography
         </SegmentedTabsTrigger>
         <SegmentedTabsTrigger
           value="theme"
-          className="gap-2 rounded-full text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground data-[state=active]:text-foreground"
+          className="h-10 gap-2 rounded-full text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground data-[state=active]:text-foreground"
         >
           <Palette className="size-4" />
           Theme
