@@ -352,6 +352,16 @@ export function FooterScrubberCanvas({
     dragHistoryRef.current = [];
   }, [cancelMomentumSignal]);
 
+  useEffect(() => {
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      cancelAnimationFrame(momentumRafRef.current);
+      isMomentumRef.current = false;
+      isDraggingRef.current = false;
+      dragHistoryRef.current = [];
+    };
+  }, []);
+
   function startMomentum(initialVelocity: number) {
     let vel =
       Math.sign(initialVelocity) *

@@ -368,6 +368,23 @@ export class PaginationEngine {
       this.hasPreparedForLoadedChapters()
     ) {
       this.paginationConfig = nextConfig;
+      // The main thread flips into "recalculating" before the worker decides
+      // whether this config update is actually a no-op. Emit a ready event so
+      // consumers like the footer never get stranded in a visual loading state
+      // after a semantically identical config update.
+      const spread = this.buildResolvedSpread(intent);
+      if (spread) {
+        this.capturePreferredAnchorSlot(spread);
+        this.emit({
+          type: "ready",
+          intent,
+          epoch: this.epoch,
+          spread,
+          chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
+            (diag): diag is PaginationChapterDiagnostics => diag !== null,
+          ),
+        });
+      }
       return;
     }
 
