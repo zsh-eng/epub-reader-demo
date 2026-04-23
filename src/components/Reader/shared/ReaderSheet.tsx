@@ -61,6 +61,7 @@ export function ReaderSheet({
     : {};
   const sheetContent = (
     <DrawerContent
+      overlayClassName="bg-transparent"
       className={cn(
         "border-none bg-transparent shadow-none",
         "data-[vaul-drawer-direction=bottom]:mt-12",
