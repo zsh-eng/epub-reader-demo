@@ -1,6 +1,9 @@
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  SegmentedToggleGroup,
+  SegmentedToggleGroupItem,
+} from "@/components/ui/segmented-controls";
 import { cn } from "@/lib/utils";
 import type {
     ContentWidth,
@@ -43,7 +46,7 @@ export function TypographyPanel({
     "text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground";
   const segmentedGroupClassName = "w-full rounded-full bg-secondary/40 p-1";
   const segmentedItemClassName =
-    "h-9 rounded-full text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground data-[state=on]:bg-background data-[state=on]:text-foreground";
+    "h-9 rounded-full text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground data-[state=on]:text-foreground";
   const fonts: { value: FontFamily; label: string; stack: string }[] = [
     { value: "lora", label: "Lora", stack: '"Lora", serif' },
     {
@@ -136,8 +139,7 @@ export function TypographyPanel({
         </h4>
         <div className="flex items-center gap-2">
           <MoveVertical className="h-4 w-4 text-muted-foreground" />
-          <ToggleGroup
-            type="single"
+          <SegmentedToggleGroup
             value={settings.lineHeight.toString()}
             onValueChange={(value) =>
               value && onUpdateSettings({ lineHeight: parseFloat(value) })
@@ -145,15 +147,15 @@ export function TypographyPanel({
             className={cn("flex-1", segmentedGroupClassName)}
           >
             {lineHeights.map((lh) => (
-              <ToggleGroupItem
+              <SegmentedToggleGroupItem
                 key={lh}
                 value={lh.toString()}
                 className={cn("flex-1 text-xs", segmentedItemClassName)}
               >
                 {lh}
-              </ToggleGroupItem>
+              </SegmentedToggleGroupItem>
             ))}
-          </ToggleGroup>
+          </SegmentedToggleGroup>
         </div>
       </div>
 
@@ -165,8 +167,7 @@ export function TypographyPanel({
           {/* Paginated mode keeps measure automatic; this stays available for scroll layouts. */}
           <div className="flex items-center gap-2">
             <MoveHorizontal className="h-4 w-4 text-muted-foreground" />
-            <ToggleGroup
-              type="single"
+            <SegmentedToggleGroup
               value={settings.contentWidth}
               onValueChange={(value) =>
                 value &&
@@ -175,15 +176,15 @@ export function TypographyPanel({
               className={cn("flex-1", segmentedGroupClassName)}
             >
               {contentWidths.map((width) => (
-                <ToggleGroupItem
+                <SegmentedToggleGroupItem
                   key={width.value}
                   value={width.value}
                   className={cn("flex-1 text-[10px]", segmentedItemClassName)}
                 >
                   {width.label}
-                </ToggleGroupItem>
+                </SegmentedToggleGroupItem>
               ))}
-            </ToggleGroup>
+            </SegmentedToggleGroup>
           </div>
         </div>
       )}
@@ -193,8 +194,7 @@ export function TypographyPanel({
         <h4 className={sectionLabelClassName}>
           Alignment
         </h4>
-        <ToggleGroup
-          type="single"
+        <SegmentedToggleGroup
           value={alignmentValue}
           onValueChange={(value) =>
             value &&
@@ -207,35 +207,35 @@ export function TypographyPanel({
           }
           className={segmentedGroupClassName}
         >
-          <ToggleGroupItem
+          <SegmentedToggleGroupItem
             value="left"
             className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
           >
             <AlignLeft className="h-4 w-4" />
             <span className="hidden sm:inline">Left</span>
-          </ToggleGroupItem>
-          <ToggleGroupItem
+          </SegmentedToggleGroupItem>
+          <SegmentedToggleGroupItem
             value="center"
             className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
           >
             <AlignCenter className="h-4 w-4" />
             <span className="hidden sm:inline">Center</span>
-          </ToggleGroupItem>
-          <ToggleGroupItem
+          </SegmentedToggleGroupItem>
+          <SegmentedToggleGroupItem
             value="right"
             className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
           >
             <AlignRight className="h-4 w-4" />
             <span className="hidden sm:inline">Right</span>
-          </ToggleGroupItem>
-          <ToggleGroupItem
+          </SegmentedToggleGroupItem>
+          <SegmentedToggleGroupItem
             value="justify"
             className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
           >
             <AlignJustify className="h-4 w-4" />
             <span className="hidden sm:inline">Justify</span>
-          </ToggleGroupItem>
-        </ToggleGroup>
+          </SegmentedToggleGroupItem>
+        </SegmentedToggleGroup>
       </div>
 
       {/* Font Size */}

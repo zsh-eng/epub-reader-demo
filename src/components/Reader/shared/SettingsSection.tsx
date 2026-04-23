@@ -1,6 +1,9 @@
 import { Button } from "@/components/ui/button";
+import {
+  SegmentedToggleGroup,
+  SegmentedToggleGroupItem,
+} from "@/components/ui/segmented-controls";
 import { Slider } from "@/components/ui/slider";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 import {
   isJustifiedTextAlign,
@@ -108,6 +111,8 @@ export function SettingsSection({
   const alignmentValue = isJustifiedTextAlign(settings.textAlign)
     ? "justify"
     : settings.textAlign;
+  const segmentedGroupClassName = "w-full rounded-lg bg-secondary/40 p-1";
+  const segmentedItemClassName = "h-8 flex-1 rounded-md";
 
   return (
     <InspectorSection title="Reader Settings">
@@ -171,8 +176,7 @@ export function SettingsSection({
         {/* Text alignment */}
         <div className="space-y-1">
           <span className="text-[11px] text-muted-foreground">Alignment</span>
-          <ToggleGroup
-            type="single"
+          <SegmentedToggleGroup
             value={alignmentValue}
             onValueChange={(v) => {
               if (!v) return;
@@ -183,21 +187,33 @@ export function SettingsSection({
                     : (v as Exclude<TextAlign, "justify-knuth-plass">),
               });
             }}
-            className="w-full"
+            className={segmentedGroupClassName}
           >
-            <ToggleGroupItem value="left" className="flex-1 h-8">
+            <SegmentedToggleGroupItem
+              value="left"
+              className={segmentedItemClassName}
+            >
               <AlignLeft className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="center" className="flex-1 h-8">
+            </SegmentedToggleGroupItem>
+            <SegmentedToggleGroupItem
+              value="center"
+              className={segmentedItemClassName}
+            >
               <AlignCenter className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="right" className="flex-1 h-8">
+            </SegmentedToggleGroupItem>
+            <SegmentedToggleGroupItem
+              value="right"
+              className={segmentedItemClassName}
+            >
               <AlignRight className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="justify" className="flex-1 h-8">
+            </SegmentedToggleGroupItem>
+            <SegmentedToggleGroupItem
+              value="justify"
+              className={segmentedItemClassName}
+            >
               <AlignJustify className="size-3.5" />
-            </ToggleGroupItem>
-          </ToggleGroup>
+            </SegmentedToggleGroupItem>
+          </SegmentedToggleGroup>
         </div>
 
         {isJustifiedTextAlign(settings.textAlign) ? (
@@ -205,26 +221,28 @@ export function SettingsSection({
             <span className="text-[11px] text-muted-foreground">
               Justification
             </span>
-            <ToggleGroup
-              type="single"
+            <SegmentedToggleGroup
               value={settings.textAlign}
               onValueChange={(value) => {
                 if (value === "justify" || value === "justify-knuth-plass") {
                   onUpdateSettings({ textAlign: value });
                 }
               }}
-              className="w-full"
+              className={segmentedGroupClassName}
             >
-              <ToggleGroupItem value="justify" className="h-8 flex-1 text-[11px]">
+              <SegmentedToggleGroupItem
+                value="justify"
+                className={cn(segmentedItemClassName, "text-[11px]")}
+              >
                 Original
-              </ToggleGroupItem>
-              <ToggleGroupItem
+              </SegmentedToggleGroupItem>
+              <SegmentedToggleGroupItem
                 value="justify-knuth-plass"
-                className="h-8 flex-1 text-[11px]"
+                className={cn(segmentedItemClassName, "text-[11px]")}
               >
                 Knuth-Plass
-              </ToggleGroupItem>
-            </ToggleGroup>
+              </SegmentedToggleGroupItem>
+            </SegmentedToggleGroup>
           </div>
         ) : null}
 
@@ -303,8 +321,7 @@ export function SettingsSection({
         <>
           <div className="space-y-1">
             <span className="text-[11px] text-muted-foreground">Columns</span>
-            <ToggleGroup
-              type="single"
+            <SegmentedToggleGroup
               value={String(spreadColumns)}
               onValueChange={(value) => {
                 if (value === "1" || value === "2" || value === "3") {
@@ -313,18 +330,27 @@ export function SettingsSection({
                   );
                 }
               }}
-              className="w-full"
+              className={segmentedGroupClassName}
             >
-              <ToggleGroupItem value="1" className="flex-1 h-8">
+              <SegmentedToggleGroupItem
+                value="1"
+                className={segmentedItemClassName}
+              >
                 1
-              </ToggleGroupItem>
-              <ToggleGroupItem value="2" className="flex-1 h-8">
+              </SegmentedToggleGroupItem>
+              <SegmentedToggleGroupItem
+                value="2"
+                className={segmentedItemClassName}
+              >
                 2
-              </ToggleGroupItem>
-              <ToggleGroupItem value="3" className="flex-1 h-8">
+              </SegmentedToggleGroupItem>
+              <SegmentedToggleGroupItem
+                value="3"
+                className={segmentedItemClassName}
+              >
                 3
-              </ToggleGroupItem>
-            </ToggleGroup>
+              </SegmentedToggleGroupItem>
+            </SegmentedToggleGroup>
           </div>
 
           <SliderRow

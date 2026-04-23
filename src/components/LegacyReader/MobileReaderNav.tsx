@@ -1,6 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  SegmentedTabs,
+  SegmentedTabsContent,
+  SegmentedTabsList,
+  SegmentedTabsTrigger,
+} from "@/components/ui/segmented-controls";
 import type { TOCItem } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import type { ReaderSettings } from "@/types/reader.types";
@@ -182,34 +187,37 @@ export function MobileReaderNav({
             paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
           }}
         >
-          <Tabs defaultValue="typography" className="flex-1 flex flex-col mt-2">
+          <SegmentedTabs
+            defaultValue="typography"
+            className="mt-2 flex flex-1 flex-col"
+          >
             <div className="flex-1 overflow-y-auto px-4 mb-4">
-              <TabsContent value="typography" className="mt-0">
+              <SegmentedTabsContent value="typography" className="mt-0">
                 <TypographyPanel
                   settings={settings}
                   onUpdateSettings={onUpdateSettings}
                 />
-              </TabsContent>
+              </SegmentedTabsContent>
 
-              <TabsContent value="theme" className="mt-0">
+              <SegmentedTabsContent value="theme" className="mt-0">
                 <ThemePanel
                   settings={settings}
                   onUpdateSettings={onUpdateSettings}
                 />
-              </TabsContent>
+              </SegmentedTabsContent>
             </div>
 
-            <TabsList className="mx-auto mb-4 w-[85%] h-10">
-              <TabsTrigger value="typography" className="gap-2">
+            <SegmentedTabsList className="mx-auto mb-4 h-10 w-[85%]">
+              <SegmentedTabsTrigger value="typography" className="gap-2">
                 <Type className="h-4 w-4" />
                 Typography
-              </TabsTrigger>
-              <TabsTrigger value="theme" className="gap-2">
+              </SegmentedTabsTrigger>
+              <SegmentedTabsTrigger value="theme" className="gap-2">
                 <Palette className="h-4 w-4" />
                 Theme
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+              </SegmentedTabsTrigger>
+            </SegmentedTabsList>
+          </SegmentedTabs>
         </DrawerContent>
       </Drawer>
 

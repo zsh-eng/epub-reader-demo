@@ -4,7 +4,12 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  SegmentedTabs,
+  SegmentedTabsContent,
+  SegmentedTabsList,
+  SegmentedTabsTrigger,
+} from "@/components/ui/segmented-controls";
 import type { ReaderSettings } from "@/types/reader.types";
 import { cn } from "@/lib/utils";
 import { Palette, Settings, Type } from "lucide-react";
@@ -18,6 +23,8 @@ interface SettingsPopoverProps {
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
 }
 
+type SettingsTab = "typography" | "theme";
+
 /**
  * SettingsPopover Component
  *
@@ -29,6 +36,7 @@ export function SettingsPopover({
   onUpdateSettings,
 }: SettingsPopoverProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<SettingsTab>("typography");
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -63,36 +71,96 @@ export function SettingsPopover({
                 duration: 0.2,
                 ease: [0.16, 1, 0.3, 1],
               }}
-              className="rounded-xl bg-background/95 backdrop-blur-md border shadow-lg overflow-hidden"
+              className="flex h-[32rem] max-h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-xl border bg-background/95 shadow-lg backdrop-blur-md"
             >
-              <Tabs defaultValue="typography" className="flex flex-col">
-                <div className="p-4 pb-2 overflow-y-auto">
-                  <TabsContent value="typography" className="mt-0">
-                    <TypographyPanel
-                      settings={settings}
-                      onUpdateSettings={onUpdateSettings}
-                    />
-                  </TabsContent>
+              <SegmentedTabs
+                value={activeTab}
+                onValueChange={(nextValue) => {
+                  if (nextValue === "typography" || nextValue === "theme") {
+                    setActiveTab(nextValue);
+                  }
+                }}
+                className="flex h-full flex-col"
+              >
+                {/* Keep the panel viewport stable so the tab row stays pinned. */}
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <SegmentedTabsContent
+                    value="typography"
+                    forceMount
+                    aria-hidden={activeTab !== "typography"}
+                    tabIndex={activeTab === "typography" ? 0 : -1}
+                    className={cn(
+                      "absolute inset-0 mt-0",
+                      activeTab === "typography"
+                        ? "pointer-events-auto z-10"
+                        : "pointer-events-none z-0",
+                    )}
+                  >
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        opacity: activeTab === "typography" ? 1 : 0,
+                        y: activeTab === "typography" ? 0 : 6,
+                      }}
+                      transition={{
+                        duration: 0.18,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                      className="h-full overflow-y-auto p-4 pb-2"
+                    >
+                      <TypographyPanel
+                        settings={settings}
+                        onUpdateSettings={onUpdateSettings}
+                      />
+                    </motion.div>
+                  </SegmentedTabsContent>
 
-                  <TabsContent value="theme" className="mt-0">
-                    <ThemePanel
-                      settings={settings}
-                      onUpdateSettings={onUpdateSettings}
-                    />
-                  </TabsContent>
+                  <SegmentedTabsContent
+                    value="theme"
+                    forceMount
+                    aria-hidden={activeTab !== "theme"}
+                    tabIndex={activeTab === "theme" ? 0 : -1}
+                    className={cn(
+                      "absolute inset-0 mt-0",
+                      activeTab === "theme"
+                        ? "pointer-events-auto z-10"
+                        : "pointer-events-none z-0",
+                    )}
+                  >
+                    <motion.div
+                      initial={false}
+                      animate={{
+                        opacity: activeTab === "theme" ? 1 : 0,
+                        y: activeTab === "theme" ? 0 : 6,
+                      }}
+                      transition={{
+                        duration: 0.18,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                      className="h-full overflow-y-auto p-4 pb-2"
+                    >
+                      <ThemePanel
+                        settings={settings}
+                        onUpdateSettings={onUpdateSettings}
+                      />
+                    </motion.div>
+                  </SegmentedTabsContent>
                 </div>
 
-                <TabsList className="mx-4 mb-4 w-auto">
-                  <TabsTrigger value="typography" className="gap-2 flex-1">
+                <SegmentedTabsList className="mx-4 mb-4 w-auto shrink-0">
+                  <SegmentedTabsTrigger
+                    value="typography"
+                    className="gap-2 flex-1"
+                  >
                     <Type className="h-4 w-4" />
                     Typography
-                  </TabsTrigger>
-                  <TabsTrigger value="theme" className="gap-2 flex-1">
+                  </SegmentedTabsTrigger>
+                  <SegmentedTabsTrigger value="theme" className="gap-2 flex-1">
                     <Palette className="h-4 w-4" />
                     Theme
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
+                  </SegmentedTabsTrigger>
+                </SegmentedTabsList>
+              </SegmentedTabs>
             </motion.div>
           </PopoverContent>
         )}
