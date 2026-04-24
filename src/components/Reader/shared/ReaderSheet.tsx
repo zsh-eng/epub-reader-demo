@@ -77,9 +77,6 @@ export function ReaderSheet({
           "backdrop-blur-xl shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)]",
           panelClassName,
         )}
-        style={{
-          paddingBottom: "max(env(safe-area-inset-bottom), 1.5rem)",
-        }}
       >
         <DrawerTitle className="sr-only">{title}</DrawerTitle>
 
