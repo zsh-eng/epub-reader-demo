@@ -418,7 +418,7 @@ export function ReaderContentsSheet({
       }}
       title="Contents"
       panelClassName="max-w-md"
-      bodyClassName="overflow-hidden"
+      bodyClassName="w-full min-w-0 max-w-full overflow-hidden"
       disableBodyDrag
       header={
         <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
@@ -440,12 +440,15 @@ export function ReaderContentsSheet({
         </div>
       }
     >
-      <div className="flex h-[34rem] max-h-[calc(88vh-7rem)] min-h-0 flex-col">
-        <div ref={scrollAreaRootRef} className="min-h-0 flex-1">
-          <ScrollArea className="h-full px-4 pb-3 pt-2">
+      <div className="flex h-[34rem] max-h-[calc(88vh-7rem)] min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
+        <div
+          ref={scrollAreaRootRef}
+          className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden"
+        >
+          <ScrollArea className="h-full w-full min-w-0 max-w-full overflow-x-hidden px-4 pb-3 pt-2">
             {contentsModel.items.length > 0 ? (
               <LayoutGroup id={layoutGroupId}>
-                <div className="space-y-6 pb-1">
+                <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-1">
                   {contentsModel.sections.map((section, index) => {
                     const followsGroupedSection =
                       !section.heading &&
