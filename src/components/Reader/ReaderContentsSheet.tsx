@@ -446,36 +446,44 @@ export function ReaderContentsSheet({
             {contentsModel.items.length > 0 ? (
               <LayoutGroup id={layoutGroupId}>
                 <div className="space-y-6 pb-1">
-                  {contentsModel.sections.map((section) => (
-                    <section
-                      key={section.id}
-                      className={cn(
-                        "space-y-3",
-                        !section.heading && "space-y-1",
-                      )}
-                    >
-                      <SectionHeading
-                        section={section}
-                        currentItemId={currentTocItem?.id}
-                        onSelect={onNavigateToHref}
-                        currentRef={currentItemRef}
-                      />
+                  {contentsModel.sections.map((section, index) => {
+                    const followsGroupedSection =
+                      !section.heading &&
+                      Boolean(contentsModel.sections[index - 1]?.heading);
 
-                      <div className="space-y-1">
-                        {section.rows.map((item) => (
-                          <ChapterRow
-                            key={item.id}
-                            item={item}
-                            currentItemId={currentTocItem?.id}
-                            layoutId="reader-contents-active-chapter"
-                            onSelect={onNavigateToHref}
-                            reducedMotion={reducedMotion}
-                            currentRef={currentItemRef}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  ))}
+                    return (
+                      <section
+                        key={section.id}
+                        className={cn(
+                          "space-y-3",
+                          !section.heading && "space-y-1",
+                          followsGroupedSection &&
+                            "border-t border-border/60 pt-3",
+                        )}
+                      >
+                        <SectionHeading
+                          section={section}
+                          currentItemId={currentTocItem?.id}
+                          onSelect={onNavigateToHref}
+                          currentRef={currentItemRef}
+                        />
+
+                        <div className="space-y-1">
+                          {section.rows.map((item) => (
+                            <ChapterRow
+                              key={item.id}
+                              item={item}
+                              currentItemId={currentTocItem?.id}
+                              layoutId="reader-contents-active-chapter"
+                              onSelect={onNavigateToHref}
+                              reducedMotion={reducedMotion}
+                              currentRef={currentItemRef}
+                            />
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
               </LayoutGroup>
             ) : (
