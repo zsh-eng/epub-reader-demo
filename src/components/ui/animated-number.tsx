@@ -46,7 +46,8 @@ function PopAnimatedNumber({
   const reducedMotion = useReducedMotion() ?? false;
   const previousValueRef = useRef(value);
   const previousValue = previousValueRef.current;
-  const direction = value === previousValue ? 0 : value > previousValue ? 1 : -1;
+  const direction =
+    value === previousValue ? 0 : value > previousValue ? 1 : -1;
   const display = format(value);
 
   useEffect(() => {

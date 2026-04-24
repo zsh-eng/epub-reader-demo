@@ -10,13 +10,7 @@ interface LazyImageProps {
   style?: CSSProperties;
 }
 
-export function LazyImage({
-  src,
-  alt,
-  width,
-  height,
-  style,
-}: LazyImageProps) {
+export function LazyImage({ src, alt, width, height, style }: LazyImageProps) {
   const { resolvedSrc } = useDeferredEpubImage(src);
 
   if (!resolvedSrc) {

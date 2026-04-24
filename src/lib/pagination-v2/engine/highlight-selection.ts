@@ -1,12 +1,12 @@
 import type {
-    Block,
-    ChapterCanonicalText,
-    PreparedBlock,
-    PreparedTextBlock,
-    PreparedTextItem,
-    TextBlock,
-    TextCursorOffset,
-    TextRun,
+  Block,
+  ChapterCanonicalText,
+  PreparedBlock,
+  PreparedTextBlock,
+  PreparedTextItem,
+  TextBlock,
+  TextCursorOffset,
+  TextRun,
 } from "../shared/types";
 import type { ContentAnchor } from "../types";
 
@@ -32,7 +32,10 @@ function isTextBlock(block: Block): block is TextBlock {
 
 function getSegmentGraphemes(text: string): string[] {
   if (!graphemeSegmenter) return Array.from(text);
-  return Array.from(graphemeSegmenter.segment(text), (segment) => segment.segment);
+  return Array.from(
+    graphemeSegmenter.segment(text),
+    (segment) => segment.segment,
+  );
 }
 
 function getPersistedRunText(blockTag: TextBlock["tag"], run: TextRun): string {
@@ -83,7 +86,11 @@ function getPreparedBoundaryIndex(
   item: PreparedTextItem,
   cursor: TextCursorOffset,
 ): number | null {
-  if (cursor.itemIndex < 0 || cursor.segmentIndex < 0 || cursor.graphemeIndex < 0) {
+  if (
+    cursor.itemIndex < 0 ||
+    cursor.segmentIndex < 0 ||
+    cursor.graphemeIndex < 0
+  ) {
     return null;
   }
 
@@ -232,7 +239,8 @@ function resolveTextAnchorToCanonicalOffset(options: {
   preparedChapter: PreparedBlock[];
   chapterCanonicalText: ChapterCanonicalText;
 }): number | null {
-  const { anchor, chapterBlocks, preparedChapter, chapterCanonicalText } = options;
+  const { anchor, chapterBlocks, preparedChapter, chapterCanonicalText } =
+    options;
 
   if (anchor.type !== "text") return null;
 

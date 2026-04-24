@@ -5,13 +5,7 @@ import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, List } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import {
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  type Ref,
-} from "react";
+import { useId, useLayoutEffect, useMemo, useRef, type Ref } from "react";
 import { ReaderSheet } from "./shared/ReaderSheet";
 import type { ChapterEntry } from "./types";
 
@@ -283,7 +277,7 @@ function SectionHeading({
       }}
       className={cn(
         "flex w-full min-w-0 items-center gap-3 rounded-none border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
-        isCurrent && "border-foreground/70"
+        isCurrent && "border-foreground/70",
       )}
     >
       <h4
@@ -348,7 +342,9 @@ function ChapterRow({
           aria-hidden="true"
           className="absolute inset-0 z-0 rounded-xl bg-accent/45"
           initial={false}
-          transition={reducedMotion ? { duration: 0 } : CHAPTER_ACTIVE_TRANSITION}
+          transition={
+            reducedMotion ? { duration: 0 } : CHAPTER_ACTIVE_TRANSITION
+          }
         >
           <span className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-foreground/70" />
         </motion.span>

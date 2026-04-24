@@ -1,52 +1,46 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-        />
-        <title>Reader</title>
-        <meta name="description" content="A modern ebook reader" />
-        <link rel="icon" href="/favicon.ico" />
-        <link
-            rel="apple-touch-icon"
-            href="/apple-touch-icon.png"
-            sizes="180x180"
-        />
-        <link rel="mask-icon" href="/mask-icon.svg" color="#FFFFFF" />
-        <meta name="theme-color" content="#ffffff" />
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <title>Reader</title>
+    <meta name="description" content="A modern ebook reader" />
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="mask-icon" href="/mask-icon.svg" color="#FFFFFF" />
+    <meta name="theme-color" content="#ffffff" />
 
-        <!-- Inline script to apply theme immediately before render to prevent flash -->
-        <script>
-            (function () {
-                const STORAGE_KEY = "epub-reader-settings";
-                const THEME_CLASSES = [
-                    "light",
-                    "dark",
-                    "flexoki-light",
-                    "flexoki-dark",
-                ];
-                const DEFAULT_THEME = "light";
+    <!-- Inline script to apply theme immediately before render to prevent flash -->
+    <script>
+      (function () {
+        const STORAGE_KEY = "epub-reader-settings";
+        const THEME_CLASSES = [
+          "light",
+          "dark",
+          "flexoki-light",
+          "flexoki-dark",
+        ];
+        const DEFAULT_THEME = "light";
 
-                try {
-                    const stored = localStorage.getItem(STORAGE_KEY);
-                    const settings = stored ? JSON.parse(stored) : null;
-                    const theme =
-                        settings?.theme &&
-                        THEME_CLASSES.includes(settings.theme)
-                            ? settings.theme
-                            : DEFAULT_THEME;
-                    document.documentElement.classList.add(theme);
-                } catch (e) {
-                    document.documentElement.classList.add(DEFAULT_THEME);
-                }
-            })();
-        </script>
-
-    </head>
-    <body>
-        <div id="root"></div>
-        <script type="module" src="/src/main.tsx"></script>
-    </body>
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          const settings = stored ? JSON.parse(stored) : null;
+          const theme =
+            settings?.theme && THEME_CLASSES.includes(settings.theme)
+              ? settings.theme
+              : DEFAULT_THEME;
+          document.documentElement.classList.add(theme);
+        } catch (e) {
+          document.documentElement.classList.add(DEFAULT_THEME);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

@@ -27,9 +27,7 @@ export function FooterPageIndicator({
     <motion.div
       className="flex items-center justify-center pb-1 pt-0.5"
       initial={
-        animateReadyDetails
-          ? { opacity: 0, filter: "blur(8px)" }
-          : false
+        animateReadyDetails ? { opacity: 0, filter: "blur(8px)" } : false
       }
       animate={{
         opacity: showBlurredLoadingDetails ? 0.78 : 1,

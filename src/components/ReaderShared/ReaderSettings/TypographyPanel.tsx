@@ -6,10 +6,10 @@ import {
 } from "@/components/ui/segmented-controls";
 import { cn } from "@/lib/utils";
 import type {
-    ContentWidth,
-    FontFamily,
-    ReaderSettings,
-    TextAlign,
+  ContentWidth,
+  FontFamily,
+  ReaderSettings,
+  TextAlign,
 } from "@/types/reader.types";
 import {
   isJustifiedTextAlign,
@@ -17,14 +17,14 @@ import {
   READER_FONT_SIZE_MIN_PX,
 } from "@/types/reader.types";
 import {
-    AlignCenter,
-    AlignJustify,
-    AlignLeft,
-    AlignRight,
-    Minus,
-    MoveHorizontal,
-    MoveVertical,
-    Plus,
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Minus,
+  MoveHorizontal,
+  MoveVertical,
+  Plus,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -96,9 +96,7 @@ export function TypographyPanel({
     <div className="space-y-5 pb-2">
       {/* Font Family */}
       <div className="space-y-2.5">
-        <h4 className={sectionLabelClassName}>
-          Font Family
-        </h4>
+        <h4 className={sectionLabelClassName}>Font Family</h4>
         <div
           ref={scrollContainerRef}
           className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
@@ -134,9 +132,7 @@ export function TypographyPanel({
 
       {/* Line Height */}
       <div className="space-y-2">
-        <h4 className={sectionLabelClassName}>
-          Line Height
-        </h4>
+        <h4 className={sectionLabelClassName}>Line Height</h4>
         <div className="flex items-center gap-2">
           <MoveVertical className="h-4 w-4 text-muted-foreground" />
           <SegmentedToggleGroup
@@ -161,9 +157,7 @@ export function TypographyPanel({
 
       {showContentWidthControl && (
         <div className="space-y-2 hidden sm:block">
-          <h4 className={sectionLabelClassName}>
-            Content Width
-          </h4>
+          <h4 className={sectionLabelClassName}>Content Width</h4>
           {/* Paginated mode keeps measure automatic; this stays available for scroll layouts. */}
           <div className="flex items-center gap-2">
             <MoveHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -191,9 +185,7 @@ export function TypographyPanel({
 
       {/* Text Align */}
       <div className="space-y-2">
-        <h4 className={sectionLabelClassName}>
-          Alignment
-        </h4>
+        <h4 className={sectionLabelClassName}>Alignment</h4>
         <SegmentedToggleGroup
           value={alignmentValue}
           onValueChange={(value) =>
@@ -240,9 +232,7 @@ export function TypographyPanel({
 
       {/* Font Size */}
       <div className="space-y-2">
-        <h4 className={sectionLabelClassName}>
-          Font Size
-        </h4>
+        <h4 className={sectionLabelClassName}>Font Size</h4>
         <div className="flex items-center justify-between rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
           <Button
             variant="outline"
@@ -263,10 +253,7 @@ export function TypographyPanel({
           </Button>
           <span className="inline-flex min-w-[4rem] items-baseline justify-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
             <span className="inline-flex w-[2ch] justify-center">
-              <AnimatedNumber
-                value={settings.fontSize}
-                variant="pop"
-              />
+              <AnimatedNumber value={settings.fontSize} variant="pop" />
             </span>
             <span className="ml-0.5 shrink-0">px</span>
           </span>

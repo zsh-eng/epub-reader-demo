@@ -23,11 +23,7 @@ const SegmentedTabsContext =
 const SegmentedToggleGroupContext =
   React.createContext<SegmentedControlContextValue | null>(null);
 
-function SegmentedActivePill({
-  reducedMotion,
-}: {
-  reducedMotion: boolean;
-}) {
+function SegmentedActivePill({ reducedMotion }: { reducedMotion: boolean }) {
   return (
     <motion.div
       layoutId="segmented-active-pill"
@@ -46,7 +42,8 @@ export function SegmentedTabs({
   onValueChange,
   ...props
 }: React.ComponentProps<typeof Tabs>) {
-  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue);
+  const [uncontrolledValue, setUncontrolledValue] =
+    React.useState(defaultValue);
   const reducedMotion = useReducedMotion() ?? false;
   const activeValue = value ?? uncontrolledValue;
   const layoutGroupId = React.useId();
@@ -139,14 +136,17 @@ export function SegmentedToggleGroup({
   className,
   ...props
 }: SegmentedToggleGroupProps) {
-  const [uncontrolledValue, setUncontrolledValue] = React.useState(defaultValue);
+  const [uncontrolledValue, setUncontrolledValue] =
+    React.useState(defaultValue);
   const reducedMotion = useReducedMotion() ?? false;
   const activeValue = value ?? uncontrolledValue;
   const layoutGroupId = React.useId();
 
   return (
     <LayoutGroup id={layoutGroupId}>
-      <SegmentedToggleGroupContext.Provider value={{ activeValue, reducedMotion }}>
+      <SegmentedToggleGroupContext.Provider
+        value={{ activeValue, reducedMotion }}
+      >
         <ToggleGroup
           type="single"
           value={activeValue}

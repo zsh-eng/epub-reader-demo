@@ -1,20 +1,20 @@
 import type { PageFragment, PageSlice } from "@/lib/pagination-v2";
 import {
-    CONTENT_ANCHOR_BLOCK_ID_ATTR,
-    CONTENT_ANCHOR_END_ATTR,
-    CONTENT_ANCHOR_START_ATTR,
-    serializeTextCursorOffset,
+  CONTENT_ANCHOR_BLOCK_ID_ATTR,
+  CONTENT_ANCHOR_END_ATTR,
+  CONTENT_ANCHOR_START_ATTR,
+  serializeTextCursorOffset,
 } from "@/lib/pagination-v2/content-anchor-dom";
 import {
-    getInlineRaisePx,
-    getNoteRefMetrics,
+  getInlineRaisePx,
+  getNoteRefMetrics,
 } from "@/lib/pagination-v2/shared/inline-presentation";
 import { measureTextWidth } from "@/lib/pagination-v2/shared/measure";
 import { cn } from "@/lib/utils";
 import {
-    EPUB_HIGHLIGHT_END_ATTRIBUTE,
-    EPUB_HIGHLIGHT_START_ATTRIBUTE,
-    toCssTextAlign,
+  EPUB_HIGHLIGHT_END_ATTRIBUTE,
+  EPUB_HIGHLIGHT_START_ATTRIBUTE,
+  toCssTextAlign,
 } from "@/types/reader.types";
 import type { CSSProperties, ReactNode } from "react";
 import { Fragment } from "react";
@@ -39,10 +39,7 @@ function isClusteredLinkFragment(fragment: PageFragment): boolean {
 function renderFragmentSequence(
   fragments: PageFragment[],
   keyPrefix: string,
-  getStyle: (
-    fragment: PageFragment,
-    fragmentIndex: number,
-  ) => CSSProperties,
+  getStyle: (fragment: PageFragment, fragmentIndex: number) => CSSProperties,
 ): ReactNode[] {
   const nodes: ReactNode[] = [];
 
@@ -112,9 +109,7 @@ function renderFragmentSequence(
   return nodes;
 }
 
-function renderFragmentContent(
-  fragment: PageFragment,
-) {
+function renderFragmentContent(fragment: PageFragment) {
   if (!fragment.highlightMarks || fragment.highlightMarks.length === 0) {
     return fragment.text;
   }
@@ -132,9 +127,7 @@ function renderFragmentContent(
           {...(mark.isStart
             ? { [EPUB_HIGHLIGHT_START_ATTRIBUTE]: "true" }
             : {})}
-          {...(mark.isEnd
-            ? { [EPUB_HIGHLIGHT_END_ATTRIBUTE]: "true" }
-            : {})}
+          {...(mark.isEnd ? { [EPUB_HIGHLIGHT_END_ATTRIBUTE]: "true" } : {})}
         >
           {content}
         </mark>
@@ -155,7 +148,9 @@ function getFragmentAnchorData(fragment: PageFragment) {
       : {}),
     ...(fragment.anchorEnd
       ? {
-          [CONTENT_ANCHOR_END_ATTR]: serializeTextCursorOffset(fragment.anchorEnd),
+          [CONTENT_ANCHOR_END_ATTR]: serializeTextCursorOffset(
+            fragment.anchorEnd,
+          ),
         }
       : {}),
   };
@@ -271,10 +266,10 @@ export function PageSliceView({
     slice.renderMode === "manual-justify"
       ? "left"
       : HEADING_TAGS.has(slice.tag) &&
-        (slice.textAlign === "justify" ||
-          slice.textAlign === "justify-knuth-plass")
-      ? "left"
-      : toCssTextAlign(slice.textAlign);
+          (slice.textAlign === "justify" ||
+            slice.textAlign === "justify-knuth-plass")
+        ? "left"
+        : toCssTextAlign(slice.textAlign);
 
   return (
     <p
@@ -333,16 +328,16 @@ export function PageSliceView({
                     }),
                   )}
                 </span>
-                {trailingBoundaryFragment ? (
-                  renderInlineFragment(
-                    trailingBoundaryFragment,
-                    `${key}-line-${lineIndex}-trailing`,
-                    {
-                      font: trailingBoundaryFragment.font,
-                      lineHeight: "inherit",
-                    },
-                  )
-                ) : null}
+                {trailingBoundaryFragment
+                  ? renderInlineFragment(
+                      trailingBoundaryFragment,
+                      `${key}-line-${lineIndex}-trailing`,
+                      {
+                        font: trailingBoundaryFragment.font,
+                        lineHeight: "inherit",
+                      },
+                    )
+                  : null}
               </Fragment>
             );
           })

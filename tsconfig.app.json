@@ -29,8 +29,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@server/*": ["./server/*"],
-    },
+      "@server/*": ["./server/*"]
+    }
   },
-  "include": ["src", "worker-configuration.d.ts"],
+  "include": ["src", "worker-configuration.d.ts"]
 }

@@ -2,7 +2,27 @@
   "name": "@zsh-eng/text-highlighter",
   "version": "0.3.0",
   "description": "A lightweight library for creating and restoring text highlights in the DOM",
+  "keywords": [
+    "annotation",
+    "dom",
+    "epub",
+    "highlight",
+    "react",
+    "text-offset",
+    "text-selection"
+  ],
+  "license": "MIT",
+  "author": "zsh-eng",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zsh-eng/epub-reader-demo",
+    "directory": "packages/text-highlighter"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -47,25 +67,5 @@
     "react": {
       "optional": true
     }
-  },
-  "files": [
-    "dist"
-  ],
-  "keywords": [
-    "highlight",
-    "annotation",
-    "text-selection",
-    "dom",
-    "epub",
-    "text-offset",
-    "react"
-  ],
-  "author": "zsh-eng",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/zsh-eng/epub-reader-demo",
-    "directory": "packages/text-highlighter"
-  },
-  "sideEffects": false
+  }
 }

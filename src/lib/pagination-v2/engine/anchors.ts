@@ -1,10 +1,10 @@
 // Anchor helpers for the pagination engine: resolve between content anchors,
 // pages, and fragment targets without owning any engine state directly.
 import type {
-    Page,
-    PreparedBlock,
-    PreparedTextBlock,
-    TextCursorOffset,
+  Page,
+  PreparedBlock,
+  PreparedTextBlock,
+  TextCursorOffset,
 } from "../shared/types";
 import type { ContentAnchor } from "../types";
 
@@ -172,7 +172,9 @@ export function pickAnchorForPage(
   // with the image that follows it (both come from the same block in the
   // source), so anchoring to a spacer causes resolveAnchorToPage to find
   // the wrong page when two slices share the same blockId.
-  const anchorableSlices = page.slices.filter((slice) => slice.type !== "spacer");
+  const anchorableSlices = page.slices.filter(
+    (slice) => slice.type !== "spacer",
+  );
   const slices = anchorableSlices.length > 0 ? anchorableSlices : page.slices;
 
   const midSlice = slices[Math.floor(slices.length / 2)];

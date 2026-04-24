@@ -149,7 +149,9 @@ export function normalizeInternalEpubHref(
   href: string,
 ): string {
   const { path, fragment } = splitHrefFragment(href);
-  const resolvedPath = path ? resolvePath(basePath, path) : basePath.split(/[#?]/)[0] ?? basePath;
+  const resolvedPath = path
+    ? resolvePath(basePath, path)
+    : (basePath.split(/[#?]/)[0] ?? basePath);
   return fragment ? `${resolvedPath}#${fragment}` : resolvedPath;
 }
 

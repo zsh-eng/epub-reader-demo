@@ -120,9 +120,7 @@ export function useReaderSettings() {
   }, [settings]);
 
   const updateSettings = useCallback((newSettings: Partial<ReaderSettings>) => {
-    setSettings((prev) =>
-      normalizeReaderSettings({ ...prev, ...newSettings }),
-    );
+    setSettings((prev) => normalizeReaderSettings({ ...prev, ...newSettings }));
   }, []);
 
   const resetSettings = useCallback(() => {

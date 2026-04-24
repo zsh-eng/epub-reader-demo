@@ -14,7 +14,9 @@ describe("resolvePaginatedReaderLayout", () => {
   it("bases vertical padding on hover rail heights instead of chrome height", () => {
     const layout = getDefaultPaginatedReaderLayout();
 
-    expect(layout.stagePadding.paddingTop).toBeGreaterThan(layout.topRailHeight);
+    expect(layout.stagePadding.paddingTop).toBeGreaterThan(
+      layout.topRailHeight,
+    );
     expect(layout.stagePadding.paddingBottom).toBeGreaterThan(
       layout.bottomRailHeight,
     );

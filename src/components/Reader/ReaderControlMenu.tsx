@@ -19,7 +19,12 @@ interface MenuItem {
 const MENU_ITEMS: MenuItem[] = [
   { id: "contents", label: "Contents", icon: List, isAvailable: true },
   { id: "search", label: "Search Book", icon: Search, isAvailable: false },
-  { id: "settings", label: "Themes & Settings", icon: Settings, isAvailable: true },
+  {
+    id: "settings",
+    label: "Themes & Settings",
+    icon: Settings,
+    isAvailable: true,
+  },
 ];
 
 export function ReaderControlMenu({
@@ -38,9 +43,10 @@ export function ReaderControlMenu({
   };
 
   return (
-    <div className="px-4 py-3"
+    <div
+      className="px-4 py-3"
       style={{
-          paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
+        paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
       }}
     >
       <div className="flex flex-col gap-2">

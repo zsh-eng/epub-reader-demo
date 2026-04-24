@@ -37,9 +37,9 @@
  *   tag sets and inline extraction rules so pagination output stays consistent.
  */
 import {
-    createDeferredEpubImageSrc,
-    DEFERRED_EPUB_IMAGE_ATTR,
-    isExternalHref,
+  createDeferredEpubImageSrc,
+  DEFERRED_EPUB_IMAGE_ATTR,
+  isExternalHref,
 } from "@/lib/epub-resource-utils";
 import {
   EPUB_HIGHLIGHT_END_ATTRIBUTE,
@@ -48,13 +48,13 @@ import {
 } from "@/types/reader.types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
 import type {
-    Block,
-    BlockTag,
-    ChapterCanonicalText,
-    HighlightMark,
-    InlineRun,
-    LinkRef,
-    TextBlock,
+  Block,
+  BlockTag,
+  ChapterCanonicalText,
+  HighlightMark,
+  InlineRun,
+  LinkRef,
+  TextBlock,
 } from "./types";
 
 const BLOCK_TAGS = new Set<string>([
@@ -143,7 +143,10 @@ function linksMatch(a: LinkRef | undefined, b: LinkRef | undefined): boolean {
   return a?.href === b?.href;
 }
 
-function targetIdsMatch(a: string[] | undefined, b: string[] | undefined): boolean {
+function targetIdsMatch(
+  a: string[] | undefined,
+  b: string[] | undefined,
+): boolean {
   if (!a || a.length === 0) return !b || b.length === 0;
   if (!b || b.length !== a.length) return false;
 
@@ -263,7 +266,10 @@ function attachTargetsToRun(run: InlineRun, targetIds: string[]): void {
   run.targetIds = mergeTargetIds(run.targetIds ?? [], targetIds);
 }
 
-function attachTargetsToLastRun(runs: InlineRun[], targetIds: string[]): boolean {
+function attachTargetsToLastRun(
+  runs: InlineRun[],
+  targetIds: string[],
+): boolean {
   const last = runs[runs.length - 1];
   if (!last) return false;
   attachTargetsToRun(last, targetIds);
@@ -291,7 +297,10 @@ function extractInlineNodes(
     trailingTargets = result.trailingTargets;
   }
 
-  if (trailingTargets.length > 0 && attachTargetsToLastRun(runs, trailingTargets)) {
+  if (
+    trailingTargets.length > 0 &&
+    attachTargetsToLastRun(runs, trailingTargets)
+  ) {
     trailingTargets = [];
   }
 
@@ -378,9 +387,7 @@ function extractInlineNode(
   }
   if (tag === "sup") {
     next.inlineRole =
-      next.link && !isExternalHref(next.link.href)
-        ? "note-ref"
-        : "superscript";
+      next.link && !isExternalHref(next.link.href) ? "note-ref" : "superscript";
   }
   if (tag === "code" || tag === "kbd" || tag === "samp") next.isCode = true;
 
@@ -458,7 +465,10 @@ function createTextBlock(
   id: string,
   targetIds: string[] = [],
 ): TextBlock | null {
-  const result = extractInlineNodes(Array.from(element.childNodes), DEFAULT_CONTEXT);
+  const result = extractInlineNodes(
+    Array.from(element.childNodes),
+    DEFAULT_CONTEXT,
+  );
   const hasRenderableText = result.runs.some(
     (run) => run.hardBreak === true || run.text.trim().length > 0,
   );
@@ -510,7 +520,10 @@ function attachTargetsToBlock(block: Block, targetIds: string[]): void {
   block.targetIds = mergeTargetIds(block.targetIds ?? [], targetIds);
 }
 
-function attachTargetsToLastBlock(blocks: Block[], targetIds: string[]): boolean {
+function attachTargetsToLastBlock(
+  blocks: Block[],
+  targetIds: string[],
+): boolean {
   const last = blocks[blocks.length - 1];
   if (!last) return false;
   attachTargetsToBlock(last, targetIds);
@@ -641,7 +654,10 @@ function parseChapterHtmlInternal(html: string): {
         return { blocks: [block], remainingTargets: [] };
       }
 
-      const childrenResult = walkChildren(Array.from(node.childNodes), targetIds);
+      const childrenResult = walkChildren(
+        Array.from(node.childNodes),
+        targetIds,
+      );
       if (childrenResult.blocks.length > 0) {
         return childrenResult;
       }
@@ -671,7 +687,10 @@ function parseChapterHtmlInternal(html: string): {
     }
 
     if (CONTAINER_TAGS.has(tag)) {
-      const childrenResult = walkChildren(Array.from(node.childNodes), targetIds);
+      const childrenResult = walkChildren(
+        Array.from(node.childNodes),
+        targetIds,
+      );
       if (childrenResult.blocks.length > 0) {
         return childrenResult;
       }
@@ -691,7 +710,9 @@ function parseChapterHtmlInternal(html: string): {
   if (result.remainingTargets.length > 0) {
     const blockId = `text-${context.counter.value++}`;
     recordBlockStart(context, blockId, context.currentCanonicalOffset);
-    result.blocks.push(createEmptyTargetBlock(blockId, result.remainingTargets));
+    result.blocks.push(
+      createEmptyTargetBlock(blockId, result.remainingTargets),
+    );
   }
 
   return {

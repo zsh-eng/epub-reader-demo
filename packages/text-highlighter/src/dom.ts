@@ -232,7 +232,10 @@ export function wrapRangeWithHighlight(
     }
   }
 
-  applySegmentBoundaryAttributes(createdElements, opts.segmentBoundaryAttributes);
+  applySegmentBoundaryAttributes(
+    createdElements,
+    opts.segmentBoundaryAttributes,
+  );
   return createdElements;
 }
 

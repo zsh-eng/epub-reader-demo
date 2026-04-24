@@ -1,12 +1,12 @@
 import { applyHighlightsToChapterHtml } from "@/components/Reader/highlight-virtualization";
 import {
-    parseChapterHtmlWithCanonicalText,
-    prepareBlocks,
-    resolveContentAnchorRangeToHighlight,
-    type ChapterCanonicalText,
-    type ContentAnchor,
-    type FontConfig,
-    type PreparedBlock,
+  parseChapterHtmlWithCanonicalText,
+  prepareBlocks,
+  resolveContentAnchorRangeToHighlight,
+  type ChapterCanonicalText,
+  type ContentAnchor,
+  type FontConfig,
+  type PreparedBlock,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import { createHighlightFromRange } from "@zsh-eng/text-highlighter";

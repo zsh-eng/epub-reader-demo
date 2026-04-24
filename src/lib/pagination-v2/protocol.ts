@@ -1,11 +1,11 @@
 import type { PaginationChapterDiagnostics } from "./shared/types";
 import type {
-    Block,
-    ContentAnchor,
-    PaginationConfig,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadIntent,
+  Block,
+  ContentAnchor,
+  PaginationConfig,
+  ResolvedSpread,
+  SpreadConfig,
+  SpreadIntent,
 } from "./types";
 
 // ---------------------------------------------------------------------------

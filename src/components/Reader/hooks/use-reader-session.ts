@@ -1,11 +1,11 @@
 import type { Book } from "@/lib/db";
 import type {
-    Block,
-    ChapterCanonicalText,
-    PaginationConfig,
-    PaginationStatus,
-    ResolvedSpread,
-    SpreadConfig,
+  Block,
+  ChapterCanonicalText,
+  PaginationConfig,
+  PaginationStatus,
+  ResolvedSpread,
+  SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { ReaderSettings } from "@/types/reader.types";
@@ -13,8 +13,8 @@ import { useMemo } from "react";
 import type { ChapterEntry } from "../types";
 import { useReaderHighlightActions } from "./use-reader-highlight-actions";
 import {
-    useReaderNavigationActions,
-    type ReaderNavigationActions,
+  useReaderNavigationActions,
+  type ReaderNavigationActions,
 } from "./use-reader-navigation-actions";
 import { useReaderCore } from "./use-reader-core";
 

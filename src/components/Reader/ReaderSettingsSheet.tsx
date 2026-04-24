@@ -2,10 +2,10 @@ import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel"
 import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 import { Button } from "@/components/ui/button";
 import {
-    SegmentedTabs,
-    SegmentedTabsContent,
-    SegmentedTabsList,
-    SegmentedTabsTrigger,
+  SegmentedTabs,
+  SegmentedTabsContent,
+  SegmentedTabsList,
+  SegmentedTabsTrigger,
 } from "@/components/ui/segmented-controls";
 import type { ReaderSettings } from "@/types/reader.types";
 import { ChevronLeft, Palette, Type } from "lucide-react";
@@ -91,7 +91,9 @@ export function ReaderSettingsPanel({
   return (
     <SegmentedTabs
       value={activeTab}
-      onValueChange={(value) => onActiveTabChange(value as ReaderSettingsPanelTab)}
+      onValueChange={(value) =>
+        onActiveTabChange(value as ReaderSettingsPanelTab)
+      }
       className="flex min-h-0 flex-col h-[32rem] mt-3"
     >
       <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-2 rounded-full bg-secondary/50 p-1 self-center">
@@ -114,7 +116,10 @@ export function ReaderSettingsPanel({
       {/* This region stays content-sized until the sheet reaches its viewport
           cap, then becomes the scroll container instead of truncating the
           active settings panel at a fixed intermediate height. */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-3" data-vaul-no-drag>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-4 pb-3"
+        data-vaul-no-drag
+      >
         <SegmentedTabsContent value="typography" className="mt-0">
           <TypographyPanel
             settings={settings}

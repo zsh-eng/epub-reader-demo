@@ -5,14 +5,14 @@ import { MobileReaderNav } from "@/components/LegacyReader/MobileReaderNav";
 import ReaderContent from "@/components/ReaderContent";
 import { useBookLoader } from "@/hooks/use-book-loader";
 import {
-    getManifestItemHref,
-    useChapterContent,
+  getManifestItemHref,
+  useChapterContent,
 } from "@/hooks/use-chapter-content";
 import { useChapterNavigation } from "@/hooks/use-chapter-navigation";
 import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import {
-    useAddHighlightMutation,
-    useHighlightsQuery,
+  useAddHighlightMutation,
+  useHighlightsQuery,
 } from "@/hooks/use-highlights-query";
 import { useKeyboardNavigation } from "@/hooks/use-keyboard-navigation";
 import { useIsMobile } from "@/hooks/use-mobile";

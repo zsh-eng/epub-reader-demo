@@ -44,7 +44,9 @@ describe("Reader highlight virtualization", () => {
 
     expect(highlightedHtml).toContain('data-highlight-id="h1"');
     expect(highlightedHtml).toContain('data-color="yellow"');
-    expect(highlightedHtml).toContain(`${EPUB_HIGHLIGHT_START_ATTRIBUTE}="true"`);
+    expect(highlightedHtml).toContain(
+      `${EPUB_HIGHLIGHT_START_ATTRIBUTE}="true"`,
+    );
     expect(highlightedHtml).toContain(`${EPUB_HIGHLIGHT_END_ATTRIBUTE}="true"`);
   });
 

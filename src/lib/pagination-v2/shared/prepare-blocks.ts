@@ -1,27 +1,21 @@
 import {
-    prepareWithSegments,
-    type LayoutCursor,
-    type PreparedTextWithSegments,
+  prepareWithSegments,
+  type LayoutCursor,
+  type PreparedTextWithSegments,
 } from "@chenglou/pretext";
+import { clearMeasureCache, measureCollapsedSpaceWidth } from "./measure";
 import {
-    clearMeasureCache,
-    measureCollapsedSpaceWidth,
-} from "./measure";
-import {
-    getInlineChromeWidthPx,
-    SUPERSCRIPT_FONT_SCALE,
+  getInlineChromeWidthPx,
+  SUPERSCRIPT_FONT_SCALE,
 } from "./inline-presentation";
-import {
-    CODE_CHROME_PX,
-    getBlockFontScale, isHeadingTag
-} from "./spacing";
+import { CODE_CHROME_PX, getBlockFontScale, isHeadingTag } from "./spacing";
 import type {
-    Block,
-    FontConfig,
-    InlineRun,
-    PreparedBlock,
-    PreparedInlineItem,
-    PreparedTextBlock,
+  Block,
+  FontConfig,
+  InlineRun,
+  PreparedBlock,
+  PreparedInlineItem,
+  PreparedTextBlock,
 } from "./types";
 
 const PREPARED_TEXT_CACHE_MAX = 12_000;
@@ -56,10 +50,7 @@ function getPreparedText(
       : {
           prepared,
           fullText: text,
-          fullWidth: prepared.widths.reduce(
-            (total, width) => total + width,
-            0,
-          ),
+          fullWidth: prepared.widths.reduce((total, width) => total + width, 0),
           endCursor: {
             segmentIndex: prepared.segments.length,
             graphemeIndex: 0,
@@ -101,9 +92,14 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
   if (run.isCode) {
     family = fonts.codeFamily;
     sizePx = Math.round(Math.max(11, fonts.baseSizePx * scale * 0.92));
-  } else if (run.inlineRole === "superscript" || run.inlineRole === "note-ref") {
+  } else if (
+    run.inlineRole === "superscript" ||
+    run.inlineRole === "note-ref"
+  ) {
     family = fonts.bodyFamily;
-    sizePx = Math.round(Math.max(9, fonts.baseSizePx * scale * SUPERSCRIPT_FONT_SCALE));
+    sizePx = Math.round(
+      Math.max(9, fonts.baseSizePx * scale * SUPERSCRIPT_FONT_SCALE),
+    );
   } else if (isHeading) {
     family = fonts.headingFamily;
     sizePx = Math.round(fonts.baseSizePx * scale);
@@ -188,7 +184,10 @@ function prepareTextBlock(
     });
   }
 
-  if (items.length === 0 && (!block.targetIds || block.targetIds.length === 0)) {
+  if (
+    items.length === 0 &&
+    (!block.targetIds || block.targetIds.length === 0)
+  ) {
     return null;
   }
 

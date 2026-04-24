@@ -1,10 +1,14 @@
 import {
-    CONTENT_ANCHOR_BLOCK_ID_ATTR,
-    CONTENT_ANCHOR_END_ATTR,
-    CONTENT_ANCHOR_START_ATTR,
-    parseTextCursorOffset,
+  CONTENT_ANCHOR_BLOCK_ID_ATTR,
+  CONTENT_ANCHOR_END_ATTR,
+  CONTENT_ANCHOR_START_ATTR,
+  parseTextCursorOffset,
 } from "../content-anchor-dom";
-import type { PageFragment, PreparedBlock, PreparedTextItem } from "../shared/types";
+import type {
+  PageFragment,
+  PreparedBlock,
+  PreparedTextItem,
+} from "../shared/types";
 import type { ContentAnchor, ResolvedSpread } from "../types";
 
 interface ResolvedEndpointBoundary {
@@ -126,7 +130,9 @@ function resolveBoundaryFragmentElement(
 
   const leftCandidate =
     clampedOffset > 0
-      ? findLastFragmentAnchorElement(node.childNodes[clampedOffset - 1] ?? null)
+      ? findLastFragmentAnchorElement(
+          node.childNodes[clampedOffset - 1] ?? null,
+        )
       : null;
   if (leftCandidate) {
     return {
@@ -166,7 +172,10 @@ function getTextOffsetWithinElement(
 
 function getSegmentGraphemes(text: string): string[] {
   if (!graphemeSegmenter) return Array.from(text);
-  return Array.from(graphemeSegmenter.segment(text), (segment) => segment.segment);
+  return Array.from(
+    graphemeSegmenter.segment(text),
+    (segment) => segment.segment,
+  );
 }
 
 function nextCursorInItem(
@@ -253,7 +262,9 @@ function resolveEndpointBoundary(
 
   const { fragmentElement, localTextOffset } = fragmentBoundary;
   const blockElement = closestBlockAnchorElement(fragmentElement);
-  const blockId = blockElement?.getAttribute(CONTENT_ANCHOR_BLOCK_ID_ATTR)?.trim();
+  const blockId = blockElement
+    ?.getAttribute(CONTENT_ANCHOR_BLOCK_ID_ATTR)
+    ?.trim();
   if (!blockId) return null;
 
   const fragmentStart = parseTextCursorOffset(

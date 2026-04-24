@@ -363,9 +363,10 @@ class EPUBReaderDB extends Dexie {
         ...LOCAL_TABLES,
       })
       .upgrade(async (tx) => {
-        const checkpointTable = tx.table(
-          "readingCheckpoints",
-        ) as Table<SyncedReadingCheckpoint, string>;
+        const checkpointTable = tx.table("readingCheckpoints") as Table<
+          SyncedReadingCheckpoint,
+          string
+        >;
         const existingCount = await checkpointTable.count();
         if (existingCount > 0) return;
 
@@ -687,7 +688,9 @@ export async function upsertReadingCheckpoint(
     ),
   };
 
-  await db.readingCheckpoints.put(normalizedCheckpoint as SyncedReadingCheckpoint);
+  await db.readingCheckpoints.put(
+    normalizedCheckpoint as SyncedReadingCheckpoint,
+  );
   return normalizedCheckpoint.id;
 }
 

@@ -2,12 +2,12 @@
 // spreads and resolve spread-level navigation and serialization details.
 import type { Page } from "../shared/types";
 import type {
-    ContentAnchor,
-    ResolvedLeafPage,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadGapReason,
-    SpreadIntent,
+  ContentAnchor,
+  ResolvedLeafPage,
+  ResolvedSpread,
+  SpreadConfig,
+  SpreadGapReason,
+  SpreadIntent,
 } from "../types";
 import { pickAnchorForPage, resolveAnchorToGlobalPage } from "./anchors";
 
@@ -150,7 +150,9 @@ function buildSpreadProjection(
 
   if (spreads.length === 0) {
     const reason: SpreadGapReason = isFullyLoaded ? "end-of-book" : "unloaded";
-    spreads.push(Array.from({ length: columns }, () => ({ kind: "gap", reason })));
+    spreads.push(
+      Array.from({ length: columns }, () => ({ kind: "gap", reason })),
+    );
   }
 
   const spreadIndexByGlobalPage = new Map<number, number>();

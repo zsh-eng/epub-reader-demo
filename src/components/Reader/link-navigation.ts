@@ -15,7 +15,5 @@ export function resolvePaginatedLinkTarget(
   const chapterIndex = chapterIndexByHrefPath.get(path);
   if (chapterIndex === undefined) return null;
 
-  return fragment
-    ? { chapterIndex, targetId: fragment }
-    : { chapterIndex };
+  return fragment ? { chapterIndex, targetId: fragment } : { chapterIndex };
 }

@@ -15,9 +15,7 @@ describe("parseChapterHtml link and target extraction", () => {
     expect(block?.type).toBe("text");
     if (!block || block.type !== "text") return;
 
-    const linkedRuns = block.runs.filter(
-      (run) => Boolean(run.link),
-    );
+    const linkedRuns = block.runs.filter((run) => Boolean(run.link));
 
     expect(linkedRuns).toHaveLength(2);
     expect(linkedRuns[0]?.link).toEqual({

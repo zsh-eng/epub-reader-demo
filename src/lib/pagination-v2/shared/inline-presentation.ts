@@ -33,7 +33,9 @@ export function getNoteRefMetrics(
   textWidthPx: number,
 ): NoteRefMetrics {
   const fontSizePx = getFontSizePx(font);
-  const horizontalPaddingPx = Math.round(fontSizePx * NOTE_REF_PADDING_X_FACTOR);
+  const horizontalPaddingPx = Math.round(
+    fontSizePx * NOTE_REF_PADDING_X_FACTOR,
+  );
   const minWidthPx = Math.round(fontSizePx * NOTE_REF_MIN_WIDTH_FACTOR);
   const totalWidthPx = Math.max(
     minWidthPx,
@@ -54,7 +56,10 @@ export function getInlineChromeWidthPx(
 ): number {
   if (inlineRole !== "note-ref") return 0;
 
-  return Math.max(0, getNoteRefMetrics(font, textWidthPx).totalWidthPx - textWidthPx);
+  return Math.max(
+    0,
+    getNoteRefMetrics(font, textWidthPx).totalWidthPx - textWidthPx,
+  );
 }
 
 export function getInlineRaisePx(

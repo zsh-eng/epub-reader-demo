@@ -1,9 +1,5 @@
 import { processEmbeddedResources } from "@/lib/epub-resource-utils";
-import type {
-  Book,
-  BookFile,
-  SyncedReadingCheckpoint,
-} from "@/lib/db";
+import type { Book, BookFile, SyncedReadingCheckpoint } from "@/lib/db";
 import {
   parseChapterHtml,
   parseChapterHtmlWithCanonicalText,
@@ -49,14 +45,19 @@ export function buildChapterEntries(book: Book | null): ChapterEntry[] {
   for (let index = 0; index < book.spine.length; index++) {
     const spineItem = book.spine[index];
     if (!spineItem) {
-      console.warn("[Reader] Missing spine item while building chapter entries", {
-        bookId: book.id,
-        spineIndex: index,
-      });
+      console.warn(
+        "[Reader] Missing spine item while building chapter entries",
+        {
+          bookId: book.id,
+          spineIndex: index,
+        },
+      );
       continue;
     }
 
-    const manifestItem = book.manifest.find((item) => item.id === spineItem.idref);
+    const manifestItem = book.manifest.find(
+      (item) => item.id === spineItem.idref,
+    );
     if (!manifestItem?.href) {
       console.warn(
         "[Reader] Missing manifest href for spine item while building chapter entries",
@@ -122,7 +123,11 @@ export async function loadBaseChapterContent(options: {
   imageDimensionsByPath: Map<string, { width: number; height: number }>;
 }): Promise<ReaderBaseChapterContent> {
   const { chapterIndex, chapterFile, chapter, imageDimensionsByPath } = options;
-  const html = await extractBodyHtml(chapterFile, chapter, imageDimensionsByPath);
+  const html = await extractBodyHtml(
+    chapterFile,
+    chapter,
+    imageDimensionsByPath,
+  );
   const { canonicalText } = parseChapterHtmlWithCanonicalText(html);
 
   return {
@@ -159,6 +164,7 @@ export function didDecoratedChapterBlocksChange(
   nextArtifact: ReaderDecoratedChapterArtifact,
 ): boolean {
   return (
-    previousArtifact.source.highlightedHtml !== nextArtifact.source.highlightedHtml
+    previousArtifact.source.highlightedHtml !==
+    nextArtifact.source.highlightedHtml
   );
 }

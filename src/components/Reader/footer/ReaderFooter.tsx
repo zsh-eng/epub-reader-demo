@@ -256,7 +256,9 @@ export function ReaderFooter({
                       }
                     >
                       <motion.div
-                        initial={animateReadyTransition ? { opacity: 0.72 } : false}
+                        initial={
+                          animateReadyTransition ? { opacity: 0.72 } : false
+                        }
                         animate={{ opacity: 1 }}
                         transition={
                           animateReadyTransition

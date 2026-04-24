@@ -1,18 +1,14 @@
 import type { LayoutCursor } from "@chenglou/pretext";
 import { layoutNextLine } from "@chenglou/pretext";
-import {
-    LINE_START_CURSOR,
-    cursorsMatch,
-    measureTextWidth,
-} from "./measure";
+import { LINE_START_CURSOR, cursorsMatch, measureTextWidth } from "./measure";
 import type {
-    HighlightMark,
-    LayoutTheme,
-    PageFragment,
-    PageLine,
-    PreparedInlineItem,
-    TextCursorOffset,
-    TextRenderMode,
+  HighlightMark,
+  LayoutTheme,
+  PageFragment,
+  PageLine,
+  PreparedInlineItem,
+  TextCursorOffset,
+  TextRenderMode,
 } from "./types";
 
 const HUGE_BADNESS = 1e8;
@@ -238,9 +234,7 @@ function layoutTextLinesGreedy(
 function canUseKnuthPlassJustification(items: PreparedInlineItem[]): boolean {
   return (
     items.length > 0 &&
-    items.every(
-      (item) => item.chromeWidth === 0 && !itemHasForcedBreak(item),
-    )
+    items.every((item) => item.chromeWidth === 0 && !itemHasForcedBreak(item))
   );
 }
 
@@ -305,7 +299,11 @@ function layoutTextLinesKnuthPlass(
   const previous: number[] = new Array(breakCandidates.length).fill(-1);
   dp[0] = 0;
 
-  for (let toCandidate = 1; toCandidate < breakCandidates.length; toCandidate++) {
+  for (
+    let toCandidate = 1;
+    toCandidate < breakCandidates.length;
+    toCandidate++
+  ) {
     const candidate = breakCandidates[toCandidate];
     if (!candidate) continue;
 
@@ -329,8 +327,7 @@ function layoutTextLinesKnuthPlass(
       if (lineStats.naturalWidth > maxWidth * 2) break;
 
       const totalBadness =
-        dp[fromCandidate]! +
-        lineBadness(lineStats, maxWidth, isLastLine);
+        dp[fromCandidate]! + lineBadness(lineStats, maxWidth, isLastLine);
 
       if (totalBadness < dp[toCandidate]!) {
         dp[toCandidate] = totalBadness;
@@ -396,7 +393,11 @@ function flattenInlineTokens(items: PreparedInlineItem[]): InlineLayoutToken[] {
       });
     }
 
-    for (let segIndex = 0; segIndex < item.prepared.segments.length; segIndex++) {
+    for (
+      let segIndex = 0;
+      segIndex < item.prepared.segments.length;
+      segIndex++
+    ) {
       const text = item.prepared.segments[segIndex];
       const width = item.prepared.widths[segIndex];
       if (text === undefined || width === undefined) continue;
@@ -525,7 +526,8 @@ function lineBadness(
     return slack * slack * 10;
   }
 
-  const justifiedSpace = (maxWidth - lineStats.wordWidth) / lineStats.spaceCount;
+  const justifiedSpace =
+    (maxWidth - lineStats.wordWidth) / lineStats.spaceCount;
   if (justifiedSpace < 0) return HUGE_BADNESS;
   const normalSpaceWidth = lineStats.normalSpaceWidth || justifiedSpace;
   if (normalSpaceWidth <= 0) return HUGE_BADNESS;
@@ -574,7 +576,12 @@ function buildKnuthPlassLine(
     return null;
   }
 
-  const lineStats = getLineStats(tokens, breakCandidates, fromCandidate, toCandidate);
+  const lineStats = getLineStats(
+    tokens,
+    breakCandidates,
+    fromCandidate,
+    toCandidate,
+  );
   if (lineStats === null) return null;
 
   const fragments: PageFragment[] = [];
@@ -634,7 +641,8 @@ function buildKnuthPlassLine(
           }
         : {}),
     });
-    lastRenderableFragment = fragments[fragments.length - 1] ?? lastRenderableFragment;
+    lastRenderableFragment =
+      fragments[fragments.length - 1] ?? lastRenderableFragment;
   }
 
   if (trailingFillPx > 0 && lastRenderableFragment) {

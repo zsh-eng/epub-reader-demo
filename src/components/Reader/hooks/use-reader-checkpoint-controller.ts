@@ -1,8 +1,8 @@
 import { upsertCurrentDeviceReadingCheckpoint } from "@/lib/db";
 import type {
-    ResolvedLeafPage,
-    ResolvedSpread,
-    SpreadIntent,
+  ResolvedLeafPage,
+  ResolvedSpread,
+  SpreadIntent,
 } from "@/lib/pagination-v2";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -24,9 +24,8 @@ function getLeadingVisiblePage(
   spread: ResolvedSpread | null,
 ): ResolvedLeafPage | null {
   return (
-    spread?.slots.find(
-      (slot): slot is ResolvedPageSlot => slot.kind === "page",
-    )?.page ?? null
+    spread?.slots.find((slot): slot is ResolvedPageSlot => slot.kind === "page")
+      ?.page ?? null
   );
 }
 
@@ -115,7 +114,10 @@ export function useReaderCheckpointController({
       if (!nextCheckpoint) return;
       if (
         !force &&
-        areCheckpointSnapshotsEqual(nextCheckpoint, lastSavedCheckpointRef.current)
+        areCheckpointSnapshotsEqual(
+          nextCheckpoint,
+          lastSavedCheckpointRef.current,
+        )
       ) {
         return;
       }

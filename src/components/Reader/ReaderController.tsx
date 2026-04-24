@@ -8,10 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import type {
-  ReaderChromeRailProps,
-  ReaderChromeSurfaceProps,
-} from "./chrome";
+import type { ReaderChromeRailProps, ReaderChromeSurfaceProps } from "./chrome";
 import { usePaginationTapNav } from "./hooks/use-pagination-tap-nav";
 
 export const CHROME_HIDE_DELAY_MS = 200;
@@ -106,7 +103,10 @@ export function ReaderController({
       if (!isHoverMode) return;
 
       const nextTarget = event.relatedTarget;
-      if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      if (
+        nextTarget instanceof Node &&
+        event.currentTarget.contains(nextTarget)
+      ) {
         return;
       }
 

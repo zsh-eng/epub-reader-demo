@@ -1,6 +1,6 @@
 import {
-    INPUT_BEHAVIOR_MEDIA_QUERIES,
-    useInputBehavior,
+  INPUT_BEHAVIOR_MEDIA_QUERIES,
+  useInputBehavior,
 } from "@/hooks/use-input-behavior";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,8 +15,9 @@ type Snapshot = {
 class MockMediaQueryList implements MediaQueryList {
   media: string;
   matches: boolean;
-  onchange: ((this: MediaQueryList, event: MediaQueryListEvent) => void) | null =
-    null;
+  onchange:
+    | ((this: MediaQueryList, event: MediaQueryListEvent) => void)
+    | null = null;
 
   private changeListeners = new Set<(event: MediaQueryListEvent) => void>();
 
@@ -25,9 +26,14 @@ class MockMediaQueryList implements MediaQueryList {
     this.matches = matches;
   }
 
-  addEventListener(_type: string, listener: EventListenerOrEventListenerObject) {
+  addEventListener(
+    _type: string,
+    listener: EventListenerOrEventListenerObject,
+  ) {
     if (typeof listener === "function") {
-      this.changeListeners.add(listener as (event: MediaQueryListEvent) => void);
+      this.changeListeners.add(
+        listener as (event: MediaQueryListEvent) => void,
+      );
     }
   }
 

@@ -1,16 +1,16 @@
 import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
 import {
-    getBlockInsetLeft,
-    getBlockSpacing,
-    getCollapsedBlockGap,
-    getLineHeight,
+  getBlockInsetLeft,
+  getBlockSpacing,
+  getCollapsedBlockGap,
+  getLineHeight,
 } from "./spacing";
 import type {
-    LayoutTheme,
-    Page,
-    PaginationResult,
-    PreparedBlock,
-    PreparedTextBlock,
+  LayoutTheme,
+  Page,
+  PaginationResult,
+  PreparedBlock,
+  PreparedTextBlock,
 } from "./types";
 
 const JUSTIFY_DISABLED_TAGS = new Set([
@@ -34,10 +34,7 @@ function resolveTextAlignForBlock(
     return "left";
   }
 
-  if (
-    textAlign === "justify-knuth-plass" &&
-    JUSTIFY_DISABLED_TAGS.has(tag)
-  ) {
+  if (textAlign === "justify-knuth-plass" && JUSTIFY_DISABLED_TAGS.has(tag)) {
     return "justify";
   }
 

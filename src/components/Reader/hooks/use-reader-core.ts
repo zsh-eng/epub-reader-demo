@@ -2,12 +2,12 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
-    DEFAULT_PARAGRAPH_SPACING,
-    usePagination,
-    type Block,
-    type ChapterCanonicalText,
-    type PaginationConfig,
-    type SpreadConfig,
+  DEFAULT_PARAGRAPH_SPACING,
+  usePagination,
+  type Block,
+  type ChapterCanonicalText,
+  type PaginationConfig,
+  type SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
@@ -173,7 +173,9 @@ export function useReaderCore(
   const totalPages = pagination.spread?.totalPages ?? 0;
   const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
   const currentTitleChapterIndex =
-    pagination.spread?.chapterIndexStart ?? initialLocation?.chapterIndex ?? null;
+    pagination.spread?.chapterIndexStart ??
+    initialLocation?.chapterIndex ??
+    null;
 
   const chapterStartPages = useMemo<(number | null)[]>(() => {
     const result: (number | null)[] = [];

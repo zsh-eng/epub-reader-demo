@@ -114,7 +114,9 @@ describe("layoutPages — image overflow spacing", () => {
     const firstPage = pages[0];
 
     expect(firstPage).toBeDefined();
-    expect(firstPage?.slices.some((slice) => slice.type === "image")).toBe(true);
+    expect(firstPage?.slices.some((slice) => slice.type === "image")).toBe(
+      true,
+    );
     expect(firstPage?.slices.some((slice) => slice.type === "text")).toBe(true);
 
     const imageSlice = firstPage?.slices.find(
@@ -175,7 +177,9 @@ describe("layoutPages — figcaption treatment", () => {
     expect(preparedCaption?.type).toBe("text");
     if (!preparedCaption || preparedCaption.type !== "text") return;
 
-    const captionText = preparedCaption.items.find((item) => item.kind === "text");
+    const captionText = preparedCaption.items.find(
+      (item) => item.kind === "text",
+    );
     expect(captionText?.font).toContain(" 15px ");
 
     const { pages } = layoutPages(prepared, 620, 860, {

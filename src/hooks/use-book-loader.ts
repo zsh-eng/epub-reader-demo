@@ -1,10 +1,10 @@
 import { useToast } from "@/hooks/use-toast";
 import {
-    getAllBooks,
-    getBook,
-    getReadingProgress,
-    type Book,
-    type ReadingProgress,
+  getAllBooks,
+  getBook,
+  getReadingProgress,
+  type Book,
+  type ReadingProgress,
 } from "@/lib/db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
@@ -148,7 +148,9 @@ export function useBookLoader(
 
   return {
     book: bookQuery.data ?? null,
-    initialProgress: includeInitialProgress ? progressQuery.data ?? null : null,
+    initialProgress: includeInitialProgress
+      ? (progressQuery.data ?? null)
+      : null,
     isLoading,
   };
 }

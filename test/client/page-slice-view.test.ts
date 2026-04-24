@@ -263,7 +263,9 @@ describe("PageSliceView", () => {
       }),
     );
 
-    expect(markup).toContain(`${CONTENT_ANCHOR_BLOCK_ID_ATTR}="highlighted-block"`);
+    expect(markup).toContain(
+      `${CONTENT_ANCHOR_BLOCK_ID_ATTR}="highlighted-block"`,
+    );
     expect(markup).toContain(`${CONTENT_ANCHOR_START_ATTR}="2:3:0"`);
     expect(markup).toContain(`${CONTENT_ANCHOR_END_ATTR}="2:4:0"`);
     expect(markup).toContain('data-highlight-id="h1"');

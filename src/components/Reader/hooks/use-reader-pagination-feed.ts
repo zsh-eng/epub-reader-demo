@@ -54,12 +54,16 @@ export function useReaderPaginationFeed({
       totalChapters: chapterEntries.length,
       initialChapterIndex: initialLocation.chapterIndex,
       initialChapterProgress: initialLocation.chapterProgress,
-      intent: initialLocation.isRestore ? { kind: "restore" } : { kind: "replace" },
+      intent: initialLocation.isRestore
+        ? { kind: "restore" }
+        : { kind: "replace" },
       firstChapterBlocks: initialArtifact.blocks,
     });
 
     initializedLoadVersionRef.current = loadVersion;
-    sentArtifactsRef.current = new Map([[initialLocation.chapterIndex, initialArtifact]]);
+    sentArtifactsRef.current = new Map([
+      [initialLocation.chapterIndex, initialArtifact],
+    ]);
   }, [
     artifactsByChapter,
     chapterEntries.length,
@@ -72,7 +76,11 @@ export function useReaderPaginationFeed({
     if (!initialLocation) return;
     if (initializedLoadVersionRef.current !== loadVersion) return;
 
-    for (let chapterIndex = 0; chapterIndex < chapterEntries.length; chapterIndex++) {
+    for (
+      let chapterIndex = 0;
+      chapterIndex < chapterEntries.length;
+      chapterIndex++
+    ) {
       const artifact = artifactsByChapter[chapterIndex];
       if (!artifact) continue;
 

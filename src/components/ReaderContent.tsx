@@ -1,9 +1,9 @@
 import {
-    CONTENT_WIDTH_VALUES,
-    EPUB_LINK,
-    FONT_STACKS,
-    type ReaderSettings,
-    toCssTextAlign,
+  CONTENT_WIDTH_VALUES,
+  EPUB_LINK,
+  FONT_STACKS,
+  type ReaderSettings,
+  toCssTextAlign,
 } from "@/types/reader.types";
 import { forwardRef, useCallback } from "react";
 

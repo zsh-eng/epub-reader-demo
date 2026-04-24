@@ -1,23 +1,23 @@
 import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import {
-    getBookFilesByPaths,
-    getBookImageDimensionsMap,
-    getCurrentDeviceReadingCheckpoint,
-    type Book,
+  getBookFilesByPaths,
+  getBookImageDimensionsMap,
+  getCurrentDeviceReadingCheckpoint,
+  type Book,
 } from "@/lib/db";
 import type { ChapterCanonicalText } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    buildChapterEntries,
-    decorateChapterContent,
-    didDecoratedChapterBlocksChange,
-    loadBaseChapterContent,
-    resolveInitialReaderLocation,
-    type ParsedChapterBlocks,
-    type ReaderBaseChapterContent,
-    type ReaderDecoratedChapterArtifact,
-    type ReaderInitialLocation,
+  buildChapterEntries,
+  decorateChapterContent,
+  didDecoratedChapterBlocksChange,
+  loadBaseChapterContent,
+  resolveInitialReaderLocation,
+  type ParsedChapterBlocks,
+  type ReaderBaseChapterContent,
+  type ReaderDecoratedChapterArtifact,
+  type ReaderInitialLocation,
 } from "../data/chapter-content-pipeline";
 import { buildHighlightsBySpineItemId } from "../highlight-virtualization";
 import type { ChapterEntry } from "../types";
@@ -52,7 +52,9 @@ function pruneRemovedChapters(
   chapterEntries: ChapterEntry[],
   ...maps: Map<number, unknown>[]
 ): void {
-  const validChapterIndices = new Set(chapterEntries.map((chapter) => chapter.index));
+  const validChapterIndices = new Set(
+    chapterEntries.map((chapter) => chapter.index),
+  );
 
   for (const map of maps) {
     for (const chapterIndex of map.keys()) {
@@ -90,7 +92,9 @@ export function useReaderChapterContent({
     [bookHighlights],
   );
 
-  const highlightsBySpineItemIdRef = useRef<Map<string, Highlight[]>>(new Map());
+  const highlightsBySpineItemIdRef = useRef<Map<string, Highlight[]>>(
+    new Map(),
+  );
   highlightsBySpineItemIdRef.current = highlightsBySpineItemId;
 
   const baseContentByChapterRef = useRef<Map<number, ReaderBaseChapterContent>>(
@@ -102,7 +106,10 @@ export function useReaderChapterContent({
 
   const writeArtifact = useCallback(
     (artifact: ReaderDecoratedChapterArtifact) => {
-      decoratedArtifactByChapterRef.current.set(artifact.chapterIndex, artifact);
+      decoratedArtifactByChapterRef.current.set(
+        artifact.chapterIndex,
+        artifact,
+      );
       setArtifactsByChapter((previousArtifacts) => {
         const nextArtifacts =
           previousArtifacts.length === chapterEntries.length
@@ -166,7 +173,8 @@ export function useReaderChapterContent({
           );
         };
 
-        const initialChapter = chapterEntries[nextInitialLocation.chapterIndex]!;
+        const initialChapter =
+          chapterEntries[nextInitialLocation.chapterIndex]!;
 
         const loadAndPublishBaseContent = async (
           chapterIndex: number,
@@ -180,7 +188,10 @@ export function useReaderChapterContent({
           });
           if (cancelled) return;
 
-          baseContentByChapterRef.current.set(baseContent.chapterIndex, baseContent);
+          baseContentByChapterRef.current.set(
+            baseContent.chapterIndex,
+            baseContent,
+          );
           writeArtifact(
             decorateChapterContent({
               baseContent,
@@ -195,7 +206,11 @@ export function useReaderChapterContent({
         );
         if (cancelled) return;
 
-        for (let chapterIndex = 0; chapterIndex < chapterEntries.length; chapterIndex++) {
+        for (
+          let chapterIndex = 0;
+          chapterIndex < chapterEntries.length;
+          chapterIndex++
+        ) {
           if (chapterIndex === nextInitialLocation.chapterIndex) continue;
 
           const chapter = chapterEntries[chapterIndex]!;

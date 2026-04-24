@@ -114,9 +114,13 @@ export function useReaderNavigationActions({
       if (!resolvedTarget) return false;
 
       if (resolvedTarget.targetId) {
-        pagination.goToTarget(resolvedTarget.chapterIndex, resolvedTarget.targetId, {
-          intent: { kind: "jump", source: "internal-link" },
-        });
+        pagination.goToTarget(
+          resolvedTarget.chapterIndex,
+          resolvedTarget.targetId,
+          {
+            intent: { kind: "jump", source: "internal-link" },
+          },
+        );
         return true;
       }
 

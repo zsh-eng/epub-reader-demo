@@ -2,32 +2,32 @@
 
 /* The filled portion width calculation with CSS variable */
 .theme-slider-fill {
-    width: calc(var(--fill-progress, 0) * (100% - 0.5rem));
+  width: calc(var(--fill-progress, 0) * (100% - 0.5rem));
 }
 
 /* Native range input thumb styling for webkit browsers */
 .theme-slider-input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    cursor: grab;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  cursor: grab;
 }
 
 .theme-slider-input:active::-webkit-slider-thumb {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 /* Thumb styling for Firefox */
 .theme-slider-input::-moz-range-thumb {
-    width: 2rem;
-    height: 2rem;
-    border-radius: 0.5rem;
-    border: none;
-    cursor: grab;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: none;
+  cursor: grab;
 }
 
 .theme-slider-input:active::-moz-range-thumb {
-    cursor: grabbing;
+  cursor: grabbing;
 }

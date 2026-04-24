@@ -45,7 +45,11 @@ function ControllerHarness({
       createElement(
         "div",
         null,
-        createElement("output", { "data-testid": "chrome-visible" }, String(chromeVisible)),
+        createElement(
+          "output",
+          { "data-testid": "chrome-visible" },
+          String(chromeVisible),
+        ),
         createElement("div", { ref: containerRef, "data-testid": "stage" }),
         showHoverRails
           ? createElement("div", {
@@ -240,7 +244,9 @@ describe("ReaderController", () => {
     renderHarness(harness.root, { chromeInteractionMode: "touch" });
 
     expect(isChromeVisible(harness.container)).toBe(true);
-    expect(harness.container.querySelector("[data-testid='top-rail']")).toBeNull();
+    expect(
+      harness.container.querySelector("[data-testid='top-rail']"),
+    ).toBeNull();
 
     renderHarness(harness.root, { chromeInteractionMode: "hover" });
     expect(isChromeVisible(harness.container)).toBe(false);
@@ -248,7 +254,9 @@ describe("ReaderController", () => {
 
     renderHarness(harness.root, { chromeInteractionMode: "touch" });
     expect(isChromeVisible(harness.container)).toBe(true);
-    expect(harness.container.querySelector("[data-testid='top-rail']")).toBeNull();
+    expect(
+      harness.container.querySelector("[data-testid='top-rail']"),
+    ).toBeNull();
 
     harness.cleanup();
   });

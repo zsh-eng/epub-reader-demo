@@ -19,8 +19,9 @@ interface DeferredEpubImageStore {
   loadUrl: (resourcePath: string) => Promise<string | null>;
 }
 
-const DeferredEpubImageContext =
-  createContext<DeferredEpubImageStore | null>(null);
+const DeferredEpubImageContext = createContext<DeferredEpubImageStore | null>(
+  null,
+);
 
 interface DeferredEpubImageProviderProps {
   bookId: string;
@@ -38,7 +39,9 @@ export function DeferredEpubImageProvider({
   children,
 }: DeferredEpubImageProviderProps) {
   const objectUrlsRef = useRef<Map<string, string>>(new Map());
-  const pendingLoadsRef = useRef<Map<string, Promise<string | null>>>(new Map());
+  const pendingLoadsRef = useRef<Map<string, Promise<string | null>>>(
+    new Map(),
+  );
   const disposedRef = useRef(false);
 
   const getUrl = useCallback((resourcePath: string): string | null => {

@@ -1,14 +1,14 @@
 import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
 import type {
-    Block,
-    ContentAnchor,
-    FontConfig,
-    LayoutTheme,
-    PaginationConfig,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadIntent,
+  Block,
+  ContentAnchor,
+  FontConfig,
+  LayoutTheme,
+  PaginationConfig,
+  ResolvedSpread,
+  SpreadConfig,
+  SpreadIntent,
 } from "@/lib/pagination-v2/types";
 import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import { describe, expect, it } from "vitest";
@@ -76,7 +76,10 @@ function makeFixedPageBlocks(chapterIndex: number, pageCount: number): Block[] {
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     blocks.push({ type: "spacer", id: `spacer-${chapterIndex}-${pageIndex}` });
     if (pageIndex < pageCount - 1) {
-      blocks.push({ type: "page-break", id: `pb-${chapterIndex}-${pageIndex}` });
+      blocks.push({
+        type: "page-break",
+        id: `pb-${chapterIndex}-${pageIndex}`,
+      });
     }
   }
 
@@ -583,9 +586,9 @@ describe("navigation", () => {
     });
 
     const next = getPageContentEvent(forward.events)!;
-    expect.soft(
-      pageSlots(next.spread).map((slot) => slot.page.currentPage),
-    ).toEqual([3, 4]);
+    expect
+      .soft(pageSlots(next.spread).map((slot) => slot.page.currentPage))
+      .toEqual([3, 4]);
 
     const backward = createEngine({
       blocks: makeFixedPageBlocks(0, 8),
@@ -612,9 +615,9 @@ describe("navigation", () => {
     });
 
     const prev = getPageContentEvent(backward.events)!;
-    expect.soft(
-      pageSlots(prev.spread).map((slot) => slot.page.currentPage),
-    ).toEqual([3, 4]);
+    expect
+      .soft(pageSlots(prev.spread).map((slot) => slot.page.currentPage))
+      .toEqual([3, 4]);
   });
 
   it("prevSpread from the first spread emits pageUnavailable", () => {

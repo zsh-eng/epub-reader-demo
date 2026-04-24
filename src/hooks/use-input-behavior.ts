@@ -51,7 +51,10 @@ function getDefaultSnapshot(): InputBehaviorSnapshot {
 }
 
 function readInputBehaviorSnapshot(): InputBehaviorSnapshot {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+  if (
+    typeof window === "undefined" ||
+    typeof window.matchMedia !== "function"
+  ) {
     return getDefaultSnapshot();
   }
 
@@ -60,9 +63,8 @@ function readInputBehaviorSnapshot(): InputBehaviorSnapshot {
     hasFinePointer: window.matchMedia(
       INPUT_BEHAVIOR_MEDIA_QUERIES.anyFinePointer,
     ).matches,
-    primaryNoHover: window.matchMedia(
-      INPUT_BEHAVIOR_MEDIA_QUERIES.hoverNone,
-    ).matches,
+    primaryNoHover: window.matchMedia(INPUT_BEHAVIOR_MEDIA_QUERIES.hoverNone)
+      .matches,
     hasCoarsePointer: window.matchMedia(
       INPUT_BEHAVIOR_MEDIA_QUERIES.pointerCoarse,
     ).matches,
@@ -89,7 +91,10 @@ export function useInputBehavior(): InputBehaviorSnapshot {
   );
 
   useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    if (
+      typeof window === "undefined" ||
+      typeof window.matchMedia !== "function"
+    ) {
       return;
     }
 

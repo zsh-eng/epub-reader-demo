@@ -24,9 +24,8 @@ export function Reader() {
   const { chromeInteractionMode } = useInputBehavior();
 
   const stageSlotRef = useRef<HTMLDivElement>(null);
-  const [stageSlotElement, setStageSlotElement] = useState<HTMLDivElement | null>(
-    null,
-  );
+  const [stageSlotElement, setStageSlotElement] =
+    useState<HTMLDivElement | null>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
 
   const handleStageSlotRef = useCallback((node: HTMLDivElement | null) => {
@@ -94,7 +93,8 @@ export function Reader() {
     sessionState.chapters.entries[
       sessionState.navigation.currentTitleChapterIndex ??
         sessionState.navigation.currentChapterIndex
-    ] ?? sessionState.chapters.entries[sessionState.navigation.currentChapterIndex];
+    ] ??
+    sessionState.chapters.entries[sessionState.navigation.currentChapterIndex];
 
   return (
     <ReaderController
@@ -205,7 +205,9 @@ export function Reader() {
               sessionState.pagination.spread?.chapterIndexEnd ??
               sessionState.navigation.currentChapterIndex
             }
-            currentTitleChapterIndex={sessionState.navigation.currentTitleChapterIndex}
+            currentTitleChapterIndex={
+              sessionState.navigation.currentTitleChapterIndex
+            }
             chapterEntries={sessionState.chapters.entries}
             chapterStartPages={sessionState.navigation.chapterStartPages}
             onScrubPreview={sessionActions.previewPage}

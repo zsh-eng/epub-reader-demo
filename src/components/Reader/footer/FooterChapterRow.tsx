@@ -92,7 +92,7 @@ export function FooterChapterRow({
 
   const currentChapterTitle =
     currentTitleChapterIndex != null
-      ? chapterEntries[currentTitleChapterIndex]?.title ?? ""
+      ? (chapterEntries[currentTitleChapterIndex]?.title ?? "")
       : "";
 
   return (
@@ -117,9 +117,7 @@ export function FooterChapterRow({
             }
             disabled={showBlurredLoadingDetails}
             initial={
-              animateReadyDetails
-                ? { opacity: 0, filter: "blur(8px)" }
-                : false
+              animateReadyDetails ? { opacity: 0, filter: "blur(8px)" } : false
             }
             animate={{
               opacity: showBlurredLoadingDetails ? 0.76 : 1,
@@ -138,9 +136,7 @@ export function FooterChapterRow({
           >
             <ChevronLeft className="size-3.5 flex-shrink-0" />
             {pagesBack !== null && pagesBack > 0 && (
-              <span className="leading-none">
-                {pagesBack}p
-              </span>
+              <span className="leading-none">{pagesBack}p</span>
             )}
           </motion.button>
         )}
@@ -169,9 +165,7 @@ export function FooterChapterRow({
               whileHover={
                 showBlurredLoadingDetails ? undefined : { scale: 1.03 }
               }
-              whileTap={
-                showBlurredLoadingDetails ? undefined : { scale: 0.97 }
-              }
+              whileTap={showBlurredLoadingDetails ? undefined : { scale: 0.97 }}
               transition={{ duration: 0.15 }}
               className={cn(
                 "pointer-events-auto flex max-w-full min-w-0 items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-medium uppercase leading-tight tracking-[0.16em] text-muted-foreground transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
@@ -203,9 +197,7 @@ export function FooterChapterRow({
             aria-label="Next chapter"
             disabled={showBlurredLoadingDetails}
             initial={
-              animateReadyDetails
-                ? { opacity: 0, filter: "blur(8px)" }
-                : false
+              animateReadyDetails ? { opacity: 0, filter: "blur(8px)" } : false
             }
             animate={{
               opacity: showBlurredLoadingDetails ? 0.76 : 1,
@@ -223,9 +215,7 @@ export function FooterChapterRow({
             }
           >
             {pagesForward !== null && pagesForward > 0 && (
-              <span className="leading-none">
-                {pagesForward}p
-              </span>
+              <span className="leading-none">{pagesForward}p</span>
             )}
             <ChevronRight className="size-3.5 flex-shrink-0" />
           </motion.button>

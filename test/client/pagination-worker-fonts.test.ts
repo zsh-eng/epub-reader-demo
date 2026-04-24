@@ -13,7 +13,10 @@ describe("Pagination worker font parser", () => {
       }
     `;
 
-    const rules = parseFontFaceRules(cssText, "https://example.com/assets/font.css");
+    const rules = parseFontFaceRules(
+      cssText,
+      "https://example.com/assets/font.css",
+    );
 
     expect(rules).toHaveLength(1);
     expect(rules[0]?.family).toBe("JetBrains Mono");
@@ -42,7 +45,7 @@ describe("Pagination worker font parser", () => {
     expect(rules).toHaveLength(1);
     expect(rules[0]?.family).toBe("Inter");
     expect(rules[0]?.src).toBe(
-      'url("https://example.com/node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2") format(\'woff2\')',
+      "url(\"https://example.com/node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2\") format('woff2')",
     );
     expect(rules[0]?.descriptors.unicodeRange).toBe("U+0000-00FF");
   });

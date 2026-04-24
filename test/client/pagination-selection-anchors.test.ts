@@ -79,7 +79,10 @@ function buildPreparedChapter(blocks: Block[]): PreparedBlock[] {
   return prepareBlocks(blocks, BASE_PAGINATION_CONFIG.fontConfig);
 }
 
-function buildSingleSlice(blocks: Block[], width = 1000): {
+function buildSingleSlice(
+  blocks: Block[],
+  width = 1000,
+): {
   slice: TextSlice;
   preparedByChapter: PreparedBlock[][];
 } {

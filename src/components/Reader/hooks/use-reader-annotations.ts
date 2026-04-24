@@ -270,7 +270,10 @@ export function useReaderAnnotations({
   const activeHighlightData = useMemo(() => {
     if (!activeHighlight) return null;
 
-    return highlights.find((highlight) => highlight.id === activeHighlight.id) ?? null;
+    return (
+      highlights.find((highlight) => highlight.id === activeHighlight.id) ??
+      null
+    );
   }, [activeHighlight, highlights]);
 
   const resolveSelectionDraft = useCallback(
@@ -329,7 +332,9 @@ export function useReaderAnnotations({
   }, [spread, stageContentRef]);
 
   useEffect(() => {
-    highlightManagerRef.current?.setActiveHighlight(activeHighlight?.id ?? null);
+    highlightManagerRef.current?.setActiveHighlight(
+      activeHighlight?.id ?? null,
+    );
   }, [activeHighlight, spread]);
 
   useEffect(() => {
@@ -384,7 +389,11 @@ export function useReaderAnnotations({
     setState((previousState) =>
       previousState.kind === "creating" ? { kind: "idle" } : previousState,
     );
-  }, [spread?.currentSpread, spread?.chapterIndexEnd, spread?.chapterIndexStart]);
+  }, [
+    spread?.currentSpread,
+    spread?.chapterIndexEnd,
+    spread?.chapterIndexStart,
+  ]);
 
   useEffect(() => {
     if (state.kind !== "active") return;

@@ -1,8 +1,8 @@
 import type { Block, FontConfig, TextCursorOffset } from "@/lib/pagination-v2";
 import {
-    layoutPreWrapLines,
-    layoutTextLines,
-    prepareBlocks,
+  layoutPreWrapLines,
+  layoutTextLines,
+  prepareBlocks,
 } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
@@ -224,12 +224,12 @@ describe("layoutPreWrapLines cursor offsets", () => {
 
     const { lines } = layoutTextLines(textBlock.items, 240);
     const fragments = lines.flatMap((line) => line.fragments);
-    expect(fragments.find((fragment) => fragment.text === "12")?.inlineRole).toBe(
-      "note-ref",
-    );
-    expect(fragments.find((fragment) => fragment.text === "2")?.inlineRole).toBe(
-      "superscript",
-    );
+    expect(
+      fragments.find((fragment) => fragment.text === "12")?.inlineRole,
+    ).toBe("note-ref");
+    expect(
+      fragments.find((fragment) => fragment.text === "2")?.inlineRole,
+    ).toBe("superscript");
   });
 
   it("preserves item boundaries for run-owned targets in pre-wrap layout", () => {

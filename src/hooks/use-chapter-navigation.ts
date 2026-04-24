@@ -1,8 +1,8 @@
 import { useProgressMutation } from "@/hooks/use-progress-mutation";
 import {
-    type Book,
-    type ProgressTriggerType,
-    type ReadingProgress,
+  type Book,
+  type ProgressTriggerType,
+  type ReadingProgress,
 } from "@/lib/db";
 import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import { findSpineIndexByHref } from "@/lib/toc-utils";

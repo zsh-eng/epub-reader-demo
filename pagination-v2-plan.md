@@ -228,7 +228,7 @@ Patterns from `test/client/pagination-engine-middle-out.test.ts`.
 | `src/lib/pagination-v2/pagination.worker.ts`         | New worker                          |
 | `src/lib/pagination-v2/use-pagination.ts`            | New hook                            |
 | `src/lib/pagination-v2/index.ts`                     | Public exports                      |
-| `src/components/Reader/index.tsx`                  | New shell                           |
+| `src/components/Reader/index.tsx`                    | New shell                           |
 | `test/client/pagination-engine-v2.test.ts`           | Tests                               |
 
 ## Files Reused (import from `../pagination/`)

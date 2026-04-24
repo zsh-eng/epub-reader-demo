@@ -1,38 +1,38 @@
 // Engine orchestrator: owns pagination state, handles commands, runs relayouts,
 // and delegates anchor/spread calculations to the engine helper modules.
 import type {
-    ChapterUnavailableEvent,
-    PaginationCommand,
-    PaginationEvent,
+  ChapterUnavailableEvent,
+  PaginationCommand,
+  PaginationEvent,
 } from "../protocol";
 import { layoutPages } from "../shared/layout-pages";
 import { prepareBlocks } from "../shared/prepare-blocks";
 import type {
-    Block,
-    Page,
-    PaginationChapterDiagnostics,
-    PreparedBlock,
+  Block,
+  Page,
+  PaginationChapterDiagnostics,
+  PreparedBlock,
 } from "../shared/types";
 import { areFontConfigsEqual } from "../shared/types";
 import type {
-    ContentAnchor,
-    PaginationConfig,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadIntent,
+  ContentAnchor,
+  PaginationConfig,
+  ResolvedSpread,
+  SpreadConfig,
+  SpreadIntent,
 } from "../types";
 import { DEFAULT_SPREAD_CONFIG } from "../types";
 import {
-    pickAnchorForPage,
-    resolveAnchorToGlobalPage,
-    resolveAnchorToPage,
-    resolveTargetToAnchor,
+  pickAnchorForPage,
+  resolveAnchorToGlobalPage,
+  resolveAnchorToPage,
+  resolveTargetToAnchor,
 } from "./anchors";
 import {
-    buildResolvedSpread,
-    countTotalSpreads,
-    resolveAnchorForSpreadIndex,
-    resolveCurrentSpreadIndex,
+  buildResolvedSpread,
+  countTotalSpreads,
+  resolveAnchorForSpreadIndex,
+  resolveCurrentSpreadIndex,
 } from "./spreads";
 
 export interface PaginationRuntime {
@@ -142,7 +142,12 @@ export class PaginationEngine {
           this.addChapter(intent, cmd.chapterIndex, cmd.blocks);
           break;
         case "updateChapter":
-          await this.updateChapter(intent, cmd.chapterIndex, cmd.blocks, runtime);
+          await this.updateChapter(
+            intent,
+            cmd.chapterIndex,
+            cmd.blocks,
+            runtime,
+          );
           break;
         case "updatePaginationConfig":
           await this.updatePaginationConfig(
@@ -267,7 +272,11 @@ export class PaginationEngine {
     }
   }
 
-  addChapter(intent: SpreadIntent, chapterIndex: number, blocks: Block[]): void {
+  addChapter(
+    intent: SpreadIntent,
+    chapterIndex: number,
+    blocks: Block[],
+  ): void {
     if (chapterIndex < 0 || chapterIndex >= this.totalChapters) {
       this.emit({
         type: "error",
@@ -397,7 +406,11 @@ export class PaginationEngine {
     if (this.receivedChapters === 0) return;
 
     if (fontChanged) {
-      for (let chapterIndex = 0; chapterIndex < this.totalChapters; chapterIndex++) {
+      for (
+        let chapterIndex = 0;
+        chapterIndex < this.totalChapters;
+        chapterIndex++
+      ) {
         if (!this.blocksByChapter[chapterIndex]) continue;
         this.preparedByChapter[chapterIndex] = null;
       }
@@ -470,7 +483,11 @@ export class PaginationEngine {
   goToPage(intent: SpreadIntent, globalPage: number): void {
     const pageIndex = Math.max(1, Math.floor(globalPage)) - 1;
 
-    for (let chapterIndex = this.chapterPageOffsets.length - 1; chapterIndex >= 0; chapterIndex--) {
+    for (
+      let chapterIndex = this.chapterPageOffsets.length - 1;
+      chapterIndex >= 0;
+      chapterIndex--
+    ) {
       const offset = this.chapterPageOffsets[chapterIndex];
       if (offset === undefined || pageIndex < offset) continue;
 
@@ -479,7 +496,11 @@ export class PaginationEngine {
       if (!pages || localIndex >= pages.length) continue;
 
       this.preferredAnchorSlotIndex = null;
-      this.anchor = pickAnchorForPage(this.pagesByChapter, chapterIndex, localIndex);
+      this.anchor = pickAnchorForPage(
+        this.pagesByChapter,
+        chapterIndex,
+        localIndex,
+      );
       this.emitPageContent(intent);
       return;
     }
@@ -784,7 +805,11 @@ export class PaginationEngine {
   }
 
   private hasPreparedForLoadedChapters(): boolean {
-    for (let chapterIndex = 0; chapterIndex < this.totalChapters; chapterIndex++) {
+    for (
+      let chapterIndex = 0;
+      chapterIndex < this.totalChapters;
+      chapterIndex++
+    ) {
       if (!this.blocksByChapter[chapterIndex]) continue;
       if (!this.preparedByChapter[chapterIndex]) return false;
     }
@@ -808,7 +833,9 @@ export class PaginationEngine {
     }
 
     const anchorSlot = spread.slots.find(
-      (slot): slot is Extract<(typeof spread.slots)[number], { kind: "page" }> =>
+      (
+        slot,
+      ): slot is Extract<(typeof spread.slots)[number], { kind: "page" }> =>
         slot.kind === "page" && slot.page.currentPage === anchorGlobalPage,
     );
     this.preferredAnchorSlotIndex = anchorSlot?.slotIndex ?? null;
