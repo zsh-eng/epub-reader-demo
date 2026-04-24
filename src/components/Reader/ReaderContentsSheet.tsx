@@ -45,6 +45,12 @@ interface TocSection {
   pageRange: string | null;
 }
 
+interface ResolvedTocHref {
+  href: string;
+  path: string;
+  chapterIndex: number;
+}
+
 function normalizeHrefPath(href: string): string {
   const { path } = splitHrefFragment(href);
   return path.replace(/^\/+/, "");
@@ -54,19 +60,47 @@ function hrefPathsMatch(a: string, b: string): boolean {
   return a === b || a.endsWith(b) || b.endsWith(a);
 }
 
-function resolveChapterIndex(
-  itemPath: string,
+function resolveTocHref(
+  itemHref: string,
   chapterEntries: ChapterEntry[],
-): number | null {
-  if (!itemPath) {
-    return null;
+): ResolvedTocHref {
+  const { path: tocPathWithSlashes, fragment } = splitHrefFragment(itemHref);
+  const tocPath = tocPathWithSlashes.replace(/^\/+/, "");
+  let suffixMatch: ChapterEntry | null = null;
+
+  for (const chapterEntry of chapterEntries) {
+    const chapterPath = normalizeHrefPath(chapterEntry.href);
+
+    if (chapterPath === tocPath) {
+      const href = fragment
+        ? `${splitHrefFragment(chapterEntry.href).path}#${fragment}`
+        : chapterEntry.href;
+
+      return {
+        href,
+        path: normalizeHrefPath(href),
+        chapterIndex: chapterEntry.index,
+      };
+    }
+
+    if (!suffixMatch && hrefPathsMatch(chapterPath, tocPath)) {
+      suffixMatch = chapterEntry;
+    }
   }
 
-  const matchedChapter = chapterEntries.find((chapter) =>
-    hrefPathsMatch(normalizeHrefPath(chapter.href), itemPath),
-  );
+  if (suffixMatch) {
+    const href = fragment
+      ? `${splitHrefFragment(suffixMatch.href).path}#${fragment}`
+      : suffixMatch.href;
 
-  return matchedChapter?.index ?? null;
+    return {
+      href,
+      path: normalizeHrefPath(href),
+      chapterIndex: suffixMatch.index,
+    };
+  }
+
+  throw new Error(`Unable to match TOC href "${itemHref}" to a chapter entry.`);
 }
 
 function formatPageRange(items: FlattenedTocItem[]): string | null {
@@ -100,18 +134,17 @@ function buildContentsModel(
   ): FlattenedTocItem => {
     sequence += 1;
 
-    const path = normalizeHrefPath(item.href);
-    const chapterIndex = resolveChapterIndex(path, chapterEntries);
+    const resolvedHref = resolveTocHref(item.href, chapterEntries);
     const flattenedItem: FlattenedTocItem = {
       id: `${entryKey}-${item.href}`,
-      href: item.href,
+      href: resolvedHref.href,
       label: item.label,
       depth,
       visualDepth,
-      path,
+      path: resolvedHref.path,
       hasFragment: item.href.includes("#"),
-      number: chapterIndex === null ? sequence : chapterIndex + 1,
-      page: chapterIndex === null ? null : chapterStartPages[chapterIndex] ?? null,
+      number: resolvedHref.chapterIndex + 1,
+      page: chapterStartPages[resolvedHref.chapterIndex] ?? null,
     };
 
     allItems.push(flattenedItem);
