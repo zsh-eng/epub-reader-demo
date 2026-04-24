@@ -3,7 +3,11 @@ import { IDBFactory } from "fake-indexeddb";
 
 // Reset IndexedDB between tests to ensure isolation
 export function resetIndexedDB() {
-  indexedDB = new IDBFactory();
+  Object.defineProperty(globalThis, "indexedDB", {
+    configurable: true,
+    writable: true,
+    value: new IDBFactory(),
+  });
 }
 
 // happy-dom returns null for canvas.getContext('2d'), which breaks @chenglou/pretext's

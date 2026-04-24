@@ -92,11 +92,13 @@ export function DeferredEpubImageProvider({
 
   useEffect(() => {
     disposedRef.current = false;
+    const pendingLoads = pendingLoadsRef.current;
+    const objectUrls = objectUrlsRef.current;
 
     return () => {
       disposedRef.current = true;
-      pendingLoadsRef.current.clear();
-      cleanupResourceUrls(objectUrlsRef.current);
+      pendingLoads.clear();
+      cleanupResourceUrls(objectUrls);
     };
   }, []);
 

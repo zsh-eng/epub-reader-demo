@@ -158,14 +158,15 @@ export function useReaderCore(
     loadVersion,
   });
 
+  const { markFontSwitchIntent } = pagination;
   const onUpdateSettings = useCallback(
     (patch: Partial<ReaderSettings>) => {
       if (patch.fontFamily && patch.fontFamily !== settings.fontFamily) {
-        pagination.markFontSwitchIntent(settings.fontFamily, patch.fontFamily);
+        markFontSwitchIntent(settings.fontFamily, patch.fontFamily);
       }
       updateSettings(patch);
     },
-    [settings.fontFamily, pagination.markFontSwitchIntent, updateSettings],
+    [settings.fontFamily, markFontSwitchIntent, updateSettings],
   );
 
   const currentPage = pagination.spread?.currentPage ?? 1;

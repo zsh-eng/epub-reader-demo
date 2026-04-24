@@ -155,9 +155,6 @@ test.describe("Reader", () => {
     });
     await page.waitForTimeout(500);
 
-    // Get the scroll position before escape
-    const scrollYBefore = await page.evaluate(() => window.scrollY);
-
     // Get a sample of the current page content to verify we're on the right chapter later
     const contentBefore = await page.evaluate(() => {
       // Get first 200 chars of the main content

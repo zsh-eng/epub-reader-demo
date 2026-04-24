@@ -110,8 +110,10 @@ export function usePagination(
   }, []);
 
   useEffect(() => {
+    const tracer = tracerRef.current;
+
     return () => {
-      tracerRef.current.cleanup();
+      tracer.cleanup();
     };
   }, []);
 

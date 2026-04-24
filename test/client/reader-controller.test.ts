@@ -22,17 +22,20 @@ function ControllerHarness({
 }: HarnessProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  return createElement(ReaderController, {
-    onNextPage,
-    onPrevPage,
-    canGoPrev: true,
-    canGoNext: true,
-    chromeInteractionMode,
-    isChromePinned,
-    containerRef,
-    topRailHeight: 60,
-    bottomRailHeight: 72,
-    children: ({
+  return createElement(
+    ReaderController,
+    {
+      onNextPage,
+      onPrevPage,
+      canGoPrev: true,
+      canGoNext: true,
+      chromeInteractionMode,
+      isChromePinned,
+      containerRef,
+      topRailHeight: 60,
+      bottomRailHeight: 72,
+    },
+    ({
       chromeVisible,
       showHoverRails,
       topRailProps,
@@ -77,7 +80,7 @@ function ControllerHarness({
           "footer",
         ),
       ),
-  });
+  );
 }
 
 function createHarness() {

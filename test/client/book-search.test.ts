@@ -9,7 +9,6 @@ import {
   extractPlainText,
   extractContext,
   searchBook,
-  type SearchOptions,
 } from "@/lib/book-search";
 import type { BookTextCache } from "@/lib/db";
 
