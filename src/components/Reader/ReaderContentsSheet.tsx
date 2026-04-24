@@ -248,7 +248,7 @@ function SectionHeading({
         onSelect(heading.href);
       }}
       className={cn(
-        "flex w-full min-w-0 items-center gap-3 rounded-lg border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+        "flex w-full min-w-0 items-center gap-3 rounded-none border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
         isCurrent && "bg-accent/40",
       )}
     >
@@ -264,7 +264,7 @@ function SectionHeading({
       {section.pageRange && (
         <p
           className={cn(
-            "max-w-[6rem] shrink-0 truncate text-right font-numeric text-sm tabular-nums text-muted-foreground",
+            "max-w-[6rem] shrink-0 truncate text-right font-numeric text-xs tabular-nums text-muted-foreground",
             isCurrent && "font-medium text-foreground",
           )}
         >
@@ -320,7 +320,7 @@ function ChapterRow({
         </motion.span>
       ) : null}
 
-      <div className="relative z-10 grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_minmax(2.25rem,max-content)] items-baseline gap-3 pl-1">
+      <div className="relative z-10 grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_minmax(2.25rem,max-content)] items-baseline gap-3 px-1">
         <span
           className={cn(
             "min-w-0 text-right font-numeric text-xs tabular-nums text-muted-foreground",
@@ -333,18 +333,12 @@ function ChapterRow({
         <div className="flex min-w-0 max-w-full items-baseline gap-2 overflow-hidden">
           <span
             className={cn(
-              "min-w-0 shrink break-words text-[0.95rem] font-medium leading-snug text-foreground",
+              "min-w-0 shrink break-words text-balance text-[0.95rem] font-normal leading-snug text-foreground",
               isCurrent && "font-semibold",
             )}
           >
             {item.label}
           </span>
-          <span
-            className={cn(
-              "mb-1 min-w-4 flex-1 shrink border-b border-dotted border-border/60",
-              isCurrent && "border-transparent",
-            )}
-          />
         </div>
 
         <span
