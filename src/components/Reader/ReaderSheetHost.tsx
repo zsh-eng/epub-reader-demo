@@ -50,20 +50,19 @@ export function ReaderSheetHost({
       <ReaderContentsSheet
         isOpen={activeSheet === "contents"}
         onClose={onCloseSheet}
+        onBack={() => onOpenSheet("tools")}
         toc={toc}
         chapterEntries={chapterEntries}
         chapterStartPages={chapterStartPages}
         currentChapterHref={currentChapterHref}
         currentChapterTitle={currentChapterTitle}
-        onNavigateToHref={(href) => {
-          const handled = onNavigateToHref(href);
-          return handled;
-        }}
+        onNavigateToHref={onNavigateToHref}
       />
 
       <ReaderSettingsSheet
         isOpen={activeSheet === "settings"}
         onClose={onCloseSheet}
+        onBack={() => onOpenSheet("tools")}
         settings={settings}
         onUpdateSettings={onUpdateSettings}
       />

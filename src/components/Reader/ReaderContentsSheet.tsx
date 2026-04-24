@@ -3,7 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TOCItem } from "@/lib/db";
 import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import { cn } from "@/lib/utils";
-import { List, X } from "lucide-react";
+import { ChevronLeft, List } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import {
   useId,
@@ -18,6 +18,7 @@ import type { ChapterEntry } from "./types";
 interface ReaderContentsSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  onBack: () => void;
   toc: TOCItem[];
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
@@ -391,6 +392,7 @@ function ChapterRow({
 export function ReaderContentsSheet({
   isOpen,
   onClose,
+  onBack,
   toc,
   chapterEntries,
   chapterStartPages,
@@ -451,11 +453,11 @@ export function ReaderContentsSheet({
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={onClose}
-            aria-label="Close contents"
+            onClick={onBack}
+            aria-label="Back to reader tools"
             className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
           >
-            <X className="size-4" />
+            <ChevronLeft className="size-4" />
           </Button>
 
           <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -466,7 +468,7 @@ export function ReaderContentsSheet({
         </div>
       }
     >
-      <div className="flex h-[34rem] max-h-[calc(88vh-7rem)] min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
+      <div className="flex h-[32rem] min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
         <div
           ref={scrollAreaRootRef}
           className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden"

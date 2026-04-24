@@ -2,13 +2,13 @@ import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel"
 import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 import { Button } from "@/components/ui/button";
 import {
-  SegmentedTabs,
-  SegmentedTabsContent,
-  SegmentedTabsList,
-  SegmentedTabsTrigger,
+    SegmentedTabs,
+    SegmentedTabsContent,
+    SegmentedTabsList,
+    SegmentedTabsTrigger,
 } from "@/components/ui/segmented-controls";
 import type { ReaderSettings } from "@/types/reader.types";
-import { Palette, Type, X } from "lucide-react";
+import { ChevronLeft, Palette, Type } from "lucide-react";
 import { useState } from "react";
 import { ReaderSheet } from "./shared/ReaderSheet";
 
@@ -24,6 +24,7 @@ interface ReaderSettingsPanelProps {
 interface ReaderSettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  onBack: () => void;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
 }
@@ -31,6 +32,7 @@ interface ReaderSettingsSheetProps {
 export function ReaderSettingsSheet({
   isOpen,
   onClose,
+  onBack,
   settings,
   onUpdateSettings,
 }: ReaderSettingsSheetProps) {
@@ -55,11 +57,11 @@ export function ReaderSettingsSheet({
           <Button
             variant="ghost"
             size="icon-sm"
-            onClick={onClose}
-            aria-label="Close settings"
+            onClick={onBack}
+            aria-label="Back to reader tools"
             className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
           >
-            <X className="size-4" />
+            <ChevronLeft className="size-4" />
           </Button>
 
           <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -90,7 +92,7 @@ export function ReaderSettingsPanel({
     <SegmentedTabs
       value={activeTab}
       onValueChange={(value) => onActiveTabChange(value as ReaderSettingsPanelTab)}
-      className="flex min-h-0 flex-col h-[30rem] mt-3"
+      className="flex min-h-0 flex-col h-[32rem] mt-3"
     >
       <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-2 rounded-full bg-secondary/50 p-1 self-center">
         <SegmentedTabsTrigger
