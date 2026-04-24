@@ -444,7 +444,7 @@ export class PaginationEngine {
       return;
     }
 
-    if (!this.setAnchorFromSpreadIndex(currentSpreadIndex + 1)) {
+    if (!this.setAnchorFromSpreadIndexForLinearTurn(currentSpreadIndex + 1)) {
       this.emitPageUnavailable(intent);
       return;
     }
@@ -459,7 +459,7 @@ export class PaginationEngine {
       return;
     }
 
-    if (!this.setAnchorFromSpreadIndex(currentSpreadIndex - 1)) {
+    if (!this.setAnchorFromSpreadIndexForLinearTurn(currentSpreadIndex - 1)) {
       this.emitPageUnavailable(intent);
       return;
     }
@@ -703,6 +703,18 @@ export class PaginationEngine {
 
     this.anchor = anchor;
     return true;
+  }
+
+  private setAnchorFromSpreadIndexForLinearTurn(spreadIndex: number): boolean {
+    const previousPreferredSlotIndex = this.preferredAnchorSlotIndex;
+
+    // Spread turns should move by the canonical spread width. Slot preservation is
+    // reserved for relayout/reprojection so a right-hand anchor does not overlap.
+    this.preferredAnchorSlotIndex = null;
+    if (this.setAnchorFromSpreadIndex(spreadIndex)) return true;
+
+    this.preferredAnchorSlotIndex = previousPreferredSlotIndex;
+    return false;
   }
 
   private isFullyLoaded(): boolean {

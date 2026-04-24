@@ -557,6 +557,66 @@ describe("navigation", () => {
     expect(pageContent!.spread.currentSpread).toBe(2);
   });
 
+  it("turns by the full spread width when the preferred anchor slot is right-hand", () => {
+    const forward = createEngine({
+      blocks: makeFixedPageBlocks(0, 8),
+      spreadConfig: { columns: 2, chapterFlow: "continuous" },
+    });
+
+    forward.events.length = 0;
+    forward.engine.handleCommand({
+      type: "goToPage",
+      page: 2,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
+
+    const rightAnchoredStart = getPageContentEvent(forward.events)!;
+    expect(
+      pageSlots(rightAnchoredStart.spread).map((slot) => slot.page.currentPage),
+    ).toEqual([1, 2]);
+    expect(pageSlots(rightAnchoredStart.spread).at(-1)?.slotIndex).toBe(1);
+
+    forward.events.length = 0;
+    forward.engine.handleCommand({
+      type: "nextSpread",
+      intent: FORWARD_LINEAR_INTENT,
+    });
+
+    const next = getPageContentEvent(forward.events)!;
+    expect.soft(
+      pageSlots(next.spread).map((slot) => slot.page.currentPage),
+    ).toEqual([3, 4]);
+
+    const backward = createEngine({
+      blocks: makeFixedPageBlocks(0, 8),
+      spreadConfig: { columns: 2, chapterFlow: "continuous" },
+    });
+
+    backward.events.length = 0;
+    backward.engine.handleCommand({
+      type: "goToPage",
+      page: 6,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
+
+    const leftTargetStart = getPageContentEvent(backward.events)!;
+    expect(
+      pageSlots(leftTargetStart.spread).map((slot) => slot.page.currentPage),
+    ).toEqual([5, 6]);
+    expect(pageSlots(leftTargetStart.spread).at(-1)?.slotIndex).toBe(1);
+
+    backward.events.length = 0;
+    backward.engine.handleCommand({
+      type: "prevSpread",
+      intent: BACKWARD_LINEAR_INTENT,
+    });
+
+    const prev = getPageContentEvent(backward.events)!;
+    expect.soft(
+      pageSlots(prev.spread).map((slot) => slot.page.currentPage),
+    ).toEqual([3, 4]);
+  });
+
   it("prevSpread from the first spread emits pageUnavailable", () => {
     const { engine, events } = createEngine();
     events.length = 0;
