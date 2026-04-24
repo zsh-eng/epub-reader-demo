@@ -6,6 +6,7 @@ import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Sessions } from "@/components/Sessions";
+import { TocExplorationsRoute } from "@/components/TocExplorationsRoute";
 import { Toaster } from "@/components/ui/sonner";
 import { useSync } from "@/hooks/use-sync";
 import { useTransferQueue } from "@/hooks/use-transfer-queue";
@@ -39,6 +40,7 @@ function App() {
             <Route path="/reader/debug/:bookId" element={<ReaderDebug />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
+            <Route path="/explorations/toc" element={<TocExplorationsRoute />} />
           </Routes>
           <Toaster
             position="top-right"
