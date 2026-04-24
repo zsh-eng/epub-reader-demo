@@ -3,6 +3,7 @@ import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 interface ReaderControlMenuProps {
+  onOpenContents: () => void;
   onOpenSettings: () => void;
 }
 
@@ -16,15 +17,24 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "contents", label: "Contents", icon: List, isAvailable: false },
+  { id: "contents", label: "Contents", icon: List, isAvailable: true },
   { id: "search", label: "Search Book", icon: Search, isAvailable: false },
   { id: "settings", label: "Themes & Settings", icon: Settings, isAvailable: true },
 ];
 
-export function ReaderControlMenu({ onOpenSettings }: ReaderControlMenuProps) {
+export function ReaderControlMenu({
+  onOpenContents,
+  onOpenSettings,
+}: ReaderControlMenuProps) {
   const handleRowClick = (id: MenuItemId) => {
-    if (id !== "settings") return;
-    onOpenSettings();
+    if (id === "contents") {
+      onOpenContents();
+      return;
+    }
+
+    if (id === "settings") {
+      onOpenSettings();
+    }
   };
 
   return (

@@ -1,0 +1,499 @@
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import type { TOCItem } from "@/lib/db";
+import { splitHrefFragment } from "@/lib/epub-resource-utils";
+import { cn } from "@/lib/utils";
+import { ChevronLeft, List } from "lucide-react";
+import { LayoutGroup, motion, useReducedMotion } from "motion/react";
+import {
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type Ref,
+} from "react";
+import { ReaderSheet } from "./shared/ReaderSheet";
+import type { ChapterEntry } from "./types";
+
+interface ReaderContentsSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  toc: TOCItem[];
+  chapterEntries: ChapterEntry[];
+  chapterStartPages: (number | null)[];
+  currentChapterHref: string;
+  currentChapterTitle?: string;
+  onNavigateToHref: (href: string) => boolean;
+}
+
+interface FlattenedTocItem {
+  id: string;
+  href: string;
+  label: string;
+  depth: number;
+  visualDepth: number;
+  path: string;
+  hasFragment: boolean;
+  number: number;
+  page: number | null;
+}
+
+interface TocSection {
+  id: string;
+  heading: FlattenedTocItem | null;
+  rows: FlattenedTocItem[];
+  pageRange: string | null;
+}
+
+function normalizeHrefPath(href: string): string {
+  const { path } = splitHrefFragment(href);
+  return path.replace(/^\/+/, "");
+}
+
+function hrefPathsMatch(a: string, b: string): boolean {
+  return a === b || a.endsWith(b) || b.endsWith(a);
+}
+
+function resolveChapterIndex(
+  itemPath: string,
+  chapterEntries: ChapterEntry[],
+): number | null {
+  if (!itemPath) {
+    return null;
+  }
+
+  const matchedChapter = chapterEntries.find((chapter) =>
+    hrefPathsMatch(normalizeHrefPath(chapter.href), itemPath),
+  );
+
+  return matchedChapter?.index ?? null;
+}
+
+function formatPageRange(items: FlattenedTocItem[]): string | null {
+  const pages = items
+    .map((item) => item.page)
+    .filter((page): page is number => page !== null);
+
+  if (pages.length === 0) {
+    return null;
+  }
+
+  const firstPage = pages[0];
+  const lastPage = pages[pages.length - 1];
+
+  return firstPage === lastPage ? `${firstPage}` : `${firstPage}-${lastPage}`;
+}
+
+function buildContentsModel(
+  toc: TOCItem[],
+  chapterEntries: ChapterEntry[],
+  chapterStartPages: (number | null)[],
+): { sections: TocSection[]; items: FlattenedTocItem[] } {
+  let sequence = 0;
+  const allItems: FlattenedTocItem[] = [];
+
+  const createTocItem = (
+    item: TOCItem,
+    depth: number,
+    visualDepth: number,
+    entryKey: string,
+  ): FlattenedTocItem => {
+    sequence += 1;
+
+    const path = normalizeHrefPath(item.href);
+    const chapterIndex = resolveChapterIndex(path, chapterEntries);
+    const flattenedItem: FlattenedTocItem = {
+      id: `${entryKey}-${item.href}`,
+      href: item.href,
+      label: item.label,
+      depth,
+      visualDepth,
+      path,
+      hasFragment: item.href.includes("#"),
+      number: chapterIndex === null ? sequence : chapterIndex + 1,
+      page: chapterIndex === null ? null : chapterStartPages[chapterIndex] ?? null,
+    };
+
+    allItems.push(flattenedItem);
+    return flattenedItem;
+  };
+
+  const flattenTocItems = (
+    items: TOCItem[],
+    depth: number,
+    visualDepthOffset: number,
+    parentKey: string,
+  ): FlattenedTocItem[] =>
+    items.flatMap((item, index) => {
+      const entryKey = `${parentKey}-${index}`;
+      const flattenedItem = createTocItem(
+        item,
+        depth,
+        Math.min(Math.max(depth - visualDepthOffset, 0), 1),
+        entryKey,
+      );
+
+      const childItems = item.children?.length
+        ? flattenTocItems(item.children, depth + 1, visualDepthOffset, entryKey)
+        : [];
+
+      return [flattenedItem, ...childItems];
+    });
+
+  if (!toc.some((item) => item.children?.length)) {
+    const rows = flattenTocItems(toc, 0, 0, "toc");
+
+    return {
+      sections: [{ id: "toc-flat", heading: null, rows, pageRange: null }],
+      items: allItems,
+    };
+  }
+
+  const sections: TocSection[] = [];
+  let looseRows: FlattenedTocItem[] = [];
+
+  const flushLooseRows = () => {
+    if (looseRows.length === 0) {
+      return;
+    }
+
+    sections.push({
+      id: `toc-loose-${sections.length}`,
+      heading: null,
+      rows: looseRows,
+      pageRange: null,
+    });
+    looseRows = [];
+  };
+
+  toc.forEach((item, index) => {
+    const entryKey = `toc-${index}`;
+    const heading = createTocItem(item, 0, 0, entryKey);
+
+    if (!item.children?.length) {
+      looseRows.push(heading);
+      return;
+    }
+
+    flushLooseRows();
+
+    const rows = flattenTocItems(item.children, 1, 1, entryKey);
+    sections.push({
+      id: heading.id,
+      heading,
+      rows,
+      pageRange: formatPageRange([heading, ...rows]),
+    });
+  });
+  flushLooseRows();
+
+  return { sections, items: allItems };
+}
+
+function resolveCurrentTocItem(
+  items: FlattenedTocItem[],
+  currentChapterHref: string,
+): FlattenedTocItem | null {
+  const currentPath = normalizeHrefPath(currentChapterHref);
+  if (!currentPath) {
+    return null;
+  }
+
+  return (
+    items.find(
+      (item) =>
+        hrefPathsMatch(item.path, currentPath) &&
+        !item.hasFragment &&
+        item.depth === 0,
+    ) ??
+    items.find(
+      (item) => hrefPathsMatch(item.path, currentPath) && !item.hasFragment,
+    ) ??
+    items.find((item) => hrefPathsMatch(item.path, currentPath)) ??
+    null
+  );
+}
+
+const CHAPTER_ACTIVE_TRANSITION = {
+  type: "spring" as const,
+  stiffness: 390,
+  damping: 36,
+  mass: 0.9,
+};
+
+function SectionHeading({
+  section,
+  currentItemId,
+  onSelect,
+  currentRef,
+}: {
+  section: TocSection;
+  currentItemId?: string;
+  onSelect: (href: string) => boolean;
+  currentRef?: Ref<HTMLButtonElement>;
+}) {
+  if (!section.heading) {
+    return null;
+  }
+
+  const heading = section.heading;
+  const isCurrent = heading.id === currentItemId;
+
+  return (
+    <button
+      ref={isCurrent ? currentRef : undefined}
+      type="button"
+      aria-current={isCurrent ? "location" : undefined}
+      onClick={() => {
+        onSelect(heading.href);
+      }}
+      className={cn(
+        "flex w-full min-w-0 items-center gap-3 rounded-lg border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+        isCurrent && "bg-accent/40",
+      )}
+    >
+      <h4
+        className={cn(
+          "min-w-0 flex-1 truncate text-[0.68rem] font-medium uppercase tracking-[0.22em] text-muted-foreground",
+          isCurrent && "text-foreground",
+        )}
+      >
+        {heading.label}
+      </h4>
+
+      {section.pageRange && (
+        <p
+          className={cn(
+            "max-w-[6rem] shrink-0 truncate text-right font-numeric text-sm tabular-nums text-muted-foreground",
+            isCurrent && "font-medium text-foreground",
+          )}
+        >
+          {section.pageRange}
+        </p>
+      )}
+    </button>
+  );
+}
+
+function ChapterRow({
+  item,
+  currentItemId,
+  layoutId,
+  onSelect,
+  reducedMotion,
+  currentRef,
+}: {
+  item: FlattenedTocItem;
+  currentItemId?: string;
+  layoutId: string;
+  onSelect: (href: string) => boolean;
+  reducedMotion: boolean;
+  currentRef?: Ref<HTMLButtonElement>;
+}) {
+  const isCurrent = item.id === currentItemId;
+
+  return (
+    <motion.button
+      ref={isCurrent ? currentRef : undefined}
+      type="button"
+      aria-current={isCurrent ? "location" : undefined}
+      onClick={() => {
+        onSelect(item.href);
+      }}
+      className="relative isolate min-h-12 w-full rounded-xl py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50"
+      style={{
+        paddingLeft: `${0.5 + item.visualDepth * 0.85}rem`,
+        paddingRight: "0.5rem",
+      }}
+      whileTap={reducedMotion ? undefined : { scale: 0.985 }}
+      transition={reducedMotion ? { duration: 0 } : { duration: 0.12 }}
+    >
+      {isCurrent ? (
+        <motion.span
+          layoutId={layoutId}
+          aria-hidden="true"
+          className="absolute inset-0 z-0 rounded-xl bg-accent/45"
+          initial={false}
+          transition={reducedMotion ? { duration: 0 } : CHAPTER_ACTIVE_TRANSITION}
+        >
+          <span className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-foreground/70" />
+        </motion.span>
+      ) : null}
+
+      <div className="relative z-10 grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_minmax(2.25rem,max-content)] items-baseline gap-3 pl-1">
+        <span
+          className={cn(
+            "min-w-0 text-right font-numeric text-xs tabular-nums text-muted-foreground",
+            isCurrent && "font-medium text-foreground",
+          )}
+        >
+          {item.number}
+        </span>
+
+        <div className="flex min-w-0 max-w-full items-baseline gap-2 overflow-hidden">
+          <span
+            className={cn(
+              "min-w-0 shrink break-words text-[0.95rem] font-medium leading-snug text-foreground",
+              isCurrent && "font-semibold",
+            )}
+          >
+            {item.label}
+          </span>
+          <span
+            className={cn(
+              "mb-1 min-w-4 flex-1 shrink border-b border-dotted border-border/60",
+              isCurrent && "border-transparent",
+            )}
+          />
+        </div>
+
+        <span
+          className={cn(
+            "min-w-0 text-right font-numeric text-sm tabular-nums text-muted-foreground",
+            isCurrent && "font-medium text-foreground",
+          )}
+          aria-label={item.page === null ? undefined : `Page ${item.page}`}
+        >
+          {item.page ?? ""}
+        </span>
+      </div>
+    </motion.button>
+  );
+}
+
+export function ReaderContentsSheet({
+  isOpen,
+  onClose,
+  toc,
+  chapterEntries,
+  chapterStartPages,
+  currentChapterHref,
+  onNavigateToHref,
+}: ReaderContentsSheetProps) {
+  const scrollAreaRootRef = useRef<HTMLDivElement | null>(null);
+  const currentItemRef = useRef<HTMLButtonElement | null>(null);
+  const wasOpenRef = useRef(false);
+  const layoutGroupId = useId();
+  const reducedMotion = useReducedMotion() ?? false;
+
+  const contentsModel = useMemo(
+    () => buildContentsModel(toc, chapterEntries, chapterStartPages),
+    [chapterEntries, chapterStartPages, toc],
+  );
+  const currentTocItem = useMemo(
+    () => resolveCurrentTocItem(contentsModel.items, currentChapterHref),
+    [contentsModel.items, currentChapterHref],
+  );
+
+  // Position the active entry before paint so the sheet opens at the current
+  // chapter instead of visibly jumping after the drawer animation begins.
+  useLayoutEffect(() => {
+    const shouldPositionCurrentItem = isOpen && !wasOpenRef.current;
+    wasOpenRef.current = isOpen;
+
+    const viewport = scrollAreaRootRef.current?.querySelector<HTMLElement>(
+      "[data-slot='scroll-area-viewport']",
+    );
+    const currentItem = currentItemRef.current;
+
+    if (!shouldPositionCurrentItem || !viewport || !currentItem) {
+      return;
+    }
+
+    const viewportRect = viewport.getBoundingClientRect();
+    const itemRect = currentItem.getBoundingClientRect();
+    viewport.scrollTop += itemRect.top - viewportRect.top - 16;
+  }, [isOpen, currentTocItem?.id]);
+
+  return (
+    <ReaderSheet
+      nested
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (open) {
+          return;
+        }
+
+        onClose();
+      }}
+      title="Contents"
+      panelClassName="max-w-md"
+      bodyClassName="overflow-hidden"
+      disableBodyDrag
+      header={
+        <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Go back"
+            className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+
+          <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Contents
+          </p>
+
+          <div className="size-8" aria-hidden="true" />
+        </div>
+      }
+    >
+      <div className="flex h-[34rem] max-h-[calc(88vh-7rem)] min-h-0 flex-col">
+        <div ref={scrollAreaRootRef} className="min-h-0 flex-1">
+          <ScrollArea className="h-full px-4 pb-3 pt-2">
+            {contentsModel.items.length > 0 ? (
+              <LayoutGroup id={layoutGroupId}>
+                <div className="space-y-6 pb-1">
+                  {contentsModel.sections.map((section) => (
+                    <section
+                      key={section.id}
+                      className={cn(
+                        "space-y-3",
+                        !section.heading && "space-y-1",
+                      )}
+                    >
+                      <SectionHeading
+                        section={section}
+                        currentItemId={currentTocItem?.id}
+                        onSelect={onNavigateToHref}
+                        currentRef={currentItemRef}
+                      />
+
+                      <div className="space-y-1">
+                        {section.rows.map((item) => (
+                          <ChapterRow
+                            key={item.id}
+                            item={item}
+                            currentItemId={currentTocItem?.id}
+                            layoutId="reader-contents-active-chapter"
+                            onSelect={onNavigateToHref}
+                            reducedMotion={reducedMotion}
+                            currentRef={currentItemRef}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              </LayoutGroup>
+            ) : (
+              <div className="flex h-full min-h-48 flex-col items-center justify-center px-6 text-center">
+                <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-secondary/25 text-muted-foreground">
+                  <List className="size-5" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-foreground">
+                  No table of contents available
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  This book does not expose chapter navigation metadata.
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+      </div>
+    </ReaderSheet>
+  );
+}

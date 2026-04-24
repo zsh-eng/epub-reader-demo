@@ -1,19 +1,28 @@
 import { Button } from "@/components/ui/button";
+import type { TOCItem } from "@/lib/db";
 import type { ReaderSettings } from "@/types/reader.types";
 import { ChevronLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ReaderControlMenu } from "./ReaderControlMenu";
+import { ReaderContentsSheet } from "./ReaderContentsSheet";
 import {
     ReaderSettingsPanel,
     type ReaderSettingsPanelTab,
 } from "./ReaderSettingsSheet";
 import { ReaderSheet } from "./shared/ReaderSheet";
+import type { ChapterEntry } from "./types";
 
 interface ReaderToolsSheetProps {
   isOpen: boolean;
   onClose: () => void;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
+  toc: TOCItem[];
+  chapterEntries: ChapterEntry[];
+  chapterStartPages: (number | null)[];
+  currentChapterHref: string;
+  currentChapterTitle?: string;
+  onNavigateToHref: (href: string) => boolean;
 }
 
 /**
@@ -26,7 +35,14 @@ export function ReaderToolsSheet({
   onClose,
   settings,
   onUpdateSettings,
+  toc,
+  chapterEntries,
+  chapterStartPages,
+  currentChapterHref,
+  currentChapterTitle,
+  onNavigateToHref,
 }: ReaderToolsSheetProps) {
+  const [isContentsOpen, setIsContentsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeSettingsTab, setActiveSettingsTab] =
     useState<ReaderSettingsPanelTab>("typography");
@@ -36,8 +52,13 @@ export function ReaderToolsSheet({
       return;
     }
 
+    setIsContentsOpen(false);
     setIsSettingsOpen(false);
   }, [isOpen]);
+
+  const closeContentsSheet = () => {
+    setIsContentsOpen(false);
+  };
 
   const closeSettingsSheet = () => {
     setIsSettingsOpen(false);
@@ -51,6 +72,7 @@ export function ReaderToolsSheet({
           return;
         }
 
+        closeContentsSheet();
         closeSettingsSheet();
         onClose();
       }}
@@ -58,8 +80,31 @@ export function ReaderToolsSheet({
       panelClassName="max-w-md"
     >
       <ReaderControlMenu
+        onOpenContents={() => {
+          closeSettingsSheet();
+          setIsContentsOpen(true);
+        }}
         onOpenSettings={() => {
+          closeContentsSheet();
           setIsSettingsOpen(true);
+        }}
+      />
+
+      <ReaderContentsSheet
+        isOpen={isContentsOpen}
+        onClose={closeContentsSheet}
+        toc={toc}
+        chapterEntries={chapterEntries}
+        chapterStartPages={chapterStartPages}
+        currentChapterHref={currentChapterHref}
+        currentChapterTitle={currentChapterTitle}
+        onNavigateToHref={(href) => {
+          const handled = onNavigateToHref(href);
+          if (!handled) {
+            return false;
+          }
+
+          return true;
         }}
       />
 

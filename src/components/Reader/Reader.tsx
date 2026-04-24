@@ -90,6 +90,11 @@ export function Reader() {
   }
 
   const book = sessionState.book;
+  const currentChapterEntry =
+    sessionState.chapters.entries[
+      sessionState.navigation.currentTitleChapterIndex ??
+        sessionState.navigation.currentChapterIndex
+    ] ?? sessionState.chapters.entries[sessionState.navigation.currentChapterIndex];
 
   return (
     <ReaderController
@@ -179,6 +184,12 @@ export function Reader() {
             onClose={chromeActions.closeTools}
             settings={sessionState.settings}
             onUpdateSettings={sessionActions.updateSettings}
+            toc={book.toc}
+            chapterEntries={sessionState.chapters.entries}
+            chapterStartPages={sessionState.navigation.chapterStartPages}
+            currentChapterHref={currentChapterEntry?.href ?? ""}
+            currentChapterTitle={currentChapterEntry?.title}
+            onNavigateToHref={sessionActions.openInternalHref}
           />
 
           {/* Floating footer — chapter nav, page indicator, scrubber */}
