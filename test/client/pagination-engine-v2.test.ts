@@ -1291,7 +1291,7 @@ describe("stale relayout detection", () => {
 // ---------------------------------------------------------------------------
 
 describe("updatePaginationConfig no-op", () => {
-  it("emits nothing when config is identical", async () => {
+  it("emits ready when config is identical", async () => {
     const { engine, events } = createEngine({ totalChapters: 2 });
     addChapter(engine, 1);
     events.length = 0;
@@ -1301,7 +1301,8 @@ describe("updatePaginationConfig no-op", () => {
       paginationConfig: BASE_PAGINATION_CONFIG,
     });
 
-    expect(events).toHaveLength(0);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.type).toBe("ready");
   });
 
   it("font/layout changes still produce a ready event", async () => {

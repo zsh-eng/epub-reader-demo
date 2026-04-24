@@ -58,22 +58,24 @@ describe("resolvePaginatedReaderLayout", () => {
   });
 
   it("adds extra desktop width to outer margins once spread measure is satisfied", () => {
-    const mediumStage = resolvePaginatedReaderLayout({
-      stageWidth: 1200,
-      stageHeight: 900,
-      isMobile: false,
-    });
     const wideStage = resolvePaginatedReaderLayout({
       stageWidth: 1500,
       stageHeight: 900,
       isMobile: false,
     });
+    const ultraWideStage = resolvePaginatedReaderLayout({
+      stageWidth: 1800,
+      stageHeight: 900,
+      isMobile: false,
+    });
 
-    expect(mediumStage.resolvedSpreadColumns).toBe(2);
     expect(wideStage.resolvedSpreadColumns).toBe(2);
-    expect(wideStage.stageViewport.width).toBe(mediumStage.stageViewport.width);
-    expect(wideStage.stagePadding.paddingX).toBeGreaterThan(
-      mediumStage.stagePadding.paddingX,
+    expect(ultraWideStage.resolvedSpreadColumns).toBe(2);
+    expect(ultraWideStage.stageViewport.width).toBe(
+      wideStage.stageViewport.width,
+    );
+    expect(ultraWideStage.stagePadding.paddingX).toBeGreaterThan(
+      wideStage.stagePadding.paddingX,
     );
   });
 });

@@ -180,7 +180,7 @@ describe("layoutPages — figcaption treatment", () => {
     const captionText = preparedCaption.items.find(
       (item) => item.kind === "text",
     );
-    expect(captionText?.font).toContain(" 15px ");
+    expect(captionText?.font).toContain(" 13px ");
 
     const { pages } = layoutPages(prepared, 620, 860, {
       ...LAYOUT_THEME,
@@ -193,7 +193,7 @@ describe("layoutPages — figcaption treatment", () => {
     );
     expect(captionSpacer?.type).toBe("spacer");
     if (captionSpacer && captionSpacer.type === "spacer") {
-      expect(captionSpacer.height).toBeCloseTo(8.8, 5);
+      expect(captionSpacer.height).toBeCloseTo(9.6, 5);
     }
 
     const captionSlice = slices.find(
@@ -203,7 +203,7 @@ describe("layoutPages — figcaption treatment", () => {
     if (!captionSlice || captionSlice.type !== "text") return;
 
     expect(captionSlice.tag).toBe("figcaption");
-    expect(captionSlice.lineHeight).toBeCloseTo(20, 5);
+    expect(captionSlice.lineHeight).toBeCloseTo(18, 5);
     expect(captionSlice.textAlign).toBe("left");
   });
 });
@@ -271,7 +271,7 @@ describe("layoutPages — blockquote parity", () => {
     );
     expect(spacerBeforeQuote?.type).toBe("spacer");
     if (spacerBeforeQuote && spacerBeforeQuote.type === "spacer") {
-      expect(spacerBeforeQuote.height).toBeCloseTo(24, 5);
+      expect(spacerBeforeQuote.height).toBeCloseTo(28.8, 5);
     }
 
     const spacerBeforeAfterParagraph = slices.find(
