@@ -283,7 +283,7 @@ function SectionHeading({
       }}
       className={cn(
         "flex w-full min-w-0 items-center gap-3 rounded-none border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
-        isCurrent && "bg-accent/40",
+        isCurrent && "border-foreground/70"
       )}
     >
       <h4
