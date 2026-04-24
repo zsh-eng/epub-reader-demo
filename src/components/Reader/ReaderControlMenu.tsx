@@ -1,6 +1,6 @@
+import { cn } from "@/lib/utils";
 import { List, Search, Settings, type LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
-import { cn } from "@/lib/utils";
 
 interface ReaderControlMenuProps {
   onOpenContents: () => void;
@@ -38,7 +38,11 @@ export function ReaderControlMenu({
   };
 
   return (
-    <div className="px-4 pb-3">
+    <div className="px-4 py-3"
+      style={{
+          paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
+      }}
+    >
       <div className="flex flex-col gap-2">
         {MENU_ITEMS.map((item, index) => (
           <motion.button

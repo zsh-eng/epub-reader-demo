@@ -3,7 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import type { TOCItem } from "@/lib/db";
 import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, List } from "lucide-react";
+import { List, X } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import {
   useId,
@@ -434,7 +434,6 @@ export function ReaderContentsSheet({
 
   return (
     <ReaderSheet
-      nested
       open={isOpen}
       onOpenChange={(open) => {
         if (open) {
@@ -453,10 +452,10 @@ export function ReaderContentsSheet({
             variant="ghost"
             size="icon-sm"
             onClick={onClose}
-            aria-label="Go back"
+            aria-label="Close contents"
             className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
           >
-            <ChevronLeft className="size-4" />
+            <X className="size-4" />
           </Button>
 
           <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">

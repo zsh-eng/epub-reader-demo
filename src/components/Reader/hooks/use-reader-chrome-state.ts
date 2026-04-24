@@ -1,15 +1,16 @@
 import { useCallback, useMemo, useState } from "react";
+import type { ReaderSheetId } from "../types";
 
 export interface ReaderChromeState {
   isBookmarked: boolean;
-  isToolsOpen: boolean;
+  activeReaderSheet: ReaderSheetId | null;
   isChromePinned: boolean;
 }
 
 export interface ReaderChromeActions {
   toggleBookmark: () => void;
-  openTools: () => void;
-  closeTools: () => void;
+  openReaderSheet: (sheet: ReaderSheetId) => void;
+  closeReaderSheet: () => void;
 }
 
 export interface UseReaderChromeStateResult {
@@ -21,42 +22,42 @@ export interface UseReaderChromeStateResult {
  * Owns ephemeral chrome state for the Reader screen.
  *
  * This hook deliberately stays scoped to reader-level chrome concerns like
- * overlay visibility and bookmark affordances. Nested navigation inside a
- * specific sheet lives with that sheet component instead of this screen-level
- * controller.
+ * overlay visibility and bookmark affordances. Reader sheets are peer overlays,
+ * so the screen-level controller tracks which one is currently active.
  */
 export function useReaderChromeState(): UseReaderChromeStateResult {
   const [isBookmarked, setIsBookmarked] = useState(false);
-  const [isToolsOpen, setIsToolsOpen] = useState(false);
+  const [activeReaderSheet, setActiveReaderSheet] =
+    useState<ReaderSheetId | null>(null);
 
   const toggleBookmark = useCallback(() => {
     setIsBookmarked((bookmarked) => !bookmarked);
   }, []);
 
-  const openTools = useCallback(() => {
-    setIsToolsOpen(true);
+  const openReaderSheet = useCallback((sheet: ReaderSheetId) => {
+    setActiveReaderSheet(sheet);
   }, []);
 
-  const closeTools = useCallback(() => {
-    setIsToolsOpen(false);
+  const closeReaderSheet = useCallback(() => {
+    setActiveReaderSheet(null);
   }, []);
 
   const state = useMemo<ReaderChromeState>(
     () => ({
       isBookmarked,
-      isToolsOpen,
-      isChromePinned: isToolsOpen,
+      activeReaderSheet,
+      isChromePinned: activeReaderSheet !== null,
     }),
-    [isBookmarked, isToolsOpen],
+    [activeReaderSheet, isBookmarked],
   );
 
   const actions = useMemo<ReaderChromeActions>(
     () => ({
       toggleBookmark,
-      openTools,
-      closeTools,
+      openReaderSheet,
+      closeReaderSheet,
     }),
-    [closeTools, openTools, toggleBookmark],
+    [closeReaderSheet, openReaderSheet, toggleBookmark],
   );
 
   return {

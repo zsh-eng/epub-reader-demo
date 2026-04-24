@@ -5,8 +5,8 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
+import { ReaderSheetHost } from "./ReaderSheetHost";
 import { ReaderStateScreen } from "./ReaderStateScreen";
-import { ReaderToolsSheet } from "./ReaderToolsSheet";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderFooter } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
@@ -176,12 +176,13 @@ export function Reader() {
             onBackToLibrary={() => navigate("/")}
             isBookmarked={chromeState.isBookmarked}
             onToggleBookmark={chromeActions.toggleBookmark}
-            onOpenMenu={chromeActions.openTools}
+            onOpenMenu={() => chromeActions.openReaderSheet("tools")}
           />
 
-          <ReaderToolsSheet
-            isOpen={chromeState.isToolsOpen}
-            onClose={chromeActions.closeTools}
+          <ReaderSheetHost
+            activeSheet={chromeState.activeReaderSheet}
+            onOpenSheet={chromeActions.openReaderSheet}
+            onCloseSheet={chromeActions.closeReaderSheet}
             settings={sessionState.settings}
             onUpdateSettings={sessionActions.updateSettings}
             toc={book.toc}
