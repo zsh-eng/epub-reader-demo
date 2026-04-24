@@ -16,6 +16,8 @@ interface FooterChapterRowProps {
   totalPages: number;
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
+  onOpenContents: () => void;
+  isContentsOpen: boolean;
   isLoading?: boolean;
   preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
@@ -33,6 +35,8 @@ export function FooterChapterRow({
   totalPages,
   onGoToChapter,
   onPrevChapter,
+  onOpenContents,
+  isContentsOpen,
   isLoading = false,
   preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
@@ -145,16 +149,42 @@ export function FooterChapterRow({
       {/* Chapter title — absolutely centered so it's unaffected by button presence */}
       <div className="pointer-events-none absolute inset-x-0 flex justify-center px-20">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.span
-            key={currentTitleChapterIndex ?? "unknown"}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
-            className="truncate text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground leading-tight"
-          >
-            {currentChapterTitle}
-          </motion.span>
+          {currentChapterTitle && (
+            <motion.button
+              key={currentTitleChapterIndex ?? "unknown"}
+              type="button"
+              onClick={onOpenContents}
+              disabled={showBlurredLoadingDetails}
+              aria-label="Open table of contents"
+              aria-haspopup="dialog"
+              aria-expanded={isContentsOpen}
+              initial={{ opacity: 0, y: 4, scale: 0.98 }}
+              animate={{
+                opacity: showBlurredLoadingDetails ? 0.76 : 1,
+                y: 0,
+                scale: isContentsOpen ? 1.03 : 1,
+                filter: showBlurredLoadingDetails ? "blur(6px)" : "blur(0px)",
+              }}
+              exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              whileHover={
+                showBlurredLoadingDetails ? undefined : { scale: 1.03 }
+              }
+              whileTap={
+                showBlurredLoadingDetails ? undefined : { scale: 0.97 }
+              }
+              transition={{ duration: 0.15 }}
+              className={cn(
+                "pointer-events-auto flex max-w-full min-w-0 items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-medium uppercase leading-tight tracking-[0.16em] text-muted-foreground transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                showBlurredLoadingDetails
+                  ? "pointer-events-none"
+                  : "hover:bg-secondary/70 hover:text-foreground",
+                isContentsOpen &&
+                  "bg-secondary/70 text-foreground shadow-sm ring-1 ring-border/70",
+              )}
+            >
+              <span className="truncate">{currentChapterTitle}</span>
+            </motion.button>
+          )}
         </AnimatePresence>
       </div>
 

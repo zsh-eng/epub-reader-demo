@@ -32,12 +32,14 @@ export interface ReaderFooterProps {
   currentChapterIndex: number;
   currentChapterEndIndex: number;
   currentTitleChapterIndex: number | null;
+  isContentsOpen: boolean;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   onScrubPreview: (page: number) => void;
   onScrubCommit: (page: number) => void;
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
+  onOpenContents: () => void;
   isLoading?: boolean;
 }
 
@@ -49,12 +51,14 @@ export function ReaderFooter({
   currentChapterIndex,
   currentChapterEndIndex,
   currentTitleChapterIndex,
+  isContentsOpen,
   chapterEntries,
   chapterStartPages,
   onScrubPreview,
   onScrubCommit,
   onGoToChapter,
   onPrevChapter,
+  onOpenContents,
   isLoading = false,
 }: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
@@ -185,6 +189,8 @@ export function ReaderFooter({
               totalPages={detailTotalPages}
               onGoToChapter={handleGoToChapter}
               onPrevChapter={handlePrevChapter}
+              onOpenContents={onOpenContents}
+              isContentsOpen={isContentsOpen}
               isLoading={isLoading}
               preserveDetailsWhileLoading={preserveDetailsWhileLoading}
               animateReadyDetails={animateReadyTransition}

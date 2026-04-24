@@ -197,6 +197,7 @@ export function Reader() {
           <ReaderFooter
             chromeVisible={chromeVisible}
             chromeSurfaceProps={chromeSurfaceProps}
+            isContentsOpen={chromeState.activeReaderSheet === "contents"}
             currentPage={sessionState.navigation.currentPage}
             totalPages={sessionState.navigation.totalPages}
             currentChapterIndex={sessionState.navigation.currentChapterIndex}
@@ -211,6 +212,7 @@ export function Reader() {
             onScrubCommit={sessionActions.commitPage}
             onGoToChapter={sessionActions.goToChapter}
             onPrevChapter={sessionActions.goToPreviousChapter}
+            onOpenContents={() => chromeActions.openReaderSheet("contents")}
             isLoading={sessionState.pagination.status !== "ready"}
           />
 
