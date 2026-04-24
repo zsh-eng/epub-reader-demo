@@ -29,7 +29,7 @@ describe("POST /api/files/upload", () => {
   });
 
   it("successfully uploads a new file", async () => {
-    const fileContent = createTestImageContent();
+    const fileContent = createTestImageContent("upload-new-file");
     const fileName = "test-upload.png";
     const fileType = "cover";
 
@@ -84,7 +84,7 @@ describe("POST /api/files/upload", () => {
   });
 
   it("returns existing file metadata when uploading duplicate content", async () => {
-    const fileContent = createTestImageContent();
+    const fileContent = createTestImageContent("duplicate-upload");
     const fileName1 = "first-upload.png";
     const fileName2 = "second-upload-same-content.png";
     const fileType = "cover";
@@ -203,7 +203,7 @@ describe("POST /api/files/upload", () => {
   });
 
   it("allows same user to upload same content hash with different file types", async () => {
-    const fileContent = createTestImageContent();
+    const fileContent = createTestImageContent("multi-type-upload");
     const fileName = "multi-type.png";
 
     // Upload as 'cover'

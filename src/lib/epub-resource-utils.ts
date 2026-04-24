@@ -223,11 +223,18 @@ export async function processEmbeddedResources(
   const doc = parser.parseFromString(content, mimeType);
   sanitizeDocument(doc);
 
-  // Find all elements with src, href, or xlink:href attributes
-  const resourceElements = doc.querySelectorAll("[src], [href], [*|href]");
+  // Find all elements with src, href, or xlink:href attributes. Avoid namespace
+  // wildcard selectors here because DOM implementations differ in support.
+  const resourceElements = Array.from(doc.getElementsByTagName("*")).filter(
+    (element) =>
+      element.hasAttribute("src") ||
+      element.hasAttribute("href") ||
+      element.hasAttributeNS("http://www.w3.org/1999/xlink", "href") ||
+      element.hasAttribute("xlink:href"),
+  );
 
   // Process each resource
-  for (const element of Array.from(resourceElements)) {
+  for (const element of resourceElements) {
     const tagName = element.tagName.toLowerCase();
     const src = element.getAttribute("src");
     const href = element.getAttribute("href");

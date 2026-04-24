@@ -91,7 +91,7 @@ export function createTestEpubContent(): Uint8Array {
 /**
  * Creates a test image file content
  */
-export function createTestImageContent(): Uint8Array {
+export function createTestImageContent(seed?: string): Uint8Array {
   // Minimal 1x1 PNG image
   const pngData = new Uint8Array([
     0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
@@ -101,5 +101,14 @@ export function createTestImageContent(): Uint8Array {
     0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
     0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
   ]);
-  return pngData;
+
+  if (!seed) {
+    return pngData;
+  }
+
+  const suffix = new TextEncoder().encode(seed);
+  const seededData = new Uint8Array(pngData.length + suffix.length);
+  seededData.set(pngData);
+  seededData.set(suffix, pngData.length);
+  return seededData;
 }
