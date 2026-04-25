@@ -39,6 +39,24 @@ export const SYNC_TABLES = {
     entityKey: "bookId",
   } satisfies SyncTableDef,
 
+  readingSessions: {
+    primaryKey: "id",
+    indices: [
+      "bookId",
+      "deviceId",
+      "readerInstanceId",
+      "startedAt",
+      "lastActiveAt",
+      "endedAt",
+    ],
+    compoundIndices: [
+      ["bookId", "startedAt"],
+      ["deviceId", "lastActiveAt"],
+      ["bookId", "_hlc"],
+    ],
+    entityKey: "bookId",
+  } satisfies SyncTableDef,
+
   highlights: {
     primaryKey: "id",
     indices: ["bookId", "spineItemId", "createdAt"],

@@ -6,8 +6,11 @@ import { resetIndexedDB } from "../setup/indexeddb";
 
 const DB_NAME = "epub-reader-db";
 
-const { readingCheckpoints: _readingCheckpoints, ...SYNC_TABLES_BEFORE_V8 } =
-  SYNC_TABLES;
+const {
+  readingCheckpoints: _readingCheckpoints,
+  readingSessions: _readingSessions,
+  ...SYNC_TABLES_BEFORE_V8
+} = SYNC_TABLES;
 const { bookImageDimensions: _bookImageDimensions, ...LOCAL_TABLES_BEFORE_V7 } =
   LOCAL_TABLES;
 

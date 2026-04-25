@@ -95,6 +95,28 @@ export interface ReadingCheckpoint {
   lastRead: number; // Timestamp when this checkpoint was last updated
 }
 
+export interface ReadingSession {
+  id: string; // UUID primary key for this reader-open session
+  bookId: string; // Foreign key to Book
+  deviceId: string; // Device that owns this session
+  readerInstanceId: string; // Ephemeral mounted reader/window instance
+  startedAt: number; // Timestamp when the reader session began
+  /**
+   * Best-effort timestamp for when the reader session ended.
+   *
+   * Browser unload/pagehide writes are not guaranteed to complete. Future
+   * cleanup/reporting should treat `lastActiveAt` as the practical end for
+   * stale sessions where this remains null.
+   */
+  endedAt: number | null;
+  lastActiveAt: number; // Last timestamp we considered plausibly active
+  activeMs: number; // Accumulated active reading time, excluding idle gaps
+  startSpineIndex: number;
+  startScrollProgress: number; // Chapter-local percentage in the range 0-100
+  endSpineIndex: number;
+  endScrollProgress: number; // Chapter-local percentage in the range 0-100
+}
+
 export interface ReadingSettings {
   /**
    * Legacy settings shape kept for IndexedDB/sync schema compatibility.
@@ -161,15 +183,15 @@ export interface BookImageDimension {
 export type SyncedBook = WithSyncMetadata<Book>;
 export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
 export type SyncedReadingCheckpoint = WithSyncMetadata<ReadingCheckpoint>;
+export type SyncedReadingSession = WithSyncMetadata<ReadingSession>;
 export type SyncedHighlight = WithSyncMetadata<Highlight>;
 export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
 export type SyncedReadingState = WithSyncMetadata<ReadingState>;
 export type SyncedNote = WithSyncMetadata<Note>;
 
 // Re-export Highlight and Note types for convenience
-export type { Highlight };
-export type { Note };
 export type { ReadingState, ReadingStatus } from "@/types/reading-state";
+export type { Highlight, Note };
 
 // Re-export StoredFile type for convenience
 export type { StoredFile, TransferTask };
@@ -257,6 +279,7 @@ class EPUBReaderDB extends Dexie {
   books!: Table<SyncedBook, string>;
   readingProgress!: Table<SyncedReadingProgress, string>;
   readingCheckpoints!: Table<SyncedReadingCheckpoint, string>;
+  readingSessions!: Table<SyncedReadingSession, string>;
   highlights!: Table<SyncedHighlight, string>;
   readingSettings!: Table<SyncedReadingSettings, string>;
   readingState!: Table<SyncedReadingState, string>;
@@ -414,6 +437,12 @@ class EPUBReaderDB extends Dexie {
 
         await checkpointTable.bulkPut(checkpoints);
       });
+
+    // Version 9: Add mutable reading session rows for active-time analytics
+    this.version(9).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
 
     // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
@@ -701,6 +730,64 @@ export async function upsertCurrentDeviceReadingCheckpoint(
     ...checkpoint,
     deviceId: getOrCreateDeviceId(),
   });
+}
+
+// ============================================================================
+// Helper Functions (Reading Sessions)
+// ============================================================================
+
+type CurrentDeviceReadingSessionInput = Omit<ReadingSession, "deviceId">;
+
+function withCurrentDeviceReadingSession(
+  session: CurrentDeviceReadingSessionInput,
+): ReadingSession {
+  return {
+    ...session,
+    deviceId: getOrCreateDeviceId(),
+  };
+}
+
+export async function createCurrentDeviceReadingSession(
+  session: CurrentDeviceReadingSessionInput,
+): Promise<string> {
+  const record = withCurrentDeviceReadingSession(session);
+  return db.readingSessions.add(record as SyncedReadingSession);
+}
+
+export async function updateCurrentDeviceReadingSession(
+  session: CurrentDeviceReadingSessionInput,
+): Promise<string> {
+  const record = withCurrentDeviceReadingSession(session);
+  await db.readingSessions.put(record as SyncedReadingSession);
+  return record.id;
+}
+
+export async function endCurrentDeviceReadingSession(
+  session: CurrentDeviceReadingSessionInput & { endedAt: number },
+): Promise<string> {
+  return updateCurrentDeviceReadingSession(session);
+}
+
+export async function closeStaleReadingSessionsForCurrentDevice(
+  staleBefore: number,
+): Promise<number> {
+  const deviceId = getOrCreateDeviceId();
+  const staleSessions = await db.readingSessions
+    .where("[deviceId+lastActiveAt]")
+    .between([deviceId, Dexie.minKey], [deviceId, staleBefore])
+    .filter((session) => session.endedAt === null && isNotDeleted(session))
+    .toArray();
+
+  if (staleSessions.length === 0) return 0;
+
+  await db.readingSessions.bulkPut(
+    staleSessions.map((session) => ({
+      ...session,
+      endedAt: session.lastActiveAt,
+    })),
+  );
+
+  return staleSessions.length;
 }
 
 // ============================================================================

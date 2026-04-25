@@ -2,21 +2,22 @@ import { useBookLoader } from "@/hooks/use-book-loader";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
-  DEFAULT_PARAGRAPH_SPACING,
-  usePagination,
-  type Block,
-  type ChapterCanonicalText,
-  type PaginationConfig,
-  type SpreadConfig,
+    DEFAULT_PARAGRAPH_SPACING,
+    usePagination,
+    type Block,
+    type ChapterCanonicalText,
+    type PaginationConfig,
+    type SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { useCallback, useMemo } from "react";
 import type { ChapterEntry } from "../types";
+import { useReaderReadingSession } from "./reading-sessions/use-reader-reading-session";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 import { useReaderChapterContent } from "./use-reader-chapter-content";
-import { useReaderPaginationFeed } from "./use-reader-pagination-feed";
 import { useReaderCheckpointController } from "./use-reader-checkpoint-controller";
+import { useReaderPaginationFeed } from "./use-reader-pagination-feed";
 
 interface UseReaderCoreOptions {
   bookId?: string;
@@ -127,6 +128,11 @@ export function useReaderCore(
   });
 
   useReaderCheckpointController({
+    bookId,
+    spread: pagination.spread,
+  });
+
+  useReaderReadingSession({
     bookId,
     spread: pagination.spread,
   });
