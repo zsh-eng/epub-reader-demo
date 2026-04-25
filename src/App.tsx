@@ -37,7 +37,7 @@ function App() {
             <Route path="/reader-legacy/:bookId" element={<LegacyReader />} />
             <Route path="/reader-v1/:bookId" element={<LegacyReader />} />
             <Route path="/reader/:bookId" element={<Reader />} />
-            <Route path="/reader/debug/:bookId" element={<ReaderDebug />} />
+            <Route path="/debug/reader/:bookId" element={<ReaderDebug />} />
             <Route
               path="/debug/reading-sessions"
               element={<ReadingSessionsDebug />}
