@@ -1,28 +1,19 @@
 import {
-    createReaderReadingSessionPosition,
-    ReaderReadingSessionController,
-    READING_SESSION_FLUSH_INTERVAL_MS,
-    type ReaderReadingSessionPosition,
+  createReaderReadingSessionPosition,
+  ReaderReadingSessionController,
+  READING_SESSION_FLUSH_INTERVAL_MS,
+  type ReaderReadingSessionPosition,
 } from "@/components/Reader/hooks/reading-sessions/reader-reading-session-controller";
 import { useReaderReadingSession } from "@/components/Reader/hooks/reading-sessions/use-reader-reading-session";
 import { updateCurrentDeviceReadingSession } from "@/lib/db";
 import type { ResolvedSpread, SpreadIntent } from "@/lib/pagination-v2";
 import { act, cleanup, renderHook } from "@testing-library/react";
-import {
-    afterEach,
-    beforeEach,
-    describe,
-    expect,
-    it,
-    vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/db", () => ({
   READER_V2_READING_SESSION_SOURCE: "reader-v2",
   READING_SESSION_IDLE_TIMEOUT_MS: 10 * 60 * 1000,
-  updateCurrentDeviceReadingSession: vi.fn(() =>
-    Promise.resolve("session-id"),
-  ),
+  updateCurrentDeviceReadingSession: vi.fn(() => Promise.resolve("session-id")),
 }));
 
 const mockedUpdateSession = vi.mocked(updateCurrentDeviceReadingSession);

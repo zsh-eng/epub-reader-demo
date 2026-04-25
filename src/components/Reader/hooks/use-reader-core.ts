@@ -3,12 +3,12 @@ import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
-    DEFAULT_PARAGRAPH_SPACING,
-    usePagination,
-    type Block,
-    type ChapterCanonicalText,
-    type PaginationConfig,
-    type SpreadConfig,
+  DEFAULT_PARAGRAPH_SPACING,
+  usePagination,
+  type Block,
+  type ChapterCanonicalText,
+  type PaginationConfig,
+  type SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";

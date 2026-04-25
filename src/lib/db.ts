@@ -823,9 +823,8 @@ export async function backfillLegacyReadingProgressCheckpoints(
       const existingCheckpoints = await db.readingCheckpoints.bulkGet(
         checkpoints.map((checkpoint) => checkpoint.id),
       );
-      const existingCheckpointsOverwritten = existingCheckpoints.filter(
-        Boolean,
-      ).length;
+      const existingCheckpointsOverwritten =
+        existingCheckpoints.filter(Boolean).length;
 
       for (const checkpoint of checkpoints) {
         const summary = bookSummariesById.get(checkpoint.bookId);

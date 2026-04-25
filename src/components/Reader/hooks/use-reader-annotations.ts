@@ -1,36 +1,36 @@
 import type { AnnotationColor } from "@/lib/highlight-constants";
 import {
-    prepareBlocks,
-    resolveContentAnchorRangeToHighlight,
-    resolveDomEndpointToContentAnchor,
-    type FontConfig,
-    type PreparedBlock,
-    type ResolvedSpread,
+  prepareBlocks,
+  resolveContentAnchorRangeToHighlight,
+  resolveDomEndpointToContentAnchor,
+  type FontConfig,
+  type PreparedBlock,
+  type ResolvedSpread,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import {
-    EPUB_HIGHLIGHT_ACTIVE_CLASS,
-    EPUB_HIGHLIGHT_CLASS,
-    EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
-    EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
+  EPUB_HIGHLIGHT_ACTIVE_CLASS,
+  EPUB_HIGHLIGHT_CLASS,
+  EPUB_HIGHLIGHT_DATA_ATTRIBUTE,
+  EPUB_HIGHLIGHT_GROUP_HOVER_CLASS,
 } from "@/types/reader.types";
 import {
-    createHighlightInteractionManager,
-    getSelectionPosition,
-    type HighlightInteractionManager,
+  createHighlightInteractionManager,
+  getSelectionPosition,
+  type HighlightInteractionManager,
 } from "@zsh-eng/text-highlighter";
 import {
-    useCallback,
-    useEffect,
-    useMemo,
-    useRef,
-    useState,
-    type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
 } from "react";
 import type { ChapterEntry } from "../types";
 import {
-    READER_TOUCH_TAP_HANDLED_EVENT,
-    TOUCH_TAP_SELECTION_SUPPRESSION_MS,
+  READER_TOUCH_TAP_HANDLED_EVENT,
+  TOUCH_TAP_SELECTION_SUPPRESSION_MS,
 } from "./reader-interaction-events";
 import type { ReaderSessionChapterAccess } from "./use-reader-session";
 

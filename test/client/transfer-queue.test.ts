@@ -6,8 +6,8 @@
 
 import { db } from "@/lib/db";
 import {
-    createMockFileRemoteAdapter,
-    type MockFileRemoteAdapter,
+  createMockFileRemoteAdapter,
+  type MockFileRemoteAdapter,
 } from "@/lib/files/file-remote-adapter";
 import { fileStorage } from "@/lib/files/file-storage";
 import { TransferQueue, transferQueue } from "@/lib/files/transfer-queue";
@@ -315,7 +315,12 @@ describe("Transfer Queue with Mock Adapter", () => {
       maxRetries: 3,
     };
 
-    await fileStorage.store(contentHash, fileType, blob, "application/epub+zip");
+    await fileStorage.store(
+      contentHash,
+      fileType,
+      blob,
+      "application/epub+zip",
+    );
     await db.transferQueue.add(task);
 
     queue.resume();
@@ -344,7 +349,12 @@ describe("Transfer Queue with Mock Adapter", () => {
       lastAttempt: Date.now() - 60_000,
     };
 
-    await fileStorage.store(contentHash, fileType, blob, "application/epub+zip");
+    await fileStorage.store(
+      contentHash,
+      fileType,
+      blob,
+      "application/epub+zip",
+    );
     await db.transferQueue.add(task);
 
     queue.resume();

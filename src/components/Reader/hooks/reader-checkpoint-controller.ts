@@ -141,7 +141,9 @@ export class ReaderCheckpointSaveCoordinator {
     void this.saveSnapshot(snapshot);
   }
 
-  private async saveSnapshot(snapshot: ReaderCheckpointSnapshot): Promise<void> {
+  private async saveSnapshot(
+    snapshot: ReaderCheckpointSnapshot,
+  ): Promise<void> {
     const generationAtStart = this.generation;
     const snapshotKey = getReaderCheckpointSnapshotKey(snapshot);
 

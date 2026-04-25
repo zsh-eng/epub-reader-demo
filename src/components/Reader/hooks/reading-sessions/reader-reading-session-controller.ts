@@ -148,7 +148,8 @@ export class ReaderReadingSessionController {
 
   constructor(options: ReaderReadingSessionControllerOptions) {
     this.persist = options.persist;
-    this.idleTimeoutMs = options.idleTimeoutMs ?? READING_SESSION_IDLE_TIMEOUT_MS;
+    this.idleTimeoutMs =
+      options.idleTimeoutMs ?? READING_SESSION_IDLE_TIMEOUT_MS;
     this.readerInstanceId = options.readerInstanceId ?? crypto.randomUUID();
     this.createId = options.createId ?? (() => crypto.randomUUID());
     this.onError = options.onError ?? (() => undefined);

@@ -11,16 +11,16 @@
 
 import { db } from "@/lib/db";
 import {
-    createHonoFileRemoteAdapter,
-    type FileRemoteAdapter,
+  createHonoFileRemoteAdapter,
+  type FileRemoteAdapter,
 } from "@/lib/files/file-remote-adapter";
 import { fileStorage } from "@/lib/files/file-storage";
 import type {
-    FileType,
-    Priority,
-    TransferDirection,
-    TransferProgress,
-    TransferTask,
+  FileType,
+  Priority,
+  TransferDirection,
+  TransferProgress,
+  TransferTask,
 } from "@/lib/files/types";
 import { createTransferKey, priorityToNumber } from "@/lib/files/types";
 

@@ -95,8 +95,7 @@ export function hasExceededTouchTapMoveTolerance(
   clientY: number,
 ): boolean {
   return (
-    Math.hypot(clientX - startX, clientY - startY) >
-    TOUCH_TAP_MOVE_TOLERANCE_PX
+    Math.hypot(clientX - startX, clientY - startY) > TOUCH_TAP_MOVE_TOLERANCE_PX
   );
 }
 
@@ -317,11 +316,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
 
     const onPointerCancel = (event: PointerEvent) => {
       const press = pressRef.current;
-      if (
-        press &&
-        press.source === "pointer" &&
-        press.id === event.pointerId
-      ) {
+      if (press && press.source === "pointer" && press.id === event.pointerId) {
         pressRef.current = null;
       }
     };

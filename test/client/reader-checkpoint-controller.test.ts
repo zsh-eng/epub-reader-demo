@@ -1,12 +1,5 @@
 import { cleanup, renderHook, act } from "@testing-library/react";
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKPOINT_FLUSH_INTERVAL_MS,
   createReaderCheckpointSnapshot,

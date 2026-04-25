@@ -86,7 +86,9 @@ function legacySessionId(
 
 async function getLegacySessions(): Promise<SyncedReadingSession[]> {
   return db.readingSessions
-    .filter((session) => session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE)
+    .filter(
+      (session) => session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE,
+    )
     .toArray();
 }
 
@@ -200,8 +202,12 @@ describe("legacy reading progress session backfill", () => {
       startedAt: 660_001,
       endedAt: 660_001,
     });
-    expect(byId.get(legacySessionId("device-b", "book-1", 30_000))).toBeTruthy();
-    expect(byId.get(legacySessionId("device-a", "book-2", 10_000))).toBeTruthy();
+    expect(
+      byId.get(legacySessionId("device-b", "book-1", 30_000)),
+    ).toBeTruthy();
+    expect(
+      byId.get(legacySessionId("device-a", "book-2", 10_000)),
+    ).toBeTruthy();
   });
 
   it("supports dry runs without mutating reading sessions", async () => {

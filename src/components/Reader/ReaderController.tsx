@@ -1,20 +1,20 @@
 import type { ChromeInteractionMode } from "@/hooks/use-input-behavior";
 import {
-    useCallback,
-    useEffect,
-    useRef,
-    useState,
-    type ReactNode,
-    type RefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
 } from "react";
 import type {
-    ReaderChromeDismissLayerProps,
-    ReaderChromeRailProps,
-    ReaderChromeSurfaceProps,
+  ReaderChromeDismissLayerProps,
+  ReaderChromeRailProps,
+  ReaderChromeSurfaceProps,
 } from "./chrome";
 import {
-    CHROME_HIDE_DELAY_MS,
-    useHoverChromeBehavior,
+  CHROME_HIDE_DELAY_MS,
+  useHoverChromeBehavior,
 } from "./hooks/use-hover-chrome-behavior";
 import { useTouchChromeLayer } from "./hooks/use-touch-chrome-layer";
 import { useTouchSpreadTapNav } from "./hooks/use-touch-spread-tap-nav";

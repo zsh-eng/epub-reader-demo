@@ -1,12 +1,12 @@
 import { PageSliceView } from "@/components/Reader/PageSliceView";
 import {
-    layoutTextLines,
-    prepareBlocks,
-    type Block,
-    type PaginationConfig,
-    type PreparedBlock,
-    type ResolvedSpread,
-    type TextSlice,
+  layoutTextLines,
+  prepareBlocks,
+  type Block,
+  type PaginationConfig,
+  type PreparedBlock,
+  type ResolvedSpread,
+  type TextSlice,
 } from "@/lib/pagination-v2";
 import { resolveDomEndpointToContentAnchor } from "@/lib/pagination-v2/engine/selection-anchors";
 import { createElement } from "react";

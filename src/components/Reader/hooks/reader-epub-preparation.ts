@@ -31,7 +31,8 @@ export function resolveReaderEpubPreparation({
     chapterContentBookId: canLoadChapterContent ? bookId : undefined,
     chapterContentBook: canLoadChapterContent ? book : null,
     isBookLoading:
-      isBookLoading || (!!book && !epubProcessor.isReady && !epubProcessor.error),
+      isBookLoading ||
+      (!!book && !epubProcessor.isReady && !epubProcessor.error),
     epubProcessError: epubProcessor.error,
   };
 }

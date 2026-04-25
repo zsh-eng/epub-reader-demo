@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  type FocusEventHandler,
-} from "react";
+import { useCallback, useEffect, useRef, type FocusEventHandler } from "react";
 import type {
   ReaderChromeRailProps,
   ReaderChromeSurfaceProps,

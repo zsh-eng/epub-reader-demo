@@ -1,13 +1,13 @@
 import {
-    CONTENT_ANCHOR_BLOCK_ID_ATTR,
-    CONTENT_ANCHOR_END_ATTR,
-    CONTENT_ANCHOR_START_ATTR,
-    parseTextCursorOffset,
+  CONTENT_ANCHOR_BLOCK_ID_ATTR,
+  CONTENT_ANCHOR_END_ATTR,
+  CONTENT_ANCHOR_START_ATTR,
+  parseTextCursorOffset,
 } from "../content-anchor-dom";
 import type {
-    PageFragment,
-    PreparedBlock,
-    PreparedTextItem,
+  PageFragment,
+  PreparedBlock,
+  PreparedTextItem,
 } from "../shared/types";
 import type { ContentAnchor, ResolvedSpread } from "../types";
 
