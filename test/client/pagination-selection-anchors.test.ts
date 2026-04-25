@@ -1,14 +1,14 @@
 import { PageSliceView } from "@/components/Reader/PageSliceView";
-import { resolveDomEndpointToContentAnchor } from "@/lib/pagination-v2/engine/selection-anchors";
 import {
-  layoutTextLines,
-  prepareBlocks,
-  type Block,
-  type PaginationConfig,
-  type PreparedBlock,
-  type ResolvedSpread,
-  type TextSlice,
+    layoutTextLines,
+    prepareBlocks,
+    type Block,
+    type PaginationConfig,
+    type PreparedBlock,
+    type ResolvedSpread,
+    type TextSlice,
 } from "@/lib/pagination-v2";
+import { resolveDomEndpointToContentAnchor } from "@/lib/pagination-v2/engine/selection-anchors";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -269,6 +269,50 @@ describe("resolveDomEndpointToContentAnchor", () => {
       chapterIndex: 0,
       blockId: "boundary-block",
       offset: firstFragment?.anchorEnd,
+    });
+  });
+
+  it("resolves an end boundary before an empty wrapper to the previous fragment", () => {
+    const blocks: Block[] = [
+      {
+        type: "text",
+        id: "paragraph-block",
+        tag: "p",
+        runs: [
+          {
+            kind: "text",
+            text: "The young man noticed her. His face was narrow, his blue eyes keen.",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+        ],
+      },
+    ];
+
+    const { slice, preparedByChapter } = buildSingleSlice(blocks, 220);
+    const preparedByVisibleChapter: PreparedBlock[][] = [];
+    preparedByVisibleChapter[23] = preparedByChapter[0] ?? [];
+    const paragraph = renderSlice(slice);
+    const emptyWrapper = document.createElement("div");
+    paragraph.after(emptyWrapper);
+
+    const anchor = resolveDomEndpointToContentAnchor({
+      node: emptyWrapper,
+      offset: 0,
+      spread: createSpread(slice, 23),
+      preparedByChapter: preparedByVisibleChapter,
+      fallbackBias: "backward",
+    });
+
+    const lastLine = slice.lines[slice.lines.length - 1];
+    const lastFragment = lastLine?.fragments[lastLine.fragments.length - 1];
+    expect(lastFragment?.anchorEnd).toBeDefined();
+    expect(anchor).toEqual({
+      type: "text",
+      chapterIndex: 23,
+      blockId: "paragraph-block",
+      offset: lastFragment?.anchorEnd,
     });
   });
 });

@@ -1,13 +1,13 @@
 import {
-  CONTENT_ANCHOR_BLOCK_ID_ATTR,
-  CONTENT_ANCHOR_END_ATTR,
-  CONTENT_ANCHOR_START_ATTR,
-  parseTextCursorOffset,
+    CONTENT_ANCHOR_BLOCK_ID_ATTR,
+    CONTENT_ANCHOR_END_ATTR,
+    CONTENT_ANCHOR_START_ATTR,
+    parseTextCursorOffset,
 } from "../content-anchor-dom";
 import type {
-  PageFragment,
-  PreparedBlock,
-  PreparedTextItem,
+    PageFragment,
+    PreparedBlock,
+    PreparedTextItem,
 } from "../shared/types";
 import type { ContentAnchor, ResolvedSpread } from "../types";
 
@@ -22,6 +22,8 @@ interface MatchedSpreadFragment {
   chapterIndex: number;
   fragment: PageFragment;
 }
+
+type BoundaryFallbackBias = "forward" | "backward";
 
 const graphemeSegmenter =
   typeof Intl !== "undefined" && "Segmenter" in Intl
@@ -111,9 +113,76 @@ function findLastFragmentAnchorElement(node: Node | null): Element | null {
   return null;
 }
 
+function findPreviousFragmentAnchorElementFromBoundary(
+  node: Node,
+  offset: number,
+): Element | null {
+  if (isElement(node)) {
+    const clampedOffset = Math.max(0, Math.min(offset, node.childNodes.length));
+    for (let index = clampedOffset - 1; index >= 0; index--) {
+      const match = findLastFragmentAnchorElement(
+        node.childNodes[index] ?? null,
+      );
+      if (match) return match;
+    }
+  }
+
+  let current: Node | null = node;
+  while (current) {
+    const parent: Node | null = current.parentNode;
+    if (!parent) break;
+
+    const siblings = Array.from(parent.childNodes) as Node[];
+    const currentIndex = siblings.indexOf(current);
+
+    for (let index = currentIndex - 1; index >= 0; index--) {
+      const match = findLastFragmentAnchorElement(siblings[index] ?? null);
+      if (match) return match;
+    }
+
+    current = parent;
+  }
+
+  return null;
+}
+
+function findNextFragmentAnchorElementFromBoundary(
+  node: Node,
+  offset: number,
+): Element | null {
+  if (isElement(node)) {
+    const clampedOffset = Math.max(0, Math.min(offset, node.childNodes.length));
+    for (let index = clampedOffset; index < node.childNodes.length; index++) {
+      const match = findFirstFragmentAnchorElement(
+        node.childNodes[index] ?? null,
+      );
+      if (match) return match;
+    }
+  }
+
+  let current: Node | null = node;
+  while (current) {
+    const parent: Node | null = current.parentNode;
+    if (!parent) break;
+
+    const siblings = Array.from(parent.childNodes) as Node[];
+    const currentIndex = siblings.indexOf(current);
+
+    for (let index = currentIndex + 1; index < siblings.length; index++) {
+      const match = findFirstFragmentAnchorElement(siblings[index] ?? null);
+      if (match) return match;
+    }
+
+    current = parent;
+  }
+
+  return null;
+}
+
 function resolveBoundaryFragmentElement(
   node: Node,
   offset: number,
+  fallbackBias?: BoundaryFallbackBias,
 ): { fragmentElement: Element; localTextOffset: number } | null {
   const directFragment = closestFragmentAnchorElement(node);
   if (directFragment) {
@@ -150,6 +219,32 @@ function resolveBoundaryFragmentElement(
       fragmentElement: rightCandidate,
       localTextOffset: 0,
     };
+  }
+
+  if (fallbackBias === "backward") {
+    const previousCandidate = findPreviousFragmentAnchorElementFromBoundary(
+      node,
+      offset,
+    );
+    if (previousCandidate) {
+      return {
+        fragmentElement: previousCandidate,
+        localTextOffset: previousCandidate.textContent?.length ?? 0,
+      };
+    }
+  }
+
+  if (fallbackBias === "forward") {
+    const nextCandidate = findNextFragmentAnchorElementFromBoundary(
+      node,
+      offset,
+    );
+    if (nextCandidate) {
+      return {
+        fragmentElement: nextCandidate,
+        localTextOffset: 0,
+      };
+    }
   }
 
   return null;
@@ -256,8 +351,13 @@ function resolveOffsetWithinPreparedItem(
 function resolveEndpointBoundary(
   node: Node,
   offset: number,
+  fallbackBias?: BoundaryFallbackBias,
 ): ResolvedEndpointBoundary | null {
-  const fragmentBoundary = resolveBoundaryFragmentElement(node, offset);
+  const fragmentBoundary = resolveBoundaryFragmentElement(
+    node,
+    offset,
+    fallbackBias,
+  );
   if (!fragmentBoundary) return null;
 
   const { fragmentElement, localTextOffset } = fragmentBoundary;
@@ -332,10 +432,11 @@ export function resolveDomEndpointToContentAnchor(options: {
   offset: number;
   spread: ResolvedSpread;
   preparedByChapter: (PreparedBlock[] | null)[];
+  fallbackBias?: BoundaryFallbackBias;
 }): ContentAnchor | null {
-  const { node, offset, spread, preparedByChapter } = options;
+  const { node, offset, spread, preparedByChapter, fallbackBias } = options;
 
-  const boundary = resolveEndpointBoundary(node, offset);
+  const boundary = resolveEndpointBoundary(node, offset, fallbackBias);
   if (!boundary) return null;
 
   const match = matchSpreadFragment(spread, boundary);
