@@ -4,7 +4,6 @@ import type { ReaderSheetId } from "../types";
 export interface ReaderChromeState {
   isBookmarked: boolean;
   activeReaderSheet: ReaderSheetId | null;
-  isChromePinned: boolean;
 }
 
 export interface ReaderChromeActions {
@@ -22,8 +21,8 @@ export interface UseReaderChromeStateResult {
  * Owns ephemeral chrome state for the Reader screen.
  *
  * This hook deliberately stays scoped to reader-level chrome concerns like
- * overlay visibility and bookmark affordances. Reader sheets are peer overlays,
- * so the screen-level controller tracks which one is currently active.
+ * bookmark affordances and the active peer sheet. Chrome visibility itself is
+ * owned by ReaderController because hover and touch modes reveal it differently.
  */
 export function useReaderChromeState(): UseReaderChromeStateResult {
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -46,7 +45,6 @@ export function useReaderChromeState(): UseReaderChromeStateResult {
     () => ({
       isBookmarked,
       activeReaderSheet,
-      isChromePinned: activeReaderSheet !== null,
     }),
     [activeReaderSheet, isBookmarked],
   );

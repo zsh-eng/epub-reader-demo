@@ -1,7 +1,10 @@
 import {
   getHorizontalTapZone,
+  isCleanTouchTap,
   isInteractiveTapTarget,
+  MAX_TOUCH_TAP_DURATION_MS,
   resolveTapNavigationAction,
+  TOUCH_TAP_MOVE_TOLERANCE_PX,
 } from "@/components/Reader/hooks/use-pagination-tap-nav";
 import { describe, expect, it } from "vitest";
 
@@ -23,6 +26,60 @@ describe("Reader tap navigation", () => {
     it("falls back to center when container width is invalid", () => {
       expect(getHorizontalTapZone(50, { left: 0, width: 0 })).toBe("center");
       expect(getHorizontalTapZone(50, { left: 0, width: -10 })).toBe("center");
+    });
+  });
+
+  describe("isCleanTouchTap", () => {
+    it("accepts short stationary taps", () => {
+      expect(
+        isCleanTouchTap({
+          startX: 10,
+          startY: 10,
+          endX: 10 + TOUCH_TAP_MOVE_TOLERANCE_PX,
+          endY: 10,
+          startedAt: 1000,
+          endedAt: 1000 + MAX_TOUCH_TAP_DURATION_MS,
+          moved: false,
+        }),
+      ).toBe(true);
+    });
+
+    it("rejects moved or long-press gestures", () => {
+      expect(
+        isCleanTouchTap({
+          startX: 10,
+          startY: 10,
+          endX: 10,
+          endY: 10,
+          startedAt: 1000,
+          endedAt: 1100,
+          moved: true,
+        }),
+      ).toBe(false);
+
+      expect(
+        isCleanTouchTap({
+          startX: 10,
+          startY: 10,
+          endX: 10,
+          endY: 10,
+          startedAt: 1000,
+          endedAt: 1000 + MAX_TOUCH_TAP_DURATION_MS + 1,
+          moved: false,
+        }),
+      ).toBe(false);
+
+      expect(
+        isCleanTouchTap({
+          startX: 10,
+          startY: 10,
+          endX: 10 + TOUCH_TAP_MOVE_TOLERANCE_PX + 0.1,
+          endY: 10,
+          startedAt: 1000,
+          endedAt: 1100,
+          moved: false,
+        }),
+      ).toBe(false);
     });
   });
 

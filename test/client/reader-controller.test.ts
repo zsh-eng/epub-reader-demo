@@ -9,14 +9,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface HarnessProps {
   chromeInteractionMode: ChromeInteractionMode;
-  isChromePinned?: boolean;
+  isChromeSuppressed?: boolean;
   onNextPage?: () => void;
   onPrevPage?: () => void;
 }
 
 function ControllerHarness({
   chromeInteractionMode,
-  isChromePinned = false,
+  isChromeSuppressed = false,
   onNextPage = () => {},
   onPrevPage = () => {},
 }: HarnessProps) {
@@ -30,7 +30,7 @@ function ControllerHarness({
       canGoPrev: true,
       canGoNext: true,
       chromeInteractionMode,
-      isChromePinned,
+      isChromeSuppressed,
       containerRef,
       topRailHeight: 60,
       bottomRailHeight: 72,
@@ -41,6 +41,7 @@ function ControllerHarness({
       topRailProps,
       bottomRailProps,
       chromeSurfaceProps,
+      chromeDismissLayerProps,
     }) =>
       createElement(
         "div",
@@ -51,6 +52,12 @@ function ControllerHarness({
           String(chromeVisible),
         ),
         createElement("div", { ref: containerRef, "data-testid": "stage" }),
+        chromeDismissLayerProps
+          ? createElement("div", {
+              ...chromeDismissLayerProps,
+              "data-testid": "dismiss-layer",
+            })
+          : null,
         showHoverRails
           ? createElement("div", {
               ...topRailProps,
@@ -153,11 +160,35 @@ function dispatchPointerTransition(
   });
 }
 
-function dispatchClick(stage: HTMLElement, clientX: number) {
+function dispatchPointerTap(
+  element: HTMLElement,
+  clientX: number,
+  pointerType: "touch" | "mouse" = "touch",
+) {
+  const dispatch = (type: "pointerdown" | "pointerup") => {
+    const event = new Event(type, { bubbles: true, cancelable: true });
+    Object.defineProperties(event, {
+      button: { value: 0 },
+      clientX: { value: clientX },
+      clientY: { value: 80 },
+      pointerId: { value: 1 },
+      pointerType: { value: pointerType },
+    });
+    element.dispatchEvent(event);
+  };
+
   act(() => {
-    stage.dispatchEvent(
+    dispatch("pointerdown");
+    dispatch("pointerup");
+  });
+}
+
+function dispatchClick(element: HTMLElement, clientX = 150) {
+  act(() => {
+    element.dispatchEvent(
       new MouseEvent("click", {
         bubbles: true,
+        cancelable: true,
         button: 0,
         clientX,
       }),
@@ -219,22 +250,27 @@ describe("ReaderController", () => {
     harness.cleanup();
   });
 
-  it("keeps chrome visible while pinned", () => {
+  it("hides chrome immediately while suppressed by a peer sheet", () => {
     const harness = createHarness();
     renderHarness(harness.root, {
       chromeInteractionMode: "hover",
-      isChromePinned: true,
     });
 
+    const topRail = getByTestId(harness.container, "top-rail");
+    dispatchPointerTransition(topRail, "pointerover");
     expect(isChromeVisible(harness.container)).toBe(true);
 
-    const header = getByTestId(harness.container, "header");
-    dispatchPointerTransition(header, "pointerout");
+    renderHarness(harness.root, {
+      chromeInteractionMode: "hover",
+      isChromeSuppressed: true,
+    });
+    expect(isChromeVisible(harness.container)).toBe(false);
 
+    dispatchPointerTransition(topRail, "pointerover");
     act(() => {
       vi.advanceTimersByTime(CHROME_HIDE_DELAY_MS);
     });
-    expect(isChromeVisible(harness.container)).toBe(true);
+    expect(isChromeVisible(harness.container)).toBe(false);
 
     harness.cleanup();
   });
@@ -243,7 +279,7 @@ describe("ReaderController", () => {
     const harness = createHarness();
     renderHarness(harness.root, { chromeInteractionMode: "touch" });
 
-    expect(isChromeVisible(harness.container)).toBe(true);
+    expect(isChromeVisible(harness.container)).toBe(false);
     expect(
       harness.container.querySelector("[data-testid='top-rail']"),
     ).toBeNull();
@@ -253,7 +289,7 @@ describe("ReaderController", () => {
     expect(getByTestId(harness.container, "top-rail")).toBeTruthy();
 
     renderHarness(harness.root, { chromeInteractionMode: "touch" });
-    expect(isChromeVisible(harness.container)).toBe(true);
+    expect(isChromeVisible(harness.container)).toBe(false);
     expect(
       harness.container.querySelector("[data-testid='top-rail']"),
     ).toBeNull();
@@ -274,9 +310,9 @@ describe("ReaderController", () => {
     const stage = getByTestId(harness.container, "stage");
     setStageBounds(stage);
 
-    dispatchClick(stage, 40);
-    dispatchClick(stage, 150);
-    dispatchClick(stage, 260);
+    dispatchPointerTap(stage, 40, "touch");
+    dispatchPointerTap(stage, 150, "touch");
+    dispatchPointerTap(stage, 260, "touch");
 
     expect(onPrevPage).not.toHaveBeenCalled();
     expect(onNextPage).not.toHaveBeenCalled();
@@ -285,7 +321,7 @@ describe("ReaderController", () => {
     harness.cleanup();
   });
 
-  it("keeps touch mode tap zones for toggle and page navigation", () => {
+  it("uses exposed touch spread taps for chrome reveal and page navigation", () => {
     const onNextPage = vi.fn();
     const onPrevPage = vi.fn();
     const harness = createHarness();
@@ -298,16 +334,44 @@ describe("ReaderController", () => {
     const stage = getByTestId(harness.container, "stage");
     setStageBounds(stage);
 
-    expect(isChromeVisible(harness.container)).toBe(true);
-
-    dispatchClick(stage, 150);
     expect(isChromeVisible(harness.container)).toBe(false);
 
-    dispatchClick(stage, 40);
-    dispatchClick(stage, 260);
+    dispatchPointerTap(stage, 150);
+    expect(isChromeVisible(harness.container)).toBe(true);
+
+    const dismissLayer = getByTestId(harness.container, "dismiss-layer");
+    dispatchClick(dismissLayer);
+    expect(isChromeVisible(harness.container)).toBe(false);
+
+    dispatchPointerTap(stage, 40);
+    dispatchPointerTap(stage, 260);
 
     expect(onPrevPage).toHaveBeenCalledTimes(1);
     expect(onNextPage).toHaveBeenCalledTimes(1);
+
+    harness.cleanup();
+  });
+
+  it("ignores mouse pointer taps even in touch chrome mode", () => {
+    const onNextPage = vi.fn();
+    const onPrevPage = vi.fn();
+    const harness = createHarness();
+    renderHarness(harness.root, {
+      chromeInteractionMode: "touch",
+      onNextPage,
+      onPrevPage,
+    });
+
+    const stage = getByTestId(harness.container, "stage");
+    setStageBounds(stage);
+
+    dispatchPointerTap(stage, 40, "mouse");
+    dispatchPointerTap(stage, 150, "mouse");
+    dispatchPointerTap(stage, 260, "mouse");
+
+    expect(onPrevPage).not.toHaveBeenCalled();
+    expect(onNextPage).not.toHaveBeenCalled();
+    expect(isChromeVisible(harness.container)).toBe(false);
 
     harness.cleanup();
   });

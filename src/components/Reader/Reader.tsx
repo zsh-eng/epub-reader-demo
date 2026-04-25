@@ -103,7 +103,7 @@ export function Reader() {
       canGoPrev={sessionState.navigation.canGoPrev}
       canGoNext={sessionState.navigation.canGoNext}
       chromeInteractionMode={chromeInteractionMode}
-      isChromePinned={chromeState.isChromePinned}
+      isChromeSuppressed={chromeState.activeReaderSheet !== null}
       containerRef={stageSlotRef}
       topRailHeight={topRailHeight}
       bottomRailHeight={bottomRailHeight}
@@ -114,6 +114,7 @@ export function Reader() {
         topRailProps,
         bottomRailProps,
         chromeSurfaceProps,
+        chromeDismissLayerProps,
       }) => (
         <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-b from-background via-background to-muted/20 font-sans text-foreground">
           <div className="pointer-events-none absolute inset-0">
@@ -167,6 +168,13 @@ export function Reader() {
               />
             </DeferredEpubImageProvider>
           </div>
+
+          {chromeDismissLayerProps && (
+            <div
+              {...chromeDismissLayerProps}
+              className="absolute inset-0 z-[16] bg-transparent"
+            />
+          )}
 
           {/* Floating header — reading padding is rail-based, not chrome-height-based. */}
           <ReaderHeader

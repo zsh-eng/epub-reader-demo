@@ -10,6 +10,19 @@ export type ReaderChromeSurfaceProps = Pick<
 >;
 
 /**
+ * Transparent touch chrome layer rendered above the spread but below visible
+ * chrome surfaces. Its only job is to dismiss chrome before taps can reach the
+ * reading spread.
+ */
+export type ReaderChromeDismissLayerProps = Pick<
+  HTMLAttributes<HTMLDivElement>,
+  "onClick" | "onPointerDown" | "onPointerMove" | "onPointerUp"
+> & {
+  "aria-hidden": true;
+  "data-reader-chrome-dismiss-layer": true;
+};
+
+/**
  * Props for invisible hover rails rendered outside the reading surface in
  * hover-capable environments.
  */

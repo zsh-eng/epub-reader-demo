@@ -5,11 +5,17 @@ import {
   useRef,
   useState,
   type FocusEventHandler,
+  type MouseEventHandler,
+  type PointerEventHandler,
   type ReactNode,
   type RefObject,
 } from "react";
-import type { ReaderChromeRailProps, ReaderChromeSurfaceProps } from "./chrome";
-import { usePaginationTapNav } from "./hooks/use-pagination-tap-nav";
+import type {
+  ReaderChromeDismissLayerProps,
+  ReaderChromeRailProps,
+  ReaderChromeSurfaceProps,
+} from "./chrome";
+import { useTouchSpreadTapNav } from "./hooks/use-pagination-tap-nav";
 
 export const CHROME_HIDE_DELAY_MS = 200;
 
@@ -19,6 +25,7 @@ interface ReaderControllerChildrenState {
   topRailProps: ReaderChromeRailProps;
   bottomRailProps: ReaderChromeRailProps;
   chromeSurfaceProps: ReaderChromeSurfaceProps;
+  chromeDismissLayerProps: ReaderChromeDismissLayerProps | null;
 }
 
 interface ReaderControllerProps {
@@ -27,7 +34,7 @@ interface ReaderControllerProps {
   canGoPrev: boolean;
   canGoNext: boolean;
   chromeInteractionMode: ChromeInteractionMode;
-  isChromePinned: boolean;
+  isChromeSuppressed?: boolean;
   containerRef: RefObject<HTMLElement | null>;
   topRailHeight: number;
   bottomRailHeight: number;
@@ -40,8 +47,9 @@ interface ReaderControllerProps {
  * Responsibilities:
  * - switches between touch and hover chrome behavior
  * - keeps tap-zone navigation active only in touch mode
+ * - exposes a transparent touch dismiss layer when chrome is visible
  * - manages hover enter/leave timing for auto-hidden chrome
- * - keeps chrome visible while the reader pins it open (menus/settings)
+ * - suppresses chrome while peer overlays like sheets are open
  *
  * Contract for callers:
  * - render the returned top/bottom hover rails in the non-reading bands
@@ -57,19 +65,17 @@ export function ReaderController({
   canGoPrev,
   canGoNext,
   chromeInteractionMode,
-  isChromePinned,
+  isChromeSuppressed = false,
   containerRef,
   topRailHeight,
   bottomRailHeight,
   children,
 }: ReaderControllerProps) {
   const isHoverMode = chromeInteractionMode === "hover";
-  const [chromeVisible, setChromeVisible] = useState(
-    !isHoverMode || isChromePinned,
-  );
+  const isTouchMode = chromeInteractionMode === "touch";
+  const [chromeVisible, setChromeVisible] = useState(false);
   const hideTimeoutRef = useRef<number | null>(null);
   const previousModeRef = useRef(chromeInteractionMode);
-  const previousPinnedRef = useRef(isChromePinned);
 
   const clearHideTimeout = useCallback(() => {
     if (hideTimeoutRef.current === null) return;
@@ -79,19 +85,25 @@ export function ReaderController({
   }, []);
 
   const showChrome = useCallback(() => {
+    if (isChromeSuppressed) return;
     clearHideTimeout();
     setChromeVisible(true);
+  }, [clearHideTimeout, isChromeSuppressed]);
+
+  const hideChrome = useCallback(() => {
+    clearHideTimeout();
+    setChromeVisible(false);
   }, [clearHideTimeout]);
 
   const scheduleHideChrome = useCallback(() => {
     clearHideTimeout();
-    if (!isHoverMode || isChromePinned) return;
+    if (!isHoverMode || isChromeSuppressed) return;
 
     hideTimeoutRef.current = window.setTimeout(() => {
       setChromeVisible(false);
       hideTimeoutRef.current = null;
     }, CHROME_HIDE_DELAY_MS);
-  }, [clearHideTimeout, isChromePinned, isHoverMode]);
+  }, [clearHideTimeout, isChromeSuppressed, isHoverMode]);
 
   const handleChromeFocus = useCallback(() => {
     if (!isHoverMode) return;
@@ -134,30 +146,42 @@ export function ReaderController({
   useEffect(() => {
     if (previousModeRef.current !== chromeInteractionMode) {
       clearHideTimeout();
-      setChromeVisible(chromeInteractionMode === "touch" || isChromePinned);
+      setChromeVisible(false);
       previousModeRef.current = chromeInteractionMode;
     }
-  }, [chromeInteractionMode, clearHideTimeout, isChromePinned]);
+  }, [chromeInteractionMode, clearHideTimeout]);
 
   useEffect(() => {
-    if (isChromePinned && !previousPinnedRef.current) {
-      showChrome();
-    } else if (!isChromePinned && previousPinnedRef.current) {
-      scheduleHideChrome();
+    if (isChromeSuppressed) {
+      hideChrome();
     }
+  }, [hideChrome, isChromeSuppressed]);
 
-    previousPinnedRef.current = isChromePinned;
-  }, [isChromePinned, scheduleHideChrome, showChrome]);
-
-  usePaginationTapNav({
+  useTouchSpreadTapNav({
     containerRef,
-    enabled: chromeInteractionMode === "touch",
+    enabled: isTouchMode && !isChromeSuppressed,
     onPrevSpread: onPrevPage,
     onNextSpread: onNextPage,
-    onToggleChrome: () => setChromeVisible((visible) => !visible),
+    onShowChrome: showChrome,
     canGoPrev,
     canGoNext,
   });
+
+  const handleDismissLayerPointerEvent = useCallback<PointerEventHandler>(
+    (event) => {
+      event.stopPropagation();
+    },
+    [],
+  );
+
+  const handleDismissLayerClick = useCallback<MouseEventHandler>(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideChrome();
+    },
+    [hideChrome],
+  );
 
   const chromeSurfaceProps: ReaderChromeSurfaceProps = {
     onBlur: handleChromeBlur,
@@ -171,6 +195,17 @@ export function ReaderController({
       {children({
         chromeVisible,
         showHoverRails: isHoverMode,
+        chromeDismissLayerProps:
+          isTouchMode && chromeVisible && !isChromeSuppressed
+            ? {
+                "aria-hidden": true,
+                "data-reader-chrome-dismiss-layer": true,
+                onClick: handleDismissLayerClick,
+                onPointerDown: handleDismissLayerPointerEvent,
+                onPointerMove: handleDismissLayerPointerEvent,
+                onPointerUp: handleDismissLayerPointerEvent,
+              }
+            : null,
         topRailProps: {
           "aria-hidden": true,
           "data-reader-chrome-rail": "top",

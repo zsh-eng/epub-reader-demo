@@ -29,6 +29,10 @@ import {
 } from "react";
 import type { ReaderSessionChapterAccess } from "./use-reader-session";
 import type { ChapterEntry } from "../types";
+import {
+  READER_TOUCH_TAP_HANDLED_EVENT,
+  TOUCH_TAP_SELECTION_SUPPRESSION_MS,
+} from "./reader-interaction-events";
 
 export interface ActiveHighlightState {
   id: string;
@@ -250,6 +254,7 @@ export function useReaderAnnotations({
 }: UseReaderAnnotationsOptions): UseReaderAnnotationsResult {
   const [state, setState] = useState<ReaderAnnotationState>({ kind: "idle" });
   const highlightManagerRef = useRef<HighlightInteractionManager | null>(null);
+  const suppressSelectionUntilRef = useRef(0);
 
   const activeHighlight = state.kind === "active" ? state.highlight : null;
   const pendingDraft = state.kind === "creating" ? state.draft : null;
@@ -339,6 +344,14 @@ export function useReaderAnnotations({
 
   useEffect(() => {
     const handleResolvedSelection = () => {
+      if (Date.now() < suppressSelectionUntilRef.current) {
+        clearDomSelection();
+        setState((previousState) =>
+          previousState.kind === "creating" ? { kind: "idle" } : previousState,
+        );
+        return;
+      }
+
       const selection = window.getSelection();
       const nextDraft = selection ? resolveSelectionDraft(selection) : null;
 
@@ -370,14 +383,28 @@ export function useReaderAnnotations({
       }
     };
 
+    const handleTouchTapHandled = () => {
+      suppressSelectionUntilRef.current =
+        Date.now() + TOUCH_TAP_SELECTION_SUPPRESSION_MS;
+      clearDomSelection();
+    };
+
     document.addEventListener("mouseup", handlePointerUp);
     document.addEventListener("touchend", handlePointerUp);
     document.addEventListener("selectionchange", handleSelectionChange);
+    document.addEventListener(
+      READER_TOUCH_TAP_HANDLED_EVENT,
+      handleTouchTapHandled,
+    );
 
     return () => {
       document.removeEventListener("mouseup", handlePointerUp);
       document.removeEventListener("touchend", handlePointerUp);
       document.removeEventListener("selectionchange", handleSelectionChange);
+      document.removeEventListener(
+        READER_TOUCH_TAP_HANDLED_EVENT,
+        handleTouchTapHandled,
+      );
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
