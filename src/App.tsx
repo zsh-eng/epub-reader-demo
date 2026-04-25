@@ -6,6 +6,7 @@ import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Sessions } from "@/components/Sessions";
+import { ReadingSessionsDebug } from "@/components/debug/ReadingSessionsDebug";
 import { Toaster } from "@/components/ui/sonner";
 import { useSync } from "@/hooks/use-sync";
 import { useTransferQueue } from "@/hooks/use-transfer-queue";
@@ -37,6 +38,10 @@ function App() {
             <Route path="/reader-v1/:bookId" element={<LegacyReader />} />
             <Route path="/reader/:bookId" element={<Reader />} />
             <Route path="/reader/debug/:bookId" element={<ReaderDebug />} />
+            <Route
+              path="/debug/reading-sessions"
+              element={<ReadingSessionsDebug />}
+            />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/highlights" element={<Highlights />} />
           </Routes>

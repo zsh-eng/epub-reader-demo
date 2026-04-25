@@ -800,8 +800,7 @@ export async function closeStaleReadingSessionsForCurrentDevice(
   return staleSessions.length;
 }
 
-const LEGACY_READING_PROGRESS_SESSION_ID_PREFIX =
-  `${LEGACY_READING_PROGRESS_SESSION_SOURCE}:v1:`;
+const LEGACY_READING_PROGRESS_SESSION_ID_PREFIX = `${LEGACY_READING_PROGRESS_SESSION_SOURCE}:v1:`;
 
 export interface BackfillLegacyReadingProgressSessionsOptions {
   /**
@@ -813,6 +812,16 @@ export interface BackfillLegacyReadingProgressSessionsOptions {
   dryRun?: boolean;
 }
 
+export interface BackfillLegacyReadingProgressSessionsBookSummary {
+  bookId: string;
+  title: string | null;
+  progressRowsConsidered: number;
+  sessionsGenerated: number;
+  activeMs: number;
+  firstStartedAt: number | null;
+  lastActiveAt: number | null;
+}
+
 export interface BackfillLegacyReadingProgressSessionsResult {
   dryRun: boolean;
   progressRowsRead: number;
@@ -822,6 +831,7 @@ export interface BackfillLegacyReadingProgressSessionsResult {
   existingLegacySessions: number;
   legacySessionsSoftDeleted: number;
   activeMs: number;
+  bookSummaries: BackfillLegacyReadingProgressSessionsBookSummary[];
 }
 
 interface LegacyReadingProgressSessionDraft {
@@ -981,15 +991,18 @@ function inferLegacyReadingProgressSessions(
 export async function backfillLegacyReadingProgressSessions(
   options: BackfillLegacyReadingProgressSessionsOptions = {},
 ): Promise<BackfillLegacyReadingProgressSessionsResult> {
-  const idleTimeoutMs = options.idleTimeoutMs ?? READING_SESSION_IDLE_TIMEOUT_MS;
+  const idleTimeoutMs =
+    options.idleTimeoutMs ?? READING_SESSION_IDLE_TIMEOUT_MS;
   const dryRun = options.dryRun ?? false;
 
   return db.transaction(
     "rw",
     [db.books, db.readingProgress, db.readingSessions],
     async () => {
-      const activeBookIds = new Set(
-        (await db.books.filter(isNotDeleted).toArray()).map((book) => book.id),
+      const activeBooks = await db.books.filter(isNotDeleted).toArray();
+      const activeBookIds = new Set(activeBooks.map((book) => book.id));
+      const bookTitles = new Map(
+        activeBooks.map((book) => [book.id, book.title]),
       );
       const progressRows = (await db.readingProgress
         .filter(isNotDeleted)
@@ -1011,6 +1024,53 @@ export async function backfillLegacyReadingProgressSessions(
         (total, session) => total + session.activeMs,
         0,
       );
+      const bookSummariesById = new Map<
+        string,
+        BackfillLegacyReadingProgressSessionsBookSummary
+      >();
+
+      for (const row of usableRows) {
+        const summary = bookSummariesById.get(row.bookId) ?? {
+          bookId: row.bookId,
+          title: bookTitles.get(row.bookId) ?? null,
+          progressRowsConsidered: 0,
+          sessionsGenerated: 0,
+          activeMs: 0,
+          firstStartedAt: null,
+          lastActiveAt: null,
+        };
+
+        summary.progressRowsConsidered += 1;
+        bookSummariesById.set(row.bookId, summary);
+      }
+
+      for (const session of inferredSessions) {
+        const summary = bookSummariesById.get(session.bookId) ?? {
+          bookId: session.bookId,
+          title: bookTitles.get(session.bookId) ?? null,
+          progressRowsConsidered: 0,
+          sessionsGenerated: 0,
+          activeMs: 0,
+          firstStartedAt: null,
+          lastActiveAt: null,
+        };
+
+        summary.sessionsGenerated += 1;
+        summary.activeMs += session.activeMs;
+        summary.firstStartedAt =
+          summary.firstStartedAt === null
+            ? session.startedAt
+            : Math.min(summary.firstStartedAt, session.startedAt);
+        summary.lastActiveAt =
+          summary.lastActiveAt === null
+            ? session.lastActiveAt
+            : Math.max(summary.lastActiveAt, session.lastActiveAt);
+        bookSummariesById.set(session.bookId, summary);
+      }
+
+      const bookSummaries = Array.from(bookSummariesById.values()).sort(
+        (a, b) => b.activeMs - a.activeMs,
+      );
 
       const result: BackfillLegacyReadingProgressSessionsResult = {
         dryRun,
@@ -1021,6 +1081,7 @@ export async function backfillLegacyReadingProgressSessions(
         existingLegacySessions: existingLegacySessions.length,
         legacySessionsSoftDeleted: dryRun ? 0 : existingLegacySessions.length,
         activeMs,
+        bookSummaries,
       };
 
       if (dryRun) return result;
