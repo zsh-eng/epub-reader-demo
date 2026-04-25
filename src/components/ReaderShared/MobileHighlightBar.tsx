@@ -11,6 +11,7 @@ interface MobileHighlightBarProps {
   currentColor?: AnnotationColor;
   onDelete?: () => void;
   isNavVisible: boolean;
+  showBackdrop?: boolean;
 }
 
 export function MobileHighlightBar({
@@ -19,19 +20,21 @@ export function MobileHighlightBar({
   currentColor,
   onDelete,
   isNavVisible,
+  showBackdrop = true,
 }: MobileHighlightBarProps) {
   return (
     <>
-      {/* Backdrop to close on tap outside */}
-      <motion.div
-        className="fixed inset-0 z-40"
-        onPointerDown={onClose}
-        aria-hidden="true"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.15, ease: "easeInOut" }}
-      />
+      {showBackdrop && (
+        <motion.div
+          className="fixed inset-0 z-40"
+          onPointerDown={onClose}
+          aria-hidden="true"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15, ease: "easeInOut" }}
+        />
+      )}
 
       {/* Highlight bar */}
       <div

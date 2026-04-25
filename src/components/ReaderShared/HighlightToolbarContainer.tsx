@@ -101,6 +101,7 @@ export function HighlightToolbarContainer({
             isNavVisible={isNavVisible}
             onColorSelect={onCreateColorSelect}
             onClose={onCreateClose}
+            showBackdrop={false}
           />
         )}
       </AnimatePresence>
