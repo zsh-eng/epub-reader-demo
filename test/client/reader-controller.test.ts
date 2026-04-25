@@ -1,6 +1,6 @@
 import {
-  CHROME_HIDE_DELAY_MS,
-  ReaderController,
+    CHROME_HIDE_DELAY_MS,
+    ReaderController,
 } from "@/components/Reader/ReaderController";
 import type { ChromeInteractionMode } from "@/hooks/use-input-behavior";
 import { act, createElement, useRef } from "react";
@@ -340,7 +340,7 @@ describe("ReaderController", () => {
     expect(isChromeVisible(harness.container)).toBe(true);
 
     const dismissLayer = getByTestId(harness.container, "dismiss-layer");
-    dispatchClick(dismissLayer);
+    dispatchPointerTap(dismissLayer, 150);
     expect(isChromeVisible(harness.container)).toBe(false);
 
     dispatchPointerTap(stage, 40);
@@ -348,6 +348,26 @@ describe("ReaderController", () => {
 
     expect(onPrevPage).toHaveBeenCalledTimes(1);
     expect(onNextPage).toHaveBeenCalledTimes(1);
+
+    harness.cleanup();
+  });
+
+  it("swallows the Android compatibility click after a reveal tap", () => {
+    const harness = createHarness();
+    renderHarness(harness.root, { chromeInteractionMode: "touch" });
+
+    const stage = getByTestId(harness.container, "stage");
+    setStageBounds(stage);
+
+    dispatchPointerTap(stage, 150);
+    expect(isChromeVisible(harness.container)).toBe(true);
+
+    const dismissLayer = getByTestId(harness.container, "dismiss-layer");
+    dispatchClick(dismissLayer);
+    expect(isChromeVisible(harness.container)).toBe(true);
+
+    dispatchPointerTap(dismissLayer, 150);
+    expect(isChromeVisible(harness.container)).toBe(false);
 
     harness.cleanup();
   });
