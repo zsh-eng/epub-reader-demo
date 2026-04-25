@@ -97,6 +97,29 @@ export function resolveInitialReaderLocation(
   };
 }
 
+export function buildReaderChapterLoadOrder(
+  totalChapters: number,
+  initialChapterIndex: number,
+): number[] {
+  if (totalChapters <= 0) return [];
+
+  const center = Math.max(
+    0,
+    Math.min(Math.floor(initialChapterIndex), totalChapters - 1),
+  );
+  const order = [center];
+
+  for (let delta = 1; order.length < totalChapters; delta++) {
+    const nextChapterIndex = center + delta;
+    if (nextChapterIndex < totalChapters) order.push(nextChapterIndex);
+
+    const previousChapterIndex = center - delta;
+    if (previousChapterIndex >= 0) order.push(previousChapterIndex);
+  }
+
+  return order;
+}
+
 async function extractBodyHtml(
   chapterFile: BookFile,
   chapter: ChapterEntry,

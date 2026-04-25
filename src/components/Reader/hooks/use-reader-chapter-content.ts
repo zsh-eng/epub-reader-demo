@@ -10,6 +10,7 @@ import type { Highlight } from "@/types/highlight";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildChapterEntries,
+  buildReaderChapterLoadOrder,
   decorateChapterContent,
   didDecoratedChapterBlocksChange,
   loadBaseChapterContent,
@@ -206,11 +207,10 @@ export function useReaderChapterContent({
         );
         if (cancelled) return;
 
-        for (
-          let chapterIndex = 0;
-          chapterIndex < chapterEntries.length;
-          chapterIndex++
-        ) {
+        for (const chapterIndex of buildReaderChapterLoadOrder(
+          chapterEntries.length,
+          nextInitialLocation.chapterIndex,
+        )) {
           if (chapterIndex === nextInitialLocation.chapterIndex) continue;
 
           const chapter = chapterEntries[chapterIndex]!;
