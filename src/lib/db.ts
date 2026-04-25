@@ -95,11 +95,21 @@ export interface ReadingCheckpoint {
   lastRead: number; // Timestamp when this checkpoint was last updated
 }
 
+export const READING_SESSION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
+export const READER_V2_READING_SESSION_SOURCE = "reader-v2" as const;
+export const LEGACY_READING_PROGRESS_SESSION_SOURCE =
+  "legacy-reading-progress" as const;
+
+export type ReadingSessionSource =
+  | typeof READER_V2_READING_SESSION_SOURCE
+  | typeof LEGACY_READING_PROGRESS_SESSION_SOURCE;
+
 export interface ReadingSession {
   id: string; // UUID primary key for this reader-open session
   bookId: string; // Foreign key to Book
   deviceId: string; // Device that owns this session
   readerInstanceId: string; // Ephemeral mounted reader/window instance
+  source: ReadingSessionSource; // Native reader session or inferred legacy backfill
   startedAt: number; // Timestamp when the reader session began
   /**
    * Best-effort timestamp for when the reader session ended.
@@ -788,6 +798,251 @@ export async function closeStaleReadingSessionsForCurrentDevice(
   );
 
   return staleSessions.length;
+}
+
+const LEGACY_READING_PROGRESS_SESSION_ID_PREFIX =
+  `${LEGACY_READING_PROGRESS_SESSION_SOURCE}:v1:`;
+
+export interface BackfillLegacyReadingProgressSessionsOptions {
+  /**
+   * Gap after which old progress rows are treated as separate sessions.
+   * Gaps over this threshold are excluded entirely from active time.
+   */
+  idleTimeoutMs?: number;
+  /** Build the inferred sessions and summary without mutating IndexedDB. */
+  dryRun?: boolean;
+}
+
+export interface BackfillLegacyReadingProgressSessionsResult {
+  dryRun: boolean;
+  progressRowsRead: number;
+  progressRowsConsidered: number;
+  progressRowsSkipped: number;
+  sessionsGenerated: number;
+  existingLegacySessions: number;
+  legacySessionsSoftDeleted: number;
+  activeMs: number;
+}
+
+interface LegacyReadingProgressSessionDraft {
+  bookId: string;
+  deviceId: string;
+  startedAt: number;
+  lastActiveAt: number;
+  activeMs: number;
+  startSpineIndex: number;
+  startScrollProgress: number;
+  endSpineIndex: number;
+  endScrollProgress: number;
+}
+
+function createLegacyReadingProgressSessionId(
+  deviceId: string,
+  bookId: string,
+  startedAt: number,
+): string {
+  return `${LEGACY_READING_PROGRESS_SESSION_ID_PREFIX}${deviceId}:${bookId}:${startedAt}`;
+}
+
+function createLegacyReadingProgressReaderInstanceId(
+  deviceId: string,
+  bookId: string,
+  startedAt: number,
+): string {
+  return `legacy-import:${deviceId}:${bookId}:${startedAt}`;
+}
+
+function isLegacyReadingProgressSession(session: ReadingSession): boolean {
+  return session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE;
+}
+
+function compareLegacyReadingProgressRows(
+  a: SyncedReadingProgress,
+  b: SyncedReadingProgress,
+): number {
+  const deviceCompare = a._deviceId.localeCompare(b._deviceId);
+  if (deviceCompare !== 0) return deviceCompare;
+
+  const bookCompare = a.bookId.localeCompare(b.bookId);
+  if (bookCompare !== 0) return bookCompare;
+
+  if (a.lastRead !== b.lastRead) return a.lastRead - b.lastRead;
+  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+  return a.id.localeCompare(b.id);
+}
+
+function createLegacyReadingProgressSessionDraft(
+  row: SyncedReadingProgress,
+): LegacyReadingProgressSessionDraft {
+  const scrollProgress = normalizeCheckpointScrollProgress(row.scrollProgress);
+
+  return {
+    bookId: row.bookId,
+    deviceId: row._deviceId,
+    startedAt: row.lastRead,
+    lastActiveAt: row.lastRead,
+    activeMs: 0,
+    startSpineIndex: row.currentSpineIndex,
+    startScrollProgress: scrollProgress,
+    endSpineIndex: row.currentSpineIndex,
+    endScrollProgress: scrollProgress,
+  };
+}
+
+function appendLegacyReadingProgressRowToSessionDraft(
+  draft: LegacyReadingProgressSessionDraft,
+  row: SyncedReadingProgress,
+): void {
+  const gap = row.lastRead - draft.lastActiveAt;
+  if (gap >= 0) {
+    draft.activeMs += gap;
+  }
+
+  draft.lastActiveAt = row.lastRead;
+  draft.endSpineIndex = row.currentSpineIndex;
+  draft.endScrollProgress = normalizeCheckpointScrollProgress(
+    row.scrollProgress,
+  );
+}
+
+function createReadingSessionFromLegacyDraft(
+  draft: LegacyReadingProgressSessionDraft,
+): ReadingSession {
+  return {
+    id: createLegacyReadingProgressSessionId(
+      draft.deviceId,
+      draft.bookId,
+      draft.startedAt,
+    ),
+    bookId: draft.bookId,
+    deviceId: draft.deviceId,
+    readerInstanceId: createLegacyReadingProgressReaderInstanceId(
+      draft.deviceId,
+      draft.bookId,
+      draft.startedAt,
+    ),
+    source: LEGACY_READING_PROGRESS_SESSION_SOURCE,
+    startedAt: draft.startedAt,
+    endedAt: draft.lastActiveAt,
+    lastActiveAt: draft.lastActiveAt,
+    activeMs: draft.activeMs,
+    startSpineIndex: draft.startSpineIndex,
+    startScrollProgress: draft.startScrollProgress,
+    endSpineIndex: draft.endSpineIndex,
+    endScrollProgress: draft.endScrollProgress,
+  };
+}
+
+function inferLegacyReadingProgressSessions(
+  rows: SyncedReadingProgress[],
+  idleTimeoutMs: number,
+): ReadingSession[] {
+  const sessions: ReadingSession[] = [];
+  let current: LegacyReadingProgressSessionDraft | null = null;
+
+  for (const row of rows) {
+    if (!current) {
+      current = createLegacyReadingProgressSessionDraft(row);
+      continue;
+    }
+
+    const shouldStartNewSession =
+      current.bookId !== row.bookId ||
+      current.deviceId !== row._deviceId ||
+      row.lastRead - current.lastActiveAt > idleTimeoutMs;
+
+    if (shouldStartNewSession) {
+      sessions.push(createReadingSessionFromLegacyDraft(current));
+
+      current = createLegacyReadingProgressSessionDraft(row);
+      continue;
+    }
+
+    appendLegacyReadingProgressRowToSessionDraft(current, row);
+  }
+
+  if (current) {
+    sessions.push(createReadingSessionFromLegacyDraft(current));
+  }
+
+  return sessions;
+}
+
+/**
+ * Rebuilds inferred reading sessions from the legacy append-only
+ * `readingProgress` stream.
+ *
+ * This is intentionally a manual, rerunnable helper rather than an IndexedDB
+ * version migration: it should run only after the old progress table has had a
+ * chance to sync. Reruns soft-delete previous legacy-imported sessions, then
+ * write the freshly inferred set so newly synced rows can bridge or remove
+ * earlier inferred sessions deterministically.
+ */
+export async function backfillLegacyReadingProgressSessions(
+  options: BackfillLegacyReadingProgressSessionsOptions = {},
+): Promise<BackfillLegacyReadingProgressSessionsResult> {
+  const idleTimeoutMs = options.idleTimeoutMs ?? READING_SESSION_IDLE_TIMEOUT_MS;
+  const dryRun = options.dryRun ?? false;
+
+  return db.transaction(
+    "rw",
+    [db.books, db.readingProgress, db.readingSessions],
+    async () => {
+      const activeBookIds = new Set(
+        (await db.books.filter(isNotDeleted).toArray()).map((book) => book.id),
+      );
+      const progressRows = (await db.readingProgress
+        .filter(isNotDeleted)
+        .toArray()) as SyncedReadingProgress[];
+      const usableRows = progressRows
+        .filter((row) => activeBookIds.has(row.bookId))
+        .sort(compareLegacyReadingProgressRows);
+      const inferredSessions = inferLegacyReadingProgressSessions(
+        usableRows,
+        idleTimeoutMs,
+      );
+      const existingLegacySessions = await db.readingSessions
+        .filter(
+          (session) =>
+            isLegacyReadingProgressSession(session) && isNotDeleted(session),
+        )
+        .toArray();
+      const activeMs = inferredSessions.reduce(
+        (total, session) => total + session.activeMs,
+        0,
+      );
+
+      const result: BackfillLegacyReadingProgressSessionsResult = {
+        dryRun,
+        progressRowsRead: progressRows.length,
+        progressRowsConsidered: usableRows.length,
+        progressRowsSkipped: progressRows.length - usableRows.length,
+        sessionsGenerated: inferredSessions.length,
+        existingLegacySessions: existingLegacySessions.length,
+        legacySessionsSoftDeleted: dryRun ? 0 : existingLegacySessions.length,
+        activeMs,
+      };
+
+      if (dryRun) return result;
+
+      if (existingLegacySessions.length > 0) {
+        await db.readingSessions.bulkPut(
+          existingLegacySessions.map((session) => ({
+            ...session,
+            _isDeleted: 1,
+          })),
+        );
+      }
+
+      if (inferredSessions.length > 0) {
+        await db.readingSessions.bulkPut(
+          inferredSessions as SyncedReadingSession[],
+        );
+      }
+
+      return result;
+    },
+  );
 }
 
 // ============================================================================

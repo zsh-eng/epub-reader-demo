@@ -18,6 +18,8 @@ import {
 } from "vitest";
 
 vi.mock("@/lib/db", () => ({
+  READER_V2_READING_SESSION_SOURCE: "reader-v2",
+  READING_SESSION_IDLE_TIMEOUT_MS: 10 * 60 * 1000,
   updateCurrentDeviceReadingSession: vi.fn(() =>
     Promise.resolve("session-id"),
   ),
