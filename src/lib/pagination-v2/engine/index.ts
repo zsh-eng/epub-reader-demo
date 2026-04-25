@@ -310,6 +310,20 @@ export class PaginationEngine {
       return;
     }
 
+    if (
+      resolvedSpread &&
+      this.spreadContainsChapter(resolvedSpread, chapterIndex)
+    ) {
+      this.emit({
+        type: "partialReady",
+        intent,
+        epoch: this.epoch,
+        spread: resolvedSpread,
+        chapterDiagnostics: diagnostics,
+      });
+      return;
+    }
+
     this.emit({
       type: "progress",
       intent,
@@ -558,7 +572,6 @@ export class PaginationEngine {
     runtime: PaginationRuntime,
   ): Promise<void> {
     const order = this.buildMiddleOutOrder(this.anchor.chapterIndex);
-    let emittedPartial = false;
 
     for (const chapterIndex of order) {
       if (runtime.isStale()) return;
@@ -575,7 +588,7 @@ export class PaginationEngine {
       const currentSpread = spread?.currentSpread ?? 1;
       const totalSpreads = spread?.totalSpreads ?? this.totalSpreads;
 
-      if (!emittedPartial && spread) {
+      if (spread && this.spreadContainsChapter(spread, chapterIndex)) {
         this.emit({
           type: "partialReady",
           intent,
@@ -583,7 +596,6 @@ export class PaginationEngine {
           spread,
           chapterDiagnostics: diagnostics,
         });
-        emittedPartial = true;
       } else {
         this.emit({
           type: "progress",
@@ -782,6 +794,15 @@ export class PaginationEngine {
     }
 
     return order;
+  }
+
+  private spreadContainsChapter(
+    spread: ResolvedSpread,
+    chapterIndex: number,
+  ): boolean {
+    return spread.slots.some(
+      (slot) => slot.kind === "page" && slot.page.chapterIndex === chapterIndex,
+    );
   }
 
   private arePaginationConfigsEqual(

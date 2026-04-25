@@ -366,6 +366,22 @@ describe("init + addChapter lifecycle", () => {
     );
   });
 
+  it("emits partialReady when a loaded chapter fills the visible spread", () => {
+    const { engine, events } = createEngine({
+      totalChapters: 3,
+      spreadConfig: { columns: 2, chapterFlow: "continuous" },
+    });
+    events.length = 0;
+
+    addChapter(engine, 1);
+
+    const partial = getLastEventOfType(events, "partialReady");
+    expect(partial).toBeDefined();
+    expect(partial?.spread.chapterIndexStart).toBe(0);
+    expect(partial?.spread.chapterIndexEnd).toBe(1);
+    expect(countEvents(events, "progress")).toBe(0);
+  });
+
   it("spread in partialReady contains slot metadata", () => {
     const { events } = createEngine({ totalChapters: 2 });
     const partial = events.find(
