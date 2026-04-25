@@ -44,17 +44,6 @@ import {
 import { syncService } from "@/lib/sync-service";
 import { cn } from "@/lib/utils";
 import {
-  type Column,
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  type PaginationState,
-  type SortingState,
-  useReactTable,
-} from "@tanstack/react-table";
-import {
   ArrowLeft,
   ArrowUpDown,
   ChevronLeft,
@@ -63,7 +52,7 @@ import {
   RefreshCw,
   Search,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -112,6 +101,23 @@ interface ReadingSessionDebugRow {
   readerInstanceId: string;
   isStaleOpen: boolean;
   searchText: string;
+}
+
+type SortableColumnId =
+  | "bookTitle"
+  | "startedAt"
+  | "lastActiveAt"
+  | "activeMs"
+  | "wallMs";
+
+interface DebugSortingState {
+  id: SortableColumnId;
+  desc: boolean;
+}
+
+interface DebugPaginationState {
+  pageIndex: number;
+  pageSize: number;
 }
 
 function isActiveRecord(record: { _isDeleted?: number }): boolean {
@@ -222,21 +228,29 @@ async function getReadingSessionsDebugData(): Promise<ReadingSessionsDebugData> 
   return { rows, bookOptions, deviceOptions };
 }
 
-function SortableHeader<TData>({
-  column,
+function SortableHeader({
+  sorting,
+  sortKey,
   title,
   className,
+  onSort,
 }: {
-  column: Column<TData, unknown>;
+  sorting: DebugSortingState | null;
+  sortKey: SortableColumnId;
   title: string;
   className?: string;
+  onSort: (sortKey: SortableColumnId) => void;
 }) {
+  const isActive = sorting?.id === sortKey;
+  const sortLabel = isActive ? (sorting.desc ? "descending" : "ascending") : "";
+
   return (
     <Button
       variant="ghost"
       size="sm"
       className={cn("-ml-2 h-8 px-2", className)}
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+      onClick={() => onSort(sortKey)}
+      aria-label={sortLabel ? `Sort ${title} (${sortLabel})` : `Sort ${title}`}
     >
       {title}
       <ArrowUpDown className="size-3.5" />
@@ -244,104 +258,180 @@ function SortableHeader<TData>({
   );
 }
 
-const columns: ColumnDef<ReadingSessionDebugRow>[] = [
+interface DebugColumn {
+  id: string;
+  header: (context: {
+    onSort: (sortKey: SortableColumnId) => void;
+    sorting: DebugSortingState | null;
+  }) => ReactNode;
+  cell: (row: ReadingSessionDebugRow) => ReactNode;
+  align?: "right";
+}
+
+const columns: DebugColumn[] = [
   {
-    accessorKey: "bookTitle",
-    header: ({ column }) => <SortableHeader column={column} title="Book" />,
-    cell: ({ row }) => (
+    id: "bookTitle",
+    header: ({ onSort, sorting }) => (
+      <SortableHeader
+        sorting={sorting}
+        sortKey="bookTitle"
+        title="Book"
+        onSort={onSort}
+      />
+    ),
+    cell: (row) => (
       <div className="max-w-[300px]">
-        <div className="truncate font-medium">{row.original.bookTitle}</div>
+        <div className="truncate font-medium">{row.bookTitle}</div>
         <div className="truncate text-xs text-muted-foreground">
-          {row.original.bookAuthor}
+          {row.bookAuthor}
         </div>
       </div>
     ),
   },
   {
-    accessorKey: "source",
-    header: "Source",
-    cell: ({ row }) => (
+    id: "source",
+    header: () => "Source",
+    cell: (row) => (
       <Badge
         variant={
-          row.original.source === READER_V2_READING_SESSION_SOURCE
+          row.source === READER_V2_READING_SESSION_SOURCE
             ? "default"
             : "secondary"
         }
       >
-        {formatSource(row.original.source)}
+        {formatSource(row.source)}
       </Badge>
     ),
   },
   {
-    accessorKey: "startedAt",
-    header: ({ column }) => <SortableHeader column={column} title="Started" />,
-    cell: ({ row }) => formatDateTime(row.original.startedAt),
+    id: "startedAt",
+    header: ({ onSort, sorting }) => (
+      <SortableHeader
+        sorting={sorting}
+        sortKey="startedAt"
+        title="Started"
+        onSort={onSort}
+      />
+    ),
+    cell: (row) => formatDateTime(row.startedAt),
   },
   {
-    accessorKey: "lastActiveAt",
-    header: ({ column }) => <SortableHeader column={column} title="End" />,
-    cell: ({ row }) => (
+    id: "lastActiveAt",
+    header: ({ onSort, sorting }) => (
+      <SortableHeader
+        sorting={sorting}
+        sortKey="lastActiveAt"
+        title="End"
+        onSort={onSort}
+      />
+    ),
+    cell: (row) => (
       <div className="space-y-1">
-        <div>
-          {formatDateTime(row.original.endedAt ?? row.original.lastActiveAt)}
-        </div>
-        {row.original.endedAt === null && (
+        <div>{formatDateTime(row.endedAt ?? row.lastActiveAt)}</div>
+        {row.endedAt === null && (
           <Badge variant="outline">
-            {row.original.isStaleOpen ? "Open stale" : "Open"}
+            {row.isStaleOpen ? "Open stale" : "Open"}
           </Badge>
         )}
       </div>
     ),
   },
   {
-    accessorKey: "activeMs",
-    header: ({ column }) => (
-      <SortableHeader column={column} title="Active" className="ml-auto" />
+    id: "activeMs",
+    align: "right",
+    header: ({ onSort, sorting }) => (
+      <SortableHeader
+        sorting={sorting}
+        sortKey="activeMs"
+        title="Active"
+        className="ml-auto"
+        onSort={onSort}
+      />
     ),
-    cell: ({ row }) => (
+    cell: (row) => (
       <div className="text-right font-medium">
-        {formatDuration(row.original.activeMs)}
+        {formatDuration(row.activeMs)}
       </div>
     ),
   },
   {
-    accessorKey: "wallMs",
-    header: ({ column }) => (
-      <SortableHeader column={column} title="Span" className="ml-auto" />
+    id: "wallMs",
+    align: "right",
+    header: ({ onSort, sorting }) => (
+      <SortableHeader
+        sorting={sorting}
+        sortKey="wallMs"
+        title="Span"
+        className="ml-auto"
+        onSort={onSort}
+      />
     ),
-    cell: ({ row }) => (
+    cell: (row) => (
       <div className="text-right text-muted-foreground">
-        {formatDuration(row.original.wallMs)}
+        {formatDuration(row.wallMs)}
       </div>
     ),
   },
   {
-    accessorKey: "startPosition",
-    header: "Start",
+    id: "startPosition",
+    header: () => "Start",
+    cell: (row) => row.startPosition,
   },
   {
-    accessorKey: "endPosition",
-    header: "End position",
+    id: "endPosition",
+    header: () => "End position",
+    cell: (row) => row.endPosition,
   },
   {
-    accessorKey: "deviceId",
-    header: "Device",
-    cell: ({ row }) => (
+    id: "deviceId",
+    header: () => "Device",
+    cell: (row) => (
       <span className="font-mono text-xs text-muted-foreground">
-        {truncateId(row.original.deviceId)}
+        {truncateId(row.deviceId)}
       </span>
     ),
   },
   {
-    accessorKey: "readerInstanceId",
-    header: "Instance",
-    cell: ({ row }) => (
+    id: "readerInstanceId",
+    header: () => "Instance",
+    cell: (row) => (
       <span className="font-mono text-xs text-muted-foreground">
-        {truncateId(row.original.readerInstanceId)}
+        {truncateId(row.readerInstanceId)}
       </span>
     ),
   },
 ];
+
+function compareRowsByColumn(
+  a: ReadingSessionDebugRow,
+  b: ReadingSessionDebugRow,
+  sortKey: SortableColumnId,
+) {
+  switch (sortKey) {
+    case "bookTitle":
+      return a.bookTitle.localeCompare(b.bookTitle);
+    case "startedAt":
+      return a.startedAt - b.startedAt;
+    case "lastActiveAt":
+      return a.lastActiveAt - b.lastActiveAt;
+    case "activeMs":
+      return a.activeMs - b.activeMs;
+    case "wallMs":
+      return a.wallMs - b.wallMs;
+  }
+}
+
+function sortReadingSessionRows(
+  rows: ReadingSessionDebugRow[],
+  sorting: DebugSortingState | null,
+) {
+  if (!sorting) return rows;
+
+  return [...rows].sort((a, b) => {
+    const result = compareRowsByColumn(a, b, sorting.id);
+    return sorting.desc ? -result : result;
+  });
+}
 
 function StatItem({ label, value }: { label: string; value: string }) {
   return (
@@ -752,10 +842,11 @@ export function ReadingSessionsDebug() {
   const [isBackfillDialogOpen, setIsBackfillDialogOpen] = useState(false);
   const [isCheckpointBackfillDialogOpen, setIsCheckpointBackfillDialogOpen] =
     useState(false);
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "startedAt", desc: true },
-  ]);
-  const [pagination, setPagination] = useState<PaginationState>({
+  const [sorting, setSorting] = useState<DebugSortingState | null>({
+    id: "startedAt",
+    desc: true,
+  });
+  const [pagination, setPagination] = useState<DebugPaginationState>({
     pageIndex: 0,
     pageSize: 25,
   });
@@ -791,24 +882,44 @@ export function ReadingSessionsDebug() {
     return { total: rows.length, readerV2, legacy, open, staleOpen, activeMs };
   }, [query.data?.rows]);
 
-  const table = useReactTable({
-    data: filteredRows,
-    columns,
-    getRowId: (row) => row.id,
-    state: {
-      sorting,
-      pagination,
-    },
-    onSortingChange: setSorting,
-    onPaginationChange: setPagination,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-  });
+  const sortedRows = useMemo(
+    () => sortReadingSessionRows(filteredRows, sorting),
+    [filteredRows, sorting],
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(sortedRows.length / pagination.pageSize),
+  );
+  const currentPageIndex = Math.min(pagination.pageIndex, pageCount - 1);
+  const paginatedRows = useMemo(() => {
+    const start = currentPageIndex * pagination.pageSize;
+    return sortedRows.slice(start, start + pagination.pageSize);
+  }, [currentPageIndex, pagination.pageSize, sortedRows]);
+  const canPreviousPage = currentPageIndex > 0;
+  const canNextPage = currentPageIndex < pageCount - 1;
 
-  useEffect(() => {
-    table.setPageIndex(0);
-  }, [bookFilter, deviceFilter, searchQuery, sourceFilter, table]);
+  const handleSort = (sortKey: SortableColumnId) => {
+    setSorting((current) => {
+      if (current?.id === sortKey) {
+        return { id: sortKey, desc: !current.desc };
+      }
+      return { id: sortKey, desc: false };
+    });
+  };
+
+  const previousPage = () => {
+    setPagination((current) => ({
+      ...current,
+      pageIndex: Math.max(0, currentPageIndex - 1),
+    }));
+  };
+
+  const nextPage = () => {
+    setPagination((current) => ({
+      ...current,
+      pageIndex: Math.min(pageCount - 1, currentPageIndex + 1),
+    }));
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -947,39 +1058,26 @@ export function ReadingSessionsDebug() {
             ) : (
               <Table className="min-w-[1180px]">
                 <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead
-                          key={header.id}
-                          className={cn(
-                            header.column.id === "activeMs" ||
-                              header.column.id === "wallMs"
-                              ? "text-right"
-                              : undefined,
-                          )}
-                        >
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext(),
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
+                  <TableRow>
+                    {columns.map((column) => (
+                      <TableHead
+                        key={column.id}
+                        className={
+                          column.align === "right" ? "text-right" : undefined
+                        }
+                      >
+                        {column.header({ onSort: handleSort, sorting })}
+                      </TableHead>
+                    ))}
+                  </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {table.getRowModel().rows.length > 0 ? (
-                    table.getRowModel().rows.map((row) => (
+                  {paginatedRows.length > 0 ? (
+                    paginatedRows.map((row) => (
                       <TableRow key={row.id}>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(
-                              cell.column.columnDef.cell,
-                              cell.getContext(),
-                            )}
+                        {columns.map((column) => (
+                          <TableCell key={`${row.id}-${column.id}`}>
+                            {column.cell(row)}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -1001,7 +1099,7 @@ export function ReadingSessionsDebug() {
 
           <div className="flex flex-col gap-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
             <div>
-              Showing {table.getRowModel().rows.length.toLocaleString()} of{" "}
+              Showing {paginatedRows.length.toLocaleString()} of{" "}
               {filteredRows.length.toLocaleString()} filtered session
               {filteredRows.length === 1 ? "" : "s"}
             </div>
@@ -1030,21 +1128,20 @@ export function ReadingSessionsDebug() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
+                onClick={previousPage}
+                disabled={!canPreviousPage}
               >
                 <ChevronLeft className="size-4" />
                 <span className="sr-only">Previous page</span>
               </Button>
               <div className="min-w-24 text-center">
-                Page {pagination.pageIndex + 1} of{" "}
-                {Math.max(1, table.getPageCount())}
+                Page {currentPageIndex + 1} of {pageCount}
               </div>
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
+                onClick={nextPage}
+                disabled={!canNextPage}
               >
                 <ChevronRight className="size-4" />
                 <span className="sr-only">Next page</span>

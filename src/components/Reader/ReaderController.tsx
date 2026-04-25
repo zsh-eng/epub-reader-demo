@@ -1,12 +1,5 @@
 import type { ChromeInteractionMode } from "@/hooks/use-input-behavior";
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { useCallback, useState, type ReactNode, type RefObject } from "react";
 import type {
   ReaderChromeDismissLayerProps,
   ReaderChromeRailProps,
@@ -75,30 +68,27 @@ export function ReaderController({
 }: ReaderControllerProps) {
   const isHoverMode = chromeInteractionMode === "hover";
   const isTouchMode = chromeInteractionMode === "touch";
-  const [chromeVisible, setChromeVisible] = useState(false);
-  const previousModeRef = useRef(chromeInteractionMode);
+  const [chromeState, setChromeState] = useState(() => ({
+    mode: chromeInteractionMode,
+    visible: false,
+  }));
+  const chromeVisible =
+    chromeState.mode === chromeInteractionMode &&
+    chromeState.visible &&
+    !isChromeSuppressed;
 
   const showChrome = useCallback(() => {
     if (isChromeSuppressed) return;
-    setChromeVisible(true);
-  }, [isChromeSuppressed]);
+    setChromeState({ mode: chromeInteractionMode, visible: true });
+  }, [chromeInteractionMode, isChromeSuppressed]);
 
   const hideChrome = useCallback(() => {
-    setChromeVisible(false);
-  }, []);
-
-  useEffect(() => {
-    if (previousModeRef.current !== chromeInteractionMode) {
-      setChromeVisible(false);
-      previousModeRef.current = chromeInteractionMode;
-    }
+    setChromeState((state) =>
+      state.visible || state.mode !== chromeInteractionMode
+        ? { mode: chromeInteractionMode, visible: false }
+        : state,
+    );
   }, [chromeInteractionMode]);
-
-  useEffect(() => {
-    if (isChromeSuppressed) {
-      hideChrome();
-    }
-  }, [hideChrome, isChromeSuppressed]);
 
   useTouchSpreadTapNav({
     containerRef,

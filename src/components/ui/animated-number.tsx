@@ -5,7 +5,7 @@ import {
   useSpring,
   useTransform,
 } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 
 interface AnimatedNumberProps {
   value: number;
@@ -22,10 +22,13 @@ interface AnimatedNumberProps {
   className?: string;
 }
 
+const defaultNumberFormat = (value: number) => Math.round(value).toString();
+const defaultSpringConfig = { stiffness: 300, damping: 30, mass: 1 };
+
 function SpringAnimatedNumber({
   value,
-  format = (v) => Math.round(v).toString(),
-  springConfig = { stiffness: 300, damping: 30, mass: 1 },
+  format = defaultNumberFormat,
+  springConfig = defaultSpringConfig,
   className,
 }: AnimatedNumberProps) {
   const spring = useSpring(value, springConfig);
@@ -40,19 +43,11 @@ function SpringAnimatedNumber({
 
 function PopAnimatedNumber({
   value,
-  format = (v) => Math.round(v).toString(),
+  format = defaultNumberFormat,
   className,
 }: AnimatedNumberProps) {
   const reducedMotion = useReducedMotion() ?? false;
-  const previousValueRef = useRef(value);
-  const previousValue = previousValueRef.current;
-  const direction =
-    value === previousValue ? 0 : value > previousValue ? 1 : -1;
   const display = format(value);
-
-  useEffect(() => {
-    previousValueRef.current = value;
-  }, [value]);
 
   return (
     <span className={className}>
@@ -61,10 +56,10 @@ function PopAnimatedNumber({
           key={display}
           className="inline-block"
           initial={
-            reducedMotion || direction === 0
+            reducedMotion
               ? false
               : {
-                  y: direction > 0 ? 6 : -6,
+                  y: 6,
                   opacity: 0,
                   scale: 0.96,
                   filter: "blur(2px)",
@@ -77,10 +72,10 @@ function PopAnimatedNumber({
             filter: "blur(0px)",
           }}
           exit={
-            reducedMotion || direction === 0
+            reducedMotion
               ? { opacity: 0 }
               : {
-                  y: direction > 0 ? -6 : 6,
+                  y: -6,
                   opacity: 0,
                   scale: 1.02,
                   filter: "blur(1px)",
@@ -106,9 +101,9 @@ function PopAnimatedNumber({
 
 export function AnimatedNumber({
   value,
-  format: formatProp = (v) => Math.round(v).toString(),
+  format: formatProp = defaultNumberFormat,
   variant = "spring",
-  springConfig = { stiffness: 300, damping: 30, mass: 1 },
+  springConfig = defaultSpringConfig,
   className,
 }: AnimatedNumberProps) {
   if (variant === "pop") {

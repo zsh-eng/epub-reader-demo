@@ -1,7 +1,7 @@
 import type { ReaderChromeSurfaceProps } from "@/components/Reader/chrome";
 import type { ChapterEntry } from "@/components/Reader/types";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
 import { FooterScrubberLoading } from "./FooterLoadingState";
 import { FooterPageIndicator } from "./FooterPageIndicator";
@@ -62,53 +62,9 @@ export function ReaderFooter({
   isLoading = false,
 }: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
-  const prevIsLoadingRef = useRef(isLoading);
-  const [hasBeenReady, setHasBeenReady] = useState(!isLoading);
-  const lastReadyDetailsRef = useRef<{
-    currentPage: number;
-    totalPages: number;
-    currentChapterIndex: number;
-    currentChapterEndIndex: number;
-    chapterStartPages: (number | null)[];
-  } | null>(
-    !isLoading
-      ? {
-          currentPage,
-          totalPages,
-          currentChapterIndex,
-          currentChapterEndIndex,
-          chapterStartPages: [...chapterStartPages],
-        }
-      : null,
-  );
-  const animateReadyTransition = prevIsLoadingRef.current && !isLoading;
-  const animateLoadingTransition = !prevIsLoadingRef.current && isLoading;
-  const preserveDetailsWhileLoading =
-    isLoading && hasBeenReady && !!lastReadyDetailsRef.current;
-
-  useEffect(() => {
-    prevIsLoadingRef.current = isLoading;
-  }, [isLoading]);
-
-  useEffect(() => {
-    if (!isLoading) {
-      setHasBeenReady(true);
-      lastReadyDetailsRef.current = {
-        currentPage,
-        totalPages,
-        currentChapterIndex,
-        currentChapterEndIndex,
-        chapterStartPages: [...chapterStartPages],
-      };
-    }
-  }, [
-    chapterStartPages,
-    currentChapterEndIndex,
-    currentChapterIndex,
-    currentPage,
-    isLoading,
-    totalPages,
-  ]);
+  const animateReadyTransition = false;
+  const animateLoadingTransition = false;
+  const preserveDetailsWhileLoading = false;
 
   const interruptScrubberMomentum = useCallback(() => {
     setCancelMomentumSignal((signal) => signal + 1);
@@ -127,26 +83,11 @@ export function ReaderFooter({
     onPrevChapter();
   }, [interruptScrubberMomentum, onPrevChapter]);
 
-  const detailCurrentPage =
-    preserveDetailsWhileLoading && lastReadyDetailsRef.current
-      ? lastReadyDetailsRef.current.currentPage
-      : currentPage;
-  const detailTotalPages =
-    preserveDetailsWhileLoading && lastReadyDetailsRef.current
-      ? lastReadyDetailsRef.current.totalPages
-      : totalPages;
-  const detailCurrentChapterIndex =
-    preserveDetailsWhileLoading && lastReadyDetailsRef.current
-      ? lastReadyDetailsRef.current.currentChapterIndex
-      : currentChapterIndex;
-  const detailCurrentChapterEndIndex =
-    preserveDetailsWhileLoading && lastReadyDetailsRef.current
-      ? lastReadyDetailsRef.current.currentChapterEndIndex
-      : currentChapterEndIndex;
-  const detailChapterStartPages =
-    preserveDetailsWhileLoading && lastReadyDetailsRef.current
-      ? lastReadyDetailsRef.current.chapterStartPages
-      : chapterStartPages;
+  const detailCurrentPage = currentPage;
+  const detailTotalPages = totalPages;
+  const detailCurrentChapterIndex = currentChapterIndex;
+  const detailCurrentChapterEndIndex = currentChapterEndIndex;
+  const detailChapterStartPages = chapterStartPages;
 
   return (
     <AnimatePresence>

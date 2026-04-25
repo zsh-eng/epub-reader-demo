@@ -73,21 +73,22 @@ interface ResponsiveContextMenuProps {
 
 function ResponsiveContextMenuRoot({ children }: ResponsiveContextMenuProps) {
   const isTouch = useIsTouchDevice();
-  const [items, setItems] = React.useState<MenuItemConfig[]>([]);
-  const [separatorIndices, setSeparatorIndices] = React.useState<number[]>([]);
 
-  // Parse children to extract menu configuration
-  React.useEffect(() => {
+  const { items, separatorIndices, trigger } = React.useMemo(() => {
     const newItems: MenuItemConfig[] = [];
     const newSeparatorIndices: number[] = [];
+    let newTrigger: React.ReactNode = null;
 
     React.Children.forEach(children, (child) => {
       if (!React.isValidElement(child)) return;
 
-      if (
-        (child.type as React.ComponentType)?.displayName ===
-        "ResponsiveContextMenuContent"
-      ) {
+      const displayName = (child.type as React.ComponentType)?.displayName;
+      if (displayName === "ResponsiveContextMenuTrigger") {
+        newTrigger = (child.props as { children: React.ReactNode }).children;
+        return;
+      }
+
+      if (displayName === "ResponsiveContextMenuContent") {
         const contentProps = child.props as { children: React.ReactNode };
         React.Children.forEach(contentProps.children, (item) => {
           if (!React.isValidElement(item)) return;
@@ -110,20 +111,12 @@ function ResponsiveContextMenuRoot({ children }: ResponsiveContextMenuProps) {
       }
     });
 
-    setItems(newItems);
-    setSeparatorIndices(newSeparatorIndices);
+    return {
+      items: newItems,
+      separatorIndices: newSeparatorIndices,
+      trigger: newTrigger,
+    };
   }, [children]);
-
-  // Find trigger from children
-  let trigger: React.ReactNode = null;
-
-  React.Children.forEach(children, (child) => {
-    if (!React.isValidElement(child)) return;
-    const displayName = (child.type as React.ComponentType)?.displayName;
-    if (displayName === "ResponsiveContextMenuTrigger") {
-      trigger = (child.props as { children: React.ReactNode }).children;
-    }
-  });
 
   if (isTouch) {
     // Mobile: Use LongPressMenu with backdrop

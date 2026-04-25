@@ -84,11 +84,16 @@ export function DeferredEpubImageProvider({
 
       pendingLoadsRef.current.set(resourcePath, loadPromise);
 
-      try {
-        return await loadPromise;
-      } finally {
-        pendingLoadsRef.current.delete(resourcePath);
-      }
+      return loadPromise.then(
+        (loadedUrl) => {
+          pendingLoadsRef.current.delete(resourcePath);
+          return loadedUrl;
+        },
+        (error) => {
+          pendingLoadsRef.current.delete(resourcePath);
+          throw error;
+        },
+      );
     },
     [bookId],
   );
@@ -124,13 +129,10 @@ export function useDeferredEpubImage(src: string) {
   const store = useContext(DeferredEpubImageContext);
   const resourcePath = getDeferredEpubImagePath(src);
   const deferredStore = resourcePath ? store : null;
-  const [resolvedSrc, setResolvedSrc] = useState<string | null>(() => {
-    if (!resourcePath) {
-      return src;
-    }
-
-    return deferredStore?.getUrl(resourcePath) ?? null;
-  });
+  const [loadedSrc, setLoadedSrc] = useState<{
+    resourcePath: string;
+    src: string;
+  } | null>(null);
 
   if (resourcePath && !deferredStore) {
     throw new Error(
@@ -138,45 +140,34 @@ export function useDeferredEpubImage(src: string) {
     );
   }
 
+  const cachedSrc =
+    resourcePath && deferredStore ? deferredStore.getUrl(resourcePath) : null;
+  const resolvedSrc = resourcePath
+    ? (cachedSrc ??
+      (loadedSrc?.resourcePath === resourcePath ? loadedSrc.src : null))
+    : src;
+
   useEffect(() => {
     let cancelled = false;
 
-    if (!resourcePath) {
-      setResolvedSrc(src);
+    if (!resourcePath || !deferredStore || cachedSrc) {
       return () => {
         cancelled = true;
       };
     }
 
-    const activeStore = deferredStore;
-    if (!activeStore) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const cachedUrl = activeStore.getUrl(resourcePath);
-    if (cachedUrl) {
-      setResolvedSrc(cachedUrl);
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    setResolvedSrc(null);
-
-    void activeStore.loadUrl(resourcePath).then((loadedUrl) => {
+    void deferredStore.loadUrl(resourcePath).then((loadedUrl) => {
       if (cancelled || !loadedUrl) {
         return;
       }
 
-      setResolvedSrc(loadedUrl);
+      setLoadedSrc({ resourcePath, src: loadedUrl });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [deferredStore, resourcePath, src]);
+  }, [cachedSrc, deferredStore, resourcePath]);
 
   return {
     isLoading: !!resourcePath && !resolvedSrc,

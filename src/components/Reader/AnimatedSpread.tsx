@@ -1,7 +1,7 @@
 import type { PaginationConfig } from "@/lib/pagination-v2";
 import type { ResolvedSpread, SpreadConfig } from "@/lib/pagination-v2/types";
 import { motion, useIsPresent, usePresenceData } from "motion/react";
-import { useRef } from "react";
+import { useState } from "react";
 import { PageSliceView } from "./PageSliceView";
 
 export type NavDirection = "forward" | "backward" | "instant";
@@ -73,15 +73,24 @@ export function AnimatedSpread({
   // latest `custom` value after any parent re-render. Without freezing, pressing
   // prev while page 1 is still exiting forward causes it to redirect rightward
   // and pop to z=1, appearing incorrectly on top of the incoming page.
-  const frozenExitDir = useRef<NavDirection | null>(null);
+  const [presenceSnapshot, setPresenceSnapshot] = useState(() => ({
+    direction: rawDirection,
+    isPresent,
+  }));
+  let direction = presenceSnapshot.direction;
+
   if (isPresent) {
-    frozenExitDir.current = null; // reset when re-entering
-  } else if (frozenExitDir.current === null) {
-    frozenExitDir.current = rawDirection; // freeze on first exit render
+    direction = rawDirection;
+    if (
+      !presenceSnapshot.isPresent ||
+      presenceSnapshot.direction !== rawDirection
+    ) {
+      setPresenceSnapshot({ direction: rawDirection, isPresent });
+    }
+  } else if (presenceSnapshot.isPresent) {
+    direction = rawDirection;
+    setPresenceSnapshot({ direction: rawDirection, isPresent });
   }
-  const direction = isPresent
-    ? rawDirection
-    : (frozenExitDir.current ?? rawDirection);
 
   // Z-index rules:
   //   backward exit  → 1 (slides away on top, revealing the incoming page beneath)

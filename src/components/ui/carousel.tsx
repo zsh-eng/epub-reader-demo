@@ -88,17 +88,33 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api || !setApi) return;
-    setApi(api);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setApi(api);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [api, setApi]);
 
   React.useEffect(() => {
     if (!api) return;
-    onSelect(api);
     api.on("reInit", onSelect);
     api.on("select", onSelect);
 
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        onSelect(api);
+      }
+    });
+
     return () => {
-      api?.off("select", onSelect);
+      cancelled = true;
+      api.off("reInit", onSelect);
+      api.off("select", onSelect);
     };
   }, [api, onSelect]);
 

@@ -14,6 +14,14 @@ interface ContinueReadingCarouselProps {
   books: SyncedBook[];
 }
 
+function formatLastReadDate(timestamp: number) {
+  return new Date(timestamp).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 // Hero card for the most recently read book
 function HeroBookCard({ book }: { book: SyncedBook }) {
   const navigate = useNavigate();
@@ -118,23 +126,6 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
     navigate(`/reader/${book.id}`);
   };
 
-  // Calculate time since last read
-  const getLastReadText = () => {
-    if (!book.lastOpened) return null;
-
-    const now = Date.now();
-    const diff = now - book.lastOpened;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return new Date(book.lastOpened).toLocaleDateString();
-  };
-
   return (
     <div
       className="relative w-full overflow-hidden rounded-xl cursor-pointer group"
@@ -211,7 +202,7 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
           </p>
           {book.lastOpened && (
             <p className="text-xs text-gray-500 dark:text-white/50">
-              Last read {getLastReadText()}
+              Last read {formatLastReadDate(book.lastOpened)}
             </p>
           )}
         </div>

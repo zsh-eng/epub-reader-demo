@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 
 interface FooterScrubberCanvasProps {
   currentPage: number;
@@ -250,10 +256,9 @@ export function FooterScrubberCanvas({
   const momentumRafRef = useRef<number>(0);
   const isMomentumRef = useRef(false);
   const colorsRef = useRef<CanvasColors | null>(null);
-  const chapterStartSet = useRef<Set<number>>(new Set());
-
-  chapterStartSet.current = new Set(
-    chapterStartPages.filter((p): p is number => p !== null),
+  const chapterStartSet = useMemo(
+    () => new Set(chapterStartPages.filter((p): p is number => p !== null)),
+    [chapterStartPages],
   );
 
   // Drag state
@@ -264,7 +269,7 @@ export function FooterScrubberCanvas({
   // Velocity tracking: recent pointer positions for momentum computation
   const dragHistoryRef = useRef<{ x: number; t: number }[]>([]);
 
-  function redraw() {
+  const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     if (!colorsRef.current) colorsRef.current = resolveColors(canvas);
@@ -272,18 +277,21 @@ export function FooterScrubberCanvas({
       canvas,
       displayPageRef.current,
       totalPages,
-      chapterStartSet.current,
+      chapterStartSet,
       colorsRef.current,
     );
-  }
+  }, [chapterStartSet, totalPages]);
 
-  function emitPreviewIfChanged(page: number) {
-    const intPage = Math.round(page);
-    if (intPage !== lastPreviewPageRef.current) {
-      lastPreviewPageRef.current = intPage;
-      onScrubPreview?.(intPage);
-    }
-  }
+  const emitPreviewIfChanged = useCallback(
+    (page: number) => {
+      const intPage = Math.round(page);
+      if (intPage !== lastPreviewPageRef.current) {
+        lastPreviewPageRef.current = intPage;
+        onScrubPreview?.(intPage);
+      }
+    },
+    [onScrubPreview],
+  );
 
   // Spring animation toward currentPage (idle / post-commit state)
   useEffect(() => {
@@ -317,7 +325,7 @@ export function FooterScrubberCanvas({
 
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [currentPage, totalPages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentPage, redraw, totalPages]);
 
   // Resize observer
   useEffect(() => {
@@ -329,7 +337,7 @@ export function FooterScrubberCanvas({
     });
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [redraw]);
 
   // Theme observer
   useEffect(() => {
@@ -342,7 +350,7 @@ export function FooterScrubberCanvas({
       attributeFilter: ["class", "data-theme"],
     });
     return () => mo.disconnect();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [redraw]);
 
   useLayoutEffect(() => {
     cancelAnimationFrame(rafRef.current);

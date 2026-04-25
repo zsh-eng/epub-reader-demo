@@ -159,7 +159,7 @@ function LongPressMenu({
 }: LongPressMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isPressing, setIsPressing] = useState(false);
-  const anchorNameRef = useRef<string>(generateAnchorName());
+  const [anchorName] = useState(generateAnchorName);
   const popoverRef = useRef<HTMLDivElement>(null);
 
   // Inject styles on mount
@@ -217,7 +217,7 @@ function LongPressMenu({
         isPressing,
         open,
         close,
-        anchorName: anchorNameRef.current,
+        anchorName,
         setIsPressing,
         popoverRef,
       }}

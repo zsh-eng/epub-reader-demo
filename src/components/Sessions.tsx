@@ -8,16 +8,22 @@ import { formatDistanceToNow } from "date-fns";
 import { ArrowLeft, Globe, Monitor, Smartphone, Tablet } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 
-function getDeviceIcon(deviceType: DeviceType) {
+function SessionDeviceIcon({
+  deviceType,
+  className,
+}: {
+  deviceType: DeviceType;
+  className?: string;
+}) {
   switch (deviceType) {
     case "mobile":
-      return Smartphone;
+      return <Smartphone className={className} />;
     case "tablet":
-      return Tablet;
+      return <Tablet className={className} />;
     case "desktop":
-      return Monitor;
+      return <Monitor className={className} />;
     default:
-      return Globe;
+      return <Globe className={className} />;
   }
 }
 
@@ -33,7 +39,6 @@ function SessionItem({
   session: SessionInfo;
   isLast?: boolean;
 }) {
-  const DeviceIcon = getDeviceIcon(session.deviceType);
   const browserName = session.browser.name;
   const browserVersion = session.browser.version;
   const osName = session.os.name;
@@ -56,7 +61,10 @@ function SessionItem({
             : "bg-secondary text-secondary-foreground"
         }`}
       >
-        <DeviceIcon className="h-5 w-5" />
+        <SessionDeviceIcon
+          deviceType={session.deviceType}
+          className="h-5 w-5"
+        />
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-medium text-foreground truncate text-sm text-left">
