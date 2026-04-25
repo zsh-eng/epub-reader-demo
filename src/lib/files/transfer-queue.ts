@@ -11,16 +11,16 @@
 
 import { db } from "@/lib/db";
 import {
-  createHonoFileRemoteAdapter,
-  type FileRemoteAdapter,
+    createHonoFileRemoteAdapter,
+    type FileRemoteAdapter,
 } from "@/lib/files/file-remote-adapter";
 import { fileStorage } from "@/lib/files/file-storage";
 import type {
-  FileType,
-  Priority,
-  TransferDirection,
-  TransferProgress,
-  TransferTask,
+    FileType,
+    Priority,
+    TransferDirection,
+    TransferProgress,
+    TransferTask,
 } from "@/lib/files/types";
 import { createTransferKey, priorityToNumber } from "@/lib/files/types";
 
@@ -66,15 +66,16 @@ class TransferQueue {
    * Useful when user logs in.
    */
   resume(): void {
-    if (!this.isPaused) {
-      return;
+    if (this.isPaused) {
+      this.isPaused = false;
+      console.log("[TransferQueue] Resumed");
     }
 
-    this.isPaused = false;
-    console.log("[TransferQueue] Resumed");
-
-    // Check if there are pending tasks and start processing
-    this.checkAndStartProcessing();
+    // A fresh app instance may already be authenticated while persisted tasks
+    // remain in IndexedDB, so every resume should scan for resumable work.
+    this.checkAndStartProcessing().catch((error) => {
+      console.error("Failed to resume transfer queue:", error);
+    });
   }
 
   /**
@@ -85,10 +86,26 @@ class TransferQueue {
       return;
     }
 
+    await this.recoverInterruptedTasks();
+
     const pendingCount = await this.getPendingCount();
     if (pendingCount > 0) {
       this.startProcessing();
     }
+  }
+
+  /**
+   * Recover tasks that were marked as processing when a previous app instance
+   * closed or reloaded before the transfer completed.
+   */
+  private async recoverInterruptedTasks(): Promise<void> {
+    if (this.isProcessing || this.processingTasks.size > 0) {
+      return;
+    }
+
+    await db.transferQueue.where("status").equals("processing").modify({
+      status: "pending",
+    });
   }
 
   /**
@@ -197,7 +214,7 @@ class TransferQueue {
    * Start processing the queue
    */
   private startProcessing(): void {
-    if (this.isProcessing) {
+    if (this.isProcessing || this.isPaused) {
       return;
     }
 

@@ -6,16 +6,35 @@
 
 import { db } from "@/lib/db";
 import {
-  createMockFileRemoteAdapter,
-  type MockFileRemoteAdapter,
+    createMockFileRemoteAdapter,
+    type MockFileRemoteAdapter,
 } from "@/lib/files/file-remote-adapter";
 import { fileStorage } from "@/lib/files/file-storage";
 import { TransferQueue, transferQueue } from "@/lib/files/transfer-queue";
 import type { TransferTask } from "@/lib/files/types";
 import { beforeEach, describe, expect, it } from "vitest";
 
+async function waitForCondition(
+  condition: () => boolean | Promise<boolean>,
+  timeoutMs = 500,
+): Promise<void> {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (await condition()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error("Timed out waiting for condition");
+}
+
 describe("Transfer Queue", () => {
   beforeEach(async () => {
+    transferQueue.pause();
+
     // Clear all tables before each test
     await db.transferQueue.clear();
     await db.files.clear();
@@ -276,6 +295,63 @@ describe("Transfer Queue with Mock Adapter", () => {
 
     expect(uploadedFile).toBeDefined();
     expect(uploadedFile?.mediaType).toBe("application/epub+zip");
+  });
+
+  it("should process a persisted pending upload when resumed after app startup", async () => {
+    const contentHash = "restored-pending-upload";
+    const fileType = "epub" as const;
+    const blob = new Blob(["pending upload content"], {
+      type: "application/epub+zip",
+    });
+    const task: TransferTask = {
+      id: crypto.randomUUID(),
+      direction: "upload",
+      contentHash,
+      fileType,
+      status: "pending",
+      priority: 5,
+      createdAt: Date.now(),
+      retryCount: 0,
+      maxRetries: 3,
+    };
+
+    await fileStorage.store(contentHash, fileType, blob, "application/epub+zip");
+    await db.transferQueue.add(task);
+
+    queue.resume();
+
+    await waitForCondition(() => mockAdapter.hasFile(fileType, contentHash));
+    const restoredTask = await db.transferQueue.get(task.id);
+    expect(restoredTask?.status).toBe("completed");
+  });
+
+  it("should recover an interrupted processing upload when resumed after app startup", async () => {
+    const contentHash = "interrupted-processing-upload";
+    const fileType = "epub" as const;
+    const blob = new Blob(["interrupted upload content"], {
+      type: "application/epub+zip",
+    });
+    const task: TransferTask = {
+      id: crypto.randomUUID(),
+      direction: "upload",
+      contentHash,
+      fileType,
+      status: "processing",
+      priority: 5,
+      createdAt: Date.now(),
+      retryCount: 0,
+      maxRetries: 3,
+      lastAttempt: Date.now() - 60_000,
+    };
+
+    await fileStorage.store(contentHash, fileType, blob, "application/epub+zip");
+    await db.transferQueue.add(task);
+
+    queue.resume();
+
+    await waitForCondition(() => mockAdapter.hasFile(fileType, contentHash));
+    const restoredTask = await db.transferQueue.get(task.id);
+    expect(restoredTask?.status).toBe("completed");
   });
 
   it("should successfully download file using mock adapter", async () => {

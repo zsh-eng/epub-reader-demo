@@ -1,22 +1,22 @@
 import type { Book } from "@/lib/db";
 import type {
-  Block,
-  ChapterCanonicalText,
-  PaginationConfig,
-  PaginationStatus,
-  ResolvedSpread,
-  SpreadConfig,
+    Block,
+    ChapterCanonicalText,
+    PaginationConfig,
+    PaginationStatus,
+    ResolvedSpread,
+    SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { ReaderSettings } from "@/types/reader.types";
 import { useMemo } from "react";
 import type { ChapterEntry } from "../types";
+import { useReaderCore } from "./use-reader-core";
 import { useReaderHighlightActions } from "./use-reader-highlight-actions";
 import {
-  useReaderNavigationActions,
-  type ReaderNavigationActions,
+    useReaderNavigationActions,
+    type ReaderNavigationActions,
 } from "./use-reader-navigation-actions";
-import { useReaderCore } from "./use-reader-core";
 
 export interface UseReaderSessionOptions {
   bookId?: string;
@@ -25,7 +25,11 @@ export interface UseReaderSessionOptions {
   paragraphSpacingFactor?: number;
 }
 
-export type ReaderSessionStatus = "loading" | "ready" | "not-found";
+export type ReaderSessionStatus =
+  | "loading"
+  | "ready"
+  | "not-found"
+  | "file-error";
 
 export interface ReaderSessionChapterAccess {
   getBlocks: (chapterIndex: number) => Block[] | null;
@@ -134,7 +138,9 @@ export function useReaderSession(
       ? "loading"
       : !options.bookId || !core.book
         ? "not-found"
-        : "ready";
+        : core.epubProcessError
+          ? "file-error"
+          : "ready";
 
     return {
       status,
@@ -172,6 +178,7 @@ export function useReaderSession(
     core.currentChapterIndex,
     core.currentPage,
     core.currentTitleChapterIndex,
+    core.epubProcessError,
     core.isBookLoading,
     core.pagination.spread,
     core.pagination.status,

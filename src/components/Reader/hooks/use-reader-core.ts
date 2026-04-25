@@ -1,4 +1,5 @@
 import { useBookLoader } from "@/hooks/use-book-loader";
+import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
@@ -13,6 +14,7 @@ import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
 import { useCallback, useMemo } from "react";
 import type { ChapterEntry } from "../types";
+import { resolveReaderEpubPreparation } from "./reader-epub-preparation";
 import { useReaderReadingSession } from "./reading-sessions/use-reader-reading-session";
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 import { useReaderChapterContent } from "./use-reader-chapter-content";
@@ -29,6 +31,7 @@ interface UseReaderCoreOptions {
 interface UseReaderCoreResult {
   book: Book | null;
   isBookLoading: boolean;
+  epubProcessError: Error | null;
   settings: ReaderSettings;
   onUpdateSettings: (patch: Partial<ReaderSettings>) => void;
   chapterEntries: ChapterEntry[];
@@ -111,6 +114,13 @@ export function useReaderCore(
   const { book, isLoading: isBookLoading } = useBookLoader(bookId, {
     includeInitialProgress: false,
   });
+  const epubProcessor = useEpubProcessor(bookId, book?.fileHash);
+  const epubPreparation = resolveReaderEpubPreparation({
+    bookId,
+    book,
+    isBookLoading,
+    epubProcessor,
+  });
 
   const paginationConfig = useMemo(
     () => buildPaginationConfig(settings, paragraphSpacingFactor, viewport),
@@ -152,8 +162,8 @@ export function useReaderCore(
     getChapterBlocks,
     getChapterCanonicalText,
   } = useReaderChapterContent({
-    bookId,
-    book,
+    bookId: epubPreparation.chapterContentBookId,
+    book: epubPreparation.chapterContentBook,
   });
 
   useReaderPaginationFeed({
@@ -200,7 +210,8 @@ export function useReaderCore(
 
   return {
     book,
-    isBookLoading,
+    isBookLoading: epubPreparation.isBookLoading,
+    epubProcessError: epubPreparation.epubProcessError,
     settings,
     onUpdateSettings,
     chapterEntries,

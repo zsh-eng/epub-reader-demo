@@ -88,6 +88,17 @@ export function Reader() {
     );
   }
 
+  if (sessionState.status === "file-error") {
+    return (
+      <ReaderStateScreen
+        title="Book file unavailable"
+        message="The book metadata is synced, but the EPUB file is not available on this device yet."
+        titleTone="destructive"
+        action={{ label: "Back to Library", onClick: () => navigate("/") }}
+      />
+    );
+  }
+
   const book = sessionState.book;
   const currentChapterEntry =
     sessionState.chapters.entries[
