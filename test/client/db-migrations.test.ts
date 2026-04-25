@@ -170,21 +170,9 @@ describe("IndexedDB migrations", () => {
     expect(dimensions[0]?.updatedAt).toEqual(expect.any(Number));
   });
 
-  it("seeds per-device reading checkpoints when upgrading from schema version 7", async () => {
+  it("does not seed per-device reading checkpoints during schema upgrade", async () => {
     await seedLegacyDatabase(7, LEGACY_STORES_V7, async (legacyDb) => {
       await legacyDb.table("readingProgress").bulkAdd([
-        {
-          id: "progress-old",
-          bookId: "book-1",
-          currentSpineIndex: 2,
-          scrollProgress: 0.25,
-          lastRead: 100,
-          createdAt: 90,
-          _hlc: "100-0-device-a",
-          _deviceId: "device-a",
-          _serverTimestamp: 1000,
-          _isDeleted: 0,
-        },
         {
           id: "progress-latest",
           bookId: "book-1",
@@ -194,82 +182,16 @@ describe("IndexedDB migrations", () => {
           createdAt: 190,
           _hlc: "200-0-device-a",
           _deviceId: "device-a",
-          _serverTimestamp: 1001,
-          _isDeleted: 0,
-        },
-        {
-          id: "progress-deleted",
-          bookId: "book-1",
-          currentSpineIndex: 9,
-          scrollProgress: 1,
-          lastRead: 300,
-          createdAt: 290,
-          _hlc: "300-0-device-a",
-          _deviceId: "device-a",
-          _serverTimestamp: 1002,
-          _isDeleted: 1,
-        },
-        {
-          id: "progress-other-device",
-          bookId: "book-1",
-          currentSpineIndex: 3,
-          scrollProgress: 88,
-          lastRead: 150,
-          createdAt: 140,
-          _hlc: "150-0-device-b",
-          _deviceId: "device-b",
-          _serverTimestamp: 1003,
-          _isDeleted: 0,
-        },
-        {
-          id: "progress-missing-device",
-          bookId: "book-2",
-          currentSpineIndex: 1,
-          scrollProgress: 50,
-          lastRead: 175,
-          createdAt: 170,
-          _hlc: "175-0-device-missing",
-          _serverTimestamp: 1004,
+          _serverTimestamp: 1000,
           _isDeleted: 0,
         },
       ]);
     });
 
-    const { db, createReadingCheckpointId } = await openCurrentDatabase();
+    const { db } = await openCurrentDatabase();
 
     const checkpoints = await db.readingCheckpoints.orderBy("id").toArray();
-    const primaryCheckpointId = createReadingCheckpointId("book-1", "device-a");
-    const secondaryCheckpointId = createReadingCheckpointId(
-      "book-1",
-      "device-b",
-    );
 
-    expect(checkpoints).toHaveLength(2);
-    expect(checkpoints).toEqual([
-      expect.objectContaining({
-        id: primaryCheckpointId,
-        bookId: "book-1",
-        deviceId: "device-a",
-        currentSpineIndex: 5,
-        scrollProgress: 75,
-        lastRead: 200,
-        _hlc: "200-0-device-a",
-        _deviceId: "device-a",
-        _serverTimestamp: 1001,
-        _isDeleted: 0,
-      }),
-      expect.objectContaining({
-        id: secondaryCheckpointId,
-        bookId: "book-1",
-        deviceId: "device-b",
-        currentSpineIndex: 3,
-        scrollProgress: 88,
-        lastRead: 150,
-        _hlc: "150-0-device-b",
-        _deviceId: "device-b",
-        _serverTimestamp: 1003,
-        _isDeleted: 0,
-      }),
-    ]);
+    expect(checkpoints).toEqual([]);
   });
 });

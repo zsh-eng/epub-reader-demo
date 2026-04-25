@@ -9,8 +9,12 @@
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
 import { extractImageDimensionsFromBlob } from "@/lib/image-dimensions";
-import { isNotDeleted, markAsRemoteWrite } from "@/lib/sync/hlc/middleware";
-import type { WithSyncMetadata } from "@/lib/sync/hlc/schema";
+import { isNotDeleted } from "@/lib/sync/hlc/middleware";
+import { getHLCService } from "@/lib/sync/hlc/hlc";
+import {
+  UNSYNCED_TIMESTAMP,
+  type WithSyncMetadata,
+} from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
 import type { Highlight } from "@/types/highlight";
 import type { Note } from "@/types/note";
@@ -389,64 +393,15 @@ class EPUBReaderDB extends Dexie {
         await tx.table("bookImageDimensions").bulkPut(rows);
       });
 
-    // Version 8: Add per-device reading checkpoints seeded from legacy readingProgress
-    this.version(8)
-      .stores({
-        ...syncSchemas,
-        ...LOCAL_TABLES,
-      })
-      .upgrade(async (tx) => {
-        const checkpointTable = tx.table("readingCheckpoints") as Table<
-          SyncedReadingCheckpoint,
-          string
-        >;
-        const existingCount = await checkpointTable.count();
-        if (existingCount > 0) return;
-
-        const progressRecords = (await tx
-          .table("readingProgress")
-          .toArray()) as SyncedReadingProgress[];
-        if (progressRecords.length === 0) return;
-
-        const latestByCheckpointId = new Map<string, SyncedReadingProgress>();
-
-        for (const record of progressRecords) {
-          if (!isNotDeleted(record)) continue;
-          if (!record.bookId || !record._deviceId) continue;
-
-          const checkpointId = createReadingCheckpointId(
-            record.bookId,
-            record._deviceId,
-          );
-          const existing = latestByCheckpointId.get(checkpointId);
-
-          if (!existing || isLegacyProgressNewer(record, existing)) {
-            latestByCheckpointId.set(checkpointId, record);
-          }
-        }
-
-        if (latestByCheckpointId.size === 0) return;
-
-        const checkpoints = Array.from(latestByCheckpointId.values()).map(
-          (record) =>
-            markAsRemoteWrite({
-              id: createReadingCheckpointId(record.bookId, record._deviceId),
-              bookId: record.bookId,
-              deviceId: record._deviceId,
-              currentSpineIndex: record.currentSpineIndex,
-              scrollProgress: normalizeCheckpointScrollProgress(
-                record.scrollProgress,
-              ),
-              lastRead: record.lastRead,
-              _hlc: record._hlc,
-              _deviceId: record._deviceId,
-              _serverTimestamp: record._serverTimestamp,
-              _isDeleted: 0,
-            }) as SyncedReadingCheckpoint,
-        );
-
-        await checkpointTable.bulkPut(checkpoints);
-      });
+    // Version 8: Add per-device reading checkpoints.
+    //
+    // Legacy progress import is intentionally manual instead of an IndexedDB
+    // migration because remote `readingProgress` rows may only arrive after the
+    // normal sync service starts.
+    this.version(8).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
 
     // Version 9: Add mutable reading session rows for active-time analytics
     this.version(9).stores({
@@ -740,6 +695,176 @@ export async function upsertCurrentDeviceReadingCheckpoint(
     ...checkpoint,
     deviceId: getOrCreateDeviceId(),
   });
+}
+
+export interface BackfillLegacyReadingProgressCheckpointsOptions {
+  /** Build the checkpoint rows and summary without mutating IndexedDB. */
+  dryRun?: boolean;
+}
+
+export interface BackfillLegacyReadingProgressCheckpointsBookSummary {
+  bookId: string;
+  title: string | null;
+  progressRowsConsidered: number;
+  checkpointsGenerated: number;
+  devicesConsidered: number;
+  latestLastRead: number | null;
+}
+
+export interface BackfillLegacyReadingProgressCheckpointsResult {
+  dryRun: boolean;
+  progressRowsRead: number;
+  progressRowsConsidered: number;
+  progressRowsSkipped: number;
+  checkpointsGenerated: number;
+  existingCheckpointsOverwritten: number;
+  bookSummaries: BackfillLegacyReadingProgressCheckpointsBookSummary[];
+}
+
+type MutableCheckpointBookSummary =
+  BackfillLegacyReadingProgressCheckpointsBookSummary & {
+    deviceIds: Set<string>;
+  };
+
+function createCheckpointFromLegacyProgress(
+  row: SyncedReadingProgress,
+): ReadingCheckpoint {
+  return {
+    id: createReadingCheckpointId(row.bookId, row._deviceId),
+    bookId: row.bookId,
+    deviceId: row._deviceId,
+    currentSpineIndex: row.currentSpineIndex,
+    scrollProgress: normalizeCheckpointScrollProgress(row.scrollProgress),
+    lastRead: row.lastRead,
+  };
+}
+
+function addFallbackSyncMetadataToCheckpoints(
+  checkpoints: ReadingCheckpoint[],
+): SyncedReadingCheckpoint[] {
+  const writerDeviceId = getOrCreateDeviceId();
+  const hlcTimestamps = getHLCService().nextBatch(checkpoints.length);
+
+  return checkpoints.map((checkpoint, index) => ({
+    ...checkpoint,
+    _hlc: hlcTimestamps[index],
+    _deviceId: writerDeviceId,
+    _serverTimestamp: UNSYNCED_TIMESTAMP,
+    _isDeleted: 0,
+  }));
+}
+
+/**
+ * Rebuilds per-device resume checkpoints from the legacy append-only
+ * `readingProgress` stream.
+ *
+ * This helper is intentionally manual and rerunnable. It should run only after
+ * legacy progress has synced locally, then it overwrites the latest checkpoint
+ * for each book/device pair as a normal local write so the sync middleware can
+ * push the generated rows to the server.
+ */
+export async function backfillLegacyReadingProgressCheckpoints(
+  options: BackfillLegacyReadingProgressCheckpointsOptions = {},
+): Promise<BackfillLegacyReadingProgressCheckpointsResult> {
+  const dryRun = options.dryRun ?? false;
+
+  return db.transaction(
+    "rw",
+    [db.books, db.readingProgress, db.readingCheckpoints],
+    async () => {
+      const activeBooks = await db.books.filter(isNotDeleted).toArray();
+      const activeBookIds = new Set(activeBooks.map((book) => book.id));
+      const bookTitles = new Map(
+        activeBooks.map((book) => [book.id, book.title]),
+      );
+      const progressRows = (await db.readingProgress
+        .filter(isNotDeleted)
+        .toArray()) as SyncedReadingProgress[];
+      const latestByCheckpointId = new Map<string, SyncedReadingProgress>();
+      const bookSummariesById = new Map<string, MutableCheckpointBookSummary>();
+
+      for (const row of progressRows) {
+        if (!row.bookId || !row._deviceId) continue;
+        if (!activeBookIds.has(row.bookId)) continue;
+
+        const summary = bookSummariesById.get(row.bookId) ?? {
+          bookId: row.bookId,
+          title: bookTitles.get(row.bookId) ?? null,
+          progressRowsConsidered: 0,
+          checkpointsGenerated: 0,
+          devicesConsidered: 0,
+          latestLastRead: null,
+          deviceIds: new Set<string>(),
+        };
+
+        summary.progressRowsConsidered += 1;
+        summary.latestLastRead =
+          summary.latestLastRead === null
+            ? row.lastRead
+            : Math.max(summary.latestLastRead, row.lastRead);
+        summary.deviceIds.add(row._deviceId);
+        summary.devicesConsidered = summary.deviceIds.size;
+        bookSummariesById.set(row.bookId, summary);
+
+        const checkpointId = createReadingCheckpointId(
+          row.bookId,
+          row._deviceId,
+        );
+        const existing = latestByCheckpointId.get(checkpointId);
+
+        if (!existing || isLegacyProgressNewer(row, existing)) {
+          latestByCheckpointId.set(checkpointId, row);
+        }
+      }
+
+      const checkpoints = Array.from(latestByCheckpointId.values()).map(
+        createCheckpointFromLegacyProgress,
+      );
+      const existingCheckpoints = await db.readingCheckpoints.bulkGet(
+        checkpoints.map((checkpoint) => checkpoint.id),
+      );
+      const existingCheckpointsOverwritten = existingCheckpoints.filter(
+        Boolean,
+      ).length;
+
+      for (const checkpoint of checkpoints) {
+        const summary = bookSummariesById.get(checkpoint.bookId);
+        if (summary) {
+          summary.checkpointsGenerated += 1;
+        }
+      }
+
+      const bookSummaries = Array.from(bookSummariesById.values())
+        .map(({ deviceIds: _deviceIds, ...summary }) => summary)
+        .sort((a, b) => {
+          if (b.checkpointsGenerated !== a.checkpointsGenerated) {
+            return b.checkpointsGenerated - a.checkpointsGenerated;
+          }
+          return a.bookId.localeCompare(b.bookId);
+        });
+
+      const progressRowsConsidered = Array.from(
+        bookSummariesById.values(),
+      ).reduce((total, summary) => total + summary.progressRowsConsidered, 0);
+      const result: BackfillLegacyReadingProgressCheckpointsResult = {
+        dryRun,
+        progressRowsRead: progressRows.length,
+        progressRowsConsidered,
+        progressRowsSkipped: progressRows.length - progressRowsConsidered,
+        checkpointsGenerated: checkpoints.length,
+        existingCheckpointsOverwritten,
+        bookSummaries,
+      };
+
+      if (dryRun || checkpoints.length === 0) return result;
+
+      await db.readingCheckpoints.bulkPut(
+        addFallbackSyncMetadataToCheckpoints(checkpoints),
+      );
+
+      return result;
+    },
+  );
 }
 
 // ============================================================================

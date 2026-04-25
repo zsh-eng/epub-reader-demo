@@ -27,17 +27,21 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
+  backfillLegacyReadingProgressCheckpoints,
   backfillLegacyReadingProgressSessions,
   db,
   LEGACY_READING_PROGRESS_SESSION_SOURCE,
   READER_V2_READING_SESSION_SOURCE,
   READING_SESSION_IDLE_TIMEOUT_MS,
+  type BackfillLegacyReadingProgressCheckpointsBookSummary,
+  type BackfillLegacyReadingProgressCheckpointsResult,
   type BackfillLegacyReadingProgressSessionsBookSummary,
   type BackfillLegacyReadingProgressSessionsResult,
   type ReadingSessionSource,
   type SyncedBook,
   type SyncedReadingSession,
 } from "@/lib/db";
+import { syncService } from "@/lib/sync-service";
 import { cn } from "@/lib/utils";
 import {
   type Column,
@@ -67,6 +71,11 @@ const QUERY_KEY = ["debug", "readingSessions"] as const;
 const BACKFILL_PREVIEW_QUERY_KEY = [
   "debug",
   "readingSessions",
+  "legacyBackfillPreview",
+] as const;
+const CHECKPOINT_BACKFILL_PREVIEW_QUERY_KEY = [
+  "debug",
+  "readingCheckpoints",
   "legacyBackfillPreview",
 ] as const;
 
@@ -411,6 +420,59 @@ function BackfillBookRows({
   );
 }
 
+function CheckpointBackfillBookRows({
+  summaries,
+}: {
+  summaries: BackfillLegacyReadingProgressCheckpointsBookSummary[];
+}) {
+  if (summaries.length === 0) {
+    return (
+      <div className="rounded-lg border px-4 py-6 text-center text-sm text-muted-foreground">
+        No legacy progress rows are available to import.
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-72 overflow-auto rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Book</TableHead>
+            <TableHead className="text-right">Rows</TableHead>
+            <TableHead className="text-right">Devices</TableHead>
+            <TableHead className="text-right">Checkpoints</TableHead>
+            <TableHead className="text-right">Latest</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {summaries.map((summary) => (
+            <TableRow key={summary.bookId}>
+              <TableCell>
+                <div className="max-w-[280px] truncate">
+                  {summary.title ?? summary.bookId}
+                </div>
+              </TableCell>
+              <TableCell className="text-right">
+                {summary.progressRowsConsidered.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right">
+                {summary.devicesConsidered.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right">
+                {summary.checkpointsGenerated.toLocaleString()}
+              </TableCell>
+              <TableCell className="text-right">
+                {formatDateTime(summary.latestLastRead)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function LegacyBackfillDialog({
   open,
   onOpenChange,
@@ -533,6 +595,153 @@ function BackfillPreview({
   );
 }
 
+function CheckpointBackfillPreview({
+  preview,
+}: {
+  preview: BackfillLegacyReadingProgressCheckpointsResult;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <BackfillMetric
+          label="Progress rows"
+          value={preview.progressRowsConsidered.toLocaleString()}
+        />
+        <BackfillMetric
+          label="Skipped rows"
+          value={preview.progressRowsSkipped.toLocaleString()}
+        />
+        <BackfillMetric
+          label="Checkpoints"
+          value={preview.checkpointsGenerated.toLocaleString()}
+        />
+        <BackfillMetric
+          label="Existing"
+          value={preview.existingCheckpointsOverwritten.toLocaleString()}
+        />
+      </div>
+      <div className="rounded-lg border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+        {preview.existingCheckpointsOverwritten.toLocaleString()} existing
+        checkpoint
+        {preview.existingCheckpointsOverwritten === 1 ? "" : "s"} will be
+        overwritten.
+      </div>
+      <CheckpointBackfillBookRows summaries={preview.bookSummaries} />
+    </div>
+  );
+}
+
+function LegacyCheckpointBackfillDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const previewQuery = useQuery({
+    queryKey: CHECKPOINT_BACKFILL_PREVIEW_QUERY_KEY,
+    queryFn: () => backfillLegacyReadingProgressCheckpoints({ dryRun: true }),
+    enabled: open,
+    staleTime: 0,
+  });
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const result = await backfillLegacyReadingProgressCheckpoints();
+
+      try {
+        await syncService.pushTable("readingCheckpoints");
+        return { result, syncError: null as string | null };
+      } catch (error) {
+        const syncError =
+          error instanceof Error ? error.message : "Unknown sync error";
+        return { result, syncError };
+      }
+    },
+    onSuccess: async ({ result, syncError }) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: CHECKPOINT_BACKFILL_PREVIEW_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({ queryKey: ["readingCheckpoint"] }),
+        queryClient.invalidateQueries({ queryKey: ["readingCheckpoints"] }),
+      ]);
+
+      if (syncError) {
+        toast({
+          title: "Checkpoints imported locally",
+          description: `Generated ${result.checkpointsGenerated.toLocaleString()} checkpoints, but the sync push failed: ${syncError}`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Legacy checkpoints imported",
+        description: `${result.checkpointsGenerated.toLocaleString()} checkpoints generated from ${result.progressRowsConsidered.toLocaleString()} progress rows`,
+      });
+      onOpenChange(false);
+    },
+    onError: (error) => {
+      console.error("Failed to import legacy reading checkpoints:", error);
+      toast({
+        title: "Import failed",
+        description: "Could not import legacy reading checkpoints",
+        variant: "destructive",
+      });
+    },
+  });
+  const preview = previewQuery.data;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Import Legacy Checkpoints</DialogTitle>
+          <DialogDescription>
+            This overwrites reading checkpoints with the latest legacy progress
+            row for each book and device.
+          </DialogDescription>
+        </DialogHeader>
+
+        {previewQuery.isLoading && <ReadingSessionsSkeleton />}
+
+        {previewQuery.error && (
+          <div className="rounded-lg border border-destructive/50 px-4 py-3 text-sm text-destructive">
+            Failed to preview the checkpoint import.
+          </div>
+        )}
+
+        {preview && <CheckpointBackfillPreview preview={preview} />}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={importMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => importMutation.mutate()}
+            disabled={
+              importMutation.isPending ||
+              previewQuery.isLoading ||
+              previewQuery.isError
+            }
+          >
+            {importMutation.isPending && (
+              <RefreshCw className="size-4 animate-spin" />
+            )}
+            Import
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ReadingSessionsDebug() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<
@@ -541,6 +750,8 @@ export function ReadingSessionsDebug() {
   const [bookFilter, setBookFilter] = useState("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [isBackfillDialogOpen, setIsBackfillDialogOpen] = useState(false);
+  const [isCheckpointBackfillDialogOpen, setIsCheckpointBackfillDialogOpen] =
+    useState(false);
   const [sorting, setSorting] = useState<SortingState>([
     { id: "startedAt", desc: true },
   ]);
@@ -631,6 +842,13 @@ export function ReadingSessionsDebug() {
             <Button onClick={() => setIsBackfillDialogOpen(true)}>
               <Database className="size-4" />
               Import Legacy Progress
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsCheckpointBackfillDialogOpen(true)}
+            >
+              <Database className="size-4" />
+              Import Checkpoints
             </Button>
           </div>
         </header>
@@ -839,6 +1057,10 @@ export function ReadingSessionsDebug() {
       <LegacyBackfillDialog
         open={isBackfillDialogOpen}
         onOpenChange={setIsBackfillDialogOpen}
+      />
+      <LegacyCheckpointBackfillDialog
+        open={isCheckpointBackfillDialogOpen}
+        onOpenChange={setIsCheckpointBackfillDialogOpen}
       />
     </div>
   );
