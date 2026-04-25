@@ -4,6 +4,7 @@ import type { PaginationCommand, PaginationEvent } from "./protocol";
 import type {
   Block,
   ContentAnchor,
+  PaginationChapterDiagnostics,
   PaginationConfig,
   PaginationStatus,
   ResolvedSpread,
@@ -22,6 +23,30 @@ const BACKWARD_LINEAR_INTENT: SpreadIntent = {
   direction: "backward",
 };
 
+function addPendingChapterPageCount(
+  pendingCounts: Map<number, number>,
+  diagnostics: PaginationChapterDiagnostics | null | undefined,
+): void {
+  if (!diagnostics) return;
+  pendingCounts.set(diagnostics.chapterIndex, diagnostics.pageCount);
+}
+
+function mergeChapterPageCounts(
+  previousCounts: Map<number, number>,
+  nextChapterCounts: ReadonlyMap<number, number>,
+): Map<number, number> {
+  if (nextChapterCounts.size === 0) return previousCounts;
+
+  let nextCounts: Map<number, number> | null = null;
+  for (const [chapterIndex, pageCount] of nextChapterCounts) {
+    if (previousCounts.get(chapterIndex) === pageCount) continue;
+    nextCounts ??= new Map(previousCounts);
+    nextCounts.set(chapterIndex, pageCount);
+  }
+
+  return nextCounts ?? previousCounts;
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -29,7 +54,7 @@ const BACKWARD_LINEAR_INTENT: SpreadIntent = {
 export interface UsePaginationResult {
   spread: ResolvedSpread | null;
   status: PaginationStatus;
-  /** Maps chapterIndex → page count for that chapter, populated progressively as chapters are laid out. */
+  /** Maps chapterIndex → page count, published with visible partials and final ready. */
   chapterPageCounts: Map<number, number>;
 
   nextSpread: () => void;
@@ -85,6 +110,7 @@ export function usePagination(
   const workerRef = useRef<Worker | null>(null);
   const currentEpochRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
+  const pendingChapterPageCountsRef = useRef<Map<number, number>>(new Map());
 
   // Keep config in a ref so init and config update effects can read the
   // latest value without capturing it as a closure dependency.
@@ -109,6 +135,35 @@ export function usePagination(
     workerRef.current?.postMessage(cmd);
   }, []);
 
+  const recordChapterPageCount = useCallback(
+    (diagnostics: PaginationChapterDiagnostics | null | undefined) => {
+      addPendingChapterPageCount(
+        pendingChapterPageCountsRef.current,
+        diagnostics,
+      );
+    },
+    [],
+  );
+
+  const publishChapterPageCounts = useCallback(
+    (diagnostics: readonly PaginationChapterDiagnostics[]) => {
+      for (const diagnostic of diagnostics) {
+        recordChapterPageCount(diagnostic);
+      }
+
+      const pendingCounts = pendingChapterPageCountsRef.current;
+      if (pendingCounts.size === 0) return;
+
+      const nextChapterCounts = new Map(pendingCounts);
+      pendingCounts.clear();
+
+      setChapterPageCounts((prev) =>
+        mergeChapterPageCounts(prev, nextChapterCounts),
+      );
+    },
+    [recordChapterPageCount],
+  );
+
   useEffect(() => {
     const tracer = tracerRef.current;
 
@@ -124,19 +179,16 @@ export function usePagination(
   const handleEvent = (event: PaginationEvent) => {
     // Discard events from previous layout epochs.
     if ("epoch" in event && event.epoch < currentEpochRef.current) return;
+    if ("epoch" in event) currentEpochRef.current = event.epoch;
 
     switch (event.type) {
       case "partialReady":
         currentEpochRef.current = event.epoch;
+        recordChapterPageCount(event.chapterDiagnostics);
         setSpread(event.spread);
         setStatus("partial");
         tracerRef.current.updateDiagnostics(null);
-        if (event.chapterDiagnostics) {
-          const { chapterIndex, pageCount } = event.chapterDiagnostics;
-          setChapterPageCounts((prev) =>
-            new Map(prev).set(chapterIndex, pageCount),
-          );
-        }
+        publishChapterPageCounts([]);
         break;
 
       case "ready":
@@ -146,37 +198,12 @@ export function usePagination(
         tracerRef.current.markReady(
           prevPaginationConfigRef.current?.fontConfig.bodyFamily ?? "",
         );
-        if (event.chapterDiagnostics.length > 0) {
-          setChapterPageCounts((prev) => {
-            const next = new Map(prev);
-            for (const d of event.chapterDiagnostics) {
-              next.set(d.chapterIndex, d.pageCount);
-            }
-            return next;
-          });
-        }
+        publishChapterPageCounts(event.chapterDiagnostics);
         break;
 
       case "progress":
-        setSpread((prev) =>
-          prev
-            ? {
-                ...prev,
-                intent: event.intent,
-                currentPage: event.currentPage,
-                totalPages: event.totalPages,
-                currentSpread: event.currentSpread,
-                totalSpreads: event.totalSpreads,
-              }
-            : prev,
-        );
         tracerRef.current.updateDiagnostics(null);
-        if (event.chapterDiagnostics) {
-          const { chapterIndex, pageCount } = event.chapterDiagnostics;
-          setChapterPageCounts((prev) =>
-            new Map(prev).set(chapterIndex, pageCount),
-          );
-        }
+        recordChapterPageCount(event.chapterDiagnostics);
         break;
 
       case "pageContent":
@@ -280,6 +307,7 @@ export function usePagination(
 
       setSpread(null);
       setStatus("idle");
+      pendingChapterPageCountsRef.current.clear();
       setChapterPageCounts(new Map());
 
       postCommand({
