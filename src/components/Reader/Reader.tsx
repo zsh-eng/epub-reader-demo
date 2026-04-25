@@ -116,7 +116,7 @@ export function Reader() {
         chromeSurfaceProps,
         chromeDismissLayerProps,
       }) => (
-        <div className="relative h-[100dvh] overflow-hidden bg-gradient-to-b from-background via-background to-muted/20 font-sans text-foreground">
+        <div className="relative h-dvh overflow-hidden bg-gradient-to-b from-background via-background to-muted/20 font-sans text-foreground">
           <div className="pointer-events-none absolute inset-0">
             <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-secondary/45 to-transparent" />
             <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem] bg-gradient-to-t from-muted/35 to-transparent" />

@@ -5,7 +5,7 @@ import {
   MAX_TOUCH_TAP_DURATION_MS,
   resolveTapNavigationAction,
   TOUCH_TAP_MOVE_TOLERANCE_PX,
-} from "@/components/Reader/hooks/use-pagination-tap-nav";
+} from "@/components/Reader/hooks/use-touch-spread-tap-nav";
 import { describe, expect, it } from "vitest";
 
 describe("Reader tap navigation", () => {
