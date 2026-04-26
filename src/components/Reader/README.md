@@ -32,3 +32,17 @@ That split gives us stable text offsets for highlight storage while still lettin
   Re-run only the decoration stage for already loaded chapters, then update pagination for chapters whose highlighted HTML changed.
 - pagination config or spread config change:
   Pagination handles relayout itself. Reader-side chapter content does not reload.
+
+## Performance Optimization
+
+Reader startup used to be dominated by materialising the source HTML. 
+On slower Chrome on Android (Poco F3), opening a large EPUB spent most of  thesource time inside Blob.text().
+This is not an issue on faster devices like the iPhone 15 Pro Max or Macbook Pro M1 Pro.
+
+The fix is to split reader startup into two caches.
+
+Idea 1: A durable cache stores normalized chapter body HTML and canonical text. It is local-only, versioned, and rebuildable from the EPUB files. This removes repeated blob reads, embedded-resource normalization, body extraction, and canonical-text parsing from the steady-state open path.
+
+Idea 2: Use React Query for a "hot cache". Reader startup data is expensive and body cache rows, current checkpoint, highlights, and derived chapter artifacts all benefit from QueryClient sdeduping and reusing memory. When the queries are warm, the reader avoids the Dexie/IndexedDB hop entirely.
+
+Idea 3: The `<Library>` prewarms the path users are likely to take next. "Continue-reading" books are fetched into memory (even for long books, the HTML is between 1-6MB), and hovered/pressed/focused book cards warm themselves before navigation. In the best path, the reader is opened with the body, checkpoint, and artifacts already in memory, so the "source wall time" (wall clock time for data fetching) falls effectively to zero and the remaining work is the pagination worker itself, which helps us avoid UI thrashing.
