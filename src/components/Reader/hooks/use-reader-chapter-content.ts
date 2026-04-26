@@ -1,22 +1,19 @@
-import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
-import { getCurrentDeviceReadingCheckpoint, type Book } from "@/lib/db";
+import type { Book } from "@/lib/db";
 import type { ChapterCanonicalText } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   buildChapterEntries,
-  buildReaderChapterLoadOrder,
-  decorateChapterContent,
-  didDecoratedChapterBlocksChange,
-  loadBaseChapterContent,
   resolveInitialReaderLocation,
   type ParsedChapterBlocks,
-  type ReaderBaseChapterContent,
   type ReaderDecoratedChapterArtifact,
   type ReaderInitialLocation,
 } from "../data/chapter-content-pipeline";
-import { loadReaderBodyCache } from "../data/reader-body-cache";
-import { buildHighlightsBySpineItemId } from "../highlight-virtualization";
+import {
+  useReaderBodyCacheQuery,
+  useReaderChapterArtifactsQuery,
+  useReaderCheckpointQuery,
+} from "../data/reader-cache/hooks";
 import type { ChapterEntry } from "../types";
 
 interface UseReaderChapterContentOptions {
@@ -37,275 +34,71 @@ interface UseReaderChapterContentResult {
   ) => ChapterCanonicalText | null;
 }
 
-function createEmptyArtifactList(
-  chapterCount: number,
-): (ReaderDecoratedChapterArtifact | null)[] {
-  return Array.from<ReaderDecoratedChapterArtifact | null>({
-    length: chapterCount,
-  }).fill(null);
-}
-
-function pruneRemovedChapters(
-  chapterEntries: ChapterEntry[],
-  ...maps: Map<number, unknown>[]
-): void {
-  const validChapterIndices = new Set(
-    chapterEntries.map((chapter) => chapter.index),
-  );
-
-  for (const map of maps) {
-    for (const chapterIndex of map.keys()) {
-      if (validChapterIndices.has(chapterIndex)) continue;
-      map.delete(chapterIndex);
-    }
-  }
-}
-
 /**
- * Owns the reader-side chapter content pipeline:
- * - load base chapter HTML and canonical text from IndexedDB-backed EPUB files
- * - redecorate chapters when highlight data changes
- * - expose stable chapter accessors for pagination and annotations
+ * Composes the reader startup cache queries and exposes the artifacts needed by
+ * pagination, annotations, and highlight interactions.
  */
 export function useReaderChapterContent({
   bookId,
   book,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
-  const [sourceLoadWallClockMs, setSourceLoadWallClockMs] = useState<
-    number | null
-  >(null);
-  const [initialLocation, setInitialLocation] =
-    useState<ReaderInitialLocation | null>(null);
   const [loadVersion, setLoadVersion] = useState(0);
-  const [artifactsByChapter, setArtifactsByChapter] = useState<
-    (ReaderDecoratedChapterArtifact | null)[]
-  >([]);
-
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
   const fileHash = book?.fileHash;
-  const { data: bookHighlights = [] } = useBookHighlightsQuery(bookId);
 
-  const highlightsBySpineItemId = useMemo(
-    () => buildHighlightsBySpineItemId(bookHighlights),
-    [bookHighlights],
-  );
+  const checkpointQuery = useReaderCheckpointQuery(bookId);
+  const initialLocation = useMemo(() => {
+    if (!checkpointQuery.isSuccess || chapterEntries.length === 0) return null;
 
-  const highlightsBySpineItemIdRef = useRef<Map<string, Highlight[]>>(
-    new Map(),
-  );
-  highlightsBySpineItemIdRef.current = highlightsBySpineItemId;
-
-  const baseContentByChapterRef = useRef<Map<number, ReaderBaseChapterContent>>(
-    new Map(),
-  );
-  const decoratedArtifactByChapterRef = useRef<
-    Map<number, ReaderDecoratedChapterArtifact>
-  >(new Map());
-
-  const writeArtifact = useCallback(
-    (artifact: ReaderDecoratedChapterArtifact) => {
-      decoratedArtifactByChapterRef.current.set(
-        artifact.chapterIndex,
-        artifact,
-      );
-      setArtifactsByChapter((previousArtifacts) => {
-        const nextArtifacts =
-          previousArtifacts.length === chapterEntries.length
-            ? [...previousArtifacts]
-            : createEmptyArtifactList(chapterEntries.length);
-        nextArtifacts[artifact.chapterIndex] = artifact;
-        return nextArtifacts;
-      });
-    },
-    [chapterEntries.length],
-  );
-
-  useEffect(() => {
-    if (!bookId || !fileHash || chapterEntries.length === 0) {
-      baseContentByChapterRef.current.clear();
-      decoratedArtifactByChapterRef.current.clear();
-      setSourceLoadWallClockMs(null);
-      setInitialLocation(null);
-      setArtifactsByChapter([]);
-      return;
-    }
-
-    let cancelled = false;
-    setLoadVersion((version) => version + 1);
-    setSourceLoadWallClockMs(null);
-    setInitialLocation(null);
-    setArtifactsByChapter(createEmptyArtifactList(chapterEntries.length));
-    baseContentByChapterRef.current.clear();
-    decoratedArtifactByChapterRef.current.clear();
-
-    const loadAllChapterContent = async () => {
-      const startedAt = performance.now();
-
-      try {
-        // Stage 1: load base content, then publish the decorated artifact for
-        // each chapter as soon as it is available so pagination can start early.
-        const [bodyCacheData, checkpoint] = await Promise.all([
-          loadReaderBodyCache({
-            bookId,
-            fileHash,
-            chapterEntries,
-          }),
-          getCurrentDeviceReadingCheckpoint(bookId),
-        ]);
-        if (cancelled) return;
-
-        const nextInitialLocation = resolveInitialReaderLocation(
-          checkpoint,
-          chapterEntries.length,
-        );
-        setInitialLocation(nextInitialLocation);
-
-        const requireChapterContent = (chapter: ChapterEntry) => {
-          const chapterContent = bodyCacheData.chapterContentsByPath.get(
-            chapter.href,
-          );
-          if (chapterContent) return chapterContent;
-
-          throw new Error(
-            `Missing cached chapter content for href "${chapter.href}" (chapter ${chapter.index})`,
-          );
-        };
-
-        const initialChapter =
-          chapterEntries[nextInitialLocation.chapterIndex]!;
-
-        const loadAndPublishBaseContent = (
-          chapterIndex: number,
-          chapter: ChapterEntry,
-        ) => {
-          const baseContent = loadBaseChapterContent({
-            chapterIndex,
-            chapterContent: requireChapterContent(chapter),
-            chapter,
-          });
-          if (cancelled) return;
-
-          baseContentByChapterRef.current.set(
-            baseContent.chapterIndex,
-            baseContent,
-          );
-          writeArtifact(
-            decorateChapterContent({
-              baseContent,
-              highlightsBySpineItemId: highlightsBySpineItemIdRef.current,
-            }),
-          );
-        };
-
-        loadAndPublishBaseContent(
-          nextInitialLocation.chapterIndex,
-          initialChapter,
-        );
-        if (cancelled) return;
-
-        for (const chapterIndex of buildReaderChapterLoadOrder(
-          chapterEntries.length,
-          nextInitialLocation.chapterIndex,
-        )) {
-          if (chapterIndex === nextInitialLocation.chapterIndex) continue;
-
-          const chapter = chapterEntries[chapterIndex]!;
-          loadAndPublishBaseContent(chapterIndex, chapter);
-          if (cancelled) return;
-        }
-
-        if (!cancelled) {
-          setSourceLoadWallClockMs(performance.now() - startedAt);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("[Reader] Failed to load chapter content", error);
-        }
-      }
-    };
-
-    void loadAllChapterContent();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [bookId, chapterEntries, fileHash, writeArtifact]);
-
-  useEffect(() => {
-    if (!bookId || chapterEntries.length === 0) return;
-
-    // Stage 2: highlights only invalidate the decoration step. We reuse the
-    // loaded base HTML/canonical text and only republish chapters whose
-    // highlighted HTML changed.
-    pruneRemovedChapters(
-      chapterEntries,
-      baseContentByChapterRef.current,
-      decoratedArtifactByChapterRef.current,
+    return resolveInitialReaderLocation(
+      checkpointQuery.data.checkpoint,
+      chapterEntries.length,
     );
+  }, [chapterEntries.length, checkpointQuery.data, checkpointQuery.isSuccess]);
 
-    const changedArtifacts: ReaderDecoratedChapterArtifact[] = [];
+  const bodyCacheQuery = useReaderBodyCacheQuery({
+    bookId,
+    fileHash,
+    chapterEntries,
+  });
 
-    for (const [chapterIndex] of chapterEntries.entries()) {
-      const baseContent = baseContentByChapterRef.current.get(chapterIndex);
-      if (!baseContent) continue;
+  const artifactsQuery = useReaderChapterArtifactsQuery({
+    bookId,
+    fileHash,
+    chapterEntries,
+    bodyCacheData: bodyCacheQuery.data,
+    initialLocation,
+  });
 
-      const nextArtifact = decorateChapterContent({
-        baseContent,
-        highlightsBySpineItemId,
-      });
-      const previousArtifact =
-        decoratedArtifactByChapterRef.current.get(chapterIndex);
-      if (
-        previousArtifact &&
-        previousArtifact.highlightSignature === nextArtifact.highlightSignature
-      ) {
-        continue;
-      }
+  useEffect(() => {
+    setLoadVersion((version) => version + 1);
+  }, [bookId, chapterEntries, fileHash]);
 
-      decoratedArtifactByChapterRef.current.set(chapterIndex, nextArtifact);
-      if (
-        !previousArtifact ||
-        didDecoratedChapterBlocksChange(previousArtifact, nextArtifact)
-      ) {
-        changedArtifacts.push(nextArtifact);
-      }
-    }
-
-    if (changedArtifacts.length === 0) return;
-
-    setArtifactsByChapter((previousArtifacts) => {
-      const nextArtifacts =
-        previousArtifacts.length === chapterEntries.length
-          ? [...previousArtifacts]
-          : createEmptyArtifactList(chapterEntries.length);
-
-      for (const artifact of changedArtifacts) {
-        nextArtifacts[artifact.chapterIndex] = artifact;
-      }
-
-      return nextArtifacts;
-    });
-  }, [bookId, chapterEntries, highlightsBySpineItemId]);
+  const artifactsByChapter = useMemo(
+    () => artifactsQuery.data?.artifactsByChapter ?? [],
+    [artifactsQuery.data?.artifactsByChapter],
+  );
 
   const getChapterBlocks = useCallback(
     (chapterIndex: number): ParsedChapterBlocks | null =>
-      decoratedArtifactByChapterRef.current.get(chapterIndex)?.blocks ?? null,
-    [],
+      artifactsByChapter[chapterIndex]?.blocks ?? null,
+    [artifactsByChapter],
   );
 
   const getChapterCanonicalText = useCallback(
     (chapterIndex: number): ChapterCanonicalText | null =>
-      baseContentByChapterRef.current.get(chapterIndex)?.canonicalText ?? null,
-    [],
+      artifactsQuery.data?.baseContentByChapter.get(chapterIndex)
+        ?.canonicalText ?? null,
+    [artifactsQuery.data],
   );
 
   return {
     chapterEntries,
-    bookHighlights,
+    bookHighlights: artifactsQuery.bookHighlights,
     artifactsByChapter,
     initialLocation,
     loadVersion,
-    sourceLoadWallClockMs,
+    sourceLoadWallClockMs: bodyCacheQuery.data?.loadWallClockMs ?? null,
     getChapterBlocks,
     getChapterCanonicalText,
   };
