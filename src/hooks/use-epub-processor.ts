@@ -1,12 +1,6 @@
 import { fileManager } from "@/lib/files/file-manager";
 import { processEpubToBookFiles } from "@/lib/sync/epub-processing";
-import {
-  db,
-  deriveImageDimensionsFromBookFiles,
-  getBookImageDimensionsMap,
-  getBookFiles,
-  upsertBookImageDimensions,
-} from "@/lib/db";
+import { db, getBookFiles } from "@/lib/db";
 import { useState, useEffect } from "react";
 
 export interface UseEpubProcessorReturn {
@@ -53,15 +47,6 @@ export function useEpubProcessor(
         const existingFiles = await getBookFiles(bookId!);
 
         if (existingFiles.length > 0) {
-          // NOTE: This is a temporary fix if the migration doesn't run properly
-          // Technically this would not work if there are no images in the book
-          const existingDimensions = await getBookImageDimensionsMap(bookId!);
-          if (existingDimensions.size === 0) {
-            const derived =
-              await deriveImageDimensionsFromBookFiles(existingFiles);
-            await upsertBookImageDimensions(derived);
-          }
-
           // Book is already processed
           if (!isCancelled) {
             setIsReady(true);
@@ -84,8 +69,6 @@ export function useEpubProcessor(
 
         // Process EPUB to extract bookFiles
         const bookFiles = await processEpubToBookFiles(blob, bookId!);
-        const imageDimensions =
-          await deriveImageDimensionsFromBookFiles(bookFiles);
 
         console.log(
           "[useEpubProcessor] Storing",
@@ -95,7 +78,6 @@ export function useEpubProcessor(
 
         // Store bookFiles in IndexedDB
         await db.bookFiles.bulkAdd(bookFiles);
-        await upsertBookImageDimensions(imageDimensions);
 
         // Mark book as downloaded
         await db.books.update(bookId!, {

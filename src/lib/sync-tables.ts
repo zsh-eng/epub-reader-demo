@@ -115,9 +115,8 @@ export const LOCAL_TABLES = {
   // Cached plain text extracted from book chapters for search
   bookTextCache: "bookId",
 
-  // Cached intrinsic image dimensions keyed by book + resource path
-  // Derived local metadata used by pagination; not synced
-  bookImageDimensions: "id, bookId, path, [bookId+path], updatedAt",
+  // Cached normalized chapter body HTML and canonical text for reader startup
+  bookChapterSourceCache: "bookId, updatedAt",
 } as const;
 
 export type SyncTableName = keyof typeof SYNC_TABLES;

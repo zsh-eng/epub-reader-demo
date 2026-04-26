@@ -1,10 +1,5 @@
 import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
-import {
-  getBookFilesByPaths,
-  getBookImageDimensionsMap,
-  getCurrentDeviceReadingCheckpoint,
-  type Book,
-} from "@/lib/db";
+import { getCurrentDeviceReadingCheckpoint, type Book } from "@/lib/db";
 import type { ChapterCanonicalText } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,6 +15,7 @@ import {
   type ReaderDecoratedChapterArtifact,
   type ReaderInitialLocation,
 } from "../data/chapter-content-pipeline";
+import { loadReaderBodyCache } from "../data/reader-body-cache";
 import { buildHighlightsBySpineItemId } from "../highlight-virtualization";
 import type { ChapterEntry } from "../types";
 
@@ -86,6 +82,7 @@ export function useReaderChapterContent({
   >([]);
 
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
+  const fileHash = book?.fileHash;
   const { data: bookHighlights = [] } = useBookHighlightsQuery(bookId);
 
   const highlightsBySpineItemId = useMemo(
@@ -124,7 +121,7 @@ export function useReaderChapterContent({
   );
 
   useEffect(() => {
-    if (!bookId || chapterEntries.length === 0) {
+    if (!bookId || !fileHash || chapterEntries.length === 0) {
       baseContentByChapterRef.current.clear();
       decoratedArtifactByChapterRef.current.clear();
       setSourceLoadWallClockMs(null);
@@ -147,8 +144,12 @@ export function useReaderChapterContent({
       try {
         // Stage 1: load base content, then publish the decorated artifact for
         // each chapter as soon as it is available so pagination can start early.
-        const [imageDimensionsByPath, checkpoint] = await Promise.all([
-          getBookImageDimensionsMap(bookId),
+        const [bodyCacheData, checkpoint] = await Promise.all([
+          loadReaderBodyCache({
+            bookId,
+            fileHash,
+            chapterEntries,
+          }),
           getCurrentDeviceReadingCheckpoint(bookId),
         ]);
         if (cancelled) return;
@@ -159,33 +160,28 @@ export function useReaderChapterContent({
         );
         setInitialLocation(nextInitialLocation);
 
-        const allChapterFiles = await getBookFilesByPaths(
-          bookId,
-          chapterEntries.map((chapter) => chapter.href),
-        );
-        if (cancelled) return;
-
-        const requireChapterFile = (chapter: ChapterEntry) => {
-          const chapterFile = allChapterFiles.get(chapter.href);
-          if (chapterFile) return chapterFile;
+        const requireChapterContent = (chapter: ChapterEntry) => {
+          const chapterContent = bodyCacheData.chapterContentsByPath.get(
+            chapter.href,
+          );
+          if (chapterContent) return chapterContent;
 
           throw new Error(
-            `Missing chapter file for href "${chapter.href}" (chapter ${chapter.index})`,
+            `Missing cached chapter content for href "${chapter.href}" (chapter ${chapter.index})`,
           );
         };
 
         const initialChapter =
           chapterEntries[nextInitialLocation.chapterIndex]!;
 
-        const loadAndPublishBaseContent = async (
+        const loadAndPublishBaseContent = (
           chapterIndex: number,
           chapter: ChapterEntry,
         ) => {
-          const baseContent = await loadBaseChapterContent({
+          const baseContent = loadBaseChapterContent({
             chapterIndex,
-            chapterFile: requireChapterFile(chapter),
+            chapterContent: requireChapterContent(chapter),
             chapter,
-            imageDimensionsByPath,
           });
           if (cancelled) return;
 
@@ -201,7 +197,7 @@ export function useReaderChapterContent({
           );
         };
 
-        await loadAndPublishBaseContent(
+        loadAndPublishBaseContent(
           nextInitialLocation.chapterIndex,
           initialChapter,
         );
@@ -214,7 +210,7 @@ export function useReaderChapterContent({
           if (chapterIndex === nextInitialLocation.chapterIndex) continue;
 
           const chapter = chapterEntries[chapterIndex]!;
-          await loadAndPublishBaseContent(chapterIndex, chapter);
+          loadAndPublishBaseContent(chapterIndex, chapter);
           if (cancelled) return;
         }
 
@@ -233,7 +229,7 @@ export function useReaderChapterContent({
     return () => {
       cancelled = true;
     };
-  }, [bookId, chapterEntries, writeArtifact]);
+  }, [bookId, chapterEntries, fileHash, writeArtifact]);
 
   useEffect(() => {
     if (!bookId || chapterEntries.length === 0) return;

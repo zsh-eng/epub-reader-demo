@@ -11,39 +11,22 @@ const {
   readingSessions: _readingSessions,
   ...SYNC_TABLES_BEFORE_V8
 } = SYNC_TABLES;
-const { bookImageDimensions: _bookImageDimensions, ...LOCAL_TABLES_BEFORE_V7 } =
-  LOCAL_TABLES;
-
-const LEGACY_STORES_V6 = {
-  ...generateDexieStores(SYNC_TABLES_BEFORE_V8),
-  ...LOCAL_TABLES_BEFORE_V7,
-};
-
+const {
+  bookChapterSourceCache: _bookChapterSourceCache,
+  ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE
+} = LOCAL_TABLES;
 const LEGACY_STORES_V7 = {
   ...generateDexieStores(SYNC_TABLES_BEFORE_V8),
-  ...LOCAL_TABLES,
+  ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
+};
+const LEGACY_STORES_V9 = {
+  ...generateDexieStores(SYNC_TABLES),
+  ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
 };
 
 type DbModule = typeof import("@/lib/db");
 
 let currentDbModule: DbModule | undefined;
-
-if (!Blob.prototype.arrayBuffer) {
-  Blob.prototype.arrayBuffer = function arrayBuffer(): Promise<ArrayBuffer> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onerror = () => {
-        reject(reader.error ?? new Error("Failed to read blob"));
-      };
-      reader.onload = () => {
-        resolve(reader.result as ArrayBuffer);
-      };
-
-      reader.readAsArrayBuffer(this);
-    });
-  };
-}
 
 /**
  * Seed a historical IndexedDB schema so the current Dexie instance must run
@@ -71,40 +54,6 @@ async function openCurrentDatabase(): Promise<DbModule> {
   return currentDbModule;
 }
 
-function createPngBlob(width: number, height: number): Blob {
-  const bytes = new Uint8Array([
-    0x89,
-    0x50,
-    0x4e,
-    0x47,
-    0x0d,
-    0x0a,
-    0x1a,
-    0x0a,
-    0x00,
-    0x00,
-    0x00,
-    0x0d,
-    0x49,
-    0x48,
-    0x44,
-    0x52,
-    ...toUint32Bytes(width),
-    ...toUint32Bytes(height),
-  ]);
-
-  return new Blob([bytes], { type: "image/png" });
-}
-
-function toUint32Bytes(value: number): [number, number, number, number] {
-  return [
-    (value >>> 24) & 0xff,
-    (value >>> 16) & 0xff,
-    (value >>> 8) & 0xff,
-    value & 0xff,
-  ];
-}
-
 describe("IndexedDB migrations", () => {
   beforeEach(() => {
     resetIndexedDB();
@@ -118,56 +67,21 @@ describe("IndexedDB migrations", () => {
     currentDbModule = undefined;
     await Dexie.delete(DB_NAME);
     localStorage.clear();
-    vi.doUnmock("@/lib/image-dimensions");
   });
 
-  it("backfills book image dimensions when upgrading from schema version 6", async () => {
-    const bookId = "book-1";
-    const imagePath = "OPS/images/hero.png";
+  it("adds the reader body cache during schema upgrade", async () => {
+    await seedLegacyDatabase(9, LEGACY_STORES_V9, async () => {});
 
-    vi.doMock("@/lib/image-dimensions", () => ({
-      extractImageDimensionsFromBlob: vi.fn(
-        async (_blob: Blob, mediaType?: string) => {
-          if (mediaType !== "image/png") return null;
-          return { width: 37, height: 19 };
-        },
-      ),
-    }));
+    const { db } = await openCurrentDatabase();
 
-    await seedLegacyDatabase(6, LEGACY_STORES_V6, async (legacyDb) => {
-      await legacyDb.table("bookFiles").bulkAdd([
-        {
-          id: "file-image",
-          bookId,
-          path: imagePath,
-          content: createPngBlob(37, 19),
-          mediaType: "image/png",
-        },
-        {
-          id: "file-chapter",
-          bookId,
-          path: "OPS/chapter-1.xhtml",
-          content: new Blob(["<html></html>"], {
-            type: "application/xhtml+xml",
-          }),
-          mediaType: "application/xhtml+xml",
-        },
-      ]);
+    await db.bookChapterSourceCache.put({
+      bookId: "book-1",
+      fileHash: "hash-1",
+      cacheVersion: 1,
+      chaptersByPath: {},
+      updatedAt: Date.now(),
     });
-
-    const { db, createBookImageDimensionId } = await openCurrentDatabase();
-
-    const dimensions = await db.bookImageDimensions.toArray();
-
-    expect(dimensions).toHaveLength(1);
-    expect(dimensions[0]).toMatchObject({
-      id: createBookImageDimensionId(bookId, imagePath),
-      bookId,
-      path: imagePath,
-      width: 37,
-      height: 19,
-    });
-    expect(dimensions[0]?.updatedAt).toEqual(expect.any(Number));
+    await expect(db.bookChapterSourceCache.count()).resolves.toBe(1);
   });
 
   it("does not seed per-device reading checkpoints during schema upgrade", async () => {

@@ -8,7 +8,6 @@
  */
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
-import { extractImageDimensionsFromBlob } from "@/lib/image-dimensions";
 import { isNotDeleted } from "@/lib/sync/hlc/middleware";
 import { getHLCService } from "@/lib/sync/hlc/hlc";
 import {
@@ -180,16 +179,26 @@ export interface BookTextCache {
   extractedAt: number; // For cache invalidation if needed
 }
 
+export interface BookChapterSourceCacheEntry {
+  bodyHtml: string;
+  canonicalText: {
+    fullText: string;
+    blockStarts: ReadonlyMap<string, number>;
+  };
+}
+
 /**
- * Cached intrinsic dimensions for image resources inside an EPUB.
- * Local-only derived metadata used by pagination to avoid repeatedly decoding blobs.
+ * Local-only reader source cache.
+ *
+ * This stores normalized chapter body HTML and canonical text in one row per
+ * book so reader startup can avoid repeatedly reading EPUB blobs and rebuilding
+ * the same DOM-derived source strings.
  */
-export interface BookImageDimension {
-  id: string; // `${bookId}:${path}`
+export interface BookChapterSourceCache {
   bookId: string;
-  path: string; // Canonical EPUB resource path
-  width: number;
-  height: number;
+  fileHash: string;
+  cacheVersion: number;
+  chaptersByPath: Record<string, BookChapterSourceCacheEntry>;
   updatedAt: number;
 }
 
@@ -210,83 +219,14 @@ export type { Highlight, Note };
 // Re-export StoredFile type for convenience
 export type { StoredFile, TransferTask };
 
-export interface BookImageDimensionInput {
-  bookId: string;
-  path: string;
-  width: number;
-  height: number;
-  updatedAt?: number;
-}
-
-const IMAGE_MEDIA_TYPE_PREFIX = "image/";
-const SVG_MEDIA_TYPES = new Set(["image/svg+xml", "application/svg+xml"]);
-
-function isImageBookFile(file: Pick<BookFile, "mediaType" | "path">): boolean {
-  const mediaType = file.mediaType.toLowerCase();
-  if (mediaType.startsWith(IMAGE_MEDIA_TYPE_PREFIX)) return true;
-  if (SVG_MEDIA_TYPES.has(mediaType)) return true;
-  return file.path.toLowerCase().endsWith(".svg");
-}
-
-export function createBookImageDimensionId(
-  bookId: string,
-  path: string,
-): string {
-  return `${bookId}:${path}`;
-}
-
-function createBookImageDimensionRow(
-  entry: BookImageDimensionInput,
-  fallbackTimestamp: number,
-): BookImageDimension {
-  return {
-    id: createBookImageDimensionId(entry.bookId, entry.path),
-    bookId: entry.bookId,
-    path: entry.path,
-    width: entry.width,
-    height: entry.height,
-    updatedAt: entry.updatedAt ?? fallbackTimestamp,
-  };
-}
-
-export async function deriveImageDimensionsFromBookFiles(
-  files: Pick<BookFile, "bookId" | "path" | "mediaType" | "content">[],
-): Promise<BookImageDimensionInput[]> {
-  const dimensions: BookImageDimensionInput[] = [];
-
-  for (const file of files) {
-    if (!isImageBookFile(file)) continue;
-
-    const parsed = await extractImageDimensionsFromBlob(
-      file.content,
-      file.mediaType,
-    );
-    if (!parsed) continue;
-
-    dimensions.push({
-      bookId: file.bookId,
-      path: file.path,
-      width: parsed.width,
-      height: parsed.height,
-    });
-  }
-
-  return dimensions;
-}
-
-export async function buildBookImageDimensionRowsFromBookFiles(
-  files: Pick<BookFile, "bookId" | "path" | "mediaType" | "content">[],
-  fallbackTimestamp: number = Date.now(),
-): Promise<BookImageDimension[]> {
-  const extracted = await deriveImageDimensionsFromBookFiles(files);
-  return extracted.map((entry) =>
-    createBookImageDimensionRow(entry, fallbackTimestamp),
-  );
-}
-
 // ============================================================================
 // Database Class
 // ============================================================================
+
+const {
+  bookChapterSourceCache: _bookChapterSourceCache,
+  ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE
+} = LOCAL_TABLES;
 
 class EPUBReaderDB extends Dexie {
   // Synced tables (with metadata)
@@ -305,7 +245,7 @@ class EPUBReaderDB extends Dexie {
   transferQueue!: Table<TransferTask, string>;
   syncLog!: Table<SyncLog, number>;
   bookTextCache!: Table<BookTextCache, string>;
-  bookImageDimensions!: Table<BookImageDimension, string>;
+  bookChapterSourceCache!: Table<BookChapterSourceCache, string>;
 
   constructor() {
     super("epub-reader-db");
@@ -321,14 +261,14 @@ class EPUBReaderDB extends Dexie {
     // Version 2: Add generic files table
     this.version(2).stores({
       ...syncSchemas,
-      ...LOCAL_TABLES,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
     });
 
     // Version 3: Migrate readingProgress to use UUID primary keys for historical tracking
     this.version(3)
       .stores({
         ...syncSchemas,
-        ...LOCAL_TABLES,
+        ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
       })
       .upgrade(async (tx) => {
         // Migrate existing readingProgress records to use UUID instead of bookId as primary key
@@ -356,42 +296,26 @@ class EPUBReaderDB extends Dexie {
     // Version 4: Add readingState table for tracking reading status history
     this.version(4).stores({
       ...syncSchemas,
-      ...LOCAL_TABLES,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
     });
 
     // Version 5: Add notes table for threaded annotations
     this.version(5).stores({
       ...syncSchemas,
-      ...LOCAL_TABLES,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
     });
 
     // Version 6: Add bookTextCache table for full-text search
     this.version(6).stores({
       ...syncSchemas,
-      ...LOCAL_TABLES,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
     });
 
-    // Version 7: Add local image-dimensions metadata and backfill existing books
-    this.version(7)
-      .stores({
-        ...syncSchemas,
-        ...LOCAL_TABLES,
-      })
-      .upgrade(async (tx) => {
-        const existingBookFiles = (await tx
-          .table("bookFiles")
-          .toArray()) as BookFile[];
-
-        if (existingBookFiles.length === 0) return;
-
-        const rows = await buildBookImageDimensionRowsFromBookFiles(
-          existingBookFiles,
-          Date.now(),
-        );
-        if (rows.length === 0) return;
-
-        await tx.table("bookImageDimensions").bulkPut(rows);
-      });
+    // Version 7: Schema marker retained for IndexedDB version continuity.
+    this.version(7).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
+    });
 
     // Version 8: Add per-device reading checkpoints.
     //
@@ -400,11 +324,17 @@ class EPUBReaderDB extends Dexie {
     // normal sync service starts.
     this.version(8).stores({
       ...syncSchemas,
-      ...LOCAL_TABLES,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
     });
 
     // Version 9: Add mutable reading session rows for active-time analytics
     this.version(9).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
+    });
+
+    // Version 10: Add normalized reader body source cache.
+    this.version(10).stores({
       ...syncSchemas,
       ...LOCAL_TABLES,
     });
@@ -476,30 +406,17 @@ export async function addBookWithFiles(
   book: Book,
   bookFiles: BookFile[],
 ): Promise<string> {
-  const imageDimensionRows = await buildBookImageDimensionRowsFromBookFiles(
-    bookFiles,
-    Date.now(),
-  );
+  return db.transaction("rw", [db.books, db.bookFiles, db.files], async () => {
+    // Add book first
+    const bookId = await db.books.add(book as SyncedBook);
 
-  return db.transaction(
-    "rw",
-    [db.books, db.bookFiles, db.files, db.bookImageDimensions],
-    async () => {
-      // Add book first
-      const bookId = await db.books.add(book as SyncedBook);
+    // Add book files (extracted EPUB content)
+    if (bookFiles.length > 0) {
+      await db.bookFiles.bulkAdd(bookFiles);
+    }
 
-      // Add book files (extracted EPUB content)
-      if (bookFiles.length > 0) {
-        await db.bookFiles.bulkAdd(bookFiles);
-      }
-
-      if (imageDimensionRows.length > 0) {
-        await db.bookImageDimensions.bulkPut(imageDimensionRows);
-      }
-
-      return bookId;
-    },
-  );
+    return bookId;
+  });
 }
 
 export async function getBook(id: string): Promise<SyncedBook | undefined> {
@@ -523,7 +440,7 @@ export async function deleteBook(id: string): Promise<void> {
 
   // Clean up local-only data
   await db.bookFiles.where("bookId").equals(id).delete();
-  await db.bookImageDimensions.where("bookId").equals(id).delete();
+  await db.bookChapterSourceCache.delete(id);
   await db.readingProgress.where("bookId").equals(id).delete();
   await db.highlights.where("bookId").equals(id).delete();
 }
@@ -562,31 +479,6 @@ export async function getBookFiles(bookId: string): Promise<BookFile[]> {
   return db.bookFiles.where("bookId").equals(bookId).toArray();
 }
 
-export async function getBookImageDimensionsMap(
-  bookId: string,
-): Promise<Map<string, { width: number; height: number }>> {
-  const rows = await db.bookImageDimensions
-    .where("bookId")
-    .equals(bookId)
-    .toArray();
-  return new Map(
-    rows.map((row) => [row.path, { width: row.width, height: row.height }]),
-  );
-}
-
-export async function upsertBookImageDimensions(
-  entries: BookImageDimensionInput[],
-): Promise<void> {
-  if (entries.length === 0) return;
-
-  const timestamp = Date.now();
-  const rows: BookImageDimension[] = entries.map((entry) =>
-    createBookImageDimensionRow(entry, timestamp),
-  );
-
-  await db.bookImageDimensions.bulkPut(rows);
-}
-
 export async function getBookFilesByPaths(
   bookId: string,
   paths: string[],
@@ -605,6 +497,28 @@ export async function getBookFilesByPaths(
   });
 
   return new Map(files.map((file) => [file.path, file]));
+}
+
+export async function getBookChapterSourceCache(
+  bookId: string,
+): Promise<BookChapterSourceCache | undefined> {
+  return db.bookChapterSourceCache.get(bookId);
+}
+
+export async function putBookChapterSourceCache(
+  bookId: string,
+  fileHash: string,
+  chaptersByPath: Record<string, BookChapterSourceCacheEntry>,
+  cacheVersion: number,
+): Promise<string> {
+  await db.bookChapterSourceCache.put({
+    bookId,
+    fileHash,
+    cacheVersion,
+    chaptersByPath,
+    updatedAt: Date.now(),
+  });
+  return bookId;
 }
 
 // ============================================================================

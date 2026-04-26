@@ -1,5 +1,5 @@
 import { processEmbeddedResources } from "@/lib/epub-resource-utils";
-import type { Book, BookFile, SyncedReadingCheckpoint } from "@/lib/db";
+import type { Book, SyncedReadingCheckpoint } from "@/lib/db";
 import {
   parseChapterHtml,
   parseChapterHtmlWithCanonicalText,
@@ -20,6 +20,11 @@ export interface ReaderBaseChapterContent {
   chapterIndex: number;
   entry: ChapterEntry;
   html: string;
+  canonicalText: ChapterCanonicalText;
+}
+
+export interface ReaderChapterCachedContent {
+  bodyHtml: string;
   canonicalText: ChapterCanonicalText;
 }
 
@@ -120,44 +125,41 @@ export function buildReaderChapterLoadOrder(
   return order;
 }
 
-async function extractBodyHtml(
-  chapterFile: BookFile,
-  chapter: ChapterEntry,
-  imageDimensionsByPath: Map<string, { width: number; height: number }>,
-): Promise<string> {
-  const text = await chapterFile.content.text();
+export async function buildReaderChapterCachedContent(options: {
+  source: string;
+  mediaType: string;
+  chapter: ChapterEntry;
+}): Promise<ReaderChapterCachedContent> {
+  const { source, mediaType, chapter } = options;
   const { document: chapterDoc } = await processEmbeddedResources({
-    content: text,
-    mediaType: chapterFile.mediaType,
+    content: source,
+    mediaType,
     basePath: chapter.href,
     loadResource: async () => null,
     skipImages: true,
     loadLinkedResources: false,
-    imageDimensionsByPath,
   });
+  const bodyHtml = chapterDoc.querySelector("body")?.innerHTML ?? "";
+  const { canonicalText } = parseChapterHtmlWithCanonicalText(bodyHtml);
 
-  return chapterDoc.querySelector("body")?.innerHTML ?? "";
+  return {
+    bodyHtml,
+    canonicalText,
+  };
 }
 
-export async function loadBaseChapterContent(options: {
+export function loadBaseChapterContent(options: {
   chapterIndex: number;
-  chapterFile: BookFile;
+  chapterContent: ReaderChapterCachedContent;
   chapter: ChapterEntry;
-  imageDimensionsByPath: Map<string, { width: number; height: number }>;
-}): Promise<ReaderBaseChapterContent> {
-  const { chapterIndex, chapterFile, chapter, imageDimensionsByPath } = options;
-  const html = await extractBodyHtml(
-    chapterFile,
-    chapter,
-    imageDimensionsByPath,
-  );
-  const { canonicalText } = parseChapterHtmlWithCanonicalText(html);
+}): ReaderBaseChapterContent {
+  const { chapterIndex, chapterContent, chapter } = options;
 
   return {
     chapterIndex,
     entry: chapter,
-    html,
-    canonicalText,
+    html: chapterContent.bodyHtml,
+    canonicalText: chapterContent.canonicalText,
   };
 }
 
