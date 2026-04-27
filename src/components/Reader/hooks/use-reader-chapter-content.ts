@@ -14,6 +14,7 @@ import {
   useReaderChapterArtifactsLoader,
   useReaderCheckpointQuery,
   type ReaderChapterArtifactSubscriber,
+  type ReaderBodyCacheLoadKind,
 } from "../data/reader-cache/hooks";
 import type { ChapterEntry } from "../types";
 
@@ -27,6 +28,7 @@ interface UseReaderChapterContentResult {
   bookHighlights: Highlight[];
   initialLocation: ReaderInitialLocation | null;
   sourceLoadWallClockMs: number | null;
+  sourceLoadKind: ReaderBodyCacheLoadKind | null;
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
   getChapterCanonicalText: (
     chapterIndex: number,
@@ -85,6 +87,7 @@ export function useReaderChapterContent({
     bookHighlights,
     initialLocation,
     sourceLoadWallClockMs: bodyCacheQuery.data?.loadWallClockMs ?? null,
+    sourceLoadKind: bodyCacheQuery.data?.loadKind ?? null,
     getChapterBlocks: artifactsLoader.getChapterBlocks,
     getChapterCanonicalText,
     subscribe: artifactsLoader.subscribe,

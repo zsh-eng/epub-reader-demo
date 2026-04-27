@@ -46,6 +46,7 @@ export function ReaderDebug() {
     pagination,
     bookHighlights,
     sourceLoadWallClockMs,
+    sourceLoadKind,
     currentPage,
     totalPages,
     currentChapterIndex,
@@ -135,9 +136,7 @@ export function ReaderDebug() {
     totalPages,
     viewport,
     sourceLoadWallClockMs,
-    addChapterSendWallClockMs: null,
-    chapterTitles: (index: number) =>
-      chapterEntries[index]?.title ?? `Chapter ${index + 1}`,
+    sourceLoadKind,
   };
 
   return (

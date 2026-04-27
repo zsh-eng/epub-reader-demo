@@ -84,7 +84,6 @@ export interface UsePaginationResult {
   updateChapter: (chapterIndex: number, blocks: Block[]) => void;
 
   tracer: PaginationTracer;
-  markFontSwitchIntent: (from: string, to: string) => void;
 }
 
 export interface UsePaginationOptions {
@@ -124,14 +123,7 @@ export function usePagination(
   const prevPaginationConfigRef = useRef<PaginationConfig | null>(null);
   const prevSpreadConfigRef = useRef<SpreadConfig | null>(null);
 
-  const markFontSwitchIntent = useCallback((from: string, to: string) => {
-    tracerRef.current.recordIntent(from, to);
-  }, []);
-
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    tracerRef.current.recordPostedCommand(cmd, {
-      immediate: cmd.type === "init",
-    });
     workerRef.current?.postMessage(cmd);
   }, []);
 
@@ -184,25 +176,25 @@ export function usePagination(
     switch (event.type) {
       case "partialReady":
         currentEpochRef.current = event.epoch;
+        tracerRef.current.markFirstVisible();
+        tracerRef.current.recordChapterDiagnostics(event.chapterDiagnostics);
         recordChapterPageCount(event.chapterDiagnostics);
         setSpread(event.spread);
         setStatus("partial");
-        tracerRef.current.updateDiagnostics(null);
         publishChapterPageCounts([]);
         break;
 
       case "ready":
         currentEpochRef.current = event.epoch;
+        tracerRef.current.markReady();
+        tracerRef.current.recordChapterDiagnosticsList(event.chapterDiagnostics);
         setSpread(event.spread);
         setStatus("ready");
-        tracerRef.current.markReady(
-          prevPaginationConfigRef.current?.fontConfig.bodyFamily ?? "",
-        );
         publishChapterPageCounts(event.chapterDiagnostics);
         break;
 
       case "progress":
-        tracerRef.current.updateDiagnostics(null);
+        tracerRef.current.recordChapterDiagnostics(event.chapterDiagnostics);
         recordChapterPageCount(event.chapterDiagnostics);
         break;
 
@@ -259,13 +251,6 @@ export function usePagination(
 
     if (!prev) return; // init hasn't been called yet — config will be sent with init.
 
-    if (
-      prev &&
-      prev.fontConfig.bodyFamily !== paginationConfig.fontConfig.bodyFamily
-    ) {
-      tracerRef.current.beginFontSwitch(paginationConfig);
-    }
-
     setStatus((s) => (s === "idle" ? s : "recalculating"));
     postCommand({
       type: "updatePaginationConfig",
@@ -304,6 +289,7 @@ export function usePagination(
       prevPaginationConfigRef.current = currentPaginationConfig;
       prevSpreadConfigRef.current = currentSpreadConfig;
       tracerRef.current.reset();
+      tracerRef.current.startRun();
 
       setSpread(null);
       setStatus("idle");
@@ -327,7 +313,6 @@ export function usePagination(
 
   const addChapter = useCallback(
     (chapterIndex: number, blocks: Block[]) => {
-      tracerRef.current.recordChapterQueued(chapterIndex);
       postCommand({ type: "addChapter", chapterIndex, blocks });
     },
     [postCommand],
@@ -335,7 +320,6 @@ export function usePagination(
 
   const updateChapter = useCallback(
     (chapterIndex: number, blocks: Block[]) => {
-      tracerRef.current.recordChapterQueued(chapterIndex);
       postCommand({ type: "updateChapter", chapterIndex, blocks });
     },
     [postCommand],
@@ -400,6 +384,5 @@ export function usePagination(
     addChapter,
     updateChapter,
     tracer: tracerRef.current,
-    markFontSwitchIntent,
   };
 }

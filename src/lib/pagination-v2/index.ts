@@ -1,13 +1,6 @@
-export {
-  createPaginationCommandHistoryEntry,
-  MAX_PAGINATION_COMMAND_HISTORY,
-  nextPaginationCommandHistory,
-  summarizePaginationCommand,
-} from "./diagnostics/command-history";
-export type { PaginationCommandHistoryEntry } from "./diagnostics/command-history";
 export { PaginationTracer } from "./diagnostics/tracer";
 export type {
-  PaginationFontSwitchLatencyTrace,
+  PaginationRunTimings,
   PaginationTracerSnapshot,
 } from "./diagnostics/tracer";
 export { resolveContentAnchorRangeToHighlight } from "./engine/highlight-selection";

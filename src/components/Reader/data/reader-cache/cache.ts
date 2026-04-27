@@ -30,9 +30,12 @@ export const READER_CHAPTER_ARTIFACTS_GC_MS = 30 * 60 * 1000;
  *    chapter, keyed by the body cache version and that chapter's highlight
  *    signature. The artifact loader fills and reads this cache imperatively.
  */
+export type ReaderBodyCacheLoadKind = "cache-hit" | "rebuilt";
+
 export interface ReaderBodyCacheData {
   baseContentByChapter: Map<number, ReaderBaseChapterContent>;
   loadWallClockMs: number;
+  loadKind: ReaderBodyCacheLoadKind;
 }
 
 function readCachedChapterContents(
@@ -137,6 +140,7 @@ export async function loadReaderBodyCache(options: {
         chapterContentsByPath,
       ),
       loadWallClockMs: performance.now() - startedAt,
+      loadKind: "cache-hit",
     };
   }
 
@@ -162,6 +166,7 @@ export async function loadReaderBodyCache(options: {
       builtChapterContents.chapterContentsByPath,
     ),
     loadWallClockMs: performance.now() - startedAt,
+    loadKind: "rebuilt",
   };
 }
 

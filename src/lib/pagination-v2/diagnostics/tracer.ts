@@ -1,101 +1,56 @@
-import {
-  nextPaginationCommandHistory,
-  type PaginationCommandHistoryEntry,
-  type TrackedPaginationCommand,
-} from "./command-history";
 import type {
-  PaginationChapterDiagnostics,
-  PaginationConfig,
-  PaginationDiagnostics,
+    PaginationChapterDiagnostics,
+    PaginationDiagnostics,
 } from "../shared/types";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface FontSwitchLatencyIntent {
-  from: string;
-  to: string;
-  startedAtMs: number;
-}
-
-interface RecordPostedCommandOptions {
-  immediate?: boolean;
-}
-
-export interface PaginationFontSwitchLatencyTrace {
-  id: string;
-  status: "running" | "ready" | "superseded";
-  startedAtMs: number;
-  intentAtMs: number | null;
-  fromFont: string | null;
-  toFont: string | null;
-  commandPostedAtMs: number;
-  firstPartialAtMs: number | null;
-  firstProgressAtMs: number | null;
+export interface PaginationRunTimings {
+  startedAtMs: number | null;
+  firstVisibleAtMs: number | null;
   readyAtMs: number | null;
-  paintedAtMs: number | null;
-  partialEvents: number;
-  progressEvents: number;
-  bodyFontLoadedAtStart: boolean | null;
-  bodyFontLoadedAtReady: boolean | null;
+  timeToFirstVisibleMs: number | null;
+  timeToReadyMs: number | null;
 }
 
 export interface PaginationTracerSnapshot {
   diagnostics: PaginationDiagnostics | null;
-  fontSwitchLatencyTraces: PaginationFontSwitchLatencyTrace[];
-  commandHistory: PaginationCommandHistoryEntry[];
+  timings: PaginationRunTimings;
 }
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const MAX_FONT_SWITCH_LATENCY_TRACES = 12;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function readFontLoaded(bodyFamily: string): boolean | null {
-  if (typeof document === "undefined") return null;
-  if (!("fonts" in document)) return null;
-  if (typeof document.fonts.check !== "function") return null;
-  return document.fonts.check(`16px ${bodyFamily}`);
-}
+const EMPTY_TIMINGS: PaginationRunTimings = {
+  startedAtMs: null,
+  firstVisibleAtMs: null,
+  readyAtMs: null,
+  timeToFirstVisibleMs: null,
+  timeToReadyMs: null,
+};
 
 // ---------------------------------------------------------------------------
 // PaginationTracer
 // ---------------------------------------------------------------------------
 
+/**
+ * Small external store for reader diagnostics.
+ *
+ * It intentionally tracks only the timings we use to compare startup behavior:
+ * time from pagination init to the first visible spread, time until all
+ * chapters are ready, and aggregate worker stage totals.
+ */
 export class PaginationTracer {
-  private stage1ByChapter = new Map<number, number>();
-  private chapterQueuedAt = new Map<number, number>();
-  private chapterLoadByChapter = new Map<number, number>();
-  private workerChapterDiagnostics = new Map<
-    number,
-    PaginationChapterDiagnostics
-  >();
-
-  private fontSwitchIntent: FontSwitchLatencyIntent | null = null;
-  private activeFontSwitchTraceId: string | null = null;
-  private traceSequence = 0;
-  private commandSequence = 0;
-
-  private traces: PaginationFontSwitchLatencyTrace[] = [];
+  private chapterDiagnostics = new Map<number, PaginationChapterDiagnostics>();
 
   private snapshot: PaginationTracerSnapshot = {
     diagnostics: null,
-    fontSwitchLatencyTraces: [],
-    commandHistory: [],
+    timings: EMPTY_TIMINGS,
   };
   private listeners = new Set<() => void>();
-
-  private readonly maxTraces: number;
-
-  constructor(maxTraces: number = MAX_FONT_SWITCH_LATENCY_TRACES) {
-    this.maxTraces = maxTraces;
-  }
 
   // -------------------------------------------------------------------------
   // External store API
@@ -113,161 +68,82 @@ export class PaginationTracer {
   };
 
   // -------------------------------------------------------------------------
-  // Command history
+  // Run timings
   // -------------------------------------------------------------------------
 
-  recordPostedCommand(
-    command: TrackedPaginationCommand,
-    _options: RecordPostedCommandOptions = {},
-  ): void {
-    this.commandSequence += 1;
-    const commandHistory = nextPaginationCommandHistory(
-      this.snapshot.commandHistory,
-      command,
-      this.commandSequence,
-    );
-
+  startRun(): void {
+    this.chapterDiagnostics.clear();
     this.snapshot = {
-      ...this.snapshot,
-      commandHistory,
+      diagnostics: null,
+      timings: {
+        ...EMPTY_TIMINGS,
+        startedAtMs: performance.now(),
+      },
     };
     this.emitChange();
   }
 
-  // -------------------------------------------------------------------------
-  // Chapter timing
-  // -------------------------------------------------------------------------
-
-  recordChapterQueued(chapterIndex: number): void {
-    this.chapterQueuedAt.set(chapterIndex, performance.now());
-  }
-
-  recordStage1(chapterIndex: number, ms: number): void {
-    this.stage1ByChapter.set(chapterIndex, ms);
-  }
-
-  finalizeChapter(
-    chapterIndex: number,
-    diag: PaginationChapterDiagnostics | null,
-  ): void {
-    if (diag) {
-      this.workerChapterDiagnostics.set(chapterIndex, diag);
-    }
-
-    const queuedAt = this.chapterQueuedAt.get(chapterIndex);
-    if (queuedAt === undefined) return;
-
-    this.chapterLoadByChapter.set(chapterIndex, performance.now() - queuedAt);
-    this.chapterQueuedAt.delete(chapterIndex);
-  }
-
-  // -------------------------------------------------------------------------
-  // Font switch tracing
-  // -------------------------------------------------------------------------
-
-  recordIntent(from: string, to: string): void {
-    this.fontSwitchIntent = { from, to, startedAtMs: performance.now() };
-  }
-
-  beginFontSwitch(config: PaginationConfig): void {
-    const now = performance.now();
-    this.traceSequence += 1;
-    const traceId = `font-switch-${Date.now()}-${this.traceSequence}`;
-
-    const activeId = this.activeFontSwitchTraceId;
-    if (activeId) {
-      this.updateTrace(activeId, (t) =>
-        t.status !== "running" ? t : { ...t, status: "superseded" },
-      );
-    }
-
-    const intent = this.fontSwitchIntent;
-    this.fontSwitchIntent = null;
-
-    const trace: PaginationFontSwitchLatencyTrace = {
-      id: traceId,
-      status: "running",
-      startedAtMs: now,
-      intentAtMs: intent?.startedAtMs ?? null,
-      fromFont: intent?.from ?? null,
-      toFont: intent?.to ?? null,
-      commandPostedAtMs: now,
-      firstPartialAtMs: null,
-      firstProgressAtMs: null,
-      readyAtMs: null,
-      paintedAtMs: null,
-      partialEvents: 0,
-      progressEvents: 0,
-      bodyFontLoadedAtStart: readFontLoaded(config.fontConfig.bodyFamily),
-      bodyFontLoadedAtReady: null,
-    };
-
-    this.traces = [trace, ...this.traces].slice(0, this.maxTraces);
-    this.activeFontSwitchTraceId = traceId;
-    this.flushTraces();
-  }
-
-  markActive(
-    apply: (
-      t: PaginationFontSwitchLatencyTrace,
-    ) => PaginationFontSwitchLatencyTrace,
-    _immediate = false,
-  ): void {
-    const id = this.activeFontSwitchTraceId;
-    if (!id) return;
-    this.updateTrace(id, apply);
-    this.flushTraces();
-  }
-
-  markReady(bodyFamily: string): void {
-    const activeId = this.activeFontSwitchTraceId;
-    if (!activeId) return;
-
-    const readyAtMs = performance.now();
-    this.updateTrace(activeId, (t) => ({
-      ...t,
-      status: "ready",
-      readyAtMs,
-      bodyFontLoadedAtReady: readFontLoaded(bodyFamily),
-    }));
-    this.activeFontSwitchTraceId = null;
-    this.flushTraces();
-    this.schedulePaintProbe(activeId);
-  }
-
-  schedulePaintProbe(traceId: string): void {
-    if (
-      typeof window === "undefined" ||
-      typeof window.requestAnimationFrame !== "function"
-    ) {
+  markFirstVisible(): void {
+    const startedAtMs = this.snapshot.timings.startedAtMs;
+    if (startedAtMs === null || this.snapshot.timings.firstVisibleAtMs !== null) {
       return;
     }
 
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const paintedAtMs = performance.now();
-        this.updateTrace(traceId, (t) => {
-          if (t.paintedAtMs !== null) return t;
-          return { ...t, paintedAtMs };
-        });
-        this.flushTraces();
-      });
-    });
+    const firstVisibleAtMs = performance.now();
+    this.snapshot = {
+      ...this.snapshot,
+      timings: {
+        ...this.snapshot.timings,
+        firstVisibleAtMs,
+        timeToFirstVisibleMs: firstVisibleAtMs - startedAtMs,
+      },
+    };
+    this.emitChange();
+  }
+
+  markReady(): void {
+    const startedAtMs = this.snapshot.timings.startedAtMs;
+    if (startedAtMs === null || this.snapshot.timings.readyAtMs !== null) {
+      return;
+    }
+
+    const readyAtMs = performance.now();
+    const firstVisibleAtMs =
+      this.snapshot.timings.firstVisibleAtMs ?? readyAtMs;
+
+    this.snapshot = {
+      ...this.snapshot,
+      timings: {
+        ...this.snapshot.timings,
+        firstVisibleAtMs,
+        readyAtMs,
+        timeToFirstVisibleMs: firstVisibleAtMs - startedAtMs,
+        timeToReadyMs: readyAtMs - startedAtMs,
+      },
+    };
+    this.emitChange();
   }
 
   // -------------------------------------------------------------------------
   // Diagnostics
   // -------------------------------------------------------------------------
 
-  updateDiagnostics(base: PaginationDiagnostics | null): void {
-    const diagnostics = this.buildDiagnostics(base);
-    if (diagnostics === null && this.snapshot.diagnostics === null) return;
+  recordChapterDiagnostics(
+    diagnostics: PaginationChapterDiagnostics | null | undefined,
+  ): void {
+    if (!diagnostics) return;
 
-    this.snapshot = {
-      ...this.snapshot,
-      diagnostics,
-    };
-    this.emitChange();
+    this.chapterDiagnostics.set(diagnostics.chapterIndex, diagnostics);
+    this.publishDiagnostics();
+  }
+
+  recordChapterDiagnosticsList(
+    diagnostics: readonly PaginationChapterDiagnostics[],
+  ): void {
+    for (const diagnostic of diagnostics) {
+      this.chapterDiagnostics.set(diagnostic.chapterIndex, diagnostic);
+    }
+    this.publishDiagnostics();
   }
 
   // -------------------------------------------------------------------------
@@ -275,23 +151,15 @@ export class PaginationTracer {
   // -------------------------------------------------------------------------
 
   reset(): void {
-    this.stage1ByChapter.clear();
-    this.chapterQueuedAt.clear();
-    this.chapterLoadByChapter.clear();
-    this.workerChapterDiagnostics.clear();
-    this.fontSwitchIntent = null;
-    this.activeFontSwitchTraceId = null;
-    this.traces = [];
+    this.chapterDiagnostics.clear();
 
     const hadDebugState =
       this.snapshot.diagnostics !== null ||
-      this.snapshot.fontSwitchLatencyTraces.length > 0 ||
-      this.snapshot.commandHistory.length > 0;
+      this.snapshot.timings.startedAtMs !== null;
 
     this.snapshot = {
       diagnostics: null,
-      fontSwitchLatencyTraces: [],
-      commandHistory: [],
+      timings: EMPTY_TIMINGS,
     };
 
     if (hadDebugState) {
@@ -300,83 +168,27 @@ export class PaginationTracer {
   }
 
   cleanup(): void {
-    // No-op: tracer now publishes changes immediately without queued timers.
+    // No-op: tracer publishes changes immediately.
   }
 
   // -------------------------------------------------------------------------
   // Private
   // -------------------------------------------------------------------------
 
-  private updateTrace(
-    id: string,
-    apply: (
-      t: PaginationFontSwitchLatencyTrace,
-    ) => PaginationFontSwitchLatencyTrace,
-  ): void {
-    this.traces = this.traces.map((t) => (t.id === id ? apply(t) : t));
-  }
-
-  private flushTraces(): void {
+  private publishDiagnostics(): void {
     this.snapshot = {
       ...this.snapshot,
-      fontSwitchLatencyTraces: [...this.traces],
+      diagnostics: this.buildDiagnostics(),
     };
     this.emitChange();
   }
 
-  private buildDiagnostics(
-    base: PaginationDiagnostics | null,
-  ): PaginationDiagnostics | null {
-    const chapterMap = new Map<number, PaginationChapterDiagnostics>();
+  private buildDiagnostics(): PaginationDiagnostics | null {
+    if (this.chapterDiagnostics.size === 0) return null;
 
-    for (const chapter of base?.chapterTimings ?? []) {
-      chapterMap.set(chapter.chapterIndex, chapter);
-    }
-
-    for (const [chapterIndex, chapter] of this.workerChapterDiagnostics) {
-      chapterMap.set(chapterIndex, chapter);
-    }
-
-    if (chapterMap.size === 0) {
-      if (!base) return null;
-      return {
-        ...base,
-        stage1ParseMs: 0,
-        stage2PrepareMs: base.stage2PrepareMs ?? 0,
-        stage3LayoutMs: base.stage3LayoutMs ?? 0,
-        totalMs:
-          (base.stage1ParseMs ?? 0) +
-          (base.stage2PrepareMs ?? 0) +
-          (base.stage3LayoutMs ?? 0),
-        chapterCount: 0,
-        chapterTimings: [],
-      };
-    }
-
-    const chapterTimings = Array.from(chapterMap.values())
-      .sort((a, b) => a.chapterIndex - b.chapterIndex)
-      .map((chapter) => {
-        const stage1ParseMs =
-          this.stage1ByChapter.get(chapter.chapterIndex) ??
-          chapter.stage1ParseMs ??
-          0;
-        const stage2PrepareMs = chapter.stage2PrepareMs ?? 0;
-        const stage3LayoutMs = chapter.stage3LayoutMs ?? 0;
-        const totalMs = stage1ParseMs + stage2PrepareMs + stage3LayoutMs;
-        const chapterLoadMs =
-          this.chapterLoadByChapter.get(chapter.chapterIndex) ??
-          chapter.chapterLoadMs ??
-          totalMs;
-
-        return {
-          ...chapter,
-          stage1ParseMs,
-          stage2PrepareMs,
-          stage3LayoutMs,
-          totalMs,
-          chapterLoadMs,
-        };
-      });
+    const chapterTimings = Array.from(this.chapterDiagnostics.values()).sort(
+      (a, b) => a.chapterIndex - b.chapterIndex,
+    );
 
     const blockCount = chapterTimings.reduce(
       (sum, chapter) => sum + chapter.blockCount,
@@ -384,10 +196,6 @@ export class PaginationTracer {
     );
     const lineCount = chapterTimings.reduce(
       (sum, chapter) => sum + chapter.lineCount,
-      0,
-    );
-    const stage1ParseMs = chapterTimings.reduce(
-      (sum, chapter) => sum + (chapter.stage1ParseMs ?? 0),
       0,
     );
     const stage2PrepareMs = chapterTimings.reduce(
@@ -398,17 +206,15 @@ export class PaginationTracer {
       (sum, chapter) => sum + (chapter.stage3LayoutMs ?? 0),
       0,
     );
-    const computeMs = stage2PrepareMs + stage3LayoutMs;
+    const totalMs = stage2PrepareMs + stage3LayoutMs;
 
     return {
-      ...(base ?? { blockCount: 0, lineCount: 0, computeMs: 0 }),
       blockCount,
       lineCount,
-      computeMs,
-      stage1ParseMs,
+      computeMs: totalMs,
       stage2PrepareMs,
       stage3LayoutMs,
-      totalMs: stage1ParseMs + stage2PrepareMs + stage3LayoutMs,
+      totalMs,
       chapterCount: chapterTimings.length,
       chapterTimings,
     };

@@ -3,12 +3,12 @@ import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
-  DEFAULT_PARAGRAPH_SPACING,
-  usePagination,
-  type Block,
-  type ChapterCanonicalText,
-  type PaginationConfig,
-  type SpreadConfig,
+    DEFAULT_PARAGRAPH_SPACING,
+    usePagination,
+    type Block,
+    type ChapterCanonicalText,
+    type PaginationConfig,
+    type SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
@@ -40,6 +40,7 @@ interface UseReaderCoreResult {
   paginationConfig: PaginationConfig;
   pagination: ReturnType<typeof usePagination>;
   sourceLoadWallClockMs: number | null;
+  sourceLoadKind: "cache-hit" | "rebuilt" | null;
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
@@ -157,6 +158,7 @@ export function useReaderCore(
     bookHighlights,
     initialLocation,
     sourceLoadWallClockMs,
+    sourceLoadKind,
     getChapterBlocks,
     getChapterCanonicalText,
     subscribe: subscribeToChapterArtifacts,
@@ -174,15 +176,11 @@ export function useReaderCore(
     initialLocation,
   });
 
-  const { markFontSwitchIntent } = pagination;
   const onUpdateSettings = useCallback(
     (patch: Partial<ReaderSettings>) => {
-      if (patch.fontFamily && patch.fontFamily !== settings.fontFamily) {
-        markFontSwitchIntent(settings.fontFamily, patch.fontFamily);
-      }
       updateSettings(patch);
     },
-    [settings.fontFamily, markFontSwitchIntent, updateSettings],
+    [updateSettings],
   );
 
   const currentPage = pagination.spread?.currentPage ?? 1;
@@ -220,6 +218,7 @@ export function useReaderCore(
     paginationConfig,
     pagination,
     sourceLoadWallClockMs,
+    sourceLoadKind,
     currentPage,
     totalPages,
     currentChapterIndex,

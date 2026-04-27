@@ -24,7 +24,10 @@ import {
   READER_BODY_CACHE_SCHEMA_VERSION,
   READER_CHAPTER_ARTIFACTS_GC_MS,
   READER_CHAPTER_ARTIFACTS_SCHEMA_VERSION,
+  type ReaderBodyCacheLoadKind,
 } from "./cache";
+
+export type { ReaderBodyCacheLoadKind };
 
 export const readerBodyCacheKeys = {
   book: (bookId: string, fileHash: string) =>

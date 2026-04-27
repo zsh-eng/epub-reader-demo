@@ -2,115 +2,64 @@ import {
   PaginationTracer,
   type PaginationTracerSnapshot,
 } from "@/lib/pagination-v2";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-
-const BASE_FONT_CONFIG = {
-  bodyFamily: '"Inter", sans-serif',
-  headingFamily: '"Inter", sans-serif',
-  codeFamily: '"Courier New", monospace',
-  baseSizePx: 16,
-};
-
-const BASE_LAYOUT_THEME = {
-  baseFontSizePx: 16,
-  lineHeightFactor: 1.5,
-  paragraphSpacingFactor: 1.2,
-  headingSpaceAbove: 1.5,
-  headingSpaceBelow: 0.7,
-  textAlign: "left" as const,
-};
-
-const BASE_CONFIG = {
-  fontConfig: BASE_FONT_CONFIG,
-  layoutTheme: BASE_LAYOUT_THEME,
-  viewport: { width: 620, height: 860 },
-};
-const BASE_SPREAD_CONFIG = {
-  columns: 1 as const,
-  chapterFlow: "continuous" as const,
-};
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("PaginationTracer", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
-  });
-
   afterEach(() => {
-    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
-  it("publishes command history updates immediately", () => {
-    const tracer = new PaginationTracer(12);
-    const notifications: number[] = [];
+  it("tracks startup timing from init to first visible and ready", () => {
+    const tracer = new PaginationTracer();
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(125)
+      .mockReturnValueOnce(180);
 
-    const unsubscribe = tracer.subscribe(() => {
-      notifications.push(tracer.getSnapshot().commandHistory.length);
-    });
+    tracer.startRun();
+    tracer.markFirstVisible();
+    tracer.markReady();
 
-    tracer.recordPostedCommand({ type: "goToPage", page: 3 });
-    const afterFirstCommand = tracer.getSnapshot().commandHistory;
-    expect(afterFirstCommand).toHaveLength(1);
-    expect(afterFirstCommand[0]?.summary).toContain("page=3");
-
-    tracer.recordPostedCommand(
-      {
-        type: "init",
-        totalChapters: 8,
-        paginationConfig: BASE_CONFIG,
-        spreadConfig: BASE_SPREAD_CONFIG,
-        initialChapterIndex: 2,
-        firstChapterBlocks: [],
-      },
-      { immediate: true },
-    );
-
-    const afterInit = tracer.getSnapshot().commandHistory;
-    expect(afterInit).toHaveLength(1);
-    expect(afterInit[0]?.type).toBe("init");
-    expect(afterInit[0]?.summary).toContain("chapters=8");
-    expect(notifications.length).toBeGreaterThanOrEqual(2);
-
-    unsubscribe();
+    const timings = tracer.getSnapshot().timings;
+    expect(timings.timeToFirstVisibleMs).toBe(25);
+    expect(timings.timeToReadyMs).toBe(80);
   });
 
-  it("owns command id sequencing across resets", () => {
-    const tracer = new PaginationTracer(12);
+  it("treats ready as first visible for single-chapter runs", () => {
+    const tracer = new PaginationTracer();
+    vi.spyOn(performance, "now").mockReturnValueOnce(10).mockReturnValueOnce(42);
 
-    tracer.recordPostedCommand(
-      { type: "goToPage", page: 1 },
-      { immediate: true },
-    );
+    tracer.startRun();
+    tracer.markReady();
 
-    const firstId = tracer.getSnapshot().commandHistory[0]?.id;
-    expect(firstId).toBeDefined();
-
-    tracer.reset();
-
-    tracer.recordPostedCommand(
-      { type: "goToPage", page: 2 },
-      { immediate: true },
-    );
-
-    const secondId = tracer.getSnapshot().commandHistory[0]?.id;
-    expect(secondId).toBeDefined();
-
-    const firstSeq = Number(firstId?.split("-").at(-1));
-    const secondSeq = Number(secondId?.split("-").at(-1));
-    expect(secondSeq).toBeGreaterThan(firstSeq);
+    const timings = tracer.getSnapshot().timings;
+    expect(timings.timeToFirstVisibleMs).toBe(32);
+    expect(timings.timeToReadyMs).toBe(32);
   });
 
-  it("publishes diagnostics and traces through snapshot subscribers", () => {
-    const tracer = new PaginationTracer(12);
+  it("keeps startup ready timing stable after later ready events", () => {
+    const tracer = new PaginationTracer();
+    vi.spyOn(performance, "now")
+      .mockReturnValueOnce(10)
+      .mockReturnValueOnce(42)
+      .mockReturnValueOnce(500);
+
+    tracer.startRun();
+    tracer.markReady();
+    tracer.markReady();
+
+    expect(tracer.getSnapshot().timings.timeToReadyMs).toBe(32);
+  });
+
+  it("publishes aggregate chapter diagnostics through snapshot subscribers", () => {
+    const tracer = new PaginationTracer();
     const notifications: PaginationTracerSnapshot[] = [];
 
     const unsubscribe = tracer.subscribe(() => {
       notifications.push(tracer.getSnapshot());
     });
 
-    tracer.recordStage1(0, 4);
-    tracer.finalizeChapter(0, {
+    tracer.recordChapterDiagnostics({
       chapterIndex: 0,
       blockCount: 10,
       lineCount: 20,
@@ -118,38 +67,47 @@ describe("PaginationTracer", () => {
       stage2PrepareMs: 3,
       stage3LayoutMs: 5,
     });
-    tracer.updateDiagnostics(null);
+    tracer.recordChapterDiagnosticsList([
+      {
+        chapterIndex: 1,
+        blockCount: 4,
+        lineCount: 8,
+        pageCount: 1,
+        stage2PrepareMs: 2,
+        stage3LayoutMs: 7,
+      },
+    ]);
 
     const diagnostics = tracer.getSnapshot().diagnostics;
-    expect(diagnostics).not.toBeNull();
-    expect(diagnostics?.chapterCount).toBe(1);
-    expect(diagnostics?.stage1ParseMs).toBe(4);
+    expect(diagnostics?.chapterCount).toBe(2);
+    expect(diagnostics?.blockCount).toBe(14);
+    expect(diagnostics?.lineCount).toBe(28);
+    expect(diagnostics?.stage2PrepareMs).toBe(5);
+    expect(diagnostics?.stage3LayoutMs).toBe(12);
+    expect(diagnostics?.totalMs).toBe(17);
+    expect(notifications).toHaveLength(2);
 
-    tracer.beginFontSwitch(BASE_CONFIG);
-    expect(tracer.getSnapshot().fontSwitchLatencyTraces).toHaveLength(1);
+    unsubscribe();
+  });
+
+  it("reset clears diagnostics and current run timings", () => {
+    const tracer = new PaginationTracer();
+    vi.spyOn(performance, "now").mockReturnValue(100);
+
+    tracer.startRun();
+    tracer.recordChapterDiagnostics({
+      chapterIndex: 0,
+      blockCount: 10,
+      lineCount: 20,
+      pageCount: 2,
+      stage2PrepareMs: 3,
+      stage3LayoutMs: 5,
+    });
 
     tracer.reset();
 
     const snapshot = tracer.getSnapshot();
     expect(snapshot.diagnostics).toBeNull();
-    expect(snapshot.fontSwitchLatencyTraces).toHaveLength(0);
-    expect(snapshot.commandHistory).toHaveLength(0);
-    expect(notifications.length).toBeGreaterThanOrEqual(3);
-
-    unsubscribe();
-  });
-
-  it("cleanup does not clear immediate command history updates", () => {
-    const tracer = new PaginationTracer(12);
-    const onChange = vi.fn();
-
-    tracer.subscribe(onChange);
-    tracer.recordPostedCommand({ type: "goToPage", page: 3 });
-    tracer.cleanup();
-
-    vi.advanceTimersByTime(500);
-
-    expect(tracer.getSnapshot().commandHistory).toHaveLength(1);
-    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(snapshot.timings.startedAtMs).toBeNull();
   });
 });
