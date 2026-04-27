@@ -18,6 +18,8 @@ export const highlightKeys = {
     [...highlightKeys.all, bookId, spineItemId] as const,
 };
 
+export const HIGHLIGHTS_QUERY_GC_TIME_MS = 30 * 60 * 1000;
+
 /**
  * Hook for fetching all highlights for a specific book.
  */
@@ -26,6 +28,8 @@ export function useBookHighlightsQuery(bookId: string | undefined) {
     queryKey: highlightKeys.book(bookId ?? ""),
     queryFn: () => getBookHighlights(bookId!),
     enabled: !!bookId,
+    staleTime: Infinity,
+    gcTime: HIGHLIGHTS_QUERY_GC_TIME_MS,
   });
 }
 
@@ -40,6 +44,8 @@ export function useHighlightsQuery(
     queryKey: highlightKeys.chapter(bookId ?? "", spineItemId ?? ""),
     queryFn: () => getHighlights(bookId!, spineItemId!),
     enabled: !!bookId && !!spineItemId,
+    staleTime: Infinity,
+    gcTime: HIGHLIGHTS_QUERY_GC_TIME_MS,
   });
 }
 

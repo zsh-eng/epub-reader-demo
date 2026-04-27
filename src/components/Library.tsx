@@ -19,6 +19,11 @@ import { authClient } from "@/lib/auth-client";
 import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
 import type { Book, SyncedBook } from "@/lib/db";
 import {
+  prefetchReaderBook,
+  prefetchReaderBooks,
+} from "@/components/Reader/data/reader-cache/prefetch";
+import { useQueryClient } from "@tanstack/react-query";
+import {
   Cloud,
   CloudOff,
   Highlighter,
@@ -31,7 +36,7 @@ import {
   Sun,
   Upload,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 export function Library() {
@@ -42,6 +47,7 @@ export function Library() {
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const queryClient = useQueryClient();
 
   const {
     data: booksData,
@@ -50,6 +56,15 @@ export function Library() {
   } = useBooksWithStatuses();
   const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
   const { settings, updateSettings } = useReaderSettings();
+
+  useEffect(() => {
+    const books = booksData?.categorized.continueReading ?? [];
+    if (books.length === 0) return;
+
+    void prefetchReaderBooks(queryClient, books, {
+      includeArtifacts: false,
+    });
+  }, [booksData?.categorized.continueReading, queryClient]);
 
   // Determine if current theme is dark
   const isDarkTheme =
@@ -266,6 +281,15 @@ export function Library() {
       });
     }
   };
+
+  const handlePrefetchBook = useCallback(
+    (book: Book) => {
+      void prefetchReaderBook(queryClient, book, {
+        includeArtifacts: true,
+      });
+    },
+    [queryClient],
+  );
 
   // Handle manual sync trigger
   const handleManualSync = async () => {
@@ -657,6 +681,7 @@ export function Library() {
                         key={book.id}
                         book={book}
                         onDelete={handleDeleteBook}
+                        onPrefetch={handlePrefetchBook}
                       />
                     ))}
                   </div>
@@ -682,6 +707,7 @@ export function Library() {
                         key={book.id}
                         book={book}
                         onDelete={handleDeleteBook}
+                        onPrefetch={handlePrefetchBook}
                       />
                     ))}
                   </div>

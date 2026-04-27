@@ -1,28 +1,29 @@
 import {
-  ResponsiveContextMenu,
-  ResponsiveContextMenuContent,
-  ResponsiveContextMenuItem,
-  ResponsiveContextMenuSeparator,
-  ResponsiveContextMenuTrigger,
+    ResponsiveContextMenu,
+    ResponsiveContextMenuContent,
+    ResponsiveContextMenuItem,
+    ResponsiveContextMenuSeparator,
+    ResponsiveContextMenuTrigger,
 } from "@/components/ui/responsive-context-menu";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
 import {
-  Book as BookIcon,
-  BookMarked,
-  BookOpen,
-  CheckCircle,
-  Loader2,
-  Trash2,
-  XCircle,
+    Book as BookIcon,
+    BookMarked,
+    BookOpen,
+    CheckCircle,
+    Loader2,
+    Trash2,
+    XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface BookCardProps {
   book: Book;
   onDelete: (bookId: string) => void;
+  onPrefetch?: (book: Book) => void;
 }
 
 function formatOpenedDate(timestamp: number) {
@@ -84,7 +85,7 @@ function BookCoverVisual({
   );
 }
 
-export function BookCard({ book, onDelete }: BookCardProps) {
+export function BookCard({ book, onDelete, onPrefetch }: BookCardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { status, setStatus } = useReadingStatus(book.id);
@@ -99,6 +100,10 @@ export function BookCard({ book, onDelete }: BookCardProps) {
   const handleClick = () => {
     // Navigate to reader - the reader will handle downloading/processing if needed
     navigate(`/reader/${book.id}`);
+  };
+
+  const handlePrefetch = () => {
+    onPrefetch?.(book);
   };
 
   const handleDelete = () => {
@@ -130,7 +135,12 @@ export function BookCard({ book, onDelete }: BookCardProps) {
   return (
     <ResponsiveContextMenu>
       <ResponsiveContextMenuTrigger>
-        <div className="group relative flex flex-col gap-3 w-full">
+        <div
+          className="group relative flex flex-col gap-3 w-full"
+          onFocusCapture={handlePrefetch}
+          onPointerDown={handlePrefetch}
+          onPointerEnter={handlePrefetch}
+        >
           {/* Book Cover Container */}
           <div
             onClick={handleClick}
