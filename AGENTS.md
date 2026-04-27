@@ -10,6 +10,8 @@ This repository uses **bun** as the package manager and for running scripts.
 - There is no need for the agent to do browser testing of new features, the user will manually test them.
 - Include comments and documentation for major pieces of code (not every helper function requires it, use your judgement).
   For example, hooks that do a lot of work/handle complex behaviour deserve documentation.
+- Unless explicity stated, you do not need to handle "backwards compatibility".
+- Do not be overly defensive in the code. Where possible, avoid using null and undefined - figure out a way to maintain data integrity and being explicit.
 
 ## Styling & UI
 
