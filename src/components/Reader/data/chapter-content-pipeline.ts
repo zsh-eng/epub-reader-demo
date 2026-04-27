@@ -1,16 +1,16 @@
-import { processEmbeddedResources } from "@/lib/epub-resource-utils";
 import type { Book, SyncedReadingCheckpoint } from "@/lib/db";
+import { processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
-  parseChapterHtml,
-  parseChapterHtmlWithCanonicalText,
-  type ChapterCanonicalText,
+    parseChapterHtml,
+    parseChapterHtmlWithCanonicalText,
+    type ChapterCanonicalText,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import {
-  applyChapterHighlights,
-  buildHighlightSignature,
-  type VirtualChapterSource,
+    applyChapterHighlights,
+    buildHighlightSignature,
+    type VirtualChapterSource,
 } from "../highlight-virtualization";
 import type { ChapterEntry } from "../types";
 
@@ -165,14 +165,12 @@ export function loadBaseChapterContent(options: {
 
 export function decorateChapterContent(options: {
   baseContent: ReaderBaseChapterContent;
-  highlightsBySpineItemId: ReadonlyMap<string, Highlight[]>;
+  highlights: Highlight[];
 }): ReaderDecoratedChapterArtifact {
-  const { baseContent, highlightsBySpineItemId } = options;
-  const chapterHighlights =
-    highlightsBySpineItemId.get(baseContent.entry.spineItemId) ?? [];
+  const { baseContent, highlights } = options;
   const source = applyChapterHighlights(
     { html: baseContent.html, highlightedHtml: baseContent.html },
-    chapterHighlights,
+    highlights,
   );
 
   return {
@@ -180,7 +178,7 @@ export function decorateChapterContent(options: {
     entry: baseContent.entry,
     source,
     blocks: parseChapterHtml(source.highlightedHtml),
-    highlightSignature: buildHighlightSignature(chapterHighlights),
+    highlightSignature: buildHighlightSignature(highlights),
   };
 }
 

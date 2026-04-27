@@ -1,21 +1,20 @@
 import {
-  getBookChapterSourceCache,
-  getBookFilesByPaths,
-  putBookChapterSourceCache,
-  type BookChapterSourceCacheEntry,
-  type BookFile,
+    getBookChapterSourceCache,
+    getBookFilesByPaths,
+    putBookChapterSourceCache,
+    type BookChapterSourceCacheEntry,
+    type BookFile,
 } from "@/lib/db";
 import type { Highlight } from "@/types/highlight";
-import {
-  buildReaderChapterCachedContent,
-  buildReaderChapterLoadOrder,
-  decorateChapterContent,
-  loadBaseChapterContent,
-  type ReaderBaseChapterContent,
-  type ReaderChapterCachedContent,
-  type ReaderDecoratedChapterArtifact,
-} from "../chapter-content-pipeline";
 import type { ChapterEntry } from "../../types";
+import {
+    buildReaderChapterCachedContent,
+    decorateChapterContent,
+    loadBaseChapterContent,
+    type ReaderBaseChapterContent,
+    type ReaderChapterCachedContent,
+    type ReaderDecoratedChapterArtifact,
+} from "../chapter-content-pipeline";
 
 export const READER_BODY_CACHE_SCHEMA_VERSION = 1;
 export const READER_CHAPTER_ARTIFACTS_SCHEMA_VERSION = 1;
@@ -27,20 +26,13 @@ export const READER_CHAPTER_ARTIFACTS_GC_MS = 30 * 60 * 1000;
  *    normalized chapter body HTML plus canonical text. This is invalidated by
  *    file hash or body cache schema version and can always be rebuilt from
  *    extracted EPUB files.
- * 2. In-memory artifact cache: React Query data derived from the body cache,
- *    current highlights, and the initial chapter. It is invalidated by the
- *    artifact schema version, body cache schema version, file hash, and a
- *    stable highlight signature.
+ * 2. In-memory chapter artifact cache: one React Query row per decorated
+ *    chapter, keyed by the body cache version and that chapter's highlight
+ *    signature. The artifact loader fills and reads this cache imperatively.
  */
 export interface ReaderBodyCacheData {
-  chapterContentsByPath: Map<string, ReaderChapterCachedContent>;
-  loadWallClockMs: number;
-}
-
-export interface ReaderChapterArtifactsData {
   baseContentByChapter: Map<number, ReaderBaseChapterContent>;
-  decoratedArtifactByChapter: Map<number, ReaderDecoratedChapterArtifact>;
-  artifactsByChapter: (ReaderDecoratedChapterArtifact | null)[];
+  loadWallClockMs: number;
 }
 
 function readCachedChapterContents(
@@ -52,6 +44,31 @@ function readCachedChapterContents(
     chapterContentsByPath.set(chapter.href, chaptersByPath[chapter.href]!);
   }
   return chapterContentsByPath;
+}
+
+function buildBaseContentByChapter(
+  chapterEntries: ChapterEntry[],
+  chapterContentsByPath: Map<string, ReaderChapterCachedContent>,
+): Map<number, ReaderBaseChapterContent> {
+  const baseContentByChapter = new Map<number, ReaderBaseChapterContent>();
+
+  for (
+    let chapterIndex = 0;
+    chapterIndex < chapterEntries.length;
+    chapterIndex++
+  ) {
+    const chapter = chapterEntries[chapterIndex]!;
+    baseContentByChapter.set(
+      chapterIndex,
+      loadBaseChapterContent({
+        chapterIndex,
+        chapterContent: chapterContentsByPath.get(chapter.href)!,
+        chapter,
+      }),
+    );
+  }
+
+  return baseContentByChapter;
 }
 
 async function buildChapterContentsFromFiles(
@@ -109,10 +126,15 @@ export async function loadReaderBodyCache(options: {
     cachedChapterSourceRow.cacheVersion === READER_BODY_CACHE_SCHEMA_VERSION &&
     cachedChapterSourceRow.fileHash === fileHash
   ) {
+    const chapterContentsByPath = readCachedChapterContents(
+      cachedChapterSourceRow.chaptersByPath,
+      chapterEntries,
+    );
+
     return {
-      chapterContentsByPath: readCachedChapterContents(
-        cachedChapterSourceRow.chaptersByPath,
+      baseContentByChapter: buildBaseContentByChapter(
         chapterEntries,
+        chapterContentsByPath,
       ),
       loadWallClockMs: performance.now() - startedAt,
     };
@@ -135,104 +157,17 @@ export async function loadReaderBodyCache(options: {
   );
 
   return {
-    chapterContentsByPath: builtChapterContents.chapterContentsByPath,
+    baseContentByChapter: buildBaseContentByChapter(
+      chapterEntries,
+      builtChapterContents.chapterContentsByPath,
+    ),
     loadWallClockMs: performance.now() - startedAt,
   };
 }
 
-function createEmptyArtifactList(
-  chapterCount: number,
-): (ReaderDecoratedChapterArtifact | null)[] {
-  return Array.from<ReaderDecoratedChapterArtifact | null>({
-    length: chapterCount,
-  }).fill(null);
-}
-
-function getHighlightUpdatedAtValue(highlight: Highlight): number {
-  return highlight.updatedAt?.getTime() ?? 0;
-}
-
-export function buildReaderArtifactHighlightSignature(
-  highlights: Highlight[],
-): string {
-  if (highlights.length === 0) return "none";
-
-  return JSON.stringify(
-    highlights
-      .slice()
-      .sort((a, b) => {
-        if (a.spineItemId !== b.spineItemId) {
-          return a.spineItemId.localeCompare(b.spineItemId);
-        }
-        if (a.startOffset !== b.startOffset) {
-          return a.startOffset - b.startOffset;
-        }
-        if (a.endOffset !== b.endOffset) return a.endOffset - b.endOffset;
-        return a.id.localeCompare(b.id);
-      })
-      .map((highlight) => [
-        highlight.spineItemId,
-        highlight.id,
-        highlight.startOffset,
-        highlight.endOffset,
-        highlight.color,
-        highlight.selectedText,
-        getHighlightUpdatedAtValue(highlight),
-      ]),
-  );
-}
-
-export function buildReaderChapterArtifacts(options: {
-  bodyCacheData: ReaderBodyCacheData;
-  chapterEntries: ChapterEntry[];
-  highlightsBySpineItemId: ReadonlyMap<string, Highlight[]>;
-  initialChapterIndex: number;
-}): ReaderChapterArtifactsData {
-  const {
-    bodyCacheData,
-    chapterEntries,
-    highlightsBySpineItemId,
-    initialChapterIndex,
-  } = options;
-  const baseContentByChapter = new Map<number, ReaderBaseChapterContent>();
-  const decoratedArtifactByChapter = new Map<
-    number,
-    ReaderDecoratedChapterArtifact
-  >();
-  const artifactsByChapter = createEmptyArtifactList(chapterEntries.length);
-
-  for (const chapterIndex of buildReaderChapterLoadOrder(
-    chapterEntries.length,
-    initialChapterIndex,
-  )) {
-    const chapter = chapterEntries[chapterIndex]!;
-    const chapterContent = bodyCacheData.chapterContentsByPath.get(
-      chapter.href,
-    );
-    if (!chapterContent) {
-      throw new Error(
-        `Missing cached chapter content for href "${chapter.href}" (chapter ${chapter.index})`,
-      );
-    }
-
-    const baseContent = loadBaseChapterContent({
-      chapterIndex,
-      chapterContent,
-      chapter,
-    });
-    const artifact = decorateChapterContent({
-      baseContent,
-      highlightsBySpineItemId,
-    });
-
-    baseContentByChapter.set(chapterIndex, baseContent);
-    decoratedArtifactByChapter.set(chapterIndex, artifact);
-    artifactsByChapter[chapterIndex] = artifact;
-  }
-
-  return {
-    baseContentByChapter,
-    decoratedArtifactByChapter,
-    artifactsByChapter,
-  };
+export function buildReaderChapterArtifact(options: {
+  baseContent: ReaderBaseChapterContent;
+  highlights: Highlight[];
+}): ReaderDecoratedChapterArtifact {
+  return decorateChapterContent(options);
 }

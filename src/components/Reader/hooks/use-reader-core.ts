@@ -155,12 +155,11 @@ export function useReaderCore(
   const {
     chapterEntries,
     bookHighlights,
-    artifactsByChapter,
     initialLocation,
-    loadVersion,
     sourceLoadWallClockMs,
     getChapterBlocks,
     getChapterCanonicalText,
+    subscribe: subscribeToChapterArtifacts,
   } = useReaderChapterContent({
     bookId: epubPreparation.chapterContentBookId,
     book: epubPreparation.chapterContentBook,
@@ -168,10 +167,11 @@ export function useReaderCore(
 
   useReaderPaginationFeed({
     pagination,
+    bookId: epubPreparation.chapterContentBookId,
     chapterEntries,
-    artifactsByChapter,
+    getChapterBlocks,
+    subscribe: subscribeToChapterArtifacts,
     initialLocation,
-    loadVersion,
   });
 
   const { markFontSwitchIntent } = pagination;

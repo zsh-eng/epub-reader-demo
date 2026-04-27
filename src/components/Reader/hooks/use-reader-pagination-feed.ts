@@ -1,20 +1,22 @@
 import { usePagination } from "@/lib/pagination-v2";
-import { useEffect, useRef } from "react";
-import type { ChapterEntry } from "../types";
+import { useEffect } from "react";
 import type {
-  ReaderDecoratedChapterArtifact,
+  ParsedChapterBlocks,
   ReaderInitialLocation,
 } from "../data/chapter-content-pipeline";
+import type { ReaderChapterArtifactSubscriber } from "../data/reader-cache/hooks";
+import type { ChapterEntry } from "../types";
 
 interface UseReaderPaginationFeedOptions {
   pagination: Pick<
     ReturnType<typeof usePagination>,
     "init" | "addChapter" | "updateChapter"
   >;
+  bookId?: string;
   chapterEntries: ChapterEntry[];
-  artifactsByChapter: (ReaderDecoratedChapterArtifact | null)[];
+  getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
+  subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
   initialLocation: ReaderInitialLocation | null;
-  loadVersion: number;
 }
 
 /**
@@ -27,80 +29,63 @@ interface UseReaderPaginationFeedOptions {
  */
 export function useReaderPaginationFeed({
   pagination,
+  bookId,
   chapterEntries,
-  artifactsByChapter,
+  getChapterBlocks,
+  subscribe,
   initialLocation,
-  loadVersion,
 }: UseReaderPaginationFeedOptions): void {
-  const initializedLoadVersionRef = useRef<number | null>(null);
-  const sentArtifactsRef = useRef<Map<number, ReaderDecoratedChapterArtifact>>(
-    new Map(),
-  );
   const { addChapter, init, updateChapter } = pagination;
 
   useEffect(() => {
-    initializedLoadVersionRef.current = null;
-    sentArtifactsRef.current = new Map();
-  }, [loadVersion]);
+    if (!bookId || !initialLocation || chapterEntries.length === 0) return;
 
-  useEffect(() => {
-    if (!initialLocation || chapterEntries.length === 0) return;
+    let initialized = false;
 
-    const initialArtifact = artifactsByChapter[initialLocation.chapterIndex];
-    if (!initialArtifact) return;
-    if (initializedLoadVersionRef.current === loadVersion) return;
+    const initializeIfReady = () => {
+      if (initialized) return true;
 
-    init({
-      totalChapters: chapterEntries.length,
-      initialChapterIndex: initialLocation.chapterIndex,
-      initialChapterProgress: initialLocation.chapterProgress,
-      intent: initialLocation.isRestore
-        ? { kind: "restore" }
-        : { kind: "replace" },
-      firstChapterBlocks: initialArtifact.blocks,
-    });
+      const firstChapterBlocks = getChapterBlocks(
+        initialLocation.chapterIndex,
+      );
+      if (!firstChapterBlocks) return false;
 
-    initializedLoadVersionRef.current = loadVersion;
-    sentArtifactsRef.current = new Map([
-      [initialLocation.chapterIndex, initialArtifact],
-    ]);
-  }, [
-    artifactsByChapter,
-    chapterEntries.length,
-    initialLocation,
-    init,
-    loadVersion,
-  ]);
+      init({
+        totalChapters: chapterEntries.length,
+        initialChapterIndex: initialLocation.chapterIndex,
+        initialChapterProgress: initialLocation.chapterProgress,
+        intent: initialLocation.isRestore
+          ? { kind: "restore" }
+          : { kind: "replace" },
+        firstChapterBlocks,
+      });
 
-  useEffect(() => {
-    if (!initialLocation) return;
-    if (initializedLoadVersionRef.current !== loadVersion) return;
+      initialized = true;
+      return true;
+    };
 
-    for (
-      let chapterIndex = 0;
-      chapterIndex < chapterEntries.length;
-      chapterIndex++
-    ) {
-      const artifact = artifactsByChapter[chapterIndex];
-      if (!artifact) continue;
+    initializeIfReady();
 
-      const previousArtifact = sentArtifactsRef.current.get(chapterIndex);
-      if (previousArtifact === artifact) continue;
+    return subscribe((event) => {
+      if (!initializeIfReady()) return;
 
-      if (previousArtifact) {
-        updateChapter(chapterIndex, artifact.blocks);
-      } else if (chapterIndex !== initialLocation.chapterIndex) {
-        addChapter(chapterIndex, artifact.blocks);
+      if (event.kind === "updated") {
+        updateChapter(event.chapterIndex, event.artifact.blocks);
+        return;
       }
 
-      sentArtifactsRef.current.set(chapterIndex, artifact);
-    }
+      if (event.chapterIndex !== initialLocation.chapterIndex) {
+        addChapter(event.chapterIndex, event.artifact.blocks);
+      }
+    });
   }, [
-    artifactsByChapter,
     addChapter,
+    bookId,
     chapterEntries.length,
+    getChapterBlocks,
     initialLocation,
-    loadVersion,
+    init,
+    subscribe,
     updateChapter,
   ]);
 }

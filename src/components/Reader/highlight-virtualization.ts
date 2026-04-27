@@ -22,15 +22,26 @@ function sortHighlightsByOffset(a: Highlight, b: Highlight): number {
   return a.id.localeCompare(b.id);
 }
 
+function getHighlightUpdatedAtValue(highlight: Highlight): number {
+  return highlight.updatedAt?.getTime() ?? 0;
+}
+
 export function buildHighlightSignature(highlights: Highlight[]): string {
-  return highlights
-    .slice()
-    .sort(sortHighlightsByOffset)
-    .map(
-      (highlight) =>
-        `${highlight.id}:${highlight.startOffset}:${highlight.endOffset}:${highlight.color}`,
-    )
-    .join("|");
+  if (highlights.length === 0) return "none";
+
+  return JSON.stringify(
+    highlights
+      .slice()
+      .sort(sortHighlightsByOffset)
+      .map((highlight) => [
+        highlight.id,
+        highlight.startOffset,
+        highlight.endOffset,
+        highlight.color,
+        highlight.selectedText,
+        getHighlightUpdatedAtValue(highlight),
+      ]),
+  );
 }
 
 export function buildHighlightsBySpineItemId(

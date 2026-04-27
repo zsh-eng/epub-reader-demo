@@ -1,18 +1,19 @@
+import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import type { Book } from "@/lib/db";
 import type { ChapterCanonicalText } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import {
   buildChapterEntries,
   resolveInitialReaderLocation,
   type ParsedChapterBlocks,
-  type ReaderDecoratedChapterArtifact,
   type ReaderInitialLocation,
 } from "../data/chapter-content-pipeline";
 import {
   useReaderBodyCacheQuery,
-  useReaderChapterArtifactsQuery,
+  useReaderChapterArtifactsLoader,
   useReaderCheckpointQuery,
+  type ReaderChapterArtifactSubscriber,
 } from "../data/reader-cache/hooks";
 import type { ChapterEntry } from "../types";
 
@@ -24,14 +25,13 @@ interface UseReaderChapterContentOptions {
 interface UseReaderChapterContentResult {
   chapterEntries: ChapterEntry[];
   bookHighlights: Highlight[];
-  artifactsByChapter: (ReaderDecoratedChapterArtifact | null)[];
   initialLocation: ReaderInitialLocation | null;
-  loadVersion: number;
   sourceLoadWallClockMs: number | null;
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
   getChapterCanonicalText: (
     chapterIndex: number,
   ) => ChapterCanonicalText | null;
+  subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
 }
 
 /**
@@ -42,7 +42,6 @@ export function useReaderChapterContent({
   bookId,
   book,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
-  const [loadVersion, setLoadVersion] = useState(0);
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
   const fileHash = book?.fileHash;
 
@@ -61,45 +60,33 @@ export function useReaderChapterContent({
     fileHash,
     chapterEntries,
   });
+  const highlightsQuery = useBookHighlightsQuery(bookId);
+  const bookHighlights = highlightsQuery.data ?? [];
 
-  const artifactsQuery = useReaderChapterArtifactsQuery({
+  const artifactsLoader = useReaderChapterArtifactsLoader({
     bookId,
     fileHash,
     chapterEntries,
-    bodyCacheData: bodyCacheQuery.data,
+    baseContentByChapter: bodyCacheQuery.data?.baseContentByChapter,
     initialLocation,
+    highlights: bookHighlights,
+    enabled: highlightsQuery.isSuccess,
   });
-
-  useEffect(() => {
-    setLoadVersion((version) => version + 1);
-  }, [bookId, chapterEntries, fileHash]);
-
-  const artifactsByChapter = useMemo(
-    () => artifactsQuery.data?.artifactsByChapter ?? [],
-    [artifactsQuery.data?.artifactsByChapter],
-  );
-
-  const getChapterBlocks = useCallback(
-    (chapterIndex: number): ParsedChapterBlocks | null =>
-      artifactsByChapter[chapterIndex]?.blocks ?? null,
-    [artifactsByChapter],
-  );
 
   const getChapterCanonicalText = useCallback(
     (chapterIndex: number): ChapterCanonicalText | null =>
-      artifactsQuery.data?.baseContentByChapter.get(chapterIndex)
+      bodyCacheQuery.data?.baseContentByChapter.get(chapterIndex)
         ?.canonicalText ?? null,
-    [artifactsQuery.data],
+    [bodyCacheQuery.data],
   );
 
   return {
     chapterEntries,
-    bookHighlights: artifactsQuery.bookHighlights,
-    artifactsByChapter,
+    bookHighlights,
     initialLocation,
-    loadVersion,
     sourceLoadWallClockMs: bodyCacheQuery.data?.loadWallClockMs ?? null,
-    getChapterBlocks,
+    getChapterBlocks: artifactsLoader.getChapterBlocks,
     getChapterCanonicalText,
+    subscribe: artifactsLoader.subscribe,
   };
 }
