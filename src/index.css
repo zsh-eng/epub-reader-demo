@@ -175,6 +175,50 @@
   }
 }
 
+@layer components {
+  [data-slot="scroll-area-viewport"][data-has-overflow-y] {
+    --scroll-area-fade-size: 2rem;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black
+        min(
+          var(--scroll-area-fade-size),
+          var(--scroll-area-overflow-y-start, 0px)
+        ),
+      black
+        calc(
+          100% -
+            min(
+              var(--scroll-area-fade-size),
+              var(--scroll-area-overflow-y-end, var(--scroll-area-fade-size))
+            )
+        ),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      black
+        min(
+          var(--scroll-area-fade-size),
+          var(--scroll-area-overflow-y-start, 0px)
+        ),
+      black
+        calc(
+          100% -
+            min(
+              var(--scroll-area-fade-size),
+              var(--scroll-area-overflow-y-end, var(--scroll-area-fade-size))
+            )
+        ),
+      transparent 100%
+    );
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+}
+
 .flexoki-light {
   --background: hsl(48 100% 97%);
   --foreground: hsl(0 3% 6%);

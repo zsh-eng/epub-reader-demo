@@ -1,6 +1,7 @@
 import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
 import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   SegmentedTabs,
   SegmentedTabsContent,
@@ -116,8 +117,8 @@ export function ReaderSettingsPanel({
       {/* This region stays content-sized until the sheet reaches its viewport
           cap, then becomes the scroll container instead of truncating the
           active settings panel at a fixed intermediate height. */}
-      <div
-        className="min-h-0 flex-1 overflow-y-auto px-4 pb-3"
+      <ScrollArea
+        className="min-h-0 flex-1 px-4 pb-3"
         data-base-ui-swipe-ignore
       >
         <SegmentedTabsContent value="typography" className="mt-0">
@@ -130,7 +131,7 @@ export function ReaderSettingsPanel({
         <SegmentedTabsContent value="theme" className="mt-0">
           <ThemePanel settings={settings} onUpdateSettings={onUpdateSettings} />
         </SegmentedTabsContent>
-      </div>
+      </ScrollArea>
     </SegmentedTabs>
   );
 }

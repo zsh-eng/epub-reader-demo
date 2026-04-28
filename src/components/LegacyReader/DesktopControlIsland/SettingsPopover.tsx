@@ -4,6 +4,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   SegmentedTabs,
   SegmentedTabsContent,
@@ -40,17 +41,21 @@ export function SettingsPopover({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger render={<Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "rounded-full",
-            isOpen && "bg-accent text-accent-foreground",
-          )}
-          aria-label="Settings"
-        >
-          <Settings className="size-4" />
-        </Button>} />
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "rounded-full",
+              isOpen && "bg-accent text-accent-foreground",
+            )}
+            aria-label="Settings"
+          >
+            <Settings className="size-4" />
+          </Button>
+        }
+      />
       <AnimatePresence>
         {isOpen && (
           <PopoverContent
@@ -93,23 +98,24 @@ export function SettingsPopover({
                         : "pointer-events-none z-0",
                     )}
                   >
-                    <motion.div
-                      initial={false}
-                      animate={{
-                        opacity: activeTab === "typography" ? 1 : 0,
-                        y: activeTab === "typography" ? 0 : 6,
-                      }}
-                      transition={{
-                        duration: 0.18,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                      className="h-full overflow-y-auto p-4 pb-2"
-                    >
-                      <TypographyPanel
-                        settings={settings}
-                        onUpdateSettings={onUpdateSettings}
-                      />
-                    </motion.div>
+                    <ScrollArea className="h-full p-4 pb-2">
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          opacity: activeTab === "typography" ? 1 : 0,
+                          y: activeTab === "typography" ? 0 : 6,
+                        }}
+                        transition={{
+                          duration: 0.18,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                      >
+                        <TypographyPanel
+                          settings={settings}
+                          onUpdateSettings={onUpdateSettings}
+                        />
+                      </motion.div>
+                    </ScrollArea>
                   </SegmentedTabsContent>
 
                   <SegmentedTabsContent
@@ -124,23 +130,24 @@ export function SettingsPopover({
                         : "pointer-events-none z-0",
                     )}
                   >
-                    <motion.div
-                      initial={false}
-                      animate={{
-                        opacity: activeTab === "theme" ? 1 : 0,
-                        y: activeTab === "theme" ? 0 : 6,
-                      }}
-                      transition={{
-                        duration: 0.18,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                      className="h-full overflow-y-auto p-4 pb-2"
-                    >
-                      <ThemePanel
-                        settings={settings}
-                        onUpdateSettings={onUpdateSettings}
-                      />
-                    </motion.div>
+                    <ScrollArea className="h-full p-4 pb-2">
+                      <motion.div
+                        initial={false}
+                        animate={{
+                          opacity: activeTab === "theme" ? 1 : 0,
+                          y: activeTab === "theme" ? 0 : 6,
+                        }}
+                        transition={{
+                          duration: 0.18,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                      >
+                        <ThemePanel
+                          settings={settings}
+                          onUpdateSettings={onUpdateSettings}
+                        />
+                      </motion.div>
+                    </ScrollArea>
                   </SegmentedTabsContent>
                 </div>
 

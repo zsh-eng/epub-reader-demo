@@ -1,4 +1,5 @@
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ReactNode } from "react";
 
 interface InspectorDrawerProps {
@@ -15,7 +16,12 @@ export function InspectorDrawer({
   return (
     <Drawer direction="bottom" open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[85vh]">
-        <div className="overflow-y-auto px-4 pb-6 pt-2">{children}</div>
+        <ScrollArea
+          className="px-4 pb-6 pt-2"
+          viewportClassName="h-auto max-h-[calc(85vh-3rem)]"
+        >
+          {children}
+        </ScrollArea>
       </DrawerContent>
     </Drawer>
   );

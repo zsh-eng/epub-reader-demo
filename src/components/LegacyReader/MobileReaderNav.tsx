@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   SegmentedTabs,
   SegmentedTabsContent,
@@ -189,9 +190,12 @@ export function MobileReaderNav({
         >
           <SegmentedTabs
             defaultValue="typography"
-            className="mt-2 flex flex-1 flex-col"
+            className="mt-2 flex min-h-0 flex-1 flex-col"
           >
-            <div className="flex-1 overflow-y-auto px-4 mb-4">
+            <ScrollArea
+              className="mb-4 min-h-0 flex-1 px-4"
+              data-base-ui-swipe-ignore
+            >
               <SegmentedTabsContent value="typography" className="mt-0">
                 <TypographyPanel
                   settings={settings}
@@ -205,7 +209,7 @@ export function MobileReaderNav({
                   onUpdateSettings={onUpdateSettings}
                 />
               </SegmentedTabsContent>
-            </div>
+            </ScrollArea>
 
             <SegmentedTabsList className="mx-auto mb-4 h-10 w-[85%]">
               <SegmentedTabsTrigger value="typography" className="gap-2">
@@ -229,8 +233,9 @@ export function MobileReaderNav({
             paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
           }}
         >
-          <div
-            className="overflow-y-auto px-4 max-h-[60vh]"
+          <ScrollArea
+            className="px-4"
+            viewportClassName="h-auto max-h-[60vh]"
             data-base-ui-swipe-ignore
           >
             {flatTOC && flatTOC.length > 0 ? (
@@ -262,7 +267,7 @@ export function MobileReaderNav({
                 No table of contents available
               </p>
             )}
-          </div>
+          </ScrollArea>
         </DrawerContent>
       </Drawer>
     </>
