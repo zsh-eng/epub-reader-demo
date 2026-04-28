@@ -2,6 +2,7 @@ import {
   captureReaderHandoffSessionStart,
   getLatestRemoteReadingCheckpoint,
   getLatestUnreadRemoteReadingCheckpoint,
+  readerHandoffDeviceKeys,
   useReaderHandoffPrompt,
 } from "@/components/Reader/hooks/use-reader-handoff-prompt";
 import {
@@ -73,6 +74,13 @@ function setCheckpoints(
     readerCheckpointKeys.book(BOOK_ID),
     { checkpoints },
   );
+}
+
+function setHandoffDevices(
+  queryClient: QueryClientType,
+  devices: { clientId: string; deviceName: string | null }[],
+): void {
+  queryClient.setQueryData(readerHandoffDeviceKeys.all, { devices });
 }
 
 afterEach(() => {
@@ -162,6 +170,9 @@ describe("useReaderHandoffPrompt", () => {
       _hlc: "1001-0-device-remote",
     });
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
+    setHandoffDevices(queryClient, [
+      { clientId: "device-remote", deviceName: "Safari on iPadOS" },
+    ]);
 
     const { result } = renderHook(
       () =>
@@ -177,6 +188,43 @@ describe("useReaderHandoffPrompt", () => {
       expect(result.current.promptState.show).toBe(true);
     });
     expect(result.current.promptState.checkpoint).toBe(remoteCheckpoint);
+    expect(result.current.promptState.sourceDeviceLabel).toBe(
+      "Safari on iPadOS",
+    );
+
+    queryClient.clear();
+  });
+
+  it("uses a generic source label when the remote device has no name", async () => {
+    const queryClient = createQueryClient();
+    const currentCheckpoint = makeCheckpoint({
+      _hlc: "1000-0-device-current",
+    });
+    const remoteCheckpoint = makeCheckpoint({
+      deviceId: "device-remote",
+      _hlc: "1001-0-device-remote",
+    });
+    setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
+    setHandoffDevices(queryClient, [
+      { clientId: "device-remote", deviceName: null },
+    ]);
+
+    const { result } = renderHook(
+      () =>
+        useReaderHandoffPrompt({
+          bookId: BOOK_ID,
+          currentDeviceId: CURRENT_DEVICE_ID,
+          sessionStartedAt: SESSION_STARTED_AT,
+        }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => {
+      expect(result.current.promptState.show).toBe(true);
+    });
+    expect(result.current.promptState.sourceDeviceLabel).toBe(
+      "another device",
+    );
 
     queryClient.clear();
   });
@@ -191,6 +239,9 @@ describe("useReaderHandoffPrompt", () => {
       _hlc: "1001-0-device-remote",
     });
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
+    setHandoffDevices(queryClient, [
+      { clientId: "device-remote", deviceName: "Chrome on macOS" },
+    ]);
 
     const { result } = renderHook(
       () =>
@@ -247,6 +298,9 @@ describe("useReaderHandoffPrompt", () => {
       _hlc: "1000-0-device-current",
     });
     setCheckpoints(queryClient, [sessionStartCheckpoint]);
+    setHandoffDevices(queryClient, [
+      { clientId: "device-remote", deviceName: "Chrome on Android" },
+    ]);
 
     const { result } = renderHook(
       () =>

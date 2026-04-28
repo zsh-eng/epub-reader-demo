@@ -1,7 +1,24 @@
 import type { SyncedReadingCheckpoint } from "@/lib/db";
+import { honoClient } from "@/lib/api";
 import { compareHLC } from "@/lib/sync/hlc/hlc";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReaderCheckpointsQuery } from "../data/reader-cache/hooks";
+
+const GENERIC_REMOTE_DEVICE_LABEL = "another device";
+
+interface ReaderHandoffDevice {
+  clientId: string;
+  deviceName: string | null;
+}
+
+interface ReaderHandoffDevicesData {
+  devices: ReaderHandoffDevice[];
+}
+
+export const readerHandoffDeviceKeys = {
+  all: ["readerHandoffDevices"] as const,
+};
 
 export interface ReaderHandoffSessionStart {
   bookId: string;
@@ -13,6 +30,7 @@ export interface ReaderHandoffSessionStart {
 export interface ReaderHandoffPromptState {
   show: boolean;
   checkpoint: SyncedReadingCheckpoint | null;
+  sourceDeviceLabel: string;
 }
 
 export interface UseReaderHandoffPromptOptions {
@@ -132,6 +150,46 @@ function shouldShowPrompt(
   return compareHLC(checkpoint._hlc, dismissedCheckpointHlc) > 0;
 }
 
+function useReaderHandoffDevicesQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: readerHandoffDeviceKeys.all,
+    queryFn: async (): Promise<ReaderHandoffDevicesData> => {
+      const response = await honoClient.api.devices.$get();
+      if (!response.ok) {
+        throw new Error("Failed to load devices for reader handoff");
+      }
+
+      const data = await response.json();
+      return {
+        devices: data.devices.map((device) => ({
+          clientId: device.clientId,
+          deviceName: device.deviceName ?? null,
+        })),
+      };
+    },
+    enabled,
+    retry: false,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+}
+
+function getSourceDeviceLabel(
+  checkpoint: SyncedReadingCheckpoint | null,
+  devices: ReaderHandoffDevice[] | undefined,
+): string {
+  if (checkpoint === null) return GENERIC_REMOTE_DEVICE_LABEL;
+
+  const deviceName = devices?.find(
+    (device) => device.clientId === checkpoint.deviceId,
+  )?.deviceName;
+
+  const trimmedDeviceName = deviceName?.trim();
+  if (!trimmedDeviceName) return GENERIC_REMOTE_DEVICE_LABEL;
+
+  return trimmedDeviceName;
+}
+
 /**
  * Derives the reader handoff prompt from the book's per-device checkpoints.
  *
@@ -190,13 +248,25 @@ export function useReaderHandoffPrompt({
 
     return getLatestUnreadRemoteReadingCheckpoint(checkpoints, sessionStart);
   }, [checkpoints, sessionStart]);
+  const devicesQuery = useReaderHandoffDevicesQuery(
+    latestUnreadCheckpoint !== null,
+  );
+  const sourceDeviceLabel = useMemo(
+    () =>
+      getSourceDeviceLabel(
+        latestUnreadCheckpoint,
+        devicesQuery.data?.devices,
+      ),
+    [devicesQuery.data?.devices, latestUnreadCheckpoint],
+  );
 
   const promptState = useMemo<ReaderHandoffPromptState>(
     () => ({
       show: shouldShowPrompt(latestUnreadCheckpoint, dismissedCheckpointHlc),
       checkpoint: latestUnreadCheckpoint,
+      sourceDeviceLabel,
     }),
-    [dismissedCheckpointHlc, latestUnreadCheckpoint],
+    [dismissedCheckpointHlc, latestUnreadCheckpoint, sourceDeviceLabel],
   );
 
   const dismissPrompt = useCallback(() => {
