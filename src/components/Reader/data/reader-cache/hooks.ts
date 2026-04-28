@@ -1,5 +1,6 @@
 import {
   getCurrentDeviceReadingCheckpoint,
+  getReadingCheckpointsForBook,
   type SyncedReadingCheckpoint,
 } from "@/lib/db";
 import type { Highlight } from "@/types/highlight";
@@ -42,6 +43,7 @@ export const readerBodyCacheKeys = {
 export const readerCheckpointKeys = {
   currentDevice: (bookId: string) =>
     ["readingCheckpoint", "currentDevice", bookId] as const,
+  book: (bookId: string) => ["readingCheckpoints", "book", bookId] as const,
 };
 
 export const readerChapterArtifactKeys = {
@@ -66,6 +68,10 @@ export const readerChapterArtifactKeys = {
 
 export interface ReaderCheckpointData {
   checkpoint: SyncedReadingCheckpoint | undefined;
+}
+
+export interface ReaderCheckpointsData {
+  checkpoints: SyncedReadingCheckpoint[];
 }
 
 export function useReaderBodyCacheQuery(options: {
@@ -94,6 +100,18 @@ export function useReaderCheckpointQuery(bookId: string | undefined) {
     queryKey: readerCheckpointKeys.currentDevice(bookId ?? ""),
     queryFn: async (): Promise<ReaderCheckpointData> => ({
       checkpoint: await getCurrentDeviceReadingCheckpoint(bookId!),
+    }),
+    enabled: !!bookId,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+}
+
+export function useReaderCheckpointsQuery(bookId: string | undefined) {
+  return useQuery({
+    queryKey: readerCheckpointKeys.book(bookId ?? ""),
+    queryFn: async (): Promise<ReaderCheckpointsData> => ({
+      checkpoints: await getReadingCheckpointsForBook(bookId!),
     }),
     enabled: !!bookId,
     staleTime: Infinity,

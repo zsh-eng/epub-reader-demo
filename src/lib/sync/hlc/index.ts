@@ -40,7 +40,9 @@
 
 // HLC Service
 export {
+  compareHLC,
   isValidHLC,
+  parseHLC,
   getHLCTimestamp,
   type HLCService,
   type HLCState,

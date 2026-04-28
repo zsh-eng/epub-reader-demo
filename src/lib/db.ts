@@ -585,6 +585,16 @@ export async function getCurrentDeviceReadingCheckpoint(
   return getReadingCheckpointForDevice(bookId, getOrCreateDeviceId());
 }
 
+export async function getReadingCheckpointsForBook(
+  bookId: string,
+): Promise<SyncedReadingCheckpoint[]> {
+  return db.readingCheckpoints
+    .where("bookId")
+    .equals(bookId)
+    .filter(isNotDeleted)
+    .toArray();
+}
+
 export async function upsertReadingCheckpoint(
   checkpoint: Omit<ReadingCheckpoint, "id">,
 ): Promise<string> {

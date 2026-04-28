@@ -70,6 +70,52 @@ export interface HLCService {
 const HLC_STATE_KEY = "epub-reader-hlc-state";
 
 /**
+ * Parse an HLC string into its components.
+ */
+export function parseHLC(hlc: string): HLCState {
+  const parts = hlc.split("-");
+
+  if (parts.length < 3) {
+    throw new Error(`Invalid HLC format: ${hlc}`);
+  }
+
+  const timestamp = parseInt(parts[0], 10);
+  const counter = parseInt(parts[1], 10);
+  const deviceId = parts.slice(2).join("-"); // Handle UUIDs with hyphens
+
+  if (isNaN(timestamp) || isNaN(counter)) {
+    throw new Error(`Invalid HLC format: ${hlc}`);
+  }
+
+  return { timestamp, counter, deviceId };
+}
+
+/**
+ * Compare two HLC strings.
+ *
+ * @returns -1 if a < b, 0 if a == b, 1 if a > b
+ */
+export function compareHLC(a: string, b: string): number {
+  const stateA = parseHLC(a);
+  const stateB = parseHLC(b);
+
+  // Compare timestamps first
+  if (stateA.timestamp < stateB.timestamp) return -1;
+  if (stateA.timestamp > stateB.timestamp) return 1;
+
+  // Timestamps equal - compare counters
+  if (stateA.counter < stateB.counter) return -1;
+  if (stateA.counter > stateB.counter) return 1;
+
+  // Both timestamp and counter equal - compare device IDs for deterministic ordering
+  if (stateA.deviceId < stateB.deviceId) return -1;
+  if (stateA.deviceId > stateB.deviceId) return 1;
+
+  // Completely equal
+  return 0;
+}
+
+/**
  * Create an HLC service instance.
  *
  * The HLC state is persisted to localStorage to maintain monotonicity
@@ -198,41 +244,11 @@ export function createHLCService(deviceId?: string): HLCService {
     },
 
     compare(a: string, b: string): number {
-      const stateA = this.parse(a);
-      const stateB = this.parse(b);
-
-      // Compare timestamps first
-      if (stateA.timestamp < stateB.timestamp) return -1;
-      if (stateA.timestamp > stateB.timestamp) return 1;
-
-      // Timestamps equal - compare counters
-      if (stateA.counter < stateB.counter) return -1;
-      if (stateA.counter > stateB.counter) return 1;
-
-      // Both timestamp and counter equal - compare device IDs for deterministic ordering
-      if (stateA.deviceId < stateB.deviceId) return -1;
-      if (stateA.deviceId > stateB.deviceId) return 1;
-
-      // Completely equal
-      return 0;
+      return compareHLC(a, b);
     },
 
     parse(hlc: string): HLCState {
-      const parts = hlc.split("-");
-
-      if (parts.length < 3) {
-        throw new Error(`Invalid HLC format: ${hlc}`);
-      }
-
-      const timestamp = parseInt(parts[0], 10);
-      const counter = parseInt(parts[1], 10);
-      const deviceId = parts.slice(2).join("-"); // Handle UUIDs with hyphens
-
-      if (isNaN(timestamp) || isNaN(counter)) {
-        throw new Error(`Invalid HLC format: ${hlc}`);
-      }
-
-      return { timestamp, counter, deviceId };
+      return parseHLC(hlc);
     },
 
     getDeviceId(): string {
