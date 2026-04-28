@@ -1,52 +1,66 @@
-// Engine orchestrator: owns pagination state, handles commands, runs relayouts,
+// Engine orchestrator: owns pagination state, creates stepwise pagination jobs,
 // and delegates anchor/spread calculations to the engine helper modules.
 import type {
-  ChapterUnavailableEvent,
-  PaginationCommand,
-  PaginationEvent,
+    ChapterUnavailableEvent,
+    ErrorEvent,
+    PageContentEvent,
+    PageUnavailableEvent,
+    PaginationCommand,
+    PartialReadyEvent,
+    ProgressEvent,
+    ReadyEvent,
 } from "../protocol";
 import { layoutPages } from "../shared/layout-pages";
 import { prepareBlocks } from "../shared/prepare-blocks";
 import type {
-  Block,
-  Page,
-  PaginationChapterDiagnostics,
-  PreparedBlock,
+    Block,
+    Page,
+    PaginationChapterDiagnostics,
+    PreparedBlock,
 } from "../shared/types";
 import { areFontConfigsEqual } from "../shared/types";
 import type {
-  ContentAnchor,
-  PaginationConfig,
-  ResolvedSpread,
-  SpreadConfig,
-  SpreadIntent,
+    ContentAnchor,
+    PaginationConfig,
+    ResolvedSpread,
+    SpreadConfig,
+    SpreadIntent,
 } from "../types";
 import { DEFAULT_SPREAD_CONFIG } from "../types";
 import {
-  pickAnchorForPage,
-  resolveAnchorToGlobalPage,
-  resolveAnchorToPage,
-  resolveTargetToAnchor,
+    pickAnchorForPage,
+    resolveAnchorToGlobalPage,
+    resolveAnchorToPage,
+    resolveTargetToAnchor,
 } from "./anchors";
 import {
-  buildResolvedSpread,
-  countTotalSpreads,
-  resolveAnchorForSpreadIndex,
-  resolveCurrentSpreadIndex,
+    buildResolvedSpread,
+    countTotalSpreads,
+    resolveAnchorForSpreadIndex,
+    resolveCurrentSpreadIndex,
 } from "./spreads";
 
-export interface PaginationRuntime {
-  /** Called periodically during long relayouts. May yield to the event loop
-   *  and drain pending navigation commands before returning. */
-  maybeYield: () => Promise<void>;
-  /** Returns true if this relayout should be abandoned (a newer one is pending). */
-  isStale: () => boolean;
+export type EnginePaginationEvent =
+  | Omit<PartialReadyEvent, "epoch">
+  | Omit<ReadyEvent, "epoch">
+  | Omit<ProgressEvent, "epoch">
+  | Omit<PageContentEvent, "epoch">
+  | Omit<PageUnavailableEvent, "epoch">
+  | Omit<ChapterUnavailableEvent, "epoch">
+  | ErrorEvent;
+
+export interface PaginationEngineJob {
+  commandType: PaginationCommand["type"];
+  readonly done: boolean;
+  step: () => void;
 }
 
-const DEFAULT_RUNTIME: PaginationRuntime = {
-  maybeYield: async () => {},
-  isStale: () => false,
-};
+interface RelayoutPlan {
+  order: number[];
+  relayoutChapter: (
+    chapterIndex: number,
+  ) => PaginationChapterDiagnostics | null;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -84,11 +98,7 @@ function resolveIntent(command: PaginationCommand): SpreadIntent {
 }
 
 export class PaginationEngine {
-  /** Set by the worker before each command so all emitted events carry the
-   *  correct epoch for staleness filtering on the main thread. */
-  epoch = 0;
-
-  private emit: (event: PaginationEvent) => void;
+  private emit: (event: EnginePaginationEvent) => void;
 
   private paginationConfig!: PaginationConfig;
   private spreadConfig: SpreadConfig = DEFAULT_SPREAD_CONFIG;
@@ -107,7 +117,7 @@ export class PaginationEngine {
   /** Keeps the current anchor in the same visible slot across 2-up reprojections. */
   private preferredAnchorSlotIndex: number | null = null;
 
-  constructor(emit: (event: PaginationEvent) => void) {
+  constructor(emit: (event: EnginePaginationEvent) => void) {
     this.emit = emit;
   }
 
@@ -118,15 +128,12 @@ export class PaginationEngine {
     );
   }
 
-  async handleCommand(
-    cmd: PaginationCommand,
-    runtime: Partial<PaginationRuntime> = {},
-  ): Promise<void> {
+  createJob(cmd: PaginationCommand): PaginationEngineJob {
     const intent = resolveIntent(cmd);
 
-    try {
-      switch (cmd.type) {
-        case "init":
+    switch (cmd.type) {
+      case "init":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.init(
             intent,
             cmd.totalChapters,
@@ -137,51 +144,69 @@ export class PaginationEngine {
             cmd.initialAnchor,
             cmd.firstChapterBlocks,
           );
-          break;
-        case "addChapter":
+        });
+      case "addChapter":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.addChapter(intent, cmd.chapterIndex, cmd.blocks);
-          break;
-        case "updateChapter":
-          await this.updateChapter(
-            intent,
-            cmd.chapterIndex,
-            cmd.blocks,
-            runtime,
-          );
-          break;
-        case "updatePaginationConfig":
-          await this.updatePaginationConfig(
-            intent,
-            cmd.paginationConfig,
-            runtime,
-          );
-          break;
-        case "updateSpreadConfig":
+        });
+      case "updateChapter":
+        return this.createUpdateChapterJob(intent, cmd.chapterIndex, cmd.blocks);
+      case "updatePaginationConfig":
+        return this.createUpdatePaginationConfigJob(
+          intent,
+          cmd.paginationConfig,
+        );
+      case "updateSpreadConfig":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.updateSpreadConfig(intent, cmd.spreadConfig);
-          break;
-        case "nextSpread":
+        });
+      case "nextSpread":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.nextSpread(intent);
-          break;
-        case "prevSpread":
+        });
+      case "prevSpread":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.prevSpread(intent);
-          break;
-        case "goToPage":
+        });
+      case "goToPage":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.goToPage(intent, cmd.page);
-          break;
-        case "goToChapter":
+        });
+      case "goToChapter":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.goToChapter(intent, cmd.chapterIndex);
-          break;
-        case "goToTarget":
+        });
+      case "goToTarget":
+        return this.createOneStepJob(cmd.type, intent, () => {
           this.goToTarget(intent, cmd.chapterIndex, cmd.targetId);
-          break;
-      }
-    } catch (err) {
-      this.emit({
-        type: "error",
-        intent,
-        message: err instanceof Error ? err.message : String(err),
-      });
+        });
     }
+  }
+
+  private createOneStepJob(
+    commandType: PaginationCommand["type"],
+    intent: SpreadIntent,
+    run: () => void,
+  ): PaginationEngineJob {
+    let done = false;
+
+    return {
+      commandType,
+      get done() {
+        return done;
+      },
+      step: () => {
+        if (done) return;
+
+        try {
+          run();
+        } catch (err) {
+          this.emitException(intent, err);
+        } finally {
+          done = true;
+        }
+      },
+    };
   }
 
   init(
@@ -257,7 +282,6 @@ export class PaginationEngine {
       this.emit({
         type: "ready",
         intent,
-        epoch: this.epoch,
         spread,
         chapterDiagnostics: diagnostics ? [diagnostics] : [],
       });
@@ -265,7 +289,6 @@ export class PaginationEngine {
       this.emit({
         type: "partialReady",
         intent,
-        epoch: this.epoch,
         spread,
         chapterDiagnostics: diagnostics,
       });
@@ -301,7 +324,6 @@ export class PaginationEngine {
       this.emit({
         type: "ready",
         intent,
-        epoch: this.epoch,
         spread: resolvedSpread,
         chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
           (diag): diag is PaginationChapterDiagnostics => diag !== null,
@@ -317,7 +339,6 @@ export class PaginationEngine {
       this.emit({
         type: "partialReady",
         intent,
-        epoch: this.epoch,
         spread: resolvedSpread,
         chapterDiagnostics: diagnostics,
       });
@@ -327,7 +348,6 @@ export class PaginationEngine {
     this.emit({
       type: "progress",
       intent,
-      epoch: this.epoch,
       chaptersCompleted: this.receivedChapters,
       totalChapters: this.totalChapters,
       currentPage: resolvedSpread?.currentPage ?? 1,
@@ -338,118 +358,188 @@ export class PaginationEngine {
     });
   }
 
-  async updateChapter(
+  private createUpdateChapterJob(
     intent: SpreadIntent,
     chapterIndex: number,
     blocks: Block[],
-    runtime: Partial<PaginationRuntime> = {},
-  ): Promise<void> {
-    if (chapterIndex < 0 || chapterIndex >= this.totalChapters) {
-      this.emit({
-        type: "error",
-        intent,
-        message: `updateChapter: index ${chapterIndex} out of bounds`,
-      });
-      return;
-    }
+  ): PaginationEngineJob {
+    return this.createDeferredRelayoutJob("updateChapter", intent, () => {
+      if (chapterIndex < 0 || chapterIndex >= this.totalChapters) {
+        this.emitErrorMessage(
+          intent,
+          `updateChapter: index ${chapterIndex} out of bounds`,
+        );
+        return null;
+      }
 
-    if (this.blocksByChapter[chapterIndex] === null) {
-      this.emit({
-        type: "error",
-        intent,
-        message: `updateChapter: chapter ${chapterIndex} has not been loaded yet`,
-      });
-      return;
-    }
+      if (this.blocksByChapter[chapterIndex] === null) {
+        this.emitErrorMessage(
+          intent,
+          `updateChapter: chapter ${chapterIndex} has not been loaded yet`,
+        );
+        return null;
+      }
 
-    this.blocksByChapter[chapterIndex] = blocks;
+      this.blocksByChapter[chapterIndex] = blocks;
 
-    await this.runRelayout(
+      return {
+        order: [chapterIndex],
+        relayoutChapter: (chapter) => {
+          if (!this.blocksByChapter[chapter]) return null;
+          return this.prepareAndLayoutChapter(chapter);
+        },
+      };
+    });
+  }
+
+  private createUpdatePaginationConfigJob(
+    intent: SpreadIntent,
+    nextConfig: PaginationConfig,
+  ): PaginationEngineJob {
+    return this.createDeferredRelayoutJob(
+      "updatePaginationConfig",
       intent,
-      (chapter) => {
-        if (chapter !== chapterIndex || !this.blocksByChapter[chapter]) {
+      () => {
+        if (this.totalChapters === 0) {
+          this.paginationConfig = nextConfig;
           return null;
         }
-        return this.prepareAndLayoutChapter(chapter);
+
+        if (
+          this.arePaginationConfigsEqual(this.paginationConfig, nextConfig) &&
+          this.hasPreparedForLoadedChapters()
+        ) {
+          this.paginationConfig = nextConfig;
+          // The main thread flips into "recalculating" before the worker decides
+          // whether this config update is actually a no-op. Emit a ready event so
+          // consumers like the footer never get stranded in a visual loading state
+          // after a semantically identical config update.
+          this.emitReady(intent);
+          return null;
+        }
+
+        const fontChanged = !areFontConfigsEqual(
+          this.paginationConfig.fontConfig,
+          nextConfig.fontConfig,
+        );
+        this.paginationConfig = nextConfig;
+
+        if (this.receivedChapters === 0) return null;
+
+        if (fontChanged) {
+          for (
+            let chapterIndex = 0;
+            chapterIndex < this.totalChapters;
+            chapterIndex++
+          ) {
+            if (!this.blocksByChapter[chapterIndex]) continue;
+            this.preparedByChapter[chapterIndex] = null;
+          }
+        }
+
+        return {
+          order: this.buildMiddleOutOrder(this.anchor.chapterIndex),
+          relayoutChapter: (chapterIndex) => {
+            if (!this.blocksByChapter[chapterIndex]) return null;
+
+            const prepared = this.preparedByChapter[chapterIndex];
+            if (!prepared) {
+              return this.prepareAndLayoutChapter(chapterIndex);
+            }
+
+            const stage2PrepareMs =
+              this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ??
+              0;
+            return this.layoutPreparedChapter(
+              chapterIndex,
+              prepared,
+              stage2PrepareMs,
+            );
+          },
+        };
       },
-      this.resolveRuntime(runtime),
     );
   }
 
-  async updatePaginationConfig(
+  private createDeferredRelayoutJob(
+    commandType: PaginationCommand["type"],
     intent: SpreadIntent,
-    nextConfig: PaginationConfig,
-    runtime: Partial<PaginationRuntime> = {},
-  ): Promise<void> {
-    if (this.totalChapters === 0) {
-      this.paginationConfig = nextConfig;
-      return;
-    }
+    createPlan: () => RelayoutPlan | null,
+  ): PaginationEngineJob {
+    // Relayout commands may wait in the worker while higher-priority navigation
+    // runs. Defer validation and plan construction until the first step so the
+    // plan reflects the engine state at execution time, not enqueue time.
+    let done = false;
+    let relayoutJob: PaginationEngineJob | null = null;
 
-    if (
-      this.arePaginationConfigsEqual(this.paginationConfig, nextConfig) &&
-      this.hasPreparedForLoadedChapters()
-    ) {
-      this.paginationConfig = nextConfig;
-      // The main thread flips into "recalculating" before the worker decides
-      // whether this config update is actually a no-op. Emit a ready event so
-      // consumers like the footer never get stranded in a visual loading state
-      // after a semantically identical config update.
-      const spread = this.buildResolvedSpread(intent);
-      if (spread) {
-        this.capturePreferredAnchorSlot(spread);
-        this.emit({
-          type: "ready",
-          intent,
-          epoch: this.epoch,
-          spread,
-          chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
-            (diag): diag is PaginationChapterDiagnostics => diag !== null,
-          ),
-        });
-      }
-      return;
-    }
-
-    const fontChanged = !areFontConfigsEqual(
-      this.paginationConfig.fontConfig,
-      nextConfig.fontConfig,
-    );
-    this.paginationConfig = nextConfig;
-
-    if (this.receivedChapters === 0) return;
-
-    if (fontChanged) {
-      for (
-        let chapterIndex = 0;
-        chapterIndex < this.totalChapters;
-        chapterIndex++
-      ) {
-        if (!this.blocksByChapter[chapterIndex]) continue;
-        this.preparedByChapter[chapterIndex] = null;
-      }
-    }
-
-    await this.runRelayout(
-      intent,
-      (chapterIndex) => {
-        if (!this.blocksByChapter[chapterIndex]) return null;
-
-        const prepared = this.preparedByChapter[chapterIndex];
-        if (!prepared) {
-          return this.prepareAndLayoutChapter(chapterIndex);
-        }
-
-        const stage2PrepareMs =
-          this.chapterDiagnosticsByChapter[chapterIndex]?.stage2PrepareMs ?? 0;
-        return this.layoutPreparedChapter(
-          chapterIndex,
-          prepared,
-          stage2PrepareMs,
-        );
+    return {
+      commandType,
+      get done() {
+        return done;
       },
-      this.resolveRuntime(runtime),
-    );
+      step: () => {
+        if (done) return;
+
+        try {
+          if (!relayoutJob) {
+            const plan = createPlan();
+            if (!plan) {
+              done = true;
+              return;
+            }
+            relayoutJob = this.createRelayoutJob(commandType, intent, plan);
+          }
+
+          relayoutJob.step();
+          if (relayoutJob.done) done = true;
+        } catch (err) {
+          this.emitException(intent, err);
+          done = true;
+        }
+      },
+    };
+  }
+
+  private createRelayoutJob(
+    commandType: PaginationCommand["type"],
+    intent: SpreadIntent,
+    plan: RelayoutPlan,
+  ): PaginationEngineJob {
+    // The concrete relayout job owns only the continuation state for an already
+    // constructed plan: each step relayouts one available chapter, and the final
+    // step emits ready.
+    let cursor = 0;
+    let done = false;
+
+    return {
+      commandType,
+      get done() {
+        return done;
+      },
+      step: () => {
+        if (done) return;
+
+        try {
+          while (cursor < plan.order.length) {
+            const chapterIndex = plan.order[cursor];
+            cursor++;
+            if (chapterIndex === undefined) continue;
+
+            const diagnostics = plan.relayoutChapter(chapterIndex);
+            if (!diagnostics) continue;
+
+            this.emitRelayoutProgress(intent, chapterIndex, diagnostics);
+            return;
+          }
+
+          this.emitReady(intent);
+          done = true;
+        } catch (err) {
+          this.emitException(intent, err);
+          done = true;
+        }
+      },
+    };
   }
 
   updateSpreadConfig(
@@ -564,59 +654,44 @@ export class PaginationEngine {
     this.emitPageContent(intent);
   }
 
-  private async runRelayout(
+  private emitRelayoutProgress(
     intent: SpreadIntent,
-    relayoutChapter: (
-      chapterIndex: number,
-    ) => PaginationChapterDiagnostics | null,
-    runtime: PaginationRuntime,
-  ): Promise<void> {
-    const order = this.buildMiddleOutOrder(this.anchor.chapterIndex);
+    chapterIndex: number,
+    diagnostics: PaginationChapterDiagnostics,
+  ): void {
+    const spread = this.buildResolvedSpread(intent);
+    if (spread) {
+      this.capturePreferredAnchorSlot(spread);
+    }
+    const currentPage = spread?.currentPage ?? 1;
+    const totalPages = spread?.totalPages ?? this.totalPages;
+    const currentSpread = spread?.currentSpread ?? 1;
+    const totalSpreads = spread?.totalSpreads ?? this.totalSpreads;
 
-    for (const chapterIndex of order) {
-      if (runtime.isStale()) return;
-
-      const diagnostics = relayoutChapter(chapterIndex);
-      if (!diagnostics) continue;
-
-      const spread = this.buildResolvedSpread(intent);
-      if (spread) {
-        this.capturePreferredAnchorSlot(spread);
-      }
-      const currentPage = spread?.currentPage ?? 1;
-      const totalPages = spread?.totalPages ?? this.totalPages;
-      const currentSpread = spread?.currentSpread ?? 1;
-      const totalSpreads = spread?.totalSpreads ?? this.totalSpreads;
-
-      if (spread && this.spreadContainsChapter(spread, chapterIndex)) {
-        this.emit({
-          type: "partialReady",
-          intent,
-          epoch: this.epoch,
-          spread,
-          chapterDiagnostics: diagnostics,
-        });
-      } else {
-        this.emit({
-          type: "progress",
-          intent,
-          epoch: this.epoch,
-          chaptersCompleted: this.receivedChapters,
-          totalChapters: this.totalChapters,
-          currentPage,
-          totalPages,
-          currentSpread,
-          totalSpreads,
-          chapterDiagnostics: diagnostics,
-        });
-      }
-
-      if (runtime.isStale()) return;
-      await runtime.maybeYield();
+    if (spread && this.spreadContainsChapter(spread, chapterIndex)) {
+      this.emit({
+        type: "partialReady",
+        intent,
+        spread,
+        chapterDiagnostics: diagnostics,
+      });
+      return;
     }
 
-    if (runtime.isStale()) return;
+    this.emit({
+      type: "progress",
+      intent,
+      chaptersCompleted: this.receivedChapters,
+      totalChapters: this.totalChapters,
+      currentPage,
+      totalPages,
+      currentSpread,
+      totalSpreads,
+      chapterDiagnostics: diagnostics,
+    });
+  }
 
+  private emitReady(intent: SpreadIntent): void {
     const spread = this.buildResolvedSpread(intent);
     if (!spread) return;
     this.capturePreferredAnchorSlot(spread);
@@ -624,7 +699,6 @@ export class PaginationEngine {
     this.emit({
       type: "ready",
       intent,
-      epoch: this.epoch,
       spread,
       chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
         (diag): diag is PaginationChapterDiagnostics => diag !== null,
@@ -761,21 +835,20 @@ export class PaginationEngine {
       return;
     }
     this.capturePreferredAnchorSlot(spread);
-    this.emit({ type: "pageContent", intent, epoch: this.epoch, spread });
+    this.emit({ type: "pageContent", intent, spread });
   }
 
   private emitPageUnavailable(intent: SpreadIntent): void {
-    this.emit({ type: "pageUnavailable", intent, epoch: this.epoch });
+    this.emit({ type: "pageUnavailable", intent });
   }
 
   private emitChapterUnavailable(
     intent: SpreadIntent,
     chapterIndex: number,
   ): void {
-    const event: ChapterUnavailableEvent = {
+    const event: Omit<ChapterUnavailableEvent, "epoch"> = {
       type: "chapterUnavailable",
       intent,
-      epoch: this.epoch,
       chapterIndex,
     };
     this.emit(event);
@@ -887,12 +960,14 @@ export class PaginationEngine {
     );
   }
 
-  private resolveRuntime(
-    overrides: Partial<PaginationRuntime>,
-  ): PaginationRuntime {
-    return {
-      maybeYield: overrides.maybeYield ?? DEFAULT_RUNTIME.maybeYield,
-      isStale: overrides.isStale ?? DEFAULT_RUNTIME.isStale,
-    };
+  private emitErrorMessage(intent: SpreadIntent, message: string): void {
+    this.emit({ type: "error", intent, message });
+  }
+
+  private emitException(intent: SpreadIntent, err: unknown): void {
+    this.emitErrorMessage(
+      intent,
+      err instanceof Error ? err.message : String(err),
+    );
   }
 }

@@ -1,40 +1,48 @@
-import { ensurePaginationWorkerFontsReady } from "./fonts";
-import type { PaginationCommand, PaginationEvent } from "../protocol";
-import { PaginationEngine } from "../engine";
 import {
-  coalesceQueuedCommands,
-  createCommandRuntime,
-  LAYOUT_ADVANCING,
-  NAVIGATION_COMMANDS,
-  type QueuedPaginationCommand,
-} from "./runtime";
+  PaginationEngine,
+  type EnginePaginationEvent,
+} from "../engine";
+import type { PaginationCommand, PaginationEvent } from "../protocol";
+import { ensurePaginationWorkerFontsReady } from "./fonts";
+import {
+  PaginationJobScheduler,
+  type ScheduledPaginationJob,
+} from "./scheduler";
+import { PAGINATION_TASK_YIELD_BUDGET_MS } from "./scheduler-policy";
 
 const workerFontsReady = ensurePaginationWorkerFontsReady();
 
 // ---------------------------------------------------------------------------
-// Epoch tracking
-// Each init/updatePaginationConfig bumps layoutEpoch. The engine's .epoch field is set
-// to the active epoch before each command so all emitted events carry it.
-// The hook discards events from older epochs.
+// Worker state
 // ---------------------------------------------------------------------------
 
 let layoutEpoch = 0;
-let pendingCommands: QueuedPaginationCommand[] = [];
-let flushScheduled = false;
-let isFlushing = false;
+let activeEventEpoch = 0;
+let pumpScheduled = false;
+let isPumping = false;
 
-function emitEvent(event: PaginationEvent): void {
-  postMessage(event);
+const TASK_YIELD_BUDGET_MS = PAGINATION_TASK_YIELD_BUDGET_MS;
+
+function emitEvent(event: EnginePaginationEvent): void {
+  if (event.type === "error") {
+    postMessage(event);
+    return;
+  }
+
+  postMessage({ ...event, epoch: activeEventEpoch } as PaginationEvent);
 }
 
 const engine = new PaginationEngine(emitEvent);
+const scheduler = new PaginationJobScheduler((command) =>
+  engine.createJob(command),
+);
 
 // ---------------------------------------------------------------------------
 // Event loop helpers
 // ---------------------------------------------------------------------------
 
 async function yieldToEventLoop(): Promise<void> {
-  const scheduler = (
+  const browserScheduler = (
     globalThis as {
       scheduler?: {
         postTask?: (
@@ -47,93 +55,71 @@ async function yieldToEventLoop(): Promise<void> {
       };
     }
   ).scheduler;
-  if (typeof scheduler?.postTask === "function") {
-    await scheduler.postTask(() => undefined, { priority: "background" });
+  if (typeof browserScheduler?.postTask === "function") {
+    await browserScheduler.postTask(() => undefined, {
+      priority: "background",
+    });
     return;
   }
-  if (typeof scheduler?.yield === "function") {
-    await scheduler.yield();
+  if (typeof browserScheduler?.yield === "function") {
+    await browserScheduler.yield();
     return;
   }
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 // ---------------------------------------------------------------------------
-// Navigation drain — called inside maybeYield so navigation commands are
-// processed at each yield boundary during a long relayout.
+// Job epoch stamping
 // ---------------------------------------------------------------------------
 
-function drainNavigationCommands(): void {
-  const navCommands = pendingCommands.filter((q) =>
-    NAVIGATION_COMMANDS.has(q.command.type),
-  );
-  if (navCommands.length === 0) return;
+function prepareJobStep(job: ScheduledPaginationJob): void {
+  if (job.startsLayout && job.eventEpoch === null) {
+    layoutEpoch++;
+    job.eventEpoch = layoutEpoch;
+  }
 
-  // Remove them from the pending queue.
-  pendingCommands = pendingCommands.filter(
-    (q) => !NAVIGATION_COMMANDS.has(q.command.type),
-  );
-
-  // Only the last navigation command is meaningful (they're supersedable).
-  const last = navCommands[navCommands.length - 1];
-  if (!last) return;
-
-  engine.epoch = layoutEpoch;
-  void engine.handleCommand(last.command);
-}
-
-function hasPendingLayoutAdvancingCommand(): boolean {
-  return pendingCommands.some((q) => LAYOUT_ADVANCING.has(q.command.type));
+  activeEventEpoch = job.eventEpoch ?? layoutEpoch;
 }
 
 // ---------------------------------------------------------------------------
-// Flush loop
+// Task pump
 // ---------------------------------------------------------------------------
 
-function scheduleFlush(): void {
-  if (flushScheduled) return;
-  flushScheduled = true;
+function schedulePump(): void {
+  if (pumpScheduled || isPumping) return;
+  pumpScheduled = true;
   setTimeout(() => {
-    flushScheduled = false;
-    void flush();
+    pumpScheduled = false;
+    void pump();
   }, 0);
 }
 
-async function flush(): Promise<void> {
-  if (isFlushing) return;
-  isFlushing = true;
+async function pump(): Promise<void> {
+  if (isPumping) return;
+  isPumping = true;
+  let sliceStartedAt = performance.now();
 
   try {
     await workerFontsReady;
 
-    while (pendingCommands.length > 0) {
-      const batch = coalesceQueuedCommands(pendingCommands);
-      pendingCommands = [];
+    while (scheduler.hasWork()) {
+      scheduler.expandIncomingCommands();
 
-      for (const queued of batch) {
-        const { command } = queued;
+      const job = scheduler.peek();
+      if (!job) continue;
 
-        if (LAYOUT_ADVANCING.has(command.type)) {
-          layoutEpoch++;
-        }
+      prepareJobStep(job);
+      job.engineJob.step();
+      if (job.engineJob.done) scheduler.remove(job);
 
-        engine.epoch = layoutEpoch;
-
-        const runtime = createCommandRuntime(command, {
-          getLayoutEpoch: () => layoutEpoch,
-          activeEpoch: layoutEpoch,
-          hasPendingLayoutAdvancingCommand,
-          yieldToEventLoop,
-          now: () => performance.now(),
-          onYield: drainNavigationCommands,
-        });
-
-        await engine.handleCommand(command, runtime);
+      if (performance.now() - sliceStartedAt >= TASK_YIELD_BUDGET_MS) {
+        await yieldToEventLoop();
+        sliceStartedAt = performance.now();
       }
     }
   } finally {
-    isFlushing = false;
-    if (pendingCommands.length > 0) scheduleFlush();
+    isPumping = false;
+    if (scheduler.hasWork()) schedulePump();
   }
 }
 
@@ -142,6 +128,6 @@ async function flush(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 self.onmessage = (e: MessageEvent<PaginationCommand>) => {
-  pendingCommands.push({ command: e.data });
-  scheduleFlush();
+  scheduler.pushCommand(e.data);
+  schedulePump();
 };
