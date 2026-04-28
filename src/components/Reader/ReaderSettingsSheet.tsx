@@ -118,7 +118,7 @@ export function ReaderSettingsPanel({
           active settings panel at a fixed intermediate height. */}
       <div
         className="min-h-0 flex-1 overflow-y-auto px-4 pb-3"
-        data-vaul-no-drag
+        data-base-ui-swipe-ignore
       >
         <SegmentedTabsContent value="typography" className="mt-0">
           <TypographyPanel

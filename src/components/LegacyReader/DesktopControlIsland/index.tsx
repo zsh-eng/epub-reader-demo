@@ -182,8 +182,7 @@ export function DesktopControlIsland({
             >
               {/* Back Button */}
               <GroupedTooltip id="back">
-                <GroupedTooltipTrigger asChild>
-                  <Button
+                <GroupedTooltipTrigger render={<Button
                     variant="ghost"
                     size="icon"
                     onClick={onBack}
@@ -191,8 +190,7 @@ export function DesktopControlIsland({
                     aria-label="Back to library"
                   >
                     <X className="size-4" />
-                  </Button>
-                </GroupedTooltipTrigger>
+                  </Button>} />
                 <GroupedTooltipContent side="top" sideOffset={8}>
                   <div className="flex items-center gap-2">
                     <span>Back to library</span>
@@ -205,8 +203,7 @@ export function DesktopControlIsland({
 
               {/* Previous Chapter Button */}
               <GroupedTooltip id="previous">
-                <GroupedTooltipTrigger asChild>
-                  <Button
+                <GroupedTooltipTrigger render={<Button
                     variant="ghost"
                     size="icon"
                     onClick={onPrevious}
@@ -215,8 +212,7 @@ export function DesktopControlIsland({
                     aria-label="Previous chapter"
                   >
                     <ArrowLeft className="size-4" />
-                  </Button>
-                </GroupedTooltipTrigger>
+                  </Button>} />
                 <GroupedTooltipContent side="top" sideOffset={8}>
                   <div className="flex items-center gap-2">
                     <span>Previous chapter</span>
@@ -230,8 +226,7 @@ export function DesktopControlIsland({
 
               {/* Next Chapter Button */}
               <GroupedTooltip id="next">
-                <GroupedTooltipTrigger asChild>
-                  <Button
+                <GroupedTooltipTrigger render={<Button
                     variant="ghost"
                     size="icon"
                     onClick={onNext}
@@ -240,8 +235,7 @@ export function DesktopControlIsland({
                     aria-label="Next chapter"
                   >
                     <ArrowRight className="size-4" />
-                  </Button>
-                </GroupedTooltipTrigger>
+                  </Button>} />
                 <GroupedTooltipContent side="top" sideOffset={8}>
                   <div className="flex items-center gap-2">
                     <span>Next chapter</span>
@@ -256,8 +250,7 @@ export function DesktopControlIsland({
               {showMarkAsFinished && (
                 <>
                   <GroupedTooltip id="finish">
-                    <GroupedTooltipTrigger asChild>
-                      <Button
+                    <GroupedTooltipTrigger render={<Button
                         variant="ghost"
                         size="icon"
                         onClick={onMarkAsFinished}
@@ -265,8 +258,7 @@ export function DesktopControlIsland({
                         aria-label="Mark as Finished"
                       >
                         <CheckCircle className="size-4" />
-                      </Button>
-                    </GroupedTooltipTrigger>
+                      </Button>} />
                     <GroupedTooltipContent side="top" sideOffset={8}>
                       <span>Mark as Finished</span>
                     </GroupedTooltipContent>

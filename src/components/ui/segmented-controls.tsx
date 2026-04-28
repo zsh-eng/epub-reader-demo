@@ -57,7 +57,9 @@ export function SegmentedTabs({
             if (value === undefined) {
               setUncontrolledValue(nextValue);
             }
-            onValueChange?.(nextValue);
+            (onValueChange as ((value: string) => void) | undefined)?.(
+              nextValue as string,
+            );
           }}
           {...props}
         />
@@ -89,32 +91,32 @@ export function SegmentedTabsTrigger({
 
   return (
     <TabsTrigger
-      asChild
+      render={
+        <motion.button>
+          {isActive ? (
+            <SegmentedActivePill reducedMotion={context.reducedMotion} />
+          ) : null}
+          <span
+            className="relative z-10 inline-flex min-w-0"
+            style={{
+              width: "100%",
+              height: "100%",
+              alignItems: "inherit",
+              justifyContent: "inherit",
+              gap: "inherit",
+            }}
+          >
+            {children}
+          </span>
+        </motion.button>
+      }
       value={value}
       className={cn(
-        "relative isolate data-[state=active]:border-transparent data-[state=active]:bg-transparent data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent",
+        "relative isolate data-[active]:border-transparent data-[active]:bg-transparent data-[active]:shadow-none dark:data-[active]:border-transparent dark:data-[active]:bg-transparent",
         className,
       )}
       {...props}
-    >
-      <motion.button>
-        {isActive ? (
-          <SegmentedActivePill reducedMotion={context.reducedMotion} />
-        ) : null}
-        <span
-          className="relative z-10 inline-flex min-w-0"
-          style={{
-            width: "100%",
-            height: "100%",
-            alignItems: "inherit",
-            justifyContent: "inherit",
-            gap: "inherit",
-          }}
-        >
-          {children}
-        </span>
-      </motion.button>
-    </TabsTrigger>
+    />
   );
 }
 
@@ -151,10 +153,13 @@ export function SegmentedToggleGroup({
           type="single"
           value={activeValue}
           onValueChange={(nextValue) => {
+            const nextStringValue = Array.isArray(nextValue)
+              ? (nextValue[0] ?? "")
+              : nextValue;
             if (value === undefined) {
-              setUncontrolledValue(nextValue);
+              setUncontrolledValue(nextStringValue);
             }
-            onValueChange?.(nextValue);
+            onValueChange?.(nextStringValue);
           }}
           className={cn("overflow-hidden", className)}
           {...props}
@@ -182,31 +187,31 @@ export function SegmentedToggleGroupItem({
 
   return (
     <ToggleGroupItem
-      asChild
+      render={
+        <motion.button>
+          {isActive ? (
+            <SegmentedActivePill reducedMotion={context.reducedMotion} />
+          ) : null}
+          <span
+            className="relative z-10 inline-flex min-w-0"
+            style={{
+              width: "100%",
+              height: "100%",
+              alignItems: "inherit",
+              justifyContent: "inherit",
+              gap: "inherit",
+            }}
+          >
+            {children}
+          </span>
+        </motion.button>
+      }
       value={value}
       className={cn(
-        "relative isolate first:rounded-l-[inherit] last:rounded-r-[inherit] data-[state=on]:bg-transparent data-[state=on]:text-foreground",
+        "relative isolate first:rounded-l-[inherit] last:rounded-r-[inherit] data-[pressed]:bg-transparent data-[pressed]:text-foreground",
         className,
       )}
       {...props}
-    >
-      <motion.button>
-        {isActive ? (
-          <SegmentedActivePill reducedMotion={context.reducedMotion} />
-        ) : null}
-        <span
-          className="relative z-10 inline-flex min-w-0"
-          style={{
-            width: "100%",
-            height: "100%",
-            alignItems: "inherit",
-            justifyContent: "inherit",
-            gap: "inherit",
-          }}
-        >
-          {children}
-        </span>
-      </motion.button>
-    </ToggleGroupItem>
+    />
   );
 }

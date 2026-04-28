@@ -74,11 +74,13 @@ export function ReaderHeader({
 
       {/* Theme Toggle */}
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+        <DropdownMenuTrigger
+          render={
           <Button variant="ghost" size="icon" aria-label="Theme settings">
             <Palette className="h-5 w-5" />
           </Button>
-        </DropdownMenuTrigger>
+          }
+        />
         <DropdownMenuContent align="end">
           {themes.map((theme) => (
             <DropdownMenuItem

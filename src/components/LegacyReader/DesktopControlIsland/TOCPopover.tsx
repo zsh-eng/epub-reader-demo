@@ -74,8 +74,7 @@ export function TOCPopover({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
+      <PopoverTrigger render={<Button
           variant="ghost"
           size="icon"
           className={cn(
@@ -85,12 +84,10 @@ export function TOCPopover({
           aria-label="Table of Contents"
         >
           <List className="size-4" />
-        </Button>
-      </PopoverTrigger>
+        </Button>} />
       <AnimatePresence>
         {isOpen && (
           <PopoverContent
-            asChild
             side="top"
             sideOffset={12}
             align="center"

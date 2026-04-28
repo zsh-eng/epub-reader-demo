@@ -468,23 +468,25 @@ export function Library() {
             </div>
           ) : isAuthenticated && user ? (
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10 rounded-full"
-                >
-                  <Avatar className="h-7 w-7">
-                    <AvatarImage
-                      src={user.image || undefined}
-                      alt={user.name || "User"}
-                    />
-                    <AvatarFallback className="text-xs">
-                      {getUserInitials()}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-full"
+                  >
+                    <Avatar className="h-7 w-7">
+                      <AvatarImage
+                        src={user.image || undefined}
+                        alt={user.name || "User"}
+                      />
+                      <AvatarFallback className="text-xs">
+                        {getUserInitials()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                }
+              />
               <DropdownMenuContent align="start" side="right" className="w-60">
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
@@ -497,12 +499,14 @@ export function Library() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/sessions">
-                    <Monitor className="mr-2 h-4 w-4" />
-                    <span>Sessions</span>
-                  </Link>
-                </DropdownMenuItem>
+                <DropdownMenuItem
+                  render={
+                    <Link to="/sessions">
+                      <Monitor className="mr-2 h-4 w-4" />
+                      <span>Sessions</span>
+                    </Link>
+                  }
+                />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Sign out</span>
@@ -604,16 +608,18 @@ export function Library() {
               )}
               {isAuthenticated && user ? (
                 <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-9 w-9">
-                      <Avatar className="h-6 w-6">
-                        <AvatarImage src={user.image || undefined} />
-                        <AvatarFallback className="text-xs">
-                          {getUserInitials()}
-                        </AvatarFallback>
-                      </Avatar>
-                    </Button>
-                  </DropdownMenuTrigger>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button variant="ghost" size="icon" className="h-9 w-9">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={user.image || undefined} />
+                          <AvatarFallback className="text-xs">
+                            {getUserInitials()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </Button>
+                    }
+                  />
                   <DropdownMenuContent align="end" className="w-60">
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
@@ -624,12 +630,14 @@ export function Library() {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link to="/sessions">
-                        <Monitor className="mr-2 h-4 w-4" />
-                        Sessions
-                      </Link>
-                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      render={
+                        <Link to="/sessions">
+                          <Monitor className="mr-2 h-4 w-4" />
+                          Sessions
+                        </Link>
+                      }
+                    />
                     <DropdownMenuItem onClick={handleSignOut}>
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign out

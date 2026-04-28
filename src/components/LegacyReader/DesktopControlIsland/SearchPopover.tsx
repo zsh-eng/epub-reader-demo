@@ -82,8 +82,7 @@ export function SearchPopover({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
+      <PopoverTrigger render={<Button
           variant="ghost"
           size="icon"
           className={cn(
@@ -93,12 +92,10 @@ export function SearchPopover({
           aria-label="Search in book"
         >
           <Search className="size-4" />
-        </Button>
-      </PopoverTrigger>
+        </Button>} />
       <AnimatePresence>
         {isOpen && (
           <PopoverContent
-            asChild
             side="top"
             sideOffset={12}
             align="center"

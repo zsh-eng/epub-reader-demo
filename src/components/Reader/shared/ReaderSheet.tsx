@@ -42,7 +42,7 @@ export function ReaderSheet({
   setActiveSnapPoint,
   fadeFromIndex,
 }: ReaderSheetProps) {
-  const bodyDragProps = disableBodyDrag ? { "data-vaul-no-drag": "" } : {};
+  const bodyDragProps = disableBodyDrag ? { "data-base-ui-swipe-ignore": "" } : {};
   const mutableSnapPoints = snapPoints ? [...snapPoints] : undefined;
   const snapPointProps = mutableSnapPoints
     ? {
@@ -63,8 +63,8 @@ export function ReaderSheet({
         overlayClassName="bg-transparent"
         className={cn(
           "border-none bg-transparent shadow-none",
-          "data-[vaul-drawer-direction=bottom]:mt-12",
-          "data-[vaul-drawer-direction=bottom]:max-h-[88vh]",
+          "data-[drawer-direction=bottom]:mt-12",
+          "data-[drawer-direction=bottom]:max-h-[88vh]",
           "[&>div:first-child]:hidden",
           contentClassName,
         )}

@@ -187,7 +187,7 @@ function ContextMenuTriggerWrapper({
 }: {
   children: React.ReactNode;
 }) {
-  return <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>;
+  return <ContextMenuTrigger render={children as React.ReactElement} />;
 }
 
 // ============================================================================

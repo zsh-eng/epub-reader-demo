@@ -1,60 +1,60 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
-  backfillLegacyReadingProgressCheckpoints,
-  backfillLegacyReadingProgressSessions,
-  db,
-  LEGACY_READING_PROGRESS_SESSION_SOURCE,
-  READER_V2_READING_SESSION_SOURCE,
-  READING_SESSION_IDLE_TIMEOUT_MS,
-  type BackfillLegacyReadingProgressCheckpointsBookSummary,
-  type BackfillLegacyReadingProgressCheckpointsResult,
-  type BackfillLegacyReadingProgressSessionsBookSummary,
-  type BackfillLegacyReadingProgressSessionsResult,
-  type ReadingSessionSource,
-  type SyncedBook,
-  type SyncedReadingSession,
+    backfillLegacyReadingProgressCheckpoints,
+    backfillLegacyReadingProgressSessions,
+    db,
+    LEGACY_READING_PROGRESS_SESSION_SOURCE,
+    READER_V2_READING_SESSION_SOURCE,
+    READING_SESSION_IDLE_TIMEOUT_MS,
+    type BackfillLegacyReadingProgressCheckpointsBookSummary,
+    type BackfillLegacyReadingProgressCheckpointsResult,
+    type BackfillLegacyReadingProgressSessionsBookSummary,
+    type BackfillLegacyReadingProgressSessionsResult,
+    type ReadingSessionSource,
+    type SyncedBook,
+    type SyncedReadingSession,
 } from "@/lib/db";
 import { syncService } from "@/lib/sync-service";
 import { cn } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
-  Database,
-  RefreshCw,
-  Search,
+    ArrowLeft,
+    ArrowUpDown,
+    ChevronLeft,
+    ChevronRight,
+    Database,
+    RefreshCw,
+    Search,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 const QUERY_KEY = ["debug", "readingSessions"] as const;
 const BACKFILL_PREVIEW_QUERY_KEY = [
@@ -926,12 +926,17 @@ export function ReadingSessionsDebug() {
       <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-10">
         <header className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <Button asChild variant="ghost" size="sm" className="-ml-2 mb-4">
-              <Link to="/">
-                <ArrowLeft className="size-4" />
-                Back to Library
-              </Link>
-            </Button>
+            <Button
+              render={
+                <Link to="/">
+                  <ArrowLeft className="size-4" />
+                  Back to Library
+                </Link>
+              }
+              variant="ghost"
+              size="sm"
+              className="-ml-2 mb-4"
+            />
             <h1 className="text-2xl font-semibold tracking-tight">
               Reading Sessions
             </h1>

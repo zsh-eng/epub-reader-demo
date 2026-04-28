@@ -40,8 +40,7 @@ export function SettingsPopover({
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
+      <PopoverTrigger render={<Button
           variant="ghost"
           size="icon"
           className={cn(
@@ -51,12 +50,10 @@ export function SettingsPopover({
           aria-label="Settings"
         >
           <Settings className="size-4" />
-        </Button>
-      </PopoverTrigger>
+        </Button>} />
       <AnimatePresence>
         {isOpen && (
           <PopoverContent
-            asChild
             side="top"
             align="end"
             sideOffset={12}
