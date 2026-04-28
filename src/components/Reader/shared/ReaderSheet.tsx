@@ -17,7 +17,6 @@ interface ReaderSheetProps {
   snapPoints?: readonly ReaderSheetSnapPoint[];
   activeSnapPoint?: ReaderSheetSnapPoint | null;
   setActiveSnapPoint?: (snapPoint: ReaderSheetSnapPoint | null) => void;
-  fadeFromIndex?: number;
 }
 
 /**
@@ -40,16 +39,14 @@ export function ReaderSheet({
   snapPoints,
   activeSnapPoint,
   setActiveSnapPoint,
-  fadeFromIndex,
 }: ReaderSheetProps) {
   const bodyDragProps = disableBodyDrag ? { "data-base-ui-swipe-ignore": "" } : {};
   const mutableSnapPoints = snapPoints ? [...snapPoints] : undefined;
   const snapPointProps = mutableSnapPoints
     ? {
         snapPoints: mutableSnapPoints,
-        activeSnapPoint,
-        setActiveSnapPoint,
-        ...(fadeFromIndex !== undefined ? { fadeFromIndex } : {}),
+        snapPoint: activeSnapPoint,
+        onSnapPointChange: setActiveSnapPoint,
       }
     : {};
   return (

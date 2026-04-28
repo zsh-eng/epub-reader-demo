@@ -83,7 +83,10 @@ function DrawerOverlay({
     <DrawerPrimitive.Backdrop
       data-slot="drawer-overlay"
       className={cn(
-        "data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 fixed inset-0 z-50",
+        "fixed inset-0 z-50 opacity-[calc(1-var(--drawer-swipe-progress))]",
+        "transition-opacity duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+        "data-[swiping]:duration-0 data-[starting-style]:opacity-0 data-[ending-style]:opacity-0",
+        "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
         className,
       )}
       {...props}
@@ -110,10 +113,25 @@ function DrawerContent({
           data-drawer-direction={direction}
           className={cn(
             "group/drawer-content bg-background fixed z-50 flex h-auto flex-col",
+            "will-change-transform transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
+            "data-[swiping]:select-none data-[swiping]:duration-0",
+            "data-[ending-style]:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
             "data-[drawer-direction=top]:inset-x-0 data-[drawer-direction=top]:top-0 data-[drawer-direction=top]:mb-24 data-[drawer-direction=top]:max-h-[80vh] data-[drawer-direction=top]:rounded-b-lg data-[drawer-direction=top]:border-b",
             "data-[drawer-direction=bottom]:inset-x-0 data-[drawer-direction=bottom]:bottom-0 data-[drawer-direction=bottom]:mt-24 data-[drawer-direction=bottom]:max-h-[80vh] data-[drawer-direction=bottom]:rounded-t-lg data-[drawer-direction=bottom]:border-t",
             "data-[drawer-direction=right]:inset-y-0 data-[drawer-direction=right]:right-0 data-[drawer-direction=right]:w-3/4 data-[drawer-direction=right]:border-l data-[drawer-direction=right]:sm:max-w-sm",
             "data-[drawer-direction=left]:inset-y-0 data-[drawer-direction=left]:left-0 data-[drawer-direction=left]:w-3/4 data-[drawer-direction=left]:border-r data-[drawer-direction=left]:sm:max-w-sm",
+            "data-[drawer-direction=top]:[transform:translateY(var(--drawer-swipe-movement-y))]",
+            "data-[drawer-direction=bottom]:[transform:translateY(var(--drawer-swipe-movement-y))]",
+            "data-[drawer-direction=right]:[transform:translateX(var(--drawer-swipe-movement-x))]",
+            "data-[drawer-direction=left]:[transform:translateX(var(--drawer-swipe-movement-x))]",
+            "data-[drawer-direction=top]:data-[starting-style]:[transform:translateY(calc(-100%-2px))]",
+            "data-[drawer-direction=top]:data-[ending-style]:[transform:translateY(calc(-100%-2px))]",
+            "data-[drawer-direction=bottom]:data-[starting-style]:[transform:translateY(calc(100%+2px))]",
+            "data-[drawer-direction=bottom]:data-[ending-style]:[transform:translateY(calc(100%+2px))]",
+            "data-[drawer-direction=right]:data-[starting-style]:[transform:translateX(calc(100%+2px))]",
+            "data-[drawer-direction=right]:data-[ending-style]:[transform:translateX(calc(100%+2px))]",
+            "data-[drawer-direction=left]:data-[starting-style]:[transform:translateX(calc(-100%-2px))]",
+            "data-[drawer-direction=left]:data-[ending-style]:[transform:translateX(calc(-100%-2px))]",
             className,
           )}
           {...props}
