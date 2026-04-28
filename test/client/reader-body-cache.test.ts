@@ -1,7 +1,7 @@
 import {
   loadReaderBodyCache,
   READER_BODY_CACHE_SCHEMA_VERSION,
-} from "@/components/Reader/data/reader-body-cache";
+} from "@/components/Reader/data/reader-cache/cache";
 import {
   addBookWithFiles,
   db,
@@ -74,10 +74,10 @@ describe("reader body cache", () => {
       chapterEntries: [chapterEntry],
     });
 
-    const chapterContent = result.chapterContentsByPath.get(chapterEntry.href);
-    expect(chapterContent?.bodyHtml).toContain("Hello");
-    expect(chapterContent?.bodyHtml).toContain("data-epub-deferred-src");
-    expect(chapterContent?.bodyHtml).not.toContain(" src=");
+    const chapterContent = result.baseContentByChapter.get(0);
+    expect(chapterContent?.html).toContain("Hello");
+    expect(chapterContent?.html).toContain("data-epub-deferred-src");
+    expect(chapterContent?.html).not.toContain(" src=");
     expect(chapterContent?.canonicalText.fullText).toContain("Hello world.");
 
     const cacheRow = await getBookChapterSourceCache("book-1");
@@ -108,8 +108,7 @@ describe("reader body cache", () => {
     });
 
     expect(
-      result.chapterContentsByPath.get(chapterEntry.href)?.canonicalText
-        .fullText,
+      result.baseContentByChapter.get(0)?.canonicalText.fullText,
     ).toContain("Original");
   });
 
@@ -130,8 +129,7 @@ describe("reader body cache", () => {
     });
 
     expect(
-      result.chapterContentsByPath.get(chapterEntry.href)?.canonicalText
-        .fullText,
+      result.baseContentByChapter.get(0)?.canonicalText.fullText,
     ).toContain("Second file");
     expect((await getBookChapterSourceCache("book-1"))?.fileHash).toBe(
       "hash-2",

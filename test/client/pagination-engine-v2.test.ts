@@ -1,5 +1,9 @@
-import { PaginationEngine } from "@/lib/pagination-v2/engine";
-import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
+import {
+  PaginationEngine,
+  type EnginePaginationEvent,
+  type PaginationEngineJob,
+} from "@/lib/pagination-v2/engine";
+import type { PaginationCommand } from "@/lib/pagination-v2/protocol";
 import type {
   Block,
   ContentAnchor,
@@ -10,7 +14,6 @@ import type {
   SpreadConfig,
   SpreadIntent,
 } from "@/lib/pagination-v2/types";
-import { createCommandRuntime } from "@/lib/pagination-v2/worker/runtime";
 import { describe, expect, it } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -219,6 +222,17 @@ function spreadContainsLeafPage(spread: ResolvedSpread, pageNumber: number) {
   return pageSlots(spread).some((slot) => slot.page.currentPage === pageNumber);
 }
 
+function runJob(job: PaginationEngineJob): void {
+  while (!job.done) job.step();
+}
+
+function runCommand(
+  engine: PaginationEngine,
+  command: PaginationCommand,
+): void {
+  runJob(engine.createJob(command));
+}
+
 /** Create an engine with `initialChapterIndex` chapter already initialised. */
 function createEngine(options?: {
   totalChapters?: number;
@@ -228,7 +242,7 @@ function createEngine(options?: {
   paginationConfig?: PaginationConfig;
   spreadConfig?: SpreadConfig;
 }) {
-  const events: PaginationEvent[] = [];
+  const events: EnginePaginationEvent[] = [];
   const engine = new PaginationEngine((event) => events.push(event));
 
   const totalChapters = options?.totalChapters ?? 1;
@@ -236,7 +250,7 @@ function createEngine(options?: {
   const paginationConfig = options?.paginationConfig ?? BASE_PAGINATION_CONFIG;
   const spreadConfig = options?.spreadConfig ?? BASE_SPREAD_CONFIG;
 
-  engine.handleCommand({
+  runCommand(engine, {
     type: "init",
     totalChapters,
     paginationConfig,
@@ -255,23 +269,28 @@ function addChapter(
   chapterIndex: number,
   blocks?: Block[],
 ): void {
-  engine.handleCommand({
+  runCommand(engine, {
     type: "addChapter",
     chapterIndex,
     blocks: blocks ?? makeSpacerBlocks(chapterIndex),
   });
 }
 
-function lastEvent(events: PaginationEvent[]): PaginationEvent | undefined {
+function lastEvent(
+  events: EnginePaginationEvent[],
+): EnginePaginationEvent | undefined {
   return events[events.length - 1];
 }
 
-function countEvents(events: PaginationEvent[], type: PaginationEvent["type"]) {
+function countEvents(
+  events: EnginePaginationEvent[],
+  type: EnginePaginationEvent["type"],
+) {
   return events.filter((e) => e.type === type).length;
 }
 
 /** Indices of chapters emitted by partialReady/progress events. */
-function getChapterOrder(events: PaginationEvent[]): number[] {
+function getChapterOrder(events: EnginePaginationEvent[]): number[] {
   const result: number[] = [];
   for (const e of events) {
     if (e.type === "partialReady" || e.type === "progress") {
@@ -281,27 +300,28 @@ function getChapterOrder(events: PaginationEvent[]): number[] {
   return result;
 }
 
-function getReadyEvent(events: PaginationEvent[]) {
+function getReadyEvent(events: EnginePaginationEvent[]) {
   return events.find(
-    (e): e is Extract<PaginationEvent, { type: "ready" }> => e.type === "ready",
+    (e): e is Extract<EnginePaginationEvent, { type: "ready" }> =>
+      e.type === "ready",
   );
 }
 
-function getPageContentEvent(events: PaginationEvent[]) {
+function getPageContentEvent(events: EnginePaginationEvent[]) {
   return events.find(
-    (e): e is Extract<PaginationEvent, { type: "pageContent" }> =>
+    (e): e is Extract<EnginePaginationEvent, { type: "pageContent" }> =>
       e.type === "pageContent",
   );
 }
 
-function getLastEventOfType<T extends PaginationEvent["type"]>(
-  events: PaginationEvent[],
+function getLastEventOfType<T extends EnginePaginationEvent["type"]>(
+  events: EnginePaginationEvent[],
   type: T,
 ) {
   return [...events]
     .reverse()
     .find(
-      (event): event is Extract<PaginationEvent, { type: T }> =>
+      (event): event is Extract<EnginePaginationEvent, { type: T }> =>
         event.type === type,
     );
 }
@@ -352,7 +372,7 @@ describe("init + addChapter lifecycle", () => {
 
     addChapter(engine, 1);
     const progress = events.find(
-      (e): e is Extract<PaginationEvent, { type: "progress" }> =>
+      (e): e is Extract<EnginePaginationEvent, { type: "progress" }> =>
         e.type === "progress",
     );
 
@@ -385,7 +405,7 @@ describe("init + addChapter lifecycle", () => {
   it("spread in partialReady contains slot metadata", () => {
     const { events } = createEngine({ totalChapters: 2 });
     const partial = events.find(
-      (e): e is Extract<PaginationEvent, { type: "partialReady" }> =>
+      (e): e is Extract<EnginePaginationEvent, { type: "partialReady" }> =>
         e.type === "partialReady",
     );
 
@@ -412,7 +432,7 @@ describe("init + addChapter lifecycle", () => {
     });
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "nextSpread",
       intent: FORWARD_LINEAR_INTENT,
     });
@@ -443,7 +463,7 @@ describe("updateChapter lifecycle", () => {
 
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updateChapter",
       chapterIndex: 0,
       blocks: makeLongTextBlocks("chapter-0-updated"),
@@ -466,14 +486,14 @@ describe("updateChapter lifecycle", () => {
     addChapter(engine, 1, makeSpacerBlocks(1));
     addChapter(engine, 2, makeSpacerBlocks(2));
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 2,
       intent: CHAPTER_JUMP_INTENT,
     });
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updateChapter",
       chapterIndex: 0,
       blocks: makeLongTextBlocks("updated-ch-0"),
@@ -493,7 +513,7 @@ describe("updateChapter lifecycle", () => {
     const { engine, events } = createEngine({ totalChapters: 3 });
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updateChapter",
       chapterIndex: 2,
       blocks: makeSpacerBlocks(2),
@@ -511,7 +531,7 @@ describe("updateChapter lifecycle", () => {
     const { engine, events } = createEngine({ totalChapters: 2 });
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updateChapter",
       chapterIndex: 99,
       blocks: makeSpacerBlocks(99),
@@ -541,7 +561,7 @@ describe("navigation", () => {
     expect(ready.spread.totalPages).toBeGreaterThan(3);
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "nextSpread",
       intent: FORWARD_LINEAR_INTENT,
     });
@@ -564,7 +584,7 @@ describe("navigation", () => {
     expect(ready.spread.currentSpread).toBe(1);
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "nextSpread",
       intent: FORWARD_LINEAR_INTENT,
     });
@@ -583,7 +603,7 @@ describe("navigation", () => {
     });
 
     forward.events.length = 0;
-    forward.engine.handleCommand({
+    runCommand(forward.engine, {
       type: "goToPage",
       page: 2,
       intent: SCRUBBER_JUMP_INTENT,
@@ -596,7 +616,7 @@ describe("navigation", () => {
     expect(pageSlots(rightAnchoredStart.spread).at(-1)?.slotIndex).toBe(1);
 
     forward.events.length = 0;
-    forward.engine.handleCommand({
+    runCommand(forward.engine, {
       type: "nextSpread",
       intent: FORWARD_LINEAR_INTENT,
     });
@@ -612,7 +632,7 @@ describe("navigation", () => {
     });
 
     backward.events.length = 0;
-    backward.engine.handleCommand({
+    runCommand(backward.engine, {
       type: "goToPage",
       page: 6,
       intent: SCRUBBER_JUMP_INTENT,
@@ -625,7 +645,7 @@ describe("navigation", () => {
     expect(pageSlots(leftTargetStart.spread).at(-1)?.slotIndex).toBe(1);
 
     backward.events.length = 0;
-    backward.engine.handleCommand({
+    runCommand(backward.engine, {
       type: "prevSpread",
       intent: BACKWARD_LINEAR_INTENT,
     });
@@ -640,7 +660,7 @@ describe("navigation", () => {
     const { engine, events } = createEngine();
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "prevSpread",
       intent: BACKWARD_LINEAR_INTENT,
     });
@@ -659,7 +679,7 @@ describe("navigation", () => {
     expect(readyEvent.spread.totalPages).toBeGreaterThan(2);
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToPage",
       page: 2,
       intent: SCRUBBER_JUMP_INTENT,
@@ -676,7 +696,7 @@ describe("navigation", () => {
     const { engine, events } = createEngine();
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToPage",
       page: 999,
       intent: SCRUBBER_JUMP_INTENT,
@@ -692,7 +712,7 @@ describe("navigation", () => {
     addChapter(engine, 2);
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 2,
       intent: CHAPTER_JUMP_INTENT,
@@ -710,7 +730,7 @@ describe("navigation", () => {
     const { engine, events } = createEngine({ totalChapters: 3 });
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 2,
       intent: CHAPTER_JUMP_INTENT,
@@ -729,7 +749,7 @@ describe("navigation", () => {
     });
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "midpoint",
@@ -748,7 +768,7 @@ describe("navigation", () => {
     });
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "mid-pre",
@@ -766,7 +786,7 @@ describe("navigation", () => {
     });
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "chapter-section",
@@ -787,7 +807,7 @@ describe("navigation", () => {
     });
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToTarget",
       chapterIndex: 0,
       targetId: "missing-target",
@@ -803,7 +823,7 @@ describe("navigation", () => {
     const { engine, events } = createEngine({ totalChapters: 2 });
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToTarget",
       chapterIndex: 1,
       targetId: "missing",
@@ -853,7 +873,7 @@ describe("spread projection", () => {
     expect(gaps.every((g) => g.reason === "chapter-boundary")).toBe(true);
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 1,
       intent: CHAPTER_JUMP_INTENT,
@@ -872,7 +892,7 @@ describe("spread projection", () => {
     });
 
     const partial = events.find(
-      (e): e is Extract<PaginationEvent, { type: "partialReady" }> =>
+      (e): e is Extract<EnginePaginationEvent, { type: "partialReady" }> =>
         e.type === "partialReady",
     )!;
 
@@ -949,10 +969,10 @@ describe("spread projection", () => {
       spreadConfig: { columns: 1, chapterFlow: "continuous" },
     });
 
-    const before = getReadyEvent(events)!;
+    expect(getReadyEvent(events)).toBeDefined();
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "updateSpreadConfig",
       spreadConfig: { columns: 3, chapterFlow: "continuous" },
     });
@@ -962,7 +982,6 @@ describe("spread projection", () => {
     expect(events[0]?.intent).toEqual(REPLACE_INTENT);
 
     const pageContent = getPageContentEvent(events)!;
-    expect(pageContent.epoch).toBe(before.epoch);
     expect(pageContent.spread.intent).toEqual(REPLACE_INTENT);
     expect(pageContent.spread.slots.length).toBe(3);
   });
@@ -977,7 +996,7 @@ describe("anchor preservation across relayout", () => {
     const { engine, events } = createEngine({ totalChapters: 2 });
 
     events.length = 0;
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToPage",
       page: 2,
       intent: SCRUBBER_JUMP_INTENT,
@@ -986,7 +1005,7 @@ describe("anchor preservation across relayout", () => {
     expect(events[0]?.type).toBe("pageUnavailable");
 
     events.length = 0;
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1008,14 +1027,14 @@ describe("anchor preservation across relayout", () => {
     addChapter(engine, 1);
     addChapter(engine, 4);
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 1,
       intent: CHAPTER_JUMP_INTENT,
     });
     events.length = 0;
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 3,
       intent: CHAPTER_JUMP_INTENT,
@@ -1024,7 +1043,7 @@ describe("anchor preservation across relayout", () => {
     expect(events[0]?.type).toBe("chapterUnavailable");
 
     events.length = 0;
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1058,7 +1077,7 @@ describe("anchor preservation across relayout", () => {
       spreadConfig: { columns: 3, chapterFlow: "continuous" },
     });
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "nextSpread",
       intent: FORWARD_LINEAR_INTENT,
     });
@@ -1067,7 +1086,7 @@ describe("anchor preservation across relayout", () => {
 
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1087,20 +1106,20 @@ describe("anchor preservation across relayout", () => {
       blocks: makeLongTextBlocks("anchor-rapid"),
     });
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "nextSpread",
       intent: FORWARD_LINEAR_INTENT,
     });
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
         viewport: { width: 550, height: 880 },
       },
     });
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1109,7 +1128,7 @@ describe("anchor preservation across relayout", () => {
     });
 
     const readyEvents = events.filter(
-      (e): e is Extract<PaginationEvent, { type: "ready" }> =>
+      (e): e is Extract<EnginePaginationEvent, { type: "ready" }> =>
         e.type === "ready",
     );
     expect(readyEvents.length).toBeGreaterThanOrEqual(1);
@@ -1128,14 +1147,14 @@ describe("middle-out relayout order", () => {
     const { engine, events } = createEngine({ totalChapters: 5 });
     for (let i = 1; i < 5; i++) addChapter(engine, i);
 
-    engine.handleCommand({
+    runCommand(engine, {
       type: "goToChapter",
       chapterIndex: 2,
       intent: CHAPTER_JUMP_INTENT,
     });
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1151,7 +1170,7 @@ describe("middle-out relayout order", () => {
     for (let i = 1; i < 5; i++) addChapter(engine, i);
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1176,49 +1195,71 @@ describe("middle-out relayout order", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Stale relayout interrupted by a newer one
+// 6. Stepwise relayout jobs
 // ---------------------------------------------------------------------------
 
-describe("stale relayout detection", () => {
-  it("aborts an in-progress relayout when a newer config arrives", async () => {
+describe("stepwise relayout jobs", () => {
+  it("relayouts one chapter per step and emits ready when finished", () => {
     const { engine, events } = createEngine({ totalChapters: 5 });
     for (let i = 1; i < 5; i++) addChapter(engine, i);
 
+    runCommand(engine, {
+      type: "goToChapter",
+      chapterIndex: 2,
+      intent: CHAPTER_JUMP_INTENT,
+    });
     events.length = 0;
 
-    let layoutEpoch = 1;
-    const staleRuntime = createCommandRuntime(
-      {
-        type: "updatePaginationConfig",
-        paginationConfig: BASE_PAGINATION_CONFIG,
+    const job = engine.createJob({
+      type: "updatePaginationConfig",
+      paginationConfig: {
+        ...BASE_PAGINATION_CONFIG,
+        viewport: { width: 700, height: 900 },
       },
-      {
-        getLayoutEpoch: () => layoutEpoch,
-        activeEpoch: 1,
-        yieldToEventLoop: async () => {
-          layoutEpoch = 2;
-        },
-        now: () => 0,
-        relayoutYieldBudgetMs: 0,
-      },
-    );
+    });
 
-    await engine.handleCommand(
-      {
-        type: "updatePaginationConfig",
-        paginationConfig: {
-          ...BASE_PAGINATION_CONFIG,
-          viewport: { width: 700, height: 900 },
-        },
-      },
-      staleRuntime,
-    );
-
+    job.step();
+    expect(getChapterOrder(events)).toEqual([2]);
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(0);
+
+    job.step();
+    expect(getChapterOrder(events)).toEqual([2, 3]);
+    expect(countEvents(events, "ready")).toBe(0);
+
+    runJob(job);
+    expect(getChapterOrder(events)).toEqual([2, 3, 1, 4, 0]);
+    expect(countEvents(events, "ready")).toBe(1);
+    expect(job.done).toBe(true);
+    expect(lastEvent(events)?.type).toBe("ready");
   });
 
-  it("re-prepares all loaded chapters after a preempted font relayout", async () => {
+  it("builds a deferred relayout plan when the job first steps", () => {
+    const { engine, events } = createEngine({ totalChapters: 5 });
+    for (let i = 1; i < 5; i++) addChapter(engine, i);
+
+    const job = engine.createJob({
+      type: "updatePaginationConfig",
+      paginationConfig: {
+        ...BASE_PAGINATION_CONFIG,
+        viewport: { width: 700, height: 900 },
+      },
+    });
+
+    runCommand(engine, {
+      type: "goToChapter",
+      chapterIndex: 3,
+      intent: CHAPTER_JUMP_INTENT,
+    });
+    events.length = 0;
+
+    runJob(job);
+
+    expect(getChapterOrder(events)).toEqual([3, 4, 2, 1, 0]);
+    expect(countEvents(events, "ready")).toBe(1);
+  });
+
+  it("re-prepares all loaded chapters after a preempted font relayout", () => {
     const totalChapters = 3;
     const fontOnlyConfig: PaginationConfig = {
       ...BASE_PAGINATION_CONFIG,
@@ -1239,22 +1280,17 @@ describe("stale relayout detection", () => {
 
     events.length = 0;
 
-    let isStale = false;
-    await engine.handleCommand(
-      { type: "updatePaginationConfig", paginationConfig: fontOnlyConfig },
-      {
-        isStale: () => isStale,
-        maybeYield: async () => {
-          isStale = true;
-        },
-      },
-    );
+    const preemptedJob = engine.createJob({
+      type: "updatePaginationConfig",
+      paginationConfig: fontOnlyConfig,
+    });
+    preemptedJob.step();
 
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(0);
 
     events.length = 0;
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: finalConfig,
     });
@@ -1269,7 +1305,7 @@ describe("stale relayout detection", () => {
     addChapter(control.engine, 2, makeLongTextBlocks("ctrl-2"));
     control.events.length = 0;
 
-    await control.engine.handleCommand({
+    runCommand(control.engine, {
       type: "updatePaginationConfig",
       paginationConfig: finalConfig,
     });
@@ -1312,7 +1348,7 @@ describe("updatePaginationConfig no-op", () => {
     addChapter(engine, 1);
     events.length = 0;
 
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: BASE_PAGINATION_CONFIG,
     });
@@ -1326,7 +1362,7 @@ describe("updatePaginationConfig no-op", () => {
     addChapter(engine, 1);
 
     events.length = 0;
-    await engine.handleCommand({
+    runCommand(engine, {
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1336,37 +1372,5 @@ describe("updatePaginationConfig no-op", () => {
     });
 
     expect(countEvents(events, "ready")).toBe(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 8. Epoch contract
-// ---------------------------------------------------------------------------
-
-describe("epoch on events", () => {
-  it("all non-error events carry the engine epoch", () => {
-    const { events } = createEngine({ totalChapters: 2 });
-    for (const e of events) {
-      if (e.type === "error") continue;
-      expect("epoch" in e).toBe(true);
-    }
-  });
-
-  it("epoch value is reflected on emitted events", () => {
-    const events: PaginationEvent[] = [];
-    const engine = new PaginationEngine((e) => events.push(e));
-    engine.epoch = 5;
-
-    engine.handleCommand({
-      type: "init",
-      totalChapters: 1,
-      paginationConfig: BASE_PAGINATION_CONFIG,
-      spreadConfig: BASE_SPREAD_CONFIG,
-      initialChapterIndex: 0,
-      firstChapterBlocks: makeSpacerBlocks(0),
-    });
-
-    const ready = getReadyEvent(events)!;
-    expect(ready.epoch).toBe(5);
   });
 });

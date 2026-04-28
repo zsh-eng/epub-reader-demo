@@ -1,5 +1,9 @@
-import type { PaginationEvent } from "@/lib/pagination-v2/protocol";
-import { PaginationEngine } from "@/lib/pagination-v2/engine";
+import {
+  PaginationEngine,
+  type EnginePaginationEvent,
+  type PaginationEngineJob,
+} from "@/lib/pagination-v2/engine";
+import type { PaginationCommand } from "@/lib/pagination-v2/protocol";
 import type {
   FontConfig,
   LayoutTheme,
@@ -37,7 +41,20 @@ const BASE_SPREAD_CONFIG: SpreadConfig = {
   chapterFlow: "continuous",
 };
 
-function collectRenderedImageSlices(events: PaginationEvent[]): PageSlice[] {
+function runJob(job: PaginationEngineJob): void {
+  while (!job.done) job.step();
+}
+
+function runCommand(
+  engine: PaginationEngine,
+  command: PaginationCommand,
+): void {
+  runJob(engine.createJob(command));
+}
+
+function collectRenderedImageSlices(
+  events: EnginePaginationEvent[],
+): PageSlice[] {
   const slices: PageSlice[] = [];
 
   for (const event of events) {
@@ -61,11 +78,11 @@ function collectRenderedImageSlices(events: PaginationEvent[]): PageSlice[] {
 }
 
 function renderSingleChapter(html: string): PageSlice[] {
-  const events: PaginationEvent[] = [];
+  const events: EnginePaginationEvent[] = [];
   const engine = new PaginationEngine((event) => events.push(event));
   const blocks = parseChapterHtml(html);
 
-  engine.handleCommand({
+  runCommand(engine, {
     type: "init",
     totalChapters: 1,
     paginationConfig: BASE_CONFIG,
