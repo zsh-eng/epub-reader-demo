@@ -132,6 +132,11 @@ export function Reader() {
             <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-secondary/45 to-transparent" />
             <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem] bg-gradient-to-t from-muted/35 to-transparent" />
           </div>
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 bg-background"
+            style={{ height: "env(safe-area-inset-bottom)" }}
+            aria-hidden="true"
+          />
 
           {showHoverRails && (
             <>
