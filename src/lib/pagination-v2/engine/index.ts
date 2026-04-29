@@ -185,6 +185,8 @@ export class PaginationEngine {
     } catch (err) {
       this.emitException(intent, err);
     }
+
+    yield* [];
   }
 
   init(

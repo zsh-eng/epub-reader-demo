@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReaderCheckpointsQuery } from "../data/reader-cache/hooks";
 
 const GENERIC_REMOTE_DEVICE_LABEL = "another device";
+const EMPTY_READING_CHECKPOINTS: readonly SyncedReadingCheckpoint[] = [];
 
 interface ReaderHandoffDevice {
   clientId: string;
@@ -77,7 +78,7 @@ function compareCheckpointsByHlc(
 }
 
 export function getLatestRemoteReadingCheckpoint(
-  checkpoints: SyncedReadingCheckpoint[],
+  checkpoints: readonly SyncedReadingCheckpoint[],
   currentDeviceId: string,
 ): SyncedReadingCheckpoint | null {
   let latestCheckpoint: SyncedReadingCheckpoint | null = null;
@@ -100,7 +101,7 @@ export function getLatestRemoteReadingCheckpoint(
 
 export function captureReaderHandoffSessionStart(options: {
   bookId: string;
-  checkpoints: SyncedReadingCheckpoint[];
+  checkpoints: readonly SyncedReadingCheckpoint[];
   currentDeviceId: string;
   startedAt: number;
 }): ReaderHandoffSessionStart {
@@ -118,7 +119,7 @@ export function captureReaderHandoffSessionStart(options: {
 }
 
 export function getLatestUnreadRemoteReadingCheckpoint(
-  checkpoints: SyncedReadingCheckpoint[],
+  checkpoints: readonly SyncedReadingCheckpoint[],
   sessionStart: ReaderHandoffSessionStart,
 ): SyncedReadingCheckpoint | null {
   const latestRemoteCheckpoint = getLatestRemoteReadingCheckpoint(
@@ -204,7 +205,8 @@ export function useReaderHandoffPrompt({
 }: UseReaderHandoffPromptOptions): UseReaderHandoffPromptResult {
   const sessionStartedAt = useStableSessionStartedAt(explicitSessionStartedAt);
   const checkpointsQuery = useReaderCheckpointsQuery(bookId);
-  const checkpoints = checkpointsQuery.data?.checkpoints ?? [];
+  const checkpoints =
+    checkpointsQuery.data?.checkpoints ?? EMPTY_READING_CHECKPOINTS;
   const [sessionStart, setSessionStart] =
     useState<ReaderHandoffSessionStart | null>(null);
   const [dismissedCheckpointHlc, setDismissedCheckpointHlc] = useState<
