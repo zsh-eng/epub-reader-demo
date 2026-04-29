@@ -23,7 +23,7 @@ export function FooterHandoffPrompt({ prompt }: FooterHandoffPromptProps) {
       role="status"
       aria-live="polite"
     >
-      <div className="mx-auto flex max-w-[min(100%,34rem)] items-center gap-1.5 rounded-full border border-border/80 bg-background/92 p-1 shadow-lg shadow-background/20 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-[min(100%,34rem)] items-center gap-1.5 rounded-full border border-border/80 bg-background p-1 shadow-lg shadow-background/20 backdrop-blur-xl">
         <button
           type="button"
           onClick={prompt.onJump}
