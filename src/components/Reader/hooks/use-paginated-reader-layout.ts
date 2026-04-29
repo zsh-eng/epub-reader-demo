@@ -85,6 +85,18 @@ export function getDefaultPaginatedReaderLayout(): PaginatedReaderLayout {
   };
 }
 
+function getInitialPaginatedReaderLayout(isMobile: boolean) {
+  if (typeof window === "undefined") {
+    return getDefaultPaginatedReaderLayout();
+  }
+
+  return resolvePaginatedReaderLayout({
+    stageWidth: document.documentElement.clientWidth || window.innerWidth,
+    stageHeight: window.innerHeight,
+    isMobile,
+  });
+}
+
 /**
  * Resolves the paginated reading stage from the available safe-area-adjusted
  * stage slot. Vertical spacing is based on the hover rails rather than the
@@ -177,12 +189,21 @@ export function usePaginatedReaderLayout({
   stageSlotElement,
   isMobile,
 }: UsePaginatedReaderLayoutOptions) {
-  const [layout, setLayout] = useState(getDefaultPaginatedReaderLayout);
+  const [layout, setLayout] = useState(() =>
+    getInitialPaginatedReaderLayout(isMobile),
+  );
 
   useLayoutEffect(() => {
     if (!stageSlotElement) return;
 
     const updateLayout = () => {
+      if (
+        stageSlotElement.clientWidth === 0 ||
+        stageSlotElement.clientHeight === 0
+      ) {
+        return;
+      }
+
       setLayout(
         resolvePaginatedReaderLayout({
           stageWidth: stageSlotElement.clientWidth,
