@@ -44,7 +44,8 @@ interface UseReaderCoreResult {
   currentPage: number;
   totalPages: number;
   currentChapterIndex: number;
-  currentTitleChapterIndex: number | null;
+  /** Chapter shown as active in chrome/TOC; may differ from the first visible page in 2-up spreads. */
+  displayChapterIndex: number | null;
   /** Start page for each chapter (by chapterIndex), null if not yet laid out. */
   chapterStartPages: (number | null)[];
   getChapterBlocks: (chapterIndex: number) => Block[] | null;
@@ -186,7 +187,10 @@ export function useReaderCore(
   const currentPage = pagination.spread?.currentPage ?? 1;
   const totalPages = pagination.spread?.totalPages ?? 0;
   const currentChapterIndex = pagination.spread?.chapterIndexStart ?? 0;
-  const currentTitleChapterIndex =
+  // When a spread crosses a chapter boundary, prefer the later visible chapter
+  // for UI identity while leaving pagination anchors and page numbers unchanged.
+  const displayChapterIndex =
+    pagination.spread?.chapterIndexEnd ??
     pagination.spread?.chapterIndexStart ??
     initialLocation?.chapterIndex ??
     null;
@@ -222,7 +226,7 @@ export function useReaderCore(
     currentPage,
     totalPages,
     currentChapterIndex,
-    currentTitleChapterIndex,
+    displayChapterIndex,
     chapterStartPages,
     getChapterBlocks,
     getChapterCanonicalText,

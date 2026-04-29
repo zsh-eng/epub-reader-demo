@@ -15,7 +15,6 @@ interface ReaderSheetHostProps {
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
-  currentChapterTitle?: string;
   onNavigateToHref: (href: string) => boolean;
 }
 
@@ -35,7 +34,6 @@ export function ReaderSheetHost({
   chapterEntries,
   chapterStartPages,
   currentChapterHref,
-  currentChapterTitle,
   onNavigateToHref,
 }: ReaderSheetHostProps) {
   return (
@@ -55,7 +53,6 @@ export function ReaderSheetHost({
         chapterEntries={chapterEntries}
         chapterStartPages={chapterStartPages}
         currentChapterHref={currentChapterHref}
-        currentChapterTitle={currentChapterTitle}
         onNavigateToHref={onNavigateToHref}
       />
 

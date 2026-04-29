@@ -7,7 +7,7 @@ import { FOOTER_READY_DETAIL_DELAY } from "./FooterLoadingState";
 interface FooterChapterRowProps {
   currentChapterIndex: number;
   currentChapterEndIndex: number;
-  currentTitleChapterIndex: number | null;
+  displayChapterIndex: number | null;
   detailCurrentChapterIndex?: number;
   detailCurrentChapterEndIndex?: number;
   chapterEntries: ChapterEntry[];
@@ -26,7 +26,7 @@ interface FooterChapterRowProps {
 export function FooterChapterRow({
   currentChapterIndex,
   currentChapterEndIndex,
-  currentTitleChapterIndex,
+  displayChapterIndex,
   detailCurrentChapterIndex,
   detailCurrentChapterEndIndex,
   chapterEntries,
@@ -91,8 +91,8 @@ export function FooterChapterRow({
   };
 
   const currentChapterTitle =
-    currentTitleChapterIndex != null
-      ? (chapterEntries[currentTitleChapterIndex]?.title ?? "")
+    displayChapterIndex != null
+      ? (chapterEntries[displayChapterIndex]?.title ?? "")
       : "";
 
   return (
@@ -147,7 +147,7 @@ export function FooterChapterRow({
         <AnimatePresence mode="wait" initial={false}>
           {currentChapterTitle && (
             <motion.button
-              key={currentTitleChapterIndex ?? "unknown"}
+              key={displayChapterIndex ?? "unknown"}
               type="button"
               onClick={onOpenContents}
               disabled={showBlurredLoadingDetails}

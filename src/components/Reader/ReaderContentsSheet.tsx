@@ -17,7 +17,6 @@ interface ReaderContentsSheetProps {
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
-  currentChapterTitle?: string;
   onNavigateToHref: (href: string) => boolean;
 }
 

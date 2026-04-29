@@ -51,7 +51,8 @@ export interface ReaderSessionNavigationState {
   canGoPrev: boolean;
   canGoNext: boolean;
   currentChapterIndex: number;
-  currentTitleChapterIndex: number | null;
+  /** Chapter presented as active in reader chrome and contents. */
+  displayChapterIndex: number | null;
   chapterStartPages: (number | null)[];
 }
 
@@ -167,7 +168,7 @@ export function useReaderSession(
           core.currentPage >= core.totalPages
         ),
         currentChapterIndex: core.currentChapterIndex,
-        currentTitleChapterIndex: core.currentTitleChapterIndex,
+        displayChapterIndex: core.displayChapterIndex,
         chapterStartPages: core.chapterStartPages,
       },
     };
@@ -178,7 +179,7 @@ export function useReaderSession(
     core.chapterStartPages,
     core.currentChapterIndex,
     core.currentPage,
-    core.currentTitleChapterIndex,
+    core.displayChapterIndex,
     core.epubProcessError,
     core.isBookLoading,
     core.pagination.spread,

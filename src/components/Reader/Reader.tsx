@@ -109,7 +109,7 @@ export function Reader() {
   const book = sessionState.book;
   const currentChapterEntry =
     sessionState.chapters.entries[
-      sessionState.navigation.currentTitleChapterIndex ??
+      sessionState.navigation.displayChapterIndex ??
         sessionState.navigation.currentChapterIndex
     ] ??
     sessionState.chapters.entries[sessionState.navigation.currentChapterIndex];
@@ -220,7 +220,6 @@ export function Reader() {
             chapterEntries={sessionState.chapters.entries}
             chapterStartPages={sessionState.navigation.chapterStartPages}
             currentChapterHref={currentChapterEntry?.href ?? ""}
-            currentChapterTitle={currentChapterEntry?.title}
             onNavigateToHref={sessionActions.openInternalHref}
           />
 
@@ -236,9 +235,7 @@ export function Reader() {
               sessionState.pagination.spread?.chapterIndexEnd ??
               sessionState.navigation.currentChapterIndex
             }
-            currentTitleChapterIndex={
-              sessionState.navigation.currentTitleChapterIndex
-            }
+            displayChapterIndex={sessionState.navigation.displayChapterIndex}
             chapterEntries={sessionState.chapters.entries}
             chapterStartPages={sessionState.navigation.chapterStartPages}
             onScrubPreview={sessionActions.previewPage}

@@ -35,7 +35,7 @@ export interface ReaderFooterProps {
   totalPages: number;
   currentChapterIndex: number;
   currentChapterEndIndex: number;
-  currentTitleChapterIndex: number | null;
+  displayChapterIndex: number | null;
   isContentsOpen: boolean;
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
@@ -55,7 +55,7 @@ export function ReaderFooter({
   totalPages,
   currentChapterIndex,
   currentChapterEndIndex,
-  currentTitleChapterIndex,
+  displayChapterIndex,
   isContentsOpen,
   chapterEntries,
   chapterStartPages,
@@ -142,7 +142,7 @@ export function ReaderFooter({
           <div className="mx-auto flex max-w-7xl flex-col px-3 pt-1 sm:px-4">
             <FooterChapterRow
               currentChapterIndex={currentChapterIndex}
-              currentTitleChapterIndex={currentTitleChapterIndex}
+              displayChapterIndex={displayChapterIndex}
               chapterEntries={chapterEntries}
               detailCurrentChapterIndex={detailCurrentChapterIndex}
               currentChapterEndIndex={currentChapterEndIndex}
