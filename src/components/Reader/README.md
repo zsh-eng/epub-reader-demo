@@ -73,3 +73,31 @@ Idea 3: The `<Library>` prewarms the path users are likely to take next. "Contin
 Idea 4: Precompute cautiously. Some derived artifacts can be prepared before the reader route opens, including highlighted chapter HTML and parsed pagination blocks. This can make the open path very fast, but background CPU still competes with active reading and library interaction. Background preparation should therefore be limited to likely-next books or likely-next chapters, and it should back off when the user is interacting.
 
 The larger goal is to hide latency in layers: cache EPUB-derived HTML durably, keep likely reader inputs hot in memory, feed the worker as soon as the first chapter is available, and let the scheduler prioritize visible navigation over full-book completion.
+
+## Firefox Pagination Performance Notes
+
+Firefox has a specific slow path in full-book pagination that is much more visible with web fonts than with system fonts. The clearest example so far is *The Way of Kings* with EB Garamond enabled. Chrome completed the prepare stage in about 940ms, while Firefox took about 13.9s on the same book. The source load, visible-first-page time, cache behavior, and layout time were not the bottleneck.
+
+Representative measurements:
+
+| Browser/font | Prepare total | Pretext time | Other prepare time | Prepare calls | Cache misses | Layout total | Pagination total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Chrome / Garamond | 940.1ms | 847.6ms | 81.7ms | 16,873 | 15,492 | 565.9ms | 1506.0ms |
+| Firefox / Garamond | 13,916.0ms | 13,776.0ms | 134.0ms | 16,873 | 15,484 | 55.0ms | 13,971.0ms |
+| Firefox / Iowan | 1909.0ms | 1769.0ms | 133.0ms | 16,873 | 15,484 | 72.0ms | 1981.0ms |
+
+The cache numbers are nearly identical between Chrome and Firefox, so this is not primarily a prepared-text cache hit/miss problem. The workload is also not dominated by one bad paragraph: the slowest individual `prepareWithSegments` run was only tens of milliseconds, and many slow runs were short strings. The cost is distributed across thousands of ordinary prepare calls.
+
+Deep primitive profiling pointed at canvas text measurement rather than segmentation. In the slow Firefox/Garamond run, almost all pretext time was inside `measureText`; `Intl.Segmenter` word and grapheme work was small by comparison. Switching Firefox to Iowan or a monospace/system font brought prepare time back near the low-single-second range, which suggests the expensive path is tied to worker canvas measurement with loaded web fonts.
+
+A stripped-down Playwright repro narrowed the browser behavior further. Measuring many strings with a single stable canvas font is fast in Firefox. The slowdown appears when the worker has multiple `FontFace` rules registered, especially @fontsource unicode-range slices, and the measurement loop repeatedly assigns `ctx.font` before short batches of `measureText` calls. That resembles pretext's internal pattern: each `prepareWithSegments(text, font, ...)` call sets the shared measurement context's font before measuring that text's segments.
+
+On one local run, the default repro measured 1000 calls with the app-like font set:
+
+| Case | Time |
+| --- | ---: |
+| Chromium worker `OffscreenCanvas` + EB Garamond | 7.0ms |
+| Firefox worker `OffscreenCanvas` + EB Garamond | 49.0ms |
+| Firefox page canvas + EB Garamond | 2.0ms |
+
+The practical takeaway is that Firefox is paying an unusually high per-prepare measurement cost for web fonts in the pagination worker. Registering fewer worker font faces changes the repro cost, but that is only an observation so far, not a chosen product fix. Any mitigation has to preserve measurement/rendering agreement; measuring with one font and rendering with another would make page counts and line breaks drift.
