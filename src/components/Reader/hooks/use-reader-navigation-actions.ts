@@ -30,6 +30,7 @@ export interface ReaderNavigationActions {
   prevSpread: () => void;
   previewPage: (page: number) => void;
   commitPage: (page: number) => void;
+  jumpToHandoffPage: (page: number) => void;
   goToChapter: (chapterIndex: number) => void;
   goToPreviousChapter: () => void;
   goToNextChapter: () => void;
@@ -80,6 +81,15 @@ export function useReaderNavigationActions({
     (page: number) => {
       pagination.goToPage(page, {
         intent: { kind: "jump", source: "scrubber" },
+      });
+    },
+    [pagination],
+  );
+
+  const jumpToHandoffPage = useCallback(
+    (page: number) => {
+      pagination.goToPage(page, {
+        intent: { kind: "jump", source: "handoff" },
       });
     },
     [pagination],
@@ -138,6 +148,7 @@ export function useReaderNavigationActions({
       prevSpread,
       previewPage,
       commitPage,
+      jumpToHandoffPage,
       goToChapter,
       goToPreviousChapter,
       goToNextChapter,
@@ -148,6 +159,7 @@ export function useReaderNavigationActions({
       goToChapter,
       goToNextChapter,
       goToPreviousChapter,
+      jumpToHandoffPage,
       nextSpread,
       openInternalHref,
       previewPage,

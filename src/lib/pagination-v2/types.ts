@@ -93,6 +93,7 @@ export type SpreadIntent =
         | "toc"
         | "search"
         | "highlight"
+        | "handoff"
         | "internal-link"
         | "scrubber";
     }

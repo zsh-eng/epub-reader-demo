@@ -12,3 +12,10 @@ export interface ChapterEntry {
   href: string;
   title: string;
 }
+
+export interface ReaderHandoffPrompt {
+  sourceLabel: string;
+  targetPage: number;
+  onJump: () => void;
+  onDismiss: () => void;
+}

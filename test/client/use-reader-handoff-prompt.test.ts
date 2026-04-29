@@ -3,6 +3,7 @@ import {
   getLatestRemoteReadingCheckpoint,
   getLatestUnreadRemoteReadingCheckpoint,
   readerHandoffDeviceKeys,
+  resolveHandoffCheckpointPage,
   useReaderHandoffPrompt,
 } from "@/components/Reader/hooks/use-reader-handoff-prompt";
 import {
@@ -22,7 +23,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const BOOK_ID = "book-1";
 const CURRENT_DEVICE_ID = "device-current";
@@ -155,6 +156,26 @@ describe("reader handoff checkpoint helpers", () => {
       ),
     ).toBe(remoteCheckpoint);
   });
+
+  it("resolves a checkpoint scroll progress to a global reader page", () => {
+    const checkpoint = makeCheckpoint({
+      currentSpineIndex: 1,
+      scrollProgress: 50,
+    });
+
+    expect(resolveHandoffCheckpointPage(checkpoint, [1, 11, 21], 30)).toBe(16);
+  });
+
+  it("waits for chapter page starts before resolving the handoff page", () => {
+    const checkpoint = makeCheckpoint({
+      currentSpineIndex: 2,
+      scrollProgress: 50,
+    });
+
+    expect(
+      resolveHandoffCheckpointPage(checkpoint, [1, 11, null], 30),
+    ).toBeNull();
+  });
 });
 
 describe("useReaderHandoffPrompt", () => {
@@ -191,6 +212,52 @@ describe("useReaderHandoffPrompt", () => {
     expect(result.current.promptState.sourceDeviceLabel).toBe(
       "Safari on iPadOS",
     );
+
+    queryClient.clear();
+  });
+
+  it("returns a jump prompt once the checkpoint page can be resolved", async () => {
+    const queryClient = createQueryClient();
+    const currentCheckpoint = makeCheckpoint({
+      _hlc: "1000-0-device-current",
+    });
+    const remoteCheckpoint = makeCheckpoint({
+      deviceId: "device-remote",
+      currentSpineIndex: 1,
+      scrollProgress: 50,
+      _hlc: "1001-0-device-remote",
+    });
+    const onJumpToPage = vi.fn();
+    setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
+    setHandoffDevices(queryClient, [
+      { clientId: "device-remote", deviceName: "Safari on iPadOS" },
+    ]);
+
+    const { result } = renderHook(
+      () =>
+        useReaderHandoffPrompt({
+          bookId: BOOK_ID,
+          currentDeviceId: CURRENT_DEVICE_ID,
+          sessionStartedAt: SESSION_STARTED_AT,
+          chapterStartPages: [1, 11, 21],
+          totalPages: 30,
+          onJumpToPage,
+        }),
+      { wrapper: createWrapper(queryClient) },
+    );
+
+    await waitFor(() => {
+      expect(result.current.prompt?.targetPage).toBe(16);
+    });
+    expect(result.current.prompt?.sourceLabel).toBe("Safari on iPadOS");
+
+    act(() => {
+      result.current.prompt?.onJump();
+    });
+
+    expect(onJumpToPage).toHaveBeenCalledWith(16);
+    expect(result.current.promptState.show).toBe(false);
+    expect(result.current.prompt).toBeUndefined();
 
     queryClient.clear();
   });

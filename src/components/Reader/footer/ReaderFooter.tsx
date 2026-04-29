@@ -1,8 +1,12 @@
 import type { ReaderChromeSurfaceProps } from "@/components/Reader/chrome";
-import type { ChapterEntry } from "@/components/Reader/types";
+import type {
+    ChapterEntry,
+    ReaderHandoffPrompt,
+} from "@/components/Reader/types";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
+import { FooterHandoffPrompt } from "./FooterHandoffPrompt";
 import { FooterScrubberLoading } from "./FooterLoadingState";
 import { FooterPageIndicator } from "./FooterPageIndicator";
 import { FooterScrubberCanvas } from "./FooterScrubberCanvas";
@@ -40,6 +44,7 @@ export interface ReaderFooterProps {
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
   onOpenContents: () => void;
+  handoffPrompt?: ReaderHandoffPrompt;
   isLoading?: boolean;
 }
 
@@ -59,6 +64,7 @@ export function ReaderFooter({
   onGoToChapter,
   onPrevChapter,
   onOpenContents,
+  handoffPrompt,
   isLoading = false,
 }: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
@@ -88,15 +94,16 @@ export function ReaderFooter({
   const detailCurrentChapterIndex = currentChapterIndex;
   const detailCurrentChapterEndIndex = currentChapterEndIndex;
   const detailChapterStartPages = chapterStartPages;
+  const shouldRenderChromeShell = chromeVisible || handoffPrompt !== undefined;
 
   return (
     <AnimatePresence>
-      {chromeVisible && (
+      {shouldRenderChromeShell && (
         <motion.div
           key="footer"
           initial={{ y: "100%", opacity: 0 }}
           animate={{
-            y: 0,
+            y: chromeVisible ? 0 : "100%",
             opacity: 1,
             transition: {
               y: CHROME_ENTER_TRANSITION,
@@ -111,12 +118,27 @@ export function ReaderFooter({
               opacity: CHROME_FADE_OUT_TRANSITION,
             },
           }}
-          className="absolute inset-x-0 bottom-0 z-20 border-t border-border/70 bg-background/88 backdrop-blur-xl"
+          className="absolute inset-x-0 bottom-0 z-20 overflow-visible border-t border-border/70 bg-background/88 backdrop-blur-xl"
           {...chromeSurfaceProps}
           style={{
             paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
           }}
         >
+          <AnimatePresence initial={false}>
+            {handoffPrompt && (
+              <div
+                key="handoff-prompt"
+                className={
+                  chromeVisible
+                    ? "absolute inset-x-0 bottom-[calc(100%+0.25rem)] transition-[bottom] duration-200 ease-out"
+                    : "absolute inset-x-0 bottom-[calc(100%+0.75rem)] transition-[bottom] duration-200 ease-out"
+                }
+              >
+                <FooterHandoffPrompt prompt={handoffPrompt} />
+              </div>
+            )}
+          </AnimatePresence>
+
           <div className="mx-auto flex max-w-7xl flex-col px-3 pt-1 sm:px-4">
             <FooterChapterRow
               currentChapterIndex={currentChapterIndex}

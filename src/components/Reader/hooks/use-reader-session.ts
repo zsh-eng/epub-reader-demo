@@ -82,6 +82,7 @@ export interface ReaderSessionActions {
   prevSpread: ReaderNavigationActions["prevSpread"];
   previewPage: ReaderNavigationActions["previewPage"];
   commitPage: ReaderNavigationActions["commitPage"];
+  jumpToHandoffPage: ReaderNavigationActions["jumpToHandoffPage"];
   goToChapter: ReaderNavigationActions["goToChapter"];
   goToPreviousChapter: ReaderNavigationActions["goToPreviousChapter"];
   goToNextChapter: ReaderNavigationActions["goToNextChapter"];

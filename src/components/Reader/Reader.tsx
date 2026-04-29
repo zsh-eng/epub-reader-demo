@@ -12,6 +12,7 @@ import { ReaderFooter } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
+import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
 import { useReaderSession } from "./hooks/use-reader-session";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
@@ -53,6 +54,12 @@ export function Reader() {
     bookId,
     viewport: stageViewport,
     spreadColumns: resolvedSpreadColumns,
+  });
+  const { prompt: handoffPrompt } = useReaderHandoffPrompt({
+    bookId,
+    chapterStartPages: sessionState.navigation.chapterStartPages,
+    totalPages: sessionState.navigation.totalPages,
+    onJumpToPage: sessionActions.jumpToHandoffPage,
   });
 
   const {
@@ -240,6 +247,7 @@ export function Reader() {
             onPrevChapter={sessionActions.goToPreviousChapter}
             onOpenContents={() => chromeActions.openReaderSheet("contents")}
             isLoading={sessionState.pagination.status !== "ready"}
+            handoffPrompt={handoffPrompt}
           />
 
           <HighlightToolbarContainer
