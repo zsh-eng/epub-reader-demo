@@ -115,7 +115,7 @@ export function useTextSelection(
         textBefore: highlightData.textBefore,
         textAfter: highlightData.textAfter,
         color,
-        createdAt: new Date(),
+        createdAt: Date.now(),
       };
 
       console.log("=== Highlight Created ===");
@@ -168,7 +168,7 @@ export function useTextSelection(
         textBefore: highlightData.textBefore,
         textAfter: highlightData.textAfter,
         color: "invisible", // Note-only annotation
-        createdAt: new Date(),
+        createdAt: Date.now(),
       };
 
       const note: Note = {
@@ -178,7 +178,7 @@ export function useTextSelection(
         bookId,
         spineItemId,
         content,
-        createdAt: new Date(),
+        createdAt: Date.now(),
       };
 
       onNoteCreate?.(highlight, note);

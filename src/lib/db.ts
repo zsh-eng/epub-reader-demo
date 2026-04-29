@@ -15,6 +15,11 @@ import {
   type WithSyncMetadata,
 } from "@/lib/sync/hlc/schema";
 import { generateDexieStores } from "@/lib/sync/hlc/schema";
+import {
+  optionalTimestampMs,
+  toTimestampMs,
+  type TimestampInput,
+} from "@/lib/timestamps";
 import type { Highlight } from "@/types/highlight";
 import type { Note } from "@/types/note";
 import type { ReadingState } from "@/types/reading-state";
@@ -218,6 +223,51 @@ export type { Highlight, Note };
 
 // Re-export StoredFile type for convenience
 export type { StoredFile, TransferTask };
+
+type LegacySyncedHighlight = Omit<
+  SyncedHighlight,
+  "createdAt" | "updatedAt"
+> & {
+  createdAt: TimestampInput;
+  updatedAt?: TimestampInput;
+};
+
+type LegacySyncedNote = Omit<SyncedNote, "createdAt" | "updatedAt"> & {
+  createdAt: TimestampInput;
+  updatedAt?: TimestampInput;
+};
+
+function normalizeHighlightTimestamps(
+  highlight: SyncedHighlight,
+): SyncedHighlight {
+  const legacyHighlight = highlight as LegacySyncedHighlight;
+  const updatedAt = optionalTimestampMs(legacyHighlight.updatedAt);
+
+  return {
+    ...highlight,
+    createdAt: toTimestampMs(legacyHighlight.createdAt),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+  };
+}
+
+function normalizeNoteTimestamps(note: SyncedNote): SyncedNote {
+  const legacyNote = note as LegacySyncedNote;
+  const updatedAt = optionalTimestampMs(legacyNote.updatedAt);
+
+  return {
+    ...note,
+    createdAt: toTimestampMs(legacyNote.createdAt),
+    ...(updatedAt === undefined ? {} : { updatedAt }),
+  };
+}
+
+function compareCreatedAtAscending(
+  a: { id: string; createdAt: number },
+  b: { id: string; createdAt: number },
+): number {
+  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+  return a.id.localeCompare(b.id);
+}
 
 // ============================================================================
 // Database Class
@@ -1199,21 +1249,25 @@ export async function getHighlights(
   bookId: string,
   spineItemId: string,
 ): Promise<SyncedHighlight[]> {
-  return db.highlights
+  const highlights = await db.highlights
     .where("bookId")
     .equals(bookId)
     .and((h) => h.spineItemId === spineItemId && isNotDeleted(h))
     .toArray();
+
+  return highlights.map(normalizeHighlightTimestamps);
 }
 
 export async function getBookHighlights(
   bookId: string,
 ): Promise<SyncedHighlight[]> {
-  return db.highlights
+  const highlights = await db.highlights
     .where("bookId")
     .equals(bookId)
     .filter(isNotDeleted)
     .toArray();
+
+  return highlights.map(normalizeHighlightTimestamps);
 }
 
 export async function deleteHighlight(id: string): Promise<void> {
@@ -1222,7 +1276,7 @@ export async function deleteHighlight(id: string): Promise<void> {
 
   // Mark as deleted (tombstone)
   await db.highlights.put({
-    ...highlight,
+    ...normalizeHighlightTimestamps(highlight),
     _isDeleted: 1,
   });
 }
@@ -1235,14 +1289,15 @@ export async function updateHighlight(
   if (!highlight || isNotDeleted(highlight) === false) return;
 
   await db.highlights.put({
-    ...highlight,
+    ...normalizeHighlightTimestamps(highlight),
     ...changes,
-    updatedAt: new Date(),
+    updatedAt: Date.now(),
   });
 }
 
 export async function getAllHighlights(): Promise<SyncedHighlight[]> {
-  return db.highlights.filter(isNotDeleted).toArray();
+  const highlights = await db.highlights.filter(isNotDeleted).toArray();
+  return highlights.map(normalizeHighlightTimestamps);
 }
 
 // ============================================================================
@@ -1256,22 +1311,26 @@ export async function addNote(note: Note): Promise<string> {
 export async function getNotesByAnnotation(
   annotationId: string,
 ): Promise<SyncedNote[]> {
-  return db.notes
+  const notes = await db.notes
     .where("annotationId")
     .equals(annotationId)
     .filter(isNotDeleted)
-    .sortBy("createdAt");
+    .toArray();
+
+  return notes.map(normalizeNoteTimestamps).sort(compareCreatedAtAscending);
 }
 
 export async function getChapterNotes(
   bookId: string,
   spineItemId: string,
 ): Promise<SyncedNote[]> {
-  return db.notes
+  const notes = await db.notes
     .where("[bookId+spineItemId]")
     .equals([bookId, spineItemId])
     .filter((n) => n.annotationType === "chapter" && isNotDeleted(n))
-    .sortBy("createdAt");
+    .toArray();
+
+  return notes.map(normalizeNoteTimestamps).sort(compareCreatedAtAscending);
 }
 
 export async function updateNote(id: string, content: string): Promise<void> {
@@ -1279,9 +1338,9 @@ export async function updateNote(id: string, content: string): Promise<void> {
   if (!note || !isNotDeleted(note)) return;
 
   await db.notes.put({
-    ...note,
+    ...normalizeNoteTimestamps(note),
     content,
-    updatedAt: new Date(),
+    updatedAt: Date.now(),
   });
 }
 
@@ -1290,13 +1349,14 @@ export async function deleteNote(id: string): Promise<void> {
   if (!note) return;
 
   await db.notes.put({
-    ...note,
+    ...normalizeNoteTimestamps(note),
     _isDeleted: 1,
   });
 }
 
 export async function getAllNotes(): Promise<SyncedNote[]> {
-  return db.notes.filter(isNotDeleted).toArray();
+  const notes = await db.notes.filter(isNotDeleted).toArray();
+  return notes.map(normalizeNoteTimestamps);
 }
 
 // ============================================================================

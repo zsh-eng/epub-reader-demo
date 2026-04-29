@@ -181,6 +181,25 @@ describe("Sync Engine Integration with DexieJS", () => {
       expect(updatedNote1?._serverTimestamp).not.toBe(UNSYNCED_TIMESTAMP);
     });
 
+    it("normalizes legacy note timestamps before pushing", async () => {
+      const createdAtIso = "2026-01-01T00:00:00.000Z";
+      const createdAtMs = new Date(createdAtIso).getTime();
+
+      await db.notes.add({
+        id: "legacy-note",
+        content: "Legacy timestamp",
+        createdAt: createdAtIso as unknown as number,
+      } as NoteWithSync);
+
+      const result = await engine.push("notes");
+
+      expect(result.pushed).toBe(1);
+      expect(remote.getServerItems("notes")[0]?.data.createdAt).toBe(
+        createdAtMs,
+      );
+      expect((await db.notes.get("legacy-note"))?.createdAt).toBe(createdAtMs);
+    });
+
     it("should handle entity-scoped push for tasks", async () => {
       // Create tasks for different projects
       const task1: Task = {
@@ -275,6 +294,34 @@ describe("Sync Engine Integration with DexieJS", () => {
       expect(localNote?.content).toBe("Remote note");
       expect(localNote?._deviceId).toBe("other-device");
       expect(localNote?._serverTimestamp).toBe(serverTime);
+    });
+
+    it("normalizes legacy note timestamps after pulling", async () => {
+      const serverTime = Date.now();
+      const createdAtIso = "2026-01-01T00:00:00.000Z";
+      const createdAtMs = new Date(createdAtIso).getTime();
+      remote.setServerTime(serverTime);
+
+      const remoteNote: SyncItem = {
+        id: "note-remote-legacy",
+        entityId: undefined,
+        _hlc: hlc.next(),
+        _deviceId: "other-device",
+        _isDeleted: false,
+        _serverTimestamp: serverTime,
+        data: {
+          content: "Remote legacy note",
+          createdAt: createdAtIso,
+        },
+      };
+
+      remote.setServerItems("notes", [remoteNote]);
+
+      const result = await engine.pull("notes");
+      const localNote = await db.notes.get("note-remote-legacy");
+
+      expect(result.pulled).toBe(1);
+      expect(localNote?.createdAt).toBe(createdAtMs);
     });
 
     it("should handle conflict resolution with DexieJS storage", async () => {

@@ -5,10 +5,10 @@
  */
 
 import {
-  getAllBooks,
-  getAllHighlights,
-  type SyncedBook,
-  type SyncedHighlight,
+    getAllBooks,
+    getAllHighlights,
+    type SyncedBook,
+    type SyncedHighlight,
 } from "@/lib/db";
 import type { AnnotationColor } from "@/types/highlight";
 import { useQuery } from "@tanstack/react-query";
@@ -20,7 +20,7 @@ export interface HighlightWithBook extends SyncedHighlight {
 export interface BookHighlightGroup {
   book: SyncedBook;
   highlights: SyncedHighlight[];
-  mostRecentHighlight: Date;
+  mostRecentHighlight: number;
 }
 
 /**
@@ -58,22 +58,18 @@ function groupHighlightsByBook(
 
     // Sort highlights within group by createdAt descending (most recent first)
     bookHighlights.sort((a, b) => {
-      const aTime = new Date(a.createdAt).getTime();
-      const bTime = new Date(b.createdAt).getTime();
-      return bTime - aTime;
+      return b.createdAt - a.createdAt;
     });
 
     groups.push({
       book,
       highlights: bookHighlights,
-      mostRecentHighlight: new Date(bookHighlights[0].createdAt),
+      mostRecentHighlight: bookHighlights[0].createdAt,
     });
   }
 
   // Sort groups by most recent highlight (most recent first)
-  groups.sort(
-    (a, b) => b.mostRecentHighlight.getTime() - a.mostRecentHighlight.getTime(),
-  );
+  groups.sort((a, b) => b.mostRecentHighlight - a.mostRecentHighlight);
 
   return groups;
 }

@@ -29,6 +29,6 @@ export interface Highlight {
   color: AnnotationColor;
 
   // Metadata
-  createdAt: Date;
-  updatedAt?: Date;
+  createdAt: number;
+  updatedAt?: number;
 }

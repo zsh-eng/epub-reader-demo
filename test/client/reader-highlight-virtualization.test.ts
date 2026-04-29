@@ -29,7 +29,7 @@ function makeHighlight(
     textBefore: "",
     textAfter: "",
     color,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    createdAt: new Date("2026-01-01T00:00:00.000Z").getTime(),
   };
 }
 
@@ -90,5 +90,18 @@ describe("Reader highlight virtualization", () => {
     const sig1 = buildHighlightSignature([hA, hB, hC]);
     const sig2 = buildHighlightSignature([hC, hB, hA]);
     expect(sig1).toBe(sig2);
+  });
+
+  it("accepts JSON-serialized updatedAt values in signatures", () => {
+    const updatedAt = "2026-01-02T00:00:00.000Z";
+    const highlight = {
+      ...makeHighlight("serialized", "spine-1", 2, 4, "xt", "blue"),
+      updatedAt,
+    } as unknown as Highlight;
+
+    const signature = buildHighlightSignature([highlight]);
+    const parsedSignature = JSON.parse(signature) as unknown[][];
+
+    expect(parsedSignature[0]?.[5]).toBe(new Date(updatedAt).getTime());
   });
 });

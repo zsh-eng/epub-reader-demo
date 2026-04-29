@@ -20,6 +20,6 @@ export interface Note {
   content: string;
 
   // Metadata
-  createdAt: Date;
-  updatedAt?: Date;
+  createdAt: number;
+  updatedAt?: number;
 }

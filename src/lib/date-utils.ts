@@ -10,8 +10,8 @@
  * - 24h to 1 year: show date like "24 Dec"
  * - Over 1 year: show year like "2024"
  */
-export function formatHighlightTime(date: Date | string | number): string {
-  const d = new Date(date);
+export function formatHighlightTime(timestamp: number): string {
+  const d = new Date(timestamp);
   const now = new Date();
 
   const diffMs = now.getTime() - d.getTime();

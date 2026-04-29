@@ -5,9 +5,10 @@
  * This adapter is used internally by the sync engine and is not meant for general application use.
  */
 
+import { markAsRemoteWrite } from "@/lib/sync/hlc/middleware";
 import type { SyncMetadata } from "@/lib/sync/hlc/schema";
 import { UNSYNCED_TIMESTAMP } from "@/lib/sync/hlc/schema";
-import { markAsRemoteWrite } from "@/lib/sync/hlc/middleware";
+import { toTimestampMs, type TimestampInput } from "@/lib/timestamps";
 import type { Table } from "dexie";
 
 /**
@@ -21,6 +22,26 @@ export interface SyncItem {
   _isDeleted: boolean;
   _serverTimestamp: number;
   data: Record<string, unknown>;
+}
+
+const SYNC_TABLES_WITH_NUMERIC_TIMESTAMPS = new Set(["highlights", "notes"]);
+
+function normalizeSyncTimestampData(
+  table: string,
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!SYNC_TABLES_WITH_NUMERIC_TIMESTAMPS.has(table)) return data;
+
+  const normalized = { ...data };
+  normalized.createdAt = toTimestampMs(normalized.createdAt as TimestampInput);
+
+  if (normalized.updatedAt !== undefined) {
+    normalized.updatedAt = toTimestampMs(
+      normalized.updatedAt as TimestampInput,
+    );
+  }
+
+  return normalized;
 }
 
 /**
@@ -94,6 +115,7 @@ export interface StorageAdapter {
  * Convert a database record to a SyncItem
  */
 function recordToSyncItem(
+  table: string,
   record: Record<string, unknown> & { id: string } & SyncMetadata,
   entityKey?: string,
 ): SyncItem {
@@ -117,7 +139,7 @@ function recordToSyncItem(
     _deviceId,
     _isDeleted: _isDeleted === 1,
     _serverTimestamp,
-    data,
+    data: normalizeSyncTimestampData(table, data),
   };
 }
 
@@ -125,6 +147,7 @@ function recordToSyncItem(
  * Convert a SyncItem to a database record
  */
 function syncItemToRecord(
+  table: string,
   item: SyncItem,
   entityKey?: string,
 ): Record<string, unknown> & { id: string } & SyncMetadata {
@@ -134,7 +157,7 @@ function syncItemToRecord(
     _deviceId: item._deviceId,
     _isDeleted: item._isDeleted ? 1 : 0,
     _serverTimestamp: item._serverTimestamp,
-    ...item.data,
+    ...normalizeSyncTimestampData(table, item.data),
   };
 
   // Add entityId to data if entityKey is specified
@@ -186,6 +209,7 @@ export class DexieStorageAdapter implements StorageAdapter {
 
     return records.map((record) =>
       recordToSyncItem(
+        table,
         record as Record<string, unknown> & { id: string } & SyncMetadata,
         entityKey,
       ),
@@ -223,13 +247,14 @@ export class DexieStorageAdapter implements StorageAdapter {
         if (!localRecord) {
           // New item - insert it
           itemsToUpdate.push(
-            markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
+            markAsRemoteWrite(syncItemToRecord(table, remoteItem, entityKey)),
           );
           pendingIds.push(remoteItem.id);
           return;
         }
 
         const localItem = recordToSyncItem(
+          table,
           localRecord as Record<string, unknown> & {
             id: string;
           } & SyncMetadata,
@@ -240,7 +265,7 @@ export class DexieStorageAdapter implements StorageAdapter {
         if (comparison > 0) {
           // Remote is newer - add to update batch
           itemsToUpdate.push(
-            markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
+            markAsRemoteWrite(syncItemToRecord(table, remoteItem, entityKey)),
           );
           pendingIds.push(remoteItem.id);
         } else if (comparison < 0) {
@@ -251,7 +276,7 @@ export class DexieStorageAdapter implements StorageAdapter {
           // HLCs are equal - this shouldn't happen in normal operation
           // but if it does, prefer the remote version (server wins ties)
           itemsToUpdate.push(
-            markAsRemoteWrite(syncItemToRecord(remoteItem, entityKey)),
+            markAsRemoteWrite(syncItemToRecord(table, remoteItem, entityKey)),
           );
           pendingIds.push(remoteItem.id);
         }

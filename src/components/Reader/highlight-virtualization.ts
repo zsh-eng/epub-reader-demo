@@ -1,7 +1,8 @@
+import { optionalTimestampMs, type TimestampInput } from "@/lib/timestamps";
 import type { Highlight } from "@/types/highlight";
 import {
-  EPUB_HIGHLIGHT_END_ATTRIBUTE,
-  EPUB_HIGHLIGHT_START_ATTRIBUTE,
+    EPUB_HIGHLIGHT_END_ATTRIBUTE,
+    EPUB_HIGHLIGHT_START_ATTRIBUTE,
 } from "@/types/reader.types";
 import { applyHighlights } from "@zsh-eng/text-highlighter";
 
@@ -23,7 +24,9 @@ function sortHighlightsByOffset(a: Highlight, b: Highlight): number {
 }
 
 function getHighlightUpdatedAtValue(highlight: Highlight): number {
-  return highlight.updatedAt?.getTime() ?? 0;
+  return (
+    optionalTimestampMs(highlight.updatedAt as TimestampInput | undefined) ?? 0
+  );
 }
 
 export function buildHighlightSignature(highlights: Highlight[]): string {
