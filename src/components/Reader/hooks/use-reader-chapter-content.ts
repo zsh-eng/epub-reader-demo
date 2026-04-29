@@ -5,7 +5,6 @@ import type { Highlight } from "@/types/highlight";
 import { useCallback, useMemo } from "react";
 import {
   buildChapterEntries,
-  resolveInitialReaderLocation,
   type ParsedChapterBlocks,
   type ReaderInitialLocation,
 } from "../data/chapter-content-pipeline";
@@ -17,6 +16,7 @@ import {
   type ReaderBodyCacheLoadKind,
 } from "../data/reader-cache/hooks";
 import type { ChapterEntry } from "../types";
+import { useSessionInitialReaderLocation } from "./use-session-initial-reader-location";
 
 interface UseReaderChapterContentOptions {
   bookId?: string;
@@ -48,14 +48,12 @@ export function useReaderChapterContent({
   const fileHash = book?.fileHash;
 
   const checkpointQuery = useReaderCheckpointQuery(bookId);
-  const initialLocation = useMemo(() => {
-    if (!checkpointQuery.isSuccess || chapterEntries.length === 0) return null;
-
-    return resolveInitialReaderLocation(
-      checkpointQuery.data.checkpoint,
-      chapterEntries.length,
-    );
-  }, [chapterEntries.length, checkpointQuery.data, checkpointQuery.isSuccess]);
+  const initialLocation = useSessionInitialReaderLocation({
+    bookId,
+    totalChapters: chapterEntries.length,
+    checkpoint: checkpointQuery.data?.checkpoint,
+    checkpointReady: checkpointQuery.isSuccess,
+  });
 
   const bodyCacheQuery = useReaderBodyCacheQuery({
     bookId,
