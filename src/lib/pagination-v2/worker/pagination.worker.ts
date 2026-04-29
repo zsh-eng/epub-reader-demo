@@ -1,7 +1,4 @@
-import {
-  PaginationEngine,
-  type EnginePaginationEvent,
-} from "../engine";
+import { PaginationEngine, type EnginePaginationEvent } from "../engine";
 import type { PaginationCommand, PaginationEvent } from "../protocol";
 import { ensurePaginationWorkerFontsReady } from "./fonts";
 import {
@@ -34,7 +31,7 @@ function emitEvent(event: EnginePaginationEvent): void {
 
 const engine = new PaginationEngine(emitEvent);
 const scheduler = new PaginationJobScheduler((command) =>
-  engine.createJob(command),
+  engine.createWork(command),
 );
 
 // ---------------------------------------------------------------------------
@@ -109,8 +106,8 @@ async function pump(): Promise<void> {
       if (!job) continue;
 
       prepareJobStep(job);
-      job.engineJob.step();
-      if (job.engineJob.done) scheduler.remove(job);
+      const result = job.work.next();
+      if (result.done) scheduler.remove(job);
 
       if (performance.now() - sliceStartedAt >= TASK_YIELD_BUDGET_MS) {
         await yieldToEventLoop();

@@ -1,20 +1,20 @@
-import type { PaginationEngineJob } from "../engine";
+import type { PaginationEngineWork } from "../engine";
 import type { PaginationCommand } from "../protocol";
 import {
-    coalesceQueuedCommands,
-    getCoalesceKey,
-    getCommandPriority,
-    startsLayoutEpoch,
-    type PaginationJobPriority,
-    type QueuedPaginationCommand,
+  coalesceQueuedCommands,
+  getCoalesceKey,
+  getCommandPriority,
+  startsLayoutEpoch,
+  type PaginationJobPriority,
+  type QueuedPaginationCommand,
 } from "./scheduler-policy";
 
 export interface ScheduledPaginationJob {
   coalesceKey: string | null;
-  engineJob: PaginationEngineJob;
   eventEpoch: number | null;
   priority: PaginationJobPriority;
   startsLayout: boolean;
+  work: PaginationEngineWork;
 }
 
 /**
@@ -27,14 +27,14 @@ export class PaginationJobScheduler {
   private userJobs: ScheduledPaginationJob[] = [];
   private layoutJobs: ScheduledPaginationJob[] = [];
   private backgroundJobs: ScheduledPaginationJob[] = [];
-  private createEngineJob: (
+  private createEngineWork: (
     command: PaginationCommand,
-  ) => PaginationEngineJob;
+  ) => PaginationEngineWork;
 
   constructor(
-    createEngineJob: (command: PaginationCommand) => PaginationEngineJob,
+    createEngineWork: (command: PaginationCommand) => PaginationEngineWork,
   ) {
-    this.createEngineJob = createEngineJob;
+    this.createEngineWork = createEngineWork;
   }
 
   pushCommand(command: PaginationCommand): void {
@@ -54,10 +54,7 @@ export class PaginationJobScheduler {
 
   peek(): ScheduledPaginationJob | null {
     return (
-      this.userJobs[0] ??
-      this.layoutJobs[0] ??
-      this.backgroundJobs[0] ??
-      null
+      this.userJobs[0] ?? this.layoutJobs[0] ?? this.backgroundJobs[0] ?? null
     );
   }
 
@@ -92,16 +89,23 @@ export class PaginationJobScheduler {
     const priority = getCommandPriority(command);
     const job: ScheduledPaginationJob = {
       coalesceKey,
-      engineJob: this.createEngineJob(command),
       eventEpoch: null,
       priority,
       startsLayout: startsLayoutEpoch(command),
+      work: this.createEngineWork(command),
     };
 
     this.queueForPriority(priority).push(job);
   }
 
   private clearJobQueues(): void {
+    for (const job of [
+      ...this.userJobs,
+      ...this.layoutJobs,
+      ...this.backgroundJobs,
+    ]) {
+      this.cancelJob(job);
+    }
     this.userJobs = [];
     this.layoutJobs = [];
     this.backgroundJobs = [];
@@ -110,11 +114,18 @@ export class PaginationJobScheduler {
   private removeSupersededJobs(coalesceKey: string | null): void {
     if (!coalesceKey) return;
 
-    const keepJob = (job: ScheduledPaginationJob) =>
-      job.coalesceKey !== coalesceKey;
+    const keepJob = (job: ScheduledPaginationJob) => {
+      const keep = job.coalesceKey !== coalesceKey;
+      if (!keep) this.cancelJob(job);
+      return keep;
+    };
     this.userJobs = this.userJobs.filter(keepJob);
     this.layoutJobs = this.layoutJobs.filter(keepJob);
     this.backgroundJobs = this.backgroundJobs.filter(keepJob);
+  }
+
+  private cancelJob(job: ScheduledPaginationJob): void {
+    job.work.return(undefined);
   }
 
   private queueForPriority(

@@ -1,7 +1,7 @@
 import {
   PaginationEngine,
   type EnginePaginationEvent,
-  type PaginationEngineJob,
+  type PaginationEngineWork,
 } from "@/lib/pagination-v2/engine";
 import type { PaginationCommand } from "@/lib/pagination-v2/protocol";
 import type {
@@ -222,15 +222,15 @@ function spreadContainsLeafPage(spread: ResolvedSpread, pageNumber: number) {
   return pageSlots(spread).some((slot) => slot.page.currentPage === pageNumber);
 }
 
-function runJob(job: PaginationEngineJob): void {
-  while (!job.done) job.step();
+function runWork(work: PaginationEngineWork): void {
+  while (!work.next().done) {}
 }
 
 function runCommand(
   engine: PaginationEngine,
   command: PaginationCommand,
 ): void {
-  runJob(engine.createJob(command));
+  runWork(engine.createWork(command));
 }
 
 /** Create an engine with `initialChapterIndex` chapter already initialised. */
@@ -1210,7 +1210,7 @@ describe("stepwise relayout jobs", () => {
     });
     events.length = 0;
 
-    const job = engine.createJob({
+    const work = engine.createWork({
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1218,19 +1218,19 @@ describe("stepwise relayout jobs", () => {
       },
     });
 
-    job.step();
+    work.next();
     expect(getChapterOrder(events)).toEqual([2]);
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(0);
 
-    job.step();
+    work.next();
     expect(getChapterOrder(events)).toEqual([2, 3]);
     expect(countEvents(events, "ready")).toBe(0);
 
-    runJob(job);
+    runWork(work);
     expect(getChapterOrder(events)).toEqual([2, 3, 1, 4, 0]);
     expect(countEvents(events, "ready")).toBe(1);
-    expect(job.done).toBe(true);
+    expect(work.next().done).toBe(true);
     expect(lastEvent(events)?.type).toBe("ready");
   });
 
@@ -1238,7 +1238,7 @@ describe("stepwise relayout jobs", () => {
     const { engine, events } = createEngine({ totalChapters: 5 });
     for (let i = 1; i < 5; i++) addChapter(engine, i);
 
-    const job = engine.createJob({
+    const work = engine.createWork({
       type: "updatePaginationConfig",
       paginationConfig: {
         ...BASE_PAGINATION_CONFIG,
@@ -1253,7 +1253,7 @@ describe("stepwise relayout jobs", () => {
     });
     events.length = 0;
 
-    runJob(job);
+    runWork(work);
 
     expect(getChapterOrder(events)).toEqual([3, 4, 2, 1, 0]);
     expect(countEvents(events, "ready")).toBe(1);
@@ -1280,11 +1280,11 @@ describe("stepwise relayout jobs", () => {
 
     events.length = 0;
 
-    const preemptedJob = engine.createJob({
+    const preemptedWork = engine.createWork({
       type: "updatePaginationConfig",
       paginationConfig: fontOnlyConfig,
     });
-    preemptedJob.step();
+    preemptedWork.next();
 
     expect(countEvents(events, "partialReady")).toBe(1);
     expect(countEvents(events, "ready")).toBe(0);
