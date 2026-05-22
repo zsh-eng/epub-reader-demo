@@ -360,22 +360,9 @@
     user-select: none;
   }
 
-  /* Reader container outline — shows dotted border briefly on mount or resize */
-  @keyframes reader-outline-fade {
-    0% {
-      outline-color: var(--color-border);
-    }
-    70% {
-      outline-color: var(--color-border);
-    }
-    100% {
-      outline-color: transparent;
-    }
-  }
-
+  /* Reader debug outline — keeps page/container bounds visible while inspecting cutoff. */
   .reader-container-outline {
-    outline: 1px dashed transparent;
+    outline: 1px dashed var(--color-border);
     outline-offset: -1px;
-    animation: reader-outline-fade 1.5s ease-out forwards;
   }
 }

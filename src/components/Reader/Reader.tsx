@@ -1,6 +1,7 @@
 import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightToolbarContainer";
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from "@/hooks/use-toast";
 import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
@@ -14,12 +15,17 @@ import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
 import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
 import { useReaderSession } from "./hooks/use-reader-session";
+import {
+  buildReaderPageDebugDump,
+  serializeReaderPageDebugDump,
+} from "./debug/page-debug-dump";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
 export function Reader() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   const { state: chromeState, actions: chromeActions } = useReaderChromeState();
   const { chromeInteractionMode } = useInputBehavior();
@@ -113,6 +119,55 @@ export function Reader() {
         sessionState.navigation.currentChapterIndex
     ] ??
     sessionState.chapters.entries[sessionState.navigation.currentChapterIndex];
+  const handleCopyDebugDump = async () => {
+    const spread = sessionState.pagination.spread;
+
+    if (!spread) {
+      toast({
+        title: "Dump unavailable",
+        description: "Wait for pagination to render a page, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const dump = buildReaderPageDebugDump({
+      book,
+      settings: sessionState.settings,
+      spread,
+      paginationConfig: sessionState.pagination.paginationConfig,
+      spreadConfig: sessionState.pagination.spreadConfig,
+      layout: {
+        viewport: stageViewport,
+        spreadColumns: resolvedSpreadColumns,
+        columnGapPx,
+        paddingTopPx: stagePadding.paddingTop,
+        paddingBottomPx: stagePadding.paddingBottom,
+        paddingLeftPx: stagePadding.paddingX,
+        paddingRightPx: stagePadding.paddingX,
+      },
+      chapterEntries: sessionState.chapters.entries,
+      getBlocks: sessionResources.chapterAccess.getBlocks,
+    });
+
+    try {
+      await navigator.clipboard.writeText(
+        serializeReaderPageDebugDump(dump),
+      );
+
+      toast({
+        title: "Debug dump copied",
+        description:
+          "Paste it into the reader debug panel to reproduce this page.",
+      });
+    } catch {
+      toast({
+        title: "Could not copy dump",
+        description: "Your browser blocked clipboard access for this page.",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <ReaderController
@@ -221,6 +276,7 @@ export function Reader() {
             chapterStartPages={sessionState.navigation.chapterStartPages}
             currentChapterHref={currentChapterEntry?.href ?? ""}
             onNavigateToHref={sessionActions.openInternalHref}
+            onCopyDebugDump={() => void handleCopyDebugDump()}
           />
 
           {/* Floating footer — chapter nav, page indicator, scrubber */}

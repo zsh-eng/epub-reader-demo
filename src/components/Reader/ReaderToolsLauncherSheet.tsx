@@ -6,6 +6,7 @@ interface ReaderToolsLauncherSheetProps {
   onClose: () => void;
   onOpenContents: () => void;
   onOpenSettings: () => void;
+  onCopyDebugDump?: () => void;
 }
 
 /**
@@ -19,6 +20,7 @@ export function ReaderToolsLauncherSheet({
   onClose,
   onOpenContents,
   onOpenSettings,
+  onCopyDebugDump,
 }: ReaderToolsLauncherSheetProps) {
   return (
     <ReaderSheet
@@ -36,6 +38,7 @@ export function ReaderToolsLauncherSheet({
       <ReaderControlMenu
         onOpenContents={onOpenContents}
         onOpenSettings={onOpenSettings}
+        onCopyDebugDump={onCopyDebugDump}
       />
     </ReaderSheet>
   );

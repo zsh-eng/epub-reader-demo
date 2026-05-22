@@ -1,13 +1,20 @@
 import { cn } from "@/lib/utils";
-import { List, Search, Settings, type LucideIcon } from "lucide-react";
+import {
+  ClipboardCopy,
+  List,
+  Search,
+  Settings,
+  type LucideIcon,
+} from "lucide-react";
 import { motion } from "motion/react";
 
 interface ReaderControlMenuProps {
   onOpenContents: () => void;
   onOpenSettings: () => void;
+  onCopyDebugDump?: () => void;
 }
 
-type MenuItemId = "contents" | "search" | "settings";
+type MenuItemId = "contents" | "search" | "settings" | "debug-dump";
 
 interface MenuItem {
   id: MenuItemId;
@@ -25,11 +32,18 @@ const MENU_ITEMS: MenuItem[] = [
     icon: Settings,
     isAvailable: true,
   },
+  {
+    id: "debug-dump",
+    label: "Copy Debug Dump",
+    icon: ClipboardCopy,
+    isAvailable: true,
+  },
 ];
 
 export function ReaderControlMenu({
   onOpenContents,
   onOpenSettings,
+  onCopyDebugDump,
 }: ReaderControlMenuProps) {
   const handleRowClick = (id: MenuItemId) => {
     if (id === "contents") {
@@ -39,6 +53,11 @@ export function ReaderControlMenu({
 
     if (id === "settings") {
       onOpenSettings();
+      return;
+    }
+
+    if (id === "debug-dump") {
+      onCopyDebugDump?.();
     }
   };
 
@@ -54,7 +73,10 @@ export function ReaderControlMenu({
           <motion.button
             key={item.id}
             type="button"
-            disabled={!item.isAvailable}
+            disabled={
+              !item.isAvailable ||
+              (item.id === "debug-dump" && !onCopyDebugDump)
+            }
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
@@ -65,7 +87,8 @@ export function ReaderControlMenu({
             }}
             className={cn(
               "flex w-full items-center justify-between rounded-[1.25rem] border border-border/60 bg-secondary/35 px-4 py-3 text-left transition-colors",
-              item.isAvailable
+              item.isAvailable &&
+                (item.id !== "debug-dump" || onCopyDebugDump)
                 ? "hover:bg-secondary/55"
                 : "cursor-not-allowed opacity-60",
             )}

@@ -17,11 +17,18 @@ import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 import { InspectorDrawer } from "./shared/InspectorDrawer";
 import { InspectorPanel } from "./shared/InspectorPanel";
 import { DEFAULT_PARAGRAPH_SPACING } from "@/lib/pagination-v2";
+import { useToast } from "@/hooks/use-toast";
+import {
+  buildReaderPageDebugDump,
+  serializeReaderPageDebugDump,
+  type ReaderPageDebugDump,
+} from "./debug/page-debug-dump";
 
 export function ReaderDebug() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { toast } = useToast();
 
   const [isPanelOpen, setIsPanelOpen] = useState(true);
   const [paragraphSpacingFactor, setParagraphSpacingFactor] = useState(
@@ -29,6 +36,8 @@ export function ReaderDebug() {
   );
   const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
+  const [loadedDump, setLoadedDump] =
+    useState<ReaderPageDebugDump | null>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
   const { createHighlight } = useReaderHighlightActions(bookId);
 
@@ -58,6 +67,40 @@ export function ReaderDebug() {
     spreadColumns,
     paragraphSpacingFactor,
   });
+
+  const currentDump = useMemo(() => {
+    if (!book || !pagination.spread) return null;
+
+    return buildReaderPageDebugDump({
+      book,
+      settings,
+      spread: pagination.spread,
+      paginationConfig,
+      spreadConfig,
+      layout: {
+        viewport,
+        spreadColumns,
+        columnGapPx: columnSpacingPx,
+        paddingTopPx: PAGE_PADDING_Y,
+        paddingBottomPx: PAGE_PADDING_Y,
+        paddingLeftPx: PAGE_PADDING_X,
+        paddingRightPx: PAGE_PADDING_X,
+      },
+      chapterEntries,
+      getBlocks: getChapterBlocks,
+    });
+  }, [
+    book,
+    chapterEntries,
+    columnSpacingPx,
+    getChapterBlocks,
+    pagination.spread,
+    paginationConfig,
+    settings,
+    spreadColumns,
+    spreadConfig,
+    viewport,
+  ]);
 
   const chapterAccess = useMemo(
     () => ({
@@ -137,7 +180,60 @@ export function ReaderDebug() {
     viewport,
     sourceLoadWallClockMs,
     sourceLoadKind,
+    currentDump,
+    loadedDump,
+    onCopyCurrentDump: async () => {
+      if (!currentDump) {
+        toast({
+          title: "Dump unavailable",
+          description: "Wait for pagination to render a page, then try again.",
+          variant: "destructive" as const,
+        });
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(
+          serializeReaderPageDebugDump(currentDump),
+        );
+
+        toast({
+          title: "Debug dump copied",
+          description: "Paste it back here to reproduce this page later.",
+        });
+      } catch {
+        toast({
+          title: "Could not copy dump",
+          description: "Your browser blocked clipboard access for this page.",
+          variant: "destructive",
+        });
+      }
+    },
+    onLoadDump: (dump: ReaderPageDebugDump) => {
+      setLoadedDump(dump);
+      toast({
+        title: "Debug dump loaded",
+        description: "The preview is now rendering the pasted debug dump.",
+      });
+    },
+    onClearLoadedDump: () => setLoadedDump(null),
   };
+  const previewSpread = loadedDump?.renderedSpread ?? pagination.spread;
+  const previewSpreadConfig = loadedDump?.spreadConfig ?? spreadConfig;
+  const previewPaginationConfig =
+    loadedDump?.paginationConfig ?? paginationConfig;
+  const previewLayout = loadedDump?.layout ?? {
+    viewport,
+    spreadColumns,
+    columnGapPx: columnSpacingPx,
+    paddingTopPx: PAGE_PADDING_Y,
+    paddingBottomPx: PAGE_PADDING_Y,
+    paddingLeftPx: PAGE_PADDING_X,
+    paddingRightPx: PAGE_PADDING_X,
+  };
+  const previewKey = loadedDump
+    ? `dump-${loadedDump.capturedAt}`
+    : `${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}-${settings.textAlign}`;
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">
@@ -176,29 +272,37 @@ export function ReaderDebug() {
         <main className="flex-1 overflow-auto">
           <div className="w-full overflow-x-auto px-4 pb-6 pt-6">
             <div
-              key={`${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}-${settings.textAlign}`}
+              key={previewKey}
               className="reader-container-outline mx-auto overflow-hidden"
               style={{
                 width: `${
-                  viewport.width * spreadConfig.columns +
-                  columnSpacingPx * (spreadConfig.columns - 1) +
-                  PAGE_PADDING_X * 2
+                  previewLayout.viewport.width * previewSpreadConfig.columns +
+                  previewLayout.columnGapPx * (previewSpreadConfig.columns - 1) +
+                  previewLayout.paddingLeftPx +
+                  previewLayout.paddingRightPx
                 }px`,
-                height: `${viewport.height + PAGE_PADDING_Y * 2}px`,
+                height: `${
+                  previewLayout.viewport.height +
+                  previewLayout.paddingTopPx +
+                  previewLayout.paddingBottomPx
+                }px`,
               }}
             >
-              <DeferredEpubImageProvider key={bookId} bookId={bookId}>
+              <DeferredEpubImageProvider
+                key={loadedDump?.book.id ?? bookId}
+                bookId={loadedDump?.book.id ?? bookId}
+              >
                 <SpreadStage
-                  spread={pagination.spread}
-                  spreadConfig={spreadConfig}
-                  columnSpacingPx={columnSpacingPx}
-                  paginationConfig={paginationConfig}
+                  spread={previewSpread}
+                  spreadConfig={previewSpreadConfig}
+                  columnSpacingPx={previewLayout.columnGapPx}
+                  paginationConfig={previewPaginationConfig}
                   stageContentRef={stageContentRef}
                   showDebugOutlines
-                  paddingTopPx={PAGE_PADDING_Y}
-                  paddingBottomPx={PAGE_PADDING_Y}
-                  paddingLeftPx={PAGE_PADDING_X}
-                  paddingRightPx={PAGE_PADDING_X}
+                  paddingTopPx={previewLayout.paddingTopPx}
+                  paddingBottomPx={previewLayout.paddingBottomPx}
+                  paddingLeftPx={previewLayout.paddingLeftPx}
+                  paddingRightPx={previewLayout.paddingRightPx}
                 />
               </DeferredEpubImageProvider>
             </div>
