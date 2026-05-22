@@ -17,6 +17,7 @@ import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
 import { useReaderSession } from "./hooks/use-reader-session";
 import {
   buildReaderPageDebugDump,
+  collectReaderPageDebugDumpEnvironment,
   serializeReaderPageDebugDump,
 } from "./debug/page-debug-dump";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
@@ -146,6 +147,10 @@ export function Reader() {
         paddingLeftPx: stagePadding.paddingX,
         paddingRightPx: stagePadding.paddingX,
       },
+      environment: collectReaderPageDebugDumpEnvironment({
+        stageSlotElement: stageSlotRef.current,
+        stageContentElement: stageContentRef.current,
+      }),
       chapterEntries: sessionState.chapters.entries,
       getBlocks: sessionResources.chapterAccess.getBlocks,
     });

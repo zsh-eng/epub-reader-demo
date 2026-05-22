@@ -150,6 +150,8 @@ export function AnimatedSpread({
             return (
               <div
                 key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
+                data-reader-page-slot={slot.slotIndex}
+                data-reader-current-page={slot.page.currentPage}
                 className={
                   showDebugOutlines
                     ? "relative h-full w-full overflow-hidden reader-container-outline"
@@ -160,7 +162,10 @@ export function AnimatedSpread({
                   className="pointer-events-none absolute inset-0"
                   aria-hidden="true"
                 />
-                <div className="relative z-10 h-full w-full overflow-hidden">
+                <div
+                  className="relative z-10 h-full w-full overflow-hidden"
+                  data-reader-page-content
+                >
                   {slot.page.content.map((slice, i) => (
                     <PageSliceView
                       key={`${slice.blockId}-${slot.slotIndex}-${i}`}

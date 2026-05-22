@@ -82,6 +82,108 @@ function DebugDumpSummary({
   );
 }
 
+function formatPx(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+  return `${value.toFixed(value % 1 === 0 ? 0 : 2)}px`;
+}
+
+function formatOverflow(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+  if (value <= 0) return "none";
+  return `+${formatPx(value)}`;
+}
+
+function DebugDumpEnvironmentSummary({
+  dump,
+}: {
+  dump: ReaderPageDebugDump;
+}) {
+  const environment = dump.environment;
+  if (!environment) return null;
+
+  const firstPage = environment.pageSlots[0];
+  const firstPageContent = firstPage?.contentMetrics;
+
+  return (
+    <div className="space-y-0.5 rounded-md border border-border/60 bg-background/60 p-2">
+      <KVRow
+        label="Window"
+        value={`${environment.window.innerWidth} x ${environment.window.innerHeight}`}
+      />
+      <KVRow
+        label="Visual VP"
+        value={
+          environment.visualViewport
+            ? `${formatPx(environment.visualViewport.width)} x ${formatPx(
+                environment.visualViewport.height,
+              )}`
+            : "n/a"
+        }
+      />
+      <KVRow
+        label="Doc Client"
+        value={`${environment.documentElement.clientWidth} x ${environment.documentElement.clientHeight}`}
+      />
+      <KVRow
+        label="Safe Area"
+        value={`t ${formatPx(environment.safeAreaInsets.top)} / b ${formatPx(
+          environment.safeAreaInsets.bottom,
+        )}`}
+      />
+      <div className="my-1 border-t border-border/50" />
+      <KVRow
+        label="Stage Slot"
+        value={
+          environment.stageSlot
+            ? `${environment.stageSlot.clientWidth} x ${environment.stageSlot.clientHeight}`
+            : "n/a"
+        }
+      />
+      <KVRow
+        label="Stage Overflow"
+        value={formatOverflow(environment.stageSlot?.overflowY)}
+      />
+      <KVRow
+        label="Stage Content"
+        value={
+          environment.stageContent
+            ? `${environment.stageContent.clientWidth} x ${environment.stageContent.clientHeight}`
+            : "n/a"
+        }
+      />
+      <KVRow
+        label="Content Overflow"
+        value={formatOverflow(environment.stageContent?.overflowY)}
+      />
+      <div className="my-1 border-t border-border/50" />
+      <KVRow
+        label="Page Slot"
+        value={
+          firstPage
+            ? `${firstPage.metrics.clientWidth} x ${firstPage.metrics.clientHeight}`
+            : "n/a"
+        }
+      />
+      <KVRow
+        label="Page Overflow"
+        value={formatOverflow(firstPage?.metrics.overflowY)}
+      />
+      <KVRow
+        label="Page Content"
+        value={
+          firstPageContent
+            ? `${firstPageContent.clientWidth} x ${firstPageContent.clientHeight}`
+            : "n/a"
+        }
+      />
+      <KVRow
+        label="Text Overflow"
+        value={formatOverflow(firstPageContent?.overflowY)}
+      />
+    </div>
+  );
+}
+
 function DebugDumpControls({
   currentDump,
   loadedDump,
@@ -143,6 +245,7 @@ function DebugDumpControls({
         </div>
 
         {currentDump ? <DebugDumpSummary dump={currentDump} /> : null}
+        {currentDump ? <DebugDumpEnvironmentSummary dump={currentDump} /> : null}
 
         {onLoadDump ? (
           <div className="space-y-2">
@@ -150,7 +253,7 @@ function DebugDumpControls({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Paste a reader page debug dump..."
-              className="min-h-24 resize-y bg-background/60 font-mono text-[11px]"
+              className="h-40 min-h-40 resize-y overflow-y-auto bg-background/60 font-mono text-[11px]"
             />
             <div className="flex gap-2">
               <Button
@@ -185,6 +288,7 @@ function DebugDumpControls({
           <div className="space-y-1">
             <span className="text-muted-foreground">Loaded Dump</span>
             <DebugDumpSummary dump={loadedDump} />
+            <DebugDumpEnvironmentSummary dump={loadedDump} />
           </div>
         ) : null}
       </div>

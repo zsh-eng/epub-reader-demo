@@ -20,6 +20,7 @@ import { DEFAULT_PARAGRAPH_SPACING } from "@/lib/pagination-v2";
 import { useToast } from "@/hooks/use-toast";
 import {
   buildReaderPageDebugDump,
+  collectReaderPageDebugDumpEnvironment,
   serializeReaderPageDebugDump,
   type ReaderPageDebugDump,
 } from "./debug/page-debug-dump";
@@ -38,6 +39,7 @@ export function ReaderDebug() {
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
   const [loadedDump, setLoadedDump] =
     useState<ReaderPageDebugDump | null>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
   const { createHighlight } = useReaderHighlightActions(bookId);
 
@@ -86,6 +88,10 @@ export function ReaderDebug() {
         paddingLeftPx: PAGE_PADDING_X,
         paddingRightPx: PAGE_PADDING_X,
       },
+      environment: collectReaderPageDebugDumpEnvironment({
+        stageSlotElement: previewContainerRef.current,
+        stageContentElement: stageContentRef.current,
+      }),
       chapterEntries,
       getBlocks: getChapterBlocks,
     });
@@ -273,6 +279,7 @@ export function ReaderDebug() {
           <div className="w-full overflow-x-auto px-4 pb-6 pt-6">
             <div
               key={previewKey}
+              ref={previewContainerRef}
               className="reader-container-outline mx-auto overflow-hidden"
               style={{
                 width: `${
