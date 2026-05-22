@@ -78,6 +78,15 @@ export interface ReaderPageDebugDumpEnvironment {
     currentPage: number | null;
     metrics: ReaderPageDebugDumpElementMetrics;
     contentMetrics: ReaderPageDebugDumpElementMetrics | null;
+    slices: Array<{
+      sliceIndex: number;
+      type: string;
+      blockId: string;
+      expectedHeight: number | null;
+      lineCount: number | null;
+      lineHeight: number | null;
+      metrics: ReaderPageDebugDumpElementMetrics;
+    }>;
   }>;
 }
 
@@ -284,6 +293,9 @@ export function collectReaderPageDebugDumpEnvironment(options: {
       const contentMetrics = getElementMetrics(
         element.querySelector<HTMLElement>("[data-reader-page-content]"),
       );
+      const sliceElements = Array.from(
+        element.querySelectorAll<HTMLElement>("[data-reader-page-slice]"),
+      );
 
       return [
         {
@@ -293,6 +305,28 @@ export function collectReaderPageDebugDumpEnvironment(options: {
             : null,
           metrics,
           contentMetrics,
+          slices: sliceElements.flatMap((sliceElement) => {
+            const sliceMetrics = getElementMetrics(sliceElement);
+            if (!sliceMetrics) return [];
+
+            return [
+              {
+                sliceIndex: Number(sliceElement.dataset.readerPageSlice ?? 0),
+                type: sliceElement.dataset.readerSliceType ?? "unknown",
+                blockId: sliceElement.dataset.readerBlockId ?? "",
+                expectedHeight: sliceElement.dataset.readerExpectedHeight
+                  ? Number(sliceElement.dataset.readerExpectedHeight)
+                  : null,
+                lineCount: sliceElement.dataset.readerLineCount
+                  ? Number(sliceElement.dataset.readerLineCount)
+                  : null,
+                lineHeight: sliceElement.dataset.readerLineHeight
+                  ? Number(sliceElement.dataset.readerLineHeight)
+                  : null,
+                metrics: sliceMetrics,
+              },
+            ];
+          }),
         },
       ];
     }),

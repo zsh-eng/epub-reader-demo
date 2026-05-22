@@ -103,6 +103,16 @@ function DebugDumpEnvironmentSummary({
 
   const firstPage = environment.pageSlots[0];
   const firstPageContent = firstPage?.contentMetrics;
+  const overflowingSlice = firstPage?.slices.find(
+    (slice) => slice.metrics.overflowY > 0,
+  );
+  const bottomCrossingSlice =
+    !overflowingSlice && firstPageContent
+      ? firstPage?.slices.find(
+          (slice) => slice.metrics.rect.bottom > firstPageContent.rect.bottom,
+        )
+      : null;
+  const suspectSlice = overflowingSlice ?? bottomCrossingSlice ?? null;
 
   return (
     <div className="space-y-0.5 rounded-md border border-border/60 bg-background/60 p-2">
@@ -180,6 +190,35 @@ function DebugDumpEnvironmentSummary({
         label="Text Overflow"
         value={formatOverflow(firstPageContent?.overflowY)}
       />
+      {suspectSlice ? (
+        <>
+          <div className="my-1 border-t border-border/50" />
+          <KVRow
+            label="Slice"
+            value={`${suspectSlice.sliceIndex} ${suspectSlice.type}`}
+          />
+          <KVRow
+            label="Slice Lines"
+            value={
+              suspectSlice.lineCount && suspectSlice.lineHeight
+                ? `${suspectSlice.lineCount} x ${formatPx(
+                    suspectSlice.lineHeight,
+                  )}`
+                : "n/a"
+            }
+          />
+          <KVRow
+            label="Slice Height"
+            value={`${formatPx(suspectSlice.expectedHeight)} / ${formatPx(
+              suspectSlice.metrics.rect.height,
+            )}`}
+          />
+          <KVRow
+            label="Slice Overflow"
+            value={formatOverflow(suspectSlice.metrics.overflowY)}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

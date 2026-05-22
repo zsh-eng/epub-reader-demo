@@ -240,12 +240,24 @@ export function PageSliceView({
   const key = `${slice.blockId}-${sliceIndex}`;
 
   if (slice.type === "spacer") {
-    return <div style={{ height: `${slice.height}px` }} />;
+    return (
+      <div
+        data-reader-page-slice={sliceIndex}
+        data-reader-slice-type="spacer"
+        data-reader-block-id={slice.blockId}
+        data-reader-expected-height={slice.height}
+        style={{ height: `${slice.height}px` }}
+      />
+    );
   }
 
   if (slice.type === "image") {
     return (
       <div
+        data-reader-page-slice={sliceIndex}
+        data-reader-slice-type="image"
+        data-reader-block-id={slice.blockId}
+        data-reader-expected-height={slice.height}
         className="flex w-full items-center justify-center"
         style={{ height: `${slice.height}px` }}
       >
@@ -273,6 +285,12 @@ export function PageSliceView({
 
   return (
     <p
+      data-reader-page-slice={sliceIndex}
+      data-reader-slice-type="text"
+      data-reader-block-id={slice.blockId}
+      data-reader-line-count={slice.lines.length}
+      data-reader-line-height={slice.lineHeight}
+      data-reader-expected-height={slice.lines.length * slice.lineHeight}
       className={cn("m-0 box-border text-foreground", {
         "reader-blockquote": slice.tag === "blockquote",
         "reader-figcaption": slice.tag === "figcaption",
