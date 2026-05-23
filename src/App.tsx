@@ -4,6 +4,7 @@ import { LegacyReader } from "@/components/LegacyReader";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
+import { ReaderDiagnostics } from "@/components/Reader/diagnostics/ReaderDiagnostics";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Sessions } from "@/components/Sessions";
 import { ReadingSessionsDebug } from "@/components/debug/ReadingSessionsDebug";
@@ -38,6 +39,7 @@ function App() {
             <Route path="/reader-v1/:bookId" element={<LegacyReader />} />
             <Route path="/reader/:bookId" element={<Reader />} />
             <Route path="/debug/reader/:bookId" element={<ReaderDebug />} />
+            <Route path="/diagnostics/reader" element={<ReaderDiagnostics />} />
             <Route
               path="/debug/reading-sessions"
               element={<ReadingSessionsDebug />}

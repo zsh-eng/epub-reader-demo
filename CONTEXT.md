@@ -8,6 +8,22 @@ This context describes the language used for the reader experience and its diagn
 A portable diagnostic payload copied from a currently rendered reader page or spread so the same content, layout, typography, and pagination inputs can be reproduced in reader debug tooling.
 _Avoid_: Debug snapshot, page snapshot, fixture unless the payload is checked into tests as a stable test input.
 
+**Reader Diagnostic Harness**:
+A programmatic debugging surface for the reader that can inspect current reader state, navigate through pages or chapters, collect Reader Page Debug Dumps, and report layout or pagination invariant failures without relying on manual visual inspection.
+_Avoid_: Pagination Diagnostics when referring to the broader reader-level harness; use Pagination Diagnostics only for engine-level pagination metrics and traces.
+
+**Reader Diagnostic Profile**:
+A named set of reader conditions used by the Reader Diagnostic Harness to make scans reproducible across runs, such as the reading viewport, spread shape, typography, and alignment mode. It is distinct from the user's ordinary reader settings.
+_Avoid_: Preset, test settings, browser size.
+
+**Reader Diagnostic Route**:
+A reader route intended for programmatic diagnostic runs rather than human reading or manual tweaking. It renders reader content under a Reader Diagnostic Profile and exposes the Reader Diagnostic Harness without ordinary reader chrome.
+_Avoid_: Debug reader when referring to the programmatic route; the debug reader is the human-facing diagnostic panel.
+
+**In-Memory Diagnostic EPUB**:
+An EPUB file supplied directly to the Reader Diagnostic Harness for a diagnostic run without importing it into the library or creating persistent reader state.
+_Avoid_: Diagnostic book when the EPUB has not been added to the library.
+
 ## Reader Invariants
 
 Reader text should remain native flowing paragraph text in the DOM. Do not render precomputed pagination lines as explicit per-line block boxes just to force wrapping, because that breaks expected text-selection behaviours such as triple-clicking to select a whole paragraph.

@@ -24,7 +24,8 @@ const DeferredEpubImageContext = createContext<DeferredEpubImageStore | null>(
 );
 
 interface DeferredEpubImageProviderProps {
-  bookId: string;
+  bookId?: string;
+  loadResource?: (resourcePath: string) => Promise<Blob | null>;
   children: ReactNode;
 }
 
@@ -36,6 +37,7 @@ interface DeferredEpubImageProviderProps {
  */
 export function DeferredEpubImageProvider({
   bookId,
+  loadResource,
   children,
 }: DeferredEpubImageProviderProps) {
   const objectUrlsRef = useRef<Map<string, string>>(new Map());
@@ -61,8 +63,13 @@ export function DeferredEpubImageProvider({
       }
 
       const loadPromise = (async () => {
-        const resourceFile = await getBookFile(bookId, resourcePath);
-        if (!resourceFile) {
+        const resourceBlob = loadResource
+          ? await loadResource(resourcePath)
+          : bookId
+            ? (await getBookFile(bookId, resourcePath))?.content
+            : null;
+
+        if (!resourceBlob) {
           console.warn("[LazyImage] Deferred image not found:", resourcePath);
           return null;
         }
@@ -72,7 +79,7 @@ export function DeferredEpubImageProvider({
           return existingUrl;
         }
 
-        const objectUrl = URL.createObjectURL(resourceFile.content);
+        const objectUrl = URL.createObjectURL(resourceBlob);
         if (disposedRef.current) {
           URL.revokeObjectURL(objectUrl);
           return null;
@@ -95,7 +102,7 @@ export function DeferredEpubImageProvider({
         },
       );
     },
-    [bookId],
+    [bookId, loadResource],
   );
 
   useEffect(() => {

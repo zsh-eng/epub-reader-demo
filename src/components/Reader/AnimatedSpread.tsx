@@ -12,6 +12,7 @@ interface AnimatedSpreadProps {
   columnSpacingPx: number;
   paginationConfig: PaginationConfig;
   showDebugOutlines?: boolean;
+  disableAnimations?: boolean;
   paddingTopPx: number;
   paddingBottomPx: number;
   paddingLeftPx: number;
@@ -54,6 +55,7 @@ export function AnimatedSpread({
   columnSpacingPx,
   paginationConfig,
   showDebugOutlines = false,
+  disableAnimations = false,
   paddingTopPx,
   paddingBottomPx,
   paddingLeftPx,
@@ -106,16 +108,8 @@ export function AnimatedSpread({
         ? 1
         : 0;
 
-  return (
-    <motion.div
-      className="absolute inset-0 h-full w-full overflow-hidden bg-background"
-      style={{ zIndex }}
-      custom={direction}
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-    >
+  const content = (
+    <>
       {/* Padding wrapper — keeps text away from the page edges */}
       <div
         className="h-full w-full overflow-hidden"
@@ -180,6 +174,28 @@ export function AnimatedSpread({
           })}
         </div>
       </div>
+    </>
+  );
+
+  if (disableAnimations) {
+    return (
+      <div className="absolute inset-0 h-full w-full overflow-hidden bg-background">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      className="absolute inset-0 h-full w-full overflow-hidden bg-background"
+      style={{ zIndex }}
+      custom={direction}
+      variants={pageVariants}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      {content}
     </motion.div>
   );
 }

@@ -12,6 +12,7 @@ interface SpreadStageProps {
   stageContentRef?: RefObject<HTMLDivElement | null>;
   onLinkActivate?: (href: string) => boolean;
   showDebugOutlines?: boolean;
+  disableAnimations?: boolean;
   paddingTopPx: number;
   paddingBottomPx: number;
   paddingLeftPx: number;
@@ -38,6 +39,7 @@ export function SpreadStage({
   stageContentRef,
   onLinkActivate,
   showDebugOutlines = false,
+  disableAnimations = false,
   paddingTopPx,
   paddingBottomPx,
   paddingLeftPx,
@@ -70,8 +72,8 @@ export function SpreadStage({
         onClick={handlePageContentClick}
         className="relative h-full w-full overflow-hidden"
       >
-        <AnimatePresence custom={direction} mode="sync">
-          {spread && (
+        {disableAnimations ? (
+          spread ? (
             <AnimatedSpread
               key={spread.currentSpread}
               spread={spread}
@@ -79,13 +81,31 @@ export function SpreadStage({
               columnSpacingPx={columnSpacingPx}
               paginationConfig={paginationConfig}
               showDebugOutlines={showDebugOutlines}
+              disableAnimations
               paddingTopPx={paddingTopPx}
               paddingBottomPx={paddingBottomPx}
               paddingLeftPx={paddingLeftPx}
               paddingRightPx={paddingRightPx}
             />
-          )}
-        </AnimatePresence>
+          ) : null
+        ) : (
+          <AnimatePresence custom={direction} mode="sync">
+            {spread && (
+              <AnimatedSpread
+                key={spread.currentSpread}
+                spread={spread}
+                spreadConfig={spreadConfig}
+                columnSpacingPx={columnSpacingPx}
+                paginationConfig={paginationConfig}
+                showDebugOutlines={showDebugOutlines}
+                paddingTopPx={paddingTopPx}
+                paddingBottomPx={paddingBottomPx}
+                paddingLeftPx={paddingLeftPx}
+                paddingRightPx={paddingRightPx}
+              />
+            )}
+          </AnimatePresence>
+        )}
       </div>
     </MotionConfig>
   );

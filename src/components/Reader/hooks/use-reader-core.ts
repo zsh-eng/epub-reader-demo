@@ -73,7 +73,7 @@ function getNamedBodyFont(fontFamily: FontFamily): string {
   }
 }
 
-function buildPaginationConfig(
+export function buildPaginationConfig(
   settings: ReaderSettings,
   paragraphSpacingFactor: number,
   viewport: { width: number; height: number },
@@ -95,7 +95,7 @@ function buildPaginationConfig(
   };
 }
 
-function buildSpreadConfig(columns: 1 | 2 | 3): SpreadConfig {
+export function buildSpreadConfig(columns: 1 | 2 | 3): SpreadConfig {
   return {
     columns,
     chapterFlow: "continuous",
