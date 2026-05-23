@@ -58,6 +58,69 @@ Epochs keep events from old layout work from overwriting newer results on the ma
 - pagination config or spread config change:
   Pagination handles relayout itself. Reader-side chapter content does not reload.
 
+## Reader diagnostics CLI
+
+Use the reader diagnostics CLI when investigating pagination or rendered-layout
+drift against an EPUB file without importing it into the library:
+
+```bash
+bun run diagnostics:reader -- \
+  --epub "/absolute/path/to/book.epub" \
+  --from 1 \
+  --to 50 \
+  --out diagnostics/book-pages-1-50.json
+```
+
+The command starts the local dev server, opens `/diagnostics/reader` in
+Playwright, loads the EPUB as an in-memory diagnostic EPUB, waits for pagination
+to finish, and scans the requested pages with the default mobile Iowan
+diagnostic profile. It exits with code `0` when all scanned pages pass and code
+`1` when any reader invariant fails, so the command can be used in automated
+checks.
+
+Useful options:
+
+- `--from <page>` / `--to <page>`: scan a global page range.
+- `--chapter <index>`: scan a zero-based chapter index instead of a page range.
+- `--stop-on-first-failure`: stop after the first failing page.
+- `--out <path>`: write the compact JSON report.
+- `--dump-out <path>`: write the first failing Reader Page Debug Dump.
+- `--dumps-dir <path>`: write one full Reader Page Debug Dump per failing page.
+- `--pages-from-report <path>`: rescan the failed page numbers from a previous report.
+- `--headed`: run the browser visibly when inspecting behaviour.
+
+### Failure snapshot workflow
+
+First, scan the suspicious range and snapshot every failing page:
+
+```bash
+bun run diagnostics:reader -- \
+  --epub "/absolute/path/to/book.epub" \
+  --from 1 \
+  --to 50 \
+  --out diagnostics/book-before.json \
+  --dumps-dir diagnostics/book-before-dumps
+```
+
+The compact report tells you which pages failed and why. The dump files in
+`diagnostics/book-before-dumps/page-0002.json` and similar paths are full Reader
+Page Debug Dumps for the failing rendered pages. Use those dumps as the concrete
+evidence while changing pagination or rendering code.
+
+After making a fix, rescan the same failed page numbers from the previous report:
+
+```bash
+bun run diagnostics:reader -- \
+  --epub "/absolute/path/to/book.epub" \
+  --pages-from-report diagnostics/book-before.json \
+  --out diagnostics/book-after.json \
+  --dumps-dir diagnostics/book-after-dumps
+```
+
+If the fix worked, `diagnostics/book-after.json` should report zero failures.
+If failures remain, compare the before/after reports and the before/after Reader
+Page Debug Dumps for the affected pages.
+
 ## Performance Optimization
 
 Reader startup used to be dominated by materializing the source HTML. On slower Chrome on Android (Poco F3), opening a large EPUB spent most of the source time inside `Blob.text()`. This is less visible on faster devices like the iPhone 15 Pro Max or MacBook Pro M1 Pro.
