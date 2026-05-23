@@ -25,6 +25,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
+    "diagnostics:reader": "bun scripts/reader-diagnostics.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check"
   },
