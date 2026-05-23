@@ -89,6 +89,42 @@ Useful options:
 - `--pages-from-report <path>`: rescan the failed page numbers from a previous report.
 - `--headed`: run the browser visibly when inspecting behaviour.
 
+### Diagnostics startup notes
+
+For large EPUBs or while debugging startup, it is often more reliable to start
+the dev server yourself and tell the CLI to reuse it:
+
+```bash
+bun run dev -- --host 127.0.0.1
+```
+
+```bash
+bun run diagnostics:reader -- \
+  --epub "/absolute/path/to/book.epub" \
+  --no-start-server \
+  --timeout-ms 120000 \
+  --out diagnostics/book.json
+```
+
+Use this path when the wrapper times out waiting for
+`http://127.0.0.1:5173/diagnostics/reader`, when Vite chooses an unexpected
+port, or when you want to run several scans against the same server.
+
+On macOS, Playwright Chromium may fail inside the filesystem sandbox with a
+`MachPortRendezvousServer ... Permission denied (1100)` error. Run the
+diagnostics command with the normal escalation path when that happens; the
+failure is a browser launch permission issue, not an EPUB parsing failure.
+
+The CLI prints its JSON report at the end of the scan. For large books, a quiet
+terminal usually means the EPUB is still being transferred, loaded, paginated,
+or scanned. `--out` and `--dumps-dir` are written after the scan returns, so use
+a larger `--timeout-ms` such as `120000` before assuming the command is stuck.
+
+The diagnostics payload should send EPUB bytes as a `Uint8Array`. Avoid
+converting large EPUBs with `Array.from(epubBytes)`, which materializes one
+JavaScript number per byte and can make large-book scans appear to hang before
+the reader receives the file.
+
 ### Failure snapshot workflow
 
 First, scan the suspicious range and snapshot every failing page:
