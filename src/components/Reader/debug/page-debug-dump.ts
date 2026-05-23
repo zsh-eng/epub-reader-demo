@@ -498,10 +498,14 @@ interface VisualLineGroup {
   styleSamples: ReaderPageDebugDumpVisualLineStyleSample[];
 }
 
-function createVisualLineGroups(rects: DOMRect[]): VisualLineGroup[] {
+export function createVisualLineGroups(
+  rects: DOMRect[],
+  lineHeight: number | null = null,
+): VisualLineGroup[] {
   const sorted = [...rects].sort((a, b) => a.top - b.top);
   const groups: VisualLineGroup[] = [];
-  const topTolerancePx = 1;
+  const topTolerancePx =
+    lineHeight !== null && lineHeight > 0 ? lineHeight * 0.5 : 1;
 
   for (const rect of sorted) {
     const top = roundMetric(rect.top);
@@ -737,7 +741,7 @@ function collectVisualLineMetrics(
 
   if (rects.length === 0) return null;
 
-  const groups = createVisualLineGroups(rects);
+  const groups = createVisualLineGroups(rects, options.lineHeight);
   annotateVisualLineGroupsWithText(element, groups);
 
   const elementRect = element.getBoundingClientRect();
