@@ -350,7 +350,7 @@ async function main() {
         },
         {
           name: path.basename(options.epub),
-          bytes: Array.from(epubBytes),
+          bytes: new Uint8Array(epubBytes),
         },
       );
 
