@@ -33,7 +33,9 @@ interface HeadingTypographySpec {
  * type so pagination and rendering stay in sync.
  */
 const HEADING_TYPOGRAPHY: Record<HeadingTag, HeadingTypographySpec> = {
-  h1: { scale: 2.0, lineHeightFactor: 1.1, aboveLines: 2.2, belowLines: 0.9 },
+  // Iowan's semibold heading glyph box is taller than the old tight factors,
+  // so these line boxes need enough room for the rendered text metrics.
+  h1: { scale: 2.0, lineHeightFactor: 1.38, aboveLines: 2.2, belowLines: 0.9 },
   h2: {
     scale: 1.55,
     lineHeightFactor: 1.14,
@@ -42,7 +44,7 @@ const HEADING_TYPOGRAPHY: Record<HeadingTag, HeadingTypographySpec> = {
   },
   h3: {
     scale: 1.28,
-    lineHeightFactor: 1.18,
+    lineHeightFactor: 1.37,
     aboveLines: 1.3,
     belowLines: 0.6,
   },

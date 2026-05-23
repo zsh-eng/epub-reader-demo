@@ -1,6 +1,7 @@
 import {
   layoutPages,
   prepareBlocks,
+  getLineHeight,
   type Block,
   type FontConfig,
   type LayoutTheme,
@@ -22,6 +23,13 @@ const LAYOUT_THEME: LayoutTheme = {
   headingSpaceBelow: 0.7,
   textAlign: "left",
 };
+
+describe("layoutPages — heading rhythm", () => {
+  it("budgets enough line height for mobile Iowan heading metrics", () => {
+    expect(getLineHeight("h1", LAYOUT_THEME)).toBe(44);
+    expect(getLineHeight("h3", LAYOUT_THEME)).toBe(28);
+  });
+});
 
 describe("layoutPages — image overflow spacing", () => {
   it("does not emit an orphaned pre-image spacer on the page before an overflowed image", () => {
