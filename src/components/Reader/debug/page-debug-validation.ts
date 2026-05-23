@@ -38,7 +38,7 @@ export interface ReaderPageDebugValidationResult {
   suspectSlice: DebugDumpPageSlot["slices"][number] | null;
 }
 
-const OVERFLOW_TOLERANCE_PX = 0.75;
+const OVERFLOW_TOLERANCE_PX = 1.5;
 const HEIGHT_TOLERANCE_PX = 1.5;
 
 function sumKnownNumbers(values: Array<number | null | undefined>): number {

@@ -38,7 +38,7 @@ const HEADING_TYPOGRAPHY: Record<HeadingTag, HeadingTypographySpec> = {
   h1: { scale: 2.0, lineHeightFactor: 1.38, aboveLines: 2.2, belowLines: 0.9 },
   h2: {
     scale: 1.55,
-    lineHeightFactor: 1.14,
+    lineHeightFactor: 1.29,
     aboveLines: 1.7,
     belowLines: 0.75,
   },

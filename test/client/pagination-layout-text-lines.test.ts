@@ -181,6 +181,55 @@ describe("layoutPreWrapLines cursor offsets", () => {
     ).toBe(true);
   });
 
+  it("wraps before a new inline run instead of taking only its first grapheme", () => {
+    const blocks: Block[] = [
+      {
+        type: "text",
+        id: "run-boundary-block",
+        tag: "p",
+        runs: [
+          {
+            kind: "text",
+            text: "Alpha beta gamma delta. ",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+          {
+            kind: "text",
+            text: "Brush the damn teeth.",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+        ],
+      },
+    ];
+
+    const prepared = prepareBlocks(blocks, BASE_FONT_CONFIG);
+    const textBlock = prepared[0];
+    expect(textBlock?.type).toBe("text");
+    if (!textBlock || textBlock.type !== "text") return;
+
+    const firstRunWidth = textBlock.items[0]?.fullWidth ?? 0;
+    const secondRunFirstWordWidth = textBlock.items[1]
+      ? textBlock.items[1].prepared.widths[0]
+      : 0;
+    const { lines } = layoutTextLines(
+      textBlock.items,
+      firstRunWidth + secondRunFirstWordWidth / 2,
+    );
+    const firstLineText = lines[0]?.fragments
+      .map((fragment) => fragment.text)
+      .join("");
+    const secondLineText = lines[1]?.fragments
+      .map((fragment) => fragment.text)
+      .join("");
+
+    expect(firstLineText).toBe("Alpha beta gamma delta.");
+    expect(secondLineText?.startsWith("Brush")).toBe(true);
+  });
+
   it("reserves extra width for note-ref hit areas while keeping plain superscripts lightweight", () => {
     const blocks: Block[] = [
       {

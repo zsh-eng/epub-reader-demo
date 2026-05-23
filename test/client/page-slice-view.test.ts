@@ -123,6 +123,51 @@ describe("PageSliceView", () => {
     expect(markup.match(/href="#Fig29"/g)).toHaveLength(3);
   });
 
+  it("renders leading gaps as breakable spaces before anchored fragments", () => {
+    const slice: TextSlice = {
+      type: "text",
+      blockId: "gap-block",
+      tag: "p",
+      lineHeight: 24,
+      textAlign: "left",
+      renderMode: "native",
+      lines: [
+        {
+          fragments: [
+            {
+              kind: "text",
+              text: "alpha",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 0,
+              isCode: false,
+            },
+            {
+              kind: "text",
+              text: "beta",
+              font: '400 16px "Inter", sans-serif',
+              leadingGap: 4,
+              isCode: false,
+            },
+          ],
+          isLastInBlock: true,
+        },
+      ],
+    };
+
+    const markup = renderToStaticMarkup(
+      createElement(PageSliceView, {
+        slice,
+        sliceIndex: 0,
+        bookId: "book-1",
+        deferredImageCache: new Map(),
+        baseFontSize: 16,
+      }),
+    );
+
+    expect(markup).toContain("> </span>");
+    expect(markup).not.toContain("margin-left");
+  });
+
   it("renders note refs as badge anchors with preserved anchor metadata", () => {
     const slice: TextSlice = {
       type: "text",

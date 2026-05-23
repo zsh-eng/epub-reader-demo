@@ -51,6 +51,13 @@ function renderFragmentSequence(
 
     if (!isClusteredLinkFragment(fragment)) {
       nodes.push(
+        renderLeadingGap(
+          fragment,
+          `${keyPrefix}-gap-${index}`,
+          getStyle(fragment, index),
+        ),
+      );
+      nodes.push(
         renderInlineFragment(
           fragment,
           `${keyPrefix}-frag-${index}`,
@@ -81,6 +88,13 @@ function renderFragmentSequence(
 
     if (group.length === 1) {
       nodes.push(
+        renderLeadingGap(
+          fragment,
+          `${keyPrefix}-gap-${index}`,
+          getStyle(fragment, index),
+        ),
+      );
+      nodes.push(
         renderInlineFragment(
           fragment,
           `${keyPrefix}-frag-${index}`,
@@ -96,13 +110,18 @@ function renderFragmentSequence(
         key={`${keyPrefix}-cluster-${index}`}
         className="reader-inline-link-cluster"
       >
-        {group.map((groupFragment, groupOffset) =>
+        {group.flatMap((groupFragment, groupOffset) => [
+          renderLeadingGap(
+            groupFragment,
+            `${keyPrefix}-gap-${index + groupOffset}`,
+            getStyle(groupFragment, index + groupOffset),
+          ),
           renderInlineFragment(
             groupFragment,
             `${keyPrefix}-frag-${index + groupOffset}`,
             getStyle(groupFragment, index + groupOffset),
           ),
-        )}
+        ])}
       </span>,
     );
     index = groupEnd;
@@ -198,6 +217,20 @@ function getSliceBaseTypographyStyle(
   const typographyStyle = getFragmentTypographyStyle(firstTextFragment.font);
   const { lineHeight: _lineHeight, ...fontStyle } = typographyStyle;
   return fontStyle;
+}
+
+function renderLeadingGap(
+  fragment: PageFragment,
+  key: string,
+  style: CSSProperties,
+) {
+  if (fragment.leadingGap <= 0) return null;
+
+  return (
+    <span key={key} style={style}>
+      {" "}
+    </span>
+  );
 }
 
 function renderInlineFragment(
@@ -411,13 +444,10 @@ export function PageSliceView({
                 line.fragments,
                 `${key}-line-${lineIndex}`,
                 (fragment) => ({
-                  marginLeft:
-                    fragment.leadingGap > 0
-                      ? `${fragment.leadingGap}px`
-                      : undefined,
                   ...getFragmentTypographyStyle(fragment.font),
                 }),
               )}
+              {lineIndex < slice.lines.length - 1 ? <br /> : null}
             </Fragment>
           ))}
     </p>

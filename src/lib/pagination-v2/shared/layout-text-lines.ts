@@ -1,5 +1,11 @@
 import type { LayoutCursor } from "@chenglou/pretext";
 import { layoutNextLine } from "@chenglou/pretext";
+import {
+  layoutNextRichInlineLineRange,
+  materializeRichInlineLineRange,
+  prepareRichInline,
+  type RichInlineCursor,
+} from "@chenglou/pretext/rich-inline";
 import { LINE_START_CURSOR, cursorsMatch, measureTextWidth } from "./measure";
 import type {
   HighlightMark,
@@ -16,6 +22,7 @@ const SOFT_HYPHEN = "\u00AD";
 const RIVER_THRESHOLD = 1.5;
 const INFEASIBLE_SPACE_RATIO = 0.4;
 const TIGHT_SPACE_RATIO = 0.65;
+const NATIVE_INLINE_WRAP_SAFETY_PX = 2;
 
 type TextLineLayoutResult = {
   lines: PageLine[];
@@ -113,6 +120,68 @@ export function layoutTextLines(
 }
 
 function layoutTextLinesGreedy(
+  items: PreparedInlineItem[],
+  safeWidth: number,
+): PageLine[] {
+  const layoutWidth = Math.max(1, safeWidth - NATIVE_INLINE_WRAP_SAFETY_PX);
+  const prepared = prepareRichInline(
+    items.map((item) => ({
+      text: item.leadingGap > 0 ? ` ${item.rawText}` : item.rawText,
+      font: item.font,
+      extraWidth: item.chromeWidth,
+    })),
+  );
+  const lines: PageLine[] = [];
+  let cursor: RichInlineCursor | undefined;
+
+  while (true) {
+    const richLineRange = layoutNextRichInlineLineRange(
+      prepared,
+      layoutWidth,
+      cursor,
+    );
+    if (!richLineRange) break;
+
+    const richLine = materializeRichInlineLineRange(prepared, richLineRange);
+    const fragments = richLine.fragments.flatMap<PageFragment>((fragment) => {
+      const item = items[fragment.itemIndex];
+      if (!item || !fragment.text) return [];
+
+      return {
+        kind: "text",
+        text: fragment.text,
+        font: item.font,
+        leadingGap: fragment.gapBefore,
+        inlineRole: item.inlineRole,
+        link: item.link,
+        isCode: item.isCode,
+        highlightMarks: projectHighlightMarks(item.highlightMarks, {
+          preserveStart: cursorsMatch(fragment.start, LINE_START_CURSOR),
+          preserveEnd: cursorsMatch(fragment.end, item.endCursor),
+        }),
+        anchorStart: createOffset(fragment.itemIndex, fragment.start),
+        anchorEnd: createOffset(fragment.itemIndex, fragment.end),
+      };
+    });
+    const firstFragment = richLine.fragments[0];
+    const lastFragment = richLine.fragments[richLine.fragments.length - 1];
+
+    if (fragments.length > 0 && firstFragment && lastFragment) {
+      lines.push({
+        fragments,
+        startOffset: createOffset(firstFragment.itemIndex, firstFragment.start),
+        endOffset: createOffset(lastFragment.itemIndex, lastFragment.end),
+        isLastInBlock: false,
+      });
+    }
+
+    cursor = richLine.end;
+  }
+
+  return lines;
+}
+
+function layoutTextLinesPreWrap(
   items: PreparedInlineItem[],
   safeWidth: number,
 ): PageLine[] {
@@ -662,7 +731,7 @@ export function layoutPreWrapLines(
   items: PreparedInlineItem[],
   maxWidth: number,
 ): PageLine[] {
-  return layoutTextLinesGreedy(items, Math.max(1, maxWidth));
+  return layoutTextLinesPreWrap(items, Math.max(1, maxWidth));
 }
 
 function isSpaceText(text: string): boolean {
