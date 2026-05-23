@@ -19,10 +19,12 @@ import type {
 
 const HUGE_BADNESS = 1e8;
 const SOFT_HYPHEN = "\u00AD";
+const ZERO_WIDTH_BREAK = "\u200B";
 const RIVER_THRESHOLD = 1.5;
 const INFEASIBLE_SPACE_RATIO = 0.4;
 const TIGHT_SPACE_RATIO = 0.65;
 const NATIVE_INLINE_WRAP_SAFETY_PX = 2;
+const NATIVE_INLINE_ZERO_WIDTH_BREAK_SAFETY_PX = 8;
 
 type TextLineLayoutResult = {
   lines: PageLine[];
@@ -123,7 +125,14 @@ function layoutTextLinesGreedy(
   items: PreparedInlineItem[],
   safeWidth: number,
 ): PageLine[] {
-  const layoutWidth = Math.max(1, safeWidth - NATIVE_INLINE_WRAP_SAFETY_PX);
+  const hasZeroWidthBreaks = items.some((item) =>
+    item.rawText.includes(ZERO_WIDTH_BREAK),
+  );
+  const wrapSafety = Math.max(
+    NATIVE_INLINE_WRAP_SAFETY_PX,
+    hasZeroWidthBreaks ? NATIVE_INLINE_ZERO_WIDTH_BREAK_SAFETY_PX : 0,
+  );
+  const layoutWidth = Math.max(1, safeWidth - wrapSafety);
   const prepared = prepareRichInline(
     items.map((item) => ({
       text: item.leadingGap > 0 ? ` ${item.rawText}` : item.rawText,

@@ -230,6 +230,38 @@ describe("layoutPreWrapLines cursor offsets", () => {
     expect(secondLineText?.startsWith("Brush")).toBe(true);
   });
 
+  it("uses extra native wrap safety when text contains zero-width breaks", () => {
+    const blocks: Block[] = [
+      {
+        type: "text",
+        id: "zero-width-break-block",
+        tag: "p",
+        runs: [
+          {
+            kind: "text",
+            text: "alpha\u200B beta",
+            bold: false,
+            italic: false,
+            isCode: false,
+          },
+        ],
+      },
+    ];
+
+    const prepared = prepareBlocks(blocks, BASE_FONT_CONFIG);
+    const textBlock = prepared[0];
+    expect(textBlock?.type).toBe("text");
+    if (!textBlock || textBlock.type !== "text") return;
+
+    const itemWidth = textBlock.items[0]?.fullWidth ?? 0;
+    const { lines } = layoutTextLines(textBlock.items, itemWidth + 7);
+    const renderedLines = lines.map((line) =>
+      line.fragments.map((fragment) => fragment.text).join(""),
+    );
+
+    expect(renderedLines).toEqual(["alpha\u200B ", "beta"]);
+  });
+
   it("reserves extra width for note-ref hit areas while keeping plain superscripts lightweight", () => {
     const blocks: Block[] = [
       {
