@@ -165,6 +165,7 @@ describe("PageSliceView", () => {
     );
 
     expect(markup).toContain("> </span>");
+    expect(markup).toContain("white-space:nowrap");
     expect(markup).not.toContain("margin-left");
   });
 

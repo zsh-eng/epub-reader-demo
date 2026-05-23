@@ -440,13 +440,15 @@ export function PageSliceView({
           })
         : slice.lines.map((line, lineIndex) => (
             <Fragment key={`${key}-line-${lineIndex}`}>
-              {renderFragmentSequence(
-                line.fragments,
-                `${key}-line-${lineIndex}`,
-                (fragment) => ({
-                  ...getFragmentTypographyStyle(fragment.font),
-                }),
-              )}
+              <span style={{ whiteSpace: "nowrap" }}>
+                {renderFragmentSequence(
+                  line.fragments,
+                  `${key}-line-${lineIndex}`,
+                  (fragment) => ({
+                    ...getFragmentTypographyStyle(fragment.font),
+                  }),
+                )}
+              </span>
               {lineIndex < slice.lines.length - 1 ? <br /> : null}
             </Fragment>
           ))}
