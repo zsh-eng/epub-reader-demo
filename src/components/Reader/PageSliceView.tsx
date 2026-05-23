@@ -21,6 +21,8 @@ import { Fragment } from "react";
 import { LazyImage } from "./shared/LazyImage";
 
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
+const FONT_SHORTHAND_RE =
+  /^(?:(italic|normal|oblique(?:\s+[-\d.]+deg)?)\s+)?(\d{3}|normal|bold|bolder|lighter)\s+(\d+(?:\.\d+)?)px\s+(.+)$/;
 
 interface PageSliceViewProps {
   slice: PageSlice;
@@ -154,6 +156,48 @@ function getFragmentAnchorData(fragment: PageFragment) {
         }
       : {}),
   };
+}
+
+function getFragmentTypographyStyle(font: string): CSSProperties {
+  const match = FONT_SHORTHAND_RE.exec(font.trim());
+  if (!match) {
+    return {
+      font,
+      lineHeight: "inherit",
+    };
+  }
+
+  const [, fontStyle, fontWeight, fontSizePx, fontFamily] = match;
+
+  // Avoid rendering the CSS font shorthand because it resets line-height before
+  // lineHeight is re-applied, which makes inline line metrics harder to reason
+  // about across browsers.
+  return {
+    fontFamily,
+    fontSize: `${fontSizePx}px`,
+    fontStyle: fontStyle ?? "normal",
+    fontWeight,
+    lineHeight: "inherit",
+  };
+}
+
+function getSliceBaseTypographyStyle(
+  slice: Extract<PageSlice, { type: "text" }>,
+  baseFontSize: number,
+): CSSProperties {
+  const firstTextFragment = slice.lines
+    .flatMap((line) => line.fragments)
+    .find((fragment) => fragment.kind === "text" && fragment.text.length > 0);
+
+  if (!firstTextFragment) {
+    return {
+      fontSize: Math.round(baseFontSize),
+    };
+  }
+
+  const typographyStyle = getFragmentTypographyStyle(firstTextFragment.font);
+  const { lineHeight: _lineHeight, ...fontStyle } = typographyStyle;
+  return fontStyle;
 }
 
 function renderInlineFragment(
@@ -304,10 +348,12 @@ export function PageSliceView({
       // Thus we need to set the `height` property to match the number of lines and line height
       // such that we don't get overflow in these cases.
       style={{
+        // The block's own inline strut participates in native line layout, so
+        // it needs to use the same base font as the rendered text fragments.
+        ...getSliceBaseTypographyStyle(slice, baseFontSize),
         lineHeight: `${slice.lineHeight}px`,
         height: `${slice.lines.length * slice.lineHeight}px`,
         textAlign,
-        fontSize: Math.round(baseFontSize),
       }}
     >
       {slice.renderMode === "manual-justify"
@@ -336,8 +382,7 @@ export function PageSliceView({
                     contentFragments,
                     `${key}-line-${lineIndex}`,
                     (fragment) => ({
-                      font: fragment.font,
-                      lineHeight: "inherit",
+                      ...getFragmentTypographyStyle(fragment.font),
                       marginRight:
                         fragment.marginRightPx !== undefined &&
                         Math.abs(fragment.marginRightPx) > 0.01
@@ -351,8 +396,9 @@ export function PageSliceView({
                       trailingBoundaryFragment,
                       `${key}-line-${lineIndex}-trailing`,
                       {
-                        font: trailingBoundaryFragment.font,
-                        lineHeight: "inherit",
+                        ...getFragmentTypographyStyle(
+                          trailingBoundaryFragment.font,
+                        ),
                       },
                     )
                   : null}
@@ -369,8 +415,7 @@ export function PageSliceView({
                     fragment.leadingGap > 0
                       ? `${fragment.leadingGap}px`
                       : undefined,
-                  font: fragment.font,
-                  lineHeight: "inherit",
+                  ...getFragmentTypographyStyle(fragment.font),
                 }),
               )}
             </Fragment>

@@ -1,7 +1,7 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightToolbarContainer";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
@@ -23,6 +23,7 @@ import {
   collectReaderPageDebugDumpEnvironment,
   serializeReaderPageDebugDump,
   type ReaderPageDebugDump,
+  type ReaderPageDebugDumpEnvironment,
 } from "./debug/page-debug-dump";
 
 export function ReaderDebug() {
@@ -39,6 +40,10 @@ export function ReaderDebug() {
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
   const [loadedDump, setLoadedDump] =
     useState<ReaderPageDebugDump | null>(null);
+  const [measuredPreviewEnvironment, setMeasuredPreviewEnvironment] = useState<{
+    key: string;
+    environment: ReaderPageDebugDumpEnvironment;
+  } | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const stageContentRef = useRef<HTMLDivElement>(null);
   const { createHighlight } = useReaderHighlightActions(bookId);
@@ -70,6 +75,25 @@ export function ReaderDebug() {
     paragraphSpacingFactor,
   });
 
+  const previewMeasureKey = loadedDump
+    ? `dump-${loadedDump.capturedAt}`
+    : [
+        viewport.width,
+        viewport.height,
+        spreadConfig.columns,
+        columnSpacingPx,
+        settings.fontFamily,
+        settings.fontSize,
+        settings.lineHeight,
+        settings.textAlign,
+        paragraphSpacingFactor,
+        pagination.spread?.currentPage ?? "none",
+      ].join("-");
+  const activeMeasuredEnvironment =
+    measuredPreviewEnvironment?.key === previewMeasureKey
+      ? measuredPreviewEnvironment.environment
+      : undefined;
+
   const currentDump = useMemo(() => {
     if (!book || !pagination.spread) return null;
 
@@ -88,18 +112,23 @@ export function ReaderDebug() {
         paddingLeftPx: PAGE_PADDING_X,
         paddingRightPx: PAGE_PADDING_X,
       },
-      environment: collectReaderPageDebugDumpEnvironment({
-        stageSlotElement: previewContainerRef.current,
-        stageContentElement: stageContentRef.current,
-      }),
+      environment:
+        !loadedDump && activeMeasuredEnvironment
+          ? activeMeasuredEnvironment
+          : collectReaderPageDebugDumpEnvironment({
+              stageSlotElement: previewContainerRef.current,
+              stageContentElement: stageContentRef.current,
+            }),
       chapterEntries,
       getBlocks: getChapterBlocks,
     });
   }, [
+    activeMeasuredEnvironment,
     book,
     chapterEntries,
     columnSpacingPx,
     getChapterBlocks,
+    loadedDump,
     pagination.spread,
     paginationConfig,
     settings,
@@ -107,6 +136,24 @@ export function ReaderDebug() {
     spreadConfig,
     viewport,
   ]);
+
+  useLayoutEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const environment = collectReaderPageDebugDumpEnvironment({
+        stageSlotElement: previewContainerRef.current,
+        stageContentElement: stageContentRef.current,
+      });
+
+      if (environment) {
+        setMeasuredPreviewEnvironment({
+          key: previewMeasureKey,
+          environment,
+        });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [previewMeasureKey]);
 
   const chapterAccess = useMemo(
     () => ({
@@ -179,6 +226,13 @@ export function ReaderDebug() {
     onColumnSpacingPxChange: setColumnSpacingPx,
   };
 
+  const previewKey = previewMeasureKey;
+  const loadedDebugDump =
+    loadedDump && activeMeasuredEnvironment
+      ? { ...loadedDump, environment: activeMeasuredEnvironment }
+      : loadedDump;
+  const activeDebugDump = loadedDebugDump ?? currentDump;
+
   const debugSectionProps = {
     tracer: pagination.tracer,
     paginationStatus: pagination.status,
@@ -186,10 +240,10 @@ export function ReaderDebug() {
     viewport,
     sourceLoadWallClockMs,
     sourceLoadKind,
-    currentDump,
-    loadedDump,
+    currentDump: activeDebugDump,
+    loadedDump: loadedDebugDump,
     onCopyCurrentDump: async () => {
-      if (!currentDump) {
+      if (!activeDebugDump) {
         toast({
           title: "Dump unavailable",
           description: "Wait for pagination to render a page, then try again.",
@@ -200,7 +254,7 @@ export function ReaderDebug() {
 
       try {
         await navigator.clipboard.writeText(
-          serializeReaderPageDebugDump(currentDump),
+          serializeReaderPageDebugDump(activeDebugDump),
         );
 
         toast({
@@ -237,9 +291,6 @@ export function ReaderDebug() {
     paddingLeftPx: PAGE_PADDING_X,
     paddingRightPx: PAGE_PADDING_X,
   };
-  const previewKey = loadedDump
-    ? `dump-${loadedDump.capturedAt}`
-    : `${viewport.width}-${viewport.height}-${spreadConfig.columns}-${columnSpacingPx}-${settings.textAlign}`;
 
   return (
     <div className="flex h-screen flex-col bg-background text-foreground">

@@ -9,6 +9,9 @@ import { useState, useSyncExternalStore } from "react";
 import {
   parseReaderPageDebugDump,
   type ReaderPageDebugDump,
+  type ReaderPageDebugDumpInlineStyleSummary,
+  type ReaderPageDebugDumpVisualLineDetail,
+  type ReaderPageDebugDumpVisualLineStyleSample,
 } from "../debug/page-debug-dump";
 import { InspectorSection } from "./InspectorSection";
 
@@ -93,6 +96,217 @@ function formatOverflow(value: number | null | undefined): string {
   return `+${formatPx(value)}`;
 }
 
+function formatDelta(value: number | null | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "n/a";
+  if (value === 0) return "0px";
+  return `${value > 0 ? "+" : ""}${formatPx(value)}`;
+}
+
+function formatLineStyle(
+  sample: ReaderPageDebugDumpVisualLineStyleSample,
+  styleCount: number,
+) {
+  const stylePrefix = sample.fontStyle === "normal" ? "" : `${sample.fontStyle} `;
+  const extraCount = styleCount > 1 ? ` +${styleCount - 1}` : "";
+
+  return `${sample.fontSize} ${stylePrefix}${sample.fontWeight} ${sample.fontFamily}${extraCount}`;
+}
+
+function formatInlineLineHeights(
+  summaries: ReaderPageDebugDumpInlineStyleSummary[],
+) {
+  if (summaries.length === 0) return "n/a";
+
+  const lineHeights = new Map<string, number>();
+  for (const summary of summaries) {
+    lineHeights.set(
+      summary.lineHeight,
+      (lineHeights.get(summary.lineHeight) ?? 0) + summary.textNodeCount,
+    );
+  }
+
+  return [...lineHeights.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([lineHeight, count]) => `${lineHeight} x ${count}`)
+    .join(" / ");
+}
+
+function formatInlineStyleCount(
+  summaries: ReaderPageDebugDumpInlineStyleSummary[],
+) {
+  if (summaries.length === 0) return "n/a";
+
+  const styleCount = summaries.length;
+  const primary = summaries[0];
+  if (!primary) return "n/a";
+
+  const extraCount = styleCount > 1 ? ` +${styleCount - 1}` : "";
+  return `${primary.fontSize} ${primary.fontWeight} ${primary.fontFamily}${extraCount}`;
+}
+
+function formatComputedFont(
+  style:
+    | {
+        fontFamily: string;
+        fontSize: string;
+        fontWeight: string;
+        lineHeight: string;
+      }
+    | null
+    | undefined,
+) {
+  if (!style) return "n/a";
+  return `${style.fontSize} ${style.fontWeight} ${style.fontFamily} / lh ${style.lineHeight}`;
+}
+
+function DebugTextSample({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <span className="text-muted-foreground">{label}</span>
+      <p className="break-words rounded-sm bg-muted/50 p-1 text-[10px] leading-snug text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+type DebugDumpPageSlot = NonNullable<
+  ReaderPageDebugDump["environment"]
+>["pageSlots"][number];
+
+function sumKnownNumbers(values: Array<number | null | undefined>): number {
+  return values.reduce<number>(
+    (sum, value) =>
+      typeof value === "number" && Number.isFinite(value) ? sum + value : sum,
+    0,
+  );
+}
+
+function getPrimaryPageSlot(
+  dump: ReaderPageDebugDump,
+  pageSlots: DebugDumpPageSlot[],
+) {
+  return (
+    pageSlots.find((pageSlot) => pageSlot.currentPage === dump.page.currentPage) ??
+    pageSlots[0]
+  );
+}
+
+function getPageSliceSummary(pageSlot: DebugDumpPageSlot | undefined) {
+  const slices = pageSlot?.slices ?? [];
+  const textSlices = slices.filter((slice) => slice.type === "text");
+  const expectedSliceHeight = sumKnownNumbers(
+    slices.map((slice) => slice.expectedHeight),
+  );
+  const expectedTextHeight = sumKnownNumbers(
+    textSlices.map((slice) => slice.expectedHeight),
+  );
+  const renderedTextHeight = sumKnownNumbers(
+    textSlices.map((slice) => slice.metrics.scrollHeight),
+  );
+  const expectedTextLines = sumKnownNumbers(
+    textSlices.map((slice) => slice.lineCount),
+  );
+  const visualLineValues = textSlices.map(
+    (slice) => slice.visualLines?.lineCount,
+  );
+  const visualTextLines =
+    visualLineValues.some((value) => typeof value === "number")
+      ? sumKnownNumbers(visualLineValues)
+      : null;
+  const overflowingTextSlices = textSlices.filter(
+    (slice) => slice.metrics.overflowY > 0,
+  );
+
+  return {
+    totalSlices: slices.length,
+    textSliceCount: textSlices.length,
+    expectedSliceHeight,
+    expectedTextHeight,
+    renderedTextHeight,
+    expectedTextLines,
+    visualTextLines,
+    overflowingTextSliceCount: overflowingTextSlices.length,
+    textSliceOverflow: sumKnownNumbers(
+      textSlices.map((slice) => Math.max(0, slice.metrics.overflowY)),
+    ),
+  };
+}
+
+function getSliceSuspectScore(
+  slice: DebugDumpPageSlot["slices"][number],
+  pageContent: DebugDumpPageSlot["contentMetrics"] | undefined,
+) {
+  const extraDomLines =
+    slice.lineCount !== null && slice.visualLines
+      ? Math.max(0, slice.visualLines.lineCount - slice.lineCount)
+      : 0;
+  const overflow = Math.max(0, slice.metrics.overflowY);
+  const bottomCrossing = pageContent
+    ? Math.max(0, slice.metrics.rect.bottom - pageContent.rect.bottom)
+    : 0;
+
+  return extraDomLines * 1_000 + overflow * 10 + bottomCrossing;
+}
+
+function getSuspectSlice(
+  pageSlot: DebugDumpPageSlot | undefined,
+  pageContent: DebugDumpPageSlot["contentMetrics"] | undefined,
+) {
+  return (pageSlot?.slices ?? [])
+    .map((slice) => ({
+      slice,
+      score: getSliceSuspectScore(slice, pageContent),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)[0]?.slice ?? null;
+}
+
+function VisualLineDiagnostic({
+  line,
+}: {
+  line: ReaderPageDebugDumpVisualLineDetail;
+}) {
+  const primaryStyle = line.styleSamples[0];
+
+  return (
+    <>
+      <KVRow
+        label="Worst Line"
+        value={`#${line.index + 1} ${line.issue}`}
+      />
+      <KVRow
+        label="Line Geometry"
+        value={`h ${formatPx(line.height)} / stride ${formatPx(
+          line.strideToNext,
+        )}`}
+      />
+      <KVRow
+        label="Line Delta"
+        value={`h ${formatDelta(line.heightDelta)} / stride ${formatDelta(
+          line.strideDelta,
+        )} / bottom ${formatDelta(line.bottomDelta)}`}
+      />
+      {primaryStyle ? (
+        <KVRow
+          label="Line Font"
+          value={formatLineStyle(primaryStyle, line.styleSamples.length)}
+        />
+      ) : null}
+      {line.textSample ? (
+        <DebugTextSample label="Line Text" value={line.textSample} />
+      ) : null}
+    </>
+  );
+}
+
 function DebugDumpEnvironmentSummary({
   dump,
 }: {
@@ -101,18 +315,10 @@ function DebugDumpEnvironmentSummary({
   const environment = dump.environment;
   if (!environment) return null;
 
-  const firstPage = environment.pageSlots[0];
-  const firstPageContent = firstPage?.contentMetrics;
-  const overflowingSlice = firstPage?.slices.find(
-    (slice) => slice.metrics.overflowY > 0,
-  );
-  const bottomCrossingSlice =
-    !overflowingSlice && firstPageContent
-      ? firstPage?.slices.find(
-          (slice) => slice.metrics.rect.bottom > firstPageContent.rect.bottom,
-        )
-      : null;
-  const suspectSlice = overflowingSlice ?? bottomCrossingSlice ?? null;
+  const primaryPage = getPrimaryPageSlot(dump, environment.pageSlots);
+  const pageSliceSummary = getPageSliceSummary(primaryPage);
+  const primaryPageContent = primaryPage?.contentMetrics;
+  const suspectSlice = getSuspectSlice(primaryPage, primaryPageContent);
 
   return (
     <div className="space-y-0.5 rounded-md border border-border/60 bg-background/60 p-2">
@@ -169,32 +375,60 @@ function DebugDumpEnvironmentSummary({
       <KVRow
         label="Page Slot"
         value={
-          firstPage
-            ? `${firstPage.metrics.clientWidth} x ${firstPage.metrics.clientHeight}`
+          primaryPage
+            ? `${primaryPage.metrics.clientWidth} x ${primaryPage.metrics.clientHeight}`
             : "n/a"
         }
       />
       <KVRow
         label="Page Overflow"
-        value={formatOverflow(firstPage?.metrics.overflowY)}
+        value={formatOverflow(primaryPage?.metrics.overflowY)}
       />
       <KVRow
         label="Page Content"
         value={
-          firstPageContent
-            ? `${firstPageContent.clientWidth} x ${firstPageContent.clientHeight}`
+          primaryPageContent
+            ? `${primaryPageContent.clientWidth} x ${primaryPageContent.clientHeight}`
             : "n/a"
         }
       />
       <KVRow
-        label="Text Overflow"
-        value={formatOverflow(firstPageContent?.overflowY)}
+        label="Content Overflow"
+        value={formatOverflow(primaryPageContent?.overflowY)}
+      />
+      <KVRow
+        label="Page Slices"
+        value={`${pageSliceSummary.totalSlices} (${pageSliceSummary.textSliceCount} text)`}
+      />
+      <KVRow
+        label="Modeled Slices"
+        value={`${formatPx(pageSliceSummary.expectedSliceHeight)} / ${formatPx(
+          primaryPageContent?.clientHeight,
+        )}`}
+      />
+      <KVRow
+        label="Text Lines"
+        value={`${pageSliceSummary.expectedTextLines} expected / ${
+          pageSliceSummary.visualTextLines ?? "n/a"
+        } DOM`}
+      />
+      <KVRow
+        label="Text Height"
+        value={`${formatPx(pageSliceSummary.expectedTextHeight)} / ${formatPx(
+          pageSliceSummary.renderedTextHeight,
+        )}`}
+      />
+      <KVRow
+        label="Text Slice Overflow"
+        value={`${formatOverflow(pageSliceSummary.textSliceOverflow)} across ${
+          pageSliceSummary.overflowingTextSliceCount
+        }`}
       />
       {suspectSlice ? (
         <>
           <div className="my-1 border-t border-border/50" />
           <KVRow
-            label="Slice"
+            label="Suspect Slice"
             value={`${suspectSlice.sliceIndex} ${suspectSlice.type}`}
           />
           <KVRow
@@ -208,6 +442,14 @@ function DebugDumpEnvironmentSummary({
             }
           />
           <KVRow
+            label="DOM Lines"
+            value={
+              suspectSlice.visualLines
+                ? `${suspectSlice.visualLines.lineCount} lines (${suspectSlice.visualLines.rectCount} rects)`
+                : "n/a"
+            }
+          />
+          <KVRow
             label="Slice Height"
             value={`${formatPx(suspectSlice.expectedHeight)} / ${formatPx(
               suspectSlice.metrics.rect.height,
@@ -217,6 +459,49 @@ function DebugDumpEnvironmentSummary({
             label="Slice Overflow"
             value={formatOverflow(suspectSlice.metrics.overflowY)}
           />
+          <KVRow
+            label="Container Font"
+            value={formatComputedFont(suspectSlice.containerStyle)}
+          />
+          <KVRow
+            label="Inline LH"
+            value={formatInlineLineHeights(suspectSlice.inlineStyles ?? [])}
+          />
+          <KVRow
+            label="Inline Styles"
+            value={formatInlineStyleCount(suspectSlice.inlineStyles ?? [])}
+          />
+          {suspectSlice.visualLines?.worstLine ? (
+            <VisualLineDiagnostic line={suspectSlice.visualLines.worstLine} />
+          ) : null}
+          {suspectSlice.lineProbe ? (
+            <>
+              <KVRow
+                label="Probe Lines"
+                value={`${suspectSlice.lineProbe.sampleLineCount} x ${formatPx(
+                  suspectSlice.lineProbe.lineHeightPx,
+                )}`}
+              />
+              <KVRow
+                label="Probe Height"
+                value={`${formatPx(
+                  suspectSlice.lineProbe.expectedHeight,
+                )} / ${formatPx(
+                  suspectSlice.lineProbe.metrics.scrollHeight,
+                )}`}
+              />
+              <KVRow
+                label="Probe Overflow"
+                value={`${formatOverflow(
+                  suspectSlice.lineProbe.metrics.overflowY,
+                )} (${formatPx(suspectSlice.lineProbe.overflowPerLine)}/line)`}
+              />
+              <KVRow
+                label="Probe Font"
+                value={`${suspectSlice.lineProbe.fontSize} ${suspectSlice.lineProbe.fontFamily}`}
+              />
+            </>
+          ) : null}
         </>
       ) : null}
     </div>
@@ -239,6 +524,7 @@ function DebugDumpControls({
 >) {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const activeDump = loadedDump ?? currentDump;
 
   if (
     !currentDump &&
@@ -283,8 +569,15 @@ function DebugDumpControls({
           ) : null}
         </div>
 
-        {currentDump ? <DebugDumpSummary dump={currentDump} /> : null}
-        {currentDump ? <DebugDumpEnvironmentSummary dump={currentDump} /> : null}
+        {activeDump ? (
+          <div className="space-y-1">
+            <span className="text-muted-foreground">
+              {loadedDump ? "Loaded Dump" : "Live Dump"}
+            </span>
+            <DebugDumpSummary dump={activeDump} />
+            <DebugDumpEnvironmentSummary dump={activeDump} />
+          </div>
+        ) : null}
 
         {onLoadDump ? (
           <div className="space-y-2">
@@ -323,13 +616,6 @@ function DebugDumpControls({
           </div>
         ) : null}
 
-        {loadedDump ? (
-          <div className="space-y-1">
-            <span className="text-muted-foreground">Loaded Dump</span>
-            <DebugDumpSummary dump={loadedDump} />
-            <DebugDumpEnvironmentSummary dump={loadedDump} />
-          </div>
-        ) : null}
       </div>
     </>
   );
