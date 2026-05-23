@@ -1,4 +1,4 @@
-import { chromium } from "@playwright/test";
+import { chromium, type Page } from "@playwright/test";
 import { spawn, type Subprocess } from "bun";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,8 +8,10 @@ interface CliOptions {
   from?: number;
   to?: number;
   chapter?: number;
+  pagesFromReport?: string;
   out?: string;
   dumpOut?: string;
+  dumpsDir?: string;
   stopOnFirstFailure: boolean;
   includeDumps: boolean;
   headed: boolean;
@@ -59,8 +61,10 @@ Options:
   --from <page>              First global page to scan. Defaults to 1.
   --to <page>                Last global page to scan. Defaults to all pages.
   --chapter <index>          Scan a zero-based chapter index instead of a page range.
+  --pages-from-report <path> Scan the failed pages listed in a previous report.
   --out <path>               Write compact JSON report to this path.
   --dump-out <path>          Write the first failing full Reader Page Debug Dump.
+  --dumps-dir <path>         Write one full Reader Page Debug Dump per failing page.
   --stop-on-first-failure    Stop scanning after the first failing page.
   --include-dumps            Include full dumps for all failures in the JSON report.
   --url <url>                Existing diagnostic route URL. Defaults to ${DEFAULT_URL}.
@@ -130,12 +134,20 @@ function parseArgs(args: string[]): CliOptions {
         );
         index += 1;
         break;
+      case "--pages-from-report":
+        options.pagesFromReport = readOptionValue(args, index, arg);
+        index += 1;
+        break;
       case "--out":
         options.out = readOptionValue(args, index, arg);
         index += 1;
         break;
       case "--dump-out":
         options.dumpOut = readOptionValue(args, index, arg);
+        index += 1;
+        break;
+      case "--dumps-dir":
+        options.dumpsDir = readOptionValue(args, index, arg);
         index += 1;
         break;
       case "--url":
@@ -178,6 +190,23 @@ function parseArgs(args: string[]): CliOptions {
 
 async function ensureParentDirectory(filePath: string): Promise<void> {
   await mkdir(path.dirname(path.resolve(filePath)), { recursive: true });
+}
+
+async function readFailedPagesFromReport(reportPath: string): Promise<number[]> {
+  const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+    scan?: {
+      failures?: Array<{ page?: unknown }>;
+    };
+  };
+  const pages = new Set<number>();
+
+  for (const failure of report.scan?.failures ?? []) {
+    if (typeof failure.page === "number" && Number.isInteger(failure.page)) {
+      pages.add(failure.page);
+    }
+  }
+
+  return [...pages].sort((a, b) => a - b);
 }
 
 async function waitForHttpOk(url: string, timeoutMs: number): Promise<void> {
@@ -249,6 +278,48 @@ function compactScanResult(scan: DiagnosticScanResult) {
   };
 }
 
+async function scanSpecificPages(options: {
+  page: Page;
+  pages: number[];
+  stopOnFirstFailure: boolean;
+  includeDumps: boolean;
+  timeoutMs: number;
+}): Promise<DiagnosticScanResult> {
+  const { page, ...scanOptions } = options;
+
+  return page.evaluate(async (scanOptions) => {
+    const harness = window.__EPUB_READER_DIAGNOSTICS__;
+    const state = harness.getState();
+    const failures = [];
+    let pagesScanned = 0;
+
+    for (const pageNumber of scanOptions.pages) {
+      const dump = await harness.goToPage(pageNumber, {
+        timeoutMs: scanOptions.timeoutMs,
+      });
+      const validation = harness.validateCurrentPage();
+      pagesScanned += 1;
+
+      if (validation.ok) continue;
+
+      failures.push({
+        page: pageNumber,
+        validation,
+        ...(scanOptions.includeDumps || failures.length === 0 ? { dump } : {}),
+      });
+
+      if (scanOptions.stopOnFirstFailure) break;
+    }
+
+    return {
+      ok: failures.length === 0,
+      pagesScanned,
+      totalPages: state.totalPages,
+      failures,
+    };
+  }, scanOptions);
+}
+
 async function main() {
   const options = parseArgs(Bun.argv.slice(2));
   const server = startDevServerIfNeeded(options);
@@ -293,25 +364,38 @@ async function main() {
       const state = await page.evaluate(() =>
         window.__EPUB_READER_DIAGNOSTICS__.getState(),
       );
-      const scan = await page.evaluate(async (scanOptions) => {
-        const harness = window.__EPUB_READER_DIAGNOSTICS__;
-        if (scanOptions.chapter !== undefined) {
-          return harness.scanChapter({
-            chapterIndex: scanOptions.chapter,
-            stopOnFirstFailure: scanOptions.stopOnFirstFailure,
-            includeDumps: scanOptions.includeDumps,
-            timeoutMs: scanOptions.timeoutMs,
-          });
-        }
+      const pagesFromReport = options.pagesFromReport
+        ? await readFailedPagesFromReport(options.pagesFromReport)
+        : null;
+      const scan = pagesFromReport
+        ? await scanSpecificPages({
+            page,
+            pages: pagesFromReport,
+            stopOnFirstFailure: options.stopOnFirstFailure,
+            includeDumps: options.includeDumps || Boolean(options.dumpsDir),
+            timeoutMs: options.timeoutMs,
+          })
+        : await page.evaluate(async (scanOptions) => {
+            const harness = window.__EPUB_READER_DIAGNOSTICS__;
+            if (scanOptions.chapter !== undefined) {
+              return harness.scanChapter({
+                chapterIndex: scanOptions.chapter,
+                stopOnFirstFailure: scanOptions.stopOnFirstFailure,
+                includeDumps:
+                  scanOptions.includeDumps || Boolean(scanOptions.dumpsDir),
+                timeoutMs: scanOptions.timeoutMs,
+              });
+            }
 
-        return harness.scanPages({
-          from: scanOptions.from,
-          to: scanOptions.to,
-          stopOnFirstFailure: scanOptions.stopOnFirstFailure,
-          includeDumps: scanOptions.includeDumps,
-          timeoutMs: scanOptions.timeoutMs,
-        });
-      }, options);
+            return harness.scanPages({
+              from: scanOptions.from,
+              to: scanOptions.to,
+              stopOnFirstFailure: scanOptions.stopOnFirstFailure,
+              includeDumps:
+                scanOptions.includeDumps || Boolean(scanOptions.dumpsDir),
+              timeoutMs: scanOptions.timeoutMs,
+            });
+          }, options);
 
       const report = {
         epub: path.resolve(options.epub),
@@ -334,6 +418,18 @@ async function main() {
             options.dumpOut,
             `${JSON.stringify(firstDump, null, 2)}\n`,
           );
+        }
+      }
+
+      if (options.dumpsDir) {
+        await mkdir(options.dumpsDir, { recursive: true });
+        for (const failure of scan.failures) {
+          if (!failure.dump) continue;
+          const dumpPath = path.join(
+            options.dumpsDir,
+            `page-${String(failure.page).padStart(4, "0")}.json`,
+          );
+          await writeFile(dumpPath, `${JSON.stringify(failure.dump, null, 2)}\n`);
         }
       }
 
