@@ -1,10 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import type {
   PaginationTracer,
   PaginationTracerSnapshot,
 } from "@/lib/pagination-v2";
-import { ClipboardCopy, RotateCcw, Upload } from "lucide-react";
+import { ClipboardCopy, ClipboardPaste, RotateCcw } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import {
   parseReaderPageDebugDump,
@@ -522,8 +521,8 @@ function DebugDumpControls({
   | "onLoadDump"
   | "onClearLoadedDump"
 >) {
-  const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isLoadingClipboard, setIsLoadingClipboard] = useState(false);
   const activeDump = loadedDump ?? currentDump;
 
   if (
@@ -535,17 +534,22 @@ function DebugDumpControls({
     return null;
   }
 
-  const handleLoadDump = () => {
+  const handleLoadDumpFromClipboard = async () => {
+    setIsLoadingClipboard(true);
+
     try {
-      const dump = parseReaderPageDebugDump(draft);
+      const clipboardText = await navigator.clipboard.readText();
+      const dump = parseReaderPageDebugDump(clipboardText);
       onLoadDump?.(dump);
       setError(null);
     } catch (loadError) {
       setError(
         loadError instanceof Error
           ? loadError.message
-          : "Could not parse reader debug dump.",
+          : "Could not read a reader debug dump from the clipboard.",
       );
+    } finally {
+      setIsLoadingClipboard(false);
     }
   };
 
@@ -581,22 +585,16 @@ function DebugDumpControls({
 
         {onLoadDump ? (
           <div className="space-y-2">
-            <Textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Paste a reader page debug dump..."
-              className="h-40 min-h-40 resize-y overflow-y-auto bg-background/60 font-mono text-[11px]"
-            />
             <div className="flex gap-2">
               <Button
                 variant="secondary"
                 size="sm"
                 className="h-7 px-2 text-[11px]"
-                disabled={draft.trim().length === 0}
-                onClick={handleLoadDump}
+                disabled={isLoadingClipboard}
+                onClick={handleLoadDumpFromClipboard}
               >
-                <Upload className="size-3" />
-                Load
+                <ClipboardPaste className="size-3" />
+                {isLoadingClipboard ? "Loading..." : "Paste & Load"}
               </Button>
               {loadedDump && onClearLoadedDump ? (
                 <Button
