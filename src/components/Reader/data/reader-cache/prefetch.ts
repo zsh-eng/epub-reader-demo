@@ -56,7 +56,7 @@ export async function prefetchReaderBook(
 
   if (chapterEntries.length === 0) return;
 
-  const bodyCacheKey = readerBodyCacheKeys.book(book.id, book.fileHash);
+  const bodyCacheKey = readerBodyCacheKeys.book(book.id, book.fileHash, false);
   const checkpointKey = readerCheckpointKeys.currentDevice(book.id);
   const highlightsKey = highlightKeys.book(book.id);
 
@@ -80,6 +80,7 @@ export async function prefetchReaderBook(
           bookId: book.id,
           fileHash: book.fileHash,
           chapterEntries,
+          publisherBookStylingEnabled: false,
         }),
       staleTime: Infinity,
       gcTime: Infinity,
@@ -138,11 +139,13 @@ export async function prefetchReaderBook(
         chapterIndex,
         chapter.spineItemId,
         highlightSignature,
+        false,
       ),
       queryFn: () =>
         buildReaderChapterArtifact({
           baseContent,
           highlights: chapterHighlights,
+          publisherBookStylingEnabled: false,
         }),
       staleTime: Infinity,
       gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,

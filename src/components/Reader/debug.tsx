@@ -86,6 +86,7 @@ export function ReaderDebug() {
         settings.fontSize,
         settings.lineHeight,
         settings.textAlign,
+        settings.publisherBookStylingEnabled,
         paragraphSpacingFactor,
         pagination.spread?.currentPage ?? "none",
       ].join("-");
@@ -185,6 +186,8 @@ export function ReaderDebug() {
     chapterEntries,
     chapterAccess,
     fontConfig: paginationConfig.fontConfig,
+    publisherBookStylingEnabled:
+      paginationConfig.publisherBookStylingEnabled ?? false,
     highlights: bookHighlights,
     onCreateHighlight: createHighlight,
   });

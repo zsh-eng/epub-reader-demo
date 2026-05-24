@@ -47,6 +47,10 @@ import {
   EPUB_LINK,
 } from "@/types/reader.types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
+import {
+  createPublisherStyleResolver,
+  type PublisherStyleResolver,
+} from "./publisher-styles";
 import type {
   Block,
   BlockTag,
@@ -54,6 +58,11 @@ import type {
   HighlightMark,
   InlineRun,
   LinkRef,
+  PublisherFontFace,
+  PublisherInlineStyle,
+  PublisherStylesheet,
+  PublisherStyleOptions,
+  PublisherTextStyle,
   TextBlock,
 } from "./types";
 
@@ -103,9 +112,15 @@ interface InlineContext {
   bold: boolean;
   italic: boolean;
   isCode: boolean;
+  publisherInlineStyle?: PublisherInlineStyle;
+  inlineStylePolicy?: InlineStylePolicy;
   inlineRole?: InlineRun["inlineRole"];
   link?: LinkRef;
   highlightMarks: HighlightMark[];
+}
+
+interface InlineStylePolicy {
+  resolve: (element: Element) => PublisherInlineStyle | undefined;
 }
 
 const DEFAULT_CONTEXT: InlineContext = {
@@ -157,12 +172,29 @@ function targetIdsMatch(
   return true;
 }
 
+function publisherInlineStylesMatch(
+  a: PublisherInlineStyle | undefined,
+  b: PublisherInlineStyle | undefined,
+): boolean {
+  return (
+    a?.fontFamily === b?.fontFamily &&
+    a?.fontScale === b?.fontScale &&
+    a?.fontWeight === b?.fontWeight &&
+    a?.fontStyle === b?.fontStyle &&
+    a?.displayBlock === b?.displayBlock
+  );
+}
+
 function runsMatch(a: InlineRun, b: InlineRun): boolean {
   return (
     (a.hardBreak ?? false) === (b.hardBreak ?? false) &&
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.isCode === b.isCode &&
+    publisherInlineStylesMatch(
+      a.publisherInlineStyle,
+      b.publisherInlineStyle,
+    ) &&
     a.inlineRole === b.inlineRole &&
     linksMatch(a.link, b.link) &&
     targetIdsMatch(a.targetIds, b.targetIds) &&
@@ -192,6 +224,9 @@ function createTextRun(
     bold: ctx.bold,
     italic: ctx.italic,
     isCode: ctx.isCode,
+    ...(ctx.publisherInlineStyle
+      ? { publisherInlineStyle: ctx.publisherInlineStyle }
+      : {}),
     ...(ctx.inlineRole ? { inlineRole: ctx.inlineRole } : {}),
     ...(ctx.link ? { link: { ...ctx.link } } : {}),
     ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
@@ -279,6 +314,31 @@ function attachTargetsToLastRun(
 interface InlineExtractionResult {
   runs: InlineRun[];
   trailingTargets: string[];
+  breakBefore?: boolean;
+  breakAfter?: boolean;
+}
+
+function createHardBreakRun(ctx: InlineContext): InlineRun {
+  const run = createTextRun("\n", ctx);
+  run.hardBreak = true;
+  return run;
+}
+
+function hasContentRun(runs: InlineRun[]): boolean {
+  return runs.some((run) => run.hardBreak === true || run.text.length > 0);
+}
+
+function lastRunIsHardBreak(runs: InlineRun[]): boolean {
+  return runs[runs.length - 1]?.hardBreak === true;
+}
+
+function prependHardBreakToRuns(runs: InlineRun[]): boolean {
+  const firstTextRun = runs.find((run) => run.text.length > 0);
+  if (!firstTextRun) return false;
+
+  firstTextRun.text = `\n${firstTextRun.text}`;
+  firstTextRun.hardBreak = true;
+  return true;
 }
 
 function extractInlineNodes(
@@ -288,13 +348,28 @@ function extractInlineNodes(
 ): InlineExtractionResult {
   const runs: InlineRun[] = [];
   let trailingTargets = [...pendingTargets];
+  let pendingDisplayBlockBreak = false;
 
   for (const node of nodes) {
     const result = extractInlineNode(node, ctx, trailingTargets);
+    const hasResultContent = hasContentRun(result.runs);
+    const shouldInsertBreakBefore =
+      hasResultContent &&
+      runs.length > 0 &&
+      !lastRunIsHardBreak(runs) &&
+      (pendingDisplayBlockBreak || result.breakBefore === true);
+    if (shouldInsertBreakBefore) {
+      const didPrependBreak = prependHardBreakToRuns(result.runs);
+      if (!didPrependBreak) {
+        appendTextRun(runs, createHardBreakRun(ctx));
+      }
+    }
+
     for (const run of result.runs) {
       appendTextRun(runs, run);
     }
     trailingTargets = result.trailingTargets;
+    pendingDisplayBlockBreak = hasResultContent && result.breakAfter === true;
   }
 
   if (
@@ -359,6 +434,10 @@ function extractInlineNode(
     ...ctx,
     highlightMarks: [...ctx.highlightMarks],
   };
+  const publisherInlineStyle = ctx.inlineStylePolicy?.resolve(node);
+  if (publisherInlineStyle) {
+    next.publisherInlineStyle = publisherInlineStyle;
+  }
 
   const highlightMark = readHighlightMark(node);
   if (highlightMark) {
@@ -391,7 +470,14 @@ function extractInlineNode(
   }
   if (tag === "code" || tag === "kbd" || tag === "samp") next.isCode = true;
 
-  return extractInlineNodes(Array.from(node.childNodes), next, targetIds);
+  const result = extractInlineNodes(Array.from(node.childNodes), next, targetIds);
+  if (!publisherInlineStyle?.displayBlock) return result;
+
+  return {
+    ...result,
+    breakBefore: true,
+    breakAfter: true,
+  };
 }
 
 function parseNumeric(value: string | null): number | null {
@@ -459,15 +545,47 @@ function createImageBlock(
   };
 }
 
+function shouldPreservePublisherInlineStyles(
+  publisherStyle: PublisherTextStyle | undefined,
+): boolean {
+  if (!publisherStyle) return false;
+  return publisherStyle.role !== "body" && publisherStyle.role !== "list";
+}
+
+function createPublisherInlineStylePolicy(
+  publisherStyle: PublisherTextStyle | undefined,
+  publisherStyleResolver: PublisherStyleResolver | null,
+): InlineStylePolicy | undefined {
+  if (
+    !publisherStyleResolver ||
+    !shouldPreservePublisherInlineStyles(publisherStyle)
+  ) {
+    return undefined;
+  }
+
+  return {
+    resolve: (element) => publisherStyleResolver.resolveInlineStyle(element),
+  };
+}
+
 function createTextBlock(
   element: Element,
   tag: BlockTag,
   id: string,
   targetIds: string[] = [],
+  publisherStyleResolver: PublisherStyleResolver | null = null,
 ): TextBlock | null {
+  const publisherStyle = publisherStyleResolver?.resolveTextStyle(element, tag);
+  const inlineStylePolicy = createPublisherInlineStylePolicy(
+    publisherStyle,
+    publisherStyleResolver,
+  );
   const result = extractInlineNodes(
     Array.from(element.childNodes),
-    DEFAULT_CONTEXT,
+    {
+      ...DEFAULT_CONTEXT,
+      ...(inlineStylePolicy ? { inlineStylePolicy } : {}),
+    },
   );
   const hasRenderableText = result.runs.some(
     (run) => run.hardBreak === true || run.text.trim().length > 0,
@@ -484,6 +602,7 @@ function createTextBlock(
     id,
     tag,
     ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
+    ...(publisherStyle ? { publisherStyle } : {}),
     runs: result.runs.filter((run) => run.text.length > 0),
   };
 }
@@ -513,6 +632,7 @@ interface ParseChapterContext {
   counter: { value: number };
   currentCanonicalOffset: number;
   blockStarts: Map<string, number> | null;
+  publisherStyleResolver: PublisherStyleResolver | null;
 }
 
 function attachTargetsToBlock(block: Block, targetIds: string[]): void {
@@ -542,16 +662,47 @@ function recordBlockStart(
   context.blockStarts?.set(blockId, offset);
 }
 
-function parseChapterHtmlInternal(html: string): {
+export interface ParseChapterHtmlOptions extends PublisherStyleOptions {
+  publisherStylesheets?: PublisherStylesheet[];
+  publisherFontFaces?: PublisherFontFace[];
+}
+
+function hasBlockChildren(element: Element): boolean {
+  return Array.from(element.children).some((child) =>
+    BLOCK_TAGS.has(child.tagName.toLowerCase()),
+  );
+}
+
+function attachPublisherFontFaces(
+  blocks: Block[],
+  publisherFontFaces: PublisherFontFace[] | undefined,
+): void {
+  if (!publisherFontFaces || publisherFontFaces.length === 0) return;
+
+  const firstTextBlock = blocks.find(
+    (block): block is TextBlock => block.type === "text",
+  );
+  if (!firstTextBlock) return;
+  firstTextBlock.publisherFontFaces = publisherFontFaces;
+}
+
+function parseChapterHtmlInternal(
+  html: string,
+  options: ParseChapterHtmlOptions = {},
+): {
   blocks: Block[];
   canonicalText: ChapterCanonicalText;
 } {
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<body>${html}</body>`, "text/html");
+  const publisherStyleResolver = options.publisherBookStylingEnabled
+    ? createPublisherStyleResolver(doc, options.publisherStylesheets ?? [])
+    : null;
   const context: ParseChapterContext = {
     counter: { value: 1 },
     currentCanonicalOffset: 0,
     blockStarts: new Map<string, number>(),
+    publisherStyleResolver,
   };
 
   function walkChildren(nodes: Node[], pendingTargets: string[]): WalkResult {
@@ -590,6 +741,7 @@ function parseChapterHtmlInternal(html: string): {
         "p",
         `text-${context.counter.value++}`,
         pendingTargets,
+        context.publisherStyleResolver,
       );
       if (block) {
         recordBlockStart(context, block.id, blockStart);
@@ -642,11 +794,26 @@ function parseChapterHtmlInternal(html: string): {
     }
 
     if (BLOCK_TAGS.has(tag)) {
+      if (
+        context.publisherStyleResolver &&
+        tag === "blockquote" &&
+        hasBlockChildren(node)
+      ) {
+        const childrenResult = walkChildren(
+          Array.from(node.childNodes),
+          targetIds,
+        );
+        if (childrenResult.blocks.length > 0) {
+          return childrenResult;
+        }
+      }
+
       const block = createTextBlock(
         node,
         tag as BlockTag,
         `text-${context.counter.value++}`,
         targetIds,
+        context.publisherStyleResolver,
       );
       if (block && hasVisibleInlineText(block)) {
         recordBlockStart(context, block.id, blockStart);
@@ -676,6 +843,7 @@ function parseChapterHtmlInternal(html: string): {
         "p",
         `text-${context.counter.value++}`,
         targetIds,
+        context.publisherStyleResolver,
       );
       if (block) {
         recordBlockStart(context, block.id, blockStart);
@@ -714,6 +882,9 @@ function parseChapterHtmlInternal(html: string): {
       createEmptyTargetBlock(blockId, result.remainingTargets),
     );
   }
+  if (options.publisherBookStylingEnabled) {
+    attachPublisherFontFaces(result.blocks, options.publisherFontFaces);
+  }
 
   return {
     blocks: result.blocks,
@@ -724,13 +895,19 @@ function parseChapterHtmlInternal(html: string): {
   };
 }
 
-export function parseChapterHtmlWithCanonicalText(html: string): {
+export function parseChapterHtmlWithCanonicalText(
+  html: string,
+  options: ParseChapterHtmlOptions = {},
+): {
   blocks: Block[];
   canonicalText: ChapterCanonicalText;
 } {
-  return parseChapterHtmlInternal(html);
+  return parseChapterHtmlInternal(html, options);
 }
 
-export function parseChapterHtml(html: string): Block[] {
-  return parseChapterHtmlInternal(html).blocks;
+export function parseChapterHtml(
+  html: string,
+  options: ParseChapterHtmlOptions = {},
+): Block[] {
+  return parseChapterHtmlInternal(html, options).blocks;
 }

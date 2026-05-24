@@ -76,6 +76,7 @@ interface UseReaderAnnotationsOptions {
   chapterEntries: ChapterEntry[];
   chapterAccess: ReaderSessionChapterAccess;
   fontConfig: FontConfig;
+  publisherBookStylingEnabled: boolean;
   highlights: Highlight[];
   onCreateHighlight: (highlight: Highlight) => void;
 }
@@ -98,6 +99,7 @@ function clearDomSelection(): void {
 function buildPreparedByVisibleChapter(
   spread: ResolvedSpread,
   fontConfig: FontConfig,
+  publisherBookStylingEnabled: boolean,
   chapterAccess: ReaderSessionChapterAccess,
 ): (PreparedBlock[] | null)[] {
   const preparedByChapter: (PreparedBlock[] | null)[] = [];
@@ -110,7 +112,9 @@ function buildPreparedByVisibleChapter(
 
     const chapterBlocks = chapterAccess.getBlocks(chapterIndex);
     preparedByChapter[chapterIndex] = chapterBlocks
-      ? prepareBlocks(chapterBlocks, fontConfig)
+      ? prepareBlocks(chapterBlocks, fontConfig, {
+          publisherBookStylingEnabled,
+        })
       : null;
   }
 
@@ -251,6 +255,7 @@ export function useReaderAnnotations({
   chapterEntries,
   chapterAccess,
   fontConfig,
+  publisherBookStylingEnabled,
   highlights,
   onCreateHighlight,
 }: UseReaderAnnotationsOptions): UseReaderAnnotationsResult {
@@ -290,6 +295,7 @@ export function useReaderAnnotations({
       const preparedByChapter = buildPreparedByVisibleChapter(
         spread,
         fontConfig,
+        publisherBookStylingEnabled,
         chapterAccess,
       );
 
@@ -302,7 +308,14 @@ export function useReaderAnnotations({
         preparedByChapter,
       });
     },
-    [chapterAccess, chapterEntries, fontConfig, spread, stageContentRef],
+    [
+      chapterAccess,
+      chapterEntries,
+      fontConfig,
+      publisherBookStylingEnabled,
+      spread,
+      stageContentRef,
+    ],
   );
 
   useEffect(() => {

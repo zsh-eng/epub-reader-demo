@@ -155,6 +155,7 @@ async function buildDiagnosticReaderSource(
       source: await chapterFile.content.text(),
       mediaType: chapterFile.mediaType,
       chapter,
+      loadResource: async (path) => filesByPath.get(path)?.content ?? null,
     });
     const baseContent = loadBaseChapterContent({
       chapterIndex: chapter.index,
@@ -214,6 +215,8 @@ export function ReaderDiagnostics() {
     [readerLayout.resolvedSpreadColumns],
   );
   const pagination = usePagination({ paginationConfig, spreadConfig });
+  const { addChapter: addPaginationChapter, init: initPagination } =
+    pagination;
   const [sourceState, setSourceState] = useState<DiagnosticSourceState>({
     status: "idle",
   });
@@ -245,7 +248,7 @@ export function ReaderDiagnostics() {
     const firstArtifact = source.artifactsByChapter.get(firstChapter.index);
     if (!firstArtifact) return;
 
-    pagination.init({
+    initPagination({
       totalChapters: source.chapterEntries.length,
       initialChapterIndex: firstChapter.index,
       intent: { kind: "replace" },
@@ -254,9 +257,9 @@ export function ReaderDiagnostics() {
 
     for (const chapter of source.chapterEntries.slice(1)) {
       const artifact = source.artifactsByChapter.get(chapter.index);
-      if (artifact) pagination.addChapter(chapter.index, artifact.blocks);
+      if (artifact) addPaginationChapter(chapter.index, artifact.blocks);
     }
-  }, [pagination.addChapter, pagination.init, sourceState]);
+  }, [addPaginationChapter, initPagination, sourceState]);
 
   const waitForCondition = useCallback(
     async (

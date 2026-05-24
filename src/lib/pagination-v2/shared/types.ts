@@ -30,6 +30,7 @@ export interface TextRun {
   bold: boolean;
   italic: boolean;
   isCode: boolean;
+  publisherInlineStyle?: PublisherInlineStyle;
   inlineRole?: InlineRole;
   link?: LinkRef;
   targetIds?: string[];
@@ -50,6 +51,8 @@ export interface TextBlock {
   id: string;
   tag: BlockTag;
   targetIds?: string[];
+  publisherStyle?: PublisherTextStyle;
+  publisherFontFaces?: PublisherFontFace[];
   runs: InlineRun[];
 }
 
@@ -88,9 +91,70 @@ export interface FontConfig {
   baseSizePx: number;
 }
 
+export type PublisherBlockRole =
+  | "body"
+  | "heading"
+  | "blockquote"
+  | "caption"
+  | "epigraph"
+  | "comment"
+  | "note"
+  | "frontBack"
+  | "list"
+  | "pre";
+
+export interface PublisherTextStyle {
+  role: PublisherBlockRole;
+  fontFamily?: string;
+  fontScale?: number;
+  fontWeight?: number;
+  fontStyle?: "normal" | "italic" | "oblique";
+  lineHeightFactor?: number;
+  textAlign?: "left" | "center" | "right" | "justify";
+  textIndent?: PublisherLength;
+  margin?: PublisherBox;
+}
+
+export interface PublisherInlineStyle {
+  fontFamily?: string;
+  fontScale?: number;
+  fontWeight?: number;
+  fontStyle?: "normal" | "italic" | "oblique";
+  displayBlock?: boolean;
+}
+
+export interface PublisherLength {
+  em?: number;
+  percent?: number;
+}
+
+export interface PublisherBox {
+  before?: PublisherLength;
+  after?: PublisherLength;
+  left?: PublisherLength;
+  right?: PublisherLength;
+}
+
+export interface PublisherStylesheet {
+  cssText: string;
+  basePath: string;
+  resourcePath?: string;
+}
+
+export interface PublisherFontFace {
+  family: string;
+  src: string;
+  descriptors: FontFaceDescriptors;
+}
+
+export interface PublisherStyleOptions {
+  publisherBookStylingEnabled?: boolean;
+}
+
 export interface PreparedTextItem {
   kind: "text";
   font: string;
+  fontScale: number;
   inlineRole?: InlineRole;
   link?: LinkRef;
   targetIds?: string[];
@@ -112,6 +176,7 @@ export interface PreparedTextBlock {
   id: string;
   tag: BlockTag;
   targetIds?: string[];
+  publisherStyle?: PublisherTextStyle;
   items: PreparedInlineItem[];
   containsNewlines: boolean;
 }
@@ -163,6 +228,7 @@ export interface LayoutTheme {
 export interface PaginationConfig {
   fontConfig: FontConfig;
   layoutTheme: LayoutTheme;
+  publisherBookStylingEnabled?: boolean;
   viewport: { width: number; height: number };
 }
 
@@ -192,6 +258,7 @@ export interface PageLine {
   endOffset?: TextCursorOffset;
   isLastInBlock: boolean;
   wordSpacingPx?: number;
+  indentPx?: number;
 }
 
 export type TextRenderMode = "native" | "manual-justify";
@@ -200,9 +267,12 @@ export interface TextSlice {
   type: "text";
   blockId: string;
   tag: BlockTag;
+  publisherStyle?: PublisherTextStyle;
   lineHeight: number;
   textAlign: "left" | "center" | "right" | "justify" | "justify-knuth-plass";
   renderMode: TextRenderMode;
+  marginLeftPx?: number;
+  marginRightPx?: number;
   lines: PageLine[];
 }
 

@@ -39,17 +39,28 @@ function createBook(overrides: Partial<Book> = {}): Book {
 }
 
 function createChapterFile(bookId: string, body: string): BookFile {
-  return {
-    id: `${bookId}:chapter-1`,
+  return createBookFile(
     bookId,
-    path: chapterEntry.href,
-    mediaType: "application/xhtml+xml",
-    content: new NodeBlob(
-      [
-        `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>${body}</body></html>`,
-      ],
-      { type: "application/xhtml+xml" },
-    ) as unknown as Blob,
+    chapterEntry.href,
+    "application/xhtml+xml",
+    `<?xml version="1.0"?><html xmlns="http://www.w3.org/1999/xhtml"><body>${body}</body></html>`,
+  );
+}
+
+function createBookFile(
+  bookId: string,
+  path: string,
+  mediaType: string,
+  content: string | Uint8Array,
+): BookFile {
+  return {
+    id: `${bookId}:${path}`,
+    bookId,
+    path,
+    mediaType,
+    content: mediaType.startsWith("font/")
+      ? new Blob([content], { type: mediaType })
+      : (new NodeBlob([content], { type: mediaType }) as unknown as Blob),
   };
 }
 
@@ -72,6 +83,7 @@ describe("reader body cache", () => {
       bookId: "book-1",
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
     });
 
     const chapterContent = result.baseContentByChapter.get(0);
@@ -98,6 +110,7 @@ describe("reader body cache", () => {
       bookId: "book-1",
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
     });
     await db.bookFiles.put(createChapterFile("book-1", "<p>Changed</p>"));
 
@@ -105,6 +118,7 @@ describe("reader body cache", () => {
       bookId: "book-1",
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
     });
 
     expect(
@@ -119,6 +133,7 @@ describe("reader body cache", () => {
       bookId: "book-1",
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
     });
     await db.bookFiles.put(createChapterFile("book-1", "<p>Second file</p>"));
 
@@ -126,6 +141,7 @@ describe("reader body cache", () => {
       bookId: "book-1",
       fileHash: "hash-2",
       chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
     });
 
     expect(
@@ -134,6 +150,48 @@ describe("reader body cache", () => {
     expect((await getBookChapterSourceCache("book-1"))?.fileHash).toBe(
       "hash-2",
     );
+  });
+
+  it("upgrades the source cache with publisher resources only when requested", async () => {
+    await db.bookFiles.bulkAdd([
+      createChapterFile(
+        "book-1",
+        `
+          <style>
+          .h1 { font-family: "Oswald-Light"; }
+          </style>
+          <h1 class="h1">Title</h1>
+        `,
+      ),
+    ]);
+
+    const defaultResult = await loadReaderBodyCache({
+      bookId: "book-1",
+      fileHash: "hash-1",
+      chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
+    });
+
+    expect(
+      defaultResult.baseContentByChapter.get(0)?.publisherStylesheets,
+    ).toEqual([]);
+    expect(
+      (await getBookChapterSourceCache("book-1"))?.publisherResourcesLoaded,
+    ).toBe(false);
+
+    const publisherResult = await loadReaderBodyCache({
+      bookId: "book-1",
+      fileHash: "hash-1",
+      chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: true,
+    });
+
+    expect(
+      publisherResult.baseContentByChapter.get(0)?.publisherStylesheets,
+    ).toHaveLength(1);
+    expect(
+      (await getBookChapterSourceCache("book-1"))?.publisherResourcesLoaded,
+    ).toBe(true);
   });
 
   it("removes the body cache when a book is deleted", async () => {
@@ -152,6 +210,7 @@ describe("reader body cache", () => {
         },
       },
       READER_BODY_CACHE_SCHEMA_VERSION,
+      false,
     );
 
     await deleteBook(book.id);

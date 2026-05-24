@@ -3,6 +3,7 @@ import {
   getReadingCheckpointsForBook,
   type SyncedReadingCheckpoint,
 } from "@/lib/db";
+import { ensurePublisherFontsReadyFromBlocks } from "@/lib/pagination-v2/shared/publisher-fonts";
 import type { Highlight } from "@/types/highlight";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
@@ -31,12 +32,17 @@ import {
 export type { ReaderBodyCacheLoadKind };
 
 export const readerBodyCacheKeys = {
-  book: (bookId: string, fileHash: string) =>
+  book: (
+    bookId: string,
+    fileHash: string,
+    publisherBookStylingEnabled: boolean,
+  ) =>
     [
       "readerBodyCache",
       READER_BODY_CACHE_SCHEMA_VERSION,
       bookId,
       fileHash,
+      getPublisherStylingCacheKey(publisherBookStylingEnabled),
     ] as const,
 };
 
@@ -53,6 +59,7 @@ export const readerChapterArtifactKeys = {
     chapterIndex: number,
     spineItemId: string,
     highlightSignature: string,
+    publisherBookStylingEnabled: boolean,
   ) =>
     [
       "readerChapterArtifact",
@@ -63,8 +70,13 @@ export const readerChapterArtifactKeys = {
       chapterIndex,
       spineItemId,
       highlightSignature,
+      getPublisherStylingCacheKey(publisherBookStylingEnabled),
     ] as const,
 };
+
+function getPublisherStylingCacheKey(enabled: boolean): string {
+  return enabled ? "publisher-styling-on" : "publisher-styling-off";
+}
 
 export interface ReaderCheckpointData {
   checkpoint: SyncedReadingCheckpoint | undefined;
@@ -78,16 +90,27 @@ export function useReaderBodyCacheQuery(options: {
   bookId?: string;
   fileHash?: string;
   chapterEntries: ChapterEntry[];
+  publisherBookStylingEnabled: boolean;
 }) {
-  const { bookId, fileHash, chapterEntries } = options;
+  const {
+    bookId,
+    fileHash,
+    chapterEntries,
+    publisherBookStylingEnabled,
+  } = options;
 
   return useQuery({
-    queryKey: readerBodyCacheKeys.book(bookId ?? "", fileHash ?? ""),
+    queryKey: readerBodyCacheKeys.book(
+      bookId ?? "",
+      fileHash ?? "",
+      publisherBookStylingEnabled,
+    ),
     queryFn: () =>
       loadReaderBodyCache({
         bookId: bookId!,
         fileHash: fileHash!,
         chapterEntries,
+        publisherBookStylingEnabled,
       }),
     enabled: !!bookId && !!fileHash && chapterEntries.length > 0,
     staleTime: Infinity,
@@ -152,6 +175,7 @@ export function useReaderChapterArtifactsLoader(options: {
   initialLocation: ReaderInitialLocation | null;
   highlights: Highlight[];
   enabled: boolean;
+  publisherBookStylingEnabled: boolean;
 }): ReaderChapterArtifactsLoader {
   const {
     bookId,
@@ -161,6 +185,7 @@ export function useReaderChapterArtifactsLoader(options: {
     initialLocation,
     highlights,
     enabled,
+    publisherBookStylingEnabled,
   } = options;
   const queryClient = useQueryClient();
   const artifactsByChapterRef = useRef<
@@ -185,6 +210,11 @@ export function useReaderChapterArtifactsLoader(options: {
     signaturesByChapterRef.current.clear();
     listenersRef.current.clear();
   }, [bookId]);
+
+  useEffect(() => {
+    artifactsByChapterRef.current.clear();
+    signaturesByChapterRef.current.clear();
+  }, [publisherBookStylingEnabled]);
 
   useEffect(() => {
     if (
@@ -212,12 +242,15 @@ export function useReaderChapterArtifactsLoader(options: {
         const chapterHighlights =
           highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
         const highlightSignature = buildHighlightSignature(chapterHighlights);
+        const artifactSignature = `${getPublisherStylingCacheKey(
+          publisherBookStylingEnabled,
+        )}:${highlightSignature}`;
         const previousSignature =
           signaturesByChapterRef.current.get(chapterIndex);
         const previousArtifact =
           artifactsByChapterRef.current.get(chapterIndex);
 
-        if (previousArtifact && previousSignature === highlightSignature) {
+        if (previousArtifact && previousSignature === artifactSignature) {
           continue;
         }
 
@@ -227,6 +260,7 @@ export function useReaderChapterArtifactsLoader(options: {
           chapterIndex,
           chapter.spineItemId,
           highlightSignature,
+          publisherBookStylingEnabled,
         );
         const cachedArtifact =
           queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
@@ -238,6 +272,7 @@ export function useReaderChapterArtifactsLoader(options: {
               buildReaderChapterArtifact({
                 baseContent,
                 highlights: chapterHighlights,
+                publisherBookStylingEnabled,
               }),
             staleTime: Infinity,
             gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,
@@ -248,7 +283,7 @@ export function useReaderChapterArtifactsLoader(options: {
         const currentArtifact =
           artifactsByChapterRef.current.get(chapterIndex);
 
-        if (currentArtifact && currentSignature === highlightSignature) {
+        if (currentArtifact && currentSignature === artifactSignature) {
           continue;
         }
 
@@ -256,15 +291,20 @@ export function useReaderChapterArtifactsLoader(options: {
           continue;
         }
 
+        await ensurePublisherFontsReadyFromBlocks(artifact.blocks);
+
         artifactsByChapterRef.current.set(chapterIndex, artifact);
-        signaturesByChapterRef.current.set(chapterIndex, highlightSignature);
+        signaturesByChapterRef.current.set(chapterIndex, artifactSignature);
 
         if (!currentArtifact) {
           notify({ kind: "loaded", chapterIndex, artifact });
           continue;
         }
 
-        if (didDecoratedChapterBlocksChange(currentArtifact, artifact)) {
+        if (
+          currentSignature !== artifactSignature ||
+          didDecoratedChapterBlocksChange(currentArtifact, artifact)
+        ) {
           notify({ kind: "updated", chapterIndex, artifact });
         }
       }
@@ -280,6 +320,7 @@ export function useReaderChapterArtifactsLoader(options: {
     highlightsBySpineItemId,
     initialLocation,
     notify,
+    publisherBookStylingEnabled,
     queryClient,
   ]);
 

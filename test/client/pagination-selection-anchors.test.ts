@@ -133,7 +133,9 @@ describe("resolveDomEndpointToContentAnchor", () => {
 
     const { slice, preparedByChapter } = buildSingleSlice(blocks);
     const paragraph = renderSlice(slice);
-    const textNode = paragraph.querySelector("span")?.firstChild;
+    const textNode = Array.from(paragraph.querySelectorAll("span"))
+      .map((span) => span.firstChild)
+      .find((node) => node?.nodeType === Node.TEXT_NODE);
     expect(textNode?.nodeType).toBe(Node.TEXT_NODE);
     if (!textNode) return;
 

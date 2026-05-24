@@ -1,5 +1,29 @@
-import { parseFontFaceRules } from "@/lib/pagination-v2/worker/font-face-parser";
-import { describe, expect, it } from "vitest";
+import { parseFontFaceRules } from "@/lib/pagination-v2/shared/font-face-parser";
+import { ensurePublisherFontFacesReady } from "@/lib/pagination-v2/shared/publisher-fonts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const originalFontFace = globalThis.FontFace;
+const originalGlobalFonts = (globalThis as { fonts?: FontFaceSet }).fonts;
+const originalDocumentFontsDescriptor = Object.getOwnPropertyDescriptor(
+  document,
+  "fonts",
+);
+
+afterEach(() => {
+  Object.defineProperty(globalThis, "FontFace", {
+    configurable: true,
+    value: originalFontFace,
+  });
+  Object.defineProperty(globalThis, "fonts", {
+    configurable: true,
+    value: originalGlobalFonts,
+  });
+  if (originalDocumentFontsDescriptor) {
+    Object.defineProperty(document, "fonts", originalDocumentFontsDescriptor);
+  } else {
+    delete (document as { fonts?: FontFaceSet }).fonts;
+  }
+});
 
 describe("Pagination worker font parser", () => {
   it("keeps data URL src descriptors intact", () => {
@@ -48,5 +72,44 @@ describe("Pagination worker font parser", () => {
       "url(\"https://example.com/node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2\") format('woff2')",
     );
     expect(rules[0]?.descriptors.unicodeRange).toBe("U+0000-00FF");
+  });
+
+  it("registers publisher fonts on document.fonts in the window renderer", async () => {
+    const add = vi.fn();
+    class TestFontFace {
+      constructor(
+        readonly family: string,
+        readonly source: string,
+        readonly descriptors: FontFaceDescriptors,
+      ) {}
+
+      async load() {
+        return this;
+      }
+    }
+
+    Object.defineProperty(globalThis, "FontFace", {
+      configurable: true,
+      value: TestFontFace,
+    });
+    Object.defineProperty(globalThis, "fonts", {
+      configurable: true,
+      value: undefined,
+    });
+    Object.defineProperty(document, "fonts", {
+      configurable: true,
+      value: { add },
+    });
+
+    await ensurePublisherFontFacesReady([
+      {
+        family: "Window Renderer Test",
+        src: 'url("data:font/ttf;base64,AAAA")',
+        descriptors: { weight: "400" },
+      },
+    ]);
+
+    expect(add).toHaveBeenCalledTimes(1);
+    expect(add.mock.calls[0]?.[0]).toBeInstanceOf(TestFontFace);
   });
 });

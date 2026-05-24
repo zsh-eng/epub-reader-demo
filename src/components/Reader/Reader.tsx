@@ -84,6 +84,9 @@ export function Reader() {
     stageContentRef,
     chapterEntries: sessionState.chapters.entries,
     fontConfig: sessionState.pagination.paginationConfig.fontConfig,
+    publisherBookStylingEnabled:
+      sessionState.pagination.paginationConfig.publisherBookStylingEnabled ??
+      false,
     chapterAccess: sessionResources.chapterAccess,
     highlights: sessionState.highlights,
     onCreateHighlight: sessionActions.createHighlight,

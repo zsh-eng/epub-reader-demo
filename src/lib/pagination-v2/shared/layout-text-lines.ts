@@ -33,6 +33,7 @@ type TextLineLayoutResult = {
 
 type TextLineLayoutOptions = {
   textAlign?: LayoutTheme["textAlign"];
+  firstLineIndentPx?: number;
 };
 
 type InlineLayoutToken = {
@@ -104,8 +105,12 @@ export function layoutTextLines(
   options?: TextLineLayoutOptions,
 ): TextLineLayoutResult {
   const safeWidth = Math.max(1, maxWidth);
+  const firstLineIndentPx = Math.max(0, options?.firstLineIndentPx ?? 0);
 
-  if (options?.textAlign === "justify-knuth-plass") {
+  if (
+    options?.textAlign === "justify-knuth-plass" &&
+    firstLineIndentPx <= 0
+  ) {
     const knuthPlassLines = layoutTextLinesKnuthPlass(items, safeWidth);
     if (knuthPlassLines !== null) {
       return {
@@ -116,7 +121,7 @@ export function layoutTextLines(
   }
 
   return {
-    lines: layoutTextLinesGreedy(items, safeWidth),
+    lines: layoutTextLinesGreedy(items, safeWidth, firstLineIndentPx),
     renderMode: "native",
   };
 }
@@ -124,6 +129,7 @@ export function layoutTextLines(
 function layoutTextLinesGreedy(
   items: PreparedInlineItem[],
   safeWidth: number,
+  firstLineIndentPx = 0,
 ): PageLine[] {
   const hasZeroWidthBreaks = items.some((item) =>
     item.rawText.includes(ZERO_WIDTH_BREAK),
@@ -142,11 +148,14 @@ function layoutTextLinesGreedy(
   );
   const lines: PageLine[] = [];
   let cursor: RichInlineCursor | undefined;
+  let isFirstLine = true;
 
   while (true) {
+    const indentPx = isFirstLine ? Math.min(firstLineIndentPx, safeWidth - 1) : 0;
+    const currentLayoutWidth = Math.max(1, layoutWidth - indentPx);
     const richLineRange = layoutNextRichInlineLineRange(
       prepared,
-      layoutWidth,
+      currentLayoutWidth,
       cursor,
     );
     if (!richLineRange) break;
@@ -181,10 +190,12 @@ function layoutTextLinesGreedy(
         startOffset: createOffset(firstFragment.itemIndex, firstFragment.start),
         endOffset: createOffset(lastFragment.itemIndex, lastFragment.end),
         isLastInBlock: false,
+        ...(indentPx > 0 ? { indentPx } : {}),
       });
     }
 
     cursor = richLine.end;
+    isFirstLine = false;
   }
 
   return lines;

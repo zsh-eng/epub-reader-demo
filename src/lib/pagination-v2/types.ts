@@ -32,6 +32,11 @@ export type {
   PreparedSpacerBlock,
   PreparedTextBlock,
   PreparedTextItem,
+  PublisherBlockRole,
+  PublisherFontFace,
+  PublisherStyleOptions,
+  PublisherStylesheet,
+  PublisherTextStyle,
   SpacerBlock,
   SpacerSlice,
   TextBlock,
@@ -48,6 +53,7 @@ export type {
 export interface PaginationConfig {
   fontConfig: FontConfig;
   layoutTheme: LayoutTheme;
+  publisherBookStylingEnabled?: boolean;
   /** Per-leaf-page viewport dimensions. */
   viewport: { width: number; height: number };
 }

@@ -4,6 +4,7 @@ import {
   SegmentedToggleGroup,
   SegmentedToggleGroupItem,
 } from "@/components/ui/segmented-controls";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type {
   ContentWidth,
@@ -228,6 +229,18 @@ export function TypographyPanel({
             <span className="hidden sm:inline">Justify</span>
           </SegmentedToggleGroupItem>
         </SegmentedToggleGroup>
+      </div>
+
+      {/* Publisher Book Styling */}
+      <div className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
+        <h4 className={sectionLabelClassName}>Publisher Styling</h4>
+        <Switch
+          checked={settings.publisherBookStylingEnabled}
+          onCheckedChange={(publisherBookStylingEnabled) =>
+            onUpdateSettings({ publisherBookStylingEnabled })
+          }
+          aria-label="Toggle publisher book styling"
+        />
       </div>
 
       {/* Font Size */}

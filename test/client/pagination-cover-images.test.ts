@@ -1,7 +1,7 @@
 import {
   PaginationEngine,
   type EnginePaginationEvent,
-  type PaginationEngineJob,
+  type PaginationEngineWork,
 } from "@/lib/pagination-v2/engine";
 import type { PaginationCommand } from "@/lib/pagination-v2/protocol";
 import type {
@@ -41,15 +41,17 @@ const BASE_SPREAD_CONFIG: SpreadConfig = {
   chapterFlow: "continuous",
 };
 
-function runJob(job: PaginationEngineJob): void {
-  while (!job.done) job.step();
+function runWork(work: PaginationEngineWork): void {
+  while (!work.next().done) {
+    // Exhaust the engine's cooperative work unit.
+  }
 }
 
 function runCommand(
   engine: PaginationEngine,
   command: PaginationCommand,
 ): void {
-  runJob(engine.createJob(command));
+  runWork(engine.createWork(command));
 }
 
 function collectRenderedImageSlices(

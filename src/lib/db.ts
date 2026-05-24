@@ -190,6 +190,15 @@ export interface BookChapterSourceCacheEntry {
     fullText: string;
     blockStarts: ReadonlyMap<string, number>;
   };
+  publisherStylesheets?: {
+    cssText: string;
+    basePath: string;
+  }[];
+  publisherFontFaces?: {
+    family: string;
+    src: string;
+    descriptors: FontFaceDescriptors;
+  }[];
 }
 
 /**
@@ -203,7 +212,13 @@ export interface BookChapterSourceCache {
   bookId: string;
   fileHash: string;
   cacheVersion: number;
+  publisherResourcesLoaded?: boolean;
   chaptersByPath: Record<string, BookChapterSourceCacheEntry>;
+  publisherFontFaces?: {
+    family: string;
+    src: string;
+    descriptors: FontFaceDescriptors;
+  }[];
   updatedAt: number;
 }
 
@@ -560,12 +575,16 @@ export async function putBookChapterSourceCache(
   fileHash: string,
   chaptersByPath: Record<string, BookChapterSourceCacheEntry>,
   cacheVersion: number,
+  publisherResourcesLoaded: boolean,
+  publisherFontFaces: BookChapterSourceCache["publisherFontFaces"] = [],
 ): Promise<string> {
   await db.bookChapterSourceCache.put({
     bookId,
     fileHash,
     cacheVersion,
+    publisherResourcesLoaded,
     chaptersByPath,
+    publisherFontFaces,
     updatedAt: Date.now(),
   });
   return bookId;

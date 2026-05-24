@@ -4,6 +4,7 @@ import {
   SegmentedToggleGroupItem,
 } from "@/components/ui/segmented-controls";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import {
   isJustifiedTextAlign,
@@ -245,6 +246,20 @@ export function SettingsSection({
             </SegmentedToggleGroup>
           </div>
         ) : null}
+
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[11px] text-muted-foreground">
+            Publisher Styling
+          </span>
+          <Switch
+            checked={settings.publisherBookStylingEnabled}
+            onCheckedChange={(publisherBookStylingEnabled) =>
+              onUpdateSettings({ publisherBookStylingEnabled })
+            }
+            className="scale-75 origin-right"
+            aria-label="Toggle publisher book styling"
+          />
+        </div>
 
         {/* Content width */}
         <div className="space-y-1">

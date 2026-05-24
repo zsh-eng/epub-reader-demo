@@ -16,6 +16,8 @@ import type {
   PreparedBlock,
   PreparedInlineItem,
   PreparedTextBlock,
+  PublisherStyleOptions,
+  PublisherTextStyle,
 } from "./types";
 
 const PREPARED_TEXT_CACHE_MAX = 12_000;
@@ -25,6 +27,11 @@ interface PreparedTextCacheEntry {
   fullText: string;
   fullWidth: number;
   endCursor: LayoutCursor;
+}
+
+interface ResolvedFont {
+  font: string;
+  fontScale: number;
 }
 
 const preparedTextCache = new Map<string, PreparedTextCacheEntry | null>();
@@ -64,9 +71,33 @@ function getPreparedText(
   return cached;
 }
 
-function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
-  const scale = getBlockFontScale(tag);
+function isPublisherHeadingStyle(
+  publisherStyle: PublisherTextStyle | undefined,
+): boolean {
+  return publisherStyle?.role === "heading";
+}
+
+function resolveFont(
+  run: InlineRun,
+  tag: string,
+  fonts: FontConfig,
+  options: PublisherStyleOptions,
+  publisherStyle: PublisherTextStyle | undefined,
+): ResolvedFont {
+  const usePublisherStyle = options.publisherBookStylingEnabled === true;
+  const publisherInlineStyle = usePublisherStyle
+    ? run.publisherInlineStyle
+    : undefined;
+  const scale =
+    publisherInlineStyle?.fontScale ??
+    (usePublisherStyle && publisherStyle?.fontScale
+      ? publisherStyle.fontScale
+      : getBlockFontScale(tag));
   const isHeading = isHeadingTag(tag);
+  const isPublisherHeading =
+    usePublisherStyle && isPublisherHeadingStyle(publisherStyle);
+  const publisherHeadingFamily =
+    publisherInlineStyle?.fontFamily ?? publisherStyle?.fontFamily;
 
   let family: string;
   let sizePx: number;
@@ -100,28 +131,47 @@ function resolveFont(run: InlineRun, tag: string, fonts: FontConfig): string {
     sizePx = Math.round(
       Math.max(9, fonts.baseSizePx * scale * SUPERSCRIPT_FONT_SCALE),
     );
-  } else if (isHeading) {
-    family = fonts.headingFamily;
+  } else if (isHeading || isPublisherHeading) {
+    family =
+      isPublisherHeading && publisherHeadingFamily
+        ? publisherHeadingFamily
+        : fonts.headingFamily;
     sizePx = Math.round(fonts.baseSizePx * scale);
   } else {
     family = fonts.bodyFamily;
     sizePx = Math.round(fonts.baseSizePx * scale);
   }
 
-  const weight = run.bold ? 700 : isHeading ? 600 : 400;
+  const weight = run.bold
+    ? 700
+    : publisherInlineStyle?.fontWeight ??
+      (usePublisherStyle && publisherStyle?.fontWeight
+        ? publisherStyle.fontWeight
+        : isHeading || isPublisherHeading
+          ? 600
+          : 400);
+  const publisherFontStyle =
+    publisherInlineStyle?.fontStyle ??
+    (usePublisherStyle ? publisherStyle?.fontStyle : undefined);
   const style =
     run.inlineRole === "note-ref"
       ? ""
-      : run.italic || tag === "blockquote"
+      : run.italic ||
+          publisherFontStyle === "italic" ||
+          (!usePublisherStyle && tag === "blockquote")
         ? "italic "
         : "";
 
-  return `${style}${weight} ${Math.round(sizePx * 100) / 100}px ${family}`;
+  return {
+    font: `${style}${weight} ${Math.round(sizePx * 100) / 100}px ${family}`,
+    fontScale: scale,
+  };
 }
 
 function prepareTextBlock(
   block: Extract<Block, { type: "text" }>,
   fonts: FontConfig,
+  options: PublisherStyleOptions,
 ): PreparedTextBlock | null {
   const items: PreparedInlineItem[] = [];
   const isPreformatted = block.tag === "pre";
@@ -143,7 +193,14 @@ function prepareTextBlock(
     const preparedText =
       isPreformatted || isHardBreak ? normalizedText : normalizedText.trim();
 
-    const font = resolveFont(run, block.tag, fonts);
+    const resolvedFont = resolveFont(
+      run,
+      block.tag,
+      fonts,
+      options,
+      block.publisherStyle,
+    );
+    const font = resolvedFont.font;
     const whiteSpace = isPreformatted || isHardBreak ? "pre-wrap" : "normal";
     const needsCollapsedSpaceWidth =
       hasTrailingWhitespace || hasLeadingWhitespace || carryGap > 0;
@@ -161,6 +218,7 @@ function prepareTextBlock(
     items.push({
       kind: "text",
       font,
+      fontScale: resolvedFont.fontScale,
       ...(run.inlineRole ? { inlineRole: run.inlineRole } : {}),
       ...(run.link ? { link: { ...run.link } } : {}),
       ...(run.targetIds && run.targetIds.length > 0
@@ -198,6 +256,7 @@ function prepareTextBlock(
     ...(block.targetIds && block.targetIds.length > 0
       ? { targetIds: [...block.targetIds] }
       : {}),
+    ...(block.publisherStyle ? { publisherStyle: block.publisherStyle } : {}),
     items,
     containsNewlines,
   };
@@ -206,13 +265,14 @@ function prepareTextBlock(
 export function prepareBlocks(
   blocks: Block[],
   fonts: FontConfig,
+  options: PublisherStyleOptions = {},
 ): PreparedBlock[] {
   const result: PreparedBlock[] = [];
 
   for (const block of blocks) {
     switch (block.type) {
       case "text": {
-        const preparedTextBlock = prepareTextBlock(block, fonts);
+        const preparedTextBlock = prepareTextBlock(block, fonts, options);
         if (preparedTextBlock) {
           result.push(preparedTextBlock);
         }

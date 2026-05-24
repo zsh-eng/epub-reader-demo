@@ -4,7 +4,7 @@ export interface ParsedFontFaceRule {
   descriptors: FontFaceDescriptors;
 }
 
-function stripQuotes(value: string): string {
+export function stripCssQuotes(value: string): string {
   const normalized = value.replace(/\s*!important\s*$/i, "").trim();
   if (
     (normalized.startsWith('"') && normalized.endsWith('"')) ||
@@ -15,10 +15,9 @@ function stripQuotes(value: string): string {
   return normalized;
 }
 
-// Preview builds can inline small font files as `data:` URLs, which means the
-// `src:` descriptor may legally contain semicolons. We split declarations with
-// a tiny state machine so `url(data:font/woff2;base64,...)` stays intact.
-function splitCssDeclarations(block: string): string[] {
+// `src:` descriptors may contain semicolons inside data URLs, so declarations
+// are split with a small state machine instead of `block.split(";")`.
+export function splitCssDeclarations(block: string): string[] {
   const declarations: string[] = [];
   let current = "";
   let parenDepth = 0;
@@ -75,7 +74,7 @@ function splitCssDeclarations(block: string): string[] {
   return declarations;
 }
 
-function parseDeclarations(block: string): Map<string, string> {
+export function parseCssDeclarations(block: string): Map<string, string> {
   const declarations = new Map<string, string>();
 
   for (const declaration of splitCssDeclarations(block)) {
@@ -114,7 +113,7 @@ export function parseFontFaceRules(
 
   let match: RegExpExecArray | null;
   while ((match = fontFacePattern.exec(cssText)) !== null) {
-    const declarations = parseDeclarations(match[1]);
+    const declarations = parseCssDeclarations(match[1]);
     const family = declarations.get("font-family");
     const src = declarations.get("src");
     if (!family || !src) continue;
@@ -125,17 +124,17 @@ export function parseFontFaceRules(
     const display = declarations.get("font-display");
     const unicodeRange = declarations.get("unicode-range");
 
-    if (style) descriptors.style = stripQuotes(style);
-    if (weight) descriptors.weight = stripQuotes(weight);
+    if (style) descriptors.style = stripCssQuotes(style);
+    if (weight) descriptors.weight = stripCssQuotes(weight);
     if (display) {
-      descriptors.display = stripQuotes(
+      descriptors.display = stripCssQuotes(
         display,
       ) as FontFaceDescriptors["display"];
     }
-    if (unicodeRange) descriptors.unicodeRange = stripQuotes(unicodeRange);
+    if (unicodeRange) descriptors.unicodeRange = stripCssQuotes(unicodeRange);
 
     rules.push({
-      family: stripQuotes(family),
+      family: stripCssQuotes(family),
       src: resolveSrcUrls(src, baseUrl),
       descriptors,
     });

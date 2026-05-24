@@ -1,5 +1,6 @@
 import { PaginationEngine, type EnginePaginationEvent } from "../engine";
 import type { PaginationCommand, PaginationEvent } from "../protocol";
+import { ensurePublisherFontsReadyFromBlocks } from "../shared/publisher-fonts";
 import { ensurePaginationWorkerFontsReady } from "./fonts";
 import {
   PaginationJobScheduler,
@@ -8,6 +9,7 @@ import {
 import { PAGINATION_TASK_YIELD_BUDGET_MS } from "./scheduler-policy";
 
 const workerFontsReady = ensurePaginationWorkerFontsReady();
+let publisherFontsReady: Promise<void> = Promise.resolve();
 
 // ---------------------------------------------------------------------------
 // Worker state
@@ -100,6 +102,7 @@ async function pump(): Promise<void> {
     await workerFontsReady;
 
     while (scheduler.hasWork()) {
+      await publisherFontsReady;
       scheduler.expandIncomingCommands();
 
       const job = scheduler.peek();
@@ -125,6 +128,25 @@ async function pump(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 self.onmessage = (e: MessageEvent<PaginationCommand>) => {
-  scheduler.pushCommand(e.data);
+  const command = e.data;
+  publisherFontsReady = publisherFontsReady
+    .then(() => {
+      switch (command.type) {
+        case "init":
+          return ensurePublisherFontsReadyFromBlocks(
+            command.firstChapterBlocks,
+          );
+        case "addChapter":
+        case "updateChapter":
+          return ensurePublisherFontsReadyFromBlocks(command.blocks);
+        default:
+          return undefined;
+      }
+    })
+    .catch((error) => {
+      console.warn("[pagination worker] Failed to load publisher fonts", error);
+    });
+
+  scheduler.pushCommand(command);
   schedulePump();
 };

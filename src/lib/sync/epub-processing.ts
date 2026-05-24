@@ -70,7 +70,9 @@ export function createBookFilesFromExtracted(
 
   for (const [relativePath, content] of Object.entries(extractedFiles)) {
     const mediaType = getMediaTypeFromPath(relativePath);
-    const contentBlob = new Blob([new Uint8Array(content)]);
+    const contentBlob = new Blob([new Uint8Array(content)], {
+      type: mediaType,
+    });
 
     bookFiles.push({
       id: crypto.randomUUID(),

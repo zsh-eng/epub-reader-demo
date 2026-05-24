@@ -395,10 +395,13 @@ export class PaginationEngine {
         return null;
       }
 
-      const fontChanged = !areFontConfigsEqual(
-        this.paginationConfig.fontConfig,
-        nextConfig.fontConfig,
-      );
+      const fontChanged =
+        !areFontConfigsEqual(
+          this.paginationConfig.fontConfig,
+          nextConfig.fontConfig,
+        ) ||
+        (this.paginationConfig.publisherBookStylingEnabled ?? false) !==
+          (nextConfig.publisherBookStylingEnabled ?? false);
       this.paginationConfig = nextConfig;
 
       if (this.receivedChapters === 0) return null;
@@ -644,7 +647,10 @@ export class PaginationEngine {
     if (!blocks) return null;
 
     const stage2StartedAt = performance.now();
-    const prepared = prepareBlocks(blocks, this.paginationConfig.fontConfig);
+    const prepared = prepareBlocks(blocks, this.paginationConfig.fontConfig, {
+      publisherBookStylingEnabled:
+        this.paginationConfig.publisherBookStylingEnabled ?? false,
+    });
     const stage2PrepareMs = performance.now() - stage2StartedAt;
     this.preparedByChapter[chapterIndex] = prepared;
 
@@ -820,6 +826,8 @@ export class PaginationEngine {
         b.layoutTheme.paragraphSpacingFactor &&
       a.layoutTheme.textAlign === b.layoutTheme.textAlign &&
       a.layoutTheme.baseFontSizePx === b.layoutTheme.baseFontSizePx &&
+      (a.publisherBookStylingEnabled ?? false) ===
+        (b.publisherBookStylingEnabled ?? false) &&
       a.viewport.width === b.viewport.width &&
       a.viewport.height === b.viewport.height
     );

@@ -10,7 +10,7 @@ import lora400CssText from "@fontsource/lora/400.css?inline";
 import lora400ItalicCssText from "@fontsource/lora/400-italic.css?inline";
 import lora500CssText from "@fontsource/lora/500.css?inline";
 import lora600CssText from "@fontsource/lora/600.css?inline";
-import { parseFontFaceRules } from "./font-face-parser";
+import { parseFontFaceRules } from "../shared/font-face-parser";
 
 const PAGINATION_FONT_STYLESHEETS = [
   { label: "@fontsource/inter/400.css", cssText: inter400CssText },

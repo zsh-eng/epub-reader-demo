@@ -123,6 +123,7 @@ export interface ReaderSettings {
   theme: ReaderTheme;
   textAlign: TextAlign;
   contentWidth: ContentWidth; // width of the reading area in scroll layouts
+  publisherBookStylingEnabled: boolean;
 }
 
 export const EPUB_HIGHLIGHT_CLASS = "epub-highlight";

@@ -11,6 +11,9 @@ import type {
   PaginationResult,
   PreparedBlock,
   PreparedTextBlock,
+  PublisherBlockRole,
+  PublisherLength,
+  PublisherTextStyle,
 } from "./types";
 
 const JUSTIFY_DISABLED_TAGS = new Set([
@@ -26,7 +29,12 @@ const JUSTIFY_DISABLED_TAGS = new Set([
 function resolveTextAlignForBlock(
   textAlign: LayoutTheme["textAlign"],
   tag: PreparedTextBlock["tag"],
+  publisherStyle: PublisherTextStyle | undefined,
 ): LayoutTheme["textAlign"] {
+  if (publisherStyle?.textAlign) {
+    return publisherStyle.textAlign;
+  }
+
   if (
     tag === "figcaption" &&
     (textAlign === "justify" || textAlign === "justify-knuth-plass")
@@ -39,6 +47,122 @@ function resolveTextAlignForBlock(
   }
 
   return textAlign;
+}
+
+function isPublisherDisplayRole(role: PublisherBlockRole): boolean {
+  return role !== "body" && role !== "list";
+}
+
+function getPublisherLengthPx(
+  length: PublisherLength | undefined,
+  theme: LayoutTheme,
+  containingBlockWidthPx: number,
+): number | undefined {
+  if (!length) return undefined;
+  return Math.max(
+    0,
+    (length.em ?? 0) * theme.baseFontSizePx +
+      (length.percent ?? 0) * containingBlockWidthPx,
+  );
+}
+
+function getResolvedBlockSpacing(
+  block: PreparedTextBlock,
+  theme: LayoutTheme,
+  containingBlockWidthPx: number,
+): { above: number; below: number } {
+  const fallback = getBlockSpacing(block.tag, theme);
+  const publisherStyle = block.publisherStyle;
+  if (!publisherStyle) return fallback;
+
+  return {
+    above:
+      getPublisherLengthPx(
+        publisherStyle.margin?.before,
+        theme,
+        containingBlockWidthPx,
+      ) ??
+      fallback.above,
+    below:
+      getPublisherLengthPx(
+        publisherStyle.margin?.after,
+        theme,
+        containingBlockWidthPx,
+      ) ??
+      fallback.below,
+  };
+}
+
+function getResolvedCollapsedBlockGap(
+  previousKind: PreparedTextBlock["tag"] | "image" | null,
+  currentBlock: PreparedTextBlock,
+  theme: LayoutTheme,
+  previousMarginBelow: number,
+  containingBlockWidthPx: number,
+): number {
+  if (!previousKind) return 0;
+  if (!currentBlock.publisherStyle) {
+    return getCollapsedBlockGap(
+      previousKind,
+      currentBlock.tag,
+      theme,
+      previousMarginBelow,
+    );
+  }
+
+  return Math.max(
+    previousMarginBelow,
+    getResolvedBlockSpacing(currentBlock, theme, containingBlockWidthPx).above,
+  );
+}
+
+function getResolvedLineHeight(
+  block: PreparedTextBlock,
+  theme: LayoutTheme,
+): number {
+  const publisherStyle = block.publisherStyle;
+  if (!publisherStyle) return getLineHeight(block.tag, theme);
+
+  const fontScale = block.items.reduce(
+    (maxFontScale, item) => Math.max(maxFontScale, item.fontScale),
+    publisherStyle.fontScale ?? 1,
+  );
+  const lineHeightFactor =
+    publisherStyle.lineHeightFactor !== undefined &&
+    isPublisherDisplayRole(publisherStyle.role)
+      ? publisherStyle.lineHeightFactor
+      : theme.lineHeightFactor;
+
+  return Math.round(theme.baseFontSizePx * fontScale * lineHeightFactor);
+}
+
+function getResolvedTextInsets(
+  block: PreparedTextBlock,
+  theme: LayoutTheme,
+  containingBlockWidthPx: number,
+): { left: number; right: number } {
+  const publisherStyle = block.publisherStyle;
+  if (!publisherStyle) {
+    return {
+      left: getBlockInsetLeft(block.tag, theme),
+      right: 0,
+    };
+  }
+
+  return {
+    left:
+      getPublisherLengthPx(
+        publisherStyle.margin?.left,
+        theme,
+        containingBlockWidthPx,
+      ) ?? 0,
+    right:
+      getPublisherLengthPx(
+        publisherStyle.margin?.right,
+        theme,
+        containingBlockWidthPx,
+      ) ?? 0,
+  };
 }
 
 function createPage(index: number): Page & { usedHeight: number } {
@@ -194,19 +318,29 @@ export function layoutPages(
 
     // Text block
     const textBlock = block as PreparedTextBlock;
-    const spacing = getBlockSpacing(textBlock.tag, theme);
-
-    const textLayoutWidth = Math.max(
-      1,
-      safeWidth - getBlockInsetLeft(textBlock.tag, theme),
+    const spacing = getResolvedBlockSpacing(textBlock, theme, safeWidth);
+    const insets = getResolvedTextInsets(textBlock, theme, safeWidth);
+    const textLayoutWidth = Math.max(1, safeWidth - insets.left - insets.right);
+    const firstLineIndentPx =
+      getPublisherLengthPx(
+        textBlock.publisherStyle?.textIndent,
+        theme,
+        textLayoutWidth,
+      ) ?? 0;
+    const textAlign = resolveTextAlignForBlock(
+      theme.textAlign,
+      textBlock.tag,
+      textBlock.publisherStyle,
     );
-    const textAlign = resolveTextAlignForBlock(theme.textAlign, textBlock.tag);
     const lineLayout = textBlock.containsNewlines
       ? {
           lines: layoutPreWrapLines(textBlock.items, textLayoutWidth),
           renderMode: "native" as const,
         }
-      : layoutTextLines(textBlock.items, textLayoutWidth, { textAlign });
+      : layoutTextLines(textBlock.items, textLayoutWidth, {
+          textAlign,
+          firstLineIndentPx,
+        });
     const { lines, renderMode } = lineLayout;
     totalLineCount += lines.length;
 
@@ -218,11 +352,12 @@ export function layoutPages(
     const effectiveGap =
       current.slices.length === 0
         ? 0
-        : getCollapsedBlockGap(
+        : getResolvedCollapsedBlockGap(
             previousBlockKind,
-            textBlock.tag,
+            textBlock,
             theme,
             prevMarginBelow,
+            safeWidth,
           );
     if (effectiveGap > 0) addSpacer(textBlock.id, effectiveGap);
 
@@ -231,7 +366,7 @@ export function layoutPages(
       lastLine.isLastInBlock = true;
     }
 
-    const lineHeight = getLineHeight(textBlock.tag, theme);
+    const lineHeight = getResolvedLineHeight(textBlock, theme);
     let lineIndex = 0;
 
     while (lineIndex < lines.length) {
@@ -257,9 +392,14 @@ export function layoutPages(
         type: "text",
         blockId: textBlock.id,
         tag: textBlock.tag,
+        ...(textBlock.publisherStyle
+          ? { publisherStyle: textBlock.publisherStyle }
+          : {}),
         lineHeight,
         textAlign,
         renderMode,
+        ...(insets.left > 0 ? { marginLeftPx: insets.left } : {}),
+        ...(insets.right > 0 ? { marginRightPx: insets.right } : {}),
         lines: sliceLines,
       });
       current.usedHeight += take * lineHeight;

@@ -115,7 +115,7 @@ export async function parseEPUB(
       id: `${bookId}-file-${fileIdCounter++}`,
       bookId,
       path,
-      content: new Blob([content.buffer as ArrayBuffer]),
+      content: new Blob([content.buffer as ArrayBuffer], { type: mediaType }),
       mediaType,
     });
   }

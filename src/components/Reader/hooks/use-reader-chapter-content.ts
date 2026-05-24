@@ -21,6 +21,7 @@ import { useSessionInitialReaderLocation } from "./use-session-initial-reader-lo
 interface UseReaderChapterContentOptions {
   bookId?: string;
   book: Book | null;
+  publisherBookStylingEnabled: boolean;
 }
 
 interface UseReaderChapterContentResult {
@@ -43,6 +44,7 @@ interface UseReaderChapterContentResult {
 export function useReaderChapterContent({
   bookId,
   book,
+  publisherBookStylingEnabled,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
   const fileHash = book?.fileHash;
@@ -59,6 +61,7 @@ export function useReaderChapterContent({
     bookId,
     fileHash,
     chapterEntries,
+    publisherBookStylingEnabled,
   });
   const highlightsQuery = useBookHighlightsQuery(bookId);
   const bookHighlights = highlightsQuery.data ?? [];
@@ -71,6 +74,7 @@ export function useReaderChapterContent({
     initialLocation,
     highlights: bookHighlights,
     enabled: highlightsQuery.isSuccess,
+    publisherBookStylingEnabled,
   });
 
   const getChapterCanonicalText = useCallback(

@@ -369,7 +369,7 @@ export function PageSliceView({
       data-reader-line-height={slice.lineHeight}
       data-reader-expected-height={slice.lines.length * slice.lineHeight}
       className={cn("m-0 box-border text-foreground", {
-        "reader-blockquote": slice.tag === "blockquote",
+        "reader-blockquote": slice.tag === "blockquote" && !slice.publisherStyle,
         "reader-figcaption": slice.tag === "figcaption",
       })}
       {...{ [CONTENT_ANCHOR_BLOCK_ID_ATTR]: slice.blockId }}
@@ -387,6 +387,12 @@ export function PageSliceView({
         lineHeight: `${slice.lineHeight}px`,
         height: `${slice.lines.length * slice.lineHeight}px`,
         textAlign,
+        marginLeft:
+          slice.marginLeftPx !== undefined ? `${slice.marginLeftPx}px` : undefined,
+        marginRight:
+          slice.marginRightPx !== undefined
+            ? `${slice.marginRightPx}px`
+            : undefined,
       }}
     >
       {slice.renderMode === "manual-justify"
@@ -403,6 +409,10 @@ export function PageSliceView({
               <Fragment key={`${key}-line-${lineIndex}`}>
                 <span
                   style={{
+                    marginLeft:
+                      line.indentPx !== undefined
+                        ? `${line.indentPx}px`
+                        : undefined,
                     whiteSpace: "nowrap",
                     wordSpacing:
                       line.wordSpacingPx !== undefined &&
@@ -440,7 +450,15 @@ export function PageSliceView({
           })
         : slice.lines.map((line, lineIndex) => (
             <Fragment key={`${key}-line-${lineIndex}`}>
-              <span style={{ whiteSpace: "nowrap" }}>
+              <span
+                style={{
+                  marginLeft:
+                    line.indentPx !== undefined
+                      ? `${line.indentPx}px`
+                      : undefined,
+                  whiteSpace: "nowrap",
+                }}
+              >
                 {renderFragmentSequence(
                   line.fragments,
                   `${key}-line-${lineIndex}`,

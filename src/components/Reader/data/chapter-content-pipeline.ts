@@ -1,17 +1,24 @@
 import type { Book, SyncedReadingCheckpoint } from "@/lib/db";
 import { processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
-    parseChapterHtml,
-    parseChapterHtmlWithCanonicalText,
-    type ChapterCanonicalText,
+  parseChapterHtml,
+  parseChapterHtmlWithCanonicalText,
+  type ChapterCanonicalText,
+  type PublisherFontFace,
+  type PublisherStylesheet,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
 import {
-    applyChapterHighlights,
-    buildHighlightSignature,
-    type VirtualChapterSource,
+  applyChapterHighlights,
+  buildHighlightSignature,
+  type VirtualChapterSource,
 } from "../highlight-virtualization";
+import {
+  createPublisherResourceLoader,
+  loadPublisherStylesheets,
+  type PublisherResourceLoader,
+} from "./publisher-resources";
 import type { ChapterEntry } from "../types";
 
 export type ParsedChapterBlocks = ReturnType<typeof parseChapterHtml>;
@@ -21,11 +28,15 @@ export interface ReaderBaseChapterContent {
   entry: ChapterEntry;
   html: string;
   canonicalText: ChapterCanonicalText;
+  publisherStylesheets: PublisherStylesheet[];
+  publisherFontFaces: PublisherFontFace[];
 }
 
 export interface ReaderChapterCachedContent {
   bodyHtml: string;
   canonicalText: ChapterCanonicalText;
+  publisherStylesheets?: PublisherStylesheet[];
+  publisherFontFaces?: PublisherFontFace[];
 }
 
 export interface ReaderDecoratedChapterArtifact {
@@ -129,22 +140,53 @@ export async function buildReaderChapterCachedContent(options: {
   source: string;
   mediaType: string;
   chapter: ChapterEntry;
+  loadResource?: (path: string) => Promise<Blob | null>;
+  includePublisherResources?: boolean;
+  publisherResourceLoader?: PublisherResourceLoader;
 }): Promise<ReaderChapterCachedContent> {
-  const { source, mediaType, chapter } = options;
+  const {
+    source,
+    mediaType,
+    chapter,
+    loadResource = async () => null,
+    includePublisherResources = false,
+    publisherResourceLoader,
+  } = options;
   const { document: chapterDoc } = await processEmbeddedResources({
     content: source,
     mediaType,
     basePath: chapter.href,
-    loadResource: async () => null,
+    loadResource,
     skipImages: true,
     loadLinkedResources: false,
   });
   const bodyHtml = chapterDoc.querySelector("body")?.innerHTML ?? "";
   const { canonicalText } = parseChapterHtmlWithCanonicalText(bodyHtml);
 
+  if (!includePublisherResources) {
+    return {
+      bodyHtml,
+      canonicalText,
+      publisherStylesheets: [],
+      publisherFontFaces: [],
+    };
+  }
+
+  const resourceLoader =
+    publisherResourceLoader ?? createPublisherResourceLoader(loadResource);
+  const publisherStylesheets = await loadPublisherStylesheets({
+    chapterDoc,
+    chapter,
+    publisherResourceLoader: resourceLoader,
+  });
+  const publisherFontFaces =
+    await resourceLoader.loadFontFaces(publisherStylesheets);
+
   return {
     bodyHtml,
     canonicalText,
+    publisherStylesheets,
+    publisherFontFaces,
   };
 }
 
@@ -160,14 +202,21 @@ export function loadBaseChapterContent(options: {
     entry: chapter,
     html: chapterContent.bodyHtml,
     canonicalText: chapterContent.canonicalText,
+    publisherStylesheets: chapterContent.publisherStylesheets ?? [],
+    publisherFontFaces: chapterContent.publisherFontFaces ?? [],
   };
 }
 
 export function decorateChapterContent(options: {
   baseContent: ReaderBaseChapterContent;
   highlights: Highlight[];
+  publisherBookStylingEnabled?: boolean;
 }): ReaderDecoratedChapterArtifact {
-  const { baseContent, highlights } = options;
+  const {
+    baseContent,
+    highlights,
+    publisherBookStylingEnabled = false,
+  } = options;
   const source = applyChapterHighlights(
     { html: baseContent.html, highlightedHtml: baseContent.html },
     highlights,
@@ -177,7 +226,11 @@ export function decorateChapterContent(options: {
     chapterIndex: baseContent.chapterIndex,
     entry: baseContent.entry,
     source,
-    blocks: parseChapterHtml(source.highlightedHtml),
+    blocks: parseChapterHtml(source.highlightedHtml, {
+      publisherBookStylingEnabled,
+      publisherStylesheets: baseContent.publisherStylesheets,
+      publisherFontFaces: baseContent.publisherFontFaces,
+    }),
     highlightSignature: buildHighlightSignature(highlights),
   };
 }

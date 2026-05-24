@@ -91,6 +91,7 @@ export function buildPaginationConfig(
       paragraphSpacingFactor,
       textAlign: settings.textAlign,
     },
+    publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
     viewport,
   };
 }
@@ -166,6 +167,7 @@ export function useReaderCore(
   } = useReaderChapterContent({
     bookId: epubPreparation.chapterContentBookId,
     book: epubPreparation.chapterContentBook,
+    publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
   });
 
   useReaderPaginationFeed({

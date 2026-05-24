@@ -1,4 +1,4 @@
-import type { PaginationEngineJob } from "@/lib/pagination-v2/engine";
+import type { PaginationEngineWork } from "@/lib/pagination-v2/engine";
 import type { PaginationCommand } from "@/lib/pagination-v2/protocol";
 import { PaginationJobScheduler } from "@/lib/pagination-v2/worker/scheduler";
 import {
@@ -156,17 +156,14 @@ function createHarness(
     const label = commandLabel(command);
     let remainingSteps = stepCounts[label] ?? 1;
 
-    return {
-      commandType: command.type,
-      get done() {
-        return remainingSteps <= 0;
-      },
-      step: () => {
+    return (function* (): PaginationEngineWork {
+      while (remainingSteps > 0) {
         if (remainingSteps <= 0) return;
         steps.push(label);
         remainingSteps--;
-      },
-    } satisfies PaginationEngineJob;
+        if (remainingSteps > 0) yield;
+      }
+    })();
   });
 
   return { scheduler, steps };
@@ -179,8 +176,8 @@ function stepScheduler(harness: SchedulerHarness): string | null {
   if (!job) return null;
 
   const stepIndex = harness.steps.length;
-  job.engineJob.step();
-  if (job.engineJob.done) harness.scheduler.remove(job);
+  const result = job.work.next();
+  if (result.done) harness.scheduler.remove(job);
 
   return harness.steps[stepIndex] ?? null;
 }
