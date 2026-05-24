@@ -24,6 +24,14 @@ _Avoid_: Debug reader when referring to the programmatic route; the debug reader
 An EPUB file supplied directly to the Reader Diagnostic Harness for a diagnostic run without importing it into the library or creating persistent reader state.
 _Avoid_: Diagnostic book when the EPUB has not been added to the library.
 
+**Publisher Book Styling**:
+Typography and layout cues supplied by the EPUB itself that remain part of the reading experience alongside the user's reader settings.
+_Avoid_: Original typography/layout, book font, book layout when referring to the umbrella concept.
+
+**Publisher Heading Font**:
+The EPUB-supplied font family used for heading text when Publisher Book Styling is honored. Non-heading prose may keep publisher spacing, sizing, alignment, and indentation cues while still using the user's selected reading font.
+_Avoid_: Book font when referring only to heading font preservation.
+
 ## Reader Invariants
 
 Reader text should remain native flowing paragraph text in the DOM. Do not render precomputed pagination lines as explicit per-line block boxes just to force wrapping, because that breaks expected text-selection behaviours such as triple-clicking to select a whole paragraph.
