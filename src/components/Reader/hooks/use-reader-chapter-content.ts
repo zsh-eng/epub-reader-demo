@@ -22,6 +22,7 @@ interface UseReaderChapterContentOptions {
   bookId?: string;
   book: Book | null;
   publisherBookStylingEnabled: boolean;
+  matchPublisherBodyTextSize: boolean;
 }
 
 interface UseReaderChapterContentResult {
@@ -45,6 +46,7 @@ export function useReaderChapterContent({
   bookId,
   book,
   publisherBookStylingEnabled,
+  matchPublisherBodyTextSize,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
   const fileHash = book?.fileHash;
@@ -75,6 +77,7 @@ export function useReaderChapterContent({
     highlights: bookHighlights,
     enabled: highlightsQuery.isSuccess,
     publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
   });
 
   const getChapterCanonicalText = useCallback(

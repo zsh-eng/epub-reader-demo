@@ -232,15 +232,38 @@ export function TypographyPanel({
       </div>
 
       {/* Publisher Book Styling */}
-      <div className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
+      <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
         <h4 className={sectionLabelClassName}>Publisher Styling</h4>
-        <Switch
-          checked={settings.publisherBookStylingEnabled}
-          onCheckedChange={(publisherBookStylingEnabled) =>
-            onUpdateSettings({ publisherBookStylingEnabled })
-          }
-          aria-label="Toggle publisher book styling"
-        />
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm font-medium text-foreground">
+            Book styles
+          </span>
+          <Switch
+            checked={settings.publisherBookStylingEnabled}
+            onCheckedChange={(publisherBookStylingEnabled) =>
+              onUpdateSettings({ publisherBookStylingEnabled })
+            }
+            aria-label="Toggle publisher book styling"
+          />
+        </div>
+        <div
+          className={cn(
+            "flex items-center justify-between gap-4",
+            !settings.publisherBookStylingEnabled && "opacity-50",
+          )}
+        >
+          <span className="text-sm font-medium text-foreground">
+            Match body text size
+          </span>
+          <Switch
+            checked={settings.matchPublisherBodyTextSize}
+            onCheckedChange={(matchPublisherBodyTextSize) =>
+              onUpdateSettings({ matchPublisherBodyTextSize })
+            }
+            disabled={!settings.publisherBookStylingEnabled}
+            aria-label="Toggle matched publisher body text size"
+          />
+        </div>
       </div>
 
       {/* Font Size */}

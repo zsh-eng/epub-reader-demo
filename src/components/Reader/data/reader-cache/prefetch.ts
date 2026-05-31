@@ -140,12 +140,15 @@ export async function prefetchReaderBook(
         chapter.spineItemId,
         highlightSignature,
         false,
+        false,
+        baseContent.publisherBodyFontScale,
       ),
       queryFn: () =>
         buildReaderChapterArtifact({
           baseContent,
           highlights: chapterHighlights,
           publisherBookStylingEnabled: false,
+          matchPublisherBodyTextSize: false,
         }),
       staleTime: Infinity,
       gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,

@@ -6,7 +6,11 @@ import {
   type BookChapterSourceCacheEntry,
   type BookFile,
 } from "@/lib/db";
-import type { PublisherFontFace } from "@/lib/pagination-v2";
+import {
+  inferPublisherBodyFontScale,
+  parseChapterHtml,
+  type PublisherFontFace,
+} from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { ChapterEntry } from "../../types";
 import {
@@ -18,11 +22,14 @@ import {
   type ReaderDecoratedChapterArtifact,
 } from "../chapter-content-pipeline";
 import {
-  createPublisherResourceLoader,
+  createChapterStylesheetLoader,
+} from "../chapter-stylesheets";
+import {
+  createPublisherFontFaceLoader,
   dedupePublisherFontFaces,
-} from "../publisher-resources";
+} from "../publisher-font-faces";
 
-export const READER_BODY_CACHE_SCHEMA_VERSION = 4;
+export const READER_BODY_CACHE_SCHEMA_VERSION = 6;
 export const READER_CHAPTER_ARTIFACTS_SCHEMA_VERSION = 1;
 export const READER_CHAPTER_ARTIFACTS_GC_MS = 30 * 60 * 1000;
 
@@ -59,6 +66,7 @@ function buildBaseContentByChapter(
   chapterEntries: ChapterEntry[],
   chapterContentsByPath: Map<string, ReaderChapterCachedContent>,
   publisherFontFaces: PublisherFontFace[] = [],
+  publisherBodyFontScale?: number,
 ): Map<number, ReaderBaseChapterContent> {
   const baseContentByChapter = new Map<number, ReaderBaseChapterContent>();
 
@@ -72,12 +80,30 @@ function buildBaseContentByChapter(
       chapterIndex,
       chapterContent: chapterContentsByPath.get(chapter.href)!,
       chapter,
+      publisherBodyFontScale,
     });
     baseContent.publisherFontFaces = publisherFontFaces;
     baseContentByChapter.set(chapterIndex, baseContent);
   }
 
   return baseContentByChapter;
+}
+
+function inferPublisherBodyFontScaleFromChapterContents(
+  chapterEntries: ChapterEntry[],
+  chapterContentsByPath: Map<string, ReaderChapterCachedContent>,
+): number | undefined {
+  const blocks = chapterEntries.flatMap((chapter) => {
+    const chapterContent = chapterContentsByPath.get(chapter.href);
+    if (!chapterContent) return [];
+
+    return parseChapterHtml(chapterContent.bodyHtml, {
+      publisherBookStylingEnabled: true,
+      bookStylesheets: chapterContent.bookStylesheets ?? [],
+    });
+  });
+
+  return inferPublisherBodyFontScale(blocks);
 }
 
 async function buildChapterContentsFromFiles(
@@ -89,6 +115,7 @@ async function buildChapterContentsFromFiles(
   chaptersByPath: Record<string, BookChapterSourceCacheEntry>;
   chapterContentsByPath: Map<string, ReaderChapterCachedContent>;
   publisherFontFaces: PublisherFontFace[];
+  publisherBodyFontScale?: number;
 }> {
   const chaptersByPath: Record<string, BookChapterSourceCacheEntry> = {};
   const chapterContentsByPath = new Map<string, ReaderChapterCachedContent>();
@@ -111,8 +138,9 @@ async function buildChapterContentsFromFiles(
     loadedResourceFiles.set(path, file);
     return getTypedContent(file);
   }
-  const publisherResourceLoader = includePublisherResources
-    ? createPublisherResourceLoader(loadResource)
+  const chapterStylesheetLoader = createChapterStylesheetLoader(loadResource);
+  const publisherFontFaceLoader = includePublisherResources
+    ? createPublisherFontFaceLoader(loadResource)
     : undefined;
 
   for (const chapter of chapterEntries) {
@@ -129,21 +157,30 @@ async function buildChapterContentsFromFiles(
       chapter,
       loadResource,
       includePublisherResources,
-      publisherResourceLoader,
+      chapterStylesheetLoader,
+      publisherFontFaceLoader,
     });
     chaptersByPath[chapter.href] = {
       bodyHtml: chapterContent.bodyHtml,
       canonicalText: chapterContent.canonicalText,
-      publisherStylesheets: chapterContent.publisherStylesheets,
+      bookStylesheets: chapterContent.bookStylesheets,
     };
     publisherFontFaces.push(...(chapterContent.publisherFontFaces ?? []));
     chapterContentsByPath.set(chapter.href, chapterContent);
   }
 
+  const publisherBodyFontScale = inferPublisherBodyFontScaleFromChapterContents(
+    chapterEntries,
+    chapterContentsByPath,
+  );
+
   return {
     chaptersByPath,
     chapterContentsByPath,
     publisherFontFaces: dedupePublisherFontFaces(publisherFontFaces),
+    ...(publisherBodyFontScale !== undefined
+      ? { publisherBodyFontScale }
+      : {}),
   };
 }
 
@@ -184,6 +221,7 @@ export async function loadReaderBodyCache(options: {
         chapterEntries,
         chapterContentsByPath,
         cachedChapterSourceRow.publisherFontFaces ?? [],
+        cachedChapterSourceRow.publisherBodyFontScale,
       ),
       loadWallClockMs: performance.now() - startedAt,
       loadKind: "cache-hit",
@@ -208,6 +246,7 @@ export async function loadReaderBodyCache(options: {
     READER_BODY_CACHE_SCHEMA_VERSION,
     publisherBookStylingEnabled,
     builtChapterContents.publisherFontFaces,
+    builtChapterContents.publisherBodyFontScale,
   );
 
   return {
@@ -215,6 +254,7 @@ export async function loadReaderBodyCache(options: {
       chapterEntries,
       builtChapterContents.chapterContentsByPath,
       builtChapterContents.publisherFontFaces,
+      builtChapterContents.publisherBodyFontScale,
     ),
     loadWallClockMs: performance.now() - startedAt,
     loadKind: "rebuilt",
@@ -225,6 +265,7 @@ export function buildReaderChapterArtifact(options: {
   baseContent: ReaderBaseChapterContent;
   highlights: Highlight[];
   publisherBookStylingEnabled: boolean;
+  matchPublisherBodyTextSize: boolean;
 }): ReaderDecoratedChapterArtifact {
   return decorateChapterContent(options);
 }

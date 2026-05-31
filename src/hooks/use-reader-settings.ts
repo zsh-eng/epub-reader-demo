@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   textAlign: "left",
   contentWidth: "narrow",
   publisherBookStylingEnabled: false,
+  matchPublisherBodyTextSize: false,
 } satisfies ReaderSettings;
 
 const THEME_TRANSITION_DURATION_MS = 300;

@@ -152,7 +152,7 @@ describe("reader body cache", () => {
     );
   });
 
-  it("upgrades the source cache with publisher resources only when requested", async () => {
+  it("loads structural stylesheets before upgrading the cache with publisher resources", async () => {
     await db.bookFiles.bulkAdd([
       createChapterFile(
         "book-1",
@@ -173,8 +173,8 @@ describe("reader body cache", () => {
     });
 
     expect(
-      defaultResult.baseContentByChapter.get(0)?.publisherStylesheets,
-    ).toEqual([]);
+      defaultResult.baseContentByChapter.get(0)?.bookStylesheets,
+    ).toHaveLength(1);
     expect(
       (await getBookChapterSourceCache("book-1"))?.publisherResourcesLoaded,
     ).toBe(false);
@@ -187,11 +187,44 @@ describe("reader body cache", () => {
     });
 
     expect(
-      publisherResult.baseContentByChapter.get(0)?.publisherStylesheets,
+      publisherResult.baseContentByChapter.get(0)?.bookStylesheets,
     ).toHaveLength(1);
     expect(
       (await getBookChapterSourceCache("book-1"))?.publisherResourcesLoaded,
     ).toBe(true);
+  });
+
+  it("persists the inferred publisher body font scale with the body cache", async () => {
+    const bodyText =
+      "Long enough prose for the reader to infer the publisher's dominant body font scale. ".repeat(
+        18,
+      );
+
+    await db.bookFiles.bulkAdd([
+      createChapterFile(
+        "book-1",
+        `
+          <style>
+          .body { font-size: 75%; }
+          </style>
+          <p class="body">${bodyText}</p>
+        `,
+      ),
+    ]);
+
+    const result = await loadReaderBodyCache({
+      bookId: "book-1",
+      fileHash: "hash-1",
+      chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: false,
+    });
+
+    expect(
+      result.baseContentByChapter.get(0)?.publisherBodyFontScale,
+    ).toBeCloseTo(0.75, 5);
+    expect(
+      (await getBookChapterSourceCache("book-1"))?.publisherBodyFontScale,
+    ).toBeCloseTo(0.75, 5);
   });
 
   it("removes the body cache when a book is deleted", async () => {

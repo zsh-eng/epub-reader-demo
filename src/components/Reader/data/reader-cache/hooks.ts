@@ -60,6 +60,8 @@ export const readerChapterArtifactKeys = {
     spineItemId: string,
     highlightSignature: string,
     publisherBookStylingEnabled: boolean,
+    matchPublisherBodyTextSize: boolean,
+    publisherBodyFontScale: number | undefined,
   ) =>
     [
       "readerChapterArtifact",
@@ -71,11 +73,30 @@ export const readerChapterArtifactKeys = {
       spineItemId,
       highlightSignature,
       getPublisherStylingCacheKey(publisherBookStylingEnabled),
+      getPublisherBodySizeCacheKey(
+        publisherBookStylingEnabled,
+        matchPublisherBodyTextSize,
+        publisherBodyFontScale,
+      ),
     ] as const,
 };
 
 function getPublisherStylingCacheKey(enabled: boolean): string {
   return enabled ? "publisher-styling-on" : "publisher-styling-off";
+}
+
+function getPublisherBodySizeCacheKey(
+  publisherBookStylingEnabled: boolean,
+  matchPublisherBodyTextSize: boolean,
+  publisherBodyFontScale: number | undefined,
+): string {
+  if (!publisherBookStylingEnabled || !matchPublisherBodyTextSize) {
+    return "body-size-literal";
+  }
+
+  return publisherBodyFontScale
+    ? `body-size-matched:${publisherBodyFontScale}`
+    : "body-size-matched:none";
 }
 
 export interface ReaderCheckpointData {
@@ -176,6 +197,7 @@ export function useReaderChapterArtifactsLoader(options: {
   highlights: Highlight[];
   enabled: boolean;
   publisherBookStylingEnabled: boolean;
+  matchPublisherBodyTextSize: boolean;
 }): ReaderChapterArtifactsLoader {
   const {
     bookId,
@@ -186,6 +208,7 @@ export function useReaderChapterArtifactsLoader(options: {
     highlights,
     enabled,
     publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
   } = options;
   const queryClient = useQueryClient();
   const artifactsByChapterRef = useRef<
@@ -210,11 +233,6 @@ export function useReaderChapterArtifactsLoader(options: {
     signaturesByChapterRef.current.clear();
     listenersRef.current.clear();
   }, [bookId]);
-
-  useEffect(() => {
-    artifactsByChapterRef.current.clear();
-    signaturesByChapterRef.current.clear();
-  }, [publisherBookStylingEnabled]);
 
   useEffect(() => {
     if (
@@ -244,6 +262,10 @@ export function useReaderChapterArtifactsLoader(options: {
         const highlightSignature = buildHighlightSignature(chapterHighlights);
         const artifactSignature = `${getPublisherStylingCacheKey(
           publisherBookStylingEnabled,
+        )}:${getPublisherBodySizeCacheKey(
+          publisherBookStylingEnabled,
+          matchPublisherBodyTextSize,
+          baseContent.publisherBodyFontScale,
         )}:${highlightSignature}`;
         const previousSignature =
           signaturesByChapterRef.current.get(chapterIndex);
@@ -261,6 +283,8 @@ export function useReaderChapterArtifactsLoader(options: {
           chapter.spineItemId,
           highlightSignature,
           publisherBookStylingEnabled,
+          matchPublisherBodyTextSize,
+          baseContent.publisherBodyFontScale,
         );
         const cachedArtifact =
           queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
@@ -273,6 +297,7 @@ export function useReaderChapterArtifactsLoader(options: {
                 baseContent,
                 highlights: chapterHighlights,
                 publisherBookStylingEnabled,
+                matchPublisherBodyTextSize,
               }),
             staleTime: Infinity,
             gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,
@@ -319,6 +344,7 @@ export function useReaderChapterArtifactsLoader(options: {
     fileHash,
     highlightsBySpineItemId,
     initialLocation,
+    matchPublisherBodyTextSize,
     notify,
     publisherBookStylingEnabled,
     queryClient,

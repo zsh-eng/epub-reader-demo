@@ -247,18 +247,40 @@ export function SettingsSection({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="space-y-2 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5">
           <span className="text-[11px] text-muted-foreground">
             Publisher Styling
           </span>
-          <Switch
-            checked={settings.publisherBookStylingEnabled}
-            onCheckedChange={(publisherBookStylingEnabled) =>
-              onUpdateSettings({ publisherBookStylingEnabled })
-            }
-            className="scale-75 origin-right"
-            aria-label="Toggle publisher book styling"
-          />
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] text-foreground">Book styles</span>
+            <Switch
+              checked={settings.publisherBookStylingEnabled}
+              onCheckedChange={(publisherBookStylingEnabled) =>
+                onUpdateSettings({ publisherBookStylingEnabled })
+              }
+              className="scale-75 origin-right"
+              aria-label="Toggle publisher book styling"
+            />
+          </div>
+          <div
+            className={cn(
+              "flex items-center justify-between gap-3",
+              !settings.publisherBookStylingEnabled && "opacity-50",
+            )}
+          >
+            <span className="text-[11px] text-foreground">
+              Match body text size
+            </span>
+            <Switch
+              checked={settings.matchPublisherBodyTextSize}
+              onCheckedChange={(matchPublisherBodyTextSize) =>
+                onUpdateSettings({ matchPublisherBodyTextSize })
+              }
+              disabled={!settings.publisherBookStylingEnabled}
+              className="scale-75 origin-right"
+              aria-label="Toggle matched publisher body text size"
+            />
+          </div>
         </div>
 
         {/* Content width */}

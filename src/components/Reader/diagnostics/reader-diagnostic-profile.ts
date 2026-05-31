@@ -22,6 +22,7 @@ export const DEFAULT_READER_DIAGNOSTIC_PROFILE: ReaderDiagnosticProfile = {
     textAlign: "left",
     contentWidth: "medium",
     publisherBookStylingEnabled: false,
+    matchPublisherBodyTextSize: false,
   },
   paragraphSpacingFactor: DEFAULT_PARAGRAPH_SPACING,
 };

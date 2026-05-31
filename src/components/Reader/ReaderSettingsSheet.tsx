@@ -95,7 +95,7 @@ export function ReaderSettingsPanel({
       onValueChange={(value) =>
         onActiveTabChange(value as ReaderSettingsPanelTab)
       }
-      className="flex min-h-0 flex-col h-[32rem] mt-3"
+      className="mt-3 flex h-[36rem] min-h-0 flex-col"
     >
       <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-2 rounded-full bg-secondary/50 p-1 self-center">
         <SegmentedTabsTrigger

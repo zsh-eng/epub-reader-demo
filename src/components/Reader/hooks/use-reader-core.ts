@@ -168,6 +168,7 @@ export function useReaderCore(
     bookId: epubPreparation.chapterContentBookId,
     book: epubPreparation.chapterContentBook,
     publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
+    matchPublisherBodyTextSize: settings.matchPublisherBodyTextSize,
   });
 
   useReaderPaginationFeed({
