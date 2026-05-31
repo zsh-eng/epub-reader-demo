@@ -1,5 +1,10 @@
 import { layoutPreWrapLines, layoutTextLines } from "./layout-text-lines";
 import {
+  hasHardPageBreakAfter,
+  hasHardPageBreakBefore,
+  shouldMoveTextBlockForPageBreakHints,
+} from "./layout-page-break-hints";
+import {
   getBlockInsetLeft,
   getBlockSpacing,
   getCollapsedBlockGap,
@@ -8,6 +13,7 @@ import {
 import type {
   LayoutTheme,
   Page,
+  PageLine,
   PaginationResult,
   PreparedBlock,
   PreparedTextBlock,
@@ -25,6 +31,15 @@ const JUSTIFY_DISABLED_TAGS = new Set([
   "h6",
   "pre",
 ]);
+
+interface TextLayoutPlan {
+  lines: PageLine[];
+  renderMode: "native" | "manual-justify";
+  lineHeight: number;
+  spacing: { above: number; below: number };
+  insets: { left: number; right: number };
+  textAlign: LayoutTheme["textAlign"];
+}
 
 function resolveTextAlignForBlock(
   textAlign: LayoutTheme["textAlign"],
@@ -191,6 +206,89 @@ function fitImageToBounds(
   };
 }
 
+function createTextLayoutPlan(
+  textBlock: PreparedTextBlock,
+  theme: LayoutTheme,
+  safeWidth: number,
+): TextLayoutPlan {
+  const spacing = getResolvedBlockSpacing(textBlock, theme, safeWidth);
+  const insets = getResolvedTextInsets(textBlock, theme, safeWidth);
+  const textLayoutWidth = Math.max(1, safeWidth - insets.left - insets.right);
+  const firstLineIndentPx =
+    getPublisherLengthPx(
+      textBlock.publisherStyle?.textIndent,
+      theme,
+      textLayoutWidth,
+    ) ?? 0;
+  const textAlign = resolveTextAlignForBlock(
+    theme.textAlign,
+    textBlock.tag,
+    textBlock.publisherStyle,
+  );
+  const lineLayout = textBlock.containsNewlines
+    ? {
+        lines: layoutPreWrapLines(textBlock.items, textLayoutWidth),
+        renderMode: "native" as const,
+      }
+    : layoutTextLines(textBlock.items, textLayoutWidth, {
+        textAlign,
+        firstLineIndentPx,
+      });
+
+  return {
+    lines: lineLayout.lines,
+    renderMode: lineLayout.renderMode,
+    lineHeight: getResolvedLineHeight(textBlock, theme),
+    spacing,
+    insets,
+    textAlign,
+  };
+}
+
+function getFollowingMinimumHeight(
+  currentBlock: PreparedTextBlock,
+  currentSpacingBelow: number,
+  nextBlock: PreparedBlock | undefined,
+  theme: LayoutTheme,
+  safeWidth: number,
+  safeHeight: number,
+): number | null {
+  if (!nextBlock || nextBlock.type === "page-break") return null;
+  if (hasHardPageBreakBefore(nextBlock)) return null;
+
+  if (nextBlock.type === "text") {
+    const nextPlan = createTextLayoutPlan(nextBlock, theme, safeWidth);
+    if (nextPlan.lines.length === 0) return 0;
+    return (
+      getResolvedCollapsedBlockGap(
+        currentBlock.tag,
+        nextBlock,
+        theme,
+        currentSpacingBelow,
+        safeWidth,
+      ) + nextPlan.lineHeight
+    );
+  }
+
+  if (nextBlock.type === "image") {
+    const gap = getCollapsedBlockGap(
+      currentBlock.tag,
+      "image",
+      theme,
+      currentSpacingBelow,
+    );
+    const fittedImage = fitImageToBounds(
+      nextBlock.intrinsicWidth,
+      nextBlock.intrinsicHeight,
+      safeWidth,
+      safeHeight,
+    );
+    return gap + fittedImage.height;
+  }
+
+  return theme.baseFontSizePx * 0.9;
+}
+
 export function layoutPages(
   preparedBlocks: PreparedBlock[],
   pageWidth: number,
@@ -244,7 +342,31 @@ export function layoutPages(
     current.usedHeight += spacerHeight;
   };
 
-  for (const block of preparedBlocks) {
+  const startBlock = (block: PreparedBlock) => {
+    if (hasHardPageBreakBefore(block) && current.slices.length > 0) {
+      pushPage();
+    }
+  };
+
+  const finishBlock = (
+    block: PreparedBlock,
+    nextPreviousBlockKind: PreparedTextBlock["tag"] | "image" | null,
+    nextMarginBelow: number,
+  ): boolean => {
+    if (hasHardPageBreakAfter(block) && current.slices.length > 0) {
+      pushPage();
+      return true;
+    }
+
+    prevMarginBelow = nextMarginBelow;
+    previousBlockKind = nextPreviousBlockKind;
+    return false;
+  };
+
+  for (let blockIndex = 0; blockIndex < preparedBlocks.length; blockIndex++) {
+    const block = preparedBlocks[blockIndex];
+    if (!block) continue;
+
     if (block.type === "page-break") {
       if (current.slices.length > 0) pushPage();
       prevMarginBelow = 0;
@@ -252,10 +374,11 @@ export function layoutPages(
       continue;
     }
 
+    startBlock(block);
+
     if (block.type === "spacer") {
       addSpacer(block.id, theme.baseFontSizePx * 0.9);
-      prevMarginBelow = 0;
-      previousBlockKind = null;
+      finishBlock(block, null, 0);
       continue;
     }
 
@@ -311,37 +434,21 @@ export function layoutPages(
       });
       current.usedHeight += displaySize.height;
 
-      prevMarginBelow = spacing.below;
-      previousBlockKind = "image";
+      finishBlock(block, "image", spacing.below);
       continue;
     }
 
     // Text block
     const textBlock = block as PreparedTextBlock;
-    const spacing = getResolvedBlockSpacing(textBlock, theme, safeWidth);
-    const insets = getResolvedTextInsets(textBlock, theme, safeWidth);
-    const textLayoutWidth = Math.max(1, safeWidth - insets.left - insets.right);
-    const firstLineIndentPx =
-      getPublisherLengthPx(
-        textBlock.publisherStyle?.textIndent,
-        theme,
-        textLayoutWidth,
-      ) ?? 0;
-    const textAlign = resolveTextAlignForBlock(
-      theme.textAlign,
-      textBlock.tag,
-      textBlock.publisherStyle,
-    );
-    const lineLayout = textBlock.containsNewlines
-      ? {
-          lines: layoutPreWrapLines(textBlock.items, textLayoutWidth),
-          renderMode: "native" as const,
-        }
-      : layoutTextLines(textBlock.items, textLayoutWidth, {
-          textAlign,
-          firstLineIndentPx,
-        });
-    const { lines, renderMode } = lineLayout;
+    const textPlan = createTextLayoutPlan(textBlock, theme, safeWidth);
+    const {
+      lines,
+      renderMode,
+      lineHeight,
+      spacing,
+      insets,
+      textAlign,
+    } = textPlan;
     totalLineCount += lines.length;
 
     if (lines.length === 0) {
@@ -349,7 +456,7 @@ export function layoutPages(
     }
 
     // Margin collapsing
-    const effectiveGap =
+    let effectiveGap =
       current.slices.length === 0
         ? 0
         : getResolvedCollapsedBlockGap(
@@ -359,6 +466,34 @@ export function layoutPages(
             prevMarginBelow,
             safeWidth,
           );
+
+    const blockHeight = lines.length * lineHeight;
+    const availableBeforeBlock = safeHeight - current.usedHeight;
+    const followingMinimumHeight =
+      textBlock.pageBreakHints?.breakAfter === "avoid"
+        ? getFollowingMinimumHeight(
+            textBlock,
+            spacing.below,
+            preparedBlocks[blockIndex + 1],
+            theme,
+            safeWidth,
+            safeHeight,
+          )
+        : null;
+    if (
+      shouldMoveTextBlockForPageBreakHints({
+        hints: textBlock.pageBreakHints,
+        currentPageHasContent: current.slices.length > 0,
+        gapBefore: effectiveGap,
+        blockHeight,
+        availableBeforeBlock,
+        safeHeight,
+        followingMinimumHeight,
+      })
+    ) {
+      pushPage();
+      effectiveGap = 0;
+    }
     if (effectiveGap > 0) addSpacer(textBlock.id, effectiveGap);
 
     const lastLine = lines[lines.length - 1];
@@ -366,7 +501,6 @@ export function layoutPages(
       lastLine.isLastInBlock = true;
     }
 
-    const lineHeight = getResolvedLineHeight(textBlock, theme);
     let lineIndex = 0;
 
     while (lineIndex < lines.length) {
@@ -406,8 +540,7 @@ export function layoutPages(
       lineIndex += take;
     }
 
-    prevMarginBelow = spacing.below;
-    previousBlockKind = textBlock.tag;
+    finishBlock(textBlock, textBlock.tag, spacing.below);
   }
 
   if (current.slices.length > 0 || pages.length === 0) {

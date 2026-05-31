@@ -32,6 +32,10 @@ _Avoid_: Original typography/layout, book font, book layout when referring to th
 The EPUB-supplied font family used for heading text when Publisher Book Styling is honored. Non-heading prose may keep publisher spacing, sizing, alignment, and indentation cues while still using the user's selected reading font.
 _Avoid_: Book font when referring only to heading font preservation.
 
+**Book Page Break Hints**:
+EPUB-supplied page-start and keep-together cues that shape where reader pages may break. They are structural reading cues and remain distinct from the optional visual preservation covered by Publisher Book Styling.
+_Avoid_: Publisher layout toggle, original layout when referring to page-break or keep-together behavior.
+
 ## Reader Invariants
 
 Reader text should remain native flowing paragraph text in the DOM. Do not render precomputed pagination lines as explicit per-line block boxes just to force wrapping, because that breaks expected text-selection behaviours such as triple-clicking to select a whole paragraph.

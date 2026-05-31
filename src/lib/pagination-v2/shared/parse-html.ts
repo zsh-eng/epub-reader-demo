@@ -48,11 +48,21 @@ import {
 } from "@/types/reader.types";
 import { DEFAULT_INTRINSIC_HEIGHT, DEFAULT_INTRINSIC_WIDTH } from "./spacing";
 import {
+  createBookPageBreakHintResolver,
+  type BookPageBreakHintResolver,
+} from "./book-page-break-hints";
+import {
+  applyContainerPageBreakHints,
+  attachPageBreakHintsToBlock,
+} from "./block-page-break-hints";
+import {
   createPublisherStyleResolver,
   type PublisherStyleResolver,
 } from "./publisher-styles";
+import { normalizePublisherBodyFontScale } from "./publisher-body-scale";
 import type {
   Block,
+  BookPageBreakHints,
   BlockTag,
   ChapterCanonicalText,
   HighlightMark,
@@ -60,7 +70,7 @@ import type {
   LinkRef,
   PublisherFontFace,
   PublisherInlineStyle,
-  PublisherStylesheet,
+  BookStylesheet,
   PublisherStyleOptions,
   PublisherTextStyle,
   TextBlock,
@@ -520,6 +530,7 @@ function createImageBlock(
   element: Element,
   id: string,
   targetIds: string[] = [],
+  pageBreakHints: BookPageBreakHints | undefined = undefined,
 ): Block | null {
   const tag = element.tagName.toLowerCase();
   const src = getImageSource(element, tag);
@@ -538,6 +549,7 @@ function createImageBlock(
     type: "image",
     id,
     ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
+    ...(pageBreakHints ? { pageBreakHints: { ...pageBreakHints } } : {}),
     src,
     alt: element.getAttribute("alt") || undefined,
     intrinsicWidth,
@@ -574,8 +586,10 @@ function createTextBlock(
   id: string,
   targetIds: string[] = [],
   publisherStyleResolver: PublisherStyleResolver | null = null,
+  bookPageBreakHintResolver: BookPageBreakHintResolver | null = null,
 ): TextBlock | null {
   const publisherStyle = publisherStyleResolver?.resolveTextStyle(element, tag);
+  const pageBreakHints = bookPageBreakHintResolver?.resolvePageBreakHints(element);
   const inlineStylePolicy = createPublisherInlineStylePolicy(
     publisherStyle,
     publisherStyleResolver,
@@ -602,6 +616,7 @@ function createTextBlock(
     id,
     tag,
     ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
+    ...(pageBreakHints ? { pageBreakHints } : {}),
     ...(publisherStyle ? { publisherStyle } : {}),
     runs: result.runs.filter((run) => run.text.length > 0),
   };
@@ -633,6 +648,7 @@ interface ParseChapterContext {
   currentCanonicalOffset: number;
   blockStarts: Map<string, number> | null;
   publisherStyleResolver: PublisherStyleResolver | null;
+  bookPageBreakHintResolver: BookPageBreakHintResolver | null;
 }
 
 function attachTargetsToBlock(block: Block, targetIds: string[]): void {
@@ -663,7 +679,7 @@ function recordBlockStart(
 }
 
 export interface ParseChapterHtmlOptions extends PublisherStyleOptions {
-  publisherStylesheets?: PublisherStylesheet[];
+  bookStylesheets?: BookStylesheet[];
   publisherFontFaces?: PublisherFontFace[];
 }
 
@@ -696,13 +712,18 @@ function parseChapterHtmlInternal(
   const parser = new DOMParser();
   const doc = parser.parseFromString(`<body>${html}</body>`, "text/html");
   const publisherStyleResolver = options.publisherBookStylingEnabled
-    ? createPublisherStyleResolver(doc, options.publisherStylesheets ?? [])
+    ? createPublisherStyleResolver(doc, options.bookStylesheets ?? [])
     : null;
+  const bookPageBreakHintResolver = createBookPageBreakHintResolver(
+    doc,
+    options.bookStylesheets ?? [],
+  );
   const context: ParseChapterContext = {
     counter: { value: 1 },
     currentCanonicalOffset: 0,
     blockStarts: new Map<string, number>(),
     publisherStyleResolver,
+    bookPageBreakHintResolver,
   };
 
   function walkChildren(nodes: Node[], pendingTargets: string[]): WalkResult {
@@ -742,6 +763,7 @@ function parseChapterHtmlInternal(
         `text-${context.counter.value++}`,
         pendingTargets,
         context.publisherStyleResolver,
+        context.bookPageBreakHintResolver,
       );
       if (block) {
         recordBlockStart(context, block.id, blockStart);
@@ -764,11 +786,24 @@ function parseChapterHtmlInternal(
     }
 
     const targetIds = mergeTargetIds(pendingTargets, readTargetIds(node));
+    const pageBreakHints =
+      context.bookPageBreakHintResolver?.resolvePageBreakHints(node);
+    const walkChildBlocks = (): WalkResult => {
+      const childrenResult = walkChildren(
+        Array.from(node.childNodes),
+        targetIds,
+      );
+      if (childrenResult.blocks.length > 0) {
+        applyContainerPageBreakHints(childrenResult.blocks, pageBreakHints);
+      }
+      return childrenResult;
+    };
 
     const imageBlock = createImageBlock(
       node,
       `image-${context.counter.value}`,
       targetIds,
+      pageBreakHints,
     );
     if (imageBlock) {
       context.counter.value += 1;
@@ -787,6 +822,7 @@ function parseChapterHtmlInternal(
             type: "spacer",
             id: spacerId,
             ...(targetIds.length > 0 ? { targetIds } : {}),
+            ...(pageBreakHints ? { pageBreakHints } : {}),
           },
         ],
         remainingTargets: [],
@@ -799,10 +835,7 @@ function parseChapterHtmlInternal(
         tag === "blockquote" &&
         hasBlockChildren(node)
       ) {
-        const childrenResult = walkChildren(
-          Array.from(node.childNodes),
-          targetIds,
-        );
+        const childrenResult = walkChildBlocks();
         if (childrenResult.blocks.length > 0) {
           return childrenResult;
         }
@@ -814,6 +847,7 @@ function parseChapterHtmlInternal(
         `text-${context.counter.value++}`,
         targetIds,
         context.publisherStyleResolver,
+        context.bookPageBreakHintResolver,
       );
       if (block && hasVisibleInlineText(block)) {
         recordBlockStart(context, block.id, blockStart);
@@ -821,10 +855,7 @@ function parseChapterHtmlInternal(
         return { blocks: [block], remainingTargets: [] };
       }
 
-      const childrenResult = walkChildren(
-        Array.from(node.childNodes),
-        targetIds,
-      );
+      const childrenResult = walkChildBlocks();
       if (childrenResult.blocks.length > 0) {
         return childrenResult;
       }
@@ -844,8 +875,10 @@ function parseChapterHtmlInternal(
         `text-${context.counter.value++}`,
         targetIds,
         context.publisherStyleResolver,
+        context.bookPageBreakHintResolver,
       );
       if (block) {
+        attachPageBreakHintsToBlock(block, pageBreakHints);
         recordBlockStart(context, block.id, blockStart);
       }
       context.currentCanonicalOffset += nodeTextLength;
@@ -855,10 +888,7 @@ function parseChapterHtmlInternal(
     }
 
     if (CONTAINER_TAGS.has(tag)) {
-      const childrenResult = walkChildren(
-        Array.from(node.childNodes),
-        targetIds,
-      );
+      const childrenResult = walkChildBlocks();
       if (childrenResult.blocks.length > 0) {
         return childrenResult;
       }
@@ -866,7 +896,7 @@ function parseChapterHtmlInternal(
       return { blocks: [], remainingTargets: childrenResult.remainingTargets };
     }
 
-    const childrenResult = walkChildren(Array.from(node.childNodes), targetIds);
+    const childrenResult = walkChildBlocks();
     if (childrenResult.blocks.length > 0) {
       return childrenResult;
     }
@@ -885,9 +915,18 @@ function parseChapterHtmlInternal(
   if (options.publisherBookStylingEnabled) {
     attachPublisherFontFaces(result.blocks, options.publisherFontFaces);
   }
+  const blocks =
+    options.publisherBookStylingEnabled &&
+    options.matchPublisherBodyTextSize &&
+    options.publisherBodyFontScale
+      ? normalizePublisherBodyFontScale(
+          result.blocks,
+          options.publisherBodyFontScale,
+        )
+      : result.blocks;
 
   return {
-    blocks: result.blocks,
+    blocks,
     canonicalText: {
       fullText: doc.body.textContent ?? "",
       blockStarts: context.blockStarts ?? new Map<string, number>(),

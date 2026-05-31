@@ -256,6 +256,9 @@ function prepareTextBlock(
     ...(block.targetIds && block.targetIds.length > 0
       ? { targetIds: [...block.targetIds] }
       : {}),
+    ...(block.pageBreakHints
+      ? { pageBreakHints: { ...block.pageBreakHints } }
+      : {}),
     ...(block.publisherStyle ? { publisherStyle: block.publisherStyle } : {}),
     items,
     containsNewlines,

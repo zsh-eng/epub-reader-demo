@@ -1,10 +1,11 @@
 import {
+  inferPublisherBodyFontScale,
   layoutPages,
   parseChapterHtml,
   prepareBlocks,
   type FontConfig,
   type LayoutTheme,
-  type PublisherStylesheet,
+  type BookStylesheet,
 } from "@/lib/pagination-v2";
 import { describe, expect, it } from "vitest";
 
@@ -22,7 +23,7 @@ const LAYOUT_THEME: LayoutTheme = {
   textAlign: "left",
 };
 
-const PUBLISHER_STYLESHEETS: PublisherStylesheet[] = [
+const PUBLISHER_STYLESHEETS: BookStylesheet[] = [
   {
     basePath: "OEBPS/Styles/book.css",
     cssText: `
@@ -49,7 +50,7 @@ const PUBLISHER_STYLESHEETS: PublisherStylesheet[] = [
 describe("pagination publisher book styling", () => {
   it("is gated off by default even when publisher stylesheets are available", () => {
     const blocks = parseChapterHtml('<p class="h1">Chapter One</p>', {
-      publisherStylesheets: PUBLISHER_STYLESHEETS,
+      bookStylesheets: PUBLISHER_STYLESHEETS,
     });
 
     const block = blocks[0];
@@ -62,7 +63,7 @@ describe("pagination publisher book styling", () => {
   it("preserves heading font family and layout cues when enabled", () => {
     const blocks = parseChapterHtml('<p class="h1">Chapter One</p>', {
       publisherBookStylingEnabled: true,
-      publisherStylesheets: PUBLISHER_STYLESHEETS,
+      bookStylesheets: PUBLISHER_STYLESHEETS,
     });
 
     const block = blocks[0];
@@ -97,7 +98,7 @@ describe("pagination publisher book styling", () => {
       '<p>Intro.</p><p class="h1">Chapter One</p>',
       {
         publisherBookStylingEnabled: true,
-        publisherStylesheets: [
+        bookStylesheets: [
           {
             basePath: "OEBPS/Styles/book.css",
             cssText: `
@@ -147,7 +148,7 @@ describe("pagination publisher book styling", () => {
       '<h1 class="h1fm">PROLOGUE <span class="heading_break">"INCOMPARABLE" ARROGANCE</span></h1>',
       {
         publisherBookStylingEnabled: true,
-        publisherStylesheets: [
+        bookStylesheets: [
           {
             basePath: "OEBPS/Styles/book.css",
             cssText: `
@@ -229,7 +230,7 @@ describe("pagination publisher book styling", () => {
       `,
       {
         publisherBookStylingEnabled: true,
-        publisherStylesheets: PUBLISHER_STYLESHEETS,
+        bookStylesheets: PUBLISHER_STYLESHEETS,
       },
     );
 
@@ -269,5 +270,69 @@ describe("pagination publisher book styling", () => {
     expect(firstTextSlice.marginLeftPx).toBeCloseTo(22.4, 5);
     expect(firstTextSlice.lines[0]?.indentPx).toBeCloseTo(22.4, 5);
     expect(firstTextSlice.lineHeight).toBe(19);
+  });
+
+  it("can normalize publisher body scale while preserving relative display sizing", () => {
+    const bodyText =
+      "A long body paragraph with enough prose to identify the publisher's dominant text scale. ".repeat(
+        18,
+      );
+    const html = `
+      <h1 class="title">Chapter One</h1>
+      <p class="body">${bodyText}</p>
+    `;
+    const bookStylesheets: BookStylesheet[] = [
+      {
+        basePath: "OEBPS/Styles/book.css",
+        cssText: `
+          .body { font-size: 75%; }
+          .title { font-size: 150%; }
+        `,
+      },
+    ];
+
+    const literalBlocks = parseChapterHtml(html, {
+      publisherBookStylingEnabled: true,
+      bookStylesheets,
+    });
+    const bodyFontScale = inferPublisherBodyFontScale(literalBlocks);
+    expect(bodyFontScale).toBeCloseTo(0.75, 5);
+
+    const literalPrepared = prepareBlocks(literalBlocks, FONT_CONFIG, {
+      publisherBookStylingEnabled: true,
+    });
+    const literalBody = literalPrepared[1];
+    expect(literalBody?.type).toBe("text");
+    if (!literalBody || literalBody.type !== "text") return;
+    expect(literalBody.items[0]?.fontScale).toBeCloseTo(0.75, 5);
+    expect(literalBody.items[0]?.font).toContain("12px");
+
+    const normalizedBlocks = parseChapterHtml(html, {
+      publisherBookStylingEnabled: true,
+      matchPublisherBodyTextSize: true,
+      publisherBodyFontScale: bodyFontScale,
+      bookStylesheets,
+    });
+    const normalizedPrepared = prepareBlocks(normalizedBlocks, FONT_CONFIG, {
+      publisherBookStylingEnabled: true,
+    });
+    const normalizedHeading = normalizedPrepared[0];
+    const normalizedBody = normalizedPrepared[1];
+
+    expect(normalizedHeading?.type).toBe("text");
+    expect(normalizedBody?.type).toBe("text");
+    if (
+      !normalizedHeading ||
+      normalizedHeading.type !== "text" ||
+      !normalizedBody ||
+      normalizedBody.type !== "text"
+    ) {
+      return;
+    }
+
+    expect(normalizedBody.items[0]?.fontScale).toBeCloseTo(1, 5);
+    expect(normalizedBody.items[0]?.font).toContain("16px");
+    expect(normalizedHeading.items[0]?.fontScale).toBeCloseTo(2, 5);
+    expect(normalizedHeading.items[0]?.font).toContain("32px");
   });
 });
