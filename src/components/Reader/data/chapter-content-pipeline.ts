@@ -5,7 +5,7 @@ import {
   parseChapterHtmlWithCanonicalText,
   type ChapterCanonicalText,
   type PublisherFontFace,
-  type PublisherStylesheet,
+  type BookStylesheet,
 } from "@/lib/pagination-v2";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import type { Highlight } from "@/types/highlight";
@@ -15,10 +15,14 @@ import {
   type VirtualChapterSource,
 } from "../highlight-virtualization";
 import {
-  createPublisherResourceLoader,
-  loadPublisherStylesheets,
-  type PublisherResourceLoader,
-} from "./publisher-resources";
+  createChapterStylesheetLoader,
+  loadChapterStylesheets,
+  type ChapterStylesheetLoader,
+} from "./chapter-stylesheets";
+import {
+  createPublisherFontFaceLoader,
+  type PublisherFontFaceLoader,
+} from "./publisher-font-faces";
 import type { ChapterEntry } from "../types";
 
 export type ParsedChapterBlocks = ReturnType<typeof parseChapterHtml>;
@@ -28,14 +32,15 @@ export interface ReaderBaseChapterContent {
   entry: ChapterEntry;
   html: string;
   canonicalText: ChapterCanonicalText;
-  publisherStylesheets: PublisherStylesheet[];
+  bookStylesheets: BookStylesheet[];
   publisherFontFaces: PublisherFontFace[];
+  publisherBodyFontScale?: number;
 }
 
 export interface ReaderChapterCachedContent {
   bodyHtml: string;
   canonicalText: ChapterCanonicalText;
-  publisherStylesheets?: PublisherStylesheet[];
+  bookStylesheets?: BookStylesheet[];
   publisherFontFaces?: PublisherFontFace[];
 }
 
@@ -142,7 +147,8 @@ export async function buildReaderChapterCachedContent(options: {
   chapter: ChapterEntry;
   loadResource?: (path: string) => Promise<Blob | null>;
   includePublisherResources?: boolean;
-  publisherResourceLoader?: PublisherResourceLoader;
+  chapterStylesheetLoader?: ChapterStylesheetLoader;
+  publisherFontFaceLoader?: PublisherFontFaceLoader;
 }): Promise<ReaderChapterCachedContent> {
   const {
     source,
@@ -150,7 +156,8 @@ export async function buildReaderChapterCachedContent(options: {
     chapter,
     loadResource = async () => null,
     includePublisherResources = false,
-    publisherResourceLoader,
+    chapterStylesheetLoader,
+    publisherFontFaceLoader,
   } = options;
   const { document: chapterDoc } = await processEmbeddedResources({
     content: source,
@@ -163,29 +170,34 @@ export async function buildReaderChapterCachedContent(options: {
   const bodyHtml = chapterDoc.querySelector("body")?.innerHTML ?? "";
   const { canonicalText } = parseChapterHtmlWithCanonicalText(bodyHtml);
 
+  // Book Page Break Hints are structural, so linked and embedded CSS is loaded
+  // even when Publisher Book Styling is off. Font-face loading remains gated by
+  // `includePublisherResources`.
+  const stylesheetLoader =
+    chapterStylesheetLoader ?? createChapterStylesheetLoader(loadResource);
+  const bookStylesheets = await loadChapterStylesheets({
+    chapterDoc,
+    chapter,
+    stylesheetLoader,
+  });
+
   if (!includePublisherResources) {
     return {
       bodyHtml,
       canonicalText,
-      publisherStylesheets: [],
+      bookStylesheets,
       publisherFontFaces: [],
     };
   }
 
-  const resourceLoader =
-    publisherResourceLoader ?? createPublisherResourceLoader(loadResource);
-  const publisherStylesheets = await loadPublisherStylesheets({
-    chapterDoc,
-    chapter,
-    publisherResourceLoader: resourceLoader,
-  });
-  const publisherFontFaces =
-    await resourceLoader.loadFontFaces(publisherStylesheets);
+  const fontFaceLoader =
+    publisherFontFaceLoader ?? createPublisherFontFaceLoader(loadResource);
+  const publisherFontFaces = await fontFaceLoader.loadFontFaces(bookStylesheets);
 
   return {
     bodyHtml,
     canonicalText,
-    publisherStylesheets,
+    bookStylesheets,
     publisherFontFaces,
   };
 }
@@ -194,16 +206,21 @@ export function loadBaseChapterContent(options: {
   chapterIndex: number;
   chapterContent: ReaderChapterCachedContent;
   chapter: ChapterEntry;
+  publisherBodyFontScale?: number;
 }): ReaderBaseChapterContent {
-  const { chapterIndex, chapterContent, chapter } = options;
+  const { chapterIndex, chapterContent, chapter, publisherBodyFontScale } =
+    options;
 
   return {
     chapterIndex,
     entry: chapter,
     html: chapterContent.bodyHtml,
     canonicalText: chapterContent.canonicalText,
-    publisherStylesheets: chapterContent.publisherStylesheets ?? [],
+    bookStylesheets: chapterContent.bookStylesheets ?? [],
     publisherFontFaces: chapterContent.publisherFontFaces ?? [],
+    ...(publisherBodyFontScale !== undefined
+      ? { publisherBodyFontScale }
+      : {}),
   };
 }
 
@@ -211,11 +228,13 @@ export function decorateChapterContent(options: {
   baseContent: ReaderBaseChapterContent;
   highlights: Highlight[];
   publisherBookStylingEnabled?: boolean;
+  matchPublisherBodyTextSize?: boolean;
 }): ReaderDecoratedChapterArtifact {
   const {
     baseContent,
     highlights,
     publisherBookStylingEnabled = false,
+    matchPublisherBodyTextSize = false,
   } = options;
   const source = applyChapterHighlights(
     { html: baseContent.html, highlightedHtml: baseContent.html },
@@ -228,8 +247,12 @@ export function decorateChapterContent(options: {
     source,
     blocks: parseChapterHtml(source.highlightedHtml, {
       publisherBookStylingEnabled,
-      publisherStylesheets: baseContent.publisherStylesheets,
+      matchPublisherBodyTextSize,
+      bookStylesheets: baseContent.bookStylesheets,
       publisherFontFaces: baseContent.publisherFontFaces,
+      ...(baseContent.publisherBodyFontScale !== undefined
+        ? { publisherBodyFontScale: baseContent.publisherBodyFontScale }
+        : {}),
     }),
     highlightSignature: buildHighlightSignature(highlights),
   };

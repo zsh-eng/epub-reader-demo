@@ -1,54 +1,7 @@
-import {
-  isExternalHref,
-  resolvePath,
-} from "@/lib/epub-resource-utils";
+import { isExternalHref, resolvePath } from "@/lib/epub-resource-utils";
 import { parseFontFaceRules } from "@/lib/pagination-v2/shared/font-face-parser";
 import { getPublisherFontFaceKey } from "@/lib/pagination-v2/shared/publisher-fonts";
-import type {
-  PublisherFontFace,
-  PublisherStylesheet,
-} from "@/lib/pagination-v2";
-import type { ChapterEntry } from "../types";
-
-function getStylesheetLinks(chapterDoc: Document): HTMLLinkElement[] {
-  return Array.from(
-    chapterDoc.querySelectorAll<HTMLLinkElement>("link[href]"),
-  ).filter((link) =>
-    (link.getAttribute("rel") ?? "")
-      .toLowerCase()
-      .split(/\s+/)
-      .includes("stylesheet"),
-  );
-}
-
-export async function loadPublisherStylesheets(options: {
-  chapterDoc: Document;
-  chapter: ChapterEntry;
-  publisherResourceLoader: PublisherResourceLoader;
-}): Promise<PublisherStylesheet[]> {
-  const { chapterDoc, chapter, publisherResourceLoader } = options;
-  const stylesheets: PublisherStylesheet[] = [];
-
-  for (const styleElement of Array.from(
-    chapterDoc.querySelectorAll("style"),
-  )) {
-    const cssText = styleElement.textContent?.trim();
-    if (!cssText) continue;
-    stylesheets.push({ cssText, basePath: chapter.href });
-  }
-
-  for (const link of getStylesheetLinks(chapterDoc)) {
-    const href = link.getAttribute("href")?.trim();
-    if (!href || isExternalHref(href)) continue;
-
-    const cssPath = resolvePath(chapter.href, href);
-    const stylesheet = await publisherResourceLoader.loadStylesheet(cssPath);
-    if (!stylesheet) continue;
-    stylesheets.push(stylesheet);
-  }
-
-  return stylesheets;
-}
+import type { BookStylesheet, PublisherFontFace } from "@/lib/pagination-v2";
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -67,10 +20,9 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 async function inlineFontUrls(options: {
   cssText: string;
   basePath: string;
-  loadResource: (path: string) => Promise<Blob | null>;
-  loadFontDataUrl?: (path: string) => Promise<string | null>;
+  loadFontDataUrl: (path: string) => Promise<string | null>;
 }): Promise<string> {
-  const { cssText, basePath, loadResource, loadFontDataUrl } = options;
+  const { cssText, basePath, loadFontDataUrl } = options;
   const urlPattern = /url\(([^)]+)\)/gi;
   const replacements = new Map<string, string>();
 
@@ -89,17 +41,10 @@ async function inlineFontUrls(options: {
     }
 
     const fontPath = resolvePath(basePath, unquoted);
-    const fontDataUrl = loadFontDataUrl
-      ? await loadFontDataUrl(fontPath)
-      : null;
+    const fontDataUrl = await loadFontDataUrl(fontPath);
     if (fontDataUrl) {
       replacements.set(match[0], `url("${fontDataUrl}")`);
-      continue;
     }
-
-    const fontBlob = await loadResource(fontPath);
-    if (!fontBlob) continue;
-    replacements.set(match[0], `url("${await blobToDataUrl(fontBlob)}")`);
   }
 
   if (replacements.size === 0) return cssText;
@@ -128,11 +73,10 @@ export function dedupePublisherFontFaces(
 }
 
 async function loadPublisherFontFaces(options: {
-  stylesheets: PublisherStylesheet[];
-  loadResource: (path: string) => Promise<Blob | null>;
-  loadFontDataUrl?: (path: string) => Promise<string | null>;
+  stylesheets: BookStylesheet[];
+  loadFontDataUrl: (path: string) => Promise<string | null>;
 }): Promise<PublisherFontFace[]> {
-  const { stylesheets, loadResource, loadFontDataUrl } = options;
+  const { stylesheets, loadFontDataUrl } = options;
   const fontFaces: PublisherFontFace[] = [];
 
   for (const stylesheet of stylesheets) {
@@ -143,7 +87,6 @@ async function loadPublisherFontFaces(options: {
     const inlinedCssText = await inlineFontUrls({
       cssText: fontFaceCssText,
       basePath: stylesheet.basePath,
-      loadResource,
       loadFontDataUrl,
     });
     fontFaces.push(
@@ -154,20 +97,15 @@ async function loadPublisherFontFaces(options: {
   return dedupePublisherFontFaces(fontFaces);
 }
 
-export interface PublisherResourceLoader {
-  loadStylesheet: (path: string) => Promise<PublisherStylesheet | null>;
+export interface PublisherFontFaceLoader {
   loadFontFaces: (
-    stylesheets: PublisherStylesheet[],
+    stylesheets: BookStylesheet[],
   ) => Promise<PublisherFontFace[]>;
 }
 
-export function createPublisherResourceLoader(
+export function createPublisherFontFaceLoader(
   loadResource: (path: string) => Promise<Blob | null>,
-): PublisherResourceLoader {
-  const stylesheetsByPath = new Map<
-    string,
-    Promise<PublisherStylesheet | null>
-  >();
+): PublisherFontFaceLoader {
   const fontDataUrlsByPath = new Map<string, Promise<string | null>>();
   const fontFacesByStylesheetKey = new Map<
     string,
@@ -186,25 +124,8 @@ export function createPublisherResourceLoader(
     return promise;
   }
 
-  function loadStylesheet(path: string): Promise<PublisherStylesheet | null> {
-    let promise = stylesheetsByPath.get(path);
-    if (!promise) {
-      promise = (async () => {
-        const stylesheet = await loadResource(path);
-        if (!stylesheet) return null;
-        return {
-          cssText: await stylesheet.text(),
-          basePath: path,
-          resourcePath: path,
-        };
-      })();
-      stylesheetsByPath.set(path, promise);
-    }
-    return promise;
-  }
-
   async function loadFontFaces(
-    stylesheets: PublisherStylesheet[],
+    stylesheets: BookStylesheet[],
   ): Promise<PublisherFontFace[]> {
     const fontFaceLists = await Promise.all(
       stylesheets.map((stylesheet) => {
@@ -215,7 +136,6 @@ export function createPublisherResourceLoader(
         if (!promise) {
           promise = loadPublisherFontFaces({
             stylesheets: [stylesheet],
-            loadResource,
             loadFontDataUrl,
           });
           fontFacesByStylesheetKey.set(key, promise);
@@ -226,5 +146,5 @@ export function createPublisherResourceLoader(
     return dedupePublisherFontFaces(fontFaceLists.flat());
   }
 
-  return { loadStylesheet, loadFontFaces };
+  return { loadFontFaces };
 }

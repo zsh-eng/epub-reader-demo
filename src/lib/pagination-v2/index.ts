@@ -22,6 +22,10 @@ export {
 } from "./shared/parse-html";
 export { clearPrepareCache, prepareBlocks } from "./shared/prepare-blocks";
 export {
+  inferPublisherBodyFontScale,
+  normalizePublisherBodyFontScale,
+} from "./shared/publisher-body-scale";
+export {
   DEFAULT_PARAGRAPH_SPACING,
   getBlockSpacing,
   getLineHeight,
@@ -30,6 +34,7 @@ export {
 export { DEFAULT_SPREAD_CONFIG } from "./types";
 export type {
   Block,
+  BookPageBreakHints,
   ChapterCanonicalText,
   ContentAnchor,
   FontConfig,
@@ -45,13 +50,16 @@ export type {
   PaginationConfig,
   PaginationStatus,
   PreparedBlock,
+  PreparedImageBlock,
   PreparedInlineItem,
+  PreparedPageBreakBlock,
+  PreparedSpacerBlock,
   PreparedTextBlock,
   PreparedTextItem,
   PublisherBlockRole,
   PublisherFontFace,
   PublisherStyleOptions,
-  PublisherStylesheet,
+  BookStylesheet,
   PublisherTextStyle,
   ResolvedLeafPage,
   ResolvedSpread,

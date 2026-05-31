@@ -69,7 +69,7 @@ describe("reader chapter content pipeline", () => {
     );
   });
 
-  it("skips publisher stylesheet and font loading unless requested", async () => {
+  it("loads structural stylesheets while skipping publisher fonts unless requested", async () => {
     let resourceLoadCount = 0;
 
     const chapterContent = await buildReaderChapterCachedContent({
@@ -90,12 +90,14 @@ describe("reader chapter content pipeline", () => {
       },
       loadResource: async () => {
         resourceLoadCount += 1;
-        return null;
+        return new Blob([".h1 { page-break-after: avoid; }"], {
+          type: "text/css",
+        });
       },
     });
 
-    expect(resourceLoadCount).toBe(0);
-    expect(chapterContent.publisherStylesheets).toEqual([]);
+    expect(resourceLoadCount).toBe(1);
+    expect(chapterContent.bookStylesheets).toHaveLength(1);
     expect(chapterContent.publisherFontFaces).toEqual([]);
   });
 });

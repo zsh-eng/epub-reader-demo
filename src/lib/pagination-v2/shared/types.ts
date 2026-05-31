@@ -51,6 +51,7 @@ export interface TextBlock {
   id: string;
   tag: BlockTag;
   targetIds?: string[];
+  pageBreakHints?: BookPageBreakHints;
   publisherStyle?: PublisherTextStyle;
   publisherFontFaces?: PublisherFontFace[];
   runs: InlineRun[];
@@ -60,6 +61,7 @@ export interface ImageBlock {
   type: "image";
   id: string;
   targetIds?: string[];
+  pageBreakHints?: BookPageBreakHints;
   src: string;
   alt?: string;
   intrinsicWidth: number;
@@ -70,6 +72,7 @@ export interface SpacerBlock {
   type: "spacer";
   id: string;
   targetIds?: string[];
+  pageBreakHints?: BookPageBreakHints;
 }
 
 export interface PageBreakBlock {
@@ -135,7 +138,7 @@ export interface PublisherBox {
   right?: PublisherLength;
 }
 
-export interface PublisherStylesheet {
+export interface BookStylesheet {
   cssText: string;
   basePath: string;
   resourcePath?: string;
@@ -149,6 +152,14 @@ export interface PublisherFontFace {
 
 export interface PublisherStyleOptions {
   publisherBookStylingEnabled?: boolean;
+  matchPublisherBodyTextSize?: boolean;
+  publisherBodyFontScale?: number;
+}
+
+export interface BookPageBreakHints {
+  breakBefore?: "page";
+  breakAfter?: "page" | "avoid";
+  breakInside?: "avoid";
 }
 
 export interface PreparedTextItem {
@@ -176,6 +187,7 @@ export interface PreparedTextBlock {
   id: string;
   tag: BlockTag;
   targetIds?: string[];
+  pageBreakHints?: BookPageBreakHints;
   publisherStyle?: PublisherTextStyle;
   items: PreparedInlineItem[];
   containsNewlines: boolean;
@@ -185,6 +197,7 @@ export interface PreparedImageBlock {
   type: "image";
   id: string;
   targetIds?: string[];
+  pageBreakHints?: BookPageBreakHints;
   src: string;
   alt?: string;
   intrinsicWidth: number;
@@ -195,6 +208,7 @@ export interface PreparedSpacerBlock {
   type: "spacer";
   id: string;
   targetIds?: string[];
+  pageBreakHints?: BookPageBreakHints;
 }
 
 export interface PreparedPageBreakBlock {
