@@ -1,10 +1,487 @@
-# Extracting a General-Purpose Local-First Sync Library
+# Sync Architecture and DX RFC
 
-This document analyses the epub-reader-demo sync infrastructure and proposes what changes are needed to turn it into a standalone, reusable local-first sync library for personal apps.
+This document records the proposed sync developer experience and the current
+epub-reader-demo sync infrastructure. The current proposal is SQLite-first and
+does not require Drizzle or Dexie in the sync core.
 
 ---
 
-## Current Architecture Overview
+## RFC: SQLite-First Sync DX
+
+**Status**: Draft
+
+**Date**: 2026-07-07
+
+**Goal**: define a small, explicit developer experience for local-first personal
+apps that need whole-app bootstrap catch-up, incremental sync, offline reads,
+tombstones, and portable local storage across web and Expo/native clients.
+
+### Design Principles
+
+1. **Local reads should be ordinary database reads.**
+   The app should query local materialized tables directly through typed helpers
+   or a local SQL driver. Reads should not require network access or a sync
+   service call.
+
+2. **Local writes must go through sync-aware APIs.**
+   The sync layer should own HLC generation, dirty metadata, tombstones, and
+   pending push state. We should not rely on storage mutation detection to infer
+   whether a write is local or remote.
+
+3. **Remote apply must be explicit.**
+   Applying server records should use a separate path from local user writes, so
+   batching and conflict handling are predictable.
+
+4. **Bootstrap catch-up should be whole-app by default.**
+   A fresh device should pull all non-blob records for an app from cursor `0`,
+   then continue with incremental cursor-based catch-up. Lazy network fetch on
+   view should not be the primary model.
+
+5. **The server should store sync records as a generic bag of rows.**
+   The server should not need an app-specific migration for every client-side
+   table. It should index sync records by app, user, table, optional scope, and
+   cursor order.
+
+6. **Files and blobs are separate from metadata sync.**
+   EPUB files, covers, and extracted reader caches should stay content-addressed
+   or local-only rather than being embedded into sync rows.
+
+7. **Stay SQL-first at the storage boundary.**
+   The schema DSL exists to derive types, table metadata, and predictable SQL.
+   Generated queries and any future migration format should stay close to
+   ordinary SQL so changes are easy to inspect.
+
+### Non-Goals
+
+- Real-time multi-user collaboration.
+- Field-level merge or CRDT support.
+- Tombstone garbage collection in the first version.
+- A general-purpose ORM.
+- Replacing React Query for UI cache management.
+- Supporting every browser storage backend in the first implementation.
+- A general Dexie-to-SQLite client migration path for the existing app.
+
+### Proposed Application DX
+
+Application code defines a schema once:
+
+```ts
+export const schema = defineSyncSchema({
+  books: table({
+    id: text().primaryKey(),
+    fileHash: text().notNull().unique(),
+    title: text().notNull(),
+    author: text().notNull(),
+    fileSize: integer().notNull(),
+    dateAdded: integer().notNull(),
+    lastOpened: integer().nullable(),
+    coverContentHash: text().nullable(),
+  }).sync({
+    recordId: "id",
+    conflict: "lww",
+  }),
+
+  highlights: table({
+    id: text().primaryKey(),
+    bookId: text().notNull().index(),
+    spineItemId: text().notNull().index(),
+    text: text().notNull(),
+    color: text().notNull(),
+    createdAt: integer().notNull(),
+    updatedAt: integer().nullable(),
+  }).sync({
+    recordId: "id",
+    scopeId: "bookId",
+    conflict: "lww",
+  }),
+
+  readingCheckpoints: table({
+    id: text().primaryKey(),
+    bookId: text().notNull().index(),
+    deviceId: text().notNull().index(),
+    currentSpineIndex: integer().notNull(),
+    scrollProgress: real().notNull(),
+    lastRead: integer().notNull(),
+  }).sync({
+    recordId: "id",
+    scopeId: "bookId",
+    conflict: "lww",
+  }),
+});
+```
+
+The schema should generate or derive:
+
+- local `CREATE TABLE` SQL
+- local indexes
+- TypeScript row types
+- sync table metadata
+- payload serializers and parsers
+- typed query helper stubs
+- optional migration metadata later
+
+The generated output should be boring and reviewable. The sync package should
+not hide complex behavior in an opaque runtime.
+
+The first schema DSL should support a deliberately small subset:
+
+- `text`, `integer`, `real`, and JSON-encoded `text`
+- primary keys
+- required and nullable fields
+- single-column indexes
+- single-column unique indexes
+- table-level sync metadata: `recordId`, optional `scopeId`, and `conflict`
+
+Compound indexes, foreign keys, custom constraints, generated columns, and raw
+SQL schema extensions should wait until a concrete app query needs them.
+
+### Local Query DX
+
+Reads should use typed local helpers over SQLite:
+
+```ts
+const book = await db.books.get(bookId);
+const highlights = await db.highlights.listByBook(bookId);
+const checkpoint = await db.readingCheckpoints.getByBookAndDevice(
+  bookId,
+  deviceId,
+);
+```
+
+These helpers should compile down to straightforward SQL:
+
+```sql
+select * from highlights
+where book_id = ?
+order by created_at;
+```
+
+The first version should not expose a raw SQL escape hatch through the sync
+library. The app can still own internal SQL helpers, but the package DX should
+start with generated or handwritten typed helpers for known query patterns.
+
+### Local Write DX
+
+Writes should be sync-aware and explicit:
+
+```ts
+await sync.books.put(book);
+await sync.highlights.put(highlight);
+await sync.highlights.delete(highlightId);
+
+await sync.transaction(async (tx) => {
+  await tx.highlights.put(highlight);
+  await tx.notes.put(note);
+});
+```
+
+A local write should update the domain table and sync metadata in the same local
+transaction. A delete should create or update a tombstone, not hard-delete the
+server-visible sync record.
+
+### Remote Apply DX
+
+Remote sync should use a separate code path:
+
+```ts
+const batch = await transport.pullApp({ appName: "ebook-reader", since });
+const applied = await sync.applyRemote(batch.records);
+await sync.setCursor(batch.cursor);
+```
+
+`applyRemote` should:
+
+- validate the incoming table and payload
+- compare HLCs per `{ tableName, recordId }`
+- update local materialized rows when the remote record wins
+- update local sync metadata
+- record affected tables and scopes for cache invalidation
+- advance the local HLC service after receiving remote HLCs
+
+### React Query DX
+
+React Query should remain the UI cache layer:
+
+```ts
+export function useBookHighlights(bookId: string) {
+  return useQuery({
+    queryKey: ["highlights", bookId],
+    queryFn: () => db.highlights.listByBook(bookId),
+  });
+}
+
+export function useAddHighlight(bookId: string) {
+  return useSyncedMutation({
+    mutationFn: (highlight: NewHighlight) => sync.highlights.put(highlight),
+    invalidate: [["highlights", bookId]],
+  });
+}
+```
+
+After `applyRemote`, the sync layer should return affected table/scope pairs so
+the app or React binding can invalidate the correct queries.
+
+### Local Storage Model
+
+The first implementation should be SQLite-first. Each app table should be a real
+local table because ebook-reader, flashcards, and budgeting-style apps benefit
+from normal indexed queries.
+
+Sync metadata should live in sidecar tables:
+
+```sql
+create table sync_meta (
+  table_name text not null,
+  record_id text not null,
+  hlc text not null,
+  device_id text not null,
+  last_server_seq integer not null default 0,
+  dirty integer not null default 0,
+  is_deleted integer not null default 0,
+  primary key (table_name, record_id)
+);
+
+create table sync_cursors (
+  cursor_key text primary key,
+  server_seq integer not null
+);
+```
+
+Keeping sync metadata in sidecar tables keeps domain tables readable and makes
+query helper code easier to review.
+
+`last_server_seq` is the last server sequence known for this local record
+version. It is `0` for a new local record that has never been accepted by the
+server. If a previously synced record is edited locally, `dirty` becomes `1` and
+`last_server_seq` remains the previous acknowledged sequence until the server
+accepts the new version.
+
+`dirty` is local-only state. `dirty = 1` means this device has a local write that
+still needs to be pushed. Remote apply should write `dirty = 0`. Successful push
+acknowledgement should update `last_server_seq` and set `dirty = 0`.
+
+`sync_cursors.server_seq` uses `0` to mean "this scope has never synced." It is
+not per-record state; it tracks app-level or table-level catch-up progress.
+
+### Server Storage Model
+
+The server stores generic sync records:
+
+```ts
+interface ServerSyncRecord {
+  appName: string;
+  userId: string;
+  tableName: string;
+  recordId: string;
+  scopeId?: string;
+  serverSeq: number;
+  hlc: string;
+  deviceId: string;
+  schemaVersion: number;
+  isDeleted: boolean;
+  payload: Record<string, unknown>;
+}
+```
+
+`payload` should use canonical schema field names, not local SQLite column
+names. For example, the wire payload should use `bookId`, not `book_id`.
+
+Preferred option:
+
+- Domain/schema field names are the sync payload format.
+- SQLite column names are local storage details.
+- Serializers map between payload fields and local columns.
+
+Tradeoffs:
+
+- Canonical field names keep the wire format stable across SQLite, Expo,
+  sqlite-wasm, and future storage adapters.
+- Canonical field names match TypeScript app types and are easier to inspect in
+  server JSON.
+- Column names would make local SQL dumps simpler, but they leak one storage
+  backend's naming convention into the server protocol and make future storage
+  changes harder.
+
+Recommended indexes:
+
+```sql
+(app_name, user_id, server_seq)
+(app_name, user_id, table_name, server_seq)
+(app_name, user_id, table_name, scope_id, server_seq)
+```
+
+`serverSeq` should be a monotonic sequence for the physical server sync table.
+Clients can store cursors with gaps. Gaps are acceptable because each client only
+cares that future pulls ask for records where `serverSeq > localCursor`.
+
+### Bootstrap and Incremental Sync
+
+Bootstrap catch-up:
+
+```ts
+await sync.bootstrapApp();
+```
+
+Expected behavior:
+
+1. Pull all non-blob sync records for `{ appName, userId }` from cursor `0`.
+2. Apply records to local materialized tables.
+3. Store the highest observed `serverSeq`.
+4. Push any local records created before authentication completed.
+
+Incremental catch-up:
+
+```ts
+await sync.pullApp();
+await sync.pushPending();
+```
+
+Expected behavior:
+
+1. Pull records after the local app cursor.
+2. Apply them locally with HLC LWW.
+3. Push pending local dirty records in batches.
+4. Mark accepted local records clean and store their assigned server sequence in
+   `last_server_seq`.
+
+### Tombstones
+
+The first implementation should keep tombstones indefinitely. This is simpler
+and correct for personal-scale apps.
+
+Future tombstone garbage collection would require server-side device watermarks:
+
+```ts
+interface DeviceSyncWatermark {
+  appName: string;
+  userId: string;
+  deviceId: string;
+  lastSeenServerSeq: number;
+  lastActiveAt: number;
+}
+```
+
+This should not be required for the first implementation.
+
+### Web SQLite Target
+
+The web implementation should focus on sqlite-wasm first. The preferred shape is
+one `SqlDriver` interface with adapters for sqlite-wasm on web and Expo SQLite
+on native.
+
+The sqlite-wasm adapter should be the first web spike because it tests the main
+architectural bet: one SQLite-first local storage model across web and native.
+Dexie should be treated as a fallback for the existing app, not as the new sync
+package's target backend.
+
+### Existing App Cutover
+
+The first cutover for an existing app should avoid a full client-side
+Dexie-to-SQLite migration. The preferred path is a server-side reseed:
+
+1. Ensure the old app has synced its local pending changes.
+2. Freeze or gate old sync writes during the cutover window.
+3. Export the current Cloudflare/D1 sync data.
+4. Transform it into the new server bag-of-rows format.
+5. Seed a new Cloudflare database or sync table.
+6. Let new clients bootstrap from cursor `0` into fresh SQLite tables.
+7. After verification, clear the old IndexedDB/Dexie contents.
+
+This treats the new client as a fresh device. It does not preserve old unsynced
+local-only records, which is acceptable for the initial single-user apps as long
+as the data is synced before cutover.
+
+The new server can assign fresh `serverSeq` values during the seed. Existing
+clients will bootstrap from `0`, so preserving old cursor values is unnecessary.
+The migration should preserve stable domain ids, payload data, HLCs where useful,
+and tombstone state.
+
+Keeping deleted rows in the seed is acceptable for personal-scale data because
+it keeps the cutover conservative. However, retired tables should be explicitly
+excluded from the new schema and from the seed, so deleted or obsolete product
+surfaces are not accidentally carried forward.
+
+The broader question of schema migration source-of-truth remains deferred. We do
+not need to decide yet whether future migrations are authored as SQL files,
+schema DSL changes, generated stubs, or handwritten TypeScript data migrations.
+
+### Query Helper Generation
+
+Query helpers should be generated files in the first version.
+
+The schema DSL should generate boring TypeScript modules such as:
+
+```ts
+export const highlightsQueries = {
+  get: (db: SqlDriver, id: string) =>
+    db.get<Highlight>("select * from highlights where id = ?", [id]),
+
+  listByBook: (db: SqlDriver, bookId: string) =>
+    db.all<Highlight>(
+      "select * from highlights where book_id = ? order by created_at",
+      [bookId],
+    ),
+};
+```
+
+This is preferable to runtime query objects for v1 because generated files are
+easy to inspect, test, and edit when the generated shape is insufficient.
+
+For this project, ordinary exported TypeScript types and functions are preferred
+over Hono-style deep type inference. Type inference can still derive row and
+helper types from the schema, but the generated output should remain simple
+enough for humans and agents to patch directly.
+
+A local `SKILL.md` should document how to use the sync library, when schema
+changes require regeneration, which generated files should not be hand-edited,
+and which app code paths must use sync-aware writes.
+
+Tradeoffs:
+
+- Generated files add a codegen step.
+- Runtime helpers avoid generated files, but they hide more behavior and are
+  harder to review.
+- Handwritten helpers are fine for unusual queries; the generator should cover
+  the standard `get`, `listByScope`, and indexed lookup cases first.
+- Hono-style type inference can give polished API ergonomics, but it increases
+  type-level complexity before the sync model has settled.
+
+### Initial PR Breakdown
+
+1. Document this RFC in `SYNC.md`.
+2. Add a schema DSL prototype with table metadata extraction only.
+3. Add a minimal async SQLite driver interface and fake test driver.
+4. Add a sqlite-wasm web driver spike behind the SQLite driver interface.
+5. Add `sync_meta` and `sync_cursors` local tables.
+6. Generate local `CREATE TABLE` SQL and indexes from the schema subset.
+7. Add typed local query helper stubs for current ebook-reader entities.
+8. Implement explicit sync-aware local writes.
+9. Extract platform-neutral HLC with injected device ID and persistence.
+10. Add server sync v2 storage and HTTP push/pull endpoints.
+11. Add client HTTP transport.
+12. Add bootstrap and incremental sync engine.
+13. Add React Query invalidation helpers.
+14. Add an agent-facing `SKILL.md` for schema edits and generated file workflow.
+15. Add a server-side export, transform, and seed script for the existing ebook
+    reader data.
+16. Cut over the ebook reader by bootstrapping the new client from the seeded
+    server data.
+
+### Open Questions
+
+1. Which sqlite-wasm persistence mode should we use for durable web storage?
+2. Which current synced tables are intentionally retired and should not be
+   included in the new server seed?
+3. What is the long-term source of truth for schema migrations after the
+   standalone library is proven?
+
+---
+
+## Existing Dexie Sync Architecture
+
+The remaining sections describe the current implementation and the earlier
+Dexie extraction path. They are retained as implementation context, not as the
+current RFC direction.
 
 The sync system is a **local-first, bidirectional sync** architecture with:
 
@@ -375,7 +852,10 @@ app.get("/api/sync-timestamp", (c) => c.json({ serverTimestamp: Date.now() }));
 
 ---
 
-## Key Design Decisions to Preserve
+## Existing Dexie Design Decisions
+
+These decisions explain the current Dexie-based implementation. The SQLite-first
+RFC above supersedes the middleware-specific parts for new work.
 
 1. **Single server table for all entities**: The `syncData` table with `(id, tableName, userId)` composite key and JSON `data` column means zero server migrations when adding new client-side tables. This is a huge DX win for personal apps.
 
@@ -393,7 +873,7 @@ app.get("/api/sync-timestamp", (c) => c.json({ serverTimestamp: Date.now() }));
 
 ---
 
-## Open Questions for Library Design
+## Open Questions From the Existing Dexie Extraction Path
 
 1. **Should the library bundle Dexie or accept any IndexedDB wrapper?** Dexie's DBCore middleware is deeply integrated into the sync approach. Supporting alternatives (e.g. idb, raw IndexedDB) would require reimplementing the middleware layer. Recommendation: **couple to Dexie** — it's the standard and the middleware API is powerful.
 
