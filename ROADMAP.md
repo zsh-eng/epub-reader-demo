@@ -173,6 +173,7 @@ Recommended sequencing:
 - [ ] Extract pagination into a separate library when the API stabilizes.
 - [ ] Extract Ctrl+F and highlight logic into the same library if it shares
       enough primitives with pagination.
+- [ ] Investigate reader highlight placement bug on indented paragraphs.
 
 ## Storage And EPUB Processing Ideas
 
