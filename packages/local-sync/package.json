@@ -18,6 +18,14 @@
     "./schema": {
       "types": "./dist/schema/index.d.ts",
       "import": "./dist/schema/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./blob": {
+      "types": "./dist/blob/index.d.ts",
+      "import": "./dist/blob/index.js"
     }
   },
   "scripts": {

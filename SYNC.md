@@ -265,26 +265,30 @@ not per-record state; it tracks app-level or table-level catch-up progress.
 
 ### Server Storage Model
 
-The server stores generic sync records:
+The shared core model distinguishes unsequenced client records from records the
+server has accepted into its ordered change stream. The server stores the latter
+with the authenticated namespace:
 
 ```ts
-interface ServerSyncRecord {
+type ServerSyncRecord = SequencedSyncRecord & {
   appName: string;
   userId: string;
-  tableName: string;
-  recordId: string;
-  scopeId?: string;
-  serverSeq: number;
-  hlc: string;
-  deviceId: string;
-  schemaVersion: number;
-  isDeleted: boolean;
-  payload: Record<string, unknown>;
-}
+};
 ```
 
-`payload` should use canonical schema field names, not local SQLite column
-names. For example, the wire payload should use `bookId`, not `book_id`.
+`SyncRecord` is a discriminated union. A normal record has
+`operation: "put"` and a payload; a tombstone has `operation: "delete"` and no
+payload. The server adapter may represent that union as `is_deleted` plus a
+nullable payload column internally, but deleted domain data is not part of the
+shared contract.
+
+The new package encodes HLC values as `<wallTimeMs>:<logicalCounter>` and keeps
+`deviceId` separate. LWW compares the two parsed numeric HLC components first,
+then `deviceId` as a deterministic tie-breaker. Raw string comparison is not
+part of the new contract.
+
+Put payloads should use canonical schema field names, not local SQLite column
+names. For example, the payload should use `bookId`, not `book_id`.
 
 Preferred option:
 
@@ -313,6 +317,11 @@ Recommended indexes:
 `serverSeq` should be a monotonic sequence for the physical server sync table.
 Clients can store cursors with gaps. Gaps are acceptable because each client only
 cares that future pulls ask for records where `serverSeq > localCursor`.
+
+These are semantic record contracts, not a mandatory wire encoding. HTTP
+transport can infer `userId` from authentication and `appName` from the route,
+group records by table, and use ordinary response compression to avoid repeating
+namespace fields.
 
 ### Bootstrap and Incremental Sync
 
@@ -448,8 +457,8 @@ Tradeoffs:
 
 ### Initial PR Breakdown
 
-1. Document this RFC in `SYNC.md`.
-2. Add a schema DSL prototype with table metadata extraction only.
+1. Scaffold the package and add the schema DSL with metadata extraction only.
+2. Add shared record, batch, cursor, table-policy, and blob-reference contracts.
 3. Add a minimal async SQLite driver interface and fake test driver.
 4. Add a sqlite-wasm web driver spike behind the SQLite driver interface.
 5. Add `sync_meta` and `sync_cursors` local tables.
@@ -869,7 +878,11 @@ RFC above supersedes the middleware-specific parts for new work.
 
 6. **Middleware-based metadata injection**: App code never manually sets `_hlc` or `_deviceId`. The Dexie middleware handles it transparently, making the sync system invisible to domain logic.
 
-7. **HLC string comparison for server-side LWW**: The HLC format (`timestamp-counter-deviceId`) allows SQLite string comparison (`>`) to work directly for ordering, avoiding parsing on the server.
+7. **Legacy HLC encoding**: The current format is
+   `timestamp-counter-deviceId`. Its parser preserves dashed device IDs by
+   joining all components after the timestamp and counter. The current server's
+   raw string comparison can misorder variable-width counters, so the new model
+   uses numeric HLC comparison with a separate device-ID tie-breaker instead.
 
 ---
 

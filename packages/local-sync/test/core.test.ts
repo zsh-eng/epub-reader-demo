@@ -1,0 +1,122 @@
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { BlobRef } from "../src/blob/index.js";
+import {
+  INITIAL_SYNC_CURSOR,
+  type SequencedSyncRecord,
+  type SyncBatch,
+  type SyncRecord,
+  type SyncTablePolicy,
+} from "../src/core/index.js";
+
+type BookPayload = {
+  title: string;
+  cover: BlobRef;
+};
+
+const baseRecord = {
+  tableName: "books",
+  recordId: "book-1",
+  hlc: "1722732000000:0",
+  deviceId: "device-1",
+  schemaVersion: 1,
+} as const;
+
+describe("local-sync core contracts", () => {
+  it("keeps blob references independent of a storage provider", () => {
+    const reference = {
+      blobId: "blob-1",
+      hash: "sha256:abc123",
+      size: 1024,
+      mediaType: "image/jpeg",
+    } satisfies BlobRef;
+
+    expect(reference).toEqual({
+      blobId: "blob-1",
+      hash: "sha256:abc123",
+      size: 1024,
+      mediaType: "image/jpeg",
+    });
+  });
+
+  it("models a local put without a server sequence", () => {
+    const record = {
+      ...baseRecord,
+      operation: "put",
+      payload: {
+        title: "Example",
+        cover: {
+          blobId: "blob-1",
+          hash: "sha256:abc123",
+          size: 1024,
+          mediaType: "image/jpeg",
+        },
+      },
+    } satisfies SyncRecord<BookPayload>;
+
+    expect(record.operation).toBe("put");
+    expect(record.payload.title).toBe("Example");
+    expectTypeOf(record).toMatchTypeOf<SyncRecord<BookPayload>>();
+  });
+
+  it("models a tombstone without retaining domain payload", () => {
+    const record = {
+      ...baseRecord,
+      operation: "delete",
+    } satisfies SyncRecord<BookPayload>;
+
+    expect("payload" in record).toBe(false);
+
+    const invalidRecord: SyncRecord<BookPayload> = {
+      ...baseRecord,
+      operation: "delete",
+      // @ts-expect-error Tombstones must not carry domain payload.
+      payload: { title: "Old data" },
+    };
+    expect(invalidRecord.operation).toBe("delete");
+  });
+
+  it("adds server ordering only to sequenced records", () => {
+    const record = {
+      ...baseRecord,
+      operation: "delete",
+      serverSeq: 42,
+    } satisfies SequencedSyncRecord<BookPayload>;
+
+    expect(record.serverSeq).toBe(42);
+    expectTypeOf(record).toMatchTypeOf<SequencedSyncRecord<BookPayload>>();
+  });
+
+  it("carries catch-up progress on the batch instead of each client request", () => {
+    const record = {
+      ...baseRecord,
+      operation: "delete",
+      serverSeq: 42,
+    } satisfies SequencedSyncRecord<BookPayload>;
+    const batch = {
+      records: [record],
+      cursor: 42,
+      hasMore: false,
+    } satisfies SyncBatch<BookPayload>;
+
+    expect(batch.cursor).toBe(42);
+    expect(batch.hasMore).toBe(false);
+    expect(INITIAL_SYNC_CURSOR).toBe(0);
+  });
+
+  it("describes scoped and whole-app table policies", () => {
+    const highlights = {
+      recordId: "id",
+      scopeId: "bookId",
+      conflict: "lww",
+      schemaVersion: 1,
+    } satisfies SyncTablePolicy<"id", "bookId">;
+    const settings = {
+      recordId: "id",
+      conflict: "lww",
+      schemaVersion: 1,
+    } satisfies SyncTablePolicy<"id">;
+
+    expect(highlights.scopeId).toBe("bookId");
+    expect("scopeId" in settings).toBe(false);
+  });
+});
