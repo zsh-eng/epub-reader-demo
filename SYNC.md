@@ -372,6 +372,40 @@ interface DeviceSyncWatermark {
 
 This should not be required for the first implementation.
 
+### SQLite Driver Contract
+
+Storage-specific code should depend on three asynchronous operations:
+
+```ts
+interface SqlExecutor {
+  run(sql: string, parameters: readonly SqlValue[]): Promise<SqlRunResult>;
+  all<Row>(
+    sql: string,
+    parameters: readonly SqlValue[],
+  ): Promise<readonly Row[]>;
+}
+
+interface SqlDriver extends SqlExecutor {
+  transaction<Result>(
+    work: (transaction: SqlExecutor) => Promise<Result>,
+  ): Promise<Result>;
+}
+```
+
+`run` covers DDL and writes, `all` covers reads, and `transaction` guarantees
+commit on success or rollback on failure. Parameters are always explicit,
+including an empty array for statements without bindings. The interface does
+not expose query builders, migrations, nested transactions, or backend-specific
+connection objects.
+
+`SqlRunResult` exposes only `rowsAffected`. Synced entities use stable IDs
+created by the application, so the portable boundary does not currently expose
+a backend-generated last-insert ID.
+
+The package's recording fake queues results and records calls. It deliberately
+does not parse SQL or emulate constraints; adapter integration tests should run
+against a real SQLite implementation later.
+
 ### Web SQLite Target
 
 The web implementation should focus on sqlite-wasm first. The preferred shape is

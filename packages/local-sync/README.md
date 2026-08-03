@@ -57,6 +57,28 @@ These interfaces describe semantic records, not a required JSON encoding. An
 HTTP transport may infer the user and app from request context, group records by
 table, and compress batches without changing the core model.
 
+Storage adapters use a deliberately small asynchronous SQLite boundary:
+
+```ts
+import type { SqlDriver } from "@zsh-eng/local-sync/adapters/sqlite";
+
+async function findBook(driver: SqlDriver, id: string) {
+  const rows = await driver.all<Book>(
+    "select id, title, author from books where id = ?",
+    [id],
+  );
+  return rows[0];
+}
+
+await driver.transaction(async (transaction) => {
+  await transaction.run("delete from books where id = ?", ["book-1"]);
+});
+```
+
+Tests can use `FakeSqlDriver` from `/adapters/sqlite/testing` to queue results
+and inspect issued statements without depending on a SQLite runtime. The fake
+does not parse SQL or emulate database behavior.
+
 The package does not yet generate database tables, intercept writes, resolve
 conflicts, communicate with a server, or manage blobs. Those capabilities will
 be added as separate, reviewable changes.

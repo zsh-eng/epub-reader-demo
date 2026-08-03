@@ -26,6 +26,14 @@
     "./blob": {
       "types": "./dist/blob/index.d.ts",
       "import": "./dist/blob/index.js"
+    },
+    "./adapters/sqlite": {
+      "types": "./dist/adapters/sqlite/index.d.ts",
+      "import": "./dist/adapters/sqlite/index.js"
+    },
+    "./adapters/sqlite/testing": {
+      "types": "./dist/adapters/sqlite/testing.d.ts",
+      "import": "./dist/adapters/sqlite/testing.js"
     }
   },
   "scripts": {
