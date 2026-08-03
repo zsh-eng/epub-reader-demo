@@ -25,6 +25,13 @@ export default defineConfig({
         },
         extends: "./vitest.config.client.ts",
       },
+      {
+        test: {
+          name: "local-sync",
+          environment: "node",
+          include: ["packages/local-sync/test/**/*.test.ts"],
+        },
+      },
     ],
   },
 });

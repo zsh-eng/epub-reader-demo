@@ -72,6 +72,14 @@
         "wrangler": "^4.85.0",
       },
     },
+    "packages/local-sync": {
+      "name": "@zsh-eng/local-sync",
+      "version": "0.0.0",
+      "devDependencies": {
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5",
+      },
+    },
     "packages/text-highlighter": {
       "name": "@zsh-eng/text-highlighter",
       "version": "0.3.0",
@@ -828,6 +836,8 @@
     "@vitest/spy": ["@vitest/spy@4.1.5", "", {}, "sha512-2lNOsh6+R2Idnf1TCZqSwYlKN2E/iDlD8sgU59kYVl+OMDmvldO1VDk39smRfpUNwYpNRVn3w4YfuC7KfbBnkQ=="],
 
     "@vitest/utils": ["@vitest/utils@4.1.5", "", { "dependencies": { "@vitest/pretty-format": "4.1.5", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug=="],
+
+    "@zsh-eng/local-sync": ["@zsh-eng/local-sync@workspace:packages/local-sync"],
 
     "@zsh-eng/text-highlighter": ["@zsh-eng/text-highlighter@workspace:packages/text-highlighter"],
 
