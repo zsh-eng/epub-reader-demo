@@ -176,8 +176,8 @@ await sync.transaction(async (tx) => {
 ```
 
 A local write should update the domain table and sync metadata in the same local
-transaction. A delete should create or update a tombstone, not hard-delete the
-server-visible sync record.
+transaction. A delete should leave the domain row and its payload in place,
+mark its sidecar metadata as deleted, and make normal query helpers hide it.
 
 ### Remote Apply DX
 
@@ -193,7 +193,8 @@ await sync.setCursor(batch.cursor);
 
 - validate the incoming table and payload
 - compare HLCs per `{ tableName, recordId }`
-- update local materialized rows when the remote record wins
+- update local materialized rows, including retained delete payloads, when the
+  remote record wins
 - update local sync metadata
 - record affected tables and scopes for cache invalidation
 - advance the local HLC service after receiving remote HLCs
@@ -248,7 +249,9 @@ create table sync_cursors (
 ```
 
 Keeping sync metadata in sidecar tables keeps domain tables readable and makes
-query helper code easier to review.
+query helper code easier to review. Normal generated queries should join or
+exclude `sync_meta.is_deleted = 1`; administrative and restore flows can read
+those retained rows explicitly.
 
 `last_server_seq` is the last server sequence known for this local record
 version. It is `0` for a new local record that has never been accepted by the
@@ -276,11 +279,10 @@ type ServerSyncRecord = SequencedSyncRecord & {
 };
 ```
 
-`SyncRecord` is a discriminated union. A normal record has
-`operation: "put"` and a payload; a tombstone has `operation: "delete"` and no
-payload. The server adapter may represent that union as `is_deleted` plus a
-nullable payload column internally, but deleted domain data is not part of the
-shared contract.
+`SyncRecord` is a discriminated union. Both `operation: "put"` and
+`operation: "delete"` carry the complete domain payload. The server adapter may
+represent the operation as `is_deleted` alongside the payload internally, but
+it should not remove payload fields when a row becomes a tombstone.
 
 The new package encodes HLC values as `<wallTimeMs>:<logicalCounter>` and keeps
 `deviceId` separate. LWW compares the two parsed numeric HLC components first,
@@ -355,8 +357,10 @@ Expected behavior:
 
 ### Tombstones
 
-The first implementation should keep tombstones indefinitely. This is simpler
-and correct for personal-scale apps.
+The first implementation should preserve tombstones and their domain payloads
+indefinitely on both clients and the server. Normal queries hide deleted rows,
+while retaining them makes an explicit restore possible. A future cleanup job
+or user-controlled retention policy is outside the first implementation.
 
 Future tombstone garbage collection would require server-side device watermarks:
 

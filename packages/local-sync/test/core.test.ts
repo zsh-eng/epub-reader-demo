@@ -58,27 +58,38 @@ describe("local-sync core contracts", () => {
     expectTypeOf(record).toMatchTypeOf<SyncRecord<BookPayload>>();
   });
 
-  it("models a tombstone without retaining domain payload", () => {
+  it("retains the domain payload on a tombstone", () => {
     const record = {
       ...baseRecord,
       operation: "delete",
+      payload: {
+        title: "Example",
+        cover: {
+          blobId: "blob-1",
+          hash: "sha256:abc123",
+          size: 1024,
+          mediaType: "image/jpeg",
+        },
+      },
     } satisfies SyncRecord<BookPayload>;
 
-    expect("payload" in record).toBe(false);
-
-    const invalidRecord: SyncRecord<BookPayload> = {
-      ...baseRecord,
-      operation: "delete",
-      // @ts-expect-error Tombstones must not carry domain payload.
-      payload: { title: "Old data" },
-    };
-    expect(invalidRecord.operation).toBe("delete");
+    expect(record.payload.title).toBe("Example");
+    expectTypeOf(record).toMatchTypeOf<SyncRecord<BookPayload>>();
   });
 
   it("adds server ordering only to sequenced records", () => {
     const record = {
       ...baseRecord,
       operation: "delete",
+      payload: {
+        title: "Example",
+        cover: {
+          blobId: "blob-1",
+          hash: "sha256:abc123",
+          size: 1024,
+          mediaType: "image/jpeg",
+        },
+      },
       serverSeq: 42,
     } satisfies SequencedSyncRecord<BookPayload>;
 
@@ -90,6 +101,15 @@ describe("local-sync core contracts", () => {
     const record = {
       ...baseRecord,
       operation: "delete",
+      payload: {
+        title: "Example",
+        cover: {
+          blobId: "blob-1",
+          hash: "sha256:abc123",
+          size: 1024,
+          mediaType: "image/jpeg",
+        },
+      },
       serverSeq: 42,
     } satisfies SequencedSyncRecord<BookPayload>;
     const batch = {

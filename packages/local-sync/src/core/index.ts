@@ -39,14 +39,17 @@ export interface SyncPutRecord<TPayload = SyncPayload> extends SyncRecordBase {
   readonly payload: TPayload;
 }
 
-/** A retained deletion marker. Tombstones intentionally carry no domain data. */
-export interface SyncDeleteRecord extends SyncRecordBase {
+/** A retained deletion marker whose domain data remains available to restore. */
+export interface SyncDeleteRecord<
+  TPayload = SyncPayload,
+> extends SyncRecordBase {
   readonly operation: "delete";
+  readonly payload: TPayload;
 }
 
 export type SyncRecord<TPayload = SyncPayload> =
   | SyncPutRecord<TPayload>
-  | SyncDeleteRecord;
+  | SyncDeleteRecord<TPayload>;
 
 /** A record after the server has placed it in the ordered change stream. */
 export type SequencedSyncRecord<TPayload = SyncPayload> =

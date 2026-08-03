@@ -49,9 +49,11 @@ as a separate field and is used as the final deterministic tie-breaker when both
 HLC components match. Implementations must compare the parsed numeric tuple,
 not the encoded strings directly.
 
-Deletes use `operation: "delete"` and carry no payload. Blob bytes also stay
-outside sync records; payloads can refer to them with `BlobRef` from the `/blob`
-entrypoint.
+Deletes use `operation: "delete"` and retain the complete domain payload. Both
+client and server keep the materialized row so a future write can restore it;
+normal local queries hide it using the accompanying tombstone metadata. Blob
+bytes still stay outside sync records, and payloads can refer to them with
+`BlobRef` from the `/blob` entrypoint.
 
 These interfaces describe semantic records, not a required JSON encoding. An
 HTTP transport may infer the user and app from request context, group records by
@@ -71,7 +73,10 @@ async function findBook(driver: SqlDriver, id: string) {
 }
 
 await driver.transaction(async (transaction) => {
-  await transaction.run("delete from books where id = ?", ["book-1"]);
+  await transaction.run("update books set title = ? where id = ?", [
+    "Updated",
+    "book-1",
+  ]);
 });
 ```
 
