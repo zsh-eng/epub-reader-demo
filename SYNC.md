@@ -249,6 +249,43 @@ create table sync_cursors (
 );
 ```
 
+`generateSqliteSchema(schema)` now emits the app tables, declared single-column
+indexes, and these shared sidecars. `initializeSqliteSchema(driver, schema)`
+executes the statements in one transaction. Identifiers remain exactly as
+declared in the schema and are quoted for SQLite; the first version does not
+perform an implicit naming conversion.
+
+The generated statements use `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF
+NOT EXISTS`. This makes fresh-database initialization idempotent, but it is not
+a migration mechanism: changing a schema definition does not alter an existing
+table. During package development, applications can call the initializer each
+time they open the database.
+
+Before the first production cutover, the local database will gain an ordered
+migration runner and a package-owned table such as:
+
+```sql
+create table local_sync_migrations (
+  version integer primary key,
+  name text not null,
+  checksum text not null
+);
+```
+
+Migration 1 will contain a checked-in, immutable copy of the generated initial
+schema. Later schema changes will add checked-in SQL migrations rather than
+changing old migrations. On database open, the runner will begin an immediate
+transaction, read the applied versions, verify their checksums, apply missing
+migrations in order, record them, and commit. Fresh databases and upgraded
+databases will therefore follow the same migration history.
+
+The migration files and `local_sync_migrations` rows are sufficient as the
+initial source of truth; a separate schema lockfile is not required. A generated
+schema snapshot can be added later if tooling begins diffing the schema DSL and
+generating migrations automatically. Local SQLite migration versions remain
+separate from `SyncRecord.schemaVersion`, which describes synced payload
+compatibility rather than physical database layout.
+
 Keeping sync metadata in sidecar tables keeps domain tables readable and makes
 query helper code easier to review. Normal generated queries should join or
 exclude `sync_meta.is_deleted = 1`; administrative and restore flows can read
@@ -556,19 +593,19 @@ Tradeoffs:
 2. Add shared record, batch, cursor, table-policy, and blob-reference contracts.
 3. Add a minimal async SQLite driver interface and fake test driver.
 4. Add a sqlite-wasm web driver spike behind the SQLite driver interface.
-5. Add `sync_meta` and `sync_cursors` local tables.
-6. Generate local `CREATE TABLE` SQL and indexes from the schema subset.
-7. Add typed local query helper stubs for current ebook-reader entities.
-8. Implement explicit sync-aware local writes.
-9. Extract platform-neutral HLC with injected device ID and persistence.
-10. Add server sync v2 storage and HTTP push/pull endpoints.
-11. Add client HTTP transport.
-12. Add bootstrap and incremental sync engine.
-13. Add React Query invalidation helpers.
-14. Add an agent-facing `SKILL.md` for schema edits and generated file workflow.
-15. Add a server-side export, transform, and seed script for the existing ebook
+5. Generate local app tables, indexes, `sync_meta`, and `sync_cursors` from the
+   schema subset.
+6. Add typed local query helper stubs for current ebook-reader entities.
+7. Implement explicit sync-aware local writes.
+8. Extract platform-neutral HLC with injected device ID and persistence.
+9. Add server sync v2 storage and HTTP push/pull endpoints.
+10. Add client HTTP transport.
+11. Add bootstrap and incremental sync engine.
+12. Add React Query invalidation helpers.
+13. Add an agent-facing `SKILL.md` for schema edits and generated file workflow.
+14. Add a server-side export, transform, and seed script for the existing ebook
     reader data.
-16. Cut over the ebook reader by bootstrapping the new client from the seeded
+15. Cut over the ebook reader by bootstrapping the new client from the seeded
     server data.
 
 ### Open Questions

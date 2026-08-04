@@ -28,3 +28,5 @@ export interface SqlDriver extends SqlExecutor {
     work: (transaction: SqlExecutor) => Promise<TResult>,
   ): Promise<TResult>;
 }
+
+export * from "./schema.js";

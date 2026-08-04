@@ -43,7 +43,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "bun run test:unit && bun run test:sqlite && bun run test:sqlite-wasm",
-    "test:sqlite": "bun test ./test/sqlite-driver-conformance.bun.ts",
+    "test:sqlite": "bun test ./test/sqlite-driver-conformance.bun.ts ./test/sqlite-schema.bun.ts",
     "test:sqlite-wasm": "bun run build && playwright test --config test/sqlite-wasm/playwright.config.ts",
     "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json"

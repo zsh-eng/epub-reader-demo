@@ -4,7 +4,8 @@ Storage-agnostic building blocks for local-first applications.
 
 This package is being built incrementally inside the EPUB reader monorepo. It
 currently contains the schema definition language and the storage-neutral data
-contracts that future client, server, and adapter modules will share.
+contracts that future client, server, and adapter modules will share. It can
+also initialize the corresponding local SQLite tables and sync sidecars.
 
 ```ts
 import {
@@ -103,6 +104,31 @@ unavailable. Hosts must send `Cross-Origin-Opener-Policy: same-origin` and
 `Cross-Origin-Embedder-Policy: require-corp`; call `db.close()` when the app no
 longer needs the worker.
 
-The package does not yet generate database tables, intercept writes, resolve
-conflicts, communicate with a server, or manage blobs. Those capabilities will
-be added as separate, reviewable changes.
+Initialize app tables and the shared `sync_meta` and `sync_cursors` sidecars
+from the same schema:
+
+```ts
+import {
+  generateSqliteSchema,
+  initializeSqliteSchema,
+} from "@zsh-eng/local-sync/adapters/sqlite";
+
+const statements = generateSqliteSchema(schema);
+await initializeSqliteSchema(db, schema);
+```
+
+`generateSqliteSchema()` returns frozen, inspectable SQL statements. Declared
+table and column names are quoted and preserved exactly; there is no implicit
+camelCase-to-snake_case conversion. `initializeSqliteSchema()` executes those
+statements in one transaction and can be called repeatedly for initialization.
+It uses `CREATE ... IF NOT EXISTS`, so it does not migrate an existing table
+when a schema definition changes. Applications may use this on each database
+open while prototyping. Before a production schema evolves, the generated
+initial statements should be frozen as migration 1 and startup should move to
+ordered, checked-in migrations tracked by a local migration table. The migration
+history and database-side checksums are the initial source of truth; a separate
+schema lockfile is only needed later if migration generation becomes automatic.
+
+The package does not yet intercept writes, resolve conflicts, communicate with
+a server, or manage blobs. Those capabilities will be added as separate,
+reviewable changes.
