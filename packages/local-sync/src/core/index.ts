@@ -8,13 +8,11 @@ export type JsonValue =
 /** The default canonical payload shape exchanged by sync adapters. */
 export type SyncPayload = Readonly<Record<string, JsonValue>>;
 
-/**
- * An encoded `<wallTimeMs>:<logicalCounter>` HLC value.
- *
- * Conflict resolution compares both numeric components, then uses the record's
- * separate device ID as the deterministic final tie-breaker.
- */
-export type HybridLogicalTimestamp = string;
+/** Numeric HLC components used before the device-ID tie-breaker. */
+export interface HybridLogicalTimestamp {
+  readonly wallTimeMs: number;
+  readonly counter: number;
+}
 
 /**
  * A server-assigned position in the app's ordered change stream.

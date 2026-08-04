@@ -254,11 +254,10 @@ query helper code easier to review. Normal generated queries should join or
 exclude `sync_meta.is_deleted = 1`; administrative and restore flows can read
 those retained rows explicitly.
 
-The core record encodes HLC as `<wallTimeMs>:<logicalCounter>`, while the local
-sidecar stores those components as integers. A future client storage adapter
-will parse incoming values and re-encode outgoing values at that boundary. PR
-3b does not implement this mapping: its Bun conformance test supplies the
-numeric components directly to verify SQLite's LWW behavior.
+The core record carries HLC as a structured `{ wallTimeMs, counter }` value, and
+the local sidecar stores those numbers as integer columns. The client storage
+adapter maps fields to columns directly; there is no HLC string parsing or
+encoding boundary.
 
 `last_server_seq` is the last server sequence known for this local record
 version. It is `0` for a new local record that has never been accepted by the
@@ -291,10 +290,10 @@ type ServerSyncRecord = SequencedSyncRecord & {
 represent the operation as `is_deleted` alongside the payload internally, but
 it should not remove payload fields when a row becomes a tombstone.
 
-The new package encodes HLC values as `<wallTimeMs>:<logicalCounter>` and keeps
-`deviceId` separate. LWW compares the two parsed numeric HLC components first,
-then `deviceId` as a deterministic tie-breaker. Raw string comparison is not
-part of the new contract.
+The new package carries HLC as `{ wallTimeMs, counter }` and keeps `deviceId`
+separate. LWW compares the two numeric HLC components first, then `deviceId` as
+a deterministic tie-breaker. Encoded HLC strings are not part of the new
+contract.
 
 Put payloads should use canonical schema field names, not local SQLite column
 names. For example, the payload should use `bookId`, not `book_id`.
@@ -945,7 +944,7 @@ RFC above supersedes the middleware-specific parts for new work.
    `timestamp-counter-deviceId`. Its parser preserves dashed device IDs by
    joining all components after the timestamp and counter. The current server's
    raw string comparison can misorder variable-width counters, so the new model
-   uses numeric HLC comparison with a separate device-ID tie-breaker instead.
+   uses a structured numeric HLC with a separate device-ID tie-breaker instead.
 
 ---
 

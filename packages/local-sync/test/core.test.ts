@@ -16,7 +16,7 @@ type BookPayload = {
 const baseRecord = {
   tableName: "books",
   recordId: "book-1",
-  hlc: "1722732000000:0",
+  hlc: { wallTimeMs: 1_722_732_000_000, counter: 0 },
   deviceId: "device-1",
   schemaVersion: 1,
 } as const;
@@ -55,6 +55,7 @@ describe("local-sync core contracts", () => {
 
     expect(record.operation).toBe("put");
     expect(record.payload.title).toBe("Example");
+    expect(record.hlc).toEqual({ wallTimeMs: 1_722_732_000_000, counter: 0 });
     expectTypeOf(record).toMatchTypeOf<SyncRecord<BookPayload>>();
   });
 

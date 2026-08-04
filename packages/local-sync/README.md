@@ -35,7 +35,7 @@ const localChange: SyncRecord<Book> = {
   recordId: "book-1",
   operation: "put",
   payload: { id: "book-1", title: "Example", author: "A. Reader" },
-  hlc: "1722732000000:0",
+  hlc: { wallTimeMs: 1_722_732_000_000, counter: 0 },
   deviceId: "device-1",
   schemaVersion: 1,
 };
@@ -44,10 +44,10 @@ declare const remoteChange: SequencedSyncRecord<Book>;
 remoteChange.serverSeq;
 ```
 
-The HLC contains only `<wallTimeMs>:<logicalCounter>`. `deviceId` is stored once
-as a separate field and is used as the final deterministic tie-breaker when both
-HLC components match. Implementations must compare the parsed numeric tuple,
-not the encoded strings directly.
+The HLC is a structured `{ wallTimeMs, counter }` value. `deviceId` is stored
+once as a separate field and is used as the final deterministic tie-breaker when
+both HLC components match. Local and server SQLite tables can map the two HLC
+numbers directly to integer columns.
 
 Deletes use `operation: "delete"` and retain the complete domain payload. Both
 client and server keep the materialized row so a future write can restore it;
