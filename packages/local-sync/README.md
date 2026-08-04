@@ -45,10 +45,11 @@ declare const remoteChange: SequencedSyncRecord<Book>;
 remoteChange.serverSeq;
 ```
 
-The HLC is a structured `{ wallTimeMs, counter }` value. `deviceId` is stored
-once as a separate field and is used as the final deterministic tie-breaker when
-both HLC components match. Local and server SQLite tables can map the two HLC
-numbers directly to integer columns.
+The client assigns the structured HLC `{ wallTimeMs, counter }` before syncing.
+Its logical counter preserves local ordering when physical time does not advance
+or moves backwards. `deviceId` is stored once as a separate field and is the
+final deterministic tie-breaker. The server separately assigns `serverSeq` only
+after accepting a version into its catch-up stream.
 
 Deletes use `operation: "delete"` and retain the complete domain payload. Both
 client and server keep the materialized row so a future write can restore it;
@@ -59,6 +60,36 @@ bytes still stay outside sync records, and payloads can refer to them with
 These interfaces describe semantic records, not a required JSON encoding. An
 HTTP transport may infer the user and app from request context, group records by
 table, and compress batches without changing the core model.
+
+The framework-neutral server coordinator operates on a generic latest-state bag
+of rows:
+
+```ts
+import { SyncServer } from "@zsh-eng/local-sync/server";
+import { InMemoryServerSyncStorage } from "@zsh-eng/local-sync/server/testing";
+
+const server = new SyncServer<Book>(new InMemoryServerSyncStorage<Book>());
+
+const pushed = await server.push({
+  appName: "ebook-reader",
+  userId: "user-1",
+  deviceId: "device-1",
+  records: [localChange],
+});
+
+const page = await server.pull({
+  appName: "ebook-reader",
+  userId: "user-1",
+  cursor: 0,
+});
+```
+
+The in-memory implementation is test support. A production adapter implements
+`ServerSyncStorage`: it atomically applies LWW per logical row, assigns a new
+global `serverSeq` only to accepted writes, and scans rows in sequence order.
+Every push outcome returns the current winner, including when an older candidate
+is rejected. Pulls support whole-app, table, and table-plus-scope cursors and do
+not exclude records written by the requesting device.
 
 Storage adapters use a deliberately small asynchronous SQLite boundary:
 
@@ -129,6 +160,7 @@ ordered, checked-in migrations tracked by a local migration table. The migration
 history and database-side checksums are the initial source of truth; a separate
 schema lockfile is only needed later if migration generation becomes automatic.
 
-The package does not yet intercept writes, resolve conflicts, communicate with
-a server, or manage blobs. Those capabilities will be added as separate,
-reviewable changes.
+The package does not yet intercept local writes, implement a production server
+storage adapter or HTTP transport, perform client sync orchestration, or manage
+blob transfers. Those capabilities will be added as separate, reviewable
+changes.

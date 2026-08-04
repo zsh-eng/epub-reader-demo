@@ -23,6 +23,14 @@
       "types": "./dist/core/index.d.ts",
       "import": "./dist/core/index.js"
     },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./server/testing": {
+      "types": "./dist/server/testing.d.ts",
+      "import": "./dist/server/testing.js"
+    },
     "./blob": {
       "types": "./dist/blob/index.d.ts",
       "import": "./dist/blob/index.js"

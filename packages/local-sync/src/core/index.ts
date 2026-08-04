@@ -8,7 +8,7 @@ export type JsonValue =
 /** The default canonical payload shape exchanged by sync adapters. */
 export type SyncPayload = Readonly<Record<string, JsonValue>>;
 
-/** Numeric HLC components used before the device-ID tie-breaker. */
+/** Client-generated HLC components used before the device-ID tie-breaker. */
 export interface HybridLogicalTimestamp {
   readonly wallTimeMs: number;
   readonly counter: number;
@@ -30,6 +30,31 @@ export interface SyncRecordBase {
   readonly hlc: HybridLogicalTimestamp;
   readonly deviceId: string;
   readonly schemaVersion: number;
+}
+
+export type SyncVersion = Pick<SyncRecordBase, "hlc" | "deviceId">;
+
+/**
+ * Reference/client LWW comparison. Production SQL adapters must encode this
+ * ordering atomically in their `ON CONFLICT` condition.
+ */
+export function compareSyncVersions(
+  left: SyncVersion,
+  right: SyncVersion,
+): -1 | 0 | 1 {
+  if (left.hlc.wallTimeMs !== right.hlc.wallTimeMs) {
+    return left.hlc.wallTimeMs < right.hlc.wallTimeMs ? -1 : 1;
+  }
+
+  if (left.hlc.counter !== right.hlc.counter) {
+    return left.hlc.counter < right.hlc.counter ? -1 : 1;
+  }
+
+  if (left.deviceId === right.deviceId) {
+    return 0;
+  }
+
+  return left.deviceId < right.deviceId ? -1 : 1;
 }
 
 export interface SyncPutRecord<TPayload = SyncPayload> extends SyncRecordBase {

@@ -330,7 +330,9 @@ it should not remove payload fields when a row becomes a tombstone.
 The new package carries HLC as `{ wallTimeMs, counter }` and keeps `deviceId`
 separate. LWW compares the two numeric HLC components first, then `deviceId` as
 a deterministic tie-breaker. Encoded HLC strings are not part of the new
-contract.
+contract. `compareSyncVersions()` is the shared implementation of this ordering.
+Device IDs are restricted to NanoID/UUID-compatible ASCII letters, digits,
+underscores, and hyphens so JavaScript and SQLite use the same lexical ordering.
 
 Put payloads should use canonical schema field names, not local SQLite column
 names. For example, the payload should use `bookId`, not `book_id`.
@@ -354,23 +356,87 @@ Tradeoffs:
 Recommended indexes:
 
 ```sql
+unique (app_name, user_id, table_name, record_id)
 (app_name, user_id, server_seq)
 (app_name, user_id, table_name, server_seq)
 (app_name, user_id, table_name, scope_id, server_seq)
 ```
 
-`serverSeq` should be a monotonic sequence for the physical server sync table.
-Clients can store cursors with gaps. Gaps are acceptable because each client only
-cares that future pulls ask for records where `serverSeq > localCursor`.
+The storage adapter must support three ordered pull shapes:
 
-The server does not have the client's two-table atomicity problem. Payload, HLC,
-device ID, tombstone state, and `serverSeq` live in the same generic sync row, so
-the preferred push path is one multi-row UPSERT that performs LWW filtering and
-assigns accepted sequences atomically. This does not depend on an interactive
-transaction API.
+```sql
+-- Whole-app bootstrap or catch-up
+where app_name = ? and user_id = ? and server_seq > ?
+order by server_seq
+limit ?
+
+-- One table
+where app_name = ? and user_id = ?
+  and table_name = ? and server_seq > ?
+order by server_seq
+limit ?
+
+-- One scope within one table
+where app_name = ? and user_id = ?
+  and table_name = ? and scope_id = ? and server_seq > ?
+order by server_seq
+limit ?
+```
+
+The logical-key index also supports fetching the current winners after a push.
+`SyncServer.pull()` requests one lookahead row, returns at most the caller's
+limit, and advances the cursor to the last returned sequence. Whole-app, table,
+and scoped streams therefore keep separate cursors.
+
+`serverSeq` is a monotonic sequence for the physical server sync store.
+Clients can store cursors with gaps. Gaps are acceptable because each client
+only cares that future pulls ask for records where `serverSeq > localCursor`.
+
+`SyncServer` now provides the framework-neutral push and pull behavior. It
+validates namespaces, device ownership, batch/page limits, duplicate logical
+keys, schema versions, and structured HLC values. By default it rejects HLC wall
+times more than five minutes ahead of the server clock; adapters can configure
+that policy and inject a clock for tests.
+
+The `ServerSyncStorage` boundary has two semantic operations:
+
+- `applyLww(namespace, records)` atomically chooses the winner for each logical
+  row and assigns a fresh global sequence only when the candidate wins.
+- `scan(query)` returns latest-state rows after a cursor in ascending sequence
+  order, with optional table and scope filters.
+
+Push outcomes always include the current winning record and its `serverSeq`.
+`accepted: false` means the candidate did not create a new stream position; the
+returned winner lets clients reconcile rejected writes and idempotent retries.
+The in-memory adapter under `/server/testing` is the executable reference for
+these semantics, not a production store.
+
+The server does not have the client's two-table atomicity problem because the
+payload, HLC, device ID, tombstone state, and sequence live in the same generic
+row. An adapter must make each LWW decision and sequence assignment atomic, but
+the whole push batch need not be all-or-nothing. If an adapter fails after a
+partial batch, the client can retry and receive the winners already stored.
 
 The exact D1 SQL shape for allocating a fresh `serverSeq` inside that UPSERT is
 still unproven and belongs in the server-adapter conformance work.
+
+The adapter must not reserve a sequence range in one committed transaction and
+publish those rows in a later transaction. For example, if writer A reserves
+101-110, writer B reserves and commits 111-120, and a client advances to 120,
+writer A cannot later publish 101-110 without those rows being skipped forever.
+A reserved range is safe only when allocation and row acceptance commit under
+the same serialized write transaction, or when lower reserved values can never
+become visible after a higher value.
+
+One candidate to test is a single table with `server_seq integer primary key
+autoincrement` plus the unique logical key. An attempted insert may allocate the
+candidate sequence, and the LWW `DO UPDATE` may copy it only when the candidate
+wins. Sequence gaps are acceptable, but the exact `excluded.server_seq`,
+multi-row UPSERT, rejected-row, and `RETURNING` behavior must be proven against
+D1. Returned rows must be mapped by logical key because SQLite does not promise
+`RETURNING` order. See the official [D1 batch documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch),
+[SQLite UPSERT documentation](https://www.sqlite.org/lang_upsert.html), and
+[SQLite RETURNING documentation](https://sqlite.org/lang_returning.html).
 
 Using one table is not sufficient if those fields are written by separate SQL
 statements: sequence assignment must remain atomic with accepting the record.
@@ -382,7 +448,10 @@ interface.
 These are semantic record contracts, not a mandatory wire encoding. HTTP
 transport can infer `userId` from authentication and `appName` from the route,
 group records by table, and use ordinary response compression to avoid repeating
-namespace fields.
+namespace fields. New pulls include records from the requesting device. This
+keeps bootstrap correct when a device identity is reused and lets every cursor
+advance over the same logical stream; transport-level echo suppression is not
+part of the first version.
 
 ### Bootstrap and Incremental Sync
 
@@ -587,26 +656,39 @@ Tradeoffs:
 - Hono-style type inference can give polished API ergonomics, but it increases
   type-level complexity before the sync model has settled.
 
-### Initial PR Breakdown
+### Completed Package PRs
 
-1. Scaffold the package and add the schema DSL with metadata extraction only.
-2. Add shared record, batch, cursor, table-policy, and blob-reference contracts.
-3. Add a minimal async SQLite driver interface and fake test driver.
-4. Add a sqlite-wasm web driver spike behind the SQLite driver interface.
-5. Generate local app tables, indexes, `sync_meta`, and `sync_cursors` from the
-   schema subset.
-6. Add typed local query helper stubs for current ebook-reader entities.
-7. Implement explicit sync-aware local writes.
-8. Extract platform-neutral HLC with injected device ID and persistence.
-9. Add server sync v2 storage and HTTP push/pull endpoints.
-10. Add client HTTP transport.
-11. Add bootstrap and incremental sync engine.
-12. Add React Query invalidation helpers.
-13. Add an agent-facing `SKILL.md` for schema edits and generated file workflow.
-14. Add a server-side export, transform, and seed script for the existing ebook
-    reader data.
-15. Cut over the ebook reader by bootstrapping the new client from the seeded
-    server data.
+1. Scaffold the package and add the text-only schema DSL.
+2. Add shared sync-record, cursor, table-policy, and blob-reference contracts.
+3. Add the async SQLite driver boundary and prove it with Bun SQLite and
+   sqlite-wasm.
+4. Generate app tables, indexes, `sync_meta`, and `sync_cursors` locally.
+5. Add framework-neutral server bag-of-rows semantics and an in-memory reference
+   adapter.
+
+### Next Focused PRs
+
+6. **D1 SQL conformance spike.** Prove one-table sequence allocation, mixed LWW
+   winners and rejections, idempotent retry, winner lookup, transactional
+   behavior, pagination, and the three indexed query plans in local D1. Record
+   the chosen SQL shape; do not expose a production adapter yet.
+7. **Production D1 storage adapter.** Implement `ServerSyncStorage` using the
+   proven schema and SQL. Add migrations and D1 integration tests, but no Hono
+   routes or ebook-backend wiring.
+8. **Complete the v1 schema vocabulary.** Add integer, real, and JSON-text
+   columns plus table-level sync policy metadata (`recordId`, optional `scopeId`,
+   conflict policy, and payload schema version).
+9. **Platform-neutral client HLC.** Generate and persist the client-owned wall
+   time and logical counter with injected clock, device ID, and state storage.
+10. **Explicit local writes and remote apply.** Atomically update domain rows and
+    `sync_meta`, retain tombstones, apply server winners, and return affected
+    table/scope information. Keep reads as ordinary SQLite queries initially.
+11. **HTTP wire adapter.** Add framework-neutral request/response validation and
+    thin Hono bindings over `SyncServer`, followed by ebook-backend wiring in a
+    separate integration PR.
+12. Add the client HTTP transport, bootstrap/incremental orchestration, React
+    Query invalidation helpers, data reseeding, and one-table-at-a-time ebook
+    cutover as later focused PRs.
 
 ### Open Questions
 

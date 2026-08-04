@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { BlobRef } from "../src/blob/index.js";
 import {
+  compareSyncVersions,
   INITIAL_SYNC_CURSOR,
   type SequencedSyncRecord,
   type SyncBatch,
@@ -22,6 +23,27 @@ const baseRecord = {
 } as const;
 
 describe("local-sync core contracts", () => {
+  it("orders sync versions by HLC components and device ID", () => {
+    expect(
+      compareSyncVersions(
+        { hlc: { wallTimeMs: 10, counter: 0 }, deviceId: "device-z" },
+        { hlc: { wallTimeMs: 11, counter: 0 }, deviceId: "device-a" },
+      ),
+    ).toBe(-1);
+    expect(
+      compareSyncVersions(
+        { hlc: { wallTimeMs: 10, counter: 2 }, deviceId: "device-a" },
+        { hlc: { wallTimeMs: 10, counter: 1 }, deviceId: "device-z" },
+      ),
+    ).toBe(1);
+    expect(
+      compareSyncVersions(
+        { hlc: { wallTimeMs: 10, counter: 2 }, deviceId: "device-b" },
+        { hlc: { wallTimeMs: 10, counter: 2 }, deviceId: "device-a" },
+      ),
+    ).toBe(1);
+  });
+
   it("keeps blob references independent of a storage provider", () => {
     const reference = {
       blobId: "blob-1",
