@@ -436,14 +436,47 @@ driver is test support, not a published production adapter.
 
 ### Web SQLite Target
 
-The web implementation should focus on sqlite-wasm first. The preferred shape is
-one `SqlDriver` interface with adapters for sqlite-wasm on web and Expo SQLite
-on native.
+The web adapter uses `@sqlite.org/sqlite-wasm` in a dedicated module worker. It
+uses the OO1 database API directly rather than the deprecated Worker1/Promiser
+API. OPFS is the default durable storage mode; an explicit in-memory mode exists
+for tests and deliberately ephemeral clients.
 
-The sqlite-wasm adapter should be the first web spike because it tests the main
-architectural bet: one SQLite-first local storage model across web and native.
-Dexie should be treated as a fallback for the existing app, not as the new sync
-package's target backend.
+Most of the adapter code bridges the worker boundary rather than compensating
+for different SQLite behavior. The worker maps OO1 `exec()` and `changes()` to
+the shared `run` and `all` contract. The main thread sends each operation with a
+request ID, then resolves the corresponding Promise when the worker echoes that
+ID in its response. Bun's test adapter needs none of this message transport
+because it calls SQLite in the same process.
+
+The main-thread driver serializes requests through one queue. A transaction
+holds that queue for `BEGIN IMMEDIATE`, every operation issued through the
+transaction executor, and `COMMIT` or `ROLLBACK`. This prevents unrelated
+driver calls from interleaving between worker messages. Transaction callbacks
+must use the executor they receive rather than calling the outer driver.
+
+OPFS does not silently fall back to memory. Opening it fails when the required
+browser facilities are unavailable, allowing the app to present an unsupported
+browser state instead of appearing durable while losing data. Hosts must send:
+
+```text
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+That embedder policy also means cross-origin scripts, images, fonts, and workers
+must provide compatible CORS or Cross-Origin-Resource-Policy headers. The app's
+deployment and file-serving paths need to preserve those headers.
+
+The browser conformance test builds the published adapter and verifies in both
+Chromium and Firefox that parameter binding, affected-row counts, multi-row LWW
+UPSERT with `RETURNING`, callback commit/rollback, and OPFS persistence across a
+worker restart all work. WebKit/Safari remains unverified locally. The upstream
+OPFS VFS documentation requires Safari 17 or newer. Version 1 adopts Safari 17+
+as its web baseline and will not add a persistence fallback for older WebKit.
+
+This confirms the main architectural bet: web and Expo/native can share the
+same `SqlDriver` and local relational model. Dexie remains the existing app's
+fallback during migration, not the new package's target backend.
 
 ### Existing App Cutover
 
@@ -540,10 +573,9 @@ Tradeoffs:
 
 ### Open Questions
 
-1. Which sqlite-wasm persistence mode should we use for durable web storage?
-2. Which current synced tables are intentionally retired and should not be
+1. Which current synced tables are intentionally retired and should not be
    included in the new server seed?
-3. What is the long-term source of truth for schema migrations after the
+2. What is the long-term source of truth for schema migrations after the
    standalone library is proven?
 
 ---

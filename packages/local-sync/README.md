@@ -87,6 +87,22 @@ test exercises this interface against real in-memory SQLite, including
 multi-row LWW UPSERT and atomic domain/sidecar transactions; its driver remains
 test support rather than a package export.
 
+Web apps can open the published sqlite-wasm adapter:
+
+```ts
+import { createSqliteWasmDriver } from "@zsh-eng/local-sync/adapters/sqlite-wasm";
+
+const db = await createSqliteWasmDriver({
+  filename: "/ebook-reader.sqlite3",
+});
+```
+
+The adapter runs SQLite in a dedicated module worker and uses durable OPFS
+storage by default. It does not silently fall back to memory when OPFS is
+unavailable. Hosts must send `Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`; call `db.close()` when the app no
+longer needs the worker.
+
 The package does not yet generate database tables, intercept writes, resolve
 conflicts, communicate with a server, or manage blobs. Those capabilities will
 be added as separate, reviewable changes.
