@@ -38,10 +38,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run",
+    "test": "bun run test:unit && bun run test:sqlite",
+    "test:sqlite": "bun test ./test/sqlite-driver-conformance.bun.ts",
+    "test:unit": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@types/bun": "^1.3.14",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   }

@@ -82,7 +82,10 @@ await driver.transaction(async (transaction) => {
 
 Tests can use `FakeSqlDriver` from `/adapters/sqlite/testing` to queue results
 and inspect issued statements without depending on a SQLite runtime. The fake
-does not parse SQL or emulate database behavior.
+does not parse SQL or emulate database behavior. A separate Bun-only conformance
+test exercises this interface against real in-memory SQLite, including
+multi-row LWW UPSERT and atomic domain/sidecar transactions; its driver remains
+test support rather than a package export.
 
 The package does not yet generate database tables, intercept writes, resolve
 conflicts, communicate with a server, or manage blobs. Those capabilities will

@@ -234,7 +234,8 @@ Sync metadata should live in sidecar tables:
 create table sync_meta (
   table_name text not null,
   record_id text not null,
-  hlc text not null,
+  hlc_wall_time integer not null,
+  hlc_counter integer not null,
   device_id text not null,
   last_server_seq integer not null default 0,
   dirty integer not null default 0,
@@ -252,6 +253,12 @@ Keeping sync metadata in sidecar tables keeps domain tables readable and makes
 query helper code easier to review. Normal generated queries should join or
 exclude `sync_meta.is_deleted = 1`; administrative and restore flows can read
 those retained rows explicitly.
+
+The core record encodes HLC as `<wallTimeMs>:<logicalCounter>`, while the local
+sidecar stores those components as integers. A future client storage adapter
+will parse incoming values and re-encode outgoing values at that boundary. PR
+3b does not implement this mapping: its Bun conformance test supplies the
+numeric components directly to verify SQLite's LWW behavior.
 
 `last_server_seq` is the last server sequence known for this local record
 version. It is `0` for a new local record that has never been accepted by the
@@ -319,6 +326,22 @@ Recommended indexes:
 `serverSeq` should be a monotonic sequence for the physical server sync table.
 Clients can store cursors with gaps. Gaps are acceptable because each client only
 cares that future pulls ask for records where `serverSeq > localCursor`.
+
+The server does not have the client's two-table atomicity problem. Payload, HLC,
+device ID, tombstone state, and `serverSeq` live in the same generic sync row, so
+the preferred push path is one multi-row UPSERT that performs LWW filtering and
+assigns accepted sequences atomically. This does not depend on an interactive
+transaction API.
+
+The exact D1 SQL shape for allocating a fresh `serverSeq` inside that UPSERT is
+still unproven and belongs in the server-adapter conformance work.
+
+Using one table is not sufficient if those fields are written by separate SQL
+statements: sequence assignment must remain atomic with accepting the record.
+If a D1 implementation needs multiple statements, `D1Database.batch()` executes
+them as a transaction and rolls the batch back when one fails. The first server
+adapter therefore does not need to expose the local callback-style transaction
+interface.
 
 These are semantic record contracts, not a mandatory wire encoding. HTTP
 transport can infer `userId` from authentication and `appName` from the route,
@@ -407,8 +430,10 @@ created by the application, so the portable boundary does not currently expose
 a backend-generated last-insert ID.
 
 The package's recording fake queues results and records calls. It deliberately
-does not parse SQL or emulate constraints; adapter integration tests should run
-against a real SQLite implementation later.
+does not parse SQL or emulate constraints. A Bun-only test driver runs the same
+boundary against real in-memory SQLite and verifies parameter binding,
+multi-row LWW UPSERT with `RETURNING`, and atomic domain/sidecar rollback. That
+driver is test support, not a published production adapter.
 
 ### Web SQLite Target
 
