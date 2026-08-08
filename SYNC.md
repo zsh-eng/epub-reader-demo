@@ -487,9 +487,30 @@ The conformance suite also runs `EXPLAIN QUERY PLAN` against D1 and confirms the
 whole-app, table, and table-plus-scope pulls use their respective sequence
 indexes. It runs inside Cloudflare's recommended [Workers Vitest
 integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
-with a local workerd/Miniflare D1 binding. This is still test-only SQL; the next
-PR will move the proven shape into a production `ServerSyncStorage` adapter and
-migration.
+with a local workerd/Miniflare D1 binding.
+
+The production `D1ServerSyncStorage` now owns this SQL behind the
+`/adapters/d1` package entrypoint. It accepts a structural subset of the D1
+binding so importing the package's core or client adapters does not require
+Cloudflare types. The package ships an immutable D1 migration for
+`local_sync_rows` as a package-relative template. A host copies it into its own
+Wrangler migration history using the next application migration number.
+Integration tests append the package migration after the ebook migrations and
+exercise the adapter through a real local D1 binding. This does not add Hono
+routes, modify the ebook backend schema, or cut existing clients over to the new
+protocol.
+
+Migration adoption is intentionally documented rather than automated. The
+template can be added to a fresh or existing D1 database; legacy sync-row
+conversion remains a separate host cutover. It has no auth foreign key because
+the package cannot assume an auth provider, parent-table name, shared database,
+or account-deletion policy. The eventual HTTP layer must supply `userId` from
+authenticated server context. A host that wants database-level referential
+integrity can customize its copied migration before applying it. Prefer
+`RESTRICT` over an implicit cascade while rows and tombstone payloads are
+retained, then make permanent account deletion explicitly purge sync rows and
+blob objects. Adding that constraint after table creation requires a SQLite
+table-rebuild migration.
 
 These are semantic record contracts, not a mandatory wire encoding. HTTP
 transport can infer `userId` from authentication and `appName` from the route,
@@ -713,12 +734,11 @@ Tradeoffs:
    adapter.
 6. Prove D1 sequence allocation, JSON-batched LWW writes, winner lookup,
    rollback, pagination, and indexed pull plans in Cloudflare's local runtime.
+7. Ship the production D1 `ServerSyncStorage` adapter, package-owned migration,
+   encoded-byte limit, and D1 integration coverage without route wiring.
 
 ### Next Focused PRs
 
-7. **Production D1 storage adapter.** Implement `ServerSyncStorage` using the
-   proven schema and SQL. Add migrations and D1 integration tests, but no Hono
-   routes or ebook-backend wiring.
 8. **Complete the v1 schema vocabulary.** Add integer, real, and JSON-text
    columns plus table-level sync policy metadata (`recordId`, optional `scopeId`,
    conflict policy, and payload schema version).

@@ -1,182 +1,231 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { SyncRecord } from "../../packages/local-sync/src/core/index";
-import { MAX_SERVER_PUSH_BATCH_SIZE } from "../../packages/local-sync/src/server/index";
 import {
-  applyLwwBatch,
-  CREATE_SYNC_ROWS_STATEMENTS,
-  explainScan,
-  prepareLwwUpsertBatch,
-  READ_BATCH_WINNERS_SQL,
-  scanSyncRows,
-  SYNC_ROWS_TABLE,
-} from "./local-sync-d1-fixture";
+  D1ServerSyncStorage,
+  D1SyncBatchTooLargeError,
+} from "../../packages/local-sync/src/adapters/d1/index";
+import {
+  D1_APPLY_LWW_BATCH_SQL,
+  D1_READ_BATCH_WINNERS_SQL,
+  D1_SCAN_APP_SQL,
+  D1_SCAN_SCOPE_SQL,
+  D1_SCAN_TABLE_SQL,
+  D1_SYNC_ROWS_TABLE,
+} from "../../packages/local-sync/src/adapters/d1/sql";
+import type { SyncRecord } from "../../packages/local-sync/src/core/index";
+import {
+  MAX_SERVER_PUSH_BATCH_SIZE,
+  SyncServer,
+} from "../../packages/local-sync/src/server/index";
+
+interface TestPayload {
+  value: string;
+}
 
 const NAMESPACE = { appName: "reader", userId: "user-1" } as const;
+const NOW = 1_000_000;
 
-describe("local-sync D1 SQL conformance", () => {
+describe("D1ServerSyncStorage", () => {
   beforeEach(async () => {
-    await env.DATABASE.batch(
-      CREATE_SYNC_ROWS_STATEMENTS.map((sql) => env.DATABASE.prepare(sql)),
+    await env.DATABASE.batch([
+      env.DATABASE.prepare(`DELETE FROM ${D1_SYNC_ROWS_TABLE}`),
+      env.DATABASE.prepare("DELETE FROM sqlite_sequence WHERE name = ?").bind(
+        D1_SYNC_ROWS_TABLE,
+      ),
+    ]);
+  });
+
+  it("is backed by the package migration", async () => {
+    const migrations = await env.DATABASE.prepare(
+      "SELECT name FROM d1_migrations ORDER BY id",
+    ).all<{ name: string }>();
+    const schema = await env.DATABASE.prepare(
+      `SELECT name FROM sqlite_schema
+       WHERE name = ? OR name LIKE 'local_sync_rows_%'
+       ORDER BY name`,
+    )
+      .bind(D1_SYNC_ROWS_TABLE)
+      .all<{ name: string }>();
+
+    expect(schema.results.map((row) => row.name)).toEqual([
+      "local_sync_rows",
+      "local_sync_rows_app_seq_idx",
+      "local_sync_rows_logical_key_idx",
+      "local_sync_rows_scope_seq_idx",
+      "local_sync_rows_table_seq_idx",
+    ]);
+    expect(migrations.results.at(-1)?.name).toBe(
+      "0000_create_local_sync_rows.sql",
     );
   });
 
-  it("assigns a fresh sequence only to visible LWW winners", async () => {
-    const initial = await applyLwwBatch(env.DATABASE, NAMESPACE, [
-      record({ recordId: "book-1", wallTimeMs: 100, value: "first" }),
-      record({ recordId: "book-2", wallTimeMs: 200, value: "second" }),
-    ]);
+  it("applies mixed LWW outcomes through SyncServer without cursor gaps", async () => {
+    const storage = createStorage();
+    const server = createServer(storage);
+    const initial = await server.push({
+      ...NAMESPACE,
+      deviceId: "device-a",
+      records: [
+        record({ recordId: "book-1", wallTimeMs: 100, value: "first" }),
+        record({ recordId: "book-2", wallTimeMs: 200, value: "second" }),
+      ],
+    });
     const initialCursor = Math.max(
-      ...initial.map((outcome) => outcome.winner.server_seq),
+      ...initial.outcomes.map((outcome) => outcome.record.serverSeq),
     );
-
-    const mixed = await applyLwwBatch(env.DATABASE, NAMESPACE, [
-      record({ recordId: "book-1", wallTimeMs: 99, value: "stale" }),
+    const candidates = [
+      record({
+        recordId: "book-1",
+        wallTimeMs: 99,
+        deviceId: "device-z",
+        value: "stale",
+      }),
       record({
         recordId: "book-2",
         wallTimeMs: 200,
         deviceId: "device-z",
         value: "tie-break winner",
       }),
-      record({ recordId: "book-3", wallTimeMs: 300, value: "new" }),
-    ]);
+      record({
+        recordId: "book-3",
+        wallTimeMs: 300,
+        deviceId: "device-z",
+        value: "new",
+      }),
+    ];
 
-    expect(mixed.map((outcome) => outcome.accepted)).toEqual([
+    const mixed = await server.push({
+      ...NAMESPACE,
+      deviceId: "device-z",
+      records: candidates,
+    });
+
+    expect(mixed.outcomes.map((outcome) => outcome.accepted)).toEqual([
       false,
       true,
       true,
     ]);
-    expect(mixed[0]!.winner).toMatchObject({
-      server_seq: initial[0]!.winner.server_seq,
-      payload: JSON.stringify({ value: "first" }),
+    expect(mixed.outcomes[0]).toMatchObject({
+      record: {
+        serverSeq: initial.outcomes[0]!.record.serverSeq,
+        payload: { value: "first" },
+      },
     });
-    expect(mixed[1]!.winner).toMatchObject({
-      device_id: "device-z",
-      payload: JSON.stringify({ value: "tie-break winner" }),
+    expect(mixed.outcomes[1]).toMatchObject({
+      record: {
+        deviceId: "device-z",
+        payload: { value: "tie-break winner" },
+      },
     });
-    expect(mixed[1]!.winner.server_seq).toBeGreaterThan(initialCursor);
-    expect(mixed[2]!.winner.server_seq).toBeGreaterThan(
-      mixed[1]!.winner.server_seq,
-    );
 
-    const catchUp = await scanSyncRows(env.DATABASE, {
+    const catchUp = await server.pull({
       ...NAMESPACE,
       cursor: initialCursor,
-      limit: 10,
     });
-    expect(catchUp.map((row) => row.record_id)).toEqual(["book-2", "book-3"]);
+    expect(catchUp.records.map((row) => row.recordId)).toEqual([
+      "book-2",
+      "book-3",
+    ]);
 
-    const retry = await applyLwwBatch(
-      env.DATABASE,
-      NAMESPACE,
-      mixed.map((outcome) => storedRowToRecord(outcome.winner)),
-    );
-    expect(retry.map((outcome) => outcome.accepted)).toEqual([
+    const retry = await server.push({
+      ...NAMESPACE,
+      deviceId: "device-z",
+      records: candidates,
+    });
+    expect(retry.outcomes.map((outcome) => outcome.accepted)).toEqual([
       false,
       false,
       false,
     ]);
-    expect(retry.map((outcome) => outcome.winner.server_seq)).toEqual(
-      mixed.map((outcome) => outcome.winner.server_seq),
+    expect(retry.outcomes.map((outcome) => outcome.record.serverSeq)).toEqual(
+      mixed.outcomes.map((outcome) => outcome.record.serverSeq),
     );
 
     const allocator = await env.DATABASE.prepare(
       "SELECT seq FROM sqlite_sequence WHERE name = ?",
     )
-      .bind(SYNC_ROWS_TABLE)
+      .bind(D1_SYNC_ROWS_TABLE)
       .first<{ seq: number }>();
-    expect(allocator!.seq).toBeGreaterThan(
-      Math.max(...mixed.map((outcome) => outcome.winner.server_seq)),
-    );
+    expect(allocator!.seq).toBeGreaterThan(catchUp.cursor);
   });
 
-  it("accepts the generic 500-record limit without expanding parameters", async () => {
+  it("accepts 500 small records and rejects an oversized encoded batch", async () => {
     const records = Array.from({ length: MAX_SERVER_PUSH_BATCH_SIZE }, (_, i) =>
-      record({
-        recordId: `book-${i}`,
-        wallTimeMs: 1_000 + i,
-      }),
+      record({ recordId: `book-${i}`, wallTimeMs: 1_000 + i }),
     );
-
-    const outcomes = await applyLwwBatch(env.DATABASE, NAMESPACE, records);
+    const outcomes = await createStorage().applyLww(NAMESPACE, records);
 
     expect(outcomes).toHaveLength(MAX_SERVER_PUSH_BATCH_SIZE);
     expect(outcomes.every((outcome) => outcome.accepted)).toBe(true);
     expect(
-      new Set(outcomes.map((outcome) => outcome.winner.server_seq)).size,
+      new Set(outcomes.map((outcome) => outcome.winner.serverSeq)).size,
     ).toBe(MAX_SERVER_PUSH_BATCH_SIZE);
+
+    const limitedStorage = createStorage({ maxEncodedBatchBytes: 200 });
+    await expect(
+      limitedStorage.applyLww(NAMESPACE, [
+        record({
+          recordId: "too-large",
+          wallTimeMs: 2_000,
+          value: "x".repeat(500),
+        }),
+      ]),
+    ).rejects.toMatchObject({
+      name: "D1SyncBatchTooLargeError",
+      maxEncodedBytes: 200,
+    } satisfies Partial<D1SyncBatchTooLargeError>);
   });
 
-  it("looks up winners by incoming key through the logical-key index", async () => {
-    const records = [
-      record({ recordId: "book-1", wallTimeMs: 100 }),
-      record({ recordId: "book-2", wallTimeMs: 101 }),
-    ];
-    const plan = await env.DATABASE.prepare(
-      `EXPLAIN QUERY PLAN ${READ_BATCH_WINNERS_SQL}`,
-    )
-      .bind(JSON.stringify(records), NAMESPACE.appName, NAMESPACE.userId)
-      .all<{ detail: string }>();
-
-    expect(plan.results.map((row) => row.detail)).toEqual([
-      expect.stringContaining("SCAN json_each"),
-      expect.stringContaining("local_sync_d1_rows_logical_key_idx"),
-    ]);
-  });
-
-  it("orders the HLC counter before the device-ID tie-breaker", async () => {
-    await applyLwwBatch(env.DATABASE, NAMESPACE, [
+  it("orders HLC components before the device-ID tie-breaker", async () => {
+    const storage = createStorage();
+    await storage.applyLww(NAMESPACE, [
       record({
         recordId: "book-1",
         wallTimeMs: 100,
         counter: 0,
         deviceId: "device-z",
-        value: "initial",
       }),
     ]);
 
-    const [higherCounter] = await applyLwwBatch(env.DATABASE, NAMESPACE, [
+    const [higherCounter] = await storage.applyLww(NAMESPACE, [
       record({
         recordId: "book-1",
         wallTimeMs: 100,
         counter: 1,
         deviceId: "device-a",
-        value: "higher counter",
       }),
     ]);
-    const [lowerWallTime] = await applyLwwBatch(env.DATABASE, NAMESPACE, [
+    const [lowerWallTime] = await storage.applyLww(NAMESPACE, [
       record({
         recordId: "book-1",
         wallTimeMs: 99,
         counter: 100,
         deviceId: "device-z",
-        value: "lower wall time",
       }),
     ]);
 
     expect(higherCounter).toMatchObject({
       accepted: true,
       winner: {
-        hlc_wall_time_ms: 100,
-        hlc_counter: 1,
-        device_id: "device-a",
+        hlc: { wallTimeMs: 100, counter: 1 },
+        deviceId: "device-a",
       },
     });
     expect(lowerWallTime).toMatchObject({
       accepted: false,
       winner: {
-        hlc_wall_time_ms: 100,
-        hlc_counter: 1,
-        device_id: "device-a",
+        hlc: { wallTimeMs: 100, counter: 1 },
+        deviceId: "device-a",
       },
     });
   });
 
   it("retains tombstone payloads and sequences a later restore", async () => {
-    await applyLwwBatch(env.DATABASE, NAMESPACE, [
+    const storage = createStorage();
+    await storage.applyLww(NAMESPACE, [
       record({ recordId: "book-1", wallTimeMs: 100, value: "original" }),
     ]);
-    const [deleted] = await applyLwwBatch(env.DATABASE, NAMESPACE, [
+    const [deleted] = await storage.applyLww(NAMESPACE, [
       record({
         operation: "delete",
         recordId: "book-1",
@@ -184,31 +233,31 @@ describe("local-sync D1 SQL conformance", () => {
         value: "retained",
       }),
     ]);
-    const [restored] = await applyLwwBatch(env.DATABASE, NAMESPACE, [
+    const [restored] = await storage.applyLww(NAMESPACE, [
       record({ recordId: "book-1", wallTimeMs: 102, value: "restored" }),
     ]);
 
     expect(deleted!.winner).toMatchObject({
-      is_deleted: 1,
-      payload: JSON.stringify({ value: "retained" }),
+      operation: "delete",
+      payload: { value: "retained" },
     });
     expect(restored!.winner).toMatchObject({
-      is_deleted: 0,
-      payload: JSON.stringify({ value: "restored" }),
+      operation: "put",
+      payload: { value: "restored" },
     });
-    expect(restored!.winner.server_seq).toBeGreaterThan(
-      deleted!.winner.server_seq,
+    expect(restored!.winner.serverSeq).toBeGreaterThan(
+      deleted!.winner.serverSeq,
     );
   });
 
-  it("rolls back the entire D1 batch when a statement fails", async () => {
-    const valid = prepareLwwUpsertBatch(
-      env.DATABASE,
-      NAMESPACE,
+  it("rolls back the D1 batch when a statement fails", async () => {
+    const valid = env.DATABASE.prepare(D1_APPLY_LWW_BATCH_SQL).bind(
+      NAMESPACE.appName,
+      NAMESPACE.userId,
       JSON.stringify([record({ recordId: "book-1", wallTimeMs: 100 })]),
     );
     const invalid = env.DATABASE.prepare(
-      `INSERT INTO ${SYNC_ROWS_TABLE} (
+      `INSERT INTO ${D1_SYNC_ROWS_TABLE} (
         app_name,
         user_id,
         table_name,
@@ -224,21 +273,18 @@ describe("local-sync D1 SQL conformance", () => {
 
     await expect(env.DATABASE.batch([valid, invalid])).rejects.toThrow();
     expect(
-      await scanSyncRows(env.DATABASE, {
-        ...NAMESPACE,
-        cursor: 0,
-        limit: 10,
-      }),
+      await createStorage().scan({ ...NAMESPACE, cursor: 0, limit: 10 }),
     ).toEqual([]);
 
-    const [afterRollback] = await applyLwwBatch(env.DATABASE, NAMESPACE, [
+    const [afterRollback] = await createStorage().applyLww(NAMESPACE, [
       record({ recordId: "book-after-rollback", wallTimeMs: 101 }),
     ]);
-    expect(afterRollback!.winner.server_seq).toBe(1);
+    expect(afterRollback!.winner.serverSeq).toBe(1);
   });
 
-  it("orders whole-app, table, and scoped scans through their indexes", async () => {
-    await applyLwwBatch(env.DATABASE, NAMESPACE, [
+  it("paginates all scan shapes through their intended indexes", async () => {
+    const storage = createStorage();
+    await storage.applyLww(NAMESPACE, [
       record({ recordId: "book-1", wallTimeMs: 100 }),
       record({
         tableName: "highlights",
@@ -258,32 +304,30 @@ describe("local-sync D1 SQL conformance", () => {
         wallTimeMs: 103,
       }),
     ]);
-    await applyLwwBatch(
-      env.DATABASE,
-      { appName: "flashcards", userId: "user-1" },
-      [record({ recordId: "card-1", wallTimeMs: 104 })],
-    );
-    await applyLwwBatch(env.DATABASE, { appName: "reader", userId: "user-2" }, [
+    await storage.applyLww({ appName: "flashcards", userId: "user-1" }, [
+      record({ recordId: "card-1", wallTimeMs: 104 }),
+    ]);
+    await storage.applyLww({ appName: "reader", userId: "user-2" }, [
       record({ recordId: "other-user-book", wallTimeMs: 105 }),
     ]);
 
-    const firstPage = await scanSyncRows(env.DATABASE, {
+    const firstPage = await storage.scan({
       ...NAMESPACE,
       cursor: 0,
       limit: 2,
     });
-    const secondPage = await scanSyncRows(env.DATABASE, {
+    const secondPage = await storage.scan({
       ...NAMESPACE,
-      cursor: firstPage.at(-1)!.server_seq,
+      cursor: firstPage.at(-1)!.serverSeq,
       limit: 2,
     });
-    const table = await scanSyncRows(env.DATABASE, {
+    const table = await storage.scan({
       ...NAMESPACE,
       tableName: "highlights",
       cursor: 0,
       limit: 10,
     });
-    const scope = await scanSyncRows(env.DATABASE, {
+    const scope = await storage.scan({
       ...NAMESPACE,
       tableName: "highlights",
       scopeId: "book-1",
@@ -291,45 +335,75 @@ describe("local-sync D1 SQL conformance", () => {
       limit: 10,
     });
 
-    expect([...firstPage, ...secondPage].map((row) => row.record_id)).toEqual([
+    expect([...firstPage, ...secondPage].map((row) => row.recordId)).toEqual([
       "book-1",
       "highlight-1",
       "highlight-2",
       "settings-1",
     ]);
-    expect(table.map((row) => row.record_id)).toEqual([
+    expect(table.map((row) => row.recordId)).toEqual([
       "highlight-1",
       "highlight-2",
     ]);
-    expect(scope.map((row) => row.record_id)).toEqual(["highlight-1"]);
+    expect(scope.map((row) => row.recordId)).toEqual(["highlight-1"]);
 
-    await expectIndex("local_sync_d1_rows_app_seq_idx", {
-      ...NAMESPACE,
-      cursor: 0,
-      limit: 4,
-    });
-    await expectIndex("local_sync_d1_rows_table_seq_idx", {
-      ...NAMESPACE,
-      tableName: "highlights",
-      cursor: 0,
-      limit: 4,
-    });
-    await expectIndex("local_sync_d1_rows_scope_seq_idx", {
-      ...NAMESPACE,
-      tableName: "highlights",
-      scopeId: "book-1",
-      cursor: 0,
-      limit: 4,
-    });
+    await expectIndex("local_sync_rows_app_seq_idx", D1_SCAN_APP_SQL, [
+      NAMESPACE.appName,
+      NAMESPACE.userId,
+      0,
+      10,
+    ]);
+    await expectIndex("local_sync_rows_table_seq_idx", D1_SCAN_TABLE_SQL, [
+      NAMESPACE.appName,
+      NAMESPACE.userId,
+      "highlights",
+      0,
+      10,
+    ]);
+    await expectIndex("local_sync_rows_scope_seq_idx", D1_SCAN_SCOPE_SQL, [
+      NAMESPACE.appName,
+      NAMESPACE.userId,
+      "highlights",
+      "book-1",
+      0,
+      10,
+    ]);
+    await expectIndex(
+      "local_sync_rows_logical_key_idx",
+      D1_READ_BATCH_WINNERS_SQL,
+      [
+        JSON.stringify([record({ recordId: "book-1", wallTimeMs: 100 })]),
+        NAMESPACE.appName,
+        NAMESPACE.userId,
+      ],
+    );
   });
 });
 
+function createStorage(
+  options: ConstructorParameters<typeof D1ServerSyncStorage>[1] = {},
+): D1ServerSyncStorage<TestPayload> {
+  return new D1ServerSyncStorage<TestPayload>(env.DATABASE, options);
+}
+
+function createServer(
+  storage: D1ServerSyncStorage<TestPayload>,
+): SyncServer<TestPayload> {
+  return new SyncServer(storage, {
+    now: () => NOW,
+    maxFutureClockSkewMs: 0,
+  });
+}
+
 async function expectIndex(
   indexName: string,
-  scan: Parameters<typeof explainScan>[1],
+  sql: string,
+  parameters: readonly unknown[],
 ): Promise<void> {
-  const plan = await explainScan(env.DATABASE, scan);
-  expect(plan.join("\n")).toContain(indexName);
+  const plan = await env.DATABASE.prepare(`EXPLAIN QUERY PLAN ${sql}`)
+    .bind(...parameters)
+    .all<{ detail: string }>();
+  expect(plan.results.map((row) => row.detail).join("\n")).toContain(indexName);
 }
 
 function record(options: {
@@ -341,7 +415,7 @@ function record(options: {
   counter?: number;
   deviceId?: string;
   value?: string;
-}): SyncRecord<{ value: string }> {
+}): SyncRecord<TestPayload> {
   const base = {
     tableName: options.tableName ?? "books",
     recordId: options.recordId,
@@ -356,37 +430,6 @@ function record(options: {
   };
 
   if (options.operation === "delete") {
-    return { ...base, operation: "delete" };
-  }
-
-  return { ...base, operation: "put" };
-}
-
-function storedRowToRecord(row: {
-  table_name: string;
-  record_id: string;
-  scope_id: string | null;
-  hlc_wall_time_ms: number;
-  hlc_counter: number;
-  device_id: string;
-  schema_version: number;
-  is_deleted: 0 | 1;
-  payload: string;
-}): SyncRecord<{ value: string }> {
-  const base = {
-    tableName: row.table_name,
-    recordId: row.record_id,
-    ...(row.scope_id === null ? {} : { scopeId: row.scope_id }),
-    hlc: {
-      wallTimeMs: row.hlc_wall_time_ms,
-      counter: row.hlc_counter,
-    },
-    deviceId: row.device_id,
-    schemaVersion: row.schema_version,
-    payload: JSON.parse(row.payload) as { value: string },
-  };
-
-  if (row.is_deleted === 1) {
     return { ...base, operation: "delete" };
   }
 

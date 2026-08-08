@@ -4,7 +4,8 @@
   "private": true,
   "description": "Storage-agnostic primitives for local-first applications",
   "files": [
-    "dist"
+    "dist",
+    "migrations"
   ],
   "type": "module",
   "sideEffects": false,
@@ -46,6 +47,10 @@
     "./adapters/sqlite-wasm": {
       "types": "./dist/adapters/sqlite-wasm/index.d.ts",
       "import": "./dist/adapters/sqlite-wasm/index.js"
+    },
+    "./adapters/d1": {
+      "types": "./dist/adapters/d1/index.d.ts",
+      "import": "./dist/adapters/d1/index.js"
     }
   },
   "scripts": {

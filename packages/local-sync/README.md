@@ -91,6 +91,41 @@ Every push outcome returns the current winner, including when an older candidate
 is rejected. Pulls support whole-app, table, and table-plus-scope cursors and do
 not exclude records written by the requesting device.
 
+Cloudflare Workers can use the production D1 adapter:
+
+```ts
+import { D1ServerSyncStorage } from "@zsh-eng/local-sync/adapters/d1";
+import { SyncServer } from "@zsh-eng/local-sync/server";
+
+const storage = new D1ServerSyncStorage<Book>(env.DATABASE);
+const server = new SyncServer<Book>(storage);
+```
+
+The package ships `migrations/d1/0000_create_local_sync_rows.sql` as a migration
+template rather than installing migrations programmatically. Copy it into the
+application's Wrangler migration directory using the application's next
+migration number, then apply migrations normally before constructing the
+adapter. This works for an existing database: the migration adds
+`local_sync_rows` alongside existing application and auth tables. Moving legacy
+sync data into the new table is a separate application cutover step.
+
+The template deliberately does not reference an auth table. The package cannot
+assume that auth shares the sync database or that every host uses the same user
+schema. A server transport must derive `userId` from its authenticated request
+context; a foreign key does not replace that authorization boundary. A host
+that keeps auth and sync in the same database may customize the copied migration
+before first applying it, for example with a `REFERENCES user(id) ON DELETE
+RESTRICT` constraint. `RESTRICT` keeps account deletion from silently cascading
+through retained sync rows; an explicit account-deletion flow can purge sync
+rows and blob storage first. Adding a foreign key after the table exists requires
+a SQLite table-rebuild migration.
+
+The migration creates the generic latest-state table and its logical-key,
+whole-app, table, and scope cursor indexes. Pushes are limited to 1 MiB of
+encoded JSON by default; `D1SyncBatchTooLargeError` lets a future HTTP transport
+return a clear request-size response. The adapter does not register routes or
+depend on Hono.
+
 Storage adapters use a deliberately small asynchronous SQLite boundary:
 
 ```ts
@@ -160,7 +195,6 @@ ordered, checked-in migrations tracked by a local migration table. The migration
 history and database-side checksums are the initial source of truth; a separate
 schema lockfile is only needed later if migration generation becomes automatic.
 
-The package does not yet intercept local writes, implement a production server
-storage adapter or HTTP transport, perform client sync orchestration, or manage
-blob transfers. Those capabilities will be added as separate, reviewable
-changes.
+The package does not yet intercept local writes, implement an HTTP transport,
+perform client sync orchestration, or manage blob transfers. Those capabilities
+will be added as separate, reviewable changes.
