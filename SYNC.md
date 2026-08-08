@@ -417,33 +417,79 @@ row. An adapter must make each LWW decision and sequence assignment atomic, but
 the whole push batch need not be all-or-nothing. If an adapter fails after a
 partial batch, the client can retry and receive the winners already stored.
 
-The exact D1 SQL shape for allocating a fresh `serverSeq` inside that UPSERT is
-still unproven and belongs in the server-adapter conformance work.
+The D1 conformance spike proves a one-table implementation with `server_seq
+integer primary key autoincrement` and a unique logical-key index. A winning
+conflict copies the candidate's generated `excluded.server_seq` into the stored
+row in the same UPSERT that replaces its payload and metadata. A rejected
+candidate returns no row and leaves the current winner's visible sequence
+unchanged.
+
+`excluded` is the statement-local proposed row: the values SQLite would have
+inserted if the logical-key conflict had not occurred. Defaults are already
+present on that row, so D1 exposes the attempted `AUTOINCREMENT` value as
+`excluded.server_seq`. The conflict clause can compare the proposed and stored
+HLCs and copy that sequence only when the proposed row wins. Sequence allocation
+therefore needs neither a separate counter table nor an application-managed
+reservation transaction.
+
+This pattern comes from PostgreSQL, whose `ON CONFLICT DO UPDATE` also exposes a
+special `excluded` row and guarantees an atomic insert-or-update outcome.
+SQLite explicitly follows PostgreSQL's UPSERT syntax. It is not standard SQL:
+MySQL provides the same proposed-row idea through a row alias in `ON DUPLICATE
+KEY UPDATE`, and other databases use different UPSERT or `MERGE` forms. The
+concept is portable, but the eventual storage adapter should own the dialect.
+See the official [PostgreSQL `INSERT` documentation](https://www.postgresql.org/docs/current/sql-insert.html),
+[SQLite UPSERT documentation](https://sqlite.org/lang_upsert.html), and
+[MySQL `ON DUPLICATE KEY UPDATE` documentation](https://dev.mysql.com/doc/refman/8.4/en/insert-on-duplicate.html).
 
 The adapter must not reserve a sequence range in one committed transaction and
 publish those rows in a later transaction. For example, if writer A reserves
 101-110, writer B reserves and commits 111-120, and a client advances to 120,
 writer A cannot later publish 101-110 without those rows being skipped forever.
-A reserved range is safe only when allocation and row acceptance commit under
-the same serialized write transaction, or when lower reserved values can never
-become visible after a higher value.
+The proven UPSERT avoids that race because D1 serializes writes and sequence
+allocation becomes visible atomically with the winning row.
 
-One candidate to test is a single table with `server_seq integer primary key
-autoincrement` plus the unique logical key. An attempted insert may allocate the
-candidate sequence, and the LWW `DO UPDATE` may copy it only when the candidate
-wins. Sequence gaps are acceptable, but the exact `excluded.server_seq`,
-multi-row UPSERT, rejected-row, and `RETURNING` behavior must be proven against
-D1. Returned rows must be mapped by logical key because SQLite does not promise
-`RETURNING` order. See the official [D1 batch documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch),
+D1 currently limits one statement to 100 bound parameters. The chosen SQL
+therefore binds the complete candidate array as one JSON string, expands it with
+`json_each(?)`, and performs one `INSERT ... SELECT ... ON CONFLICT DO UPDATE
+... RETURNING` statement. A second statement expands the same JSON value and
+reads the current winner for every logical key. Both statements run in one
+`D1Database.batch()`, which D1 executes sequentially as a transaction and rolls
+back completely if either statement fails. This shape accepted 500 small records
+in the local D1 runtime without generating a variable-length parameter list.
+The transaction keeps the UPSERT and winner lookup together; it is not used to
+reserve or assign sequence numbers in application code.
+
+`RETURNING` includes only inserts and winning updates, and SQLite does not
+promise its row order. Accepted keys and winner rows are therefore mapped by
+`(table_name, record_id)` rather than array position. Rejected attempts still
+advance SQLite's internal `AUTOINCREMENT` allocator, including idempotent
+retries, but those unused values never appear as rows. Cursor correctness only
+requires visible sequences to increase; gaps are expected.
+
+The JSON batch must have a byte limit in addition to a record-count limit. D1's
+current maximum string or row size is 2 MB, so the eventual HTTP adapter should
+reject encoded batches comfortably below that boundary. Blob bytes remain
+outside this table. See the official [D1 limits](https://developers.cloudflare.com/d1/platform/limits/),
+[D1 batch documentation](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch),
 [SQLite UPSERT documentation](https://www.sqlite.org/lang_upsert.html), and
 [SQLite RETURNING documentation](https://sqlite.org/lang_returning.html).
 
-Using one table is not sufficient if those fields are written by separate SQL
-statements: sequence assignment must remain atomic with accepting the record.
-If a D1 implementation needs multiple statements, `D1Database.batch()` executes
-them as a transaction and rolls the batch back when one fails. The first server
-adapter therefore does not need to expose the local callback-style transaction
-interface.
+The winner lookup must iterate the `json_each` keys first and probe the unique
+logical-key index for each one. SQLite otherwise preferred scanning the app's
+sequence index and repeatedly scanning the JSON virtual table, which scaled
+quadratically. The conformance suite pins the efficient query plan. An initial
+server limit of 500 records and 1 MiB of encoded JSON, whichever comes first,
+leaves margin below D1's 2 MB boundary; clients can split larger pushes without
+changing sync semantics.
+
+The conformance suite also runs `EXPLAIN QUERY PLAN` against D1 and confirms the
+whole-app, table, and table-plus-scope pulls use their respective sequence
+indexes. It runs inside Cloudflare's recommended [Workers Vitest
+integration](https://developers.cloudflare.com/workers/testing/vitest-integration/)
+with a local workerd/Miniflare D1 binding. This is still test-only SQL; the next
+PR will move the proven shape into a production `ServerSyncStorage` adapter and
+migration.
 
 These are semantic record contracts, not a mandatory wire encoding. HTTP
 transport can infer `userId` from authentication and `appName` from the route,
@@ -665,13 +711,11 @@ Tradeoffs:
 4. Generate app tables, indexes, `sync_meta`, and `sync_cursors` locally.
 5. Add framework-neutral server bag-of-rows semantics and an in-memory reference
    adapter.
+6. Prove D1 sequence allocation, JSON-batched LWW writes, winner lookup,
+   rollback, pagination, and indexed pull plans in Cloudflare's local runtime.
 
 ### Next Focused PRs
 
-6. **D1 SQL conformance spike.** Prove one-table sequence allocation, mixed LWW
-   winners and rejections, idempotent retry, winner lookup, transactional
-   behavior, pagination, and the three indexed query plans in local D1. Record
-   the chosen SQL shape; do not expose a production adapter yet.
 7. **Production D1 storage adapter.** Implement `ServerSyncStorage` using the
    proven schema and SQL. Add migrations and D1 integration tests, but no Hono
    routes or ebook-backend wiring.
