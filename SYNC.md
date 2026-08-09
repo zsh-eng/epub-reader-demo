@@ -67,46 +67,46 @@ Application code defines a schema once:
 
 ```ts
 export const schema = defineSyncSchema({
-  books: table({
+  books: syncedTable({
     id: text().primaryKey(),
     fileHash: text().notNull().unique(),
     title: text().notNull(),
     author: text().notNull(),
     fileSize: integer().notNull(),
     dateAdded: integer().notNull(),
-    lastOpened: integer().nullable(),
-    coverContentHash: text().nullable(),
-  }).sync({
-    recordId: "id",
-    conflict: "lww",
+    lastOpened: integer(),
+    coverContentHash: text(),
+    metadata: jsonText(),
   }),
 
-  highlights: table({
-    id: text().primaryKey(),
-    bookId: text().notNull().index(),
-    spineItemId: text().notNull().index(),
-    text: text().notNull(),
-    color: text().notNull(),
-    createdAt: integer().notNull(),
-    updatedAt: integer().nullable(),
-  }).sync({
-    recordId: "id",
-    scopeId: "bookId",
-    conflict: "lww",
-  }),
+  highlights: syncedTable(
+    {
+      id: text().primaryKey(),
+      bookId: text().notNull().index(),
+      spineItemId: text().notNull().index(),
+      text: text().notNull(),
+      color: text().notNull(),
+      createdAt: integer().notNull(),
+      updatedAt: integer(),
+    },
+    {
+      scopeId: "bookId",
+    },
+  ),
 
-  readingCheckpoints: table({
-    id: text().primaryKey(),
-    bookId: text().notNull().index(),
-    deviceId: text().notNull().index(),
-    currentSpineIndex: integer().notNull(),
-    scrollProgress: real().notNull(),
-    lastRead: integer().notNull(),
-  }).sync({
-    recordId: "id",
-    scopeId: "bookId",
-    conflict: "lww",
-  }),
+  readingCheckpoints: syncedTable(
+    {
+      id: text().primaryKey(),
+      bookId: text().notNull().index(),
+      deviceId: text().notNull().index(),
+      currentSpineIndex: integer().notNull(),
+      scrollProgress: real().notNull(),
+      lastRead: integer().notNull(),
+    },
+    {
+      scopeId: "bookId",
+    },
+  ),
 });
 ```
 
@@ -125,12 +125,21 @@ not hide complex behavior in an opaque runtime.
 
 The first schema DSL should support a deliberately small subset:
 
-- `text`, `integer`, `real`, and JSON-encoded `text`
+- `text`, `integer`, `real`, and JSON-validated `text`
 - primary keys
 - required and nullable fields
 - single-column indexes
 - single-column unique indexes
-- table-level sync metadata: `recordId`, optional `scopeId`, and `conflict`
+- separate `table()` and `syncedTable()` declarations
+- optional synced-table `scopeId` and payload `schemaVersion`
+
+`table()` declares local-only data. `syncedTable()` requires a non-null text
+primary key and derives it as `recordId`; normalized metadata fixes conflict
+handling to whole-row `lww` and defaults payload `schemaVersion` to `1`.
+`jsonText()` deliberately infers a string because reads go through native SQLite
+and no query codec exists yet. Integer primary keys remain available for
+local-only tables. A configured scope is a non-null text field used for pull
+partitioning, not a relational foreign key.
 
 Compound indexes, foreign keys, custom constraints, generated columns, and raw
 SQL schema extensions should wait until a concrete app query needs them.
@@ -736,12 +745,11 @@ Tradeoffs:
    rollback, pagination, and indexed pull plans in Cloudflare's local runtime.
 7. Ship the production D1 `ServerSyncStorage` adapter, package-owned migration,
    encoded-byte limit, and D1 integration coverage without route wiring.
+8. Complete the v1 schema vocabulary with integer, real, JSON-text, optional
+   sync policy metadata, validation, and SQLite generation.
 
 ### Next Focused PRs
 
-8. **Complete the v1 schema vocabulary.** Add integer, real, and JSON-text
-   columns plus table-level sync policy metadata (`recordId`, optional `scopeId`,
-   conflict policy, and payload schema version).
 9. **Platform-neutral client HLC.** Generate and persist the client-owned wall
    time and logical counter with injected clock, device ID, and state storage.
 10. **Explicit local writes and remote apply.** Atomically update domain rows and

@@ -1,4 +1,8 @@
-import type { SyncSchemaMetadata, TableMetadata } from "../../schema/index.js";
+import type {
+  ColumnKind,
+  SyncSchemaMetadata,
+  TableMetadata,
+} from "../../schema/index.js";
 import type { SqlDriver } from "./index.js";
 
 export interface SqliteSchemaSource {
@@ -55,15 +59,34 @@ function generateTableStatement(
   table: TableMetadata,
 ): string {
   const columns = Object.entries(table.columns).map(([columnName, column]) => {
+    const quotedColumnName = quoteIdentifier(columnName);
     const constraints = [column.nullable ? "" : " not null"];
     if (column.primaryKey) {
       constraints.push(" primary key");
     }
+    if (column.kind === "json-text") {
+      constraints.push(
+        column.nullable
+          ? ` check (${quotedColumnName} is null or json_valid(${quotedColumnName}))`
+          : ` check (json_valid(${quotedColumnName}))`,
+      );
+    }
 
-    return `  ${quoteIdentifier(columnName)} ${column.kind}${constraints.join("")}`;
+    return `  ${quotedColumnName} ${sqliteColumnType(column.kind)}${constraints.join("")}`;
   });
 
   return `create table if not exists ${quoteIdentifier(tableName)} (\n${columns.join(",\n")}\n)`;
+}
+
+function sqliteColumnType(kind: ColumnKind): "text" | "integer" | "real" {
+  if (kind === "integer") {
+    return "integer";
+  }
+  if (kind === "real") {
+    return "real";
+  }
+
+  return "text";
 }
 
 function generateIndexStatement(

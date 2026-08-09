@@ -10,21 +10,38 @@ also initialize the corresponding local SQLite tables and sync sidecars.
 ```ts
 import {
   defineSyncSchema,
-  table,
+  integer,
+  jsonText,
+  real,
+  syncedTable,
   text,
   type InferTableRow,
 } from "@zsh-eng/local-sync/schema";
 
 const schema = defineSyncSchema({
-  books: table({
+  books: syncedTable({
     id: text().primaryKey(),
     title: text().notNull(),
     author: text().notNull().index(),
+    pageCount: integer(),
+    rating: real(),
+    metadata: jsonText(),
   }),
 });
 
 type Book = InferTableRow<(typeof schema.tables)["books"]>;
 ```
+
+`integer()` and `real()` infer `number`; `jsonText()` is JSON-validated SQLite
+text and therefore infers `string`. The package does not claim that native
+SQLite reads decode JSON objects. All columns are nullable until `.notNull()` or
+`.primaryKey()` is applied.
+
+Use `table()` for local-only data and `syncedTable()` for synchronized rows. A
+synced table must have a non-null text primary key; the package derives that
+column as `recordId` and uses whole-row `lww`. An optional `scopeId` must name a
+non-null text column. Payload `schemaVersion` defaults to `1` and can be
+overridden independently of the local SQLite migration number.
 
 The core package distinguishes local records from server-sequenced records:
 
@@ -35,7 +52,14 @@ const localChange: SyncRecord<Book> = {
   tableName: "books",
   recordId: "book-1",
   operation: "put",
-  payload: { id: "book-1", title: "Example", author: "A. Reader" },
+  payload: {
+    id: "book-1",
+    title: "Example",
+    author: "A. Reader",
+    pageCount: null,
+    rating: null,
+    metadata: null,
+  },
   hlc: { wallTimeMs: 1_722_732_000_000, counter: 0 },
   deviceId: "device-1",
   schemaVersion: 1,

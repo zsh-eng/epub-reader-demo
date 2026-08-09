@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { initializeSqliteSchema } from "../src/adapters/sqlite/index.js";
-import { defineSyncSchema, table, text } from "../src/schema/index.js";
+import {
+  defineSyncSchema,
+  integer,
+  jsonText,
+  real,
+  table,
+  text,
+} from "../src/schema/index.js";
 import { BunSqliteTestDriver } from "./support/bun-sqlite-driver.js";
 
 interface SqliteObjectRow {
@@ -97,5 +104,54 @@ describe("SQLite generated schema", () => {
         ["app"],
       ),
     ).toEqual([{ server_seq: 42 }]);
+  });
+
+  it("enforces generated scalar and JSON-text columns", async () => {
+    const schema = defineSyncSchema({
+      measurements: table({
+        id: integer().primaryKey(),
+        score: real().notNull(),
+        metadata: jsonText(),
+        requiredMetadata: jsonText().notNull(),
+      }),
+    });
+    await initializeSqliteSchema(driver, schema);
+
+    await driver.run(
+      `insert into measurements (id, score, metadata, requiredMetadata)
+       values (?, ?, ?, ?)`,
+      [1, 0.75, '{"source":"reader"}', '["required"]'],
+    );
+    await driver.run(
+      `insert into measurements (id, score, metadata, requiredMetadata)
+       values (?, ?, ?, ?)`,
+      [2, 1.25, null, "{}"],
+    );
+
+    expect(
+      await driver.all<{
+        id: number;
+        score: number;
+        metadata: string | null;
+      }>("select id, score, metadata from measurements order by id", []),
+    ).toEqual([
+      { id: 1, score: 0.75, metadata: '{"source":"reader"}' },
+      { id: 2, score: 1.25, metadata: null },
+    ]);
+
+    await expect(
+      driver.run(
+        `insert into measurements (id, score, metadata, requiredMetadata)
+         values (?, ?, ?, ?)`,
+        [3, 1.5, "not-json", "{}"],
+      ),
+    ).rejects.toThrow();
+    await expect(
+      driver.run(
+        `insert into measurements (id, score, metadata, requiredMetadata)
+         values (?, ?, ?, ?)`,
+        [4, 1.75, null, "not-json"],
+      ),
+    ).rejects.toThrow();
   });
 });
