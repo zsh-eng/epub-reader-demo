@@ -174,19 +174,35 @@ start with generated or handwritten typed helpers for known query patterns.
 Writes should be sync-aware and explicit:
 
 ```ts
-await sync.books.put(book);
-await sync.highlights.put(highlight);
-await sync.highlights.delete(highlightId);
-
-await sync.transaction(async (tx) => {
-  await tx.highlights.put(highlight);
-  await tx.notes.put(note);
-});
+await sync.put("books", book);
+await sync.put("highlights", highlight);
+await sync.delete("highlights", highlightId);
+await sync.putMany("highlights", importedHighlights);
 ```
 
-A local write should update the domain table and sync metadata in the same local
-transaction. A delete should leave the domain row and its payload in place,
-mark its sidecar metadata as deleted, and make normal query helpers hide it.
+`createSqliteSyncClient({ schema, driver, clock })` constrains table names and
+row payloads from the schema type. Each local batch validates complete rows,
+uses `tickMany()` to allocate a distinct HLC per row, and updates domain data
+and sync metadata in the same local transaction. A delete leaves the domain row
+and its payload in place and marks its sidecar metadata as deleted.
+
+`getPendingChanges({ limit })` scans dirty metadata in deterministic table and
+record order, groups retained-row reads by table, and reconstructs current
+`SyncRecord` payloads. It returns latest dirty state, not every intermediate
+local edit. The first version caps a page at 500 records to match the server
+push limit.
+
+Raw SQL writes are not intercepted and therefore do not become pending sync
+records. Reads remain ordinary SQLite. Normal application reads must explicitly
+exclude tombstones until generated filtered views or query helpers are added.
+Cross-table client transaction composition remains deferred; `putMany()` and
+`deleteMany()` are atomic within one table.
+
+The initial `putMany()` baseline and the planned flashcard-scale comparison with
+IndexedDB and Expo SQLite are recorded in
+[`packages/local-sync/BENCHMARKS.md`](packages/local-sync/BENCHMARKS.md). The
+baseline keeps per-row SQL because 500 rows remained sub-second in Chromium and
+Firefox OPFS on the measured M1 Pro development machine.
 
 ### Remote Apply DX
 
@@ -796,18 +812,18 @@ Tradeoffs:
    synced-table policy metadata, validation, and SQLite generation.
 9. Add the platform-neutral client HLC, atomic state-storage contract, and
    durable SQLite state keyed by device ID.
+   10a. Add typed explicit SQLite `put`, `putMany`, `delete`, and `deleteMany`
+   operations plus deterministic pending-record materialization.
 
 ### Next Focused PRs
 
-10. **Explicit local writes and remote apply.** Atomically update domain rows and
-    `sync_meta`, retain tombstones, apply server winners, and return affected
-    table/scope information. Keep reads as ordinary SQLite queries initially.
-11. **HTTP wire adapter.** Add framework-neutral request/response validation and
-    thin Hono bindings over `SyncServer`, followed by ebook-backend wiring in a
-    separate integration PR.
-12. Add the client HTTP transport, bootstrap/incremental orchestration, React
-    Query invalidation helpers, data reseeding, and one-table-at-a-time ebook
-    cutover as later focused PRs.
+10b. **Remote apply and acknowledgement.** Apply server winners atomically,
+clear acknowledged dirty state, advance cursors and the client HLC, and
+return affected table/scope information. 11. **HTTP wire adapter.** Add framework-neutral request/response validation and
+thin Hono bindings over `SyncServer`, followed by ebook-backend wiring in a
+separate integration PR. 12. Add the client HTTP transport, bootstrap/incremental orchestration, React
+Query invalidation helpers, data reseeding, and one-table-at-a-time ebook
+cutover as later focused PRs.
 
 ### Open Questions
 

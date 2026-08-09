@@ -2,8 +2,16 @@ import {
   createSqliteWasmDriver,
   type SqliteWasmDriver,
 } from "../../dist/adapters/sqlite-wasm/index.js";
-import { SqliteHlcStateStorage } from "../../dist/adapters/sqlite/index.js";
+import {
+  createSqliteSyncClient,
+  SqliteHlcStateStorage,
+} from "../../dist/adapters/sqlite/index.js";
 import { createHybridLogicalClock } from "../../dist/client/index.js";
+import {
+  defineSyncSchema,
+  syncedTable,
+  text,
+} from "../../dist/schema/index.js";
 
 interface BookRow {
   id: string;
@@ -26,6 +34,7 @@ export type SqliteWasmProofResult =
       readonly storage: "opfs";
       readonly persistedBooks: number;
       readonly persistedHlcCounter: number;
+      readonly pendingChanges: number;
       readonly lwwWinners: readonly string[];
     }
   | {
@@ -90,6 +99,7 @@ async function runProof(): Promise<SqliteWasmProofResult> {
       now: () => 100,
     });
     await clock.tickMany(2);
+    const pendingChanges = await verifySyncClient(driver);
 
     const versionRows = await driver.all<{ version: string }>(
       "select sqlite_version() as version",
@@ -124,6 +134,7 @@ async function runProof(): Promise<SqliteWasmProofResult> {
       storage: "opfs",
       persistedBooks,
       persistedHlcCounter: persistedHlc.counter,
+      pendingChanges,
       lwwWinners,
     };
   } finally {
@@ -291,6 +302,47 @@ async function verifyTransactions(driver: SqliteWasmDriver): Promise<void> {
   );
 }
 
+async function verifySyncClient(driver: SqliteWasmDriver): Promise<number> {
+  const schema = defineSyncSchema({
+    client_books: syncedTable({
+      id: text().primaryKey(),
+      title: text().notNull(),
+    }),
+  });
+  const clock = createHybridLogicalClock({
+    deviceId: "device-sync-client",
+    stateStorage: new SqliteHlcStateStorage(driver),
+    now: () => 200,
+  });
+  const client = createSqliteSyncClient({ schema, driver, clock });
+
+  const written = await client.putMany("client_books", [
+    { id: "client-book-1", title: "First" },
+    { id: "client-book-2", title: "Second" },
+  ]);
+  assert(
+    written[0]?.hlc.counter === 0 && written[1]?.hlc.counter === 1,
+    "Sync client did not allocate unique batch HLCs",
+  );
+  await client.delete("client_books", "client-book-2");
+
+  const pending = await client.getPendingChanges();
+  const deleted = pending.find(
+    ({ tableName, recordId }) =>
+      tableName === "client_books" && recordId === "client-book-2",
+  );
+  assert(
+    pending.filter(({ tableName }) => tableName === "client_books").length ===
+      2,
+    "Sync client did not materialize pending rows",
+  );
+  assert(
+    deleted?.operation === "delete" && deleted.payload.title === "Second",
+    "Sync client did not retain deleted payload",
+  );
+  return pending.filter(({ tableName }) => tableName === "client_books").length;
+}
+
 async function createTables(driver: SqliteWasmDriver): Promise<void> {
   await driver.run(
     "create table books (id text primary key, title text not null)",
@@ -303,9 +355,15 @@ async function createTables(driver: SqliteWasmDriver): Promise<void> {
       hlc_wall_time integer not null,
       hlc_counter integer not null,
       device_id text not null,
-      is_deleted integer not null,
+      last_server_seq integer not null default 0,
+      dirty integer not null default 0,
+      is_deleted integer not null default 0,
       primary key (table_name, record_id)
     )`,
+    [],
+  );
+  await driver.run(
+    "create table client_books (id text primary key, title text not null)",
     [],
   );
   await driver.run(

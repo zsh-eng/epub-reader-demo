@@ -2,6 +2,9 @@
 
 Storage-agnostic building blocks for local-first applications.
 
+Performance baselines and the planned SQLite-versus-IndexedDB fresh-sync
+methodology are recorded in [BENCHMARKS.md](./BENCHMARKS.md).
+
 This package is being built incrementally inside the EPUB reader monorepo. It
 currently contains the schema definition language, storage-neutral data
 contracts, and a durable client hybrid logical clock. It can also initialize
@@ -106,6 +109,36 @@ SQLite stores one clock row per device in `sync_hlc_state` and serializes
 updates through a transaction. Advancing the clock and then crashing before the
 corresponding domain write can leave a harmless unused timestamp; it cannot
 cause the clock to move backwards after restart.
+
+Use the SQLite sync client for explicit synchronized writes:
+
+```ts
+import { createSqliteSyncClient } from "@zsh-eng/local-sync/adapters/sqlite";
+
+const sync = createSqliteSyncClient({ schema, driver, clock });
+
+await sync.put("books", book);
+await sync.putMany("books", importedBooks);
+await sync.delete("books", book.id);
+
+const pending = await sync.getPendingChanges({ limit: 500 });
+```
+
+The table name controls the row type and local-only tables are rejected at
+compile time. Writes validate complete rows against schema metadata, allocate a
+distinct HLC per row, and atomically update the domain table with `sync_meta`.
+`putMany()` and `deleteMany()` use one domain transaction and one HLC range.
+Delete keeps the domain payload and marks its metadata as a dirty tombstone.
+
+`getPendingChanges()` returns the latest dirty state rather than a history of
+every local edit. It reconstructs canonical payloads from retained domain rows,
+including deleted rows, in deterministic table-and-record order. Successful
+push acknowledgement and remote apply will clear dirty state in PR10b.
+
+Ordinary SQL writes intentionally bypass sync tracking; synchronized mutations
+must use this client. Reads remain ordinary SQLite queries. Until filtered views
+or generated query helpers are added, normal reads must join `sync_meta` and
+exclude `is_deleted = 1` themselves.
 
 Deletes use `operation: "delete"` and retain the complete domain payload. Both
 client and server keep the materialized row so a future write can restore it;
