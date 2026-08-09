@@ -9,7 +9,11 @@ export interface SqliteSchemaSource {
   readonly meta: SyncSchemaMetadata;
 }
 
-const RESERVED_TABLE_NAMES = new Set(["sync_meta", "sync_cursors"]);
+const RESERVED_TABLE_NAMES = new Set([
+  "sync_meta",
+  "sync_cursors",
+  "sync_hlc_state",
+]);
 
 /**
  * Generates idempotent SQLite initialization statements for application tables
@@ -128,5 +132,10 @@ const SYNC_SIDECAR_STATEMENTS = Object.freeze([
   `create table if not exists "sync_cursors" (
   "cursor_key" text primary key,
   "server_seq" integer not null
+)`,
+  `create table if not exists "sync_hlc_state" (
+  "device_id" text primary key check (length("device_id") > 0),
+  "wall_time_ms" integer not null check ("wall_time_ms" >= 0),
+  "counter" integer not null check ("counter" >= 0)
 )`,
 ]);

@@ -2,6 +2,8 @@ import {
   createSqliteWasmDriver,
   type SqliteWasmDriver,
 } from "../../dist/adapters/sqlite-wasm/index.js";
+import { SqliteHlcStateStorage } from "../../dist/adapters/sqlite/index.js";
+import { createHybridLogicalClock } from "../../dist/client/index.js";
 
 interface BookRow {
   id: string;
@@ -23,6 +25,7 @@ export type SqliteWasmProofResult =
       readonly sqliteVersion: string;
       readonly storage: "opfs";
       readonly persistedBooks: number;
+      readonly persistedHlcCounter: number;
       readonly lwwWinners: readonly string[];
     }
   | {
@@ -81,6 +84,12 @@ async function runProof(): Promise<SqliteWasmProofResult> {
 
     const lwwWinners = await verifyLwwReturning(driver);
     await verifyTransactions(driver);
+    const clock = createHybridLogicalClock({
+      deviceId: "device-browser",
+      stateStorage: new SqliteHlcStateStorage(driver),
+      now: () => 100,
+    });
+    await clock.tickMany(2);
 
     const versionRows = await driver.all<{ version: string }>(
       "select sqlite_version() as version",
@@ -98,12 +107,23 @@ async function runProof(): Promise<SqliteWasmProofResult> {
     );
     const persistedBooks = persistedRows[0]?.count;
     assert(persistedBooks === 3, "OPFS rows did not survive worker restart");
+    const restartedClock = createHybridLogicalClock({
+      deviceId: "device-browser",
+      stateStorage: new SqliteHlcStateStorage(driver),
+      now: () => 50,
+    });
+    const persistedHlc = await restartedClock.tick();
+    assert(
+      persistedHlc.wallTimeMs === 100 && persistedHlc.counter === 2,
+      "HLC state did not survive worker restart",
+    );
 
     return {
       status: "passed",
       sqliteVersion,
       storage: "opfs",
       persistedBooks,
+      persistedHlcCounter: persistedHlc.counter,
       lwwWinners,
     };
   } finally {
@@ -292,6 +312,14 @@ async function createTables(driver: SqliteWasmDriver): Promise<void> {
     `create table write_order (
       position integer primary key autoincrement,
       label text not null
+    )`,
+    [],
+  );
+  await driver.run(
+    `create table sync_hlc_state (
+      device_id text primary key,
+      wall_time_ms integer not null,
+      counter integer not null
     )`,
     [],
   );

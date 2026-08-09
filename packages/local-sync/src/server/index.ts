@@ -4,14 +4,13 @@ import {
   type SyncCursor,
   type SyncPayload,
   type SyncRecord,
+  isValidSyncDeviceId,
 } from "../core/index.js";
 
 export const DEFAULT_SERVER_PULL_LIMIT = 500;
 export const MAX_SERVER_PULL_LIMIT = 5_000;
 export const MAX_SERVER_PUSH_BATCH_SIZE = 500;
 export const DEFAULT_MAX_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
-
-const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 export interface SyncNamespace {
   readonly appName: string;
@@ -256,7 +255,7 @@ function assertNonEmpty(value: string, field: string): void {
 
 function assertDeviceId(value: string, field: string): void {
   assertNonEmpty(value, field);
-  if (!DEVICE_ID_PATTERN.test(value)) {
+  if (!isValidSyncDeviceId(value)) {
     throw new SyncServerValidationError(
       `${field} must use NanoID-compatible ASCII characters`,
     );

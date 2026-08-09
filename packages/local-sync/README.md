@@ -3,9 +3,9 @@
 Storage-agnostic building blocks for local-first applications.
 
 This package is being built incrementally inside the EPUB reader monorepo. It
-currently contains the schema definition language and the storage-neutral data
-contracts that future client, server, and adapter modules will share. It can
-also initialize the corresponding local SQLite tables and sync sidecars.
+currently contains the schema definition language, storage-neutral data
+contracts, and a durable client hybrid logical clock. It can also initialize
+the corresponding local SQLite tables and sync sidecars.
 
 ```ts
 import {
@@ -74,6 +74,38 @@ Its logical counter preserves local ordering when physical time does not advance
 or moves backwards. `deviceId` is stored once as a separate field and is the
 final deterministic tie-breaker. The server separately assigns `serverSeq` only
 after accepting a version into its catch-up stream.
+
+Create the client clock with injected state storage and, optionally, a physical
+clock for tests:
+
+```ts
+import { createHybridLogicalClock } from "@zsh-eng/local-sync/client";
+import {
+  initializeSqliteSchema,
+  SqliteHlcStateStorage,
+} from "@zsh-eng/local-sync/adapters/sqlite";
+
+await initializeSqliteSchema(driver, schema);
+
+const clock = createHybridLogicalClock({
+  deviceId: "device-1",
+  stateStorage: new SqliteHlcStateStorage(driver),
+});
+
+const localTimestamp = await clock.tick();
+const importedTimestamps = await clock.tickMany(100);
+await clock.observe(remoteChange.hlc);
+```
+
+`tick()` persists a timestamp before returning it. `observe()` applies the HLC
+receive rule so a later local write is causally after an observed remote event.
+`tickMany(count)` reserves consecutive logical counters in one state
+transaction and returns one distinct timestamp per row; only the final counter
+must be persisted.
+SQLite stores one clock row per device in `sync_hlc_state` and serializes
+updates through a transaction. Advancing the clock and then crashing before the
+corresponding domain write can leave a harmless unused timestamp; it cannot
+cause the clock to move backwards after restart.
 
 Deletes use `operation: "delete"` and retain the complete domain payload. Both
 client and server keep the materialized row so a future write can restore it;

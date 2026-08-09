@@ -14,6 +14,13 @@ export interface HybridLogicalTimestamp {
   readonly counter: number;
 }
 
+const SYNC_DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+/** Device IDs participate in deterministic LWW ordering across all adapters. */
+export function isValidSyncDeviceId(deviceId: string): boolean {
+  return deviceId.length > 0 && SYNC_DEVICE_ID_PATTERN.test(deviceId);
+}
+
 /**
  * A server-assigned position in the app's ordered change stream.
  *

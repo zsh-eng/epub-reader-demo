@@ -256,6 +256,12 @@ create table sync_cursors (
   cursor_key text primary key,
   server_seq integer not null
 );
+
+create table sync_hlc_state (
+  device_id text primary key,
+  wall_time_ms integer not null,
+  counter integer not null
+);
 ```
 
 `generateSqliteSchema(schema)` now emits the app tables, declared single-column
@@ -317,6 +323,47 @@ acknowledgement should update `last_server_seq` and set `dirty = 0`.
 
 `sync_cursors.server_seq` uses `0` to mean "this scope has never synced." It is
 not per-record state; it tracks app-level or table-level catch-up progress.
+
+### Client Hybrid Logical Clock
+
+The package exposes a platform-neutral asynchronous client clock:
+
+```ts
+const clock = createHybridLogicalClock({
+  deviceId,
+  stateStorage,
+  now: Date.now,
+});
+
+const timestamp = await clock.tick();
+const timestamps = await clock.tickMany(records.length);
+await clock.observe(remoteTimestamp);
+```
+
+`tick()` chooses the greater of physical time and persisted wall time. It resets
+the logical counter when physical time advances and increments the counter when
+time is equal or moves backwards. `observe()` uses the standard HLC receive
+rule across physical, persisted, and remote values so subsequent local writes
+are causally later than observed remote events.
+
+`tickMany(count)` allocates one distinct timestamp per row while performing a
+single durable state transition. It reserves a consecutive logical-counter
+range and persists only its final timestamp. Client write batches should use
+this method rather than sharing one HLC across multiple rows.
+
+`HlcStateStorage.update()` is the persistence boundary. An implementation must
+apply its synchronous state transition atomically and make the resulting state
+durable before returning. The SQLite implementation stores one row per device
+in `sync_hlc_state`, wraps read-modify-write in a transaction, and serializes
+operations issued through the same storage instance. This allows clock state to
+survive application and worker restarts.
+
+Clock persistence is intentionally separate from the later domain-write
+transaction. A crash between advancing the clock and writing a record may leave
+an unused timestamp, which is harmless. Persisting the clock first prevents the
+more dangerous inverse: committing a record whose HLC could be reused after a
+restart. The client clock never allocates `serverSeq`; that remains a server-only
+catch-up cursor.
 
 ### Server Storage Model
 
@@ -745,13 +792,13 @@ Tradeoffs:
    rollback, pagination, and indexed pull plans in Cloudflare's local runtime.
 7. Ship the production D1 `ServerSyncStorage` adapter, package-owned migration,
    encoded-byte limit, and D1 integration coverage without route wiring.
-8. Complete the v1 schema vocabulary with integer, real, JSON-text, optional
-   sync policy metadata, validation, and SQLite generation.
+8. Complete the v1 schema vocabulary with integer, real, JSON-text,
+   synced-table policy metadata, validation, and SQLite generation.
+9. Add the platform-neutral client HLC, atomic state-storage contract, and
+   durable SQLite state keyed by device ID.
 
 ### Next Focused PRs
 
-9. **Platform-neutral client HLC.** Generate and persist the client-owned wall
-   time and logical counter with injected clock, device ID, and state storage.
 10. **Explicit local writes and remote apply.** Atomically update domain rows and
     `sync_meta`, retain tombstones, apply server winners, and return affected
     table/scope information. Keep reads as ordinary SQLite queries initially.

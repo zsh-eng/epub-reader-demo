@@ -16,6 +16,7 @@ test("runs the sync storage model in persistent sqlite-wasm", async ({
     status: "passed",
     storage: "opfs",
     persistedBooks: 3,
+    persistedHlcCounter: 2,
     lwwWinners: ["book-2", "book-3"],
   } satisfies Partial<SqliteWasmProofResult>);
 

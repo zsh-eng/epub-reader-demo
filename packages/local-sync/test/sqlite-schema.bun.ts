@@ -59,6 +59,7 @@ describe("SQLite generated schema", () => {
       { type: "index", name: "sync_meta_dirty_table_idx" },
       { type: "table", name: "books" },
       { type: "table", name: "sync_cursors" },
+      { type: "table", name: "sync_hlc_state" },
       { type: "table", name: "sync_meta" },
     ]);
 

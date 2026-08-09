@@ -29,4 +29,5 @@ export interface SqlDriver extends SqlExecutor {
   ): Promise<TResult>;
 }
 
+export * from "./hlc-state-storage.js";
 export * from "./schema.js";
