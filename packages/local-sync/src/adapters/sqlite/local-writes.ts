@@ -1,15 +1,14 @@
 import type { HybridLogicalClock } from "../../client/index.js";
 import type { SyncPayload, SyncRecord } from "../../core/index.js";
 import type { TableMetadata } from "../../schema/index.js";
-import type { SqlDriver, SqlExecutor, SqlRow, SqlValue } from "./index.js";
+import { readDomainRow, upsertDomainRow } from "./domain-rows.js";
+import type { SqlDriver, SqlExecutor } from "./index.js";
 import {
   assertNonEmpty,
   assertUniqueRecordIds,
   assertUniqueStrings,
-  columnList,
   createLocalSyncRecord,
   normalizeSyncPayload,
-  quoteIdentifier,
 } from "./sync-record.js";
 
 interface SyncMetaWinnerRow {
@@ -161,51 +160,4 @@ async function writeSyncMetadata(
       `Local write was superseded before commit: ${record.tableName}/${record.recordId}`,
     );
   }
-}
-
-async function upsertDomainRow(
-  transaction: SqlExecutor,
-  tableName: string,
-  table: TableMetadata,
-  payload: SyncPayload,
-): Promise<void> {
-  const columnNames = Object.keys(table.columns);
-  const updateColumns = columnNames.filter(
-    (columnName) => columnName !== table.primaryKey,
-  );
-  const conflictAction =
-    updateColumns.length === 0
-      ? "do nothing"
-      : `do update set ${updateColumns
-          .map(
-            (columnName) =>
-              `${quoteIdentifier(columnName)} = excluded.${quoteIdentifier(columnName)}`,
-          )
-          .join(", ")}`;
-
-  await transaction.run(
-    `insert into ${quoteIdentifier(tableName)} (
-       ${columnNames.map(quoteIdentifier).join(", ")}
-     ) values (${columnNames.map(() => "?").join(", ")})
-     on conflict (${quoteIdentifier(table.primaryKey)}) ${conflictAction}`,
-    columnNames.map((columnName) => payload[columnName] as SqlValue),
-  );
-}
-
-async function readDomainRow(
-  transaction: SqlExecutor,
-  tableName: string,
-  table: TableMetadata,
-  recordId: string,
-): Promise<SyncPayload | undefined> {
-  const rows = await transaction.all<SqlRow>(
-    `select ${columnList(table)}
-     from ${quoteIdentifier(tableName)}
-     where ${quoteIdentifier(table.primaryKey)} = ?`,
-    [recordId],
-  );
-  const row = rows[0];
-  return row === undefined
-    ? undefined
-    : normalizeSyncPayload(tableName, table, row);
 }

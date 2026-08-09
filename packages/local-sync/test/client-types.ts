@@ -1,4 +1,5 @@
 import type { HybridLogicalClock } from "../src/client/index.js";
+import type { SequencedSyncRecord } from "../src/core/index.js";
 import type { SqlDriver } from "../src/adapters/sqlite/index.js";
 import { createSqliteSyncClient } from "../src/adapters/sqlite/index.js";
 import {
@@ -35,6 +36,16 @@ void client.putMany("books", [
   { id: "book-2", title: "Second", pageCount: null },
 ]);
 void client.delete("books", "book-1");
+
+declare const remoteBook: SequencedSyncRecord<{
+  readonly id: string;
+  readonly title: string;
+  readonly pageCount: number | null;
+}>;
+void client.applyRemote([remoteBook], { cursor: remoteBook.serverSeq });
+void client.reconcilePushOutcomes([{ accepted: true, record: remoteBook }]);
+void client.getCursor();
+void client.setCursor(10);
 
 // @ts-expect-error Local-only tables are excluded from the sync client API.
 void client.put("localFiles", { id: 1, path: "/book.epub" });

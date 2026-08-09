@@ -210,11 +210,12 @@ Remote sync should use a separate code path:
 
 ```ts
 const batch = await transport.pullApp({ appName: "ebook-reader", since });
-const applied = await sync.applyRemote(batch.records);
-await sync.setCursor(batch.cursor);
+const applied = await sync.applyRemote(batch.records, {
+  cursor: batch.cursor,
+});
 ```
 
-`applyRemote` should:
+`applyRemote`:
 
 - validate the incoming table and payload
 - compare HLCs per `{ tableName, recordId }`
@@ -223,6 +224,28 @@ await sync.setCursor(batch.cursor);
 - update local sync metadata
 - record affected tables and scopes for cache invalidation
 - advance the local HLC service after receiving remote HLCs
+- commit the pull cursor with the domain and metadata writes when one is passed
+
+The client observes the greatest remote HLC once before opening the domain
+transaction. If the SQLite transaction later fails, the only residue is a
+harmless unused local timestamp. The page can be retried because no domain row
+or cursor escaped the rollback.
+
+Push acknowledgement uses the same server-winner reconciliation:
+
+```ts
+const pending = await sync.getPendingChanges();
+const pushed = await transport.push(pending);
+await sync.reconcilePushOutcomes(pushed.outcomes);
+```
+
+The server outcome's `record` is authoritative for reconciliation. If it is the
+same version as local metadata, that exact pending version becomes clean. If it
+is newer, it is applied as remote state. If a newer local edit was created while
+the push was in flight, the older returned winner only advances
+`last_server_seq`; the current edit stays dirty. `accepted` describes whether
+the push created a server stream position, but retries mean it does not by
+itself determine local dirty state.
 
 ### React Query DX
 
@@ -244,8 +267,9 @@ export function useAddHighlight(bookId: string) {
 }
 ```
 
-After `applyRemote`, the sync layer should return affected table/scope pairs so
-the app or React binding can invalidate the correct queries.
+After `applyRemote`, the sync layer returns deduplicated affected table/scope
+pairs so the app or React binding can invalidate the correct queries. A scoped
+row that moves returns both its previous and current scope.
 
 ### Local Storage Model
 
@@ -334,8 +358,11 @@ server. If a previously synced record is edited locally, `dirty` becomes `1` and
 accepts the new version.
 
 `dirty` is local-only state. `dirty = 1` means this device has a local write that
-still needs to be pushed. Remote apply should write `dirty = 0`. Successful push
-acknowledgement should update `last_server_seq` and set `dirty = 0`.
+still needs to be pushed. A strictly newer remote version writes `dirty = 0`.
+Push acknowledgement clears it only when the returned winner exactly matches
+the stored HLC and device ID, so acknowledgement cannot erase a newer local
+edit. Every observed winner advances `last_server_seq` monotonically even when
+the local version remains newer.
 
 `sync_cursors.server_seq` uses `0` to mean "this scope has never synced." It is
 not per-record state; it tracks app-level or table-level catch-up progress.
@@ -814,16 +841,18 @@ Tradeoffs:
    durable SQLite state keyed by device ID.
    10a. Add typed explicit SQLite `put`, `putMany`, `delete`, and `deleteMany`
    operations plus deterministic pending-record materialization.
+   10b. Apply and acknowledge server winners with atomic cursor advancement,
+   client HLC observation, race-safe dirty-state handling, and affected-scope
+   reporting.
 
 ### Next Focused PRs
 
-10b. **Remote apply and acknowledgement.** Apply server winners atomically,
-clear acknowledged dirty state, advance cursors and the client HLC, and
-return affected table/scope information. 11. **HTTP wire adapter.** Add framework-neutral request/response validation and
-thin Hono bindings over `SyncServer`, followed by ebook-backend wiring in a
-separate integration PR. 12. Add the client HTTP transport, bootstrap/incremental orchestration, React
-Query invalidation helpers, data reseeding, and one-table-at-a-time ebook
-cutover as later focused PRs.
+11. **HTTP wire adapter.** Add framework-neutral request/response validation
+    and thin Hono bindings over `SyncServer`, followed by ebook-backend wiring in a
+    separate integration PR.
+12. Add the client HTTP transport, bootstrap/incremental orchestration, React
+    Query invalidation helpers, data reseeding, and one-table-at-a-time ebook
+    cutover as later focused PRs.
 
 ### Open Questions
 

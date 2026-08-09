@@ -122,6 +122,15 @@ await sync.putMany("books", importedBooks);
 await sync.delete("books", book.id);
 
 const pending = await sync.getPendingChanges({ limit: 500 });
+
+const pushResult = await transport.push(pending);
+await sync.reconcilePushOutcomes(pushResult.outcomes);
+
+const cursor = await sync.getCursor();
+const pulled = await transport.pull({ cursor });
+const applied = await sync.applyRemote(pulled.records, {
+  cursor: pulled.cursor,
+});
 ```
 
 The table name controls the row type and local-only tables are rejected at
@@ -132,8 +141,22 @@ Delete keeps the domain payload and marks its metadata as a dirty tombstone.
 
 `getPendingChanges()` returns the latest dirty state rather than a history of
 every local edit. It reconstructs canonical payloads from retained domain rows,
-including deleted rows, in deterministic table-and-record order. Successful
-push acknowledgement and remote apply will clear dirty state in PR10b.
+including deleted rows, in deterministic table-and-record order.
+
+`reconcilePushOutcomes()` accepts the outcomes returned by `SyncServer.push()`.
+The returned winner drives reconciliation: an equal version clears that exact
+pending write, a newer server version replaces local state, and an older server
+version leaves a newer in-flight local edit dirty. The outcome's `accepted` flag
+remains useful for observability but is not sufficient to make those local
+decisions.
+
+`applyRemote()` validates a pull page, advances the client HLC past its greatest
+observed timestamp, and applies strict LWW winners. Passing the page cursor
+commits domain rows, tombstones, `sync_meta`, and the cursor in one SQLite
+transaction. Its `affected` result contains deduplicated table/scope targets for
+query invalidation, including both old and new scopes when a row moves. The
+default cursor key is `"app"`; `getCursor()` and `setCursor()` also accept named
+cursors for future filtered sync flows. Cursors only move forward.
 
 Ordinary SQL writes intentionally bypass sync tracking; synchronized mutations
 must use this client. Reads remain ordinary SQLite queries. Until filtered views
@@ -284,6 +307,6 @@ ordered, checked-in migrations tracked by a local migration table. The migration
 history and database-side checksums are the initial source of truth; a separate
 schema lockfile is only needed later if migration generation becomes automatic.
 
-The package does not yet intercept local writes, implement an HTTP transport,
+The package does not intercept raw SQL writes, implement an HTTP transport,
 perform client sync orchestration, or manage blob transfers. Those capabilities
 will be added as separate, reviewable changes.

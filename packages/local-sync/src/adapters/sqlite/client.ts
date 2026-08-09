@@ -1,5 +1,7 @@
 import type { HybridLogicalClock } from "../../client/index.js";
 import type {
+  SequencedSyncRecord,
+  SyncCursor,
   SyncPayload,
   SyncRecord,
   SyncTablePolicy,
@@ -11,18 +13,37 @@ import type {
   TableDefinitions,
 } from "../../schema/index.js";
 import type { SqlDriver } from "./index.js";
+import {
+  DEFAULT_SYNC_CURSOR_KEY,
+  readSyncCursor,
+  writeSyncCursor,
+} from "./cursors.js";
 import { deleteLocalRows, putLocalRows } from "./local-writes.js";
 import {
   type PendingChangesOptions,
   readPendingChanges,
 } from "./pending-changes.js";
+import {
+  type PushOutcomeLike,
+  type RemoteApplyOptions,
+  type ServerRecordApplyResult,
+  applyRemoteRecords,
+  reconcilePushOutcomeRecords,
+} from "./remote-apply.js";
 import { getSyncedTable } from "./sync-record.js";
 
+export { DEFAULT_SYNC_CURSOR_KEY } from "./cursors.js";
 export {
   DEFAULT_PENDING_CHANGES_LIMIT,
   MAX_PENDING_CHANGES_LIMIT,
   type PendingChangesOptions,
 } from "./pending-changes.js";
+export type {
+  AffectedSyncTarget,
+  PushOutcomeLike,
+  RemoteApplyOptions,
+  ServerRecordApplyResult,
+} from "./remote-apply.js";
 
 type SyncedTableName<TTables extends TableDefinitions> = {
   [TName in keyof TTables]: TTables[TName] extends TableBuilder<
@@ -47,7 +68,7 @@ export interface SqliteSyncClientOptions<TTables extends TableDefinitions> {
   readonly clock: HybridLogicalClock;
 }
 
-/** Explicit local writes and pending-record reads over generated SQLite tables. */
+/** Explicit local writes and server reconciliation over generated SQLite tables. */
 export class SqliteSyncClient<TTables extends TableDefinitions> {
   private operationTail: Promise<void> = Promise.resolve();
 
@@ -130,6 +151,48 @@ export class SqliteSyncClient<TTables extends TableDefinitions> {
         this.options.schema.meta,
         options,
       ),
+    );
+  }
+
+  applyRemote(
+    records: readonly SequencedSyncRecord<unknown>[],
+    options: RemoteApplyOptions = {},
+  ): Promise<ServerRecordApplyResult> {
+    return this.enqueue(() =>
+      applyRemoteRecords(
+        this.options.driver,
+        this.options.clock,
+        this.options.schema.meta,
+        records,
+        options,
+      ),
+    );
+  }
+
+  /** Reconciles the current winners returned for a pushed pending batch. */
+  reconcilePushOutcomes(
+    outcomes: readonly PushOutcomeLike[],
+  ): Promise<ServerRecordApplyResult> {
+    return this.enqueue(() =>
+      reconcilePushOutcomeRecords(
+        this.options.driver,
+        this.options.clock,
+        this.options.schema.meta,
+        outcomes,
+      ),
+    );
+  }
+
+  getCursor(cursorKey = DEFAULT_SYNC_CURSOR_KEY): Promise<SyncCursor> {
+    return this.enqueue(() => readSyncCursor(this.options.driver, cursorKey));
+  }
+
+  setCursor(
+    cursor: SyncCursor,
+    cursorKey = DEFAULT_SYNC_CURSOR_KEY,
+  ): Promise<void> {
+    return this.enqueue(() =>
+      writeSyncCursor(this.options.driver, cursorKey, cursor),
     );
   }
 

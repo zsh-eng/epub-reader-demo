@@ -173,7 +173,7 @@ export function recordKey(tableName: string, recordId: string): string {
   return JSON.stringify([tableName, recordId]);
 }
 
-function getScopeId(
+export function getScopeId(
   table: TableMetadata,
   payload: SyncPayload,
 ): string | undefined {
@@ -189,7 +189,7 @@ function getScopeId(
   return value;
 }
 
-function getSyncPolicy(table: TableMetadata): SyncTablePolicy {
+export function getSyncPolicy(table: TableMetadata): SyncTablePolicy {
   const sync = table.sync;
   if (sync === undefined) {
     throw new Error("Expected a synced table policy");

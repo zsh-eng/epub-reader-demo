@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createHybridLogicalClock } from "../src/client/index.js";
+import type { SequencedSyncRecord } from "../src/core/index.js";
 import {
   createSqliteSyncClient,
   initializeSqliteSchema,
@@ -325,7 +326,318 @@ describe("SQLite sync client", () => {
     );
     expect(await driver.all("select * from sync_meta", [])).toEqual([]);
   });
+
+  it("applies remote puts and retained tombstones with the pull cursor", async () => {
+    const client = createClient();
+    const result = await client.applyRemote(
+      [
+        sequencedBook({
+          id: "book-1",
+          title: "Remote",
+          wallTimeMs: 500,
+          counter: 2,
+          serverSeq: 10,
+        }),
+        {
+          tableName: "highlights",
+          recordId: "highlight-1",
+          scopeId: "book-1",
+          operation: "delete",
+          payload: {
+            id: "highlight-1",
+            bookId: "book-1",
+            quote: "Retained",
+          },
+          hlc: { wallTimeMs: 501, counter: 3 },
+          deviceId: "device-2",
+          schemaVersion: 2,
+          serverSeq: 11,
+        },
+      ],
+      { cursor: 11 },
+    );
+
+    expect(result).toEqual({
+      processedRecordCount: 2,
+      appliedRecordCount: 2,
+      affected: [
+        { tableName: "books" },
+        { tableName: "highlights", scopeId: "book-1" },
+      ],
+    });
+    expect(
+      await driver.all<BookRow>(
+        "select id, title, fileHash from books order by id",
+        [],
+      ),
+    ).toEqual([{ id: "book-1", title: "Remote", fileHash: "hash-book-1" }]);
+    expect(
+      await driver.all(
+        "select id, bookId, quote from highlights where id = ?",
+        ["highlight-1"],
+      ),
+    ).toEqual([{ id: "highlight-1", bookId: "book-1", quote: "Retained" }]);
+    expect(await readSyncMetadata(driver)).toEqual([
+      {
+        table_name: "books",
+        record_id: "book-1",
+        hlc_wall_time: 500,
+        hlc_counter: 2,
+        device_id: "device-2",
+        last_server_seq: 10,
+        dirty: 0,
+        is_deleted: 0,
+      },
+      {
+        table_name: "highlights",
+        record_id: "highlight-1",
+        hlc_wall_time: 501,
+        hlc_counter: 3,
+        device_id: "device-2",
+        last_server_seq: 11,
+        dirty: 0,
+        is_deleted: 1,
+      },
+    ]);
+    expect(await client.getCursor()).toBe(11);
+    expect(
+      await driver.all(
+        `select wall_time_ms, counter
+         from sync_hlc_state
+         where device_id = ?`,
+        ["device-1"],
+      ),
+    ).toEqual([{ wall_time_ms: 501, counter: 4 }]);
+  });
+
+  it("keeps a newer local edit dirty when an older server row arrives", async () => {
+    now = 1_000;
+    const client = createClient();
+    await client.put("books", book("book-1", "Local"));
+
+    const result = await client.applyRemote(
+      [
+        sequencedBook({
+          id: "book-1",
+          title: "Older remote",
+          wallTimeMs: 900,
+          serverSeq: 7,
+        }),
+      ],
+      { cursor: 7 },
+    );
+
+    expect(result).toEqual({
+      processedRecordCount: 1,
+      appliedRecordCount: 0,
+      affected: [],
+    });
+    expect(
+      await driver.all<{ title: string }>(
+        "select title from books where id = ?",
+        ["book-1"],
+      ),
+    ).toEqual([{ title: "Local" }]);
+    expect(await readSyncMetadata(driver)).toMatchObject([
+      { last_server_seq: 7, dirty: 1, hlc_wall_time: 1_000 },
+    ]);
+    expect(await client.getCursor()).toBe(7);
+  });
+
+  it("acknowledges only the exact local version returned by the server", async () => {
+    const client = createClient();
+    const first = await client.put("books", book("book-1", "First"));
+    const acknowledgement = {
+      accepted: true,
+      record: { ...first, serverSeq: 20 },
+    } as const;
+
+    expect(await client.reconcilePushOutcomes([acknowledgement])).toEqual({
+      processedRecordCount: 1,
+      appliedRecordCount: 0,
+      affected: [],
+    });
+    expect(await readSyncMetadata(driver)).toMatchObject([
+      { last_server_seq: 20, dirty: 0 },
+    ]);
+    expect(await client.getPendingChanges()).toEqual([]);
+
+    await client.put("books", book("book-1", "Second"));
+    await client.reconcilePushOutcomes([acknowledgement]);
+
+    expect(
+      await driver.all<{ title: string }>(
+        "select title from books where id = ?",
+        ["book-1"],
+      ),
+    ).toEqual([{ title: "Second" }]);
+    expect(await readSyncMetadata(driver)).toMatchObject([
+      { last_server_seq: 20, dirty: 1, hlc_counter: 2 },
+    ]);
+  });
+
+  it("applies the server winner returned for a rejected push", async () => {
+    const client = createClient();
+    await client.put("books", book("book-1", "Local"));
+    const outcome = {
+      accepted: false,
+      record: sequencedBook({
+        id: "book-1",
+        title: "Remote winner",
+        wallTimeMs: 200,
+        serverSeq: 3,
+      }),
+    } as const;
+
+    const result = await client.reconcilePushOutcomes([outcome]);
+
+    expect(result).toEqual({
+      processedRecordCount: 1,
+      appliedRecordCount: 1,
+      affected: [{ tableName: "books" }],
+    });
+    expect(
+      await driver.all<{ title: string }>(
+        "select title from books where id = ?",
+        ["book-1"],
+      ),
+    ).toEqual([{ title: "Remote winner" }]);
+    expect(await readSyncMetadata(driver)).toMatchObject([
+      { last_server_seq: 3, dirty: 0, device_id: "device-2" },
+    ]);
+  });
+
+  it("reports both scopes when a winning record moves between scopes", async () => {
+    const client = createClient();
+    await client.applyRemote([
+      {
+        tableName: "highlights",
+        recordId: "highlight-1",
+        scopeId: "book-1",
+        operation: "put",
+        payload: {
+          id: "highlight-1",
+          bookId: "book-1",
+          quote: "First",
+        },
+        hlc: { wallTimeMs: 200, counter: 0 },
+        deviceId: "device-2",
+        schemaVersion: 2,
+        serverSeq: 1,
+      },
+    ]);
+
+    const result = await client.applyRemote([
+      {
+        tableName: "highlights",
+        recordId: "highlight-1",
+        scopeId: "book-2",
+        operation: "put",
+        payload: {
+          id: "highlight-1",
+          bookId: "book-2",
+          quote: "Moved",
+        },
+        hlc: { wallTimeMs: 201, counter: 0 },
+        deviceId: "device-2",
+        schemaVersion: 2,
+        serverSeq: 2,
+      },
+    ]);
+
+    expect(result.affected).toEqual([
+      { tableName: "highlights", scopeId: "book-1" },
+      { tableName: "highlights", scopeId: "book-2" },
+    ]);
+  });
+
+  it("rolls back remote rows and their cursor as one transaction", async () => {
+    const client = createClient();
+
+    await expect(
+      client.applyRemote(
+        [
+          sequencedBook({
+            id: "book-1",
+            title: "First",
+            fileHash: "duplicate",
+            wallTimeMs: 300,
+            serverSeq: 1,
+          }),
+          sequencedBook({
+            id: "book-2",
+            title: "Second",
+            fileHash: "duplicate",
+            wallTimeMs: 301,
+            serverSeq: 2,
+          }),
+        ],
+        { cursor: 2 },
+      ),
+    ).rejects.toThrow();
+
+    expect(await driver.all("select * from books", [])).toEqual([]);
+    expect(await driver.all("select * from sync_meta", [])).toEqual([]);
+    expect(await client.getCursor()).toBe(0);
+  });
+
+  it("validates a remote batch before advancing storage state", async () => {
+    const client = createClient();
+    const invalid = {
+      ...sequencedBook({
+        id: "book-1",
+        title: "Wrong version",
+        wallTimeMs: 500,
+        serverSeq: 1,
+      }),
+      schemaVersion: 2,
+    };
+
+    await expect(client.applyRemote([invalid])).rejects.toThrow(
+      "Remote schema version mismatch for books",
+    );
+    expect(await driver.all("select * from sync_hlc_state", [])).toEqual([]);
+    expect(await driver.all("select * from books", [])).toEqual([]);
+  });
+
+  it("keeps named cursors monotonic", async () => {
+    const client = createClient();
+
+    await client.setCursor(10, "books");
+    await client.setCursor(5, "books");
+    await client.applyRemote([], { cursor: 12, cursorKey: "books" });
+
+    expect(await client.getCursor("books")).toBe(12);
+    expect(await client.getCursor("missing")).toBe(0);
+  });
 });
+
+function sequencedBook(options: {
+  readonly id: string;
+  readonly title: string;
+  readonly fileHash?: string;
+  readonly wallTimeMs: number;
+  readonly counter?: number;
+  readonly serverSeq: number;
+}): SequencedSyncRecord<ReturnType<typeof book>> {
+  return {
+    tableName: "books",
+    recordId: options.id,
+    operation: "put",
+    payload: book(
+      options.id,
+      options.title,
+      options.fileHash ?? `hash-${options.id}`,
+    ),
+    hlc: {
+      wallTimeMs: options.wallTimeMs,
+      counter: options.counter ?? 0,
+    },
+    deviceId: "device-2",
+    schemaVersion: 1,
+    serverSeq: options.serverSeq,
+  };
+}
 
 function readSyncMetadata(
   driver: BunSqliteTestDriver,

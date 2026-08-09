@@ -35,6 +35,7 @@ export type SqliteWasmProofResult =
       readonly persistedBooks: number;
       readonly persistedHlcCounter: number;
       readonly pendingChanges: number;
+      readonly remoteApplied: number;
       readonly lwwWinners: readonly string[];
     }
   | {
@@ -99,7 +100,7 @@ async function runProof(): Promise<SqliteWasmProofResult> {
       now: () => 100,
     });
     await clock.tickMany(2);
-    const pendingChanges = await verifySyncClient(driver);
+    const { pendingChanges, remoteApplied } = await verifySyncClient(driver);
 
     const versionRows = await driver.all<{ version: string }>(
       "select sqlite_version() as version",
@@ -135,6 +136,7 @@ async function runProof(): Promise<SqliteWasmProofResult> {
       persistedBooks,
       persistedHlcCounter: persistedHlc.counter,
       pendingChanges,
+      remoteApplied,
       lwwWinners,
     };
   } finally {
@@ -302,7 +304,10 @@ async function verifyTransactions(driver: SqliteWasmDriver): Promise<void> {
   );
 }
 
-async function verifySyncClient(driver: SqliteWasmDriver): Promise<number> {
+async function verifySyncClient(driver: SqliteWasmDriver): Promise<{
+  readonly pendingChanges: number;
+  readonly remoteApplied: number;
+}> {
   const schema = defineSyncSchema({
     client_books: syncedTable({
       id: text().primaryKey(),
@@ -340,7 +345,49 @@ async function verifySyncClient(driver: SqliteWasmDriver): Promise<number> {
     deleted?.operation === "delete" && deleted.payload.title === "Second",
     "Sync client did not retain deleted payload",
   );
-  return pending.filter(({ tableName }) => tableName === "client_books").length;
+  const pendingChanges = pending.filter(
+    ({ tableName }) => tableName === "client_books",
+  ).length;
+
+  const first = written[0];
+  assert(
+    first !== undefined,
+    "Sync client did not return its first local write",
+  );
+  await client.reconcilePushOutcomes([
+    { accepted: true, record: { ...first, serverSeq: 1 } },
+  ]);
+  const remote = await client.applyRemote(
+    [
+      {
+        tableName: "client_books",
+        recordId: "client-book-2",
+        operation: "put",
+        payload: { id: "client-book-2", title: "Remote restored" },
+        hlc: { wallTimeMs: 300, counter: 0 },
+        deviceId: "device-remote",
+        schemaVersion: 1,
+        serverSeq: 2,
+      },
+    ],
+    { cursor: 2 },
+  );
+  const restored = await driver.all<{ title: string }>(
+    "select title from client_books where id = ?",
+    ["client-book-2"],
+  );
+  assert(
+    remote.appliedRecordCount === 1 &&
+      restored[0]?.title === "Remote restored" &&
+      (await client.getCursor()) === 2,
+    "Sync client did not apply and persist the remote winner",
+  );
+  assert(
+    (await client.getPendingChanges()).length === 0,
+    "Sync client did not clear acknowledged remote state",
+  );
+
+  return { pendingChanges, remoteApplied: remote.appliedRecordCount };
 }
 
 async function createTables(driver: SqliteWasmDriver): Promise<void> {
@@ -364,6 +411,13 @@ async function createTables(driver: SqliteWasmDriver): Promise<void> {
   );
   await driver.run(
     "create table client_books (id text primary key, title text not null)",
+    [],
+  );
+  await driver.run(
+    `create table sync_cursors (
+      cursor_key text primary key,
+      server_seq integer not null
+    )`,
     [],
   );
   await driver.run(
