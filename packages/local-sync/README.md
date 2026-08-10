@@ -173,6 +173,43 @@ These interfaces describe semantic records, not a required JSON encoding. An
 HTTP transport may infer the user and app from request context, group records by
 table, and compress batches without changing the core model.
 
+The `/http` entrypoint defines the strict JSON boundary without depending on a
+web framework:
+
+```ts
+import {
+  parseSyncPullQuery,
+  parseSyncPullResponse,
+  parseSyncPushBody,
+  parseSyncPushResponse,
+} from "@zsh-eng/local-sync/http";
+
+const body = parseSyncPushBody(await request.json());
+const pushRequest = {
+  appName: trustedAppName,
+  userId: authenticatedUserId,
+  deviceId: authenticatedDeviceId,
+  records: body.records,
+};
+
+const query = parseSyncPullQuery({
+  cursor: url.searchParams.get("cursor"),
+  limit: url.searchParams.get("limit") ?? undefined,
+});
+```
+
+Push JSON contains only `{ records }`; `appName`, `userId`, and the expected
+device identity are attached by server integration code. Each record still
+carries its claimed `deviceId` for LWW ordering, but `SyncServer` checks it
+against that trusted context. Pull query numbers use canonical unsigned decimal
+strings and become safe JavaScript integers after parsing. Schemas reject
+unknown fields, non-JSON payload values, invalid HLCs, invalid device IDs, and
+pages above the package limits. The entrypoint exports the parsed types and four
+parse functions; its Zod schemas stay private. Invalid values throw ordinary
+`ZodError` instances. Semantic checks that require trusted context or compare
+records, such as device matching, future-clock skew, and duplicate candidates,
+remain in `SyncServer`.
+
 The framework-neutral server coordinator operates on a generic latest-state bag
 of rows:
 
@@ -307,6 +344,6 @@ ordered, checked-in migrations tracked by a local migration table. The migration
 history and database-side checksums are the initial source of truth; a separate
 schema lockfile is only needed later if migration generation becomes automatic.
 
-The package does not intercept raw SQL writes, implement an HTTP transport,
-perform client sync orchestration, or manage blob transfers. Those capabilities
-will be added as separate, reviewable changes.
+The package does not intercept raw SQL writes, send HTTP requests, register
+framework routes, perform client sync orchestration, or manage blob transfers.
+Those capabilities will be added as separate, reviewable changes.

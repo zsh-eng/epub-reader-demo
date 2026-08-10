@@ -37,6 +37,10 @@
       "types": "./dist/server/testing.d.ts",
       "import": "./dist/server/testing.js"
     },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js"
+    },
     "./blob": {
       "types": "./dist/blob/index.d.ts",
       "import": "./dist/blob/index.js"
@@ -67,7 +71,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@sqlite.org/sqlite-wasm": "^3.53.0-build1"
+    "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",

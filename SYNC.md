@@ -619,6 +619,43 @@ keeps bootstrap correct when a device identity is reused and lets every cursor
 advance over the same logical stream; transport-level echo suppression is not
 part of the first version.
 
+### HTTP Wire Contract
+
+The framework-neutral `/http` package entrypoint validates four boundaries:
+
+- push body: `{ records }`
+- pull query: `cursor`, with optional `tableName`, `scopeId`, and `limit`
+- push response: the server's current winner for every candidate
+- pull response: sequenced records, cursor, and `hasMore`
+
+`appName`, `userId`, and the trusted expected device identity are deliberately
+absent from top-level request JSON. Records still carry their claimed `deviceId`
+because it participates in LWW ordering. The future Hono binding supplies the
+expected identity from authenticated request context, and `SyncServer` requires
+every record to match it:
+
+```ts
+const body = parseSyncPushBody(untrustedJson);
+await server.push({
+  appName: trustedAppName,
+  userId: authenticatedUserId,
+  deviceId: authenticatedDeviceId,
+  records: body.records,
+});
+```
+
+Wire validation is structural. It accepts only complete JSON records, safe
+integer HLC components and sequences, canonical decimal query integers, known
+fields, and package batch limits. The entrypoint exposes parsed types and four
+parse functions while keeping its Zod schemas private. Parse failures are
+ordinary `ZodError` instances.
+
+`SyncServer` remains responsible for checks that require trusted or
+configurable server state or comparison between records, including
+authenticated device matching, future-clock skew, duplicate push candidates,
+pagination behavior, and storage behavior. PR11a does not register routes,
+choose authentication middleware, or make network requests.
+
 ### Bootstrap and Incremental Sync
 
 Bootstrap catch-up:
@@ -839,20 +876,22 @@ Tradeoffs:
    synced-table policy metadata, validation, and SQLite generation.
 9. Add the platform-neutral client HLC, atomic state-storage contract, and
    durable SQLite state keyed by device ID.
-   10a. Add typed explicit SQLite `put`, `putMany`, `delete`, and `deleteMany`
-   operations plus deterministic pending-record materialization.
-   10b. Apply and acknowledge server winners with atomic cursor advancement,
-   client HLC observation, race-safe dirty-state handling, and affected-scope
-   reporting.
+10. **PR10a:** Add typed explicit SQLite `put`, `putMany`, `delete`, and `deleteMany`
+    operations plus deterministic pending-record materialization.
+11. **PR10b:** Apply and acknowledge server winners with atomic cursor advancement,
+    client HLC observation, race-safe dirty-state handling, and affected-scope
+    reporting.
+12. **PR11a:** Define framework-neutral Zod-backed HTTP parsers and types without
+    trusting namespace fields from request JSON.
 
 ### Next Focused PRs
 
-11. **HTTP wire adapter.** Add framework-neutral request/response validation
-    and thin Hono bindings over `SyncServer`, followed by ebook-backend wiring in a
-    separate integration PR.
-12. Add the client HTTP transport, bootstrap/incremental orchestration, React
-    Query invalidation helpers, data reseeding, and one-table-at-a-time ebook
-    cutover as later focused PRs.
+1. **PR11b: Thin Hono bindings.** Attach trusted app, user, and device context to
+   the validated wire values, call `SyncServer`, and map failures to HTTP
+   responses. Ebook-backend wiring remains a separate integration PR.
+2. **PR12:** Add the client HTTP transport, bootstrap/incremental orchestration,
+   React Query invalidation helpers, data reseeding, and one-table-at-a-time
+   ebook cutover as later focused PRs.
 
 ### Open Questions
 
