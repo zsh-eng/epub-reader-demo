@@ -134,8 +134,10 @@ const applied = await sync.applyRemote(pulled.records, {
 ```
 
 The table name controls the row type and local-only tables are rejected at
-compile time. Writes validate complete rows against schema metadata, allocate a
-distinct HLC per row, and atomically update the domain table with `sync_meta`.
+compile time. Typed local rows are projected to declared columns without runtime
+parsing, allocate a distinct HLC per row, and atomically update the domain table
+with `sync_meta`. Generated SQLite constraints remain the storage integrity
+boundary.
 `putMany()` and `deleteMany()` use one domain transaction and one HLC range.
 Delete keeps the domain payload and marks its metadata as a dirty tombstone.
 
@@ -150,7 +152,8 @@ version leaves a newer in-flight local edit dirty. The outcome's `accepted` flag
 remains useful for observability but is not sufficient to make those local
 decisions.
 
-`applyRemote()` validates a pull page, advances the client HLC past its greatest
+`applyRemote()` accepts structurally parsed wire records, validates each payload
+against its application table schema, advances the client HLC past its greatest
 observed timestamp, and applies strict LWW winners. Passing the page cursor
 commits domain rows, tombstones, `sync_meta`, and the cursor in one SQLite
 transaction. Its `affected` result contains deduplicated table/scope targets for
@@ -209,6 +212,12 @@ parse functions; its Zod schemas stay private. Invalid values throw ordinary
 `ZodError` instances. Semantic checks that require trusted context or compare
 records, such as device matching, future-clock skew, and duplicate candidates,
 remain in `SyncServer`.
+
+Only functions accepting `unknown` perform structural parsing. Typed values
+passed between the coordinator and its adapters, plus rows read from
+schema-controlled SQLite or D1 tables, are trusted. Runtime assertions are
+reserved for cross-row and ordering invariants that indicate implementation or
+adapter bugs.
 
 The framework-neutral server coordinator operates on a generic latest-state bag
 of rows:

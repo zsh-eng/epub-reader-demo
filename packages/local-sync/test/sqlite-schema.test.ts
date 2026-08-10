@@ -35,20 +35,20 @@ describe("SQLite schema generation", () => {
       `create index if not exists "books_author_idx" on "books" ("author")`,
       `create unique index if not exists "books_fileHash_unique_idx" on "books" ("fileHash")`,
       `create table if not exists "sync_meta" (
-  "table_name" text not null,
-  "record_id" text not null,
-  "hlc_wall_time" integer not null,
-  "hlc_counter" integer not null,
-  "device_id" text not null,
-  "last_server_seq" integer not null default 0,
-  "dirty" integer not null default 0,
-  "is_deleted" integer not null default 0,
+  "table_name" text not null check (length("table_name") > 0),
+  "record_id" text not null check (length("record_id") > 0),
+  "hlc_wall_time" integer not null check ("hlc_wall_time" >= 0),
+  "hlc_counter" integer not null check ("hlc_counter" >= 0),
+  "device_id" text not null check (length("device_id") > 0),
+  "last_server_seq" integer not null default 0 check ("last_server_seq" >= 0),
+  "dirty" integer not null default 0 check ("dirty" in (0, 1)),
+  "is_deleted" integer not null default 0 check ("is_deleted" in (0, 1)),
   primary key ("table_name", "record_id")
 )`,
       `create index if not exists "sync_meta_dirty_table_idx" on "sync_meta" ("dirty", "table_name")`,
       `create table if not exists "sync_cursors" (
-  "cursor_key" text primary key,
-  "server_seq" integer not null
+  "cursor_key" text primary key check (length("cursor_key") > 0),
+  "server_seq" integer not null check ("server_seq" >= 0)
 )`,
       `create table if not exists "sync_hlc_state" (
   "device_id" text primary key check (length("device_id") > 0),

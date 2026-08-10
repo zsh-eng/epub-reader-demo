@@ -172,7 +172,7 @@ describe("client hybrid logical clock", () => {
     expect(stateStorage.updateCount).toBe(0);
   });
 
-  it("rejects invalid device IDs, clocks, and remote timestamps", async () => {
+  it("rejects invalid device IDs", () => {
     const stateStorage = new MemoryHlcStateStorage();
 
     expect(() =>
@@ -181,23 +181,5 @@ describe("client hybrid logical clock", () => {
         stateStorage,
       }),
     ).toThrow("deviceId must use NanoID-compatible ASCII characters");
-
-    const invalidPhysicalClock = createHybridLogicalClock({
-      deviceId: "device-1",
-      stateStorage,
-      now: () => 1.5,
-    });
-    await expect(invalidPhysicalClock.tick()).rejects.toThrow(
-      "physical clock must be a non-negative safe integer",
-    );
-
-    const clock = createHybridLogicalClock({
-      deviceId: "device-2",
-      stateStorage,
-      now: () => 10,
-    });
-    await expect(clock.observe({ wallTimeMs: -1, counter: 0 })).rejects.toThrow(
-      "remote HLC.wallTimeMs must be a non-negative safe integer",
-    );
   });
 });

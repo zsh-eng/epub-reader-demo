@@ -54,12 +54,10 @@ export function createHybridLogicalClock(
     deviceId: options.deviceId,
 
     async tick(): Promise<HybridLogicalTimestamp> {
-      const wallTimeMs = readPhysicalTime(physicalClock);
-      const timestamp = await options.stateStorage.update(
-        options.deviceId,
-        (current) => tick(current, wallTimeMs),
+      const wallTimeMs = physicalClock();
+      return options.stateStorage.update(options.deviceId, (current) =>
+        tick(current, wallTimeMs),
       );
-      return copyTimestamp(assertTimestamp(timestamp, "stored HLC state"));
     },
 
     async tickMany(count: number): Promise<readonly HybridLogicalTimestamp[]> {
@@ -68,7 +66,7 @@ export function createHybridLogicalClock(
         return Object.freeze([]);
       }
 
-      const wallTimeMs = readPhysicalTime(physicalClock);
+      const wallTimeMs = physicalClock();
       const finalTimestamp = await options.stateStorage.update(
         options.deviceId,
         (current) => {
@@ -79,13 +77,8 @@ export function createHybridLogicalClock(
           );
         },
       );
-      assertTimestamp(finalTimestamp, "stored HLC state");
 
       const firstCounter = finalTimestamp.counter - (count - 1);
-      if (firstCounter < 0) {
-        throw new Error("Stored HLC state did not reserve the requested batch");
-      }
-
       return Object.freeze(
         Array.from({ length: count }, (_, index) =>
           createTimestamp(finalTimestamp.wallTimeMs, firstCounter + index),
@@ -96,13 +89,10 @@ export function createHybridLogicalClock(
     async observe(
       remote: HybridLogicalTimestamp,
     ): Promise<HybridLogicalTimestamp> {
-      assertTimestamp(remote, "remote HLC");
-      const wallTimeMs = readPhysicalTime(physicalClock);
-      const timestamp = await options.stateStorage.update(
-        options.deviceId,
-        (current) => receive(current, remote, wallTimeMs),
+      const wallTimeMs = physicalClock();
+      return options.stateStorage.update(options.deviceId, (current) =>
+        receive(current, remote, wallTimeMs),
       );
-      return copyTimestamp(assertTimestamp(timestamp, "stored HLC state"));
     },
   });
 }
@@ -115,7 +105,6 @@ function tick(
     return createTimestamp(wallTimeMs, 0);
   }
 
-  assertTimestamp(current, "stored HLC state");
   if (wallTimeMs > current.wallTimeMs) {
     return createTimestamp(wallTimeMs, 0);
   }
@@ -136,7 +125,6 @@ function receive(
     return createTimestamp(remote.wallTimeMs, increment(remote.counter));
   }
 
-  assertTimestamp(current, "stored HLC state");
   const wallTimeMs = Math.max(
     physicalWallTimeMs,
     current.wallTimeMs,
@@ -159,21 +147,6 @@ function receive(
   }
 
   return createTimestamp(wallTimeMs, 0);
-}
-
-function readPhysicalTime(now: () => number): number {
-  const wallTimeMs = now();
-  assertNonNegativeSafeInteger(wallTimeMs, "physical clock");
-  return wallTimeMs;
-}
-
-function assertTimestamp(
-  timestamp: HybridLogicalTimestamp,
-  field: string,
-): HybridLogicalTimestamp {
-  assertNonNegativeSafeInteger(timestamp.wallTimeMs, `${field}.wallTimeMs`);
-  assertNonNegativeSafeInteger(timestamp.counter, `${field}.counter`);
-  return timestamp;
 }
 
 function increment(value: number): number {
@@ -199,10 +172,4 @@ function createTimestamp(
   counter: number,
 ): HybridLogicalTimestamp {
   return Object.freeze({ wallTimeMs, counter });
-}
-
-function copyTimestamp(
-  timestamp: HybridLogicalTimestamp,
-): HybridLogicalTimestamp {
-  return createTimestamp(timestamp.wallTimeMs, timestamp.counter);
 }

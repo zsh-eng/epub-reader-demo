@@ -1,14 +1,13 @@
 import type { HybridLogicalClock } from "../../client/index.js";
 import type { SyncPayload, SyncRecord } from "../../core/index.js";
-import type { TableMetadata } from "../../schema/index.js";
 import { readDomainRow, upsertDomainRow } from "./domain-rows.js";
 import type { SqlDriver, SqlExecutor } from "./index.js";
 import {
-  assertNonEmpty,
   assertUniqueRecordIds,
   assertUniqueStrings,
   createLocalSyncRecord,
-  normalizeSyncPayload,
+  projectSyncPayload,
+  type SyncedTableMetadata,
 } from "./sync-record.js";
 
 interface SyncMetaWinnerRow {
@@ -19,12 +18,10 @@ export async function putLocalRows(
   driver: SqlDriver,
   clock: HybridLogicalClock,
   tableName: string,
-  table: TableMetadata,
+  table: SyncedTableMetadata,
   rows: readonly unknown[],
 ): Promise<readonly SyncRecord<SyncPayload>[]> {
-  const payloads = rows.map((row) =>
-    normalizeSyncPayload(tableName, table, row),
-  );
+  const payloads = rows.map((row) => projectSyncPayload(table, row));
   assertUniqueRecordIds(tableName, table, payloads);
 
   if (payloads.length === 0) {
@@ -64,12 +61,9 @@ export async function deleteLocalRows(
   driver: SqlDriver,
   clock: HybridLogicalClock,
   tableName: string,
-  table: TableMetadata,
+  table: SyncedTableMetadata,
   recordIds: readonly string[],
 ): Promise<readonly SyncRecord<SyncPayload>[]> {
-  for (const recordId of recordIds) {
-    assertNonEmpty(recordId, "recordId");
-  }
   assertUniqueStrings(recordIds, `delete batch for ${tableName}`);
 
   if (recordIds.length === 0) {

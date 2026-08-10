@@ -88,6 +88,10 @@ const syncPullQuery = z
       .pipe(positiveInteger.max(MAX_SERVER_PULL_LIMIT))
       .optional(),
   })
+  .refine(
+    (query) => query.scopeId === undefined || query.tableName !== undefined,
+    { message: "scopeId requires tableName", path: ["scopeId"] },
+  )
   .transform(
     (query): SyncPullQuery => ({
       cursor: query.cursor,

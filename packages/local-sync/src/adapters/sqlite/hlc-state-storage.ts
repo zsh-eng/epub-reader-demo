@@ -2,10 +2,7 @@ import type {
   HlcStateStorage,
   HlcStateTransition,
 } from "../../client/index.js";
-import {
-  type HybridLogicalTimestamp,
-  isValidSyncDeviceId,
-} from "../../core/index.js";
+import type { HybridLogicalTimestamp } from "../../core/index.js";
 import type { SqlDriver } from "./index.js";
 
 interface HlcStateRow {
@@ -23,12 +20,6 @@ export class SqliteHlcStateStorage implements HlcStateStorage {
     deviceId: string,
     transition: HlcStateTransition,
   ): Promise<HybridLogicalTimestamp> {
-    if (!isValidSyncDeviceId(deviceId)) {
-      return Promise.reject(
-        new Error("deviceId must use NanoID-compatible ASCII characters"),
-      );
-    }
-
     return this.enqueue(() =>
       this.driver.transaction(async (transaction) => {
         const rows = await transaction.all<HlcStateRow>(
@@ -41,9 +32,8 @@ export class SqliteHlcStateStorage implements HlcStateStorage {
         const current =
           row === undefined
             ? undefined
-            : createTimestamp(row.wall_time_ms, row.counter);
+            : { wallTimeMs: row.wall_time_ms, counter: row.counter };
         const next = transition(current);
-        assertTimestamp(next);
 
         await transaction.run(
           `insert into sync_hlc_state (
@@ -55,7 +45,7 @@ export class SqliteHlcStateStorage implements HlcStateStorage {
           [deviceId, next.wallTimeMs, next.counter],
         );
 
-        return createTimestamp(next.wallTimeMs, next.counter);
+        return next;
       }),
     );
   }
@@ -70,24 +60,4 @@ export class SqliteHlcStateStorage implements HlcStateStorage {
     );
     return result;
   }
-}
-
-function assertTimestamp(timestamp: HybridLogicalTimestamp): void {
-  assertNonNegativeSafeInteger(timestamp.wallTimeMs, "HLC wallTimeMs");
-  assertNonNegativeSafeInteger(timestamp.counter, "HLC counter");
-}
-
-function assertNonNegativeSafeInteger(value: number, field: string): void {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new Error(`${field} must be a non-negative safe integer`);
-  }
-}
-
-function createTimestamp(
-  wallTimeMs: number,
-  counter: number,
-): HybridLogicalTimestamp {
-  assertNonNegativeSafeInteger(wallTimeMs, "stored HLC wallTimeMs");
-  assertNonNegativeSafeInteger(counter, "stored HLC counter");
-  return Object.freeze({ wallTimeMs, counter });
 }

@@ -214,14 +214,6 @@ describe("server bag-of-rows sync", () => {
       server.push({
         appName: "reader",
         userId: "user-1",
-        deviceId: "device-\u65e5",
-        records: [record({ deviceId: "device-\u65e5", wallTimeMs: 100 })],
-      }),
-    ).rejects.toThrow("NanoID-compatible ASCII");
-    await expect(
-      server.push({
-        appName: "reader",
-        userId: "user-1",
         deviceId: "device-a",
         records: [record({ wallTimeMs: NOW + 1_001 })],
       }),

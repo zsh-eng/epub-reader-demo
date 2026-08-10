@@ -1,16 +1,10 @@
-import {
-  type SyncPayload,
-  type SyncRecord,
-  isValidSyncDeviceId,
-} from "../../core/index.js";
+import type { SyncPayload, SyncRecord } from "../../core/index.js";
 import type { SyncSchemaMetadata } from "../../schema/index.js";
 import type { SqlDriver, SqlExecutor, SqlRow } from "./index.js";
 import {
-  assertNonNegativeSafeInteger,
   columnList,
   createLocalSyncRecord,
   getSyncedTable,
-  normalizeSyncPayload,
   quoteIdentifier,
   recordKey,
 } from "./sync-record.js";
@@ -37,10 +31,13 @@ export async function readPendingChanges(
   options: PendingChangesOptions,
 ): Promise<readonly SyncRecord<SyncPayload>[]> {
   const limit = options.limit ?? DEFAULT_PENDING_CHANGES_LIMIT;
-  assertNonNegativeSafeInteger(limit, "pending changes limit");
-  if (limit > MAX_PENDING_CHANGES_LIMIT) {
+  if (
+    !Number.isSafeInteger(limit) ||
+    limit < 0 ||
+    limit > MAX_PENDING_CHANGES_LIMIT
+  ) {
     throw new Error(
-      `pending changes limit must not exceed ${MAX_PENDING_CHANGES_LIMIT}`,
+      `pending changes limit must be between 0 and ${MAX_PENDING_CHANGES_LIMIT}`,
     );
   }
   if (limit === 0) {
@@ -72,19 +69,6 @@ export async function readPendingChanges(
           `Pending metadata has no domain row: ${row.table_name}/${row.record_id}`,
         );
       }
-      if (!isValidSyncDeviceId(row.device_id)) {
-        throw new Error(
-          `Pending metadata has an invalid device ID: ${row.table_name}/${row.record_id}`,
-        );
-      }
-      assertNonNegativeSafeInteger(row.hlc_wall_time, "pending HLC wallTimeMs");
-      assertNonNegativeSafeInteger(row.hlc_counter, "pending HLC counter");
-      if (row.is_deleted !== 0 && row.is_deleted !== 1) {
-        throw new Error(
-          `Pending metadata has invalid tombstone state: ${row.table_name}/${row.record_id}`,
-        );
-      }
-
       return createLocalSyncRecord(
         row.table_name,
         table,
@@ -128,12 +112,8 @@ async function readPendingPayloads(
     );
 
     for (const row of rows) {
-      const payload = normalizeSyncPayload(tableName, table, row);
-      const recordId = payload[table.primaryKey];
-      if (typeof recordId !== "string") {
-        throw new Error(`Synced record ID must be text: ${tableName}`);
-      }
-      payloads.set(recordKey(tableName, recordId), payload);
+      const recordId = row[table.primaryKey] as string;
+      payloads.set(recordKey(tableName, recordId), row);
     }
   }
 

@@ -155,7 +155,7 @@ export class SqliteSyncClient<TTables extends TableDefinitions> {
   }
 
   applyRemote(
-    records: readonly SequencedSyncRecord<unknown>[],
+    records: readonly SequencedSyncRecord<SyncPayload>[],
     options: RemoteApplyOptions = {},
   ): Promise<ServerRecordApplyResult> {
     return this.enqueue(() =>

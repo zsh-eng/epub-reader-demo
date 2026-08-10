@@ -4,7 +4,6 @@ import {
   type SyncCursor,
   type SyncPayload,
   type SyncRecord,
-  isValidSyncDeviceId,
 } from "../core/index.js";
 
 export const DEFAULT_SERVER_PULL_LIMIT = 500;
@@ -122,9 +121,6 @@ export class SyncServer<TPayload = SyncPayload> {
   async push(
     request: ServerPushRequest<TPayload>,
   ): Promise<ServerPushResult<TPayload>> {
-    assertNamespace(request);
-    assertDeviceId(request.deviceId, "deviceId");
-
     if (request.records.length > this.maxPushBatchSize) {
       throw new SyncServerValidationError(
         `Push batch exceeds maximum size of ${this.maxPushBatchSize}`,
@@ -165,23 +161,13 @@ export class SyncServer<TPayload = SyncPayload> {
   }
 
   async pull(request: ServerPullRequest): Promise<SyncBatch<TPayload>> {
-    assertNamespace(request);
-    assertNonNegativeInteger(request.cursor, "cursor");
-
-    if (request.tableName !== undefined) {
-      assertNonEmpty(request.tableName, "tableName");
-    }
-    if (request.scopeId !== undefined) {
-      assertNonEmpty(request.scopeId, "scopeId");
-      if (request.tableName === undefined) {
-        throw new SyncServerValidationError(
-          "scopeId requires a tableName filter",
-        );
-      }
+    if (request.scopeId !== undefined && request.tableName === undefined) {
+      throw new SyncServerValidationError(
+        "scopeId requires a tableName filter",
+      );
     }
 
     const limit = request.limit ?? this.defaultPullLimit;
-    assertPositiveInteger(limit, "limit");
     if (limit > this.maxPullLimit) {
       throw new SyncServerValidationError(
         `Pull limit exceeds maximum size of ${this.maxPullLimit}`,
@@ -220,44 +206,14 @@ function validateRecord<TPayload>(
   authenticatedDeviceId: string,
   latestAllowedWallTime: number,
 ): void {
-  assertNonEmpty(record.tableName, "record.tableName");
-  assertNonEmpty(record.recordId, "record.recordId");
-  assertDeviceId(record.deviceId, "record.deviceId");
-  if (record.scopeId !== undefined) {
-    assertNonEmpty(record.scopeId, "record.scopeId");
-  }
   if (record.deviceId !== authenticatedDeviceId) {
     throw new SyncServerValidationError(
       `Record deviceId does not match authenticated device: ${record.tableName}/${record.recordId}`,
     );
   }
-
-  assertNonNegativeInteger(record.hlc.wallTimeMs, "record.hlc.wallTimeMs");
-  assertNonNegativeInteger(record.hlc.counter, "record.hlc.counter");
-  assertPositiveInteger(record.schemaVersion, "record.schemaVersion");
   if (record.hlc.wallTimeMs > latestAllowedWallTime) {
     throw new SyncServerValidationError(
       `Record HLC exceeds the allowed future clock skew: ${record.tableName}/${record.recordId}`,
-    );
-  }
-}
-
-function assertNamespace(namespace: SyncNamespace): void {
-  assertNonEmpty(namespace.appName, "appName");
-  assertNonEmpty(namespace.userId, "userId");
-}
-
-function assertNonEmpty(value: string, field: string): void {
-  if (value.length === 0) {
-    throw new SyncServerValidationError(`${field} must not be empty`);
-  }
-}
-
-function assertDeviceId(value: string, field: string): void {
-  assertNonEmpty(value, field);
-  if (!isValidSyncDeviceId(value)) {
-    throw new SyncServerValidationError(
-      `${field} must use NanoID-compatible ASCII characters`,
     );
   }
 }

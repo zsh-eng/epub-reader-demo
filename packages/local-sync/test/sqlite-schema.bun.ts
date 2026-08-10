@@ -94,6 +94,13 @@ describe("SQLite generated schema", () => {
         ["books", "book-1"],
       ),
     ).toEqual([{ last_server_seq: 0, dirty: 0, is_deleted: 0 }]);
+    await expect(
+      driver.run(
+        `update sync_meta set dirty = 2
+         where table_name = ? and record_id = ?`,
+        ["books", "book-1"],
+      ),
+    ).rejects.toThrow();
 
     await driver.run(
       "insert into sync_cursors (cursor_key, server_seq) values (?, ?)",
@@ -105,6 +112,12 @@ describe("SQLite generated schema", () => {
         ["app"],
       ),
     ).toEqual([{ server_seq: 42 }]);
+    await expect(
+      driver.run(
+        "insert into sync_cursors (cursor_key, server_seq) values (?, ?)",
+        ["invalid", -1],
+      ),
+    ).rejects.toThrow();
   });
 
   it("enforces generated scalar and JSON-text columns", async () => {

@@ -97,6 +97,9 @@ describe("HTTP sync wire validation", () => {
     expect(() => parseSyncPullQuery({ cursor: "0", limit: "5001" })).toThrow(
       z.ZodError,
     );
+    expect(() =>
+      parseSyncPullQuery({ cursor: "0", scopeId: "book-1" }),
+    ).toThrow(z.ZodError);
   });
 
   it("rejects non-query values and authentication fields in pull queries", () => {

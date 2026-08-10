@@ -1,11 +1,7 @@
 import type { SyncPayload } from "../../core/index.js";
 import type { TableMetadata } from "../../schema/index.js";
 import type { SqlExecutor, SqlRow, SqlValue } from "./index.js";
-import {
-  columnList,
-  normalizeSyncPayload,
-  quoteIdentifier,
-} from "./sync-record.js";
+import { columnList, quoteIdentifier } from "./sync-record.js";
 
 export async function upsertDomainRow(
   transaction: SqlExecutor,
@@ -49,7 +45,5 @@ export async function readDomainRow(
     [recordId],
   );
   const row = rows[0];
-  return row === undefined
-    ? undefined
-    : normalizeSyncPayload(tableName, table, row);
+  return row;
 }

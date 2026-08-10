@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createHybridLogicalClock } from "../src/client/index.js";
-import type { SequencedSyncRecord } from "../src/core/index.js";
+import type { SequencedSyncRecord, SyncPayload } from "../src/core/index.js";
 import {
   createSqliteSyncClient,
   initializeSqliteSchema,
@@ -284,18 +284,12 @@ describe("SQLite sync client", () => {
     expect(await client.getPendingChanges({ limit: 1 })).toHaveLength(1);
   });
 
-  it("validates rows before advancing the HLC", async () => {
+  it("rejects local-only tables before advancing the HLC", async () => {
     const client = createClient();
     const unsafeClient = client as unknown as {
       put(tableName: string, row: unknown): Promise<unknown>;
     };
 
-    await expect(
-      unsafeClient.put("books", {
-        id: "book-1",
-        title: "Missing columns",
-      }),
-    ).rejects.toThrow("Missing column for books: fileHash");
     await expect(
       unsafeClient.put("localFiles", { id: 1, path: "/book.epub" }),
     ).rejects.toThrow("Table is local-only and cannot be synced: localFiles");
@@ -583,6 +577,15 @@ describe("SQLite sync client", () => {
 
   it("validates a remote batch before advancing storage state", async () => {
     const client = createClient();
+    const invalidPayload = {
+      ...sequencedBook({
+        id: "book-1",
+        title: "Missing columns",
+        wallTimeMs: 500,
+        serverSeq: 1,
+      }),
+      payload: { id: "book-1", title: "Missing columns" },
+    } as unknown as SequencedSyncRecord<SyncPayload>;
     const invalid = {
       ...sequencedBook({
         id: "book-1",
@@ -593,6 +596,7 @@ describe("SQLite sync client", () => {
       schemaVersion: 2,
     };
 
+    await expect(client.applyRemote([invalidPayload])).rejects.toThrow();
     await expect(client.applyRemote([invalid])).rejects.toThrow(
       "Remote schema version mismatch for books",
     );

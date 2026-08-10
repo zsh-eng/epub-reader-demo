@@ -4,21 +4,18 @@ import {
   type SequencedSyncRecord,
   type SyncCursor,
   type SyncPayload,
-  isValidSyncDeviceId,
 } from "../../core/index.js";
-import type { SyncSchemaMetadata, TableMetadata } from "../../schema/index.js";
+import type { SyncSchemaMetadata } from "../../schema/index.js";
 import { DEFAULT_SYNC_CURSOR_KEY, writeSyncCursor } from "./cursors.js";
 import { readDomainRow, upsertDomainRow } from "./domain-rows.js";
 import type { SqlDriver, SqlExecutor } from "./index.js";
 import {
-  assertNonEmpty,
-  assertNonNegativeSafeInteger,
   getRecordId,
   getScopeId,
   getSyncedTable,
-  getSyncPolicy,
-  normalizeSyncPayload,
+  parseRemoteSyncPayload,
   recordKey,
+  type SyncedTableMetadata,
 } from "./sync-record.js";
 
 export interface RemoteApplyOptions {
@@ -31,7 +28,7 @@ export interface RemoteApplyOptions {
 export interface PushOutcomeLike {
   /** Included for wire compatibility; reconciliation is driven by `record`. */
   readonly accepted: boolean;
-  readonly record: SequencedSyncRecord<unknown>;
+  readonly record: SequencedSyncRecord<SyncPayload>;
 }
 
 export interface AffectedSyncTarget {
@@ -47,7 +44,7 @@ export interface ServerRecordApplyResult {
 }
 
 interface NormalizedServerRecord {
-  readonly table: TableMetadata;
+  readonly table: SyncedTableMetadata;
   readonly record: SequencedSyncRecord<SyncPayload>;
 }
 
@@ -59,7 +56,7 @@ export async function applyRemoteRecords(
   driver: SqlDriver,
   clock: HybridLogicalClock,
   schema: SyncSchemaMetadata,
-  records: readonly SequencedSyncRecord<unknown>[],
+  records: readonly SequencedSyncRecord<SyncPayload>[],
   options: RemoteApplyOptions = {},
 ): Promise<ServerRecordApplyResult> {
   const normalized = normalizeServerRecords(schema, records);
@@ -140,15 +137,13 @@ export function reconcilePushOutcomeRecords(
 
 function normalizeServerRecords(
   schema: SyncSchemaMetadata,
-  records: readonly SequencedSyncRecord<unknown>[],
+  records: readonly SequencedSyncRecord<SyncPayload>[],
 ): readonly NormalizedServerRecord[] {
   const keys = new Set<string>();
 
   return records.map((candidate) => {
     const tableName = candidate.tableName;
     const recordId = candidate.recordId;
-    assertNonEmpty(tableName, "record.tableName");
-    assertNonEmpty(recordId, "record.recordId");
     const key = recordKey(tableName, recordId);
     if (keys.has(key)) {
       throw new Error(
@@ -158,7 +153,7 @@ function normalizeServerRecords(
     keys.add(key);
 
     const table = getSyncedTable(schema, tableName);
-    const payload = normalizeSyncPayload(tableName, table, candidate.payload);
+    const payload = parseRemoteSyncPayload(table, candidate.payload);
     if (getRecordId(table, payload) !== recordId) {
       throw new Error(
         `Remote payload record ID does not match: ${tableName}/${recordId}`,
@@ -171,30 +166,7 @@ function normalizeServerRecords(
         `Remote payload scope ID does not match: ${tableName}/${recordId}`,
       );
     }
-    const operation: unknown = candidate.operation;
-    if (operation !== "put" && operation !== "delete") {
-      throw new Error(
-        `Remote record has an invalid operation: ${tableName}/${recordId}`,
-      );
-    }
-    if (!isValidSyncDeviceId(candidate.deviceId)) {
-      throw new Error(
-        `Remote record has an invalid device ID: ${tableName}/${recordId}`,
-      );
-    }
-    assertNonNegativeSafeInteger(
-      candidate.hlc.wallTimeMs,
-      "remote HLC wallTimeMs",
-    );
-    assertNonNegativeSafeInteger(candidate.hlc.counter, "remote HLC counter");
-    if (
-      !Number.isSafeInteger(candidate.serverSeq) ||
-      candidate.serverSeq <= 0
-    ) {
-      throw new Error("remote serverSeq must be a positive safe integer");
-    }
-
-    const schemaVersion = getSyncPolicy(table).schemaVersion;
+    const schemaVersion = table.sync.schemaVersion;
     if (candidate.schemaVersion !== schemaVersion) {
       throw new Error(
         `Remote schema version mismatch for ${tableName}: expected ${schemaVersion}, received ${candidate.schemaVersion}`,
@@ -205,14 +177,14 @@ function normalizeServerRecords(
       tableName,
       recordId,
       ...(scopeId === undefined ? {} : { scopeId }),
-      hlc: Object.freeze({ ...candidate.hlc }),
+      hlc: candidate.hlc,
       deviceId: candidate.deviceId,
       schemaVersion,
       serverSeq: candidate.serverSeq,
       payload,
     };
     const record: SequencedSyncRecord<SyncPayload> =
-      operation === "delete"
+      candidate.operation === "delete"
         ? { ...base, operation: "delete" }
         : { ...base, operation: "put" };
 
@@ -225,7 +197,6 @@ function validateCursorOptions(
   options: RemoteApplyOptions,
 ): void {
   if (options.cursorKey !== undefined) {
-    assertNonEmpty(options.cursorKey, "cursorKey");
     if (options.cursor === undefined) {
       throw new Error("cursorKey requires a cursor");
     }
@@ -234,7 +205,6 @@ function validateCursorOptions(
     return;
   }
 
-  assertNonNegativeSafeInteger(options.cursor, "sync cursor");
   for (const { record } of records) {
     if (record.serverSeq > options.cursor) {
       throw new Error(

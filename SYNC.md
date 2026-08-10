@@ -181,10 +181,12 @@ await sync.putMany("highlights", importedHighlights);
 ```
 
 `createSqliteSyncClient({ schema, driver, clock })` constrains table names and
-row payloads from the schema type. Each local batch validates complete rows,
-uses `tickMany()` to allocate a distinct HLC per row, and updates domain data
-and sync metadata in the same local transaction. A delete leaves the domain row
-and its payload in place and marks its sidecar metadata as deleted.
+row payloads from the schema type. Each local batch projects typed rows to their
+declared columns without runtime parsing, uses `tickMany()` to allocate a
+distinct HLC per row, and updates domain data and sync metadata in the same
+local transaction. Generated SQLite constraints are the storage integrity
+boundary. A delete leaves the domain row and its payload in place and marks its
+sidecar metadata as deleted.
 
 `getPendingChanges({ limit })` scans dirty metadata in deterministic table and
 record order, groups retained-row reads by table, and reconstructs current
@@ -215,9 +217,9 @@ const applied = await sync.applyRemote(batch.records, {
 });
 ```
 
-`applyRemote`:
+`applyRemote` accepts structurally parsed wire records and then:
 
-- validate the incoming table and payload
+- parse the payload against the named application table
 - compare HLCs per `{ tableName, recordId }`
 - update local materialized rows, including retained delete payloads, when the
   remote record wins
@@ -492,10 +494,11 @@ Clients can store cursors with gaps. Gaps are acceptable because each client
 only cares that future pulls ask for records where `serverSeq > localCursor`.
 
 `SyncServer` now provides the framework-neutral push and pull behavior. It
-validates namespaces, device ownership, batch/page limits, duplicate logical
-keys, schema versions, and structured HLC values. By default it rejects HLC wall
-times more than five minutes ahead of the server clock; adapters can configure
-that policy and inject a clock for tests.
+checks authenticated device ownership, configurable batch/page limits,
+duplicate logical keys, and future-clock skew after the transport has parsed
+the wire shape. By default it rejects HLC wall times more than five minutes
+ahead of the server clock; adapters can configure that policy and inject a
+clock for tests.
 
 The `ServerSyncStorage` boundary has two semantic operations:
 
@@ -886,9 +889,11 @@ Tradeoffs:
 
 ### Next Focused PRs
 
-1. **PR11b: Thin Hono bindings.** Attach trusted app, user, and device context to
-   the validated wire values, call `SyncServer`, and map failures to HTTP
-   responses. Ebook-backend wiring remains a separate integration PR.
+1. **PR11b: Thin Hono bindings.** Add a small Hono-specific entrypoint exporting
+   prepared validation middleware while retaining the framework-neutral parse
+   functions. Attach trusted app, user, and device context to validated wire
+   values, call `SyncServer`, and map failures to HTTP responses. Ebook-backend
+   wiring remains a separate integration PR.
 2. **PR12:** Add the client HTTP transport, bootstrap/incremental orchestration,
    React Query invalidation helpers, data reseeding, and one-table-at-a-time
    ebook cutover as later focused PRs.
