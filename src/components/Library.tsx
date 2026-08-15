@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -49,10 +50,7 @@ export function Library() {
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
 
-  const {
-    data: booksData,
-    refetch: refetchBooks,
-  } = useBooksWithStatuses();
+  const { data: booksData, refetch: refetchBooks } = useBooksWithStatuses();
   const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
   const { settings, updateSettings } = useReaderSettings();
 
@@ -347,8 +345,12 @@ export function Library() {
   const finishedBooks =
     booksData?.categorized.finished.filter(filterBySearch) ?? [];
 
-  // Combine library and finished books into "All Books" section
-  const allBooks = [...libraryBooks, ...finishedBooks];
+  // Combine library and finished books into "All Books" section.
+  // Both lists are already sorted by dateAdded, but re-sorting the combined
+  // list keeps the section globally ordered most-recently-added first.
+  const allBooks = [...libraryBooks, ...finishedBooks].sort(
+    compareBooksByDateAddedDesc,
+  );
   const hasAnyBooks = continueReadingBooks.length > 0 || allBooks.length > 0;
 
   // The library data comes from a fast local IndexedDB read, so there is no

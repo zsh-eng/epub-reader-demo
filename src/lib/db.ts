@@ -667,6 +667,32 @@ export async function getReadingCheckpointsForBook(
     .toArray();
 }
 
+/**
+ * Returns the latest "lastRead" timestamp per book across all devices.
+ *
+ * This is the source of truth for "most recently read" ordering in the
+ * library: reading checkpoints are written while reading (page turns,
+ * periodic flushes, tab-hide), whereas "books.lastOpened" is a legacy field
+ * that is not kept in sync. Taking the max across devices means a book read
+ * on another device still sorts by its most recent activity.
+ */
+export async function getAllReadingCheckpointLastReads(): Promise<
+  Map<string, number>
+> {
+  const checkpoints = await db.readingCheckpoints
+    .filter(isNotDeleted)
+    .toArray();
+
+  const lastReadByBook = new Map<string, number>();
+  for (const checkpoint of checkpoints) {
+    const existing = lastReadByBook.get(checkpoint.bookId);
+    if (existing === undefined || checkpoint.lastRead > existing) {
+      lastReadByBook.set(checkpoint.bookId, checkpoint.lastRead);
+    }
+  }
+  return lastReadByBook;
+}
+
 export async function upsertReadingCheckpoint(
   checkpoint: Omit<ReadingCheckpoint, "id">,
 ): Promise<string> {

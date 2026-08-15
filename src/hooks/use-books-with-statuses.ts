@@ -5,20 +5,25 @@
 
 import {
   getAllBooks,
+  getAllReadingCheckpointLastReads,
   getAllReadingStatuses,
   type SyncedBook,
   type ReadingStatus,
 } from "@/lib/db";
+import {
+  compareBooksByDateAddedDesc,
+  compareBooksByLastReadDesc,
+} from "@/lib/library-sort";
 import { useQuery } from "@tanstack/react-query";
 import { bookKeys } from "./use-book-loader";
 import { readingStatusKeys } from "./use-reading-status";
 
 export interface CategorizedBooks {
-  /** Books currently being read */
+  /** Books currently being read, most recently read first */
   continueReading: SyncedBook[];
-  /** Books in the library (not started or want-to-read) */
+  /** Books in the library (not started or want-to-read), most recently added first */
   library: SyncedBook[];
-  /** Books that have been finished */
+  /** Books that have been finished, most recently added first */
   finished: SyncedBook[];
   /** All books for counting/filtering purposes */
   all: SyncedBook[];
@@ -26,22 +31,29 @@ export interface CategorizedBooks {
 
 /**
  * Hook for fetching all books with their reading statuses in a single query.
- * Returns books already categorized by reading status.
+ * Returns books already categorized by reading status and sorted:
+ * - "continueReading" by most recently read (reading checkpoint lastRead,
+ *   falling back to most recently added for never-read books)
+ * - "library" and "finished" by most recently added
  * This prevents the flicker that occurs when books and statuses load separately.
  */
 export function useBooksWithStatuses() {
   return useQuery({
-    // Combine query keys since this depends on both data sources
+    // Combine query keys since this depends on all three data sources.
+    // The "books" prefix keeps the query invalidated by the sync service,
+    // which refetches checkpoint last-read timestamps alongside the books.
     queryKey: [...bookKeys.list(), ...readingStatusKeys.allStatuses()],
     queryFn: async (): Promise<{
       books: SyncedBook[];
       statuses: Map<string, ReadingStatus>;
       categorized: CategorizedBooks;
     }> => {
-      // Fetch both in parallel
-      const [books, statuses] = await Promise.all([
+      // Fetch all sources in parallel: book metadata, reading statuses, and
+      // the latest "last read" timestamp per book from reading checkpoints.
+      const [books, statuses, lastReadByBook] = await Promise.all([
         getAllBooks(),
         getAllReadingStatuses(),
+        getAllReadingCheckpointLastReads(),
       ]);
 
       // Categorize books by status
@@ -62,6 +74,13 @@ export function useBooksWithStatuses() {
         }
       }
 
+      // Ordering: books being read sort by most recently read (checkpoint
+      // lastRead, falling back to dateAdded); everything else sorts by most
+      // recently added.
+      continueReading.sort(compareBooksByLastReadDesc(lastReadByBook));
+      library.sort(compareBooksByDateAddedDesc);
+      finished.sort(compareBooksByDateAddedDesc);
+
       return {
         books,
         statuses,
@@ -73,7 +92,10 @@ export function useBooksWithStatuses() {
         },
       };
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    // This query reads only local IndexedDB, so keeping it immediately stale
+    // is cheap and guarantees the continue-reading order reflects the latest
+    // progress save every time the library mounts.
+    staleTime: 0,
     gcTime: 30 * 60 * 1000, // 30 minutes
     refetchOnWindowFocus: false,
   });
