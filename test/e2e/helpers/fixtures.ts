@@ -67,9 +67,16 @@ export { expect } from "@playwright/test";
  * Wait for the library page to be fully loaded
  */
 export async function waitForLibraryLoaded(page: Page): Promise<void> {
-  // Wait for the loading spinner to disappear
+  // The library page renders immediately (no loading indicator); its content
+  // appears once the local IndexedDB read settles. Wait for either the books
+  // sections or the empty state to be present.
   await page.waitForFunction(() => {
-    return !document.body.textContent?.includes("Loading library...");
+    const text = document.body.textContent ?? "";
+    return (
+      text.includes("Your library is empty") ||
+      text.includes("Continue Reading") ||
+      text.includes("All Books")
+    );
   });
 }
 

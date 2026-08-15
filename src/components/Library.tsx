@@ -51,7 +51,6 @@ export function Library() {
 
   const {
     data: booksData,
-    isLoading,
     refetch: refetchBooks,
   } = useBooksWithStatuses();
   const { isSyncing, triggerSync, deleteBook: syncDeleteBook } = useSync();
@@ -352,16 +351,11 @@ export function Library() {
   const allBooks = [...libraryBooks, ...finishedBooks];
   const hasAnyBooks = continueReadingBooks.length > 0 || allBooks.length > 0;
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground text-sm">Loading library...</p>
-        </div>
-      </div>
-    );
-  }
+  // The library data comes from a fast local IndexedDB read, so there is no
+  // loading indicator: the page chrome renders immediately and the content
+  // area stays empty until the query settles (avoiding a false "empty
+  // library" flash before the books arrive).
+  const booksLoaded = booksData !== undefined;
 
   return (
     <>
@@ -722,7 +716,7 @@ export function Library() {
                 </section>
               )}
             </div>
-          ) : (
+          ) : booksLoaded ? (
             <div className="flex flex-col items-center justify-center py-16 sm:py-20 md:py-24 lg:py-32 xl:py-40 2xl:py-48 text-center">
               {/* Animated floating books illustration */}
               <div className="relative mb-6 sm:mb-8 md:mb-10 lg:mb-12 xl:mb-14 2xl:mb-16">
@@ -775,7 +769,7 @@ export function Library() {
                 </Button>
               )}
             </div>
-          )}
+          ) : null}
         </main>
       </div>
     </>

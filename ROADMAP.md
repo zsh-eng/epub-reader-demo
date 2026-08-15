@@ -103,7 +103,7 @@ Recommended sequencing:
 - [ ] Add sort order for books, with most recently read first.
 - [ ] Consider bringing back auto-start-reading behavior.
 - [ ] Improve the add-new-EPUB flow.
-- [ ] Remove unnecessary "loading library" UI.
+- [x] Remove unnecessary "loading library" UI.
 - [ ] Standardize the UI font, likely around DM Sans.
 - [ ] Rename the project/repository from the prototype name when ready.
 - [ ] Optional: add a landing page.
