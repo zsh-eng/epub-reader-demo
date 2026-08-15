@@ -1,6 +1,5 @@
 import "@/App.css";
 import { Highlights } from "@/components/Highlights";
-import { LegacyReader } from "@/components/LegacyReader";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
@@ -35,8 +34,6 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Library />} />
-            <Route path="/reader-legacy/:bookId" element={<LegacyReader />} />
-            <Route path="/reader-v1/:bookId" element={<LegacyReader />} />
             <Route path="/reader/:bookId" element={<Reader />} />
             <Route path="/debug/reader/:bookId" element={<ReaderDebug />} />
             <Route path="/diagnostics/reader" element={<ReaderDiagnostics />} />

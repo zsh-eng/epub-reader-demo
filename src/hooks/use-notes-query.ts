@@ -1,12 +1,10 @@
 import {
-  addNote as addNoteToDb,
   deleteNote as deleteNoteFromDb,
   getChapterNotes,
   getNotesByAnnotation,
   updateNote as updateNoteInDb,
   type SyncedNote,
 } from "@/lib/db";
-import type { Note } from "@/types/note";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 /**
@@ -42,39 +40,6 @@ export function useChapterNotesQuery(
     queryKey: noteKeys.chapter(bookId ?? "", spineItemId ?? ""),
     queryFn: () => getChapterNotes(bookId!, spineItemId!),
     enabled: !!bookId && !!spineItemId,
-  });
-}
-
-/**
- * Hook for adding a note with optimistic updates
- */
-export function useAddNoteMutation(annotationId: string | undefined) {
-  const queryClient = useQueryClient();
-  const queryKey = noteKeys.annotation(annotationId ?? "");
-
-  return useMutation({
-    mutationFn: async (note: Note) => {
-      await addNoteToDb(note);
-      return note;
-    },
-    onMutate: async (newNote) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previousNotes = queryClient.getQueryData<SyncedNote[]>(queryKey);
-      queryClient.setQueryData<SyncedNote[]>(queryKey, (old = []) => [
-        ...old,
-        newNote as SyncedNote,
-      ]);
-      return { previousNotes };
-    },
-    onError: (err, _newNote, context) => {
-      if (context?.previousNotes) {
-        queryClient.setQueryData(queryKey, context.previousNotes);
-      }
-      console.error("Failed to add note:", err);
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
-    },
   });
 }
 
