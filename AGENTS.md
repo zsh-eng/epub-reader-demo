@@ -18,6 +18,7 @@ This repository uses **bun** as the package manager and for running scripts.
 - **Colours**: Avoid introducing new colours. Use existing CSS variables from `index.css`. Refactor any hardcoded colours to use theme variables. Clarify with user before adding new colours
 - **Animations**: Use the `motion` library for complex animations (simpler than verbose CSS)
 - **Data Fetching**: Use TanStack React Query for data fetching and caching
+- **UI components**: Keep only components in `src/components/ui` that are actually used. Add specific ones as needed via `bunx shadcn@latest add <component>` rather than pre-adding a broad library, and remove any that fall out of use.
 
 ---
 
