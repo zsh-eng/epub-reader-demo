@@ -3,12 +3,12 @@ import { useEpubProcessor } from "@/hooks/use-epub-processor";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import type { Book } from "@/lib/db";
 import {
-    DEFAULT_PARAGRAPH_SPACING,
-    usePagination,
-    type Block,
-    type ChapterCanonicalText,
-    type PaginationConfig,
-    type SpreadConfig,
+  DEFAULT_PARAGRAPH_SPACING,
+  usePagination,
+  type Block,
+  type ChapterCanonicalText,
+  type PaginationConfig,
+  type SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
@@ -26,6 +26,7 @@ interface UseReaderCoreOptions {
   viewport: { width: number; height: number };
   spreadColumns: 1 | 2 | 3;
   paragraphSpacingFactor?: number;
+  layoutReady?: boolean;
 }
 
 interface UseReaderCoreResult {
@@ -112,6 +113,7 @@ export function useReaderCore(
     viewport,
     spreadColumns,
     paragraphSpacingFactor = DEFAULT_PARAGRAPH_SPACING,
+    layoutReady = true,
   } = options;
   const { settings, updateSettings } = useReaderSettings();
   const { book, isLoading: isBookLoading } = useBookLoader(bookId, {
@@ -178,6 +180,7 @@ export function useReaderCore(
     getChapterBlocks,
     subscribe: subscribeToChapterArtifacts,
     initialLocation,
+    enabled: layoutReady,
   });
 
   const onUpdateSettings = useCallback(

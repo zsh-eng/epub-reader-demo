@@ -545,6 +545,10 @@ export async function getBookFiles(bookId: string): Promise<BookFile[]> {
   return db.bookFiles.where("bookId").equals(bookId).toArray();
 }
 
+export async function hasBookFiles(bookId: string): Promise<boolean> {
+  return (await db.bookFiles.where("bookId").equals(bookId).count()) > 0;
+}
+
 export async function getBookFilesByPaths(
   bookId: string,
   paths: string[],

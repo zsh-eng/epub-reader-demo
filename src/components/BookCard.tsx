@@ -1,28 +1,30 @@
 import {
-    ResponsiveContextMenu,
-    ResponsiveContextMenuContent,
-    ResponsiveContextMenuItem,
-    ResponsiveContextMenuSeparator,
-    ResponsiveContextMenuTrigger,
+  ResponsiveContextMenu,
+  ResponsiveContextMenuContent,
+  ResponsiveContextMenuItem,
+  ResponsiveContextMenuSeparator,
+  ResponsiveContextMenuTrigger,
 } from "@/components/ui/responsive-context-menu";
-import { useFileUrl } from "@/hooks/use-file-url";
-import { useReadingStatus } from "@/hooks/use-reading-status";
+import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
 import {
-    Book as BookIcon,
-    BookMarked,
-    BookOpen,
-    CheckCircle,
-    Loader2,
-    Trash2,
-    XCircle,
+  Book as BookIcon,
+  BookMarked,
+  BookOpen,
+  CheckCircle,
+  Trash2,
+  XCircle,
 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface BookCardProps {
   book: Book;
+  status: ReadingStatus | null;
+  coverUrl?: string;
   onDelete: (bookId: string) => void;
+  onCoverRequest?: (book: Book) => void;
   onPrefetch?: (book: Book) => void;
 }
 
@@ -37,11 +39,9 @@ function formatOpenedDate(timestamp: number) {
 // Extracted visual component for the book cover (used in both normal and preview state)
 function BookCoverVisual({
   coverUrl,
-  isLoadingCover,
   title,
 }: {
-  coverUrl: string | null | undefined;
-  isLoadingCover: boolean;
+  coverUrl: string | undefined;
   title: string;
 }) {
   return (
@@ -60,15 +60,8 @@ function BookCoverVisual({
             src={coverUrl}
             alt={`Cover of ${title}`}
             className="absolute inset-0 block h-full w-full object-cover"
-            loading="lazy"
+            loading="eager"
           />
-        ) : isLoadingCover ? (
-          <div className="flex h-full w-full flex-col items-center justify-center bg-secondary p-4 text-center">
-            <Loader2 className="mb-2 h-8 w-8 text-muted-foreground/50 animate-spin" />
-            <span className="text-xs font-medium text-muted-foreground line-clamp-3">
-              {title}
-            </span>
-          </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center bg-secondary p-4 text-center">
             <BookIcon className="mb-2 h-8 w-8 text-muted-foreground/50" />
@@ -85,17 +78,42 @@ function BookCoverVisual({
   );
 }
 
-export function BookCard({ book, onDelete, onPrefetch }: BookCardProps) {
+export function BookCard({
+  book,
+  status,
+  coverUrl,
+  onDelete,
+  onCoverRequest,
+  onPrefetch,
+}: BookCardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { status, setStatus } = useReadingStatus(book.id);
+  const setStatus = useSetReadingStatus(book.id);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  // Use FileManager to get cover URL from content hash
-  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
-    book.coverContentHash,
-    "cover",
-    { skip: !book.coverContentHash },
-  );
+  useEffect(() => {
+    if (coverUrl || !book.coverContentHash || !onCoverRequest) return;
+
+    const card = cardRef.current;
+    if (!card || typeof IntersectionObserver === "undefined") {
+      onCoverRequest(book);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        onCoverRequest(book);
+        observer.disconnect();
+      },
+      { rootMargin: "400px 0px" },
+    );
+    observer.observe(card);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [book, coverUrl, onCoverRequest]);
 
   const handleClick = () => {
     // Navigate to reader - the reader will handle downloading/processing if needed
@@ -117,7 +135,7 @@ export function BookCard({ book, onDelete, onPrefetch }: BookCardProps) {
   };
 
   const handleSetStatus = (newStatus: ReadingStatus) => {
-    setStatus(newStatus, {
+    setStatus.mutate(newStatus, {
       onSuccess: () => {
         const statusLabels: Record<ReadingStatus, string> = {
           "want-to-read": "Want to Read",
@@ -136,6 +154,7 @@ export function BookCard({ book, onDelete, onPrefetch }: BookCardProps) {
     <ResponsiveContextMenu>
       <ResponsiveContextMenuTrigger>
         <div
+          ref={cardRef}
           className="group relative flex flex-col gap-3 w-full"
           onFocusCapture={handlePrefetch}
           onPointerDown={handlePrefetch}
@@ -147,11 +166,7 @@ export function BookCard({ book, onDelete, onPrefetch }: BookCardProps) {
             className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
           >
             <div className="relative w-full h-full transition-transform duration-300 ease-out group-hover:-translate-y-2 group-hover:scale-[1.02]">
-              <BookCoverVisual
-                coverUrl={coverUrl}
-                isLoadingCover={isLoadingCover}
-                title={book.title}
-              />
+              <BookCoverVisual coverUrl={coverUrl} title={book.title} />
             </div>
           </div>
 

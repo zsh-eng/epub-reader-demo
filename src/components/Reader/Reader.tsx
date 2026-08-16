@@ -2,7 +2,8 @@ import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightTo
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useCallback, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
@@ -13,6 +14,7 @@ import { ReaderFooter } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
+import { useReaderDisplayReadiness } from "./hooks/use-reader-display-readiness";
 import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
 import { useReaderSession } from "./hooks/use-reader-session";
 import {
@@ -48,10 +50,13 @@ export function Reader() {
     topRailHeight,
     bottomRailHeight,
     columnGapPx,
+    isMeasured: isStageMeasured,
   } = usePaginatedReaderLayout({
     stageSlotElement,
     isMobile,
   });
+  const isReaderStageMeasured =
+    isStageMeasured && stageSlotElement?.dataset.readerStageSlot === "content";
 
   const {
     resources: sessionResources,
@@ -61,6 +66,7 @@ export function Reader() {
     bookId,
     viewport: stageViewport,
     spreadColumns: resolvedSpreadColumns,
+    layoutReady: isReaderStageMeasured,
   });
   const { prompt: handoffPrompt } = useReaderHandoffPrompt({
     bookId,
@@ -92,11 +98,32 @@ export function Reader() {
     onCreateHighlight: sessionActions.createHighlight,
   });
 
-  if (sessionState.status === "loading") {
-    return <ReaderStateScreen showSpinner title="Loading book" />;
-  }
+  const displayReady = useReaderDisplayReadiness({
+    bookId,
+    contentReady: isReaderStageMeasured && sessionState.status === "ready",
+    stageContentRef,
+  });
+  const [showPreparationStatus, setShowPreparationStatus] = useState(false);
 
-  if (sessionState.status === "not-found" || !bookId || !sessionState.book) {
+  useEffect(() => {
+    const hasTerminalError =
+      sessionState.status === "not-found" ||
+      sessionState.status === "file-error";
+    if (displayReady || hasTerminalError) {
+      setShowPreparationStatus(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowPreparationStatus(true);
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [displayReady, sessionState.status]);
+
+  if (sessionState.status === "not-found" || !bookId) {
     return (
       <ReaderStateScreen
         title="Book not found"
@@ -113,6 +140,24 @@ export function Reader() {
         titleTone="destructive"
         action={{ label: "Back to Library", onClick: () => navigate("/") }}
       />
+    );
+  }
+
+  if (!sessionState.book) {
+    return (
+      <div className="relative h-dvh overflow-hidden bg-background">
+        <div
+          ref={handleStageSlotRef}
+          data-reader-stage-slot="measurement"
+          aria-hidden="true"
+          className="invisible absolute inset-x-0"
+          style={{
+            top: "env(safe-area-inset-top)",
+            bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
+          }}
+        />
+        {showPreparationStatus && <ReaderStateScreen title="Preparing book" />}
+      </div>
     );
   }
 
@@ -159,9 +204,7 @@ export function Reader() {
     });
 
     try {
-      await navigator.clipboard.writeText(
-        serializeReaderPageDebugDump(dump),
-      );
+      await navigator.clipboard.writeText(serializeReaderPageDebugDump(dump));
 
       toast({
         title: "Debug dump copied",
@@ -178,156 +221,186 @@ export function Reader() {
   };
 
   return (
-    <ReaderController
-      onNextPage={sessionActions.nextSpread}
-      onPrevPage={sessionActions.prevSpread}
-      canGoPrev={sessionState.navigation.canGoPrev}
-      canGoNext={sessionState.navigation.canGoNext}
-      chromeInteractionMode={chromeInteractionMode}
-      isChromeSuppressed={chromeState.activeReaderSheet !== null}
-      containerRef={stageSlotRef}
-      topRailHeight={topRailHeight}
-      bottomRailHeight={bottomRailHeight}
-    >
-      {({
-        chromeVisible,
-        showHoverRails,
-        topRailProps,
-        bottomRailProps,
-        chromeSurfaceProps,
-        chromeDismissLayerProps,
-      }) => (
-        <div className="relative h-dvh overflow-hidden font-sans text-foreground">
-          <div className="pointer-events-none absolute inset-0">
-            <div className="absolute inset-x-0 top-0 h-40" />
-            <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem]" />
-          </div>
-          <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 bg-background"
-            style={{ height: "env(safe-area-inset-bottom)" }}
-            aria-hidden="true"
-          />
-
-          {showHoverRails && (
-            <>
-              {/* Hover rails live in the existing top/bottom non-reading bands. */}
+    <div className="relative h-dvh overflow-hidden bg-background">
+      <div
+        className={cn("h-full", !displayReady && "invisible")}
+        aria-hidden={!displayReady}
+      >
+        <ReaderController
+          onNextPage={sessionActions.nextSpread}
+          onPrevPage={sessionActions.prevSpread}
+          canGoPrev={sessionState.navigation.canGoPrev}
+          canGoNext={sessionState.navigation.canGoNext}
+          chromeInteractionMode={chromeInteractionMode}
+          isChromeSuppressed={chromeState.activeReaderSheet !== null}
+          containerRef={stageSlotRef}
+          topRailHeight={topRailHeight}
+          bottomRailHeight={bottomRailHeight}
+        >
+          {({
+            chromeVisible,
+            showHoverRails,
+            topRailProps,
+            bottomRailProps,
+            chromeSurfaceProps,
+            chromeDismissLayerProps,
+          }) => (
+            <div className="relative h-dvh overflow-hidden font-sans text-foreground">
+              <div className="pointer-events-none absolute inset-0">
+                <div className="absolute inset-x-0 top-0 h-40" />
+                <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem]" />
+              </div>
               <div
-                {...topRailProps}
-                className="absolute inset-x-0 z-[15]"
-                style={{
-                  ...topRailProps.style,
-                  top: "env(safe-area-inset-top)",
-                }}
+                className="pointer-events-none absolute inset-x-0 bottom-0 bg-background"
+                style={{ height: "env(safe-area-inset-bottom)" }}
+                aria-hidden="true"
               />
+
+              {displayReady && showHoverRails && (
+                <>
+                  {/* Hover rails live in the existing top/bottom non-reading bands. */}
+                  <div
+                    {...topRailProps}
+                    className="absolute inset-x-0 z-[15]"
+                    style={{
+                      ...topRailProps.style,
+                      top: "env(safe-area-inset-top)",
+                    }}
+                  />
+                  <div
+                    {...bottomRailProps}
+                    className="absolute inset-x-0 z-[15]"
+                    style={{
+                      ...bottomRailProps.style,
+                      bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
               <div
-                {...bottomRailProps}
-                className="absolute inset-x-0 z-[15]"
+                ref={handleStageSlotRef}
+                data-reader-stage-slot="content"
+                className="absolute inset-x-0 z-10"
                 style={{
-                  ...bottomRailProps.style,
+                  top: "env(safe-area-inset-top)",
                   bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
                 }}
-              />
-            </>
+              >
+                <DeferredEpubImageProvider key={bookId} bookId={bookId}>
+                  <SpreadStage
+                    spread={sessionState.pagination.spread}
+                    spreadConfig={sessionState.pagination.spreadConfig}
+                    columnSpacingPx={columnGapPx}
+                    paginationConfig={sessionState.pagination.paginationConfig}
+                    stageContentRef={stageContentRef}
+                    onLinkActivate={sessionActions.openInternalHref}
+                    disableAnimations={!displayReady}
+                    paddingTopPx={stagePadding.paddingTop}
+                    paddingBottomPx={stagePadding.paddingBottom}
+                    paddingLeftPx={stagePadding.paddingX}
+                    paddingRightPx={stagePadding.paddingX}
+                  />
+                </DeferredEpubImageProvider>
+              </div>
+
+              {displayReady && (
+                <>
+                  {chromeDismissLayerProps && (
+                    <div
+                      {...chromeDismissLayerProps}
+                      className="absolute inset-0 z-[16] bg-transparent"
+                    />
+                  )}
+
+                  {/* Floating header — reading padding is rail-based, not chrome-height-based. */}
+                  <ReaderHeader
+                    chromeVisible={chromeVisible}
+                    chromeSurfaceProps={chromeSurfaceProps}
+                    bookTitle={book.title}
+                    onBackToLibrary={() => navigate("/")}
+                    isBookmarked={chromeState.isBookmarked}
+                    onToggleBookmark={chromeActions.toggleBookmark}
+                    onOpenMenu={() => chromeActions.openReaderSheet("tools")}
+                  />
+
+                  <ReaderSheetHost
+                    activeSheet={chromeState.activeReaderSheet}
+                    onOpenSheet={chromeActions.openReaderSheet}
+                    onCloseSheet={chromeActions.closeReaderSheet}
+                    settings={sessionState.settings}
+                    onUpdateSettings={sessionActions.updateSettings}
+                    toc={book.toc}
+                    chapterEntries={sessionState.chapters.entries}
+                    chapterStartPages={
+                      sessionState.navigation.chapterStartPages
+                    }
+                    currentChapterHref={currentChapterEntry?.href ?? ""}
+                    onNavigateToHref={sessionActions.openInternalHref}
+                    onCopyDebugDump={() => void handleCopyDebugDump()}
+                  />
+
+                  {/* Floating footer — chapter nav, page indicator, scrubber */}
+                  <ReaderFooter
+                    chromeVisible={chromeVisible}
+                    chromeSurfaceProps={chromeSurfaceProps}
+                    isContentsOpen={
+                      chromeState.activeReaderSheet === "contents"
+                    }
+                    currentPage={sessionState.navigation.currentPage}
+                    totalPages={sessionState.navigation.totalPages}
+                    currentChapterIndex={
+                      sessionState.navigation.currentChapterIndex
+                    }
+                    currentChapterEndIndex={
+                      sessionState.pagination.spread?.chapterIndexEnd ??
+                      sessionState.navigation.currentChapterIndex
+                    }
+                    displayChapterIndex={
+                      sessionState.navigation.displayChapterIndex
+                    }
+                    chapterEntries={sessionState.chapters.entries}
+                    chapterStartPages={
+                      sessionState.navigation.chapterStartPages
+                    }
+                    onScrubPreview={sessionActions.previewPage}
+                    onScrubCommit={sessionActions.commitPage}
+                    onGoToChapter={sessionActions.goToChapter}
+                    onPrevChapter={sessionActions.goToPreviousChapter}
+                    onOpenContents={() =>
+                      chromeActions.openReaderSheet("contents")
+                    }
+                    isLoading={sessionState.pagination.status !== "ready"}
+                    handoffPrompt={handoffPrompt}
+                  />
+
+                  <HighlightToolbarContainer
+                    bookId={bookId}
+                    spineItemId={activeHighlightData?.spineItemId ?? undefined}
+                    highlights={sessionState.highlights}
+                    isCreatingHighlight={isCreatingHighlight}
+                    creationPosition={creationPosition}
+                    onCreateColorSelect={selectColor}
+                    onCreateClose={closeCreation}
+                    activeHighlight={
+                      annotationState.kind === "active" ? activeHighlight : null
+                    }
+                    onEditClose={clearActiveHighlight}
+                    isNavVisible={chromeVisible}
+                    onCreateNoteSubmit={undefined}
+                  />
+                </>
+              )}
+            </div>
           )}
-
-          {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
-          <div
-            ref={handleStageSlotRef}
-            className="absolute inset-x-0 z-10"
-            style={{
-              top: "env(safe-area-inset-top)",
-              bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
-            }}
-          >
-            <DeferredEpubImageProvider key={bookId} bookId={bookId}>
-              <SpreadStage
-                spread={sessionState.pagination.spread}
-                spreadConfig={sessionState.pagination.spreadConfig}
-                columnSpacingPx={columnGapPx}
-                paginationConfig={sessionState.pagination.paginationConfig}
-                stageContentRef={stageContentRef}
-                onLinkActivate={sessionActions.openInternalHref}
-                paddingTopPx={stagePadding.paddingTop}
-                paddingBottomPx={stagePadding.paddingBottom}
-                paddingLeftPx={stagePadding.paddingX}
-                paddingRightPx={stagePadding.paddingX}
-              />
-            </DeferredEpubImageProvider>
-          </div>
-
-          {chromeDismissLayerProps && (
-            <div
-              {...chromeDismissLayerProps}
-              className="absolute inset-0 z-[16] bg-transparent"
-            />
-          )}
-
-          {/* Floating header — reading padding is rail-based, not chrome-height-based. */}
-          <ReaderHeader
-            chromeVisible={chromeVisible}
-            chromeSurfaceProps={chromeSurfaceProps}
-            bookTitle={book.title}
-            onBackToLibrary={() => navigate("/")}
-            isBookmarked={chromeState.isBookmarked}
-            onToggleBookmark={chromeActions.toggleBookmark}
-            onOpenMenu={() => chromeActions.openReaderSheet("tools")}
-          />
-
-          <ReaderSheetHost
-            activeSheet={chromeState.activeReaderSheet}
-            onOpenSheet={chromeActions.openReaderSheet}
-            onCloseSheet={chromeActions.closeReaderSheet}
-            settings={sessionState.settings}
-            onUpdateSettings={sessionActions.updateSettings}
-            toc={book.toc}
-            chapterEntries={sessionState.chapters.entries}
-            chapterStartPages={sessionState.navigation.chapterStartPages}
-            currentChapterHref={currentChapterEntry?.href ?? ""}
-            onNavigateToHref={sessionActions.openInternalHref}
-            onCopyDebugDump={() => void handleCopyDebugDump()}
-          />
-
-          {/* Floating footer — chapter nav, page indicator, scrubber */}
-          <ReaderFooter
-            chromeVisible={chromeVisible}
-            chromeSurfaceProps={chromeSurfaceProps}
-            isContentsOpen={chromeState.activeReaderSheet === "contents"}
-            currentPage={sessionState.navigation.currentPage}
-            totalPages={sessionState.navigation.totalPages}
-            currentChapterIndex={sessionState.navigation.currentChapterIndex}
-            currentChapterEndIndex={
-              sessionState.pagination.spread?.chapterIndexEnd ??
-              sessionState.navigation.currentChapterIndex
-            }
-            displayChapterIndex={sessionState.navigation.displayChapterIndex}
-            chapterEntries={sessionState.chapters.entries}
-            chapterStartPages={sessionState.navigation.chapterStartPages}
-            onScrubPreview={sessionActions.previewPage}
-            onScrubCommit={sessionActions.commitPage}
-            onGoToChapter={sessionActions.goToChapter}
-            onPrevChapter={sessionActions.goToPreviousChapter}
-            onOpenContents={() => chromeActions.openReaderSheet("contents")}
-            isLoading={sessionState.pagination.status !== "ready"}
-            handoffPrompt={handoffPrompt}
-          />
-
-          <HighlightToolbarContainer
-            bookId={bookId}
-            spineItemId={activeHighlightData?.spineItemId ?? undefined}
-            highlights={sessionState.highlights}
-            isCreatingHighlight={isCreatingHighlight}
-            creationPosition={creationPosition}
-            onCreateColorSelect={selectColor}
-            onCreateClose={closeCreation}
-            activeHighlight={
-              annotationState.kind === "active" ? activeHighlight : null
-            }
-            onEditClose={clearActiveHighlight}
-            isNavVisible={chromeVisible}
-            onCreateNoteSubmit={undefined}
-          />
+        </ReaderController>
+      </div>
+      {!displayReady && showPreparationStatus && (
+        <div className="absolute inset-0">
+          <ReaderStateScreen title="Preparing book" />
         </div>
       )}
-    </ReaderController>
+    </div>
   );
 }

@@ -35,6 +35,11 @@ export interface PaginatedReaderLayout {
   columnGapPx: number;
 }
 
+export interface MeasuredPaginatedReaderLayout extends PaginatedReaderLayout {
+  /** True after the current stage element has supplied non-zero dimensions. */
+  isMeasured: boolean;
+}
+
 interface ResolvePaginatedReaderLayoutOptions {
   stageWidth: number;
   stageHeight: number;
@@ -188,10 +193,14 @@ export function resolvePaginatedReaderLayout(
 export function usePaginatedReaderLayout({
   stageSlotElement,
   isMobile,
-}: UsePaginatedReaderLayoutOptions) {
+}: UsePaginatedReaderLayoutOptions): MeasuredPaginatedReaderLayout {
   const [layout, setLayout] = useState(() =>
     getInitialPaginatedReaderLayout(isMobile),
   );
+  const [measurement, setMeasurement] = useState<{
+    element: HTMLDivElement | null;
+    isMobile: boolean;
+  }>({ element: null, isMobile });
 
   useLayoutEffect(() => {
     if (!stageSlotElement) return;
@@ -211,6 +220,7 @@ export function usePaginatedReaderLayout({
           isMobile,
         }),
       );
+      setMeasurement({ element: stageSlotElement, isMobile });
     };
 
     updateLayout();
@@ -223,5 +233,11 @@ export function usePaginatedReaderLayout({
     };
   }, [isMobile, stageSlotElement]);
 
-  return layout;
+  return {
+    ...layout,
+    isMeasured:
+      stageSlotElement !== null &&
+      measurement.element === stageSlotElement &&
+      measurement.isMobile === isMobile,
+  };
 }

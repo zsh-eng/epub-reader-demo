@@ -17,6 +17,7 @@ interface UseReaderPaginationFeedOptions {
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
   subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
   initialLocation: ReaderInitialLocation | null;
+  enabled?: boolean;
 }
 
 /**
@@ -34,20 +35,26 @@ export function useReaderPaginationFeed({
   getChapterBlocks,
   subscribe,
   initialLocation,
+  enabled = true,
 }: UseReaderPaginationFeedOptions): void {
   const { addChapter, init, updateChapter } = pagination;
 
   useEffect(() => {
-    if (!bookId || !initialLocation || chapterEntries.length === 0) return;
+    if (
+      !enabled ||
+      !bookId ||
+      !initialLocation ||
+      chapterEntries.length === 0
+    ) {
+      return;
+    }
 
     let initialized = false;
 
     const initializeIfReady = () => {
       if (initialized) return true;
 
-      const firstChapterBlocks = getChapterBlocks(
-        initialLocation.chapterIndex,
-      );
+      const firstChapterBlocks = getChapterBlocks(initialLocation.chapterIndex);
       if (!firstChapterBlocks) return false;
 
       init({
@@ -82,6 +89,7 @@ export function useReaderPaginationFeed({
     addChapter,
     bookId,
     chapterEntries.length,
+    enabled,
     getChapterBlocks,
     initialLocation,
     init,

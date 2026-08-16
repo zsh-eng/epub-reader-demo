@@ -138,7 +138,7 @@ export function useDeferredEpubImage(src: string) {
   const deferredStore = resourcePath ? store : null;
   const [loadedSrc, setLoadedSrc] = useState<{
     resourcePath: string;
-    src: string;
+    src: string | null;
   } | null>(null);
 
   if (resourcePath && !deferredStore) {
@@ -149,35 +149,32 @@ export function useDeferredEpubImage(src: string) {
 
   const cachedSrc =
     resourcePath && deferredStore ? deferredStore.getUrl(resourcePath) : null;
+  const resourceLoadSettled = loadedSrc?.resourcePath === resourcePath;
   const resolvedSrc = resourcePath
-    ? (cachedSrc ??
-      (loadedSrc?.resourcePath === resourcePath ? loadedSrc.src : null))
+    ? (cachedSrc ?? (resourceLoadSettled ? loadedSrc.src : null))
     : src;
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!resourcePath || !deferredStore || cachedSrc) {
+    if (!resourcePath || !deferredStore || cachedSrc || resourceLoadSettled) {
       return () => {
         cancelled = true;
       };
     }
 
     void deferredStore.loadUrl(resourcePath).then((loadedUrl) => {
-      if (cancelled || !loadedUrl) {
-        return;
-      }
-
+      if (cancelled) return;
       setLoadedSrc({ resourcePath, src: loadedUrl });
     });
 
     return () => {
       cancelled = true;
     };
-  }, [cachedSrc, deferredStore, resourcePath]);
+  }, [cachedSrc, deferredStore, resourceLoadSettled, resourcePath]);
 
   return {
-    isLoading: !!resourcePath && !resolvedSrc,
+    isLoading: !!resourcePath && !cachedSrc && !resourceLoadSettled,
     resolvedSrc,
   };
 }

@@ -20,11 +20,35 @@ export const readingStatusKeys = {
 };
 
 /**
+ * Updates one reading status and refreshes every query that derives library
+ * placement from that status.
+ */
+export function useSetReadingStatus(bookId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (status: ReadingStatus) => {
+      if (!bookId) throw new Error("No book ID provided");
+      return await setReadingStatus(bookId, status);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: readingStatusKeys.book(bookId ?? ""),
+      });
+      queryClient.invalidateQueries({
+        queryKey: readingStatusKeys.allStatuses(),
+      });
+      queryClient.invalidateQueries({
+        queryKey: bookKeys.list(),
+      });
+    },
+  });
+}
+
+/**
  * Hook for querying and mutating reading status for a single book
  */
 export function useReadingStatus(bookId: string | undefined) {
-  const queryClient = useQueryClient();
-
   const query = useQuery({
     queryKey: readingStatusKeys.book(bookId ?? ""),
     queryFn: async () => {
@@ -36,26 +60,7 @@ export function useReadingStatus(bookId: string | undefined) {
     gcTime: 30 * 60 * 1000, // 30 minutes
   });
 
-  const mutation = useMutation({
-    mutationFn: async (status: ReadingStatus) => {
-      if (!bookId) throw new Error("No book ID provided");
-      return await setReadingStatus(bookId, status);
-    },
-    onSuccess: () => {
-      // Invalidate both this book's status and the all-statuses query
-      queryClient.invalidateQueries({
-        queryKey: readingStatusKeys.book(bookId ?? ""),
-      });
-      queryClient.invalidateQueries({
-        queryKey: readingStatusKeys.allStatuses(),
-      });
-      // Also invalidate books list to refresh useBooksWithStatuses
-      // (which has a combined query key that includes both books and statuses)
-      queryClient.invalidateQueries({
-        queryKey: bookKeys.list(),
-      });
-    },
-  });
+  const mutation = useSetReadingStatus(bookId);
 
   return {
     status: query.data ?? null,

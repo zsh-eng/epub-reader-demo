@@ -1,6 +1,6 @@
 import { fileManager } from "@/lib/files/file-manager";
 import { processEpubToBookFiles } from "@/lib/sync/epub-processing";
-import { db, getBookFiles } from "@/lib/db";
+import { db, hasBookFiles } from "@/lib/db";
 import { useState, useEffect } from "react";
 
 export interface UseEpubProcessorReturn {
@@ -44,9 +44,9 @@ export function useEpubProcessor(
     async function ensureBookProcessed() {
       try {
         // Check if bookFiles already exist
-        const existingFiles = await getBookFiles(bookId!);
+        const hasExistingFiles = await hasBookFiles(bookId!);
 
-        if (existingFiles.length > 0) {
+        if (hasExistingFiles) {
           // Book is already processed
           if (!isCancelled) {
             setIsReady(true);

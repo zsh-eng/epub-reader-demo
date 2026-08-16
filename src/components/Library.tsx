@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
@@ -37,7 +38,13 @@ import {
   Sun,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
 
 export function Library() {
@@ -283,6 +290,7 @@ export function Library() {
     (book: Book) => {
       void prefetchReaderBook(queryClient, book, {
         includeArtifacts: true,
+        artifactLimit: 2,
       });
     },
     [queryClient],
@@ -332,32 +340,66 @@ export function Library() {
     input.click();
   };
 
-  // Filter books by search query
-  const filterBySearch = (book: SyncedBook) =>
-    book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    book.author.toLowerCase().includes(searchQuery.toLowerCase());
+  const { continueReadingBooks, allBooks } = useMemo(() => {
+    if (!booksData) {
+      return {
+        continueReadingBooks: [] as SyncedBook[],
+        allBooks: [] as SyncedBook[],
+      };
+    }
 
-  // Get categorized and filtered books
-  const continueReadingBooks =
-    booksData?.categorized.continueReading.filter(filterBySearch) ?? [];
-  const libraryBooks =
-    booksData?.categorized.library.filter(filterBySearch) ?? [];
-  const finishedBooks =
-    booksData?.categorized.finished.filter(filterBySearch) ?? [];
+    const normalizedSearch = searchQuery.toLowerCase();
+    const filterBySearch = (book: SyncedBook) =>
+      book.title.toLowerCase().includes(normalizedSearch) ||
+      book.author.toLowerCase().includes(normalizedSearch);
+    const continueReading =
+      booksData.categorized.continueReading.filter(filterBySearch);
+    const library = booksData.categorized.library.filter(filterBySearch);
+    const finished = booksData.categorized.finished.filter(filterBySearch);
 
-  // Combine library and finished books into "All Books" section.
-  // Both lists are already sorted by dateAdded, but re-sorting the combined
-  // list keeps the section globally ordered most-recently-added first.
-  const allBooks = [...libraryBooks, ...finishedBooks].sort(
-    compareBooksByDateAddedDesc,
+    return {
+      continueReadingBooks: continueReading,
+      // The source lists are sorted independently. Sort the combined section
+      // again so it remains globally ordered by date added.
+      allBooks: [...library, ...finished].sort(compareBooksByDateAddedDesc),
+    };
+  }, [booksData, searchQuery]);
+  const displayedBooks = useMemo(
+    () => [...continueReadingBooks, ...allBooks],
+    [allBooks, continueReadingBooks],
   );
+  const { coverUrls, initialCoversReady, requestCover } =
+    useLibraryCoverUrls(displayedBooks);
   const hasAnyBooks = continueReadingBooks.length > 0 || allBooks.length > 0;
-
-  // The library data comes from a fast local IndexedDB read, so there is no
-  // loading indicator: the page chrome renders immediately and the content
-  // area stays empty until the query settles (avoiding a false "empty
-  // library" flash before the books arrive).
   const booksLoaded = booksData !== undefined;
+  const [fontsReady, setFontsReady] = useState(
+    () =>
+      typeof document === "undefined" ||
+      !("fonts" in document) ||
+      document.fonts.status === "loaded",
+  );
+  const [libraryDisplayReady, setLibraryDisplayReady] = useState(false);
+
+  useEffect(() => {
+    if (fontsReady || !("fonts" in document)) return;
+
+    let cancelled = false;
+    void document.fonts.ready.then(() => {
+      if (!cancelled) setFontsReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fontsReady]);
+
+  // This latch makes the first library paint atomic. It does not hide the page
+  // again for later interactions such as search, sync, or status changes.
+  useLayoutEffect(() => {
+    if (booksLoaded && initialCoversReady && !isAuthLoading && fontsReady) {
+      setLibraryDisplayReady(true);
+    }
+  }, [booksLoaded, fontsReady, initialCoversReady, isAuthLoading]);
 
   return (
     <>
@@ -371,7 +413,9 @@ export function Library() {
       )}
 
       <div
-        className="min-h-screen bg-background transition-colors duration-300"
+        className={`min-h-screen bg-background ${libraryDisplayReady ? "" : "invisible"}`}
+        aria-busy={!libraryDisplayReady}
+        aria-hidden={!libraryDisplayReady}
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -381,7 +425,7 @@ export function Library() {
         {isDragging && (
           <div className="fixed inset-0 z-50 bg-primary/10 backdrop-blur-sm border-4 border-primary border-dashed m-4 rounded-xl flex items-center justify-center pointer-events-none">
             <div className="text-center bg-background/80 p-8 rounded-2xl shadow-xl backdrop-blur-md">
-              <Upload className="h-16 w-16 text-primary mx-auto mb-4 animate-bounce" />
+              <Upload className="h-16 w-16 text-primary mx-auto mb-4" />
               <h3 className="text-2xl font-bold text-primary mb-2">
                 Drop EPUB to Add
               </h3>
@@ -672,55 +716,63 @@ export function Library() {
 
           {/* Books Content */}
           {hasAnyBooks ? (
-            <div className="space-y-8 fade-in animate-in duration-300">
-              {/* Continue Reading Section */}
-              {continueReadingBooks.length > 0 && (
-                <section>
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
-                    Continue Reading
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
-                    {continueReadingBooks.map((book) => (
-                      <BookCard
-                        key={book.id}
-                        book={book}
-                        onDelete={handleDeleteBook}
-                        onPrefetch={handlePrefetchBook}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
+            libraryDisplayReady ? (
+              <div className="space-y-8">
+                {/* Continue Reading Section */}
+                {continueReadingBooks.length > 0 && (
+                  <section>
+                    <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
+                      Continue Reading
+                    </h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
+                      {continueReadingBooks.map((book) => (
+                        <BookCard
+                          key={book.id}
+                          book={book}
+                          status={booksData?.statuses.get(book.id) ?? null}
+                          coverUrl={coverUrls.get(book.id)}
+                          onDelete={handleDeleteBook}
+                          onCoverRequest={requestCover}
+                          onPrefetch={handlePrefetchBook}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
 
-              {/* Section Divider - only show if both sections have content */}
-              {continueReadingBooks.length > 0 && allBooks.length > 0 && (
-                <div className="section-divider">
-                  <span className="section-divider-flair">§</span>
-                </div>
-              )}
-
-              {/* All Books Section */}
-              {allBooks.length > 0 && (
-                <section>
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
-                    All Books
-                  </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
-                    {allBooks.map((book) => (
-                      <BookCard
-                        key={book.id}
-                        book={book}
-                        onDelete={handleDeleteBook}
-                        onPrefetch={handlePrefetchBook}
-                      />
-                    ))}
+                {/* Section Divider - only show if both sections have content */}
+                {continueReadingBooks.length > 0 && allBooks.length > 0 && (
+                  <div className="section-divider">
+                    <span className="section-divider-flair">§</span>
                   </div>
-                </section>
-              )}
-            </div>
+                )}
+
+                {/* All Books Section */}
+                {allBooks.length > 0 && (
+                  <section>
+                    <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
+                      All Books
+                    </h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
+                      {allBooks.map((book) => (
+                        <BookCard
+                          key={book.id}
+                          book={book}
+                          status={booksData?.statuses.get(book.id) ?? null}
+                          coverUrl={coverUrls.get(book.id)}
+                          onDelete={handleDeleteBook}
+                          onCoverRequest={requestCover}
+                          onPrefetch={handlePrefetchBook}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </div>
+            ) : null
           ) : booksLoaded ? (
             <div className="flex flex-col items-center justify-center py-16 sm:py-20 md:py-24 lg:py-32 xl:py-40 2xl:py-48 text-center">
-              {/* Animated floating books illustration */}
+              {/* Static book-stack illustration */}
               <div className="relative mb-6 sm:mb-8 md:mb-10 lg:mb-12 xl:mb-14 2xl:mb-16">
                 {/* Background glow */}
                 <div className="absolute inset-0 bg-primary/5 blur-3xl rounded-full scale-150" />
@@ -728,23 +780,17 @@ export function Library() {
                 {/* Floating book stack */}
                 <div className="relative">
                   {/* Back book */}
-                  <div
-                    className="absolute -left-2 sm:-left-3 md:-left-4 lg:-left-5 xl:-left-6 2xl:-left-8 -top-1.5 sm:-top-2 md:-top-3 lg:-top-4 xl:-top-5 2xl:-top-6 w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-30 lg:w-24 lg:h-36 xl:w-28 xl:h-42 2xl:w-36 2xl:h-54 rounded-r-md rounded-l-sm bg-gradient-to-br from-muted to-muted-foreground/20 shadow-lg transform -rotate-12 animate-[float_3s_ease-in-out_infinite]"
-                    style={{ animationDelay: "-0.5s" }}
-                  >
+                  <div className="absolute -left-2 sm:-left-3 md:-left-4 lg:-left-5 xl:-left-6 2xl:-left-8 -top-1.5 sm:-top-2 md:-top-3 lg:-top-4 xl:-top-5 2xl:-top-6 w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-30 lg:w-24 lg:h-36 xl:w-28 xl:h-42 2xl:w-36 2xl:h-54 rounded-r-md rounded-l-sm bg-gradient-to-br from-muted to-muted-foreground/20 shadow-lg transform -rotate-12">
                     <div className="absolute left-0 top-0 bottom-0 w-0.5 sm:w-1 md:w-1.5 bg-gradient-to-r from-black/10 to-transparent" />
                   </div>
 
                   {/* Middle book */}
-                  <div
-                    className="absolute left-1.5 sm:left-2 md:left-3 lg:left-4 xl:left-5 2xl:left-6 top-0.5 sm:top-1 md:top-1.5 lg:top-2 xl:top-3 2xl:top-4 w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-30 lg:w-24 lg:h-36 xl:w-28 xl:h-42 2xl:w-36 2xl:h-54 rounded-r-md rounded-l-sm bg-gradient-to-br from-secondary to-secondary-foreground/10 shadow-lg transform rotate-6 animate-[float_3s_ease-in-out_infinite]"
-                    style={{ animationDelay: "-1s" }}
-                  >
+                  <div className="absolute left-1.5 sm:left-2 md:left-3 lg:left-4 xl:left-5 2xl:left-6 top-0.5 sm:top-1 md:top-1.5 lg:top-2 xl:top-3 2xl:top-4 w-12 h-18 sm:w-16 sm:h-24 md:w-20 md:h-30 lg:w-24 lg:h-36 xl:w-28 xl:h-42 2xl:w-36 2xl:h-54 rounded-r-md rounded-l-sm bg-gradient-to-br from-secondary to-secondary-foreground/10 shadow-lg transform rotate-6">
                     <div className="absolute left-0 top-0 bottom-0 w-0.5 sm:w-1 md:w-1.5 bg-gradient-to-r from-black/10 to-transparent" />
                   </div>
 
                   {/* Front book with icon */}
-                  <div className="relative w-16 h-22 sm:w-20 sm:h-28 md:w-24 md:h-36 lg:w-32 lg:h-44 xl:w-36 xl:h-52 2xl:w-48 2xl:h-68 rounded-r-md rounded-l-sm bg-gradient-to-br from-primary/10 to-primary/5 shadow-xl ring-1 ring-primary/10 animate-[float_3s_ease-in-out_infinite] flex items-center justify-center">
+                  <div className="relative w-16 h-22 sm:w-20 sm:h-28 md:w-24 md:h-36 lg:w-32 lg:h-44 xl:w-36 xl:h-52 2xl:w-48 2xl:h-68 rounded-r-md rounded-l-sm bg-gradient-to-br from-primary/10 to-primary/5 shadow-xl ring-1 ring-primary/10 flex items-center justify-center">
                     <div className="absolute left-0 top-0 bottom-0 w-0.5 sm:w-1 md:w-1.5 bg-gradient-to-r from-black/15 to-transparent rounded-l-sm" />
                     <LibraryIcon className="h-6 w-6 sm:h-8 sm:w-8 md:h-10 md:w-10 lg:h-12 lg:w-12 xl:h-14 xl:w-14 2xl:h-18 2xl:w-18 text-muted-foreground/40" />
                   </div>

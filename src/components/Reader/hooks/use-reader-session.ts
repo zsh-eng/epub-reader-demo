@@ -23,6 +23,8 @@ export interface UseReaderSessionOptions {
   viewport: { width: number; height: number };
   spreadColumns: 1 | 2 | 3;
   paragraphSpacingFactor?: number;
+  /** Prevents the first pagination run until the real reader stage is known. */
+  layoutReady?: boolean;
 }
 
 export type ReaderSessionStatus =
@@ -142,7 +144,9 @@ export function useReaderSession(
         ? "not-found"
         : core.epubProcessError
           ? "file-error"
-          : "ready";
+          : options.layoutReady === false || !core.pagination.spread
+            ? "loading"
+            : "ready";
 
     return {
       status,
@@ -189,6 +193,7 @@ export function useReaderSession(
     core.spreadConfig,
     core.totalPages,
     options.bookId,
+    options.layoutReady,
   ]);
 
   const resources = useMemo<ReaderSessionResources>(
