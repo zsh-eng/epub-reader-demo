@@ -115,7 +115,7 @@ export function Devices() {
   const otherSessions = sessions?.filter((s) => !s.isCurrent) ?? [];
 
   return (
-    <div className="min-h-screen bg-background fade-in animate-in duration-300">
+    <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 pt-16 pb-6 md:px-6 md:py-10">
         {/* Header */}
         <header className="mb-8 flex flex-col">
