@@ -62,13 +62,15 @@ describe("SmoothCaretInput", () => {
     );
 
     expect(caretFill?.classList.contains("rounded-full")).toBe(true);
-    expect(caretFill?.classList.contains("smooth-caret-blink")).toBe(false);
+    expect((caretFill as HTMLElement | null)?.style.animation).toBe("none");
 
     act(() => vi.advanceTimersByTime(499));
-    expect(caretFill?.classList.contains("smooth-caret-blink")).toBe(false);
+    expect((caretFill as HTMLElement | null)?.style.animation).toBe("none");
 
     act(() => vi.advanceTimersByTime(1));
-    expect(caretFill?.classList.contains("smooth-caret-blink")).toBe(true);
+    expect((caretFill as HTMLElement | null)?.style.animation).toBe(
+      "smooth-caret-blink 1s step-end infinite",
+    );
   });
 
   it("positions the custom caret from the collapsed selection", () => {
@@ -147,12 +149,54 @@ describe("SmoothCaretInput", () => {
     fireEvent.pointerDown(input);
     input.setSelectionRange(2, 2);
     fireEvent.select(input);
+    fireEvent.pointerUp(input);
 
     expect(
       document
         .querySelector('[data-slot="smooth-caret"]')
         ?.getAttribute("data-motion"),
     ).toBe("instant");
+  });
+
+  it("waits for pointer placement before showing a refocused caret", () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+    render(
+      createElement(SmoothCaretInput, {
+        "aria-label": "Library search",
+        value: "reader",
+        onChange: () => undefined,
+      }),
+    );
+
+    const input = screen.getByRole<HTMLInputElement>("textbox", {
+      name: "Library search",
+    });
+    input.focus();
+    input.setSelectionRange(6, 6);
+    fireEvent.select(input);
+    input.blur();
+
+    fireEvent.pointerDown(input);
+    input.focus();
+    expect(
+      document
+        .querySelector('[data-slot="smooth-caret"]')
+        ?.classList.contains("opacity-0"),
+    ).toBe(true);
+
+    input.setSelectionRange(2, 2);
+    fireEvent.pointerUp(input);
+    const caret = document.querySelector('[data-slot="smooth-caret"]');
+    const caretFill = caret?.firstElementChild as HTMLElement;
+    expect(caret?.classList.contains("opacity-100")).toBe(true);
+    expect(caret?.getAttribute("data-motion")).toBe("instant");
+    expect(caretFill.style.animation).toBe("none");
+
+    act(() => vi.advanceTimersByTime(500));
+    expect(caretFill.style.animation).toBe(
+      "smooth-caret-blink 1s step-end infinite",
+    );
   });
 
   it("hides the custom caret for a range selection", () => {

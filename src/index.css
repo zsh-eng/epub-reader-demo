@@ -314,6 +314,17 @@
   --magenta-secondary: #641f46;
 }
 
+@keyframes smooth-caret-blink {
+  0%,
+  49% {
+    opacity: 0;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
 @layer utilities {
   /* Override transition-all during theme changes to ensure consistent 300ms duration
        Only on desktop - mobile gets instant theme changes to avoid staggered repainting */
@@ -333,16 +344,6 @@
     50% {
       transform: translateY(-8px) rotate(var(--tw-rotate, 0deg));
     }
-  }
-
-  @keyframes smooth-caret-blink {
-    50% {
-      opacity: 0;
-    }
-  }
-
-  .smooth-caret-blink {
-    animation: smooth-caret-blink 1s step-end infinite;
   }
 
   /* Section divider with decorative flair */

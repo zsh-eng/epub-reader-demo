@@ -79,6 +79,19 @@ export const SmoothCaretInput = forwardRef<
   const [isComposing, setIsComposing] = useState(false);
   const [caret, setCaret] = useState(initialCaretState);
 
+  const suspendCaret = useCallback(() => {
+    lastCaretSignatureRef.current = "";
+    if (blinkTimeoutRef.current !== null) {
+      window.clearTimeout(blinkTimeoutRef.current);
+      blinkTimeoutRef.current = null;
+    }
+    setCaret((current) => ({
+      ...current,
+      blinking: false,
+      visible: false,
+    }));
+  }, []);
+
   const setInputRef = useCallback(
     (node: HTMLInputElement | null) => {
       inputRef.current = node;
@@ -221,7 +234,8 @@ export const SmoothCaretInput = forwardRef<
 
     const handleSelectionChange = () => {
       if (document.activeElement !== input) return;
-      scheduleCaretUpdate(pointerInteractionRef.current);
+      if (pointerInteractionRef.current) return;
+      scheduleCaretUpdate(false);
     };
     const handleLayoutChange = () => scheduleCaretUpdate(true);
     const resizeObserver = new ResizeObserver(handleLayoutChange);
@@ -268,15 +282,7 @@ export const SmoothCaretInput = forwardRef<
           className,
         )}
         onBlur={(event) => {
-          if (blinkTimeoutRef.current !== null) {
-            window.clearTimeout(blinkTimeoutRef.current);
-            blinkTimeoutRef.current = null;
-          }
-          setCaret((current) => ({
-            ...current,
-            blinking: false,
-            visible: false,
-          }));
+          suspendCaret();
           onBlur?.(event);
         }}
         onChange={(event) => {
@@ -286,7 +292,7 @@ export const SmoothCaretInput = forwardRef<
         onCompositionStart={(event) => {
           composingRef.current = true;
           setIsComposing(true);
-          setCaret((current) => ({ ...current, visible: false }));
+          suspendCaret();
           onCompositionStart?.(event);
         }}
         onCompositionEnd={(event) => {
@@ -296,7 +302,7 @@ export const SmoothCaretInput = forwardRef<
           onCompositionEnd?.(event);
         }}
         onFocus={(event) => {
-          updateCaret(true);
+          if (!pointerInteractionRef.current) updateCaret(true);
           onFocus?.(event);
         }}
         onKeyUp={(event) => {
@@ -305,10 +311,12 @@ export const SmoothCaretInput = forwardRef<
         }}
         onPointerCancel={(event) => {
           pointerInteractionRef.current = false;
+          updateCaret(true);
           onPointerCancel?.(event);
         }}
         onPointerDown={(event) => {
           pointerInteractionRef.current = true;
+          suspendCaret();
           onPointerDown?.(event);
         }}
         onPointerUp={(event) => {
@@ -321,7 +329,7 @@ export const SmoothCaretInput = forwardRef<
           onScroll?.(event);
         }}
         onSelect={(event) => {
-          updateCaret(pointerInteractionRef.current);
+          if (!pointerInteractionRef.current) updateCaret(false);
           onSelect?.(event);
         }}
       />
@@ -355,10 +363,12 @@ export const SmoothCaretInput = forwardRef<
         >
           <span
             key={caret.blinkRevision}
-            className={cn(
-              "block size-full rounded-full bg-foreground",
-              caret.blinking && "smooth-caret-blink",
-            )}
+            className="block size-full rounded-full bg-foreground"
+            style={{
+              animation: caret.blinking
+                ? "smooth-caret-blink 1s step-end infinite"
+                : "none",
+            }}
           />
         </span>
       ) : null}
