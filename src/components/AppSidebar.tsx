@@ -1,10 +1,8 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -152,31 +150,23 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="gap-3 px-4 pt-3.5 pb-2">
-        <div className="flex h-9 items-center gap-2.5 px-0.5">
-          <BookOpenText
-            className="size-[17px] text-sidebar-foreground/70"
-            aria-hidden="true"
-          />
-          <span className="font-serif text-[16px] italic tracking-tight">
-            Reader
-          </span>
+      <SidebarHeader className="px-3 pt-3 pb-1">
+        <div className="flex h-[38px] items-center">
+          <Link
+            to="/"
+            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 outline-none hover:bg-sidebar-accent/50 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            title="Go to library"
+          >
+            <BookOpenText
+              className="size-[17px] shrink-0 text-sidebar-foreground/70"
+              aria-hidden="true"
+            />
+            <span className="truncate font-serif text-[16px] font-medium tracking-tight">
+              Reader
+            </span>
+          </Link>
           <SidebarTrigger className="ml-auto size-7 rounded-full text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground" />
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 w-full justify-start rounded-lg border-sidebar-border/80 bg-background/45 px-3 text-[13px] font-normal shadow-none hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
-          onClick={handleImport}
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <BookPlus className="size-4" />
-          )}
-          {isProcessing ? "Importing…" : "Import EPUB"}
-        </Button>
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-2">
@@ -184,8 +174,27 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
+                className="border border-sidebar-border/80 bg-background/45 hover:bg-sidebar-accent/70"
+                onClick={handleImport}
+                disabled={isProcessing}
+              >
+                {isProcessing ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <BookPlus />
+                )}
+                <span>{isProcessing ? "Importing…" : "Import EPUB"}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+
+          <SidebarSeparator className="my-2" />
+
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
                 isActive={location.pathname === "/"}
-                render={<Link to="/" onClick={closeSidebar} />}
+                render={<Link to="/" />}
               >
                 <Library />
                 <span>Library</span>
@@ -194,7 +203,7 @@ export function AppSidebar() {
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location.pathname === "/highlights"}
-                render={<Link to="/highlights" onClick={closeSidebar} />}
+                render={<Link to="/highlights" />}
               >
                 <Highlighter />
                 <span>Highlights</span>
@@ -204,7 +213,7 @@ export function AppSidebar() {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location.pathname === "/devices"}
-                  render={<Link to="/devices" onClick={closeSidebar} />}
+                  render={<Link to="/devices" />}
                 >
                   <MonitorSmartphone />
                   <span>Devices</span>
@@ -219,9 +228,14 @@ export function AppSidebar() {
         <SidebarSeparator className="mb-1" />
         <SidebarMenu className="pt-1">
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleThemeToggle}>
+            <SidebarMenuButton
+              onClick={handleThemeToggle}
+              aria-label={
+                isDarkTheme ? "Switch to light theme" : "Switch to dark theme"
+              }
+            >
               {isDarkTheme ? <Sun /> : <Moon />}
-              <span>{isDarkTheme ? "Light theme" : "Dark theme"}</span>
+              <span>Toggle theme</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           {isAuthenticated && (
@@ -288,15 +302,6 @@ export function AppSidebar() {
               <MoreVertical className="size-3.5 shrink-0 text-sidebar-foreground/45" />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="end" className="w-56">
-              <DropdownMenuItem
-                render={
-                  <Link to="/devices" onClick={closeSidebar}>
-                    <MonitorSmartphone />
-                    Devices
-                  </Link>
-                }
-              />
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void handleSignOut()}>
                 <LogOut />
                 Sign out

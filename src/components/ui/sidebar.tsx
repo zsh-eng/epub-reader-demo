@@ -17,6 +17,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ComponentProps,
@@ -25,7 +26,10 @@ import {
 
 const SIDEBAR_WIDTH = "18rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_TRANSITION_MS = 160;
+const SIDEBAR_ENTER_DURATION_MS = 200;
+const SIDEBAR_EXIT_DURATION_MS = 140;
+
+type SidebarTransitionMode = "animated" | "instant";
 
 type RenderProp = Parameters<typeof useRender>[0]["render"];
 
@@ -36,6 +40,7 @@ interface SidebarContextValue {
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleSidebar: () => void;
+  transitionMode: SidebarTransitionMode;
 }
 
 const SidebarContext = createContext<SidebarContextValue | null>(null);
@@ -71,6 +76,9 @@ export function SidebarProvider({
   const isMobile = useIsMobile();
   const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
   const [openMobile, setOpenMobile] = useState(false);
+  const [transitionMode, setTransitionMode] =
+    useState<SidebarTransitionMode>("animated");
+  const keyboardResetFrame = useRef<number | null>(null);
   const open = controlledOpen ?? uncontrolledOpen;
 
   const setOpen = useCallback(
@@ -84,13 +92,23 @@ export function SidebarProvider({
     [onOpenChange],
   );
 
-  const toggleSidebar = useCallback(() => {
+  const applySidebarToggle = useCallback(() => {
     if (isMobile) {
       setOpenMobile((current) => !current);
       return;
     }
     setOpen(!open);
   }, [isMobile, open, setOpen]);
+
+  const toggleSidebar = useCallback(() => {
+    setTransitionMode("animated");
+    applySidebarToggle();
+  }, [applySidebarToggle]);
+
+  const applySidebarToggleRef = useRef(applySidebarToggle);
+  useEffect(() => {
+    applySidebarToggleRef.current = applySidebarToggle;
+  }, [applySidebarToggle]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -103,12 +121,26 @@ export function SidebarProvider({
       }
 
       event.preventDefault();
-      toggleSidebar();
+      setTransitionMode("instant");
+      applySidebarToggleRef.current();
+
+      if (keyboardResetFrame.current !== null) {
+        window.cancelAnimationFrame(keyboardResetFrame.current);
+      }
+      keyboardResetFrame.current = window.requestAnimationFrame(() => {
+        setTransitionMode("animated");
+        keyboardResetFrame.current = null;
+      });
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSidebar]);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      if (keyboardResetFrame.current !== null) {
+        window.cancelAnimationFrame(keyboardResetFrame.current);
+      }
+    };
+  }, []);
 
   const value = useMemo<SidebarContextValue>(
     () => ({
@@ -118,8 +150,9 @@ export function SidebarProvider({
       setOpenMobile,
       isMobile,
       toggleSidebar,
+      transitionMode,
     }),
-    [isMobile, open, openMobile, setOpen, toggleSidebar],
+    [isMobile, open, openMobile, setOpen, toggleSidebar, transitionMode],
   );
 
   return (
@@ -127,10 +160,10 @@ export function SidebarProvider({
       <div
         data-slot="sidebar-wrapper"
         data-sidebar-open={open}
+        data-transition-mode={transitionMode}
         style={
           {
             "--sidebar-width": SIDEBAR_WIDTH,
-            "--sidebar-transition-ms": `${SIDEBAR_TRANSITION_MS}ms`,
             ...style,
           } as CSSProperties
         }
@@ -148,16 +181,42 @@ export function Sidebar({
   children,
   ...props
 }: ComponentProps<"aside">) {
-  const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
+  const {
+    isMobile,
+    open,
+    openMobile,
+    setOpen,
+    setOpenMobile,
+    transitionMode,
+  } = useSidebar();
+  const isSidebarOpen = isMobile ? openMobile : open;
+  const transitionDuration =
+    transitionMode === "instant"
+      ? 0
+      : isSidebarOpen
+        ? SIDEBAR_ENTER_DURATION_MS
+        : SIDEBAR_EXIT_DURATION_MS;
 
   if (isMobile) {
     return (
       <Drawer direction="left" open={openMobile} onOpenChange={setOpenMobile}>
         <DrawerContent
           data-slot="sidebar"
-          className="inset-y-3! left-3! h-auto! w-[calc(100vw-1.5rem)]! max-w-(--sidebar-width)! gap-0 rounded-2xl border border-sidebar-border/80 bg-sidebar/96 p-0 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-[opacity,transform] duration-[160ms]! ease-[cubic-bezier(0.22,1,0.36,1)]! data-[starting-style]:translate-x-[-12px]! data-[starting-style]:opacity-0 data-[ending-style]:translate-x-[-12px]! data-[ending-style]:opacity-0 data-[ending-style]:duration-[120ms]!"
-          overlayClassName="bg-background/15 backdrop-blur-[1px] duration-[160ms]! data-[ending-style]:duration-[120ms]!"
-          style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as CSSProperties}
+          className="inset-y-3! left-3! h-auto! w-[calc(100vw-1.5rem)]! max-w-(--sidebar-width)! gap-0 rounded-2xl border border-sidebar-border/80 bg-sidebar/96 p-0 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)]! data-[starting-style]:[transform:translate3d(-12px,0,0)]! data-[starting-style]:opacity-0 data-[ending-style]:[transform:translate3d(-12px,0,0)]! data-[ending-style]:opacity-0 motion-reduce:data-[starting-style]:transform-none! motion-reduce:data-[ending-style]:transform-none!"
+          overlayClassName={cn(
+            "bg-background/15 backdrop-blur-[1px] ease-[cubic-bezier(0.23,1,0.32,1)]!",
+            transitionMode === "instant"
+              ? "duration-0!"
+              : openMobile
+                ? "duration-[200ms]!"
+                : "duration-[140ms]!",
+          )}
+          style={
+            {
+              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+              transitionDuration: `${transitionDuration}ms`,
+            } as CSSProperties
+          }
         >
           <div className="sr-only">
             <DrawerTitle>Application navigation</DrawerTitle>
@@ -197,11 +256,12 @@ export function Sidebar({
       <div
         data-slot="sidebar-container"
         className={cn(
-          "pointer-events-auto fixed inset-y-3 left-3 z-50 flex w-(--sidebar-width) transition-[opacity,transform] duration-(--sidebar-transition-ms) ease-[cubic-bezier(0.22,1,0.36,1)]",
+          "pointer-events-auto fixed inset-y-3 left-3 z-50 flex w-(--sidebar-width) transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
           open
-            ? "translate-x-0 opacity-100"
-            : "pointer-events-none -translate-x-3 opacity-0",
+            ? "[transform:translate3d(0,0,0)] opacity-100"
+            : "pointer-events-none [transform:translate3d(-12px,0,0)] opacity-0",
         )}
+        style={{ transitionDuration: `${transitionDuration}ms` }}
       >
         <div
           data-slot="sidebar-inner"
@@ -255,19 +315,24 @@ export function SidebarTrigger({
 }
 
 export function SidebarFloatingTrigger({ className }: { className?: string }) {
-  const { isMobile, open, openMobile } = useSidebar();
+  const { isMobile, open, openMobile, transitionMode } = useSidebar();
   const isSidebarOpen = isMobile ? openMobile : open;
 
   return (
     <div
       aria-hidden={isSidebarOpen}
       className={cn(
-        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 transition-[opacity,transform] duration-150 ease-out",
+        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
         isSidebarOpen
-          ? "pointer-events-none invisible -translate-y-1 opacity-0"
-          : "translate-y-0 opacity-65 hover:opacity-100",
+          ? "pointer-events-none invisible [transform:translate3d(0,-4px,0)] opacity-0"
+          : "[transform:translate3d(0,0,0)] opacity-65 hover:opacity-100",
         className,
       )}
+      style={{
+        transitionDuration: `${
+          transitionMode === "instant" ? 0 : SIDEBAR_EXIT_DURATION_MS
+        }ms`,
+      }}
     >
       <SidebarTrigger
         tabIndex={isSidebarOpen ? -1 : 0}
@@ -360,7 +425,7 @@ export function SidebarMenuButton({
         "data-active": isActive,
         type: "button",
         className: cn(
-          "flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] font-normal outline-none transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
+          "flex min-h-[38px] w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[14px] font-normal outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
           className,
         ),
       },

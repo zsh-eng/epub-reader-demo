@@ -58,12 +58,15 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   window.matchMedia = originalMatchMedia;
   document.documentElement.classList.remove("dark", "theme-transitioning");
 });
 
 describe("SidebarProvider", () => {
   it("toggles the desktop sidebar with Command+Backslash", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+
     render(
       createElement(
         SidebarProvider,
@@ -81,6 +84,30 @@ describe("SidebarProvider", () => {
     });
 
     expect(screen.getByRole("button").textContent).toBe("closed");
+    expect(
+      document.querySelector('[data-slot="sidebar-wrapper"]')?.getAttribute(
+        "data-transition-mode",
+      ),
+    ).toBe("instant");
+  });
+
+  it("uses a shorter exit than entrance for pointer interactions", () => {
+    render(
+      createElement(
+        SidebarProvider,
+        { defaultOpen: true },
+        createElement(Sidebar),
+      ),
+    );
+
+    const sidebarContainer = document.querySelector<HTMLElement>(
+      '[data-slot="sidebar-container"]',
+    );
+    expect(sidebarContainer?.style.transitionDuration).toBe("200ms");
+
+    fireEvent.click(screen.getByRole("button", { name: "Close sidebar" }));
+
+    expect(sidebarContainer?.style.transitionDuration).toBe("140ms");
   });
 
   it("reports controlled changes to the app shell", () => {
