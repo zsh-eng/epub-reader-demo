@@ -335,6 +335,16 @@
     }
   }
 
+  @keyframes smooth-caret-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  .smooth-caret-blink {
+    animation: smooth-caret-blink 1s step-end infinite;
+  }
+
   /* Section divider with decorative flair */
   .section-divider {
     position: relative;

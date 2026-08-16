@@ -1,6 +1,7 @@
 import { useAppShellReady } from "@/components/AppShell";
 import { BookCard } from "@/components/BookCard";
 import { Button } from "@/components/ui/button";
+import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
@@ -193,7 +194,7 @@ export function Library() {
       <main className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
         {/* Hero Search Bar */}
         <div className="max-w-3xl mb-10 md:mb-16">
-          <input
+          <SmoothCaretInput
             type="text"
             placeholder="Search my library..."
             value={searchQuery}
