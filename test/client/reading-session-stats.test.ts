@@ -195,6 +195,6 @@ describe("reading session formatting", () => {
         year: 2025,
         month: 6,
       }),
-    ).toBe("July");
+    ).toBe("Jul");
   });
 });

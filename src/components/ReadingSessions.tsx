@@ -47,7 +47,7 @@ function getMonthOptions(now: Date): RangeOption[] {
   const calendarMonths = Array.from({ length: 12 }, (_, index) => {
     const date = subMonths(now, index);
     return {
-      label: format(date, "MMMM"),
+      label: format(date, "MMM"),
       range: {
         kind: "calendar-month",
         year: date.getFullYear(),
@@ -117,7 +117,7 @@ function TimeRangeNavigator({
       <LayoutGroup id={scaleLayoutGroupId}>
         <nav
           aria-label="Reading history scale"
-          className="mx-auto flex h-9 w-full max-w-sm rounded-xl bg-muted p-1"
+          className="relative isolate mx-auto flex h-9 w-full max-w-sm rounded-xl bg-muted p-1"
         >
           {SCALE_OPTIONS.map((option) => {
             const isActive = option.value === scale;
@@ -127,7 +127,7 @@ function TimeRangeNavigator({
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => onScaleChange(option.value)}
-                className={`relative isolate flex-1 cursor-pointer rounded-lg px-3 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring ${
+                className={`relative flex-1 cursor-pointer rounded-lg px-3 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring ${
                   isActive
                     ? "text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -135,6 +135,7 @@ function TimeRangeNavigator({
               >
                 {isActive && (
                   <motion.span
+                    layout="position"
                     layoutId="sessions-scale-selection"
                     aria-hidden="true"
                     initial={false}
@@ -152,7 +153,7 @@ function TimeRangeNavigator({
       <LayoutGroup id={rangeLayoutGroupId}>
         <nav
           aria-label="Reading history period"
-          className="mt-2 -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
+          className="relative isolate mt-2 -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
         >
           {rangeOptions.map((option) => {
             const optionKey = getRangeKey(option.range);
@@ -163,19 +164,16 @@ function TimeRangeNavigator({
                 type="button"
                 aria-pressed={isActive}
                 onClick={() => onRangeChange(option.range)}
-                className={`relative isolate shrink-0 cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring ${
-                  isActive
-                    ? "text-background"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                className="relative shrink-0 cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {isActive && (
                   <motion.span
-                    layoutId="sessions-range-selection"
+                    layout="position"
+                    layoutId={`sessions-range-selection-${scale}`}
                     aria-hidden="true"
                     initial={false}
                     transition={selectionTransition}
-                    className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-foreground"
+                    className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-secondary shadow-sm ring-1 ring-border/70"
                   />
                 )}
                 <span className="relative z-10">{option.label}</span>
@@ -405,6 +403,37 @@ function SessionsEmptyState({ invitation }: { invitation: ReadingInvitation }) {
   );
 }
 
+function RecentReadingEmptyState({
+  bookId,
+  bookTitle,
+}: {
+  bookId: string;
+  bookTitle: string;
+}) {
+  return (
+    <div className="flex min-h-72 flex-1 flex-col items-center justify-center px-5 py-8 text-center">
+      <span className="mb-5 grid size-14 place-items-center rounded-full bg-secondary">
+        <BookOpenText
+          className="size-5 text-muted-foreground"
+          aria-hidden="true"
+        />
+      </span>
+      <p className="max-w-xs font-serif text-2xl font-medium tracking-tight">
+        Continue {bookTitle}
+      </p>
+      <p className="mt-2 max-w-xs text-sm leading-6 text-muted-foreground">
+        Return to your book and your next reading session will appear here.
+      </p>
+      <Link
+        to={`/reader/${bookId}`}
+        className="mt-6 inline-flex min-h-9 items-center justify-center rounded-full border bg-background px-4 py-2 text-sm font-medium outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
+      >
+        Continue reading
+      </Link>
+    </div>
+  );
+}
+
 export function ReadingSessions() {
   const [scale, setScale] = useState<ReadingSessionScale>("month");
   const [rangesByScale, setRangesByScale] = useState<
@@ -463,10 +492,6 @@ export function ReadingSessions() {
       ),
     [now, query.data?.books, query.data?.sessions, totalRecordedReadingTime],
   );
-  const shouldShowEmptyState =
-    invitation.kind === "empty-library" ||
-    totalRecordedReadingTime < MIN_MEANINGFUL_READING_MS;
-
   if (query.isLoading) {
     return (
       <div className="min-h-svh bg-background text-foreground">
@@ -493,7 +518,10 @@ export function ReadingSessions() {
     );
   }
 
-  if (shouldShowEmptyState) {
+  if (
+    invitation.kind === "empty-library" ||
+    totalRecordedReadingTime < MIN_MEANINGFUL_READING_MS
+  ) {
     return (
       <div className="flex min-h-svh flex-col bg-background text-foreground">
         <SessionsHeader />
@@ -647,7 +675,7 @@ export function ReadingSessions() {
               )}
             </section>
 
-            <section className="rounded-3xl border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
+            <section className="flex min-h-96 flex-col rounded-3xl border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
               <div className="mb-5">
                 <h2 className="font-serif text-2xl font-medium tracking-tight">
                   Recent reading
@@ -683,7 +711,10 @@ export function ReadingSessions() {
                   ))}
                 </ol>
               ) : (
-                <EmptyPanel>No recent reading in this period.</EmptyPanel>
+                <RecentReadingEmptyState
+                  bookId={invitation.bookId}
+                  bookTitle={invitation.bookTitle}
+                />
               )}
             </section>
           </div>

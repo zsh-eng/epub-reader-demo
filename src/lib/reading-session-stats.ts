@@ -186,7 +186,7 @@ function getBucketDefinitions(
 export function formatReadingSessionRange(range: ReadingSessionRange): string {
   if (range.kind === "rolling") return `Last ${range.days} days`;
   if (range.kind === "calendar-month") {
-    return format(new Date(range.year, range.month, 1), "MMMM");
+    return format(new Date(range.year, range.month, 1), "MMM");
   }
   if (range.kind === "calendar-year") return String(range.year);
   return "All recorded time";
