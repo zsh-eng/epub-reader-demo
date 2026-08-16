@@ -1,5 +1,4 @@
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { MoreHorizontal } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReaderChromeSurfaceProps } from "./chrome";
@@ -150,10 +149,8 @@ export function ReaderHeader({
           }}
         />
         <div className="relative z-10 mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
-          {/* Zone 1 — Left: application navigation */}
-          <div className="flex items-center">
-            <SidebarTrigger className={CHROME_BUTTON_CLASS_NAME} />
-          </div>
+          {/* Zone 1 — Left: reserved for the application-level trigger. */}
+          <div />
 
           {/* Zone 2 — Center: Book title */}
           <p className="max-w-[min(64vw,36rem)] truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">

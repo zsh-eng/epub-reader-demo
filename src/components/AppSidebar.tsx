@@ -45,10 +45,6 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-interface AppSidebarProps {
-  presentation: "inset" | "overlay";
-}
-
 function getUserInitials(name: string | null | undefined): string {
   if (!name) return "U";
   return name
@@ -59,7 +55,7 @@ function getUserInitials(name: string | null | undefined): string {
     .slice(0, 2);
 }
 
-export function AppSidebar({ presentation }: AppSidebarProps) {
+export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -84,11 +80,13 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
     };
   }, []);
 
-  const closeMobileSidebar = () => setOpenMobile(false);
+  const closeSidebar = () => {
+    setOpen(false);
+    setOpenMobile(false);
+  };
 
   const handleImport = () => {
-    closeMobileSidebar();
-    if (presentation === "overlay") setOpen(false);
+    closeSidebar();
     openFilePicker();
   };
 
@@ -136,7 +134,7 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
   const handleSignOut = async () => {
     try {
       await authClient.signOut();
-      closeMobileSidebar();
+      closeSidebar();
       navigate("/");
       toast({
         title: "Signed out",
@@ -153,37 +151,41 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
   };
 
   return (
-    <Sidebar presentation={presentation}>
-      <SidebarHeader className="gap-3 px-4 pt-4">
-        <div className="flex h-10 items-center gap-3 px-1">
-          <BookOpenText className="size-5" aria-hidden="true" />
-          <span className="text-[17px] font-semibold tracking-tight">
+    <Sidebar>
+      <SidebarHeader className="gap-3 px-4 pt-3.5 pb-2">
+        <div className="flex h-9 items-center gap-2.5 px-0.5">
+          <BookOpenText
+            className="size-[17px] text-sidebar-foreground/70"
+            aria-hidden="true"
+          />
+          <span className="font-serif text-[16px] italic tracking-tight">
             Reader
           </span>
-          <SidebarTrigger className="ml-auto" />
+          <SidebarTrigger className="ml-auto size-7 rounded-full text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground" />
         </div>
         <Button
           type="button"
-          className="h-10 w-full justify-start rounded-lg px-3 text-[15px]"
+          variant="outline"
+          className="h-9 w-full justify-start rounded-lg border-sidebar-border/80 bg-background/45 px-3 text-[13px] font-normal shadow-none hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
           onClick={handleImport}
           disabled={isProcessing}
         >
           {isProcessing ? (
-            <Loader2 className="size-[18px] animate-spin" />
+            <Loader2 className="size-4 animate-spin" />
           ) : (
-            <BookPlus className="size-[18px]" />
+            <BookPlus className="size-4" />
           )}
           {isProcessing ? "Importing…" : "Import EPUB"}
         </Button>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="px-3 py-2">
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location.pathname === "/"}
-                render={<Link to="/" onClick={closeMobileSidebar} />}
+                render={<Link to="/" onClick={closeSidebar} />}
               >
                 <Library />
                 <span>Library</span>
@@ -192,7 +194,7 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location.pathname === "/highlights"}
-                render={<Link to="/highlights" onClick={closeMobileSidebar} />}
+                render={<Link to="/highlights" onClick={closeSidebar} />}
               >
                 <Highlighter />
                 <span>Highlights</span>
@@ -202,7 +204,7 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location.pathname === "/devices"}
-                  render={<Link to="/devices" onClick={closeMobileSidebar} />}
+                  render={<Link to="/devices" onClick={closeSidebar} />}
                 >
                   <MonitorSmartphone />
                   <span>Devices</span>
@@ -213,8 +215,8 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
-        <SidebarSeparator />
+      <SidebarFooter className="gap-2 px-3 pt-2 pb-3">
+        <SidebarSeparator className="mb-1" />
         <SidebarMenu className="pt-1">
           <SidebarMenuItem>
             <SidebarMenuButton onClick={handleThemeToggle}>
@@ -243,12 +245,14 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
           )}
         </SidebarMenu>
 
+        <SidebarSeparator className="my-1" />
+
         {isAuthLoading ? (
-          <div className="flex h-14 items-center gap-3 px-3">
-            <Skeleton className="size-9 rounded-full" />
+          <div className="flex h-13 items-center gap-2.5 px-2.5">
+            <Skeleton className="size-8 rounded-full" />
             <div className="min-w-0 flex-1 space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-36" />
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3 w-32" />
             </div>
           </div>
         ) : isAuthenticated && user ? (
@@ -257,33 +261,36 @@ export function AppSidebar({ presentation }: AppSidebarProps) {
               render={
                 <button
                   type="button"
-                  className="flex min-h-16 w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left outline-none transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                 />
               }
             >
-              <Avatar className="size-9">
+              <Avatar className="size-8">
                 <AvatarImage
                   src={user.image || undefined}
                   alt={user.name || "User"}
                 />
-                <AvatarFallback className="text-sm">
+                <AvatarFallback className="text-xs">
                   {getUserInitials(user.name)}
                 </AvatarFallback>
               </Avatar>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-base font-medium leading-5">
+                <span
+                  className="block truncate text-sm font-medium leading-[18px]"
+                  title={user.name}
+                >
                   {user.name}
                 </span>
-                <span className="block truncate text-[13px] leading-5 text-sidebar-foreground/65">
+                <span className="block truncate text-xs leading-[18px] text-sidebar-foreground/60">
                   {user.email}
                 </span>
               </span>
-              <MoreVertical className="size-4 shrink-0 text-sidebar-foreground/60" />
+              <MoreVertical className="size-3.5 shrink-0 text-sidebar-foreground/45" />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="end" className="w-56">
               <DropdownMenuItem
                 render={
-                  <Link to="/devices" onClick={closeMobileSidebar}>
+                  <Link to="/devices" onClick={closeSidebar}>
                     <MonitorSmartphone />
                     Devices
                   </Link>

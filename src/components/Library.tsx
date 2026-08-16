@@ -1,7 +1,6 @@
 import { useAppShellReady } from "@/components/AppShell";
 import { BookCard } from "@/components/BookCard";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
@@ -191,11 +190,7 @@ export function Library() {
       )}
 
       {/* Main Content */}
-      <main className="px-4 py-6 md:px-8 md:py-10">
-        <div className="mb-6 flex items-center">
-          <SidebarTrigger />
-        </div>
-
+      <main className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
         {/* Hero Search Bar */}
         <div className="max-w-3xl mb-10 md:mb-16">
           <input

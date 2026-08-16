@@ -23,9 +23,9 @@ import {
   type ReactNode,
 } from "react";
 
-const SIDEBAR_WIDTH = "16rem";
+const SIDEBAR_WIDTH = "18rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
-const SIDEBAR_TRANSITION_MS = 120;
+const SIDEBAR_TRANSITION_MS = 160;
 
 type RenderProp = Parameters<typeof useRender>[0]["render"];
 
@@ -61,7 +61,7 @@ interface SidebarProviderProps extends ComponentProps<"div"> {
  */
 export function SidebarProvider({
   children,
-  defaultOpen = true,
+  defaultOpen = false,
   open: controlledOpen,
   onOpenChange,
   className,
@@ -143,25 +143,20 @@ export function SidebarProvider({
   );
 }
 
-interface SidebarProps extends ComponentProps<"aside"> {
-  presentation?: "inset" | "overlay";
-}
-
 export function Sidebar({
-  presentation = "inset",
   className,
   children,
   ...props
-}: SidebarProps) {
-  const { isMobile, open, openMobile, setOpenMobile } = useSidebar();
+}: ComponentProps<"aside">) {
+  const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
 
   if (isMobile) {
     return (
       <Drawer direction="left" open={openMobile} onOpenChange={setOpenMobile}>
         <DrawerContent
           data-slot="sidebar"
-          className="w-(--sidebar-width)! max-w-none! gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground duration-[120ms] data-[ending-style]:duration-[120ms]"
-          overlayClassName="bg-black/35 duration-[120ms] data-[ending-style]:duration-[120ms]"
+          className="inset-y-3! left-3! h-auto! w-[calc(100vw-1.5rem)]! max-w-(--sidebar-width)! gap-0 rounded-2xl border border-sidebar-border/80 bg-sidebar/96 p-0 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-[opacity,transform] duration-[160ms]! ease-[cubic-bezier(0.22,1,0.36,1)]! data-[starting-style]:translate-x-[-12px]! data-[starting-style]:opacity-0 data-[ending-style]:translate-x-[-12px]! data-[ending-style]:opacity-0 data-[ending-style]:duration-[120ms]!"
+          overlayClassName="bg-background/15 backdrop-blur-[1px] duration-[160ms]! data-[ending-style]:duration-[120ms]!"
           style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as CSSProperties}
         >
           <div className="sr-only">
@@ -176,39 +171,41 @@ export function Sidebar({
     );
   }
 
-  const reservesSpace = presentation === "inset";
-
   return (
     <aside
       data-slot="sidebar"
-      data-presentation={presentation}
       data-state={open ? "expanded" : "collapsed"}
-      className={cn("peer hidden text-sidebar-foreground md:block", className)}
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
+      className={cn(
+        "pointer-events-none fixed inset-0 z-40 hidden text-sidebar-foreground md:block",
+        className,
+      )}
       {...props}
     >
-      <div
-        data-slot="sidebar-gap"
-        aria-hidden="true"
+      <button
+        type="button"
+        aria-label="Close sidebar"
+        aria-hidden={!open}
+        tabIndex={-1}
+        onClick={() => setOpen(false)}
         className={cn(
-          "relative bg-transparent transition-[width] duration-(--sidebar-transition-ms) ease-out",
-          reservesSpace && open ? "w-(--sidebar-width)" : "w-0",
+          "fixed inset-0 z-40 bg-transparent",
+          open ? "pointer-events-auto" : "pointer-events-none",
         )}
       />
       <div
         data-slot="sidebar-container"
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-svh w-(--sidebar-width) transition-transform duration-(--sidebar-transition-ms) ease-out",
-          open ? "translate-x-0" : "-translate-x-full",
-          presentation === "inset" ? "p-2" : "z-50 p-2",
+          "pointer-events-auto fixed inset-y-3 left-3 z-50 flex w-(--sidebar-width) transition-[opacity,transform] duration-(--sidebar-transition-ms) ease-[cubic-bezier(0.22,1,0.36,1)]",
+          open
+            ? "translate-x-0 opacity-100"
+            : "pointer-events-none -translate-x-3 opacity-0",
         )}
       >
         <div
           data-slot="sidebar-inner"
-          className={cn(
-            "flex h-full min-h-0 w-full flex-col bg-sidebar text-sidebar-foreground",
-            presentation === "overlay" &&
-              "rounded-xl border border-sidebar-border shadow-xl",
-          )}
+          className="flex h-full min-h-0 w-full flex-col rounded-2xl border border-sidebar-border/80 bg-sidebar/96 text-sidebar-foreground shadow-2xl backdrop-blur-xl"
         >
           {children}
         </div>
@@ -223,7 +220,6 @@ export function SidebarInset({ className, ...props }: ComponentProps<"main">) {
       data-slot="sidebar-inset"
       className={cn(
         "relative flex min-w-0 flex-1 flex-col bg-background",
-        "md:peer-data-[presentation=inset]:m-2 md:peer-data-[presentation=inset]:ml-0 md:peer-data-[presentation=inset]:rounded-xl md:peer-data-[presentation=inset]:shadow-sm",
         className,
       )}
       {...props}
@@ -236,7 +232,7 @@ export function SidebarTrigger({
   onClick,
   ...props
 }: ComponentProps<typeof Button>) {
-  const { toggleSidebar } = useSidebar();
+  const { isMobile, open, openMobile, toggleSidebar } = useSidebar();
 
   return (
     <Button
@@ -245,6 +241,7 @@ export function SidebarTrigger({
       size="icon-sm"
       className={cn("shrink-0", className)}
       aria-label="Toggle sidebar"
+      aria-expanded={isMobile ? openMobile : open}
       title="Toggle sidebar (Command or Control + Backslash)"
       onClick={(event) => {
         onClick?.(event);
@@ -254,6 +251,29 @@ export function SidebarTrigger({
     >
       <PanelLeftIcon className="size-4" />
     </Button>
+  );
+}
+
+export function SidebarFloatingTrigger({ className }: { className?: string }) {
+  const { isMobile, open, openMobile } = useSidebar();
+  const isSidebarOpen = isMobile ? openMobile : open;
+
+  return (
+    <div
+      aria-hidden={isSidebarOpen}
+      className={cn(
+        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 transition-[opacity,transform] duration-150 ease-out",
+        isSidebarOpen
+          ? "pointer-events-none invisible -translate-y-1 opacity-0"
+          : "translate-y-0 opacity-65 hover:opacity-100",
+        className,
+      )}
+    >
+      <SidebarTrigger
+        tabIndex={isSidebarOpen ? -1 : 0}
+        className="size-9 rounded-full border border-border/60 bg-background/75 text-muted-foreground shadow-sm backdrop-blur-xl hover:bg-background/95 hover:text-foreground"
+      />
+    </div>
   );
 }
 
@@ -340,7 +360,7 @@ export function SidebarMenuButton({
         "data-active": isActive,
         type: "button",
         className: cn(
-          "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[15px] font-medium outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-[18px] [&>svg]:shrink-0",
+          "flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-left text-[13px] font-normal outline-none transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
           className,
         ),
       },

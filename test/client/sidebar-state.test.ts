@@ -1,9 +1,17 @@
-import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import {
+  Sidebar,
+  SidebarFloatingTrigger,
+  SidebarHeader,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import {
   ReaderSettingsProvider,
   useReaderSettings,
 } from "@/hooks/use-reader-settings";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const originalMatchMedia = window.matchMedia;
@@ -23,23 +31,23 @@ function createMediaQueryList(query: string): MediaQueryList {
 
 function SidebarProbe() {
   const { open, toggleSidebar } = useSidebar();
-  return (
-    <button type="button" onClick={toggleSidebar}>
-      {open ? "open" : "closed"}
-    </button>
+  return createElement(
+    "button",
+    { type: "button", onClick: toggleSidebar },
+    open ? "open" : "closed",
   );
 }
 
 function ThemeProbe({ label }: { label: string }) {
   const { settings, updateSettings } = useReaderSettings();
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={() => updateSettings({ theme: "dark" })}
-    >
-      {settings.theme}
-    </button>
+  return createElement(
+    "button",
+    {
+      type: "button",
+      "aria-label": label,
+      onClick: () => updateSettings({ theme: "dark" }),
+    },
+    settings.theme,
   );
 }
 
@@ -57,9 +65,11 @@ afterEach(() => {
 describe("SidebarProvider", () => {
   it("toggles the desktop sidebar with Command+Backslash", () => {
     render(
-      <SidebarProvider defaultOpen>
-        <SidebarProbe />
-      </SidebarProvider>,
+      createElement(
+        SidebarProvider,
+        { defaultOpen: true },
+        createElement(SidebarProbe),
+      ),
     );
 
     expect(screen.getByRole("button").textContent).toBe("open");
@@ -76,24 +86,53 @@ describe("SidebarProvider", () => {
   it("reports controlled changes to the app shell", () => {
     const onOpenChange = vi.fn();
     render(
-      <SidebarProvider open onOpenChange={onOpenChange}>
-        <SidebarProbe />
-      </SidebarProvider>,
+      createElement(
+        SidebarProvider,
+        { open: true, onOpenChange },
+        createElement(SidebarProbe),
+      ),
     );
 
     fireEvent.click(screen.getByRole("button"));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("exposes only one visible sidebar control at a time", () => {
+    render(
+      createElement(
+        SidebarProvider,
+        null,
+        createElement(
+          Sidebar,
+          null,
+          createElement(SidebarHeader, null, createElement(SidebarTrigger)),
+        ),
+        createElement(SidebarFloatingTrigger),
+      ),
+    );
+
+    expect(
+      screen.getAllByRole("button", { name: "Toggle sidebar" }),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle sidebar" }));
+
+    expect(
+      screen.getAllByRole("button", { name: "Toggle sidebar" }),
+    ).toHaveLength(1);
+  });
 });
 
 describe("ReaderSettingsProvider", () => {
   it("shares one settings snapshot across consumers", () => {
     render(
-      <ReaderSettingsProvider>
-        <ThemeProbe label="first" />
-        <ThemeProbe label="second" />
-      </ReaderSettingsProvider>,
+      createElement(
+        ReaderSettingsProvider,
+        null,
+        createElement(ThemeProbe, { label: "first" }),
+        createElement(ThemeProbe, { label: "second" }),
+      ),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "first" }));

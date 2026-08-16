@@ -1,5 +1,4 @@
 import { Card } from "@/components/ui/card";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessions } from "@/hooks/use-sessions";
@@ -117,10 +116,9 @@ export function Devices() {
 
   return (
     <div className="min-h-screen bg-background fade-in animate-in duration-300">
-      <div className="max-w-2xl mx-auto px-4 py-6 md:px-6 md:py-10">
+      <div className="max-w-2xl mx-auto px-4 pt-16 pb-6 md:px-6 md:py-10">
         {/* Header */}
         <header className="mb-8 flex flex-col">
-          <SidebarTrigger className="mb-4 -ml-1" />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Devices
           </h1>

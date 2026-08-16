@@ -7,7 +7,6 @@
 
 import { HighlightCard } from "@/components/HighlightCard";
 import { Input } from "@/components/ui/input";
-import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useFileUrl } from "@/hooks/use-file-url";
 import {
   filterByColors,
@@ -217,10 +216,9 @@ export function Highlights() {
         ref={headerRef}
         className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border"
       >
-        <div className="max-w-3xl mx-auto px-4 py-4">
-          {/* Top row: sidebar button and title */}
+        <div className="max-w-3xl mx-auto pr-4 pl-14 py-4 md:px-4">
+          {/* Top row: page title */}
           <div className="flex items-center gap-3 mb-2">
-            <SidebarTrigger className="rounded-full" />
             <div className="text-left">
               <h1 className="text-lg font-semibold">Highlights</h1>
               {/*<p className="text-xs text-muted-foreground">
