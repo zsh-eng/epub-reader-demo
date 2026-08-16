@@ -46,6 +46,7 @@ export function useBooksWithStatuses() {
     queryFn: async (): Promise<{
       books: SyncedBook[];
       statuses: Map<string, ReadingStatus>;
+      lastReadByBook: Map<string, number>;
       categorized: CategorizedBooks;
     }> => {
       // Fetch all sources in parallel: book metadata, reading statuses, and
@@ -84,6 +85,7 @@ export function useBooksWithStatuses() {
       return {
         books,
         statuses,
+        lastReadByBook,
         categorized: {
           continueReading,
           library,

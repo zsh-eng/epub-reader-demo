@@ -43,3 +43,39 @@ export function compareBooksByLastReadDesc(
     return compareBooksByDateAddedDesc(a, b);
   };
 }
+
+export interface RecentlyReadBook {
+  book: SyncedBook;
+  lastRead: number;
+}
+
+/**
+ * Finds the book with the latest reading activity across all statuses.
+ * Checkpoints are authoritative; lastOpened only supports legacy books that
+ * have not written a checkpoint yet.
+ */
+export function findMostRecentlyReadBook(
+  books: readonly SyncedBook[],
+  lastReadByBook: ReadonlyMap<string, number>,
+): RecentlyReadBook | null {
+  let mostRecent: RecentlyReadBook | null = null;
+
+  for (const book of books) {
+    const lastRead = lastReadByBook.get(book.id) ?? book.lastOpened ?? 0;
+    if (lastRead <= 0) continue;
+
+    if (!mostRecent || lastRead > mostRecent.lastRead) {
+      mostRecent = { book, lastRead };
+      continue;
+    }
+
+    if (
+      lastRead === mostRecent.lastRead &&
+      compareBooksByDateAddedDesc(book, mostRecent.book) < 0
+    ) {
+      mostRecent = { book, lastRead };
+    }
+  }
+
+  return mostRecent;
+}

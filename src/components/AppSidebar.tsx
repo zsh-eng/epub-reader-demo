@@ -20,14 +20,18 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
-import { useEpubImport } from "@/hooks/use-epub-import";
+import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
+import type { SyncedBook } from "@/lib/db";
+import { findMostRecentlyReadBook } from "@/lib/library-sort";
+import { cn } from "@/lib/utils";
+import { formatDistanceToNow } from "date-fns";
 import {
   BookOpenText,
-  BookPlus,
   Cloud,
   CloudOff,
   Highlighter,
@@ -40,7 +44,7 @@ import {
   MoreVertical,
   Sun,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 function getUserInitials(name: string | null | undefined): string {
@@ -53,16 +57,113 @@ function getUserInitials(name: string | null | undefined): string {
     .slice(0, 2);
 }
 
+interface ContinueReadingCardProps {
+  book: SyncedBook;
+  coverUrl: string | undefined;
+  isActive: boolean;
+  lastRead: number;
+}
+
+/**
+ * A quiet resume destination. The cover wash adds identity, while the sharp
+ * thumbnail and sidebar-toned gradient keep arbitrary cover art legible.
+ */
+function ContinueReadingCard({
+  book,
+  coverUrl,
+  isActive,
+  lastRead,
+}: ContinueReadingCardProps) {
+  const activityLabel = isActive
+    ? "Reading now"
+    : `Last read ${formatDistanceToNow(new Date(lastRead), {
+        addSuffix: true,
+      })}`;
+
+  return (
+    <div className="px-1">
+      <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
+        Continue reading
+      </p>
+      <Link
+        to={`/reader/${book.id}`}
+        aria-label={`Continue reading ${book.title}`}
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "group relative flex min-h-[80px] w-full overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5 text-sidebar-foreground outline-none transition-[transform,border-color,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100",
+          "hover:border-sidebar-foreground/15 hover:bg-sidebar-accent/55",
+          isActive && "border-sidebar-foreground/20 bg-sidebar-accent/65",
+        )}
+        title={`Continue reading ${book.title}`}
+      >
+        {coverUrl && (
+          <img
+            src={coverUrl}
+            alt=""
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 size-full scale-110 object-cover opacity-30 blur-lg saturate-75"
+          />
+        )}
+        <span
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-sidebar via-sidebar/90 to-sidebar/65"
+          aria-hidden="true"
+        />
+
+        <span className="relative flex min-w-0 items-center gap-2.5">
+          <span className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-sidebar-border/80 bg-sidebar-accent shadow-sm">
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt=""
+                aria-hidden="true"
+                className="size-full object-cover"
+              />
+            ) : (
+              <BookOpenText
+                className="size-4 text-sidebar-foreground/45"
+                aria-hidden="true"
+              />
+            )}
+          </span>
+
+          <span className="min-w-0 flex-1">
+            <span className="line-clamp-2 font-serif text-[13px] font-medium leading-[17px] tracking-[-0.01em]">
+              {book.title}
+            </span>
+            <span className="mt-1 block truncate text-[11px] leading-4 text-sidebar-foreground/55">
+              {activityLabel}
+            </span>
+          </span>
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { settings, updateSettings } = useReaderSettings();
   const { isSyncing, triggerSync } = useSync();
-  const { isProcessing, openFilePicker } = useEpubImport();
-  const { setOpen, setOpenMobile } = useSidebar();
+  const { data: booksData, refetch: refetchBooks } = useBooksWithStatuses();
+  const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
   const { toast } = useToast();
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  const recentReading = useMemo(() => {
+    if (!booksData) return null;
+    return findMostRecentlyReadBook(booksData.books, booksData.lastReadByBook);
+  }, [booksData]);
+  const recentBooks = useMemo(
+    () => (recentReading ? [recentReading.book] : []),
+    [recentReading],
+  );
+  const { coverUrls } = useLibraryCoverUrls(recentBooks);
+  const isSidebarOpen = isMobile ? openMobile : open;
+  const recentBookCoverUrl = recentReading
+    ? coverUrls.get(recentReading.book.id)
+    : undefined;
 
   const isDarkTheme =
     settings.theme === "dark" || settings.theme === "flexoki-dark";
@@ -78,14 +179,14 @@ export function AppSidebar() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    void refetchBooks();
+  }, [isSidebarOpen, refetchBooks]);
+
   const closeSidebar = () => {
     setOpen(false);
     setOpenMobile(false);
-  };
-
-  const handleImport = () => {
-    closeSidebar();
-    openFilePicker();
   };
 
   const handleThemeToggle = () => {
@@ -174,25 +275,6 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton
-                className="border border-sidebar-border/80 bg-background/45 hover:bg-sidebar-accent/70"
-                onClick={handleImport}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <BookPlus />
-                )}
-                <span>{isProcessing ? "Importing…" : "Import EPUB"}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-
-          <SidebarSeparator className="my-2" />
-
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
                 isActive={location.pathname === "/"}
                 render={<Link to="/" />}
               >
@@ -221,6 +303,20 @@ export function AppSidebar() {
               </SidebarMenuItem>
             )}
           </SidebarMenu>
+
+          {recentReading && (
+            <>
+              <SidebarSeparator className="my-3" />
+              <ContinueReadingCard
+                book={recentReading.book}
+                coverUrl={recentBookCoverUrl}
+                lastRead={recentReading.lastRead}
+                isActive={
+                  location.pathname === `/reader/${recentReading.book.id}`
+                }
+              />
+            </>
+          )}
         </SidebarGroup>
       </SidebarContent>
 

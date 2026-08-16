@@ -1,6 +1,7 @@
 import {
   compareBooksByDateAddedDesc,
   compareBooksByLastReadDesc,
+  findMostRecentlyReadBook,
 } from "@/lib/library-sort";
 import type { SyncedBook } from "@/lib/db";
 import { describe, expect, it } from "vitest";
@@ -87,5 +88,36 @@ describe("compareBooksByLastReadDesc", () => {
 
     const sorted = [a, b].sort(compareBooksByLastReadDesc(lastReadByBook));
     expect(sorted.map((x) => x.id)).toEqual(["b", "a"]);
+  });
+});
+
+describe("findMostRecentlyReadBook", () => {
+  it("uses the latest checkpoint across the complete library", () => {
+    const older = makeBook("older", 300);
+    const newest = makeBook("newest", 100);
+    const neverRead = makeBook("never-read", 500);
+    const lastReadByBook = new Map([
+      ["older", 1000],
+      ["newest", 2000],
+    ]);
+
+    expect(
+      findMostRecentlyReadBook([older, neverRead, newest], lastReadByBook),
+    ).toEqual({ book: newest, lastRead: 2000 });
+  });
+
+  it("falls back to legacy lastOpened and hides when nothing was read", () => {
+    const legacy = {
+      ...makeBook("legacy", 100),
+      lastOpened: 1500,
+    };
+
+    expect(findMostRecentlyReadBook([legacy], new Map())).toEqual({
+      book: legacy,
+      lastRead: 1500,
+    });
+    expect(
+      findMostRecentlyReadBook([makeBook("never-read", 200)], new Map()),
+    ).toBeNull();
   });
 });
