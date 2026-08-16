@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 import { ToggleGroup, ToggleGroupItem } from "./toggle-group";
 
-const SEGMENTED_PILL_TRANSITION = {
+export const SEGMENTED_PILL_TRANSITION = {
   type: "spring" as const,
   stiffness: 390,
   damping: 36,
