@@ -1,10 +1,12 @@
 import "@/App.css";
 import { AppShell } from "@/components/AppShell";
 import { Highlights } from "@/components/Highlights";
+import { HighlightsMasonry } from "@/components/HighlightsMasonry";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
 import { ReaderDiagnostics } from "@/components/Reader/diagnostics/ReaderDiagnostics";
+import { ReadingSessions } from "@/components/ReadingSessions";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Devices } from "@/components/Sessions";
 import { ReadingSessionsDebug } from "@/components/debug/ReadingSessionsDebug";
@@ -39,7 +41,15 @@ function App() {
                     <Route index element={<Library />} />
                     <Route path="/reader/:bookId" element={<Reader />} />
                     <Route path="/highlights" element={<Highlights />} />
+                    <Route
+                      path="/highlights/masonry"
+                      element={<HighlightsMasonry />}
+                    />
                     <Route path="/devices" element={<Devices />} />
+                    <Route
+                      path="/reading-sessions"
+                      element={<ReadingSessions />}
+                    />
                     <Route
                       path="/sessions"
                       element={<Navigate to="/devices" replace />}

@@ -8,6 +8,7 @@ import {
   EPUB_HIGHLIGHT_CLASS,
   HIGHLIGHT_TOOLBAR_CLASS,
 } from "@/types/reader.types";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -85,17 +86,16 @@ export function HighlightToolbar({
     };
   }, [onClose]);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useHotkey("Escape", onClose, {
+    conflictBehavior: "allow",
+    preventDefault: false,
+    requireReset: true,
+    stopPropagation: false,
+    meta: {
+      name: "Close highlight toolbar",
+      description: "Dismiss the active highlight controls",
+    },
+  });
 
   const handleNoteSubmit = () => {
     if (noteText.trim() && onNoteSubmit) {
