@@ -279,7 +279,7 @@ function BookIndexItem({
       onClick={onNavigate}
       aria-current={isActive ? "location" : undefined}
       className={cn(
-        "relative isolate flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
+        "relative flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
         className,
       )}
     >
@@ -291,7 +291,7 @@ function BookIndexItem({
           transition={
             reducedMotion ? { duration: 0 } : BOOK_INDEX_ACTIVE_TRANSITION
           }
-          className="absolute inset-0 z-0 rounded-xl bg-secondary"
+          className="pointer-events-none absolute inset-0 z-0 rounded-xl bg-secondary"
         >
           <span className="absolute top-3 bottom-3 left-0 w-0.5 rounded-full bg-foreground/70" />
         </motion.span>
@@ -383,7 +383,7 @@ function BookIndexPanel({
       <LayoutGroup id={layoutGroupId}>
         <nav
           aria-label="Books on this highlights page"
-          className="min-h-0 overflow-y-auto pr-1 pb-1"
+          className="relative isolate min-h-0 overflow-y-auto pr-1 pb-1"
         >
           {groups.map((group) => (
             <BookIndexItem
@@ -417,7 +417,7 @@ function MobileBookIndex({
     <LayoutGroup id={layoutGroupId}>
       <nav
         aria-label="Books on this highlights page"
-        className="-mx-4 mt-3 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 lg:hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        className="relative isolate -mx-4 mt-3 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 lg:hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
       >
         {groups.map((group) => (
           <BookIndexItem
@@ -812,7 +812,7 @@ function HighlightsSearch({
           onChange={(event) => onChange(event.target.value)}
           placeholder="Search all highlights…"
           aria-label="Search all highlights"
-          className="h-12 bg-card pr-13 pl-11 shadow-md"
+          className="h-12 bg-card pr-13 pl-11 shadow-md backdrop-blur-xl dark:bg-card/95"
         />
         <CollapsibleTrigger
           aria-label="Filter highlights"
@@ -910,25 +910,30 @@ export function HighlightsMasonry() {
         )}
       </section>
 
-      <div className="sticky top-0 z-30 bg-background px-4 pt-3 pb-5">
-        <div className="mx-auto max-w-xl">
-          <HighlightsSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            selectedColors={selectedColors}
-            onToggleColor={handleToggleColor}
+      <div className="sticky top-3 z-30 isolate mx-auto w-full max-w-xl px-4">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-x-4 -top-3 -bottom-5 -z-10"
+        >
+          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/15 to-transparent" />
+          <div className="highlights-search-scroll-blur absolute inset-0 backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)]" />
+        </div>
+        <HighlightsSearch
+          value={searchQuery}
+          onChange={setSearchQuery}
+          selectedColors={selectedColors}
+          onToggleColor={handleToggleColor}
+        />
+      </div>
+      {bookIndexGroups.length > 0 && (
+        <div className="mx-auto max-w-[1600px] px-4">
+          <MobileBookIndex
+            groups={bookIndexGroups}
+            activeBookId={activeBookId}
+            onNavigate={setActiveBookId}
           />
         </div>
-        {bookIndexGroups.length > 0 && (
-          <div className="mx-auto max-w-[1600px]">
-            <MobileBookIndex
-              groups={bookIndexGroups}
-              activeBookId={activeBookId}
-              onNavigate={setActiveBookId}
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       <main className="mx-auto w-full max-w-[1600px] px-4 pt-4 pb-20 md:px-6 xl:px-8">
         {isLoading ? (
