@@ -181,6 +181,12 @@ describe("SidebarProvider", () => {
     expect(
       screen.getAllByRole("button", { name: "Toggle sidebar" }),
     ).toHaveLength(1);
+    const floatingTrigger = screen.getByRole("button", {
+      name: "Toggle sidebar",
+    }).parentElement;
+    expect(floatingTrigger?.classList.contains("bg-background")).toBe(true);
+    expect(floatingTrigger?.classList.contains("opacity-100")).toBe(true);
+    expect(floatingTrigger?.classList.contains("opacity-65")).toBe(false);
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle sidebar" }));
 

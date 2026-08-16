@@ -351,10 +351,10 @@ export function SidebarFloatingTrigger({ className }: { className?: string }) {
     <div
       aria-hidden={isSidebarOpen}
       className={cn(
-        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
+        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 rounded-full bg-background transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
         isSidebarOpen
           ? "pointer-events-none invisible [transform:translate3d(0,-4px,0)] opacity-0"
-          : "[transform:translate3d(0,0,0)] opacity-65 hover:opacity-100",
+          : "[transform:translate3d(0,0,0)] opacity-100",
         className,
       )}
       style={{
@@ -365,7 +365,7 @@ export function SidebarFloatingTrigger({ className }: { className?: string }) {
     >
       <SidebarTrigger
         tabIndex={isSidebarOpen ? -1 : 0}
-        className="size-9 rounded-full border border-border/60 bg-background text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
+        className="size-9 rounded-full border border-border/60 bg-background/75 text-muted-foreground shadow-sm backdrop-blur-xl hover:bg-background/95 hover:text-foreground"
       />
     </div>
   );
