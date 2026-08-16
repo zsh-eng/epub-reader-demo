@@ -1,5 +1,11 @@
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { createElement, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +34,7 @@ function ControlledInput() {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -39,6 +46,29 @@ describe("SmoothCaretInput", () => {
     fireEvent.change(input, { target: { value: "reader" } });
 
     expect((input as HTMLInputElement).value).toBe("reader");
+  });
+
+  it("stays solid during typing and starts blinking when typing stops", () => {
+    vi.useFakeTimers();
+    render(createElement(ControlledInput));
+    const input = screen.getByRole<HTMLInputElement>("textbox", {
+      name: "Library search",
+    });
+
+    input.focus();
+    fireEvent.change(input, { target: { value: "r" } });
+    const caretFill = document.querySelector(
+      '[data-slot="smooth-caret"] > span',
+    );
+
+    expect(caretFill?.classList.contains("rounded-full")).toBe(true);
+    expect(caretFill?.classList.contains("smooth-caret-blink")).toBe(false);
+
+    act(() => vi.advanceTimersByTime(499));
+    expect(caretFill?.classList.contains("smooth-caret-blink")).toBe(false);
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(caretFill?.classList.contains("smooth-caret-blink")).toBe(true);
   });
 
   it("positions the custom caret from the collapsed selection", () => {

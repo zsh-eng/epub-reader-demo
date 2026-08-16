@@ -17,6 +17,7 @@ interface SmoothCaretInputProps extends Omit<ComponentProps<"input">, "value"> {
 interface CaretState {
   animate: boolean;
   blinkRevision: number;
+  blinking: boolean;
   height: number;
   ready: boolean;
   visible: boolean;
@@ -26,6 +27,7 @@ interface CaretState {
 const initialCaretState: CaretState = {
   animate: false,
   blinkRevision: 0,
+  blinking: false,
   height: 16,
   ready: false,
   visible: false,
@@ -70,6 +72,7 @@ export const SmoothCaretInput = forwardRef<
   const mirrorMarkerRef = useRef<HTMLSpanElement | null>(null);
   const selectionFrameRef = useRef<number | null>(null);
   const transitionFrameRef = useRef<number | null>(null);
+  const blinkTimeoutRef = useRef<number | null>(null);
   const pointerInteractionRef = useRef(false);
   const composingRef = useRef(false);
   const lastCaretSignatureRef = useRef("");
@@ -162,6 +165,16 @@ export const SmoothCaretInput = forwardRef<
     const resetBlink = signature !== lastCaretSignatureRef.current;
     lastCaretSignatureRef.current = signature;
 
+    if (resetBlink) {
+      if (blinkTimeoutRef.current !== null) {
+        window.clearTimeout(blinkTimeoutRef.current);
+      }
+      blinkTimeoutRef.current = window.setTimeout(() => {
+        setCaret((current) => ({ ...current, blinking: true }));
+        blinkTimeoutRef.current = null;
+      }, 500);
+    }
+
     if (snap && transitionFrameRef.current !== null) {
       window.cancelAnimationFrame(transitionFrameRef.current);
     }
@@ -171,6 +184,7 @@ export const SmoothCaretInput = forwardRef<
       blinkRevision: resetBlink
         ? current.blinkRevision + 1
         : current.blinkRevision,
+      blinking: resetBlink ? false : current.blinking,
       height,
       ready: true,
       visible: true,
@@ -233,6 +247,9 @@ export const SmoothCaretInput = forwardRef<
       if (transitionFrameRef.current !== null) {
         window.cancelAnimationFrame(transitionFrameRef.current);
       }
+      if (blinkTimeoutRef.current !== null) {
+        window.clearTimeout(blinkTimeoutRef.current);
+      }
     };
   }, [scheduleCaretUpdate]);
 
@@ -251,7 +268,15 @@ export const SmoothCaretInput = forwardRef<
           className,
         )}
         onBlur={(event) => {
-          setCaret((current) => ({ ...current, visible: false }));
+          if (blinkTimeoutRef.current !== null) {
+            window.clearTimeout(blinkTimeoutRef.current);
+            blinkTimeoutRef.current = null;
+          }
+          setCaret((current) => ({
+            ...current,
+            blinking: false,
+            visible: false,
+          }));
           onBlur?.(event);
         }}
         onChange={(event) => {
@@ -330,7 +355,10 @@ export const SmoothCaretInput = forwardRef<
         >
           <span
             key={caret.blinkRevision}
-            className="smooth-caret-blink block size-full bg-foreground"
+            className={cn(
+              "block size-full rounded-full bg-foreground",
+              caret.blinking && "smooth-caret-blink",
+            )}
           />
         </span>
       ) : null}
