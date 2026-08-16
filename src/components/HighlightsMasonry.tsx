@@ -1,8 +1,3 @@
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { useFileUrl } from "@/hooks/use-file-url";
 import {
@@ -11,6 +6,10 @@ import {
 } from "@/hooks/use-all-highlights-query";
 import { formatHighlightTime } from "@/lib/date-utils";
 import type { SyncedHighlight } from "@/lib/db";
+import {
+  ALL_HIGHLIGHT_COLORS,
+  toggleHighlightColorSelection,
+} from "@/lib/highlight-filter-selection";
 import {
   BOOK_COVER_TILE_ID,
   BOOK_DETAILS_TILE_ID,
@@ -27,7 +26,9 @@ import { cn } from "@/lib/utils";
 import { layout, prepare, type PreparedText } from "@chenglou/pretext";
 import {
   LayoutGroup,
+  animate,
   motion,
+  useMotionValue,
   useReducedMotion,
   useScroll,
   useTransform,
@@ -40,9 +41,9 @@ import {
   Pin,
   PinOff,
   Search,
-  SlidersHorizontal,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -68,6 +69,10 @@ const BOOK_INDEX_ACTIVE_TRANSITION = {
   stiffness: 390,
   damping: 36,
   mass: 0.9,
+};
+const BOOK_PROGRESS_NAVIGATION_TRANSITION = {
+  duration: 0.25,
+  ease: [0.77, 0, 0.175, 1] as const,
 };
 
 const highlightAccentValues: Record<AnnotationColor, string> = {
@@ -251,6 +256,62 @@ function useActiveBookId(bookIds: string[]) {
   }, [bookIds]);
 
   return { activeBookId, setActiveBookId };
+}
+
+/**
+ * Tracks manual scrolling without latency. An instant anchor jump temporarily
+ * takes control and interpolates the visible rail to the new document progress.
+ */
+function useBookNavigationProgress(scrollProgress: MotionValue<number>) {
+  const reducedMotion = useReducedMotion() ?? false;
+  const displayedProgress = useMotionValue(scrollProgress.get());
+  const navigationPendingRef = useRef(false);
+  const navigationFrameRef = useRef(0);
+  const animationRef = useRef<ReturnType<typeof animate> | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = scrollProgress.on("change", (latestProgress) => {
+      if (navigationPendingRef.current || animationRef.current) return;
+      displayedProgress.set(latestProgress);
+    });
+
+    return () => {
+      unsubscribe();
+      window.cancelAnimationFrame(navigationFrameRef.current);
+      animationRef.current?.stop();
+    };
+  }, [displayedProgress, scrollProgress]);
+
+  const animateAfterInstantNavigation = useCallback(() => {
+    window.cancelAnimationFrame(navigationFrameRef.current);
+    animationRef.current?.stop();
+    animationRef.current = null;
+    navigationPendingRef.current = true;
+
+    navigationFrameRef.current = window.requestAnimationFrame(() => {
+      const targetProgress = scrollProgress.get();
+      if (reducedMotion) {
+        displayedProgress.set(targetProgress);
+        navigationPendingRef.current = false;
+        return;
+      }
+
+      const animation = animate(
+        displayedProgress,
+        targetProgress,
+        BOOK_PROGRESS_NAVIGATION_TRANSITION,
+      );
+      animationRef.current = animation;
+      navigationPendingRef.current = false;
+      void animation.then(() => {
+        if (animationRef.current !== animation) return;
+        animationRef.current = null;
+        displayedProgress.set(scrollProgress.get());
+      });
+    });
+  }, [displayedProgress, reducedMotion, scrollProgress]);
+
+  return { displayedProgress, animateAfterInstantNavigation };
 }
 
 function BookIndexItem({
@@ -760,30 +821,37 @@ function ColorFilters({
   onToggle: (color: HighlightColor) => void;
 }) {
   return (
-    <div className="mt-3 flex justify-center">
-      <div className="flex items-center gap-3 rounded-full border bg-card px-4 py-2 shadow-sm">
-        <span className="mr-1 text-[11px] text-muted-foreground">
-          Highlight color
-        </span>
-        {HIGHLIGHT_COLORS.map(({ name }) => {
-          const isSelected = selectedColors.includes(name);
+    <div
+      role="group"
+      aria-label="Filter by highlight color"
+      className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-2"
+    >
+      {HIGHLIGHT_COLORS.map(({ name }) => {
+        const isSelected = selectedColors.includes(name);
+        const allColorsSelected =
+          selectedColors.length === ALL_HIGHLIGHT_COLORS.length;
+        const actionLabel = allColorsSelected
+          ? `Show only ${name} highlights`
+          : isSelected && selectedColors.length === 1
+            ? "Show all highlight colors"
+            : `${isSelected ? "Hide" : "Show"} ${name} highlights`;
 
-          return (
-            <button
-              key={name}
-              type="button"
-              onClick={() => onToggle(name)}
-              aria-label={`${isSelected ? "Hide" : "Show"} ${name} highlights`}
-              aria-pressed={isSelected}
-              className={cn(
-                "size-6 rounded-full border-[3px] border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.94]",
-                !isSelected && "opacity-30 shadow-none",
-              )}
-              style={getHighlightAccentStyle(name)}
-            />
-          );
-        })}
-      </div>
+        return (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onToggle(name)}
+            aria-label={actionLabel}
+            aria-pressed={isSelected}
+            title={actionLabel}
+            className={cn(
+              "size-5 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94]",
+              !isSelected && "opacity-25 shadow-none",
+            )}
+            style={getHighlightAccentStyle(name)}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -799,37 +867,22 @@ function HighlightsSearch({
   selectedColors: HighlightColor[];
   onToggleColor: (color: HighlightColor) => void;
 }) {
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
   return (
-    <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
-      <div className="relative mx-auto w-full max-w-xl">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <Input
-          type="search"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Search all highlights…"
-          aria-label="Search all highlights"
-          className="h-12 bg-card pr-13 pl-11 shadow-md backdrop-blur-xl dark:bg-card/95"
-        />
-        <CollapsibleTrigger
-          aria-label="Filter highlights"
-          className="absolute top-1/2 right-1.5 grid size-9 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none transition-[transform,color,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] data-[panel-open]:bg-secondary data-[panel-open]:text-foreground"
-        >
-          <SlidersHorizontal className="size-4" aria-hidden="true" />
-        </CollapsibleTrigger>
-      </div>
-      <CollapsibleContent>
-        <ColorFilters
-          selectedColors={selectedColors}
-          onToggle={onToggleColor}
-        />
-      </CollapsibleContent>
-    </Collapsible>
+    <div className="relative mx-auto w-full max-w-xl">
+      <Search
+        className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <Input
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Search all highlights…"
+        aria-label="Search all highlights"
+        className="h-12 bg-card pr-32 pl-11 shadow-md backdrop-blur-xl dark:bg-card/95"
+      />
+      <ColorFilters selectedColors={selectedColors} onToggle={onToggleColor} />
+    </div>
   );
 }
 
@@ -838,10 +891,12 @@ export function HighlightsMasonry() {
   const [isBookIndexPinned, setIsBookIndexPinned] = useState(
     () => localStorage.getItem(BOOK_INDEX_PIN_STORAGE_KEY) === "true",
   );
-  const [selectedColors, setSelectedColors] = useState<HighlightColor[]>(() =>
-    HIGHLIGHT_COLORS.map(({ name }) => name),
-  );
+  const [selectedColors, setSelectedColors] = useState<HighlightColor[]>(() => [
+    ...ALL_HIGHLIGHT_COLORS,
+  ]);
   const { scrollYProgress } = useScroll();
+  const { displayedProgress, animateAfterInstantNavigation } =
+    useBookNavigationProgress(scrollYProgress);
   const { data: groups = [], isLoading } = useAllHighlightsQuery();
   const visibleGroups = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -853,7 +908,7 @@ export function HighlightsMasonry() {
       const highlights = group.highlights.filter((highlight) => {
         const matchesColor =
           highlight.color === "invisible"
-            ? selectedColors.length === HIGHLIGHT_COLORS.length
+            ? selectedColors.length === ALL_HIGHLIGHT_COLORS.length
             : selectedColors.includes(highlight.color);
         const matchesQuery =
           normalizedQuery.length === 0 ||
@@ -892,11 +947,17 @@ export function HighlightsMasonry() {
 
   const handleToggleColor = (color: HighlightColor) => {
     setSelectedColors((current) =>
-      current.includes(color)
-        ? current.filter((selected) => selected !== color)
-        : [...current, color],
+      toggleHighlightColorSelection(current, color),
     );
   };
+
+  const handleBookNavigate = useCallback(
+    (bookId: string) => {
+      setActiveBookId(bookId);
+      animateAfterInstantNavigation();
+    },
+    [animateAfterInstantNavigation, setActiveBookId],
+  );
 
   return (
     <div className="min-h-svh bg-background text-foreground">
@@ -932,7 +993,7 @@ export function HighlightsMasonry() {
           <MobileBookIndex
             groups={bookIndexGroups}
             activeBookId={activeBookId}
-            onNavigate={setActiveBookId}
+            onNavigate={handleBookNavigate}
           />
         </div>
       )}
@@ -962,15 +1023,11 @@ export function HighlightsMasonry() {
             className={cn(
               "grid lg:items-start",
               isBookIndexPinned &&
+                visibleGroups.length > 0 &&
                 "gap-8 lg:grid-cols-[minmax(0,1fr)_248px] xl:gap-10",
             )}
           >
-            <div
-              className={cn(
-                "min-w-0",
-                visibleGroups.length > 0 && "pb-[calc(100svh-8rem)]",
-              )}
-            >
+            <div className="min-w-0">
               {visibleGroups.length > 0 ? (
                 visibleGroups.map(({ group, highlights }, index) => {
                   const sectionId = getBookSectionId(group.book.id);
@@ -982,7 +1039,7 @@ export function HighlightsMasonry() {
                       id={sectionId}
                       aria-labelledby={headingId}
                       className={cn(
-                        "scroll-mt-44 lg:scroll-mt-28",
+                        "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
                         index > 0 && "mt-16 border-t pt-14",
                       )}
                     >
@@ -995,7 +1052,7 @@ export function HighlightsMasonry() {
                   );
                 })
               ) : (
-                <div className="flex min-h-56 flex-col items-center justify-center rounded-2xl border border-dashed text-center">
+                <div className="flex min-h-[calc(100svh-8rem)] w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
                   <Search
                     className="mb-4 size-7 text-muted-foreground"
                     aria-hidden="true"
@@ -1014,7 +1071,7 @@ export function HighlightsMasonry() {
                 groups={bookIndexGroups}
                 activeBookId={activeBookId}
                 isPinned
-                onNavigate={setActiveBookId}
+                onNavigate={handleBookNavigate}
                 onPinChange={setIsBookIndexPinned}
                 className="sticky top-[calc((100svh-min(64svh,560px))/2)] hidden h-[min(64svh,560px)] self-start lg:flex"
               />
@@ -1026,9 +1083,9 @@ export function HighlightsMasonry() {
         <FloatingBookIndex
           groups={bookIndexGroups}
           activeBookId={activeBookId}
-          onNavigate={setActiveBookId}
+          onNavigate={handleBookNavigate}
           onPin={() => setIsBookIndexPinned(true)}
-          scrollProgress={scrollYProgress}
+          scrollProgress={displayedProgress}
         />
       )}
       <div
