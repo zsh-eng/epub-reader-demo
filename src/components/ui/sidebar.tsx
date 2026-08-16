@@ -158,9 +158,8 @@ export function SidebarProvider({
       }
 
       event.preventDefault();
-      setTransitionMode("instant");
+      setTransitionMode("animated");
       applySidebarToggleRef.current();
-      restoreAnimatedTransitions();
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -366,7 +365,7 @@ export function SidebarFloatingTrigger({ className }: { className?: string }) {
     >
       <SidebarTrigger
         tabIndex={isSidebarOpen ? -1 : 0}
-        className="size-9 rounded-full border border-border/60 bg-background/75 text-muted-foreground shadow-sm backdrop-blur-xl hover:bg-background/95 hover:text-foreground"
+        className="size-9 rounded-full border border-border/60 bg-background text-muted-foreground shadow-sm hover:bg-accent hover:text-foreground"
       />
     </div>
   );

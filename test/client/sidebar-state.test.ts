@@ -65,8 +65,6 @@ afterEach(() => {
 
 describe("SidebarProvider", () => {
   it("toggles the desktop sidebar with Command+Backslash", () => {
-    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
-
     render(
       createElement(
         SidebarProvider,
@@ -88,7 +86,7 @@ describe("SidebarProvider", () => {
       document.querySelector('[data-slot="sidebar-wrapper"]')?.getAttribute(
         "data-transition-mode",
       ),
-    ).toBe("instant");
+    ).toBe("animated");
   });
 
   it("closes the desktop sidebar with Escape", () => {
