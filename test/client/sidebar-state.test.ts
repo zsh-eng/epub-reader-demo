@@ -91,6 +91,47 @@ describe("SidebarProvider", () => {
     ).toBe("instant");
   });
 
+  it("closes the desktop sidebar with Escape", () => {
+    vi.spyOn(window, "requestAnimationFrame").mockReturnValue(1);
+
+    render(
+      createElement(
+        SidebarProvider,
+        { defaultOpen: true },
+        createElement(SidebarProbe),
+      ),
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(screen.getByRole("button").textContent).toBe("closed");
+    expect(
+      document.querySelector('[data-slot="sidebar-wrapper"]')?.getAttribute(
+        "data-transition-mode",
+      ),
+    ).toBe("instant");
+  });
+
+  it("leaves the sidebar open when another layer handles Escape", () => {
+    render(
+      createElement(
+        SidebarProvider,
+        { defaultOpen: true },
+        createElement(SidebarProbe),
+      ),
+    );
+
+    const escapeEvent = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    });
+    escapeEvent.preventDefault();
+    fireEvent(window, escapeEvent);
+
+    expect(screen.getByRole("button").textContent).toBe("open");
+  });
+
   it("uses a shorter exit than entrance for pointer interactions", () => {
     render(
       createElement(

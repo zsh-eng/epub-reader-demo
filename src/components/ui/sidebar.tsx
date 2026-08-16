@@ -105,13 +105,50 @@ export function SidebarProvider({
     applySidebarToggle();
   }, [applySidebarToggle]);
 
+  const closeSidebarInstantly = useCallback(() => {
+    if (isMobile) {
+      if (!openMobile) return false;
+      setTransitionMode("instant");
+      setOpenMobile(false);
+      return true;
+    }
+
+    if (!open) return false;
+    setTransitionMode("instant");
+    setOpen(false);
+    return true;
+  }, [isMobile, open, openMobile, setOpen]);
+
   const applySidebarToggleRef = useRef(applySidebarToggle);
+  const closeSidebarInstantlyRef = useRef(closeSidebarInstantly);
   useEffect(() => {
     applySidebarToggleRef.current = applySidebarToggle;
-  }, [applySidebarToggle]);
+    closeSidebarInstantlyRef.current = closeSidebarInstantly;
+  }, [applySidebarToggle, closeSidebarInstantly]);
 
   useEffect(() => {
+    const restoreAnimatedTransitions = () => {
+      if (keyboardResetFrame.current !== null) {
+        window.cancelAnimationFrame(keyboardResetFrame.current);
+      }
+      keyboardResetFrame.current = window.requestAnimationFrame(() => {
+        setTransitionMode("animated");
+        keyboardResetFrame.current = null;
+      });
+    };
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !event.repeat &&
+        !event.defaultPrevented &&
+        closeSidebarInstantlyRef.current()
+      ) {
+        event.preventDefault();
+        restoreAnimatedTransitions();
+        return;
+      }
+
       if (
         event.repeat ||
         event.code !== "Backslash" ||
@@ -123,14 +160,7 @@ export function SidebarProvider({
       event.preventDefault();
       setTransitionMode("instant");
       applySidebarToggleRef.current();
-
-      if (keyboardResetFrame.current !== null) {
-        window.cancelAnimationFrame(keyboardResetFrame.current);
-      }
-      keyboardResetFrame.current = window.requestAnimationFrame(() => {
-        setTransitionMode("animated");
-        keyboardResetFrame.current = null;
-      });
+      restoreAnimatedTransitions();
     };
 
     window.addEventListener("keydown", handleKeyDown);
