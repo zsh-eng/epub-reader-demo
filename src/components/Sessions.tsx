@@ -1,12 +1,12 @@
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessions } from "@/hooks/use-sessions";
 import type { DeviceType, SessionInfo } from "@/types/session";
 import { formatDistanceToNow } from "date-fns";
-import { ArrowLeft, Globe, Monitor, Smartphone, Tablet } from "lucide-react";
-import { Link, Navigate } from "react-router-dom";
+import { Globe, Monitor, Smartphone, Tablet } from "lucide-react";
+import { Navigate } from "react-router-dom";
 
 function SessionDeviceIcon({
   deviceType,
@@ -103,7 +103,7 @@ function SessionSkeleton() {
   );
 }
 
-export function Sessions() {
+export function Devices() {
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { data: sessions, isLoading: isSessionsLoading, error } = useSessions();
 
@@ -120,19 +120,13 @@ export function Sessions() {
       <div className="max-w-2xl mx-auto px-4 py-6 md:px-6 md:py-10">
         {/* Header */}
         <header className="mb-8 flex flex-col">
-          <Link to="/" className="self-start">
-            <Button
-              variant="ghost"
-              size="lg"
-              className="rounded-xl mb-4 -ml-1 group gap-1"
-            >
-              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-              Back to Library
-            </Button>
-          </Link>
+          <SidebarTrigger className="mb-4 -ml-1" />
           <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Sessions
+            Devices
           </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Browsers that are signed in to your account.
+          </p>
         </header>
 
         {/* Error State */}
@@ -140,7 +134,7 @@ export function Sessions() {
           <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
             <div className="p-6 text-center">
               <p className="text-destructive">
-                Failed to load sessions. Please try again.
+                Failed to load devices. Please try again.
               </p>
             </div>
           </Card>
@@ -179,7 +173,7 @@ export function Sessions() {
             {otherSessions.length > 0 && (
               <section>
                 <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-                  Active Sessions
+                  Other Devices
                 </h2>
                 <Card className="overflow-hidden px-2 py-2 bg-background rounded-3xl shadow-none gap-0">
                   {otherSessions.map((session, index) => (

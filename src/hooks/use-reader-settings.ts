@@ -5,7 +5,17 @@ import {
   THEME_CLASSES,
   type ReaderSettings,
 } from "@/types/reader.types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 const STORAGE_KEY = "epub-reader-settings";
 const THEME_TRANSITION_CLASS = "theme-transitioning";
@@ -54,7 +64,23 @@ function normalizeReaderSettings(settings: ReaderSettings): ReaderSettings {
   };
 }
 
-export function useReaderSettings() {
+interface ReaderSettingsContextValue {
+  settings: ReaderSettings;
+  updateSettings: (newSettings: Partial<ReaderSettings>) => void;
+  resetSettings: () => void;
+}
+
+const ReaderSettingsContext = createContext<ReaderSettingsContextValue | null>(
+  null,
+);
+
+/**
+ * Owns reader settings for the full application session.
+ *
+ * A single provider keeps the sidebar, library, and mounted reader on the same
+ * settings snapshot while localStorage remains the durable backing store.
+ */
+export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   // Track timeout for theme transition cleanup
   const themeTransitionTimeoutRef = useRef<number | null>(null);
   // Track if this is the initial mount - skip transitions on first load
@@ -129,9 +155,20 @@ export function useReaderSettings() {
     setSettings(DEFAULT_SETTINGS);
   }, []);
 
-  return {
-    settings,
-    updateSettings,
-    resetSettings,
-  };
+  const value = useMemo<ReaderSettingsContextValue>(
+    () => ({ settings, updateSettings, resetSettings }),
+    [resetSettings, settings, updateSettings],
+  );
+
+  return createElement(ReaderSettingsContext.Provider, { value }, children);
+}
+
+export function useReaderSettings(): ReaderSettingsContextValue {
+  const context = useContext(ReaderSettingsContext);
+  if (!context) {
+    throw new Error(
+      "useReaderSettings must be used within ReaderSettingsProvider",
+    );
+  }
+  return context;
 }

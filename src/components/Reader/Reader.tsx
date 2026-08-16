@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
+import { useSidebar } from "@/components/ui/sidebar";
 import { ReaderSheetHost } from "./ReaderSheetHost";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
@@ -25,6 +26,7 @@ import {
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
 
 export function Reader() {
+  const { open: isSidebarOpen, openMobile: isMobileSidebarOpen } = useSidebar();
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -232,7 +234,11 @@ export function Reader() {
           canGoPrev={sessionState.navigation.canGoPrev}
           canGoNext={sessionState.navigation.canGoNext}
           chromeInteractionMode={chromeInteractionMode}
-          isChromeSuppressed={chromeState.activeReaderSheet !== null}
+          isChromeSuppressed={
+            chromeState.activeReaderSheet !== null ||
+            isSidebarOpen ||
+            isMobileSidebarOpen
+          }
           containerRef={stageSlotRef}
           topRailHeight={topRailHeight}
           bottomRailHeight={bottomRailHeight}
@@ -319,7 +325,6 @@ export function Reader() {
                     chromeVisible={chromeVisible}
                     chromeSurfaceProps={chromeSurfaceProps}
                     bookTitle={book.title}
-                    onBackToLibrary={() => navigate("/")}
                     isBookmarked={chromeState.isBookmarked}
                     onToggleBookmark={chromeActions.toggleBookmark}
                     onOpenMenu={() => chromeActions.openReaderSheet("tools")}

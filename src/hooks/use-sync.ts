@@ -1,9 +1,19 @@
 import { useAuth } from "@/hooks/use-auth";
 import { syncService } from "@/lib/sync-service";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  createElement,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
-interface UseSyncReturn {
+interface SyncContextValue {
   /** Whether a sync is currently in progress */
   isSyncing: boolean;
   /** Last sync timestamp */
@@ -18,8 +28,10 @@ interface UseSyncReturn {
   syncError: Error | null;
 }
 
+const SyncContext = createContext<SyncContextValue | null>(null);
+
 /**
- * Hook for managing book synchronization.
+ * Owns the synchronization lifecycle and observable UI state once.
  *
  * This hook:
  * - Initializes the sync service with the QueryClient
@@ -27,7 +39,7 @@ interface UseSyncReturn {
  * - Provides manual sync triggers and book operations
  * - Exposes sync state to the UI
  */
-export function useSync(): UseSyncReturn {
+export function SyncProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [isSyncing, setIsSyncing] = useState(false);
@@ -77,7 +89,10 @@ export function useSync(): UseSyncReturn {
       setLastSyncedAt(new Date());
     } catch (error) {
       console.error("[useSync] Sync failed:", error);
-      setSyncError(error instanceof Error ? error : new Error("Sync failed"));
+      const syncFailure =
+        error instanceof Error ? error : new Error("Sync failed");
+      setSyncError(syncFailure);
+      throw syncFailure;
     } finally {
       setIsSyncing(false);
     }
@@ -117,14 +132,27 @@ export function useSync(): UseSyncReturn {
     [isAuthenticated],
   );
 
-  return {
-    isSyncing,
-    lastSyncedAt,
-    triggerSync,
-    downloadBook,
-    deleteBook,
-    syncError,
-  };
+  const value = useMemo<SyncContextValue>(
+    () => ({
+      isSyncing,
+      lastSyncedAt,
+      triggerSync,
+      downloadBook,
+      deleteBook,
+      syncError,
+    }),
+    [deleteBook, downloadBook, isSyncing, lastSyncedAt, syncError, triggerSync],
+  );
+
+  return createElement(SyncContext.Provider, { value }, children);
+}
+
+export function useSync(): SyncContextValue {
+  const context = useContext(SyncContext);
+  if (!context) {
+    throw new Error("useSync must be used within SyncProvider");
+  }
+  return context;
 }
 
 /**

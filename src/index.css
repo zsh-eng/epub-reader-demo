@@ -240,6 +240,14 @@
   --input: hsl(51 21% 88%);
   --ring: hsl(55 10% 79%);
   --radius: 0.5rem;
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 
   --red-primary: hsl(3 62% 42%);
   --red-secondary: hsl(5 61% 54%);
@@ -279,6 +287,14 @@
   --border: hsl(30 3% 15%);
   --input: hsl(30 3% 15%);
   --ring: hsl(30 3% 24%);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 
   --red-primary: hsl(5 61% 54%);
   --red-secondary: hsl(3 62% 42%);

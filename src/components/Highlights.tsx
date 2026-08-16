@@ -6,8 +6,8 @@
  */
 
 import { HighlightCard } from "@/components/HighlightCard";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useFileUrl } from "@/hooks/use-file-url";
 import {
   filterByColors,
@@ -22,9 +22,8 @@ import {
 } from "@/lib/highlight-constants";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "motion/react";
-import { ArrowLeft, Highlighter, Search } from "lucide-react";
+import { Highlighter, Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 
 // Color button styling
 const colorButtonStyles: Record<HighlightColor, string> = {
@@ -219,13 +218,9 @@ export function Highlights() {
         className="sticky top-0 z-20 bg-background/95 backdrop-blur-sm border-b border-border"
       >
         <div className="max-w-3xl mx-auto px-4 py-4">
-          {/* Top row: back button and title */}
+          {/* Top row: sidebar button and title */}
           <div className="flex items-center gap-3 mb-2">
-            <Link to="/">
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </Link>
+            <SidebarTrigger className="rounded-full" />
             <div className="text-left">
               <h1 className="text-lg font-semibold">Highlights</h1>
               {/*<p className="text-xs text-muted-foreground">
