@@ -262,26 +262,12 @@ Recommended sequencing:
 - [ ] Desktop highlight bar is ugly
 	- [ ] Buttons shouldn't have any "dead zone" between them
 
-- [ ] Sessions screen
-	- [ ] Recent reading state
-		- [ ] Still not good enough - it should show book cover - something specific to *you*
-	- [ ] Spacing between months and "year" is ugly
-	- [ ] Fix hover bug again where it looks like there are 2 elements because of the user hovering (update AGENTS.md)
-	- [ ] Length of the button should not animate (e.g. switching from "month" to "all"). Also switching from All back to month - (let's say) I already selected an earlier month before I switched to the all - it should just be instant, it shouldn't animate from left to right
-- [ ] Sidebar button and search bar alignment has to be better
+- [ ] Sidebar ugly on mobile
+- [ ] Not loading book images properly
 
-- [ ] New highlights page: 'bento style'
-	- [ ] Space at the bottom of the page is only important if the last book's section is too short
-	- [ ] No matching highlights Should not be scrollable
-	- [ ]  X button should be more discreet and normal for a searchbar - it looks ugly  - and make the highlight circles bigger
-	- [ ] "Search all highlights" has too much left padding, and the highlight circles should be a bit more left - too little padding on the right side (optically should be aligned based on roudness)
-	
-	- [ ] Where to put the bookcover - alternate, if low number of highlights (cannot tesselate, then we just put the book cover next to the continue reading - this is column 1, book cover columns 2-3 for example). If enough highlights, can put 1-2, 2-3, etc. columns for varied look, usually nested somewhere between the highlights
-	- [ ] Long quotes can take up 2 columns as well (though we need to think of a nice way to lay it out)
-	- [ ] Large search bar, when scroll down shrinks a little as it becomes stickied
-	- [ ] Mobile design
-		- [ ] On mobile, clicking a highlight opens a sheet with 2 options - copy or open the book to that page
-		- [ ] Copy should be animated
-
-- [ ] Desktop highlight bar is ugly
-	- [ ] Buttons shouldn't have any "dead zone" between them
+Continue resolving papercuts in EPUB Reader Demo
+Remove reader "preparing book" - consider other animations?
+Flicker
+Immediately "start reading" after adding a new book in
+"Slow network" messing up the loads
+Install Emil animations and figure out if something makes sense for the animation
