@@ -3,6 +3,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -32,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import {
   BookOpenText,
+  Clock3,
   Cloud,
   CloudOff,
   Highlighter,
@@ -291,17 +293,15 @@ export function AppSidebar() {
                 <span>Highlights</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            {isAuthenticated && (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={location.pathname === "/devices"}
-                  render={<Link to="/devices" />}
-                >
-                  <MonitorSmartphone />
-                  <span>Devices</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={location.pathname === "/reading-sessions"}
+                render={<Link to="/reading-sessions" />}
+              >
+                <Clock3 />
+                <span>Sessions</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </SidebarMenu>
 
           {recentReading && (
@@ -398,6 +398,11 @@ export function AppSidebar() {
               <MoreVertical className="size-3.5 shrink-0 text-sidebar-foreground/45" />
             </DropdownMenuTrigger>
             <DropdownMenuContent side="right" align="end" className="w-56">
+              <DropdownMenuItem render={<Link to="/devices" />}>
+                <MonitorSmartphone />
+                Devices
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void handleSignOut()}>
                 <LogOut />
                 Sign out
