@@ -1,48 +1,32 @@
-import { useEffect, useRef } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
 
 interface UsePaginationKeyboardNavOptions {
   onNextSpread: () => void;
   onPrevSpread: () => void;
 }
 
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-
-  const tag = target.tagName.toLowerCase();
-  return (
-    tag === "input" ||
-    tag === "textarea" ||
-    tag === "select" ||
-    target.isContentEditable
-  );
-}
-
 export function usePaginationKeyboardNav(
   options: UsePaginationKeyboardNavOptions,
 ) {
   const { onNextSpread, onPrevSpread } = options;
-  const nextSpreadRef = useRef(onNextSpread);
-  const prevSpreadRef = useRef(onPrevSpread);
-  nextSpreadRef.current = onNextSpread;
-  prevSpreadRef.current = onPrevSpread;
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditableTarget(event.target)) return;
+  useHotkey("ArrowLeft", onPrevSpread, {
+    target: window,
+    ignoreInputs: true,
+    stopPropagation: false,
+    meta: {
+      name: "Previous page",
+      description: "Move to the previous Reader spread",
+    },
+  });
 
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        prevSpreadRef.current();
-        return;
-      }
-
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        nextSpreadRef.current();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  useHotkey("ArrowRight", onNextSpread, {
+    target: window,
+    ignoreInputs: true,
+    stopPropagation: false,
+    meta: {
+      name: "Next page",
+      description: "Move to the next Reader spread",
+    },
+  });
 }

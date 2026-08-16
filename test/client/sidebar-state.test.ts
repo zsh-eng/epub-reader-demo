@@ -10,7 +10,18 @@ import {
   ReaderSettingsProvider,
   useReaderSettings,
 } from "@/hooks/use-reader-settings";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  getHotkeyManager,
+  type Hotkey,
+  type HotkeyRegistration,
+} from "@tanstack/react-hotkeys";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -51,6 +62,27 @@ function ThemeProbe({ label }: { label: string }) {
   );
 }
 
+function getHotkeyRegistration(hotkey: Hotkey): HotkeyRegistration {
+  const registration = Array.from(
+    getHotkeyManager().registrations.state.values(),
+  ).find((candidate) => candidate.hotkey === hotkey);
+
+  if (!registration) {
+    throw new Error(`Expected ${hotkey} to be registered`);
+  }
+
+  return registration;
+}
+
+function triggerHotkey(hotkey: Hotkey): void {
+  const manager = getHotkeyManager();
+  const registration = getHotkeyRegistration(hotkey);
+
+  act(() => {
+    manager.triggerRegistration(registration.id);
+  });
+}
+
 beforeEach(() => {
   window.matchMedia = vi.fn(createMediaQueryList);
   window.localStorage.clear();
@@ -75,17 +107,13 @@ describe("SidebarProvider", () => {
 
     expect(screen.getByRole("button").textContent).toBe("open");
 
-    fireEvent.keyDown(window, {
-      code: "Backslash",
-      key: "\\",
-      metaKey: true,
-    });
+    triggerHotkey("Mod+\\");
 
     expect(screen.getByRole("button").textContent).toBe("closed");
     expect(
-      document.querySelector('[data-slot="sidebar-wrapper"]')?.getAttribute(
-        "data-transition-mode",
-      ),
+      document
+        .querySelector('[data-slot="sidebar-wrapper"]')
+        ?.getAttribute("data-transition-mode"),
     ).toBe("animated");
   });
 
@@ -100,13 +128,13 @@ describe("SidebarProvider", () => {
       ),
     );
 
-    fireEvent.keyDown(window, { key: "Escape" });
+    triggerHotkey("Escape");
 
     expect(screen.getByRole("button").textContent).toBe("closed");
     expect(
-      document.querySelector('[data-slot="sidebar-wrapper"]')?.getAttribute(
-        "data-transition-mode",
-      ),
+      document
+        .querySelector('[data-slot="sidebar-wrapper"]')
+        ?.getAttribute("data-transition-mode"),
     ).toBe("instant");
   });
 
@@ -125,7 +153,13 @@ describe("SidebarProvider", () => {
       cancelable: true,
     });
     escapeEvent.preventDefault();
-    fireEvent(window, escapeEvent);
+    const registration = getHotkeyRegistration("Escape");
+    act(() => {
+      registration.callback(escapeEvent, {
+        hotkey: registration.hotkey,
+        parsedHotkey: registration.parsedHotkey,
+      });
+    });
 
     expect(screen.getByRole("button").textContent).toBe("open");
   });

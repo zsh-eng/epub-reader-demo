@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import * as React from "react";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 
@@ -151,6 +152,21 @@ interface LongPressMenuProps {
   lockScroll?: boolean;
 }
 
+function LongPressMenuEscapeHotkey({ onClose }: { onClose: () => void }) {
+  useHotkey("Escape", onClose, {
+    conflictBehavior: "allow",
+    preventDefault: false,
+    requireReset: true,
+    stopPropagation: false,
+    meta: {
+      name: "Close context menu",
+      description: "Dismiss the open long-press context menu",
+    },
+  });
+
+  return null;
+}
+
 function LongPressMenu({
   children,
   pressDelay = 500,
@@ -196,20 +212,6 @@ function LongPressMenu({
     popoverRef.current?.hidePopover();
   }, []);
 
-  // Handle escape key (popover="manual" doesn't auto-dismiss)
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, close]);
-
   return (
     <LongPressMenuContext.Provider
       value={{
@@ -222,6 +224,7 @@ function LongPressMenu({
         popoverRef,
       }}
     >
+      {isOpen && <LongPressMenuEscapeHotkey onClose={close} />}
       <LongPressMenuInner pressDelay={pressDelay}>
         {children}
       </LongPressMenuInner>

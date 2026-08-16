@@ -10,6 +10,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { PanelLeftIcon } from "lucide-react";
 import {
   createContext,
@@ -61,8 +62,8 @@ interface SidebarProviderProps extends ComponentProps<"div"> {
 }
 
 /**
- * Owns the shared desktop/mobile sidebar state and the Command/Ctrl+Backslash
- * shortcut. The desktop state can be controlled by the route-aware app shell.
+ * Owns the shared desktop/mobile sidebar state and its global keyboard
+ * shortcuts. The desktop state can be controlled by the route-aware app shell.
  */
 export function SidebarProvider({
   children,
@@ -119,52 +120,50 @@ export function SidebarProvider({
     return true;
   }, [isMobile, open, openMobile, setOpen]);
 
-  const applySidebarToggleRef = useRef(applySidebarToggle);
-  const closeSidebarInstantlyRef = useRef(closeSidebarInstantly);
-  useEffect(() => {
-    applySidebarToggleRef.current = applySidebarToggle;
-    closeSidebarInstantlyRef.current = closeSidebarInstantly;
-  }, [applySidebarToggle, closeSidebarInstantly]);
+  const restoreAnimatedTransitions = useCallback(() => {
+    if (keyboardResetFrame.current !== null) {
+      window.cancelAnimationFrame(keyboardResetFrame.current);
+    }
+    keyboardResetFrame.current = window.requestAnimationFrame(() => {
+      setTransitionMode("animated");
+      keyboardResetFrame.current = null;
+    });
+  }, []);
 
-  useEffect(() => {
-    const restoreAnimatedTransitions = () => {
-      if (keyboardResetFrame.current !== null) {
-        window.cancelAnimationFrame(keyboardResetFrame.current);
-      }
-      keyboardResetFrame.current = window.requestAnimationFrame(() => {
-        setTransitionMode("animated");
-        keyboardResetFrame.current = null;
-      });
-    };
+  useHotkey("Mod+\\", toggleSidebar, {
+    target: window,
+    ignoreInputs: false,
+    requireReset: true,
+    stopPropagation: false,
+    meta: {
+      name: "Toggle sidebar",
+      description: "Show or hide the application sidebar",
+    },
+  });
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        event.key === "Escape" &&
-        !event.repeat &&
-        !event.defaultPrevented &&
-        closeSidebarInstantlyRef.current()
-      ) {
-        event.preventDefault();
-        restoreAnimatedTransitions();
-        return;
-      }
-
-      if (
-        event.repeat ||
-        event.code !== "Backslash" ||
-        (!event.metaKey && !event.ctrlKey)
-      ) {
-        return;
-      }
+  useHotkey(
+    "Escape",
+    (event) => {
+      if (event.defaultPrevented || !closeSidebarInstantly()) return;
 
       event.preventDefault();
-      setTransitionMode("animated");
-      applySidebarToggleRef.current();
-    };
+      restoreAnimatedTransitions();
+    },
+    {
+      target: window,
+      ignoreInputs: false,
+      preventDefault: false,
+      requireReset: true,
+      stopPropagation: false,
+      meta: {
+        name: "Close sidebar",
+        description: "Close the application sidebar",
+      },
+    },
+  );
 
-    window.addEventListener("keydown", handleKeyDown);
+  useEffect(() => {
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
       if (keyboardResetFrame.current !== null) {
         window.cancelAnimationFrame(keyboardResetFrame.current);
       }
@@ -210,14 +209,8 @@ export function Sidebar({
   children,
   ...props
 }: ComponentProps<"aside">) {
-  const {
-    isMobile,
-    open,
-    openMobile,
-    setOpen,
-    setOpenMobile,
-    transitionMode,
-  } = useSidebar();
+  const { isMobile, open, openMobile, setOpen, setOpenMobile, transitionMode } =
+    useSidebar();
   const isSidebarOpen = isMobile ? openMobile : open;
   const transitionDuration =
     transitionMode === "instant"
