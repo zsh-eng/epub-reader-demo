@@ -104,7 +104,7 @@ function ContextMenuContent({
 }: ContextMenuPrimitive.Popup.Props) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Positioner>
+      <ContextMenuPrimitive.Positioner className="z-50">
       <ContextMenuPrimitive.Popup
         data-slot="context-menu-content"
         className={cn(
