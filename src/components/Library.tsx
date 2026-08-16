@@ -199,7 +199,7 @@ export function Library() {
             placeholder="Search my library..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-transparent border-none outline-none text-xl md:text-4xl lg:text-5xl 2xl:text-7xl md:font-serif md:italic placeholder:text-muted-foreground/40 md:placeholder:italic text-foreground"
+            className="w-full bg-transparent border-none outline-none text-xl md:indent-[0.25em] md:text-4xl lg:text-5xl 2xl:text-7xl md:font-serif md:italic placeholder:text-muted-foreground/40 md:placeholder:italic text-foreground"
           />
         </div>
 
