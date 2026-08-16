@@ -25,7 +25,14 @@ import {
 } from "@/lib/highlight-constants";
 import { cn } from "@/lib/utils";
 import { layout, prepare, type PreparedText } from "@chenglou/pretext";
-import { useReducedMotion } from "motion/react";
+import {
+  LayoutGroup,
+  motion,
+  useReducedMotion,
+  useScroll,
+  useTransform,
+  type MotionValue,
+} from "motion/react";
 import {
   BookOpen,
   BookOpenText,
@@ -37,6 +44,7 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -54,6 +62,13 @@ const QUOTE_CARD_CHROME_HEIGHT = 62;
 const QUOTE_CARD_MIN_HEIGHT = 96;
 const BOOK_TITLE_MAX_FONT = '500 44px "EB Garamond"';
 const BOOK_INDEX_PIN_STORAGE_KEY = "highlights-masonry-book-index-pinned";
+const BOOK_INDEX_ACTIVE_LAYOUT_ID = "highlights-book-index-active";
+const BOOK_INDEX_ACTIVE_TRANSITION = {
+  type: "spring" as const,
+  stiffness: 390,
+  damping: 36,
+  mass: 0.9,
+};
 
 const highlightAccentValues: Record<AnnotationColor, string> = {
   yellow: "var(--yellow-primary, var(--yellow-secondary))",
@@ -242,12 +257,16 @@ function BookIndexItem({
   className,
   group,
   isActive,
+  layoutId,
   onNavigate,
+  reducedMotion,
 }: {
   className?: string;
   group: BookHighlightGroup;
   isActive: boolean;
+  layoutId: string;
   onNavigate: () => void;
+  reducedMotion: boolean;
 }) {
   const { url: coverUrl } = useFileUrl(group.book.coverContentHash, "cover", {
     skip: !group.book.coverContentHash,
@@ -260,12 +279,24 @@ function BookIndexItem({
       onClick={onNavigate}
       aria-current={isActive ? "location" : undefined}
       className={cn(
-        "flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
-        isActive && "bg-secondary",
+        "relative isolate flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
         className,
       )}
     >
-      <span className="relative aspect-2/3 w-11 shrink-0 overflow-hidden rounded-r-md rounded-l-xs shadow-md">
+      {isActive && (
+        <motion.span
+          layoutId={layoutId}
+          aria-hidden="true"
+          initial={false}
+          transition={
+            reducedMotion ? { duration: 0 } : BOOK_INDEX_ACTIVE_TRANSITION
+          }
+          className="absolute inset-0 z-0 rounded-xl bg-secondary"
+        >
+          <span className="absolute top-3 bottom-3 left-0 w-0.5 rounded-full bg-foreground/70" />
+        </motion.span>
+      )}
+      <span className="relative z-10 aspect-2/3 w-11 shrink-0 overflow-hidden rounded-r-md rounded-l-xs shadow-md">
         {coverUrl ? (
           <img src={coverUrl} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -277,7 +308,7 @@ function BookIndexItem({
           </span>
         )}
       </span>
-      <span className="min-w-0 flex-1">
+      <span className="relative z-10 min-w-0 flex-1">
         <span className="line-clamp-2 font-serif text-base font-medium leading-[1.05]">
           {group.book.title}
         </span>
@@ -311,6 +342,9 @@ function BookIndexPanel({
   onNavigate: (bookId: string) => void;
   onPinChange: (isPinned: boolean) => void;
 }) {
+  const layoutGroupId = useId();
+  const reducedMotion = useReducedMotion() ?? false;
+
   return (
     <aside
       style={style}
@@ -346,19 +380,23 @@ function BookIndexPanel({
           )}
         </button>
       </div>
-      <nav
-        aria-label="Books on this highlights page"
-        className="min-h-0 overflow-y-auto pr-1 pb-1"
-      >
-        {groups.map((group) => (
-          <BookIndexItem
-            key={group.book.id}
-            group={group}
-            isActive={group.book.id === activeBookId}
-            onNavigate={() => onNavigate(group.book.id)}
-          />
-        ))}
-      </nav>
+      <LayoutGroup id={layoutGroupId}>
+        <nav
+          aria-label="Books on this highlights page"
+          className="min-h-0 overflow-y-auto pr-1 pb-1"
+        >
+          {groups.map((group) => (
+            <BookIndexItem
+              key={group.book.id}
+              group={group}
+              isActive={group.book.id === activeBookId}
+              layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
+              onNavigate={() => onNavigate(group.book.id)}
+              reducedMotion={reducedMotion}
+            />
+          ))}
+        </nav>
+      </LayoutGroup>
     </aside>
   );
 }
@@ -372,21 +410,28 @@ function MobileBookIndex({
   activeBookId: string;
   onNavigate: (bookId: string) => void;
 }) {
+  const layoutGroupId = useId();
+  const reducedMotion = useReducedMotion() ?? false;
+
   return (
-    <nav
-      aria-label="Books on this highlights page"
-      className="-mx-4 mt-3 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 lg:hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-    >
-      {groups.map((group) => (
-        <BookIndexItem
-          key={group.book.id}
-          group={group}
-          isActive={group.book.id === activeBookId}
-          onNavigate={() => onNavigate(group.book.id)}
-          className="border bg-card/80 shadow-sm"
-        />
-      ))}
-    </nav>
+    <LayoutGroup id={layoutGroupId}>
+      <nav
+        aria-label="Books on this highlights page"
+        className="-mx-4 mt-3 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 lg:hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
+        {groups.map((group) => (
+          <BookIndexItem
+            key={group.book.id}
+            group={group}
+            isActive={group.book.id === activeBookId}
+            layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
+            onNavigate={() => onNavigate(group.book.id)}
+            reducedMotion={reducedMotion}
+            className="border bg-card/80 shadow-sm"
+          />
+        ))}
+      </nav>
+    </LayoutGroup>
   );
 }
 
@@ -395,21 +440,21 @@ function FloatingBookIndex({
   activeBookId,
   onNavigate,
   onPin,
+  scrollProgress,
 }: {
   groups: BookHighlightGroup[];
   activeBookId: string;
   onNavigate: (bookId: string) => void;
   onPin: () => void;
+  scrollProgress: MotionValue<number>;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const prefersReducedMotion = useReducedMotion();
   const closeTimerRef = useRef(0);
-  const activeBookIndex = Math.max(
-    0,
-    groups.findIndex(({ book }) => book.id === activeBookId),
+  const progressTransform = useTransform(
+    scrollProgress,
+    (value) => `translate3d(0, 0, 0) scaleY(${value})`,
   );
-  const progress =
-    groups.length > 0 ? (activeBookIndex + 1) / groups.length : 0;
 
   useEffect(() => {
     return () => window.clearTimeout(closeTimerRef.current);
@@ -440,9 +485,9 @@ function FloatingBookIndex({
         className="pointer-events-auto absolute inset-y-0 right-0 w-24 cursor-default"
       >
         <div className="absolute inset-y-3 right-3 w-1 overflow-hidden rounded-full bg-border">
-          <div
-            className="h-full origin-top rounded-full bg-foreground/55 transition-transform duration-[180ms] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
-            style={{ transform: `scaleY(${progress})` }}
+          <motion.div
+            className="h-full origin-top rounded-full bg-foreground/55"
+            style={{ transform: progressTransform }}
           />
         </div>
       </div>
@@ -794,6 +839,7 @@ export function HighlightsMasonry() {
   const [selectedColors, setSelectedColors] = useState<HighlightColor[]>(() =>
     HIGHLIGHT_COLORS.map(({ name }) => name),
   );
+  const { scrollYProgress } = useScroll();
   const { data: groups = [], isLoading } = useAllHighlightsQuery();
   const visibleGroups = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -864,7 +910,7 @@ export function HighlightsMasonry() {
         )}
       </section>
 
-      <div className="sticky top-0 z-30 bg-gradient-to-b from-background via-background/95 to-transparent px-4 pt-3 pb-5">
+      <div className="sticky top-0 z-30 bg-background px-4 pt-3 pb-5">
         <div className="mx-auto max-w-xl">
           <HighlightsSearch
             value={searchQuery}
@@ -975,8 +1021,16 @@ export function HighlightsMasonry() {
           activeBookId={activeBookId}
           onNavigate={setActiveBookId}
           onPin={() => setIsBookIndexPinned(true)}
+          scrollProgress={scrollYProgress}
         />
       )}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-20 hidden h-24 lg:block"
+      >
+        <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/35 to-transparent" />
+        <div className="absolute inset-0 backdrop-blur-md [mask-image:linear-gradient(to_top,black_0%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_top,black_0%,transparent_100%)]" />
+      </div>
     </div>
   );
 }
