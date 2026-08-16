@@ -273,6 +273,8 @@ function BookIndexItem({
   });
   const highlightCount = group.highlights.length;
 
+  // Keep rows in the nav's shared stacking context. Otherwise the target row's
+  // DOM order can lift the moving selection marker above rows that it crosses.
   return (
     <a
       href={`#${getBookSectionId(group.book.id)}`}
