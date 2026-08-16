@@ -13,6 +13,7 @@ import {
 } from "@/components/Reader/data/reader-cache/prefetch";
 import type { Book, SyncedBook } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Library as LibraryIcon, Upload } from "lucide-react";
 import {
@@ -20,12 +21,14 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
 export function Library() {
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { importFiles, isProcessing, openFilePicker } = useEpubImport();
   const queryClient = useQueryClient();
@@ -165,6 +168,16 @@ export function Library() {
 
   useAppShellReady(libraryDisplayReady);
 
+  useHotkey("/", () => searchInputRef.current?.focus(), {
+    ignoreInputs: true,
+    requireReset: true,
+    stopPropagation: false,
+    meta: {
+      name: "Focus library search",
+      description: "Move focus to the Library search field",
+    },
+  });
+
   return (
     <div
       className={`min-h-full bg-background ${libraryDisplayReady ? "" : "invisible"}`}
@@ -195,7 +208,9 @@ export function Library() {
         {/* Hero Search Bar */}
         <div className="max-w-3xl mb-10 md:mb-16">
           <SmoothCaretInput
+            ref={searchInputRef}
             type="text"
+            aria-label="Search library"
             placeholder="Search my library..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
