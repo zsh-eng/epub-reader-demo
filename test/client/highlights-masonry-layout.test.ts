@@ -1,10 +1,20 @@
 import {
   BOOK_COVER_TILE_ID,
   BOOK_DETAILS_TILE_ID,
-  computeJustifiedHighlightsMosaicLayout,
+  computeHighlightsBentoLayout,
   getHighlightsMosaicGeometry,
+  type MosaicPlacement,
 } from "@/lib/highlights-masonry-layout";
 import { describe, expect, it } from "vitest";
+
+function placementsOverlap(left: MosaicPlacement, right: MosaicPlacement) {
+  const horizontalOverlap =
+    left.column < right.column + right.columnSpan &&
+    right.column < left.column + left.columnSpan;
+  const verticalOverlap =
+    left.top < right.top + right.height && right.top < left.top + left.height;
+  return horizontalOverlap && verticalOverlap;
+}
 
 describe("getHighlightsMosaicGeometry", () => {
   it("adds a column only when every card can keep its minimum width", () => {
@@ -24,92 +34,114 @@ describe("getHighlightsMosaicGeometry", () => {
   });
 });
 
-describe("computeJustifiedHighlightsMosaicLayout", () => {
-  it("places the book details, standalone cover, and highlights together", () => {
-    const mosaic = computeJustifiedHighlightsMosaicLayout(
+describe("computeHighlightsBentoLayout", () => {
+  it("nests the cover and lets a long quote span two columns", () => {
+    const mosaic = computeHighlightsBentoLayout(
       1_000,
       [
         { id: "a", height: 160 },
         { id: "b", height: 100 },
-        { id: "c", height: 140 },
+        {
+          id: "long",
+          height: 260,
+          wideHeight: 150,
+          preferredColumnSpan: 2,
+        },
         { id: "d", height: 120 },
         { id: "e", height: 180 },
         { id: "f", height: 110 },
         { id: "g", height: 150 },
         { id: "h", height: 130 },
       ],
-      { detailsHeight: 180 },
+      { detailsHeight: 180, layoutSeed: 7 },
     );
 
     expect(mosaic.placements).toHaveLength(10);
     expect(
       mosaic.placements.find(({ id }) => id === BOOK_DETAILS_TILE_ID),
-    ).toMatchObject({ kind: "details", column: 0, top: 0 });
+    ).toMatchObject({ kind: "details", column: 0, top: 0, columnSpan: 1 });
     expect(
-      mosaic.placements.filter(({ kind }) => kind === "highlight"),
-    ).toHaveLength(8);
-
-    const cover = mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID);
-    expect(cover).toMatchObject({
-      kind: "cover",
-      column: mosaic.coverColumn,
-      width: mosaic.coverWidth,
+      mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
+    ).toMatchObject({ kind: "cover", columnSpan: 1 });
+    expect(
+      mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID)?.top,
+    ).toBeGreaterThan(0);
+    expect(mosaic.placements.find(({ id }) => id === "long")).toMatchObject({
+      columnSpan: 2,
+      naturalHeight: 150,
     });
-
-    const coverColumn = mosaic.placements
-      .filter(({ column }) => column === mosaic.coverColumn)
-      .sort((left, right) => left.top - right.top);
-    const coverIndex = coverColumn.findIndex(
-      ({ id }) => id === BOOK_COVER_TILE_ID,
-    );
-    expect(coverColumn[coverIndex - 1]?.kind).toBe("highlight");
-    expect(coverColumn[coverIndex + 1]?.kind).toBe("highlight");
   });
 
-  it("stretches quote cards so every populated column has one bottom edge", () => {
-    const mosaic = computeJustifiedHighlightsMosaicLayout(
+  it("uses a wide cover footprint beside the book details at low density", () => {
+    const items = [
+      { id: "a", height: 160 },
+      { id: "b", height: 120 },
+      { id: "c", height: 140 },
+    ];
+    const mosaic = computeHighlightsBentoLayout(1_000, items, {
+      detailsHeight: 180,
+    });
+    const alternateMosaic = computeHighlightsBentoLayout(1_000, items, {
+      detailsHeight: 180,
+      layoutSeed: 1,
+    });
+
+    expect(
+      mosaic.placements.find(({ id }) => id === BOOK_DETAILS_TILE_ID),
+    ).toMatchObject({ column: 0, top: 0 });
+    expect(
+      mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
+    ).toMatchObject({ column: 1, columnSpan: 2, top: 0 });
+    expect(
+      alternateMosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
+    ).toMatchObject({ column: 2, columnSpan: 2, top: 0 });
+  });
+
+  it("packs every tile without overlap and reports the true bottom edge", () => {
+    const mosaic = computeHighlightsBentoLayout(
       1_000,
       [
         { id: "a", height: 160 },
         { id: "b", height: 100 },
-        { id: "c", height: 140 },
+        { id: "c", height: 140, wideHeight: 100, preferredColumnSpan: 2 },
         { id: "d", height: 120 },
         { id: "e", height: 180 },
         { id: "f", height: 110 },
         { id: "g", height: 150 },
-        { id: "h", height: 130 },
       ],
-      { detailsHeight: 180 },
+      { detailsHeight: 180, layoutSeed: 3 },
     );
 
-    const columnBottoms = Array.from(
-      { length: mosaic.columnCount },
-      (_, column) =>
-        Math.max(
-          ...mosaic.placements
-            .filter((placement) => placement.column === column)
-            .map((placement) => placement.top + placement.height),
+    for (const [index, placement] of mosaic.placements.entries()) {
+      expect(placement.column + placement.columnSpan).toBeLessThanOrEqual(
+        mosaic.columnCount,
+      );
+
+      for (const other of mosaic.placements.slice(index + 1)) {
+        expect(placementsOverlap(placement, other)).toBe(false);
+      }
+    }
+
+    expect(mosaic.height).toBe(
+      Math.max(
+        ...mosaic.placements.map(
+          (placement) => placement.top + placement.height,
         ),
+      ),
     );
-
-    for (const bottom of columnBottoms) {
-      expect(bottom).toBeCloseTo(mosaic.height);
-    }
-    for (const placement of mosaic.placements) {
-      expect(placement.height).toBeGreaterThanOrEqual(placement.naturalHeight);
-    }
   });
 
   it("returns an empty layout before the container is measured", () => {
-    expect(
-      computeJustifiedHighlightsMosaicLayout(0, [{ id: "a", height: 100 }]),
-    ).toEqual({
-      columnCount: 1,
-      columnWidth: 0,
-      coverColumn: 0,
-      coverWidth: 0,
-      height: 0,
-      placements: [],
-    });
+    expect(computeHighlightsBentoLayout(0, [{ id: "a", height: 100 }])).toEqual(
+      {
+        columnCount: 1,
+        columnWidth: 0,
+        coverColumn: 0,
+        coverColumnSpan: 1,
+        coverWidth: 0,
+        height: 0,
+        placements: [],
+      },
+    );
   });
 });
