@@ -94,14 +94,14 @@ Recommended sequencing:
 
 ## Current App Product Work
 
-- [ ] OLED reading theme.
-- [ ] Improve the Library page design.
+- [ ] OLED reading theme (the text shouldn't be pure white, it should be something dimmer to suit reading at nightime).
+- [x] Improve the Library page design.
 - [ ] Explore searchable list-style Library design.
-- [ ] Make Continue Reading order by most recently read.
-- [ ] Make the front page and Continue Reading screen sleeker.
+- [x] Make Continue Reading order by most recently read.
+- [x] Make the front page and Continue Reading screen sleeker.
 - [ ] Improve book search.
-- [ ] Add sort order for books, with most recently read first.
-- [ ] Consider bringing back auto-start-reading behavior.
+- [x] Add sort order for books, with most recently read first.
+- [x] Consider bringing back auto-start-reading behavior.
 - [ ] Improve the add-new-EPUB flow.
 - [x] Remove unnecessary "loading library" UI.
 - [ ] Standardize the UI font, likely around DM Sans.
@@ -110,8 +110,6 @@ Recommended sequencing:
 
 ## Reader Experience Work
 
-- [ ] Add a better ebook loading screen.
-- [ ] Update the reader loading spinner design.
 - [ ] Keep chrome hidden during initial reader load.
 - [ ] Fade in the first page on mount if it feels better.
 - [ ] Add slide gestures for previous and next page.
@@ -256,9 +254,6 @@ Recommended sequencing:
 - [x] Continue reading
 - [x] Fix theme settings sheet
 
-- [ ] Immediately "start reading" after adding a new book in (some kind of card on mobile?)
-- [ ] Carousel / horizontal scroll style for the continue reading on mobile (maybe slightly smaller cards)
-
 - [x] New highlights page: 'bento style'
 	- [x] Space at the bottom of the page is only important if the last book's section is too short
 	- [x] No matching highlights Should not be scrollable
@@ -276,9 +271,13 @@ Recommended sequencing:
 	- [x] Entry animations
 	- [x] Word cloud idea
 
-- [ ] Desktop highlight bar is ugly
-	- [ ] Buttons shouldn't have any "dead zone" between them
+- [x] Desktop highlight bar is ugly
+	- [x] Buttons shouldn't have any "dead zone" between them
+	
 - [ ] Sessions screen: Fix hover bug again where it looks like there are 2 elements because of the user hovering (update AGENTS.md)
+- [ ] Immediately "start reading" after adding a new book in (some kind of card on mobile?)
+- [ ] Carousel / horizontal scroll style for the continue reading on mobile (maybe slightly smaller cards)
+- [ ] Flicker bug for overscrolling in the sessions page
 
 Flicker
 "Slow network" messing up the loads
