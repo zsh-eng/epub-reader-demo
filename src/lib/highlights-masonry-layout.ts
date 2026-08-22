@@ -4,6 +4,8 @@ export const BOOK_DETAILS_TILE_ID = "book-details";
 export interface MosaicItemMeasurement {
   id: string;
   height: number;
+  wideHeight?: number;
+  preferredColumnSpan?: 1 | 2;
 }
 
 export type MosaicTileKind = "cover" | "details" | "highlight";
@@ -12,6 +14,7 @@ export interface MosaicPlacement {
   id: string;
   kind: MosaicTileKind;
   column: number;
+  columnSpan: number;
   left: number;
   top: number;
   width: number;
@@ -23,6 +26,7 @@ export interface HighlightsMosaicLayout {
   columnCount: number;
   columnWidth: number;
   coverColumn: number;
+  coverColumnSpan: number;
   coverWidth: number;
   height: number;
   placements: MosaicPlacement[];
@@ -37,6 +41,8 @@ export interface HighlightsMosaicLayoutOptions {
   maxCoverWidth: number;
   minCoverWidth: number;
   detailsHeight: number;
+  rowHeight: number;
+  layoutSeed: number;
 }
 
 const DEFAULT_OPTIONS: HighlightsMosaicLayoutOptions = {
@@ -47,7 +53,9 @@ const DEFAULT_OPTIONS: HighlightsMosaicLayoutOptions = {
   coverWidthRatio: 0.18,
   maxCoverWidth: 280,
   minCoverWidth: 160,
-  detailsHeight: 210,
+  detailsHeight: 250,
+  rowHeight: 8,
+  layoutSeed: 0,
 };
 
 export function getHighlightsMosaicGeometry(
@@ -88,178 +96,247 @@ export function getHighlightsMosaicGeometry(
   return { columnCount, columnWidth, coverWidth };
 }
 
-interface ColumnTile {
+interface BentoTile {
   id: string;
   kind: MosaicTileKind;
   naturalHeight: number;
+  columnSpan: number;
+  minimumRow?: number;
+  preferredColumn?: number;
+  fixedColumn?: number;
+  fixedRow?: number;
 }
 
-interface MosaicColumn {
-  naturalHeight: number;
-  tiles: ColumnTile[];
+interface TileSlot {
+  column: number;
+  row: number;
+  rowSpan: number;
 }
 
-function addTile(column: MosaicColumn, tile: ColumnTile, gap: number) {
-  if (column.tiles.length > 0) column.naturalHeight += gap;
-  column.tiles.push(tile);
-  column.naturalHeight += tile.naturalHeight;
+function getRotatedColumns(columnCount: number, seed: number) {
+  const columns = Array.from({ length: columnCount }, (_, index) => index);
+  const offset = Math.abs(seed) % Math.max(1, columnCount);
+  return [...columns.slice(offset), ...columns.slice(0, offset)];
 }
 
-function getShortestColumnIndex(columns: MosaicColumn[]) {
-  let shortestColumn = 0;
-
-  for (let column = 1; column < columns.length; column += 1) {
-    if (columns[column].naturalHeight < columns[shortestColumn].naturalHeight) {
-      shortestColumn = column;
+function canOccupy(
+  occupiedRows: boolean[][],
+  row: number,
+  column: number,
+  rowSpan: number,
+  columnSpan: number,
+) {
+  for (let rowIndex = row; rowIndex < row + rowSpan; rowIndex += 1) {
+    for (
+      let columnIndex = column;
+      columnIndex < column + columnSpan;
+      columnIndex += 1
+    ) {
+      if (occupiedRows[rowIndex]?.[columnIndex]) return false;
     }
   }
 
-  return shortestColumn;
+  return true;
+}
+
+function occupy(
+  occupiedRows: boolean[][],
+  slot: TileSlot,
+  columnSpan: number,
+  columnCount: number,
+) {
+  for (
+    let rowIndex = slot.row;
+    rowIndex < slot.row + slot.rowSpan;
+    rowIndex += 1
+  ) {
+    const occupiedRow =
+      occupiedRows[rowIndex] ?? Array<boolean>(columnCount).fill(false);
+    occupiedRows[rowIndex] = occupiedRow;
+
+    for (
+      let columnIndex = slot.column;
+      columnIndex < slot.column + columnSpan;
+      columnIndex += 1
+    ) {
+      occupiedRow[columnIndex] = true;
+    }
+  }
+}
+
+function findTileSlot({
+  tile,
+  rowSpan,
+  columnCount,
+  occupiedRows,
+  seed,
+}: {
+  tile: BentoTile;
+  rowSpan: number;
+  columnCount: number;
+  occupiedRows: boolean[][];
+  seed: number;
+}): TileSlot {
+  if (tile.fixedColumn !== undefined && tile.fixedRow !== undefined) {
+    return {
+      column: tile.fixedColumn,
+      row: tile.fixedRow,
+      rowSpan,
+    };
+  }
+
+  const possibleColumnCount = columnCount - tile.columnSpan + 1;
+  const preferredColumn = Math.min(
+    possibleColumnCount - 1,
+    tile.preferredColumn ?? 0,
+  );
+  const candidateColumns = getRotatedColumns(
+    possibleColumnCount,
+    preferredColumn + seed,
+  );
+  const minimumRow = tile.minimumRow ?? 0;
+
+  for (let row = minimumRow; ; row += 1) {
+    for (const column of candidateColumns) {
+      if (canOccupy(occupiedRows, row, column, rowSpan, tile.columnSpan)) {
+        return { column, row, rowSpan };
+      }
+    }
+  }
 }
 
 /**
- * Builds a dense mosaic around the book details and standalone cover. Quote
- * cards absorb unused height so all populated columns share one bottom edge.
+ * Packs a bento mosaic on a small virtual row grid. The dense occupancy scan
+ * lets narrow cards fill gaps below wide cards instead of forcing every column
+ * to stretch to the same bottom edge.
  */
-export function computeJustifiedHighlightsMosaicLayout(
+export function computeHighlightsBentoLayout(
   containerWidth: number,
   items: MosaicItemMeasurement[],
   options: Partial<HighlightsMosaicLayoutOptions> = {},
 ): HighlightsMosaicLayout {
   const resolvedOptions = { ...DEFAULT_OPTIONS, ...options };
-  const { coverAspectRatio, gap, detailsHeight } = resolvedOptions;
+  const { coverAspectRatio, detailsHeight, gap, layoutSeed, rowHeight } =
+    resolvedOptions;
   const { columnCount, columnWidth, coverWidth } = getHighlightsMosaicGeometry(
     containerWidth,
     resolvedOptions,
   );
-  const coverColumn = Math.min(columnCount - 1, Math.floor(columnCount / 2));
 
   if (containerWidth <= 0) {
     return {
       columnCount,
       columnWidth,
-      coverColumn,
+      coverColumn: 0,
+      coverColumnSpan: 1,
       coverWidth,
       height: 0,
       placements: [],
     };
   }
 
-  const columns = Array.from(
-    { length: columnCount },
-    (): MosaicColumn => ({
-      naturalHeight: 0,
-      tiles: [],
-    }),
-  );
-  addTile(
-    columns[0],
+  const hasEnoughHighlightsToNestCover =
+    items.length >= Math.max(5, columnCount + 3);
+  const coverColumnSpan =
+    !hasEnoughHighlightsToNestCover && columnCount >= 3 ? 2 : 1;
+  const lowDensityCoverColumn =
+    columnCount === 1
+      ? 0
+      : 1 + (Math.abs(layoutSeed) % Math.max(1, columnCount - coverColumnSpan));
+  const nestedCoverColumn = Math.abs(layoutSeed) % columnCount;
+  const coverNaturalHeight = coverWidth * coverAspectRatio;
+  const detailsRowSpan = Math.ceil((detailsHeight + gap) / rowHeight);
+  const coverInsertionIndex = hasEnoughHighlightsToNestCover
+    ? Math.min(items.length, 2 + (Math.abs(layoutSeed) % 3))
+    : 0;
+  const tiles: BentoTile[] = [
     {
       id: BOOK_DETAILS_TILE_ID,
       kind: "details",
       naturalHeight: detailsHeight,
+      columnSpan: 1,
+      fixedColumn: 0,
+      fixedRow: 0,
     },
-    gap,
-  );
+  ];
 
-  const [highlightAboveCover, highlightBelowCover, ...remainingItems] = items;
-  if (highlightAboveCover) {
-    addTile(
-      columns[coverColumn],
-      {
-        id: highlightAboveCover.id,
-        kind: "highlight",
-        naturalHeight: highlightAboveCover.height,
-      },
-      gap,
-    );
-  }
-  addTile(
-    columns[coverColumn],
-    {
-      id: BOOK_COVER_TILE_ID,
-      kind: "cover",
-      naturalHeight: coverWidth * coverAspectRatio,
-    },
-    gap,
-  );
-  if (highlightBelowCover) {
-    addTile(
-      columns[coverColumn],
-      {
-        id: highlightBelowCover.id,
-        kind: "highlight",
-        naturalHeight: highlightBelowCover.height,
-      },
-      gap,
-    );
-  }
+  const coverTile: BentoTile = {
+    id: BOOK_COVER_TILE_ID,
+    kind: "cover",
+    naturalHeight: coverNaturalHeight,
+    columnSpan: coverColumnSpan,
+    ...(hasEnoughHighlightsToNestCover
+      ? {
+          minimumRow: Math.max(1, Math.floor(detailsRowSpan * 0.35)),
+          preferredColumn: nestedCoverColumn,
+        }
+      : {
+          fixedColumn: lowDensityCoverColumn,
+          fixedRow: columnCount === 1 ? detailsRowSpan : 0,
+        }),
+  };
 
-  for (const item of remainingItems) {
-    const column = getShortestColumnIndex(columns);
-    addTile(
-      columns[column],
-      {
-        id: item.id,
-        kind: "highlight",
-        naturalHeight: item.height,
-      },
-      gap,
-    );
-  }
+  items.forEach((item, itemIndex) => {
+    if (itemIndex === coverInsertionIndex) tiles.push(coverTile);
 
-  const targetHeight = Math.max(
-    ...columns.map((column) => column.naturalHeight),
-  );
-  const placements: MosaicPlacement[] = [];
-
-  columns.forEach((column, columnIndex) => {
-    const quoteTiles = column.tiles.filter((tile) => tile.kind === "highlight");
-    const quoteHeight = quoteTiles.reduce(
-      (total, tile) => total + tile.naturalHeight,
-      0,
-    );
-    const slack =
-      quoteTiles.length > 0 ? targetHeight - column.naturalHeight : 0;
-    const lastQuoteId = quoteTiles.at(-1)?.id;
-    let allocatedSlack = 0;
-    let top = 0;
-
-    column.tiles.forEach((tile, tileIndex) => {
-      let extraHeight = 0;
-      if (tile.kind === "highlight" && slack > 0) {
-        extraHeight =
-          tile.id === lastQuoteId
-            ? slack - allocatedSlack
-            : slack * (tile.naturalHeight / quoteHeight);
-        allocatedSlack += extraHeight;
-      }
-
-      const height = tile.naturalHeight + extraHeight;
-      const width = tile.kind === "cover" ? coverWidth : columnWidth;
-      placements.push({
-        id: tile.id,
-        kind: tile.kind,
-        column: columnIndex,
-        left:
-          columnIndex * (columnWidth + gap) +
-          (tile.kind === "cover" ? (columnWidth - coverWidth) / 2 : 0),
-        top,
-        width,
-        height,
-        naturalHeight: tile.naturalHeight,
-      });
-      top += height;
-      if (tileIndex < column.tiles.length - 1) top += gap;
+    const columnSpan = Math.min(columnCount, item.preferredColumnSpan ?? 1);
+    tiles.push({
+      id: item.id,
+      kind: "highlight",
+      naturalHeight:
+        columnSpan > 1 ? (item.wideHeight ?? item.height) : item.height,
+      columnSpan,
+      preferredColumn: (layoutSeed + itemIndex) % columnCount,
     });
   });
+
+  if (coverInsertionIndex === items.length) tiles.push(coverTile);
+
+  const occupiedRows: boolean[][] = [];
+  const placements: MosaicPlacement[] = [];
+
+  tiles.forEach((tile, tileIndex) => {
+    const rowSpan = Math.max(
+      1,
+      Math.ceil((tile.naturalHeight + gap) / rowHeight),
+    );
+    const slot = findTileSlot({
+      tile,
+      rowSpan,
+      columnCount,
+      occupiedRows,
+      seed: layoutSeed + tileIndex,
+    });
+    occupy(occupiedRows, slot, tile.columnSpan, columnCount);
+
+    placements.push({
+      id: tile.id,
+      kind: tile.kind,
+      column: slot.column,
+      columnSpan: tile.columnSpan,
+      left: slot.column * (columnWidth + gap),
+      top: slot.row * rowHeight,
+      width:
+        columnWidth * tile.columnSpan + gap * Math.max(0, tile.columnSpan - 1),
+      height: slot.rowSpan * rowHeight - gap,
+      naturalHeight: tile.naturalHeight,
+    });
+  });
+
+  const coverPlacement = placements.find(
+    (placement) => placement.id === BOOK_COVER_TILE_ID,
+  );
+  const height = Math.max(
+    ...placements.map((placement) => placement.top + placement.height),
+  );
 
   return {
     columnCount,
     columnWidth,
-    coverColumn,
+    coverColumn: coverPlacement?.column ?? 0,
+    coverColumnSpan,
     coverWidth,
-    height: targetHeight,
+    height,
     placements,
   };
 }
