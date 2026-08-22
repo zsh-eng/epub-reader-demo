@@ -176,6 +176,7 @@ export function ReaderDebug() {
     activeHighlightData,
     isCreatingHighlight,
     creationPosition,
+    creationText,
     selectColor,
     closeCreation,
     clearActiveHighlight,
@@ -392,6 +393,7 @@ export function ReaderDebug() {
         highlights={bookHighlights}
         isCreatingHighlight={isCreatingHighlight}
         creationPosition={creationPosition}
+        creationText={creationText}
         onCreateColorSelect={selectColor}
         onCreateClose={closeCreation}
         activeHighlight={

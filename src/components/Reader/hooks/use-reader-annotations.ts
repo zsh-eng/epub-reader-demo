@@ -87,6 +87,7 @@ interface UseReaderAnnotationsResult {
   activeHighlightData: Highlight | null;
   isCreatingHighlight: boolean;
   creationPosition: { x: number; y: number };
+  creationText: string;
   selectColor: (color: AnnotationColor) => void;
   closeCreation: () => void;
   clearActiveHighlight: () => void;
@@ -483,6 +484,7 @@ export function useReaderAnnotations({
     activeHighlightData,
     isCreatingHighlight: state.kind === "creating",
     creationPosition: pendingDraft?.position ?? { x: 0, y: 0 },
+    creationText: pendingDraft?.highlight.selectedText ?? "",
     selectColor,
     closeCreation,
     clearActiveHighlight,

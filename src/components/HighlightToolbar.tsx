@@ -9,9 +9,9 @@ import {
   HIGHLIGHT_TOOLBAR_CLASS,
 } from "@/types/reader.types";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { Send } from "lucide-react";
+import { Check, Copy, Send } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface HighlightToolbarProps {
   position: { x: number; y: number };
@@ -19,6 +19,7 @@ interface HighlightToolbarProps {
   onClose: () => void;
   currentColor?: AnnotationColor;
   onDelete?: () => void;
+  textToCopy?: string;
   /** Called when user submits a note (creates invisible annotation + note) */
   onNoteSubmit?: (content: string) => void;
 }
@@ -29,20 +30,30 @@ export function HighlightToolbar({
   onClose,
   currentColor,
   onDelete,
+  textToCopy,
   onNoteSubmit,
 }: HighlightToolbarProps) {
   const isMobile = useIsMobile();
   const prefersReducedMotion = useReducedMotion();
   const [noteText, setNoteText] = useState("");
+  const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isBareDesktopPicker = !isMobile && !onNoteSubmit;
+  const hasCopyAction = Boolean(textToCopy?.trim());
 
   // Calculate position directly to avoid layout thrashing/jumping
   // Vertical layout: colors on top, input bar below
   // Desktop color-only mode follows the compact floating pill used by Papers.
   // A note composer keeps the wider two-row surface.
   // Mobile: ~260px width, ~120px height
-  const toolbarWidth = isBareDesktopPicker ? 172 : isMobile ? 260 : 220;
+  const toolbarWidth = isBareDesktopPicker
+    ? hasCopyAction
+      ? 228
+      : 172
+    : isMobile
+      ? 260
+      : 220;
   const toolbarHeight = isBareDesktopPicker ? 44 : isMobile ? 120 : 88;
   const padding = 12;
 
@@ -67,6 +78,32 @@ export function HighlightToolbar({
   }
 
   const opensBelowSelection = y > position.y;
+
+  const handleCopy = useCallback(async () => {
+    if (!textToCopy || !navigator.clipboard) return;
+
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      setCopied(true);
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        copyResetTimerRef.current = null;
+        setCopied(false);
+      }, 1500);
+    } catch (error) {
+      console.error("Failed to copy highlighted text:", error);
+    }
+  }, [textToCopy]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
 
   // Close toolbar when clicking outside
   useEffect(() => {
@@ -102,6 +139,23 @@ export function HighlightToolbar({
       description: "Dismiss the active highlight controls",
     },
   });
+
+  useHotkey(
+    "Mod+Shift+C",
+    (event) => {
+      if (!hasCopyAction) return;
+      event.preventDefault();
+      void handleCopy();
+    },
+    {
+      requireReset: true,
+      stopPropagation: false,
+      meta: {
+        name: "Copy highlighted text",
+        description: "Copy the selected reader text",
+      },
+    },
+  );
 
   const handleNoteSubmit = () => {
     if (noteText.trim() && onNoteSubmit) {
@@ -190,6 +244,30 @@ export function HighlightToolbar({
             />
           );
         })}
+
+        {hasCopyAction && <div className="h-5 w-px bg-border/50" />}
+
+        {hasCopyAction && (
+          <button
+            type="button"
+            onClick={() => void handleCopy()}
+            aria-label="Copy highlighted text"
+            title={copied ? "Copied" : "Copy text"}
+            className={cn(
+              "flex size-7 items-center justify-center rounded-full text-muted-foreground",
+              "transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/70 focus-visible:ring-offset-2 focus-visible:ring-offset-popover",
+              "[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted",
+              copied && "text-foreground",
+            )}
+          >
+            {copied ? (
+              <Check className="size-5" aria-hidden="true" />
+            ) : (
+              <Copy className="size-5" aria-hidden="true" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Note input row */}

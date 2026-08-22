@@ -1,13 +1,8 @@
 import { Button } from "@/components/ui/button";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerTitle,
-} from "@/components/ui/drawer";
 import type { TOCItem } from "@/lib/db";
 import { cn } from "@/lib/utils";
 import type { ReaderSettings } from "@/types/reader.types";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   ChevronRight,
   ClipboardCopy,
@@ -76,30 +71,58 @@ export function ReaderToolsSidebar({
   const activePanel = resolveActivePanel(activeSheet);
   const isOpen = activeSheet !== null;
 
-  return (
-    <Drawer
-      direction="right"
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (open) return;
+  useHotkey(
+    { key: "\\", mod: true, shift: true },
+    (event) => {
+      event.preventDefault();
+      if (isOpen) {
         onClose();
-      }}
-    >
-      <DrawerContent
-        overlayClassName="bg-transparent"
-        className={cn(
-          "h-dvh! min-w-[20rem] w-[min(42vw,25rem)]! max-w-none! overflow-hidden p-0",
-          "select-none border-l border-border/70 bg-background/95 text-foreground shadow-[-24px_0_64px_hsl(var(--foreground)/0.12)] backdrop-blur-2xl",
-          "[-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]",
-          "motion-reduce:transition-none [&>div:first-child]:hidden",
-        )}
-      >
-        <DrawerTitle className="sr-only">Reader tools</DrawerTitle>
-        <DrawerDescription className="sr-only">
-          Browse the book and adjust its reading appearance.
-        </DrawerDescription>
+        return;
+      }
 
-        <div className="flex h-full min-h-0 flex-col">
+      onOpenPanel("contents");
+    },
+    {
+      target: window,
+      ignoreInputs: false,
+      requireReset: true,
+      stopPropagation: false,
+      meta: {
+        name: "Toggle reader tools",
+        description: "Show or hide the reader tools sidebar",
+      },
+    },
+  );
+
+  return (
+    <aside
+      aria-label="Reader tools"
+      aria-hidden={!isOpen}
+      inert={!isOpen ? true : undefined}
+      className="pointer-events-none fixed inset-0 z-40 hidden text-foreground md:block"
+    >
+      <button
+        type="button"
+        aria-label="Close reader tools"
+        aria-hidden={!isOpen}
+        tabIndex={-1}
+        onClick={onClose}
+        className={cn(
+          "fixed inset-0 z-40 bg-transparent",
+          isOpen ? "pointer-events-auto" : "pointer-events-none",
+        )}
+      />
+
+      <div
+        className={cn(
+          "pointer-events-auto fixed inset-y-3 right-3 z-50 flex min-w-[20rem] w-[min(42vw,25rem)] transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
+          isOpen
+            ? "[transform:translate3d(0,0,0)] opacity-100"
+            : "pointer-events-none [transform:translate3d(12px,0,0)] opacity-0",
+        )}
+        style={{ transitionDuration: isOpen ? "200ms" : "140ms" }}
+      >
+        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-background/95 text-foreground shadow-[-24px_0_64px_hsl(var(--foreground)/0.12)] backdrop-blur-2xl select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]">
           <nav
             aria-label="Reader tools"
             className="relative z-10 flex min-h-14 shrink-0 items-center gap-1.5 px-2 pb-2"
@@ -198,7 +221,7 @@ export function ReaderToolsSidebar({
             )}
           </div>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </div>
+    </aside>
   );
 }

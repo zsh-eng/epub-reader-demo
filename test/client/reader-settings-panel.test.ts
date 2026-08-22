@@ -60,10 +60,11 @@ describe("ReaderSettingsPanel", () => {
 
   it("shows all appearance controls in one desktop scroll list", () => {
     Element.prototype.scrollIntoView = vi.fn();
+    const onUpdateSettings = vi.fn();
     render(
       createElement(ReaderSettingsList, {
         settings,
-        onUpdateSettings: vi.fn(),
+        onUpdateSettings,
       }),
     );
 
@@ -73,5 +74,17 @@ describe("ReaderSettingsPanel", () => {
     expect(screen.getByRole("heading", { name: "Font Size" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Line Height" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Alignment" })).toBeTruthy();
+
+    const headings = screen
+      .getAllByRole("heading")
+      .map((heading) => heading.textContent);
+    expect(headings.indexOf("Theme")).toBeGreaterThan(
+      headings.indexOf("Alignment"),
+    );
+
+    fireEvent.click(screen.getByText("Book styles"));
+    expect(onUpdateSettings).toHaveBeenCalledWith({
+      publisherBookStylingEnabled: true,
+    });
   });
 });

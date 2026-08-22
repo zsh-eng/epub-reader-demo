@@ -61,7 +61,7 @@ describe("BookCardActions", () => {
       clientX: 30,
       clientY: 10,
     });
-    act(() => vi.advanceTimersByTime(300));
+    act(() => vi.advanceTimersByTime(700));
     expect(onOpenMobileActions).not.toHaveBeenCalled();
 
     fireEvent.pointerDown(trigger, {
@@ -70,21 +70,31 @@ describe("BookCardActions", () => {
       clientY: 10,
     });
     expect(trigger.parentElement?.dataset.longPressPhase).toBe("pressing");
-    act(() => vi.advanceTimersByTime(199));
+    act(() => vi.advanceTimersByTime(499));
     expect(onOpenMobileActions).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(1));
 
     expect(onOpenMobileActions).not.toHaveBeenCalled();
     expect(trigger.parentElement?.dataset.longPressPhase).toBe("popping");
+    act(() => vi.advanceTimersByTime(149));
+    expect(onOpenMobileActions).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(onOpenMobileActions).not.toHaveBeenCalled();
+    expect(trigger.parentElement?.dataset.longPressPhase).toBe("popping");
+
+    // The sheet must not mount under the active finger, even after the pop.
+    act(() => vi.advanceTimersByTime(300));
+    expect(onOpenMobileActions).not.toHaveBeenCalled();
+
     fireEvent.pointerUp(trigger, {
       pointerType: "touch",
       clientX: 10,
       clientY: 10,
     });
 
-    act(() => vi.advanceTimersByTime(149));
-
+    act(() => vi.advanceTimersByTime(49));
     expect(onOpenMobileActions).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(1));

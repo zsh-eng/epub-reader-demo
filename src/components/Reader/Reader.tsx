@@ -83,6 +83,7 @@ export function Reader() {
     activeHighlightData,
     isCreatingHighlight,
     creationPosition,
+    creationText,
     selectColor,
     closeCreation,
     clearActiveHighlight,
@@ -366,6 +367,7 @@ export function Reader() {
                     highlights={sessionState.highlights}
                     isCreatingHighlight={isCreatingHighlight}
                     creationPosition={creationPosition}
+                    creationText={creationText}
                     onCreateColorSelect={selectColor}
                     onCreateClose={closeCreation}
                     activeHighlight={

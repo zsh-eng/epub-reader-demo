@@ -1,5 +1,11 @@
 import { HighlightToolbar } from "@/components/HighlightToolbar";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -11,11 +17,24 @@ vi.mock("@tanstack/react-hotkeys", () => ({
   useHotkey: vi.fn(),
 }));
 
-afterEach(cleanup);
+const originalClipboard = navigator.clipboard;
+
+afterEach(() => {
+  cleanup();
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: originalClipboard,
+  });
+});
 
 describe("HighlightToolbar", () => {
-  it("uses the desktop floating pill and selects a color on click", () => {
+  it("uses the desktop floating pill with color and copy actions", async () => {
     const onColorSelect = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     const { container } = render(
       createElement(HighlightToolbar, {
         position: { x: 200, y: 200 },
@@ -23,6 +42,7 @@ describe("HighlightToolbar", () => {
         onClose: vi.fn(),
         currentColor: "green",
         onDelete: vi.fn(),
+        textToCopy: "A selected passage",
       }),
     );
 
@@ -39,5 +59,12 @@ describe("HighlightToolbar", () => {
     fireEvent.click(yellow);
     expect(onColorSelect).toHaveBeenCalledOnce();
     expect(onColorSelect).toHaveBeenCalledWith("yellow");
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy highlighted text" }),
+    );
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith("A selected passage"),
+    );
   });
 });

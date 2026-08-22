@@ -177,8 +177,6 @@ export function ReaderSettingsList({
         contentClassName="min-w-0 max-w-full overflow-x-hidden"
       >
         <div className="space-y-7 px-4 py-3">
-          <ThemePanel settings={settings} onUpdateSettings={onUpdateSettings} />
-          <div className="h-px bg-border/60" aria-hidden="true" />
           <TypographyPanel
             settings={settings}
             onUpdateSettings={onUpdateSettings}
@@ -192,6 +190,8 @@ export function ReaderSettingsList({
             section="layout"
             showContentWidthControl={false}
           />
+          <div className="h-px bg-border/60" aria-hidden="true" />
+          <ThemePanel settings={settings} onUpdateSettings={onUpdateSettings} />
         </div>
       </ScrollArea>
     </div>

@@ -27,7 +27,7 @@ import {
   MoveVertical,
   Plus,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 interface TypographyPanelProps {
   settings: ReaderSettings;
@@ -80,6 +80,8 @@ export function TypographyPanel({
     { value: "full", label: "Full" },
   ];
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const publisherStylingSwitchId = useId();
+  const publisherBodySizeSwitchId = useId();
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -239,28 +241,36 @@ export function TypographyPanel({
       {section === "type" && (
         <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
           <h4 className={sectionLabelClassName}>Publisher Styling</h4>
-          <div className="flex items-center justify-between gap-4">
+          <label
+            htmlFor={publisherStylingSwitchId}
+            className="flex cursor-pointer items-center justify-between gap-4"
+          >
             <span className="text-sm font-medium text-foreground">
               Book styles
             </span>
             <Switch
+              id={publisherStylingSwitchId}
               checked={settings.publisherBookStylingEnabled}
               onCheckedChange={(publisherBookStylingEnabled) =>
                 onUpdateSettings({ publisherBookStylingEnabled })
               }
               aria-label="Toggle publisher book styling"
             />
-          </div>
-          <div
+          </label>
+          <label
+            htmlFor={publisherBodySizeSwitchId}
             className={cn(
               "flex items-center justify-between gap-4",
-              !settings.publisherBookStylingEnabled && "opacity-50",
+              settings.publisherBookStylingEnabled
+                ? "cursor-pointer"
+                : "cursor-not-allowed opacity-50",
             )}
           >
             <span className="text-sm font-medium text-foreground">
               Match body text size
             </span>
             <Switch
+              id={publisherBodySizeSwitchId}
               checked={settings.matchPublisherBodyTextSize}
               onCheckedChange={(matchPublisherBodyTextSize) =>
                 onUpdateSettings({ matchPublisherBodyTextSize })
@@ -268,7 +278,7 @@ export function TypographyPanel({
               disabled={!settings.publisherBookStylingEnabled}
               aria-label="Toggle matched publisher body text size"
             />
-          </div>
+          </label>
         </div>
       )}
 
