@@ -1,4 +1,5 @@
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { CopyFeedbackIcon } from "@/components/ui/copy-feedback-icon";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -45,7 +46,6 @@ import { cn } from "@/lib/utils";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { layout, prepare, type PreparedText } from "@chenglou/pretext";
 import {
-  AnimatePresence,
   LayoutGroup,
   animate,
   motion,
@@ -56,10 +56,8 @@ import {
   type MotionValue,
 } from "motion/react";
 import {
-  ArrowRight,
   BookOpen,
   BookOpenText,
-  Check,
   Copy,
   Ellipsis,
   Highlighter,
@@ -90,7 +88,7 @@ const QUOTE_CARD_CHROME_HEIGHT = 80;
 const QUOTE_CARD_MIN_HEIGHT = 96;
 const WIDE_QUOTE_MIN_LINES = 7;
 const BOOK_TITLE_MAX_FONT = '500 44px "EB Garamond"';
-const BOOK_INDEX_PIN_STORAGE_KEY = "highlights-masonry-book-index-pinned";
+const BOOK_INDEX_PIN_STORAGE_KEY = "highlights-masonry-book-index-pinned-v2";
 const BOOK_INDEX_ACTIVE_LAYOUT_ID = "highlights-book-index-active";
 const BOOK_INDEX_ACTIVE_TRANSITION = {
   type: "spring" as const,
@@ -608,24 +606,32 @@ function MobileBookIndex({
   const reducedMotion = useReducedMotion() ?? false;
 
   return (
-    <LayoutGroup id={layoutGroupId}>
-      <nav
-        aria-label="Books on this highlights page"
-        className="relative isolate -mx-4 mt-3 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 lg:hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-      >
-        {groups.map((group) => (
-          <BookIndexItem
-            key={group.book.id}
-            group={group}
-            isActive={group.book.id === activeBookId}
-            layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
-            onNavigate={() => onNavigate(group.book.id)}
-            reducedMotion={reducedMotion}
-            className="border bg-card/80 shadow-sm"
-          />
-        ))}
-      </nav>
-    </LayoutGroup>
+    <div className="lg:hidden">
+      <div className="flex items-baseline gap-2 px-1 pb-1.5">
+        <h2 className="font-serif text-base font-medium">In this page</h2>
+        <span className="text-[11px] text-muted-foreground">
+          {groups.length}
+        </span>
+      </div>
+      <LayoutGroup id={layoutGroupId}>
+        <nav
+          aria-label="Books on this highlights page"
+          className="relative isolate -mx-4 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+        >
+          {groups.map((group) => (
+            <BookIndexItem
+              key={group.book.id}
+              group={group}
+              isActive={group.book.id === activeBookId}
+              layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
+              onNavigate={() => onNavigate(group.book.id)}
+              reducedMotion={reducedMotion}
+              className="border bg-card/95 shadow-sm"
+            />
+          ))}
+        </nav>
+      </LayoutGroup>
+    </div>
   );
 }
 
@@ -750,13 +756,6 @@ function BookDetailsTile({
         <span className="size-1.5 rounded-full bg-green-primary" />
         <span>{countLabel}</span>
       </div>
-      <Link
-        to={`/reader/${group.book.id}`}
-        className="mt-6 inline-flex w-fit items-center gap-2 rounded-full border bg-card px-4 py-2 text-sm font-medium outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97]"
-      >
-        Continue reading
-        <ArrowRight className="size-3.5" aria-hidden="true" />
-      </Link>
     </div>
   );
 }
@@ -774,12 +773,16 @@ function BookCoverTile({
     skip: !group.book.coverContentHash,
   });
   const cover = (
-    <div className="h-full overflow-hidden rounded-2xl border border-border/50 bg-secondary/25">
+    <Link
+      to={`/reader/${group.book.id}`}
+      aria-label={`Open ${group.book.title}`}
+      className="group relative block h-full overflow-hidden rounded-2xl border border-border/50 bg-secondary/25 outline-none transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+    >
       {coverUrl ? (
         <img
           src={coverUrl}
           alt={`Cover of ${group.book.title}`}
-          className="size-full object-cover"
+          className="size-full object-cover transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.015]"
         />
       ) : (
         <div className="flex size-full items-center justify-center bg-secondary">
@@ -792,7 +795,10 @@ function BookCoverTile({
           </span>
         </div>
       )}
-    </div>
+      <span className="absolute right-3 bottom-3 grid size-9 place-items-center rounded-full border border-border/60 bg-background/90 text-foreground shadow-md backdrop-blur-md transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-105">
+        <BookOpen className="size-4" aria-hidden="true" />
+      </span>
+    </Link>
   );
 
   return (
@@ -820,6 +826,7 @@ function HighlightQuoteCard({
   onCopy,
   onOpenActions,
   onOpenBook,
+  isCopied,
 }: {
   highlight: SyncedHighlight;
   presentation: HighlightCardPresentation;
@@ -829,6 +836,7 @@ function HighlightQuoteCard({
   onCopy: (highlight: SyncedHighlight) => void;
   onOpenActions: (highlight: SyncedHighlight) => void;
   onOpenBook: (highlight: SyncedHighlight) => void;
+  isCopied: boolean;
 }) {
   const usesWordCloud = presentation === "word-cloud";
   const usesCompactQuote = presentation === "compact-quote";
@@ -923,9 +931,14 @@ function HighlightQuoteCard({
                 aria-hidden="true"
               />
             ) : (
-              <Copy
-                className="ml-1 size-3.5 opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70"
-                aria-hidden="true"
+              <CopyFeedbackIcon
+                copied={isCopied}
+                className={cn(
+                  "ml-1 size-3.5 transition-opacity duration-150",
+                  isCopied
+                    ? "text-foreground opacity-100"
+                    : "opacity-0 group-hover:opacity-70 group-focus-visible:opacity-70",
+                )}
               />
             )}
             <span className="sr-only">
@@ -977,7 +990,6 @@ function HighlightActionsSheet({
   onCopy: (highlight: SyncedHighlight) => Promise<boolean>;
   onOpenBook: (highlight: SyncedHighlight) => void;
 }) {
-  const reducedMotion = useReducedMotion() ?? false;
   const copyPress = useSpringPressAnimation();
   const openBookPress = useSpringPressAnimation();
   const [isCopied, setIsCopied] = useState(false);
@@ -1040,34 +1052,8 @@ function HighlightActionsSheet({
             className="flex h-14 items-center gap-3 rounded-2xl border bg-card px-4 text-left font-medium outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
             {...copyPress}
           >
-            <span className="relative grid size-8 place-items-center rounded-full bg-secondary">
-              <AnimatePresence initial={false} mode="wait">
-                <motion.span
-                  key={isCopied ? "copied" : "copy"}
-                  className="absolute grid place-items-center"
-                  initial={
-                    reducedMotion
-                      ? { opacity: 0 }
-                      : { opacity: 0, transform: "scale(0.92)" }
-                  }
-                  animate={{ opacity: 1, transform: "scale(1)" }}
-                  exit={
-                    reducedMotion
-                      ? { opacity: 0 }
-                      : { opacity: 0, transform: "scale(0.92)" }
-                  }
-                  transition={{
-                    duration: reducedMotion ? 0.1 : 0.18,
-                    ease: [0.23, 1, 0.32, 1],
-                  }}
-                >
-                  {isCopied ? (
-                    <Check className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Copy className="size-4" aria-hidden="true" />
-                  )}
-                </motion.span>
-              </AnimatePresence>
+            <span className="grid size-8 place-items-center rounded-full bg-secondary">
+              <CopyFeedbackIcon copied={isCopied} className="size-4" />
             </span>
             <span aria-live="polite">
               {isCopied ? "Copied" : "Copy highlight"}
@@ -1102,6 +1088,7 @@ function HighlightsMosaic({
   onCopy,
   onOpenActions,
   onOpenBook,
+  copiedHighlightId,
 }: {
   group: BookHighlightGroup;
   headingId: string;
@@ -1112,6 +1099,7 @@ function HighlightsMosaic({
   onCopy: (highlight: SyncedHighlight) => void;
   onOpenActions: (highlight: SyncedHighlight) => void;
   onOpenBook: (highlight: SyncedHighlight) => void;
+  copiedHighlightId: string | null;
 }) {
   const { elementRef, width } = useElementWidth();
   const { fontReady, preparedById } = usePreparedHighlights(group.highlights);
@@ -1337,6 +1325,7 @@ function HighlightsMosaic({
               onCopy={onCopy}
               onOpenActions={onOpenActions}
               onOpenBook={onOpenBook}
+              isCopied={copiedHighlightId === highlight.id}
             />
           </PositionedTile>
         );
@@ -1461,8 +1450,12 @@ export function HighlightsMasonry() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHighlight, setSelectedHighlight] =
     useState<SyncedHighlight | null>(null);
+  const [copiedHighlightId, setCopiedHighlightId] = useState<string | null>(
+    null,
+  );
+  const copiedHighlightTimerRef = useRef(0);
   const [isBookIndexPinned, setIsBookIndexPinned] = useState(
-    () => localStorage.getItem(BOOK_INDEX_PIN_STORAGE_KEY) === "true",
+    () => localStorage.getItem(BOOK_INDEX_PIN_STORAGE_KEY) !== "false",
   );
   const [selectedColors, setSelectedColors] = useState<HighlightColor[]>(() => [
     ...ALL_HIGHLIGHT_COLORS,
@@ -1542,6 +1535,10 @@ export function HighlightsMasonry() {
     if (!isMobile) setSelectedHighlight(null);
   }, [isMobile]);
 
+  useEffect(() => {
+    return () => window.clearTimeout(copiedHighlightTimerRef.current);
+  }, []);
+
   const handleToggleColor = (color: HighlightColor) => {
     setSelectedColors((current) =>
       toggleHighlightColorSelection(current, color),
@@ -1556,36 +1553,36 @@ export function HighlightsMasonry() {
     [animateAfterInstantNavigation, setActiveBookId],
   );
 
-  const copyHighlight = useCallback(
-    async (highlight: SyncedHighlight, announceWithToast: boolean) => {
-      try {
-        await navigator.clipboard.writeText(highlight.selectedText);
-        if (announceWithToast) {
-          toast.success("Highlight copied", {
-            id: "highlight-copied",
-            duration: 2200,
-          });
-        }
-        return true;
-      } catch {
-        toast.error("Could not copy highlight", {
-          id: "highlight-copy-error",
-        });
-        return false;
-      }
-    },
-    [],
-  );
+  const copyHighlight = useCallback(async (highlight: SyncedHighlight) => {
+    try {
+      await navigator.clipboard.writeText(highlight.selectedText);
+      return true;
+    } catch {
+      toast.error("Could not copy highlight", {
+        id: "highlight-copy-error",
+      });
+      return false;
+    }
+  }, []);
 
   const handleDesktopCopy = useCallback(
     (highlight: SyncedHighlight) => {
-      void copyHighlight(highlight, true);
+      void copyHighlight(highlight).then((didCopy) => {
+        if (!didCopy) return;
+
+        setCopiedHighlightId(highlight.id);
+        window.clearTimeout(copiedHighlightTimerRef.current);
+        copiedHighlightTimerRef.current = window.setTimeout(
+          () => setCopiedHighlightId(null),
+          1500,
+        );
+      });
     },
     [copyHighlight],
   );
 
   const handleMobileCopy = useCallback(
-    (highlight: SyncedHighlight) => copyHighlight(highlight, false),
+    (highlight: SyncedHighlight) => copyHighlight(highlight),
     [copyHighlight],
   );
 
@@ -1650,7 +1647,11 @@ export function HighlightsMasonry() {
           />
         </div>
         {bookIndexGroups.length > 0 && (
-          <div className="mx-auto max-w-[1600px] px-4">
+          <div className="sticky top-[4.75rem] z-20 mx-auto w-full max-w-[1600px] px-4 pt-2 lg:hidden">
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 -top-2 -bottom-3 -z-10 bg-gradient-to-b from-background/90 via-background/75 to-transparent backdrop-blur-md"
+            />
             <MobileBookIndex
               groups={bookIndexGroups}
               activeBookId={activeBookId}
@@ -1717,6 +1718,7 @@ export function HighlightsMasonry() {
                           onCopy={handleDesktopCopy}
                           onOpenActions={setSelectedHighlight}
                           onOpenBook={handleOpenBook}
+                          copiedHighlightId={copiedHighlightId}
                         />
                       </section>
                     );

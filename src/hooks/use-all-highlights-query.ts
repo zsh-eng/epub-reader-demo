@@ -5,17 +5,12 @@
  */
 
 import {
-    getAllBooks,
-    getAllHighlights,
-    type SyncedBook,
-    type SyncedHighlight,
+  getAllBooks,
+  getAllHighlights,
+  type SyncedBook,
+  type SyncedHighlight,
 } from "@/lib/db";
-import type { AnnotationColor } from "@/types/highlight";
 import { useQuery } from "@tanstack/react-query";
-
-export interface HighlightWithBook extends SyncedHighlight {
-  book: SyncedBook;
-}
 
 export interface BookHighlightGroup {
   book: SyncedBook;
@@ -72,64 +67,6 @@ function groupHighlightsByBook(
   groups.sort((a, b) => b.mostRecentHighlight - a.mostRecentHighlight);
 
   return groups;
-}
-
-/**
- * Filter highlights by color
- */
-export function filterByColors(
-  groups: BookHighlightGroup[],
-  selectedColors: AnnotationColor[],
-): BookHighlightGroup[] {
-  if (selectedColors.length === 0) {
-    return groups; // No filter = show all
-  }
-
-  return groups
-    .map((group) => ({
-      ...group,
-      highlights: group.highlights.filter((h) =>
-        selectedColors.includes(h.color),
-      ),
-    }))
-    .filter((group) => group.highlights.length > 0);
-}
-
-/**
- * Filter highlights by search query
- */
-export function filterBySearch(
-  groups: BookHighlightGroup[],
-  query: string,
-): BookHighlightGroup[] {
-  if (!query.trim()) {
-    return groups;
-  }
-
-  const lowerQuery = query.toLowerCase();
-
-  return groups
-    .map((group) => {
-      // Check if book title/author matches
-      const bookMatches =
-        group.book.title.toLowerCase().includes(lowerQuery) ||
-        group.book.author.toLowerCase().includes(lowerQuery);
-
-      if (bookMatches) {
-        return group; // Return all highlights if book matches
-      }
-
-      // Filter highlights by text content
-      const filteredHighlights = group.highlights.filter((h) =>
-        h.selectedText.toLowerCase().includes(lowerQuery),
-      );
-
-      return {
-        ...group,
-        highlights: filteredHighlights,
-      };
-    })
-    .filter((group) => group.highlights.length > 0);
 }
 
 /**

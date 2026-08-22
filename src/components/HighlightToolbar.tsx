@@ -1,4 +1,5 @@
 import { useIsMobile } from "@/hooks/use-mobile";
+import { CopyFeedbackIcon } from "@/components/ui/copy-feedback-icon";
 import {
   HIGHLIGHT_COLORS,
   type AnnotationColor,
@@ -9,7 +10,7 @@ import {
   HIGHLIGHT_TOOLBAR_CLASS,
 } from "@/types/reader.types";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { Check, Copy, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -261,11 +262,7 @@ export function HighlightToolbar({
               copied && "text-foreground",
             )}
           >
-            {copied ? (
-              <Check className="size-5" aria-hidden="true" />
-            ) : (
-              <Copy className="size-5" aria-hidden="true" />
-            )}
+            <CopyFeedbackIcon copied={copied} className="size-5" />
           </button>
         )}
       </div>

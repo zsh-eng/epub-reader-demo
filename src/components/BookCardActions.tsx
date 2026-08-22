@@ -8,15 +8,13 @@ import {
 } from "@/components/ui/context-menu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ReadingStatus } from "@/lib/db";
-import { cn } from "@/lib/utils";
 import { Check, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
   useRef,
-  useState,
-  type PointerEvent as ReactPointerEvent,
   type ReactElement,
+  type TouchEvent as ReactTouchEvent,
 } from "react";
 
 const LONG_PRESS_HOLD_MS = 500;
@@ -24,7 +22,7 @@ const LONG_PRESS_POP_MS = 150;
 const SHEET_OPEN_AFTER_RELEASE_MS = 50;
 const LONG_PRESS_SLOP_PX = 10;
 
-type LongPressPhase = "idle" | "pressing" | "popping" | "settling";
+type LongPressPhase = "pressing" | "popping" | "settling";
 
 interface BookCardActionsProps {
   children: ReactElement;
@@ -48,16 +46,31 @@ export function BookCardActions({
   onOpenMobileActions,
 }: BookCardActionsProps) {
   const isMobile = useIsMobile();
-  const [pressPhase, setPressPhase] = useState<LongPressPhase>("idle");
+  const triggerRef = useRef<HTMLDivElement>(null);
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPointRef = useRef<{ x: number; y: number } | null>(null);
-  const pointerIsDownRef = useRef(false);
+  const touchIsActiveRef = useRef(false);
   const gestureCommittedRef = useRef(false);
-  const popCompletedRef = useRef(false);
-  const sheetOpenScheduledRef = useRef(false);
-  const didLongPressRef = useRef(false);
+  const suppressClickRef = useRef(false);
+  const commitStartedAtRef = useRef(0);
+
+  const setVisualPhase = useCallback((phase: LongPressPhase | null) => {
+    if (!triggerRef.current) return;
+
+    if (phase) {
+      triggerRef.current.dataset.longPressState = phase;
+      return;
+    }
+
+    delete triggerRef.current.dataset.longPressState;
+  }, []);
+
+  const releaseSelectionLock = useCallback(() => {
+    document.body.classList.remove("library-long-press-active");
+    document.getSelection()?.removeAllRanges();
+  }, []);
 
   const clearLongPressTimers = useCallback(() => {
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
@@ -71,71 +84,79 @@ export function BookCardActions({
   const cancelLongPress = useCallback(() => {
     clearLongPressTimers();
     startPointRef.current = null;
-    pointerIsDownRef.current = false;
+    touchIsActiveRef.current = false;
     gestureCommittedRef.current = false;
-    popCompletedRef.current = false;
-    sheetOpenScheduledRef.current = false;
-    didLongPressRef.current = false;
-    setPressPhase("idle");
-  }, [clearLongPressTimers]);
+    suppressClickRef.current = false;
+    commitStartedAtRef.current = 0;
+    setVisualPhase(null);
+    releaseSelectionLock();
+  }, [clearLongPressTimers, releaseSelectionLock, setVisualPhase]);
 
-  useEffect(() => () => clearLongPressTimers(), [clearLongPressTimers]);
+  useEffect(() => {
+    return () => {
+      clearLongPressTimers();
+      releaseSelectionLock();
+    };
+  }, [clearLongPressTimers, releaseSelectionLock]);
 
-  const openSheetIfReady = useCallback(() => {
+  const openSheetAfterRelease = useCallback(() => {
     if (!gestureCommittedRef.current) return;
-    if (!popCompletedRef.current) return;
-    if (pointerIsDownRef.current) return;
-    if (sheetOpenScheduledRef.current) return;
+    if (touchIsActiveRef.current) return;
+    if (sheetTimerRef.current) return;
 
-    sheetOpenScheduledRef.current = true;
-    // Wait until the synthetic touch click has finished before mounting a
-    // sheet beneath the release point.
+    const popElapsedMs = Date.now() - commitStartedAtRef.current;
+    const popRemainingMs = Math.max(0, LONG_PRESS_POP_MS - popElapsedMs);
     sheetTimerRef.current = setTimeout(() => {
       sheetTimerRef.current = null;
+      gestureCommittedRef.current = false;
+      commitStartedAtRef.current = 0;
       document.getSelection()?.removeAllRanges();
-      setPressPhase("settling");
+      setVisualPhase(null);
       onOpenMobileActions();
-    }, SHEET_OPEN_AFTER_RELEASE_MS);
-  }, [onOpenMobileActions]);
+      releaseSelectionLock();
+    }, popRemainingMs + SHEET_OPEN_AFTER_RELEASE_MS);
+  }, [onOpenMobileActions, releaseSelectionLock, setVisualPhase]);
 
-  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.pointerType === "mouse") return;
+  const handleTouchStart = (event: ReactTouchEvent<HTMLDivElement>) => {
+    if (event.touches.length !== 1) return;
 
     clearLongPressTimers();
-    pointerIsDownRef.current = true;
+    touchIsActiveRef.current = true;
     gestureCommittedRef.current = false;
-    popCompletedRef.current = false;
-    sheetOpenScheduledRef.current = false;
-    didLongPressRef.current = false;
-    startPointRef.current = { x: event.clientX, y: event.clientY };
-    setPressPhase("pressing");
+    suppressClickRef.current = false;
+    commitStartedAtRef.current = 0;
+    const touch = event.touches[0];
+    startPointRef.current = { x: touch.clientX, y: touch.clientY };
+    setVisualPhase("pressing");
+    document.body.classList.add("library-long-press-active");
     document.getSelection()?.removeAllRanges();
 
     holdTimerRef.current = setTimeout(() => {
       holdTimerRef.current = null;
-      if (!startPointRef.current) return;
+      if (!touchIsActiveRef.current || !startPointRef.current) return;
 
       gestureCommittedRef.current = true;
-      didLongPressRef.current = true;
+      suppressClickRef.current = true;
+      commitStartedAtRef.current = Date.now();
       startPointRef.current = null;
-      setPressPhase("popping");
+      setVisualPhase("popping");
       document.getSelection()?.removeAllRanges();
       navigator.vibrate?.(10);
 
       popTimerRef.current = setTimeout(() => {
         popTimerRef.current = null;
-        popCompletedRef.current = true;
-        openSheetIfReady();
+        setVisualPhase("settling");
       }, LONG_PRESS_POP_MS);
     }, LONG_PRESS_HOLD_MS);
   };
 
-  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const handleTouchMove = (event: ReactTouchEvent<HTMLDivElement>) => {
     const startPoint = startPointRef.current;
-    if (!startPoint) return;
+    const touch = event.touches[0];
+    if (!startPoint || !touch) return;
 
-    const movedX = Math.abs(event.clientX - startPoint.x);
-    const movedY = Math.abs(event.clientY - startPoint.y);
+    const movedX = Math.abs(touch.clientX - startPoint.x);
+    const movedY = Math.abs(touch.clientY - startPoint.y);
     if (movedX > LONG_PRESS_SLOP_PX || movedY > LONG_PRESS_SLOP_PX) {
       cancelLongPress();
     }
@@ -144,41 +165,31 @@ export function BookCardActions({
   if (isMobile) {
     return (
       <div
-        className={cn(
-          "min-w-0 touch-pan-y select-none transform-gpu transition-transform will-change-transform",
-          "[-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]",
-          "motion-reduce:transform-none motion-reduce:transition-opacity",
-          pressPhase === "pressing" && "scale-[0.96] motion-reduce:opacity-80",
-          pressPhase === "popping" && "scale-[1.05]",
-        )}
-        data-long-press-phase={pressPhase}
-        style={{
-          transitionDuration: pressPhase === "pressing" ? "450ms" : "150ms",
-          transitionTimingFunction:
-            pressPhase === "pressing"
-              ? "linear"
-              : "cubic-bezier(0.23, 1, 0.32, 1)",
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={() => {
-          pointerIsDownRef.current = false;
+        ref={triggerRef}
+        className="min-w-0 touch-pan-y select-none transform-gpu will-change-transform [transition-duration:150ms] [transition-property:transform,opacity] [transition-timing-function:cubic-bezier(0.23,1,0.32,1)] [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none] data-[long-press-state=popping]:scale-[1.05] data-[long-press-state=pressing]:scale-[0.96] data-[long-press-state=pressing]:[transition-duration:450ms] data-[long-press-state=pressing]:[transition-timing-function:linear] motion-reduce:transform-none motion-reduce:data-[long-press-state=pressing]:opacity-80"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={(event) => {
+          touchIsActiveRef.current = false;
           if (!gestureCommittedRef.current) {
             cancelLongPress();
             return;
           }
 
-          document.getSelection()?.removeAllRanges();
-          openSheetIfReady();
-        }}
-        onPointerCancel={cancelLongPress}
-        onDragStart={(event) => event.preventDefault()}
-        onContextMenu={(event) => event.preventDefault()}
-        onClickCapture={(event) => {
-          if (!didLongPressRef.current) return;
           event.preventDefault();
           event.stopPropagation();
-          didLongPressRef.current = false;
+          startPointRef.current = null;
+          document.getSelection()?.removeAllRanges();
+          openSheetAfterRelease();
+        }}
+        onTouchCancel={cancelLongPress}
+        onDragStart={(event) => event.preventDefault()}
+        onContextMenuCapture={(event) => event.preventDefault()}
+        onClickCapture={(event) => {
+          if (!suppressClickRef.current) return;
+          event.preventDefault();
+          event.stopPropagation();
+          suppressClickRef.current = false;
         }}
       >
         {children}

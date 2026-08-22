@@ -74,7 +74,7 @@ describe("computeHighlightsBentoLayout", () => {
     });
   });
 
-  it("uses a wide cover footprint beside the book details at low density", () => {
+  it("keeps a low-density cover to one column beside the book details", () => {
     const items = [
       { id: "a", height: 160 },
       { id: "b", height: 120 },
@@ -93,17 +93,17 @@ describe("computeHighlightsBentoLayout", () => {
     ).toMatchObject({ column: 0, top: 0 });
     expect(
       mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
-    ).toMatchObject({ column: 1, columnSpan: 2, top: 0 });
+    ).toMatchObject({ column: 1, columnSpan: 1, top: 0 });
     expect(
       alternateMosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
-    ).toMatchObject({ column: 2, columnSpan: 2, top: 0 });
-    expect(mosaic.coverWidth).toBeCloseTo(496, 1);
+    ).toMatchObject({ column: 2, columnSpan: 1, top: 0 });
+    expect(mosaic.coverWidth).toBeCloseTo(244, 1);
     expect(mosaic.coverWidth).toBe(
       mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID)?.width,
     );
     expect(
       mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID)?.height,
-    ).toBeGreaterThan(630);
+    ).toBeGreaterThan(360);
   });
 
   it("fills interior holes without extending the content boundary", () => {

@@ -66,5 +66,12 @@ describe("HighlightToolbar", () => {
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith("A selected passage"),
     );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole("button", { name: "Copy highlighted text" })
+          .querySelector(".lucide-check"),
+      ).toBeTruthy(),
+    );
   });
 });

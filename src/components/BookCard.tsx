@@ -165,15 +165,16 @@ export function BookCard({
         ref={setCardElement}
         className="group relative flex w-full flex-col gap-3"
         onFocusCapture={handlePrefetch}
-        onPointerDown={handlePrefetch}
-        onPointerEnter={handlePrefetch}
+        onPointerEnter={(event) => {
+          if (event.pointerType !== "touch") handlePrefetch();
+        }}
       >
         {/* Book Cover Container */}
         <div
           onClick={handleClick}
           className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
         >
-          <div className="relative h-full w-full transition-transform duration-300 ease-out group-hover:-translate-y-2 group-hover:scale-[1.02]">
+          <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02]">
             <BookCoverVisual coverUrl={coverUrl} title={book.title} />
           </div>
         </div>

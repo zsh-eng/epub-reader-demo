@@ -307,8 +307,9 @@ export function computeHighlightsBentoLayout(
 
   const hasEnoughHighlightsToNestCover =
     items.length >= Math.max(5, columnCount + 3);
-  const coverColumnSpan =
-    !hasEnoughHighlightsToNestCover && columnCount >= 3 ? 2 : 1;
+  // A cover remains book-sized even in sparse sections. Let quote cards use
+  // wide spans, but never enlarge the cover beyond one masonry column.
+  const coverColumnSpan = 1;
   const lowDensityCoverColumn =
     columnCount === 1
       ? 0
