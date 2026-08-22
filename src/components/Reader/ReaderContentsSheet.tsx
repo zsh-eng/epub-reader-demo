@@ -9,15 +9,19 @@ import { useId, useLayoutEffect, useMemo, useRef, type Ref } from "react";
 import { ReaderSheet } from "./shared/ReaderSheet";
 import type { ChapterEntry } from "./types";
 
-interface ReaderContentsSheetProps {
+interface ReaderContentsPanelProps {
   isOpen: boolean;
-  onClose: () => void;
-  onBack: () => void;
   toc: TOCItem[];
   chapterEntries: ChapterEntry[];
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
+  className?: string;
+}
+
+interface ReaderContentsSheetProps extends ReaderContentsPanelProps {
+  onClose: () => void;
+  onBack: () => void;
 }
 
 interface FlattenedTocItem {
@@ -382,16 +386,15 @@ function ChapterRow({
   );
 }
 
-export function ReaderContentsSheet({
+export function ReaderContentsPanel({
   isOpen,
-  onClose,
-  onBack,
   toc,
   chapterEntries,
   chapterStartPages,
   currentChapterHref,
   onNavigateToHref,
-}: ReaderContentsSheetProps) {
+  className,
+}: ReaderContentsPanelProps) {
   const scrollAreaRootRef = useRef<HTMLDivElement | null>(null);
   const currentItemRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(false);
@@ -428,13 +431,90 @@ export function ReaderContentsSheet({
   }, [isOpen, currentTocItem?.id]);
 
   return (
+    <div
+      className={cn(
+        "flex h-[32rem] min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden",
+        className,
+      )}
+    >
+      <div
+        ref={scrollAreaRootRef}
+        className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden"
+      >
+        <ScrollArea className="h-full w-full min-w-0 max-w-full overflow-x-hidden px-4 pb-3 pt-2">
+          {contentsModel.items.length > 0 ? (
+            <LayoutGroup id={layoutGroupId}>
+              <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-1">
+                {contentsModel.sections.map((section, index) => {
+                  const followsGroupedSection =
+                    !section.heading &&
+                    Boolean(contentsModel.sections[index - 1]?.heading);
+
+                  return (
+                    <section
+                      key={section.id}
+                      className={cn(
+                        "space-y-3",
+                        !section.heading && "space-y-1",
+                        followsGroupedSection &&
+                          "border-t border-border/60 pt-3",
+                      )}
+                    >
+                      <SectionHeading
+                        section={section}
+                        currentItemId={currentTocItem?.id}
+                        onSelect={onNavigateToHref}
+                        currentRef={currentItemRef}
+                      />
+
+                      <div className="space-y-1">
+                        {section.rows.map((item) => (
+                          <ChapterRow
+                            key={item.id}
+                            item={item}
+                            currentItemId={currentTocItem?.id}
+                            layoutId="reader-contents-active-chapter"
+                            onSelect={onNavigateToHref}
+                            reducedMotion={reducedMotion}
+                            currentRef={currentItemRef}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </LayoutGroup>
+          ) : (
+            <div className="flex h-full min-h-48 flex-col items-center justify-center px-6 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-secondary/25 text-muted-foreground">
+                <List className="size-5" />
+              </div>
+              <p className="mt-4 text-sm font-medium text-foreground">
+                No table of contents available
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This book does not expose chapter navigation metadata.
+              </p>
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+    </div>
+  );
+}
+
+export function ReaderContentsSheet({
+  isOpen,
+  onClose,
+  onBack,
+  ...panelProps
+}: ReaderContentsSheetProps) {
+  return (
     <ReaderSheet
       open={isOpen}
       onOpenChange={(open) => {
-        if (open) {
-          return;
-        }
-
+        if (open) return;
         onClose();
       }}
       title="Contents"
@@ -460,71 +540,7 @@ export function ReaderContentsSheet({
         </div>
       }
     >
-      <div className="flex h-[32rem] min-h-0 w-full min-w-0 max-w-full flex-col overflow-hidden">
-        <div
-          ref={scrollAreaRootRef}
-          className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-hidden"
-        >
-          <ScrollArea className="h-full w-full min-w-0 max-w-full overflow-x-hidden px-4 pb-3 pt-2">
-            {contentsModel.items.length > 0 ? (
-              <LayoutGroup id={layoutGroupId}>
-                <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-1">
-                  {contentsModel.sections.map((section, index) => {
-                    const followsGroupedSection =
-                      !section.heading &&
-                      Boolean(contentsModel.sections[index - 1]?.heading);
-
-                    return (
-                      <section
-                        key={section.id}
-                        className={cn(
-                          "space-y-3",
-                          !section.heading && "space-y-1",
-                          followsGroupedSection &&
-                            "border-t border-border/60 pt-3",
-                        )}
-                      >
-                        <SectionHeading
-                          section={section}
-                          currentItemId={currentTocItem?.id}
-                          onSelect={onNavigateToHref}
-                          currentRef={currentItemRef}
-                        />
-
-                        <div className="space-y-1">
-                          {section.rows.map((item) => (
-                            <ChapterRow
-                              key={item.id}
-                              item={item}
-                              currentItemId={currentTocItem?.id}
-                              layoutId="reader-contents-active-chapter"
-                              onSelect={onNavigateToHref}
-                              reducedMotion={reducedMotion}
-                              currentRef={currentItemRef}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    );
-                  })}
-                </div>
-              </LayoutGroup>
-            ) : (
-              <div className="flex h-full min-h-48 flex-col items-center justify-center px-6 text-center">
-                <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-secondary/25 text-muted-foreground">
-                  <List className="size-5" />
-                </div>
-                <p className="mt-4 text-sm font-medium text-foreground">
-                  No table of contents available
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This book does not expose chapter navigation metadata.
-                </p>
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-      </div>
+      <ReaderContentsPanel isOpen={isOpen} {...panelProps} />
     </ReaderSheet>
   );
 }

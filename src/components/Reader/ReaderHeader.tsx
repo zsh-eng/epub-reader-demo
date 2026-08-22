@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, MoreHorizontal } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, PanelRight } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReaderChromeSurfaceProps } from "./chrome";
 
@@ -41,7 +41,7 @@ const CHROME_FADE_OUT_TRANSITION = {
   ease: "easeIn" as const,
 };
 const CHROME_BUTTON_CLASS_NAME =
-  "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground hover:bg-background hover:text-foreground";
+  "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background hover:text-foreground active:scale-95 motion-reduce:active:scale-100";
 
 interface ReaderHeaderProps {
   chromeVisible: boolean;
@@ -173,16 +173,17 @@ export function ReaderHeader({
             {bookTitle}
           </p>
 
-          {/* Zone 3 — Right: Menu button */}
+          {/* Zone 3 — Right: mobile launcher or desktop sidebar trigger. */}
           <div className="flex items-center justify-end">
             <Button
               variant="ghost"
               size="icon-sm"
               onClick={onOpenMenu}
-              aria-label="Open menu"
+              aria-label="Open reader tools"
               className={CHROME_BUTTON_CLASS_NAME}
             >
-              <MoreHorizontal className="size-4" />
+              <MoreHorizontal className="size-4 md:hidden" />
+              <PanelRight className="hidden size-4 md:block" />
             </Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-export type ReaderSheetId = "tools" | "contents" | "settings";
+export type ReaderSheetId = "tools" | "contents" | "search" | "settings";
 
 /**
  * Reader-facing chapter metadata derived from the EPUB spine.

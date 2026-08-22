@@ -94,14 +94,14 @@ Recommended sequencing:
 
 ## Current App Product Work
 
-- [ ] OLED reading theme.
-- [ ] Improve the Library page design.
+- [ ] OLED reading theme (the text shouldn't be pure white, it should be something dimmer to suit reading at nightime).
+- [x] Improve the Library page design.
 - [ ] Explore searchable list-style Library design.
-- [ ] Make Continue Reading order by most recently read.
-- [ ] Make the front page and Continue Reading screen sleeker.
+- [x] Make Continue Reading order by most recently read.
+- [x] Make the front page and Continue Reading screen sleeker.
 - [ ] Improve book search.
-- [ ] Add sort order for books, with most recently read first.
-- [ ] Consider bringing back auto-start-reading behavior.
+- [x] Add sort order for books, with most recently read first.
+- [x] Consider bringing back auto-start-reading behavior.
 - [ ] Improve the add-new-EPUB flow.
 - [x] Remove unnecessary "loading library" UI.
 - [ ] Standardize the UI font, likely around DM Sans.
@@ -110,8 +110,6 @@ Recommended sequencing:
 
 ## Reader Experience Work
 
-- [ ] Add a better ebook loading screen.
-- [ ] Update the reader loading spinner design.
 - [ ] Keep chrome hidden during initial reader load.
 - [ ] Fade in the first page on mount if it feels better.
 - [ ] Add slide gestures for previous and next page.
@@ -244,36 +242,43 @@ Recommended sequencing:
 - [x] Remove the sidebar icon (or make it part of the header) when in mobile (or maybe even desktop mode)
 - [x] New "continue reading" screen
 - [x] For mobile, sessions, devices screen etc. should have back button, not the 3 dots for the sidebar
-- [ ] Sessions screen
+- [x] Sessions screen
 	- [x] Recent reading state
 		- [x] Still not good enough - it should show book cover - something specific to *you* (we can use the mobile same card)
 	- [x] At least 5 minutes of reading time, rather than 10 to show on the "recent reading"
 	- [x] Reading space?
 	- [x] Spacing between months and "year" is ugly
-	- [ ] Fix hover bug again where it looks like there are 2 elements because of the user hovering (update AGENTS.md)
 	- [x] Length of the button should not animate (e.g. switching from "month" to "all"). Also switching from All back to month - (let's say) I already selected an earlier month before I switched to the all - it should just be instant, it shouldn't animate from left to right
 
-- [ ] Better long press options
+- [x] Better long press options
+- [x] Continue reading
+- [x] Fix theme settings sheet
 
-- [ ] New highlights page: 'bento style'
-	- [ ] Space at the bottom of the page is only important if the last book's section is too short
-	- [ ] No matching highlights Should not be scrollable
-	- [ ]  X button should be more discreet and normal for a searchbar - it looks ugly  - and make the highlight circles bigger
-	- [ ] "Search all highlights" has too much left padding, and the highlight circles should be a bit more left - too little padding on the right side (optically should be aligned based on roudness)
+- [x] New highlights page: 'bento style'
+	- [x] Space at the bottom of the page is only important if the last book's section is too short
+	- [x] No matching highlights Should not be scrollable
+	- [x]  X button should be more discreet and normal for a searchbar - it looks ugly  - and make the highlight circles bigger
+	- [x] "Search all highlights" has too much left padding, and the highlight circles should be a bit more left - too little padding on the right side (optically should be aligned based on roudness)
 	
-	- [ ] Where to put the bookcover - alternate, if low number of highlights (cannot tesselate, then we just put the book cover next to the continue reading - this is column 1, book cover columns 2-3 for example). If enough highlights, can put 1-2, 2-3, etc. columns for varied look, usually nested somewhere between the highlights
-	- [ ] Long quotes can take up 2 columns as well (though we need to think of a nice way to lay it out)
-	- [ ] Large search bar, when scroll down shrinks a little as it becomes stickied
-	- [ ] Mobile design
-		- [ ] On mobile, clicking a highlight opens a sheet with 2 options - copy or open the book to that page
-		- [ ] Copy should be animated
+	- [x] Where to put the bookcover - alternate, if low number of highlights (cannot tesselate, then we just put the book cover next to the continue reading - this is column 1, book cover columns 2-3 for example). If enough highlights, can put 1-2, 2-3, etc. columns for varied look, usually nested somewhere between the highlights
+	- [x] Long quotes can take up 2 columns as well (though we need to think of a nice way to lay it out)
+	- [x] Large search bar, when scroll down shrinks a little as it becomes stickied
+	- [x] Mobile design
+		- [x] On mobile, clicking a highlight opens a sheet with 2 options - copy or open the book to that page
+		- [x] Copy should be animated
+	- [x] Right click context menu on desktop should do the same
+	- [x] Desktop clicking the highlight should copy (and trigger a toast), should not be jumping straight to book
+	- [x] Entry animations
+	- [x] Word cloud idea
 
-- [ ] Desktop highlight bar is ugly
-	- [ ] Buttons shouldn't have any "dead zone" between them
+- [x] Desktop highlight bar is ugly
+	- [x] Buttons shouldn't have any "dead zone" between them
+	
+- [ ] Sessions screen: Fix hover bug again where it looks like there are 2 elements because of the user hovering (update AGENTS.md)
+- [ ] Immediately "start reading" after adding a new book in (some kind of card on mobile?)
+- [ ] Carousel / horizontal scroll style for the continue reading on mobile (maybe slightly smaller cards)
+- [ ] Flicker bug for overscrolling in the sessions page
 
-Continue resolving papercuts in EPUB Reader Demo
-Remove reader "preparing book" - consider other animations?
 Flicker
-Immediately "start reading" after adding a new book in
 "Slow network" messing up the loads
 Install Emil animations and figure out if something makes sense for the animation

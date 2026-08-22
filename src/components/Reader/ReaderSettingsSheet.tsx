@@ -9,6 +9,7 @@ import {
   SegmentedTabsTrigger,
 } from "@/components/ui/segmented-controls";
 import type { ReaderSettings } from "@/types/reader.types";
+import { cn } from "@/lib/utils";
 import { AlignLeft, ChevronLeft, Palette, Type } from "lucide-react";
 import { useState } from "react";
 import { ReaderSheet } from "./shared/ReaderSheet";
@@ -20,6 +21,13 @@ interface ReaderSettingsPanelProps {
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
   activeTab: ReaderSettingsPanelTab;
   onActiveTabChange: (tab: ReaderSettingsPanelTab) => void;
+  className?: string;
+}
+
+interface ReaderSettingsListProps {
+  settings: ReaderSettings;
+  onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
+  className?: string;
 }
 
 interface ReaderSettingsSheetProps {
@@ -81,6 +89,7 @@ export function ReaderSettingsPanel({
   onUpdateSettings,
   activeTab,
   onActiveTabChange,
+  className,
 }: ReaderSettingsPanelProps) {
   return (
     <SegmentedTabs
@@ -88,7 +97,10 @@ export function ReaderSettingsPanel({
       onValueChange={(value) =>
         onActiveTabChange(value as ReaderSettingsPanelTab)
       }
-      className="mt-3 flex h-[30rem] min-h-0 w-full max-w-full flex-col overflow-x-hidden"
+      className={cn(
+        "mt-3 flex h-[30rem] min-h-0 w-full max-w-full flex-col overflow-x-hidden",
+        className,
+      )}
     >
       <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-3 rounded-full bg-secondary/50 p-1 self-center">
         <SegmentedTabsTrigger
@@ -143,5 +155,45 @@ export function ReaderSettingsPanel({
         </SegmentedTabsContent>
       </ScrollArea>
     </SegmentedTabs>
+  );
+}
+
+/** Desktop settings use one continuous list because the sidebar has height. */
+export function ReaderSettingsList({
+  settings,
+  onUpdateSettings,
+  className,
+}: ReaderSettingsListProps) {
+  return (
+    <div
+      className={cn(
+        "flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden",
+        className,
+      )}
+    >
+      <ScrollArea
+        className="min-h-0 w-full max-w-full flex-1"
+        viewportClassName="overflow-x-hidden"
+        contentClassName="min-w-0 max-w-full overflow-x-hidden"
+      >
+        <div className="space-y-7 px-4 py-3">
+          <ThemePanel settings={settings} onUpdateSettings={onUpdateSettings} />
+          <div className="h-px bg-border/60" aria-hidden="true" />
+          <TypographyPanel
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            section="type"
+            showContentWidthControl={false}
+          />
+          <div className="h-px bg-border/60" aria-hidden="true" />
+          <TypographyPanel
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            section="layout"
+            showContentWidthControl={false}
+          />
+        </div>
+      </ScrollArea>
+    </div>
   );
 }

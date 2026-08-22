@@ -9,18 +9,21 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ReadingStatus } from "@/lib/db";
 import { Check, Trash2 } from "lucide-react";
-import { motion, useAnimationControls, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   useCallback,
   useEffect,
   useRef,
+  useState,
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from "react";
 
-const LONG_PRESS_HOLD_MS = 550;
-const LONG_PRESS_COMPRESSION_MS = 100;
+const LONG_PRESS_HOLD_MS = 200;
+const LONG_PRESS_POP_MS = 150;
 const LONG_PRESS_SLOP_PX = 10;
+
+type LongPressPhase = "idle" | "pressing" | "popping" | "settling";
 
 interface BookCardActionsProps {
   children: ReactElement;
@@ -45,81 +48,55 @@ export function BookCardActions({
 }: BookCardActionsProps) {
   const isMobile = useIsMobile();
   const prefersReducedMotion = useReducedMotion();
-  const pressControls = useAnimationControls();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pressPhase, setPressPhase] = useState<LongPressPhase>("idle");
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sheetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startPointRef = useRef<{ x: number; y: number } | null>(null);
   const didLongPressRef = useRef(false);
 
-  const clearLongPressTracking = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
-    startPointRef.current = null;
+  const clearLongPressTimers = useCallback(() => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    if (sheetTimerRef.current) clearTimeout(sheetTimerRef.current);
+    holdTimerRef.current = null;
+    sheetTimerRef.current = null;
   }, []);
 
-  const animateToRest = useCallback(
-    (withPop: boolean) => {
-      if (prefersReducedMotion) {
-        void pressControls.start({
-          opacity: 1,
-          transition: { duration: 0.1, ease: "easeOut" },
-        });
-        return;
-      }
-
-      void pressControls.start({
-        transform: "scale(1)",
-        transition: {
-          type: "spring",
-          duration: withPop ? 0.3 : 0.16,
-          bounce: withPop ? 0.25 : 0,
-        },
-      });
-    },
-    [prefersReducedMotion, pressControls],
-  );
-
   const cancelLongPress = useCallback(() => {
-    clearLongPressTracking();
-    animateToRest(false);
-  }, [animateToRest, clearLongPressTracking]);
+    clearLongPressTimers();
+    startPointRef.current = null;
+    didLongPressRef.current = false;
+    setPressPhase("idle");
+  }, [clearLongPressTimers]);
 
-  useEffect(() => () => clearLongPressTracking(), [clearLongPressTracking]);
+  useEffect(() => () => clearLongPressTimers(), [clearLongPressTimers]);
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse") return;
 
-    clearLongPressTracking();
+    clearLongPressTimers();
     didLongPressRef.current = false;
     startPointRef.current = { x: event.clientX, y: event.clientY };
-    // Delay visual feedback until the hold is deliberate. The final 100 ms
-    // compression then completes before the sheet opens and the card rebounds.
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
+    setPressPhase("pressing");
+    document.getSelection()?.removeAllRanges();
+
+    holdTimerRef.current = setTimeout(() => {
+      holdTimerRef.current = null;
       if (!startPointRef.current) return;
 
-      void pressControls.start(
-        prefersReducedMotion
-          ? {
-              opacity: 0.82,
-              transition: { duration: 0.1, ease: [0.23, 1, 0.32, 1] },
-            }
-          : {
-              transform: "scale(0.97)",
-              transition: { duration: 0.1, ease: [0.23, 1, 0.32, 1] },
-            },
-      );
+      didLongPressRef.current = true;
+      startPointRef.current = null;
+      setPressPhase("popping");
+      document.getSelection()?.removeAllRanges();
+      navigator.vibrate?.(10);
 
-      timerRef.current = setTimeout(() => {
-        timerRef.current = null;
-        if (!startPointRef.current) return;
-
-        didLongPressRef.current = true;
-        clearLongPressTracking();
-        document.getSelection()?.removeAllRanges();
-        animateToRest(true);
-        navigator.vibrate?.(10);
+      // Preserve the old library interaction: the cover grows past rest first,
+      // then the sheet enters after that pop has become visible.
+      const sheetDelay = prefersReducedMotion ? 0 : LONG_PRESS_POP_MS;
+      sheetTimerRef.current = setTimeout(() => {
+        sheetTimerRef.current = null;
+        setPressPhase("settling");
         onOpenMobileActions();
-      }, LONG_PRESS_COMPRESSION_MS);
+      }, sheetDelay);
     }, LONG_PRESS_HOLD_MS);
   };
 
@@ -135,27 +112,50 @@ export function BookCardActions({
   };
 
   if (isMobile) {
+    const transform =
+      pressPhase === "pressing"
+        ? "scale(0.96)"
+        : pressPhase === "popping"
+          ? "scale(1.05)"
+          : "scale(1)";
+    const transition =
+      pressPhase === "pressing"
+        ? { duration: 0.2, ease: "linear" as const }
+        : pressPhase === "popping"
+          ? { duration: 0.15, ease: [0.23, 1, 0.32, 1] as const }
+          : pressPhase === "settling"
+            ? { type: "spring" as const, duration: 0.3, bounce: 0.25 }
+            : { duration: 0.15, ease: [0.23, 1, 0.32, 1] as const };
+
     return (
       <motion.div
         className="min-w-0 touch-pan-y select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
-        initial={{ transform: "scale(1)", opacity: 1 }}
-        animate={pressControls}
+        data-long-press-phase={pressPhase}
+        initial={false}
+        animate={
+          prefersReducedMotion
+            ? {
+                opacity: pressPhase === "pressing" ? 0.82 : 1,
+                transform: "scale(1)",
+              }
+            : { opacity: 1, transform }
+        }
+        transition={
+          prefersReducedMotion
+            ? { duration: 0.1, ease: [0.23, 1, 0.32, 1] }
+            : transition
+        }
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={() => {
-          if (didLongPressRef.current) {
-            clearLongPressTracking();
-            return;
-          }
+          if (didLongPressRef.current) return;
           cancelLongPress();
         }}
         onPointerCancel={() => {
-          if (didLongPressRef.current) {
-            clearLongPressTracking();
-            return;
-          }
+          if (didLongPressRef.current) return;
           cancelLongPress();
         }}
+        onDragStart={(event) => event.preventDefault()}
         onContextMenu={(event) => event.preventDefault()}
         onClickCapture={(event) => {
           if (!didLongPressRef.current) return;

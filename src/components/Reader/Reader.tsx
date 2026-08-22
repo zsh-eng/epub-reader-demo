@@ -344,6 +344,7 @@ export function Reader() {
                   )}
 
                   <ReaderSheetHost
+                    isMobile={isMobile}
                     activeSheet={chromeState.activeReaderSheet}
                     onOpenSheet={chromeActions.openReaderSheet}
                     onCloseSheet={chromeActions.closeReaderSheet}

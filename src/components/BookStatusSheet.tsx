@@ -57,13 +57,11 @@ interface BookStatusSheetProps {
 
 function BookStatusOptionButton({
   option,
-  index,
   isSelected,
   isUpdating,
   onSelect,
 }: {
   option: ReadingStatusOption;
-  index: number;
   isSelected: boolean;
   isUpdating: boolean;
   onSelect: () => void;
@@ -71,47 +69,34 @@ function BookStatusOptionButton({
   const springPress = useSpringPressAnimation();
 
   return (
-    <motion.div
-      initial={{ opacity: 0, transform: "translateY(16px)" }}
-      animate={{ opacity: 1, transform: "translateY(0px)" }}
-      transition={{
-        duration: 0.2,
-        ease: [0.16, 1, 0.3, 1],
-        delay: 0.03 + index * 0.05,
-      }}
+    <motion.button
+      type="button"
+      aria-pressed={isSelected}
+      disabled={isUpdating}
+      className={cn(
+        "flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] border bg-secondary/35 px-4 py-3 text-left outline-none transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring/60",
+        isSelected
+          ? "border-foreground bg-secondary/65"
+          : "border-border/60 hover:bg-secondary/55",
+        isUpdating && "cursor-wait opacity-70",
+      )}
+      onClick={onSelect}
+      {...springPress}
     >
-      <motion.button
-        type="button"
-        aria-pressed={isSelected}
-        disabled={isUpdating}
+      <option.icon
         className={cn(
-          "flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] border bg-secondary/35 px-4 py-3 text-left outline-none transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring/60",
-          isSelected
-            ? "border-foreground bg-secondary/65"
-            : "border-border/60 hover:bg-secondary/55",
-          isUpdating && "cursor-wait opacity-70",
+          "size-5 shrink-0",
+          isSelected ? "text-foreground" : "text-muted-foreground",
         )}
-        onClick={onSelect}
-        {...springPress}
-      >
-        <option.icon
-          className={cn(
-            "size-5 shrink-0",
-            isSelected ? "text-foreground" : "text-muted-foreground",
-          )}
-          aria-hidden="true"
-        />
-        <span className="min-w-0 flex-1 text-[15px] font-medium text-foreground">
-          {option.label}
-        </span>
-        {isSelected && (
-          <Check
-            className="size-5 shrink-0 text-foreground"
-            aria-hidden="true"
-          />
-        )}
-      </motion.button>
-    </motion.div>
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1 text-[15px] font-medium text-foreground">
+        {option.label}
+      </span>
+      {isSelected && (
+        <Check className="size-5 shrink-0 text-foreground" aria-hidden="true" />
+      )}
+    </motion.button>
   );
 }
 
@@ -145,14 +130,11 @@ export function BookStatusSheet({
           paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
         }}
       >
-        <motion.button
+        <button
           type="button"
           aria-label={`Open ${bookTitle}`}
           onClick={onOpenBook}
           className="mb-5 flex w-full min-w-0 items-center gap-4 rounded-[1.25rem] px-2 py-1 text-left outline-none transition-colors hover:bg-secondary/35 focus-visible:ring-2 focus-visible:ring-ring/60"
-          initial={{ opacity: 0, transform: "translateY(12px)" }}
-          animate={{ opacity: 1, transform: "translateY(0px)" }}
-          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
         >
           <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
           <div className="min-w-0">
@@ -163,17 +145,16 @@ export function BookStatusSheet({
               {bookAuthor}
             </p>
           </div>
-        </motion.button>
+        </button>
 
         <div className="flex flex-col gap-2">
-          {READING_STATUS_OPTIONS.map((option, index) => {
+          {READING_STATUS_OPTIONS.map((option) => {
             const isSelected = status === option.value;
 
             return (
               <BookStatusOptionButton
                 key={option.value}
                 option={option}
-                index={index}
                 isSelected={isSelected}
                 isUpdating={isUpdating}
                 onSelect={() => onSelectStatus(option.value)}
