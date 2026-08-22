@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { PanelLeftIcon } from "lucide-react";
+import { MoreHorizontal, PanelLeftIcon } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -320,16 +320,21 @@ export function SidebarTrigger({
       variant="ghost"
       size="icon-sm"
       className={cn("shrink-0", className)}
-      aria-label="Toggle sidebar"
+      aria-label={isMobile ? "Open navigation" : "Toggle sidebar"}
       aria-expanded={isMobile ? openMobile : open}
-      title="Toggle sidebar (Command or Control + Backslash)"
+      title={
+        isMobile
+          ? "Open navigation"
+          : "Toggle sidebar (Command or Control + Backslash)"
+      }
       onClick={(event) => {
         onClick?.(event);
         toggleSidebar();
       }}
       {...props}
     >
-      <PanelLeftIcon className="size-4" />
+      <PanelLeftIcon className="hidden size-4 md:block" />
+      <MoreHorizontal className="size-4 md:hidden" />
     </Button>
   );
 }

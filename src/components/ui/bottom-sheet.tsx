@@ -84,9 +84,13 @@ export function BottomSheet({
 
           <div className="px-4">
             {header ?? (
-              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {title}
-              </p>
+              <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
+                <div className="size-8" aria-hidden="true" />
+                <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  {title}
+                </p>
+                <div className="size-8" aria-hidden="true" />
+              </div>
             )}
           </div>
 

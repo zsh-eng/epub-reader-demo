@@ -300,6 +300,38 @@ export function Reader() {
                 }}
               />
 
+              {/* Keep both chrome edges visible while pagination prepares. */}
+              <ReaderFooter
+                chromeVisible={!displayReady || chromeVisible}
+                chromeSurfaceProps={chromeSurfaceProps}
+                isContentsOpen={chromeState.activeReaderSheet === "contents"}
+                currentPage={sessionState.navigation.currentPage}
+                totalPages={sessionState.navigation.totalPages}
+                currentChapterIndex={
+                  sessionState.navigation.currentChapterIndex
+                }
+                currentChapterEndIndex={
+                  sessionState.pagination.spread?.chapterIndexEnd ??
+                  sessionState.navigation.currentChapterIndex
+                }
+                displayChapterIndex={
+                  sessionState.navigation.displayChapterIndex
+                }
+                chapterEntries={sessionState.chapters.entries}
+                chapterStartPages={sessionState.navigation.chapterStartPages}
+                onScrubPreview={sessionActions.previewPage}
+                onScrubCommit={sessionActions.commitPage}
+                onGoToChapter={sessionActions.goToChapter}
+                onPrevChapter={sessionActions.goToPreviousChapter}
+                onOpenContents={() => {
+                  if (displayReady) chromeActions.openReaderSheet("contents");
+                }}
+                isLoading={
+                  !displayReady || sessionState.pagination.status !== "ready"
+                }
+                handoffPrompt={handoffPrompt}
+              />
+
               {displayReady && (
                 <>
                   {chromeDismissLayerProps && (
@@ -323,40 +355,6 @@ export function Reader() {
                     currentChapterHref={currentChapterEntry?.href ?? ""}
                     onNavigateToHref={sessionActions.openInternalHref}
                     onCopyDebugDump={() => void handleCopyDebugDump()}
-                  />
-
-                  {/* Floating footer — chapter nav, page indicator, scrubber */}
-                  <ReaderFooter
-                    chromeVisible={chromeVisible}
-                    chromeSurfaceProps={chromeSurfaceProps}
-                    isContentsOpen={
-                      chromeState.activeReaderSheet === "contents"
-                    }
-                    currentPage={sessionState.navigation.currentPage}
-                    totalPages={sessionState.navigation.totalPages}
-                    currentChapterIndex={
-                      sessionState.navigation.currentChapterIndex
-                    }
-                    currentChapterEndIndex={
-                      sessionState.pagination.spread?.chapterIndexEnd ??
-                      sessionState.navigation.currentChapterIndex
-                    }
-                    displayChapterIndex={
-                      sessionState.navigation.displayChapterIndex
-                    }
-                    chapterEntries={sessionState.chapters.entries}
-                    chapterStartPages={
-                      sessionState.navigation.chapterStartPages
-                    }
-                    onScrubPreview={sessionActions.previewPage}
-                    onScrubCommit={sessionActions.commitPage}
-                    onGoToChapter={sessionActions.goToChapter}
-                    onPrevChapter={sessionActions.goToPreviousChapter}
-                    onOpenContents={() =>
-                      chromeActions.openReaderSheet("contents")
-                    }
-                    isLoading={sessionState.pagination.status !== "ready"}
-                    handoffPrompt={handoffPrompt}
                   />
 
                   <HighlightToolbarContainer

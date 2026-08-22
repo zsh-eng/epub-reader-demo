@@ -49,6 +49,7 @@ export function AppShell() {
   const prefersReducedMotion = useReducedMotion();
   const { isLoading: isAuthLoading } = useAuth();
   const isReaderRoute = location.pathname.startsWith("/reader/");
+  const isLibraryRoute = location.pathname === "/";
   const routeTransitionKey = getRouteTransitionKey(location.pathname);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [libraryReady, setLibraryReady] = useState(location.pathname !== "/");
@@ -89,7 +90,9 @@ export function AppShell() {
       >
         <AppSidebar />
         <SidebarFloatingTrigger
-          className={isReaderRoute ? "max-md:hidden" : undefined}
+          className={
+            isReaderRoute || isLibraryRoute ? "max-md:hidden" : undefined
+          }
         />
         <SidebarInset
           className={cn(

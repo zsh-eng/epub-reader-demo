@@ -1,4 +1,5 @@
 import { Library } from "@/components/Library";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
@@ -66,7 +67,7 @@ describe("Library hotkeys", () => {
       createElement(
         QueryClientProvider,
         { client: queryClient },
-        createElement(Library),
+        createElement(SidebarProvider, null, createElement(Library)),
       ),
     );
     const searchInput = screen.getByRole<HTMLInputElement>("textbox", {
@@ -85,5 +86,27 @@ describe("Library hotkeys", () => {
     expect(document.activeElement).toBe(otherInput);
 
     otherInput.remove();
+  });
+
+  it("keeps the mobile navigation trigger in the search row", () => {
+    const queryClient = new QueryClient();
+    render(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(SidebarProvider, null, createElement(Library)),
+      ),
+    );
+
+    const searchInput = screen.getByRole("textbox", {
+      name: "Search library",
+    });
+    const navigationTrigger = screen.getByRole("button", {
+      name: "Open navigation",
+    });
+
+    expect(searchInput.parentElement?.parentElement).toBe(
+      navigationTrigger.parentElement,
+    );
   });
 });

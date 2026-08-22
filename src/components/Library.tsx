@@ -1,6 +1,7 @@
 import { useAppShellReady } from "@/components/AppShell";
 import { BookCard } from "@/components/BookCard";
 import { Button } from "@/components/ui/button";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/hooks/use-epub-import";
@@ -206,7 +207,7 @@ export function Library() {
       {/* Main Content */}
       <main className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
         {/* Hero Search Bar */}
-        <div className="max-w-3xl mb-10 md:mb-16">
+        <div className="mb-10 flex max-w-3xl items-center gap-3 md:mb-16">
           <SmoothCaretInput
             ref={searchInputRef}
             type="text"
@@ -214,7 +215,13 @@ export function Library() {
             placeholder="Search my library..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            containerClassName="min-w-0 flex-1"
             className="w-full bg-transparent border-none outline-none text-xl md:indent-[0.25em] md:text-4xl lg:text-5xl 2xl:text-7xl md:font-serif md:italic placeholder:text-muted-foreground/40 md:placeholder:italic text-foreground"
+          />
+          <SidebarTrigger
+            aria-label="Open navigation"
+            title="Open navigation"
+            className="size-9 rounded-full border border-border/60 bg-background/75 text-muted-foreground shadow-sm backdrop-blur-xl hover:bg-background/95 hover:text-foreground md:hidden"
           />
         </div>
 

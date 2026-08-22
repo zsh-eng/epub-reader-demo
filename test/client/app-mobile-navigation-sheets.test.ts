@@ -80,6 +80,7 @@ describe("AppMobileNavigationSheets", () => {
     const cover = continueLink.querySelector("img");
 
     expect(cover?.parentElement?.classList.contains("rounded-full")).toBe(true);
+    expect(continueLink.textContent).not.toContain("00");
   });
 
   it("opens account actions as a peer sheet and returns to navigation", async () => {

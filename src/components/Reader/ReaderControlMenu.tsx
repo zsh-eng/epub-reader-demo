@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import {
   ClipboardCopy,
   List,
@@ -45,6 +46,7 @@ export function ReaderControlMenu({
   onOpenSettings,
   onCopyDebugDump,
 }: ReaderControlMenuProps) {
+  const springPress = useSpringPressAnimation();
   const handleRowClick = (id: MenuItemId) => {
     if (id === "contents") {
       onOpenContents();
@@ -70,40 +72,44 @@ export function ReaderControlMenu({
     >
       <div className="flex flex-col gap-2">
         {MENU_ITEMS.map((item, index) => (
-          <motion.button
+          <motion.div
             key={item.id}
-            type="button"
-            disabled={
-              !item.isAvailable ||
-              (item.id === "debug-dump" && !onCopyDebugDump)
-            }
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, transform: "translateY(16px)" }}
+            animate={{ opacity: 1, transform: "translateY(0px)" }}
+            exit={{ opacity: 0, transform: "translateY(16px)" }}
             transition={{
               duration: 0.2,
               ease: [0.16, 1, 0.3, 1],
               delay: index * 0.06,
             }}
-            className={cn(
-              "flex w-full items-center justify-between rounded-[1.25rem] border border-border/60 bg-secondary/35 px-4 py-3 text-left transition-colors",
-              item.isAvailable &&
-                (item.id !== "debug-dump" || onCopyDebugDump)
-                ? "hover:bg-secondary/55"
-                : "cursor-not-allowed opacity-60",
-            )}
-            onClick={() => handleRowClick(item.id)}
           >
-            <div className="min-w-0">
-              <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                {String(index + 1).padStart(2, "0")}
-              </span>
-              <span className="mt-1 block truncate text-sm font-medium text-foreground">
-                {item.label}
-              </span>
-            </div>
-            <item.icon className="size-4 text-muted-foreground" />
-          </motion.button>
+            <motion.button
+              type="button"
+              disabled={
+                !item.isAvailable ||
+                (item.id === "debug-dump" && !onCopyDebugDump)
+              }
+              className={cn(
+                "flex w-full items-center justify-between rounded-[1.25rem] border border-border/60 bg-secondary/35 px-4 py-3 text-left transition-colors",
+                item.isAvailable &&
+                  (item.id !== "debug-dump" || onCopyDebugDump)
+                  ? "hover:bg-secondary/55"
+                  : "cursor-not-allowed opacity-60",
+              )}
+              onClick={() => handleRowClick(item.id)}
+              {...springPress}
+            >
+              <div className="min-w-0">
+                <span className="block text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="mt-1 block truncate text-sm font-medium text-foreground">
+                  {item.label}
+                </span>
+              </div>
+              <item.icon className="size-4 text-muted-foreground" />
+            </motion.button>
+          </motion.div>
         ))}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import type { RecentlyReadBook } from "@/lib/library-sort";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -24,6 +25,8 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+
+const MotionLink = motion.create(Link);
 
 type MobileNavigationSheet = "navigation" | "account";
 
@@ -88,8 +91,9 @@ function MobileSheetRow({
   destructive = false,
   delay,
 }: MobileSheetRowProps) {
+  const springPress = useSpringPressAnimation();
   const className = cn(
-    "flex w-full items-center justify-between rounded-[1.25rem] border border-border/60 bg-secondary/35 px-4 py-3 text-left outline-none transition-[background-color,border-color,transform] focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.985] motion-reduce:active:scale-100",
+    "flex w-full items-center justify-between rounded-[1.25rem] border border-border/60 bg-secondary/35 px-4 py-3 text-left outline-none transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring/60",
     isActive && "border-border bg-secondary/65",
     disabled ? "cursor-not-allowed opacity-55" : "hover:bg-secondary/55",
   );
@@ -128,8 +132,8 @@ function MobileSheetRow({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, transform: "translateY(16px)" }}
+      animate={{ opacity: 1, transform: "translateY(0px)" }}
       transition={{
         duration: 0.2,
         ease: [0.16, 1, 0.3, 1],
@@ -137,22 +141,24 @@ function MobileSheetRow({
       }}
     >
       {to ? (
-        <Link
+        <MotionLink
           to={to}
           aria-current={isActive ? "page" : undefined}
           className={className}
+          {...springPress}
         >
           {content}
-        </Link>
+        </MotionLink>
       ) : (
-        <button
+        <motion.button
           type="button"
           className={className}
           onClick={onClick}
           disabled={disabled}
+          {...springPress}
         >
           {content}
-        </button>
+        </motion.button>
       )}
     </motion.div>
   );
@@ -174,6 +180,7 @@ function ContinueReadingOrb({
   coverUrl,
   isActive,
 }: ContinueReadingOrbProps) {
+  const springPress = useSpringPressAnimation();
   const activityLabel = isActive
     ? "Reading now"
     : `Last read ${formatDistanceToNow(new Date(recentReading.lastRead), {
@@ -183,23 +190,31 @@ function ContinueReadingOrb({
   return (
     <motion.div
       className="px-4 pt-3"
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, transform: "translateY(16px)" }}
+      animate={{ opacity: 1, transform: "translateY(0px)" }}
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
     >
-      <Link
+      <MotionLink
         to={`/reader/${recentReading.book.id}`}
         aria-label={`Continue reading ${recentReading.book.title}`}
         aria-current={isActive ? "page" : undefined}
-        className="group block rounded-[1.5rem] border border-border/60 bg-secondary/35 px-4 pb-4 pt-3 text-center outline-none transition-[background-color,border-color,transform] hover:bg-secondary/55 focus-visible:ring-2 focus-visible:ring-ring/60 active:scale-[0.985] motion-reduce:active:scale-100"
+        className="group relative block overflow-hidden rounded-[1.5rem] border border-border/60 bg-secondary/35 px-4 pb-4 pt-3 text-center outline-none transition-[background-color,border-color] hover:bg-secondary/55 focus-visible:ring-2 focus-visible:ring-ring/60"
+        {...springPress}
       >
-        <span className="flex items-center justify-between text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          <span>00</span>
-          <span>Continue reading</span>
-          <BookOpenText className="size-4" aria-hidden="true" />
+        <span
+          className="pointer-events-none absolute left-1/2 top-8 size-36 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+          aria-hidden="true"
+        />
+        <span
+          className="pointer-events-none absolute inset-x-8 bottom-0 h-16 rounded-full bg-secondary/80 blur-2xl"
+          aria-hidden="true"
+        />
+
+        <span className="relative z-10 block text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+          Continue reading
         </span>
 
-        <span className="my-3 flex justify-center">
+        <span className="relative z-10 my-3 flex justify-center">
           <span className="relative flex size-24 items-center justify-center overflow-hidden rounded-full border-[5px] border-background bg-secondary shadow-sm ring-1 ring-border/70 transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.025] motion-reduce:transition-none">
             {coverUrl ? (
               <img
@@ -217,13 +232,13 @@ function ContinueReadingOrb({
           </span>
         </span>
 
-        <span className="block truncate font-serif text-base font-medium tracking-[-0.01em] text-foreground">
+        <span className="relative z-10 block truncate font-serif text-base font-medium tracking-[-0.01em] text-foreground">
           {recentReading.book.title}
         </span>
-        <span className="mt-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+        <span className="relative z-10 mt-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           {activityLabel}
         </span>
-      </Link>
+      </MotionLink>
     </motion.div>
   );
 }
@@ -397,8 +412,8 @@ export function AppMobileNavigationSheets({
           >
             <motion.div
               className="mb-3 flex items-center gap-3 rounded-[1.25rem] border border-border/60 bg-secondary/20 px-4 py-3"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, transform: "translateY(12px)" }}
+              animate={{ opacity: 1, transform: "translateY(0px)" }}
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
             >
               <Avatar className="size-11">
