@@ -56,7 +56,9 @@ describe("computeHighlightsBentoLayout", () => {
       { detailsHeight: 180, layoutSeed: 7 },
     );
 
-    expect(mosaic.placements).toHaveLength(10);
+    expect(
+      mosaic.placements.filter(({ kind }) => kind !== "filler"),
+    ).toHaveLength(10);
     expect(
       mosaic.placements.find(({ id }) => id === BOOK_DETAILS_TILE_ID),
     ).toMatchObject({ kind: "details", column: 0, top: 0, columnSpan: 1 });
@@ -95,6 +97,44 @@ describe("computeHighlightsBentoLayout", () => {
     expect(
       alternateMosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
     ).toMatchObject({ column: 2, columnSpan: 2, top: 0 });
+    expect(mosaic.coverWidth).toBeCloseTo(424.83, 1);
+    expect(
+      mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID)?.height,
+    ).toBeGreaterThan(630);
+  });
+
+  it("fills interior holes without extending the content boundary", () => {
+    const mosaic = computeHighlightsBentoLayout(
+      1_000,
+      [
+        { id: "a", height: 160 },
+        { id: "b", height: 104 },
+        { id: "c", height: 260, wideHeight: 140, preferredColumnSpan: 2 },
+        { id: "d", height: 128 },
+        { id: "e", height: 192 },
+      ],
+      { detailsHeight: 180, layoutSeed: 2 },
+    );
+    const contentPlacements = mosaic.placements.filter(
+      ({ kind }) => kind !== "filler",
+    );
+    const fillerPlacements = mosaic.placements.filter(
+      ({ kind }) => kind === "filler",
+    );
+
+    expect(fillerPlacements.length).toBeGreaterThan(0);
+    expect(mosaic.height).toBe(
+      Math.max(
+        ...contentPlacements.map(
+          (placement) => placement.top + placement.height,
+        ),
+      ),
+    );
+    expect(
+      fillerPlacements.every(
+        (placement) => placement.top + placement.height <= mosaic.height,
+      ),
+    ).toBe(true);
   });
 
   it("packs every tile without overlap and reports the true bottom edge", () => {

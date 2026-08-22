@@ -9,12 +9,17 @@ import { Input } from "@/components/ui/input";
 import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useReadingSessionsQuery } from "@/hooks/use-reading-sessions-query";
 import {
   useAllHighlightsQuery,
   type BookHighlightGroup,
 } from "@/hooks/use-all-highlights-query";
 import { formatHighlightTime } from "@/lib/date-utils";
 import type { SyncedHighlight } from "@/lib/db";
+import {
+  SHORT_HIGHLIGHT_CARD_HEIGHT,
+  usesWordCloudHighlightStyle,
+} from "@/lib/highlight-card-presentation";
 import {
   ALL_HIGHLIGHT_COLORS,
   toggleHighlightColorSelection,
@@ -31,7 +36,10 @@ import {
   type AnnotationColor,
   type HighlightColor,
 } from "@/lib/highlight-constants";
+import { formatReadingDuration } from "@/lib/reading-session-stats";
+import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
+import { Tooltip } from "@base-ui/react/tooltip";
 import { layout, prepare, type PreparedText } from "@chenglou/pretext";
 import {
   AnimatePresence,
@@ -75,7 +83,7 @@ const MOSAIC_MAX_COLUMNS = 4;
 const MOSAIC_MIN_CARD_WIDTH = 220;
 const QUOTE_FONT = '400 18px "EB Garamond"';
 const QUOTE_LINE_HEIGHT = 24;
-const QUOTE_CARD_CHROME_HEIGHT = 62;
+const QUOTE_CARD_CHROME_HEIGHT = 80;
 const QUOTE_CARD_MIN_HEIGHT = 96;
 const WIDE_QUOTE_MIN_LINES = 7;
 const BOOK_TITLE_MAX_FONT = '500 44px "EB Garamond"';
@@ -108,8 +116,36 @@ type HighlightAccentStyle = CSSProperties & {
   "--highlight-accent": string;
 };
 
+interface HighlightsTooltipPayload {
+  label: string;
+}
+
 function getHighlightAccentStyle(color: AnnotationColor): HighlightAccentStyle {
   return { "--highlight-accent": highlightAccentValues[color] };
+}
+
+function SharedHighlightsTooltip({
+  handle,
+}: {
+  handle: Tooltip.Handle<HighlightsTooltipPayload>;
+}) {
+  return (
+    <Tooltip.Root handle={handle} disableHoverablePopup>
+      {({ payload }) => (
+        <Tooltip.Portal>
+          <Tooltip.Positioner
+            sideOffset={8}
+            collisionPadding={8}
+            className="z-50"
+          >
+            <Tooltip.Popup className="origin-[var(--transform-origin)] rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-lg transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-[ending-style]:scale-[0.96] data-[ending-style]:opacity-0 data-[instant]:transition-none data-[starting-style]:scale-[0.96] data-[starting-style]:opacity-0 motion-reduce:transition-opacity motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100">
+              {payload?.label}
+            </Tooltip.Popup>
+          </Tooltip.Positioner>
+        </Tooltip.Portal>
+      )}
+    </Tooltip.Root>
+  );
 }
 
 function getStableNumber(value: string) {
@@ -725,67 +761,96 @@ function BookDetailsTile({
 function BookCoverTile({
   group,
   coverWidth,
+  readingTimeMs,
+  tooltipHandle,
 }: {
   group: BookHighlightGroup;
   coverWidth: number;
+  readingTimeMs: number;
+  tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
 }) {
   const { url: coverUrl } = useFileUrl(group.book.coverContentHash, "cover", {
     skip: !group.book.coverContentHash,
   });
-
-  if (coverUrl) {
-    return (
-      <div className="flex h-full items-center justify-center">
+  const cover = (
+    <div className="flex h-full items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-secondary/25">
+      {coverUrl ? (
         <img
           src={coverUrl}
           alt={`Cover of ${group.book.title}`}
           className="aspect-2/3 max-h-full rounded-r-lg rounded-l-sm object-cover shadow-xl"
           style={{ width: coverWidth }}
         />
-      </div>
-    );
-  }
+      ) : (
+        <div
+          className="flex aspect-2/3 max-h-full items-center justify-center rounded-r-lg rounded-l-sm border bg-secondary shadow-xl"
+          style={{ width: coverWidth }}
+        >
+          <BookOpenText
+            className="size-10 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <span className="sr-only">
+            No cover available for {group.book.title}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex h-full items-center justify-center">
-      <div
-        className="flex aspect-2/3 max-h-full items-center justify-center rounded-r-lg rounded-l-sm border bg-secondary shadow-xl"
-        style={{ width: coverWidth }}
-      >
-        <BookOpenText
-          className="size-10 text-muted-foreground"
-          aria-hidden="true"
-        />
-        <span className="sr-only">
-          No cover available for {group.book.title}
-        </span>
-      </div>
-    </div>
+    <Tooltip.Trigger
+      handle={tooltipHandle}
+      payload={{
+        label:
+          readingTimeMs > 0
+            ? `Reading time: ${formatReadingDuration(readingTimeMs)}`
+            : "No reading time yet",
+      }}
+      delay={300}
+      closeDelay={80}
+      render={cover}
+    />
   );
 }
 
 function HighlightQuoteCard({
   highlight,
   isMobile,
+  chapterTitle,
+  tooltipHandle,
   onCopy,
   onOpenActions,
   onOpenBook,
 }: {
   highlight: SyncedHighlight;
   isMobile: boolean;
+  chapterTitle: string;
+  tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
   onCopy: (highlight: SyncedHighlight) => void;
   onOpenActions: (highlight: SyncedHighlight) => void;
   onOpenBook: (highlight: SyncedHighlight) => void;
 }) {
+  const usesWordCloud = usesWordCloudHighlightStyle(highlight.selectedText);
   const card = (
     <article
-      className="relative h-full overflow-hidden rounded-xl border bg-card text-card-foreground"
+      className={cn(
+        "relative h-full overflow-hidden rounded-xl border text-card-foreground",
+        usesWordCloud ? "bg-secondary/35" : "bg-card",
+      )}
       style={getHighlightAccentStyle(highlight.color)}
     >
-      <div
-        className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--highlight-accent)]"
-        aria-hidden="true"
-      />
+      {usesWordCloud ? (
+        <span
+          className="absolute top-4 left-4 size-2.5 rounded-full bg-[var(--highlight-accent)]"
+          aria-hidden="true"
+        />
+      ) : (
+        <div
+          className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--highlight-accent)]"
+          aria-hidden="true"
+        />
+      )}
       <button
         type="button"
         onClick={() =>
@@ -794,23 +859,43 @@ function HighlightQuoteCard({
         aria-label={
           isMobile ? "Show highlight actions" : "Copy highlight to clipboard"
         }
-        className="group flex h-full w-full cursor-pointer flex-col px-5 py-4 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy"
+        className={cn(
+          "group flex h-full w-full cursor-pointer flex-col px-5 pt-4 pb-5 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy",
+          usesWordCloud && "text-center",
+        )}
       >
-        <blockquote className="m-0 break-words font-serif text-[18px] leading-6">
+        {usesWordCloud ? (
+          <blockquote className="m-0 flex min-h-0 flex-1 items-center justify-center px-2 py-5 font-serif text-[clamp(2rem,7vw,3.5rem)] leading-[0.94] tracking-[-0.035em] md:text-[clamp(2rem,3vw,3.25rem)]">
+            <span className="relative inline-block max-w-full">
+              <span className="relative z-10 break-words">
+                {highlight.selectedText}
+              </span>
+              <span
+                className="absolute -bottom-2 left-1/2 h-1.5 w-[72%] -translate-x-1/2 rounded-full bg-[var(--highlight-accent)] opacity-35"
+                aria-hidden="true"
+              />
+            </span>
+          </blockquote>
+        ) : (
+          <blockquote className="m-0 break-words font-serif text-[18px] leading-6">
+            <span
+              className="mr-1 text-[25px] leading-0 text-[var(--highlight-accent)]"
+              aria-hidden="true"
+            >
+              “
+            </span>
+            {highlight.selectedText}
+          </blockquote>
+        )}
+        <footer className="mt-auto flex min-h-8 shrink-0 items-center justify-end gap-1.5 pt-3 text-[11px] leading-none text-muted-foreground">
           <span
-            className="mr-1 text-[25px] leading-0 text-[var(--highlight-accent)]"
-            aria-hidden="true"
-          >
-            “
-          </span>
-          {highlight.selectedText}
-        </blockquote>
-        <footer className="mt-auto flex h-7 shrink-0 items-end justify-end gap-1.5 text-[11px] text-muted-foreground">
-          <span
-            className="size-1.5 rounded-full bg-[var(--highlight-accent)]"
+            className="size-1.5 shrink-0 rounded-full bg-[var(--highlight-accent)]"
             aria-hidden="true"
           />
-          <time dateTime={new Date(highlight.createdAt).toISOString()}>
+          <time
+            className="whitespace-nowrap"
+            dateTime={new Date(highlight.createdAt).toISOString()}
+          >
             {formatHighlightTime(highlight.createdAt)}
           </time>
           {isMobile ? (
@@ -829,7 +914,17 @@ function HighlightQuoteCard({
     </article>
   );
 
-  if (isMobile) return card;
+  if (isMobile) {
+    return (
+      <Tooltip.Trigger
+        handle={tooltipHandle}
+        payload={{ label: chapterTitle }}
+        delay={380}
+        closeDelay={80}
+        render={card}
+      />
+    );
+  }
 
   return (
     <ContextMenu>
@@ -976,6 +1071,8 @@ function HighlightsMosaic({
   headingId,
   highlights,
   isMobile,
+  readingTimeMs,
+  tooltipHandle,
   onCopy,
   onOpenActions,
   onOpenBook,
@@ -984,6 +1081,8 @@ function HighlightsMosaic({
   headingId: string;
   highlights: SyncedHighlight[];
   isMobile: boolean;
+  readingTimeMs: number;
+  tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
   onCopy: (highlight: SyncedHighlight) => void;
   onOpenActions: (highlight: SyncedHighlight) => void;
   onOpenBook: (highlight: SyncedHighlight) => void;
@@ -1023,6 +1122,17 @@ function HighlightsMosaic({
       geometry.columnWidth * 2 + MOSAIC_GAP - 40,
     );
     const measurements = highlights.flatMap((highlight) => {
+      if (usesWordCloudHighlightStyle(highlight.selectedText)) {
+        return [
+          {
+            id: highlight.id,
+            height: SHORT_HIGHLIGHT_CARD_HEIGHT,
+            wideHeight: SHORT_HIGHLIGHT_CARD_HEIGHT,
+            preferredColumnSpan: 1 as const,
+          },
+        ];
+      }
+
       const prepared = preparedById.get(highlight.id);
       if (!prepared) return [];
 
@@ -1076,6 +1186,23 @@ function HighlightsMosaic({
   );
   const detailsPlacement = placementById.get(BOOK_DETAILS_TILE_ID);
   const coverPlacement = placementById.get(BOOK_COVER_TILE_ID);
+  const fillerPlacements = mosaic.placements.filter(
+    ({ kind }) => kind === "filler",
+  );
+  const chapterTitleByHighlightId = useMemo(() => {
+    return new Map(
+      highlights.map((highlight) => {
+        const spineIndex = group.book.spine.findIndex(
+          ({ idref }) => idref === highlight.spineItemId,
+        );
+        const chapterTitle =
+          spineIndex >= 0
+            ? getChapterTitleFromSpine(group.book, spineIndex)
+            : "Chapter unavailable";
+        return [highlight.id, chapterTitle] as const;
+      }),
+    );
+  }, [group.book, highlights]);
 
   return (
     <div
@@ -1083,6 +1210,19 @@ function HighlightsMosaic({
       className="relative"
       style={{ height: mosaic.height || 520 }}
     >
+      {fillerPlacements.map((placement) => (
+        <PositionedTile
+          key={placement.id}
+          placement={placement}
+          entranceKey={`${group.book.id}-${placement.id}`}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none h-full rounded-2xl border border-border/35 bg-secondary/20"
+          />
+        </PositionedTile>
+      ))}
+
       {detailsPlacement && (
         <PositionedTile
           placement={detailsPlacement}
@@ -1102,7 +1242,12 @@ function HighlightsMosaic({
           placement={coverPlacement}
           entranceKey={`${group.book.id}-${BOOK_COVER_TILE_ID}`}
         >
-          <BookCoverTile group={group} coverWidth={mosaic.coverWidth} />
+          <BookCoverTile
+            group={group}
+            coverWidth={mosaic.coverWidth}
+            readingTimeMs={readingTimeMs}
+            tooltipHandle={tooltipHandle}
+          />
         </PositionedTile>
       )}
 
@@ -1119,6 +1264,11 @@ function HighlightsMosaic({
             <HighlightQuoteCard
               highlight={highlight}
               isMobile={isMobile}
+              chapterTitle={
+                chapterTitleByHighlightId.get(highlight.id) ??
+                "Chapter unavailable"
+              }
+              tooltipHandle={tooltipHandle}
               onCopy={onCopy}
               onOpenActions={onOpenActions}
               onOpenBook={onOpenBook}
@@ -1239,6 +1389,10 @@ function HighlightsSearch({
 export function HighlightsMasonry() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const tooltipHandle = useMemo(
+    () => Tooltip.createHandle<HighlightsTooltipPayload>(),
+    [],
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedHighlight, setSelectedHighlight] =
     useState<SyncedHighlight | null>(null);
@@ -1254,6 +1408,22 @@ export function HighlightsMasonry() {
   const { displayedProgress, animateAfterInstantNavigation } =
     useBookNavigationProgress(scrollYProgress);
   const { data: groups = [], isLoading } = useAllHighlightsQuery();
+  const { data: readingSessionsData } = useReadingSessionsQuery();
+  const readingTimeByBookId = useMemo(() => {
+    const totals = new Map<string, number>();
+    if (!readingSessionsData) return totals;
+
+    const now = Date.now();
+    for (const session of readingSessionsData.sessions) {
+      if (session.activeMs <= 0 || session.startedAt > now) continue;
+      totals.set(
+        session.bookId,
+        (totals.get(session.bookId) ?? 0) + session.activeMs,
+      );
+    }
+
+    return totals;
+  }, [readingSessionsData]);
   const visibleGroups = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
     return groups.flatMap((group) => {
@@ -1370,158 +1540,169 @@ export function HighlightsMasonry() {
   );
 
   return (
-    <div
-      className={cn(
-        "flex min-h-svh flex-col bg-background text-foreground",
-        hasNoMatches && "h-svh overflow-hidden",
-      )}
-    >
-      <section className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
-        <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
-          <MobileBackToLibrary />
-          <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
-            Highlights
-          </h1>
-          <div className="size-8 md:hidden" aria-hidden="true" />
-        </div>
-        {!isLoading && groups.length > 0 && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            {totalHighlightCount} highlights across {groups.length}{" "}
-            {groups.length === 1 ? "book" : "books"}
-          </p>
+    <Tooltip.Provider delay={380} closeDelay={80} timeout={480}>
+      <div
+        className={cn(
+          "flex min-h-svh flex-col bg-background text-foreground",
+          hasNoMatches && "h-svh overflow-hidden",
         )}
-      </section>
+      >
+        <section className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
+          <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
+            <MobileBackToLibrary />
+            <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
+              Highlights
+            </h1>
+            <div className="size-8 md:hidden" aria-hidden="true" />
+          </div>
+          {!isLoading && groups.length > 0 && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {totalHighlightCount} highlights across {groups.length}{" "}
+              {groups.length === 1 ? "book" : "books"}
+            </p>
+          )}
+        </section>
 
-      <div ref={searchAnchorRef} className="h-px shrink-0" aria-hidden="true" />
-      <div className="sticky top-3 z-30 isolate mx-auto w-full max-w-2xl shrink-0 px-4">
         <div
+          ref={searchAnchorRef}
+          className="h-px shrink-0"
           aria-hidden="true"
-          className="pointer-events-none absolute -inset-x-4 -top-3 -bottom-5 -z-10"
-        >
-          <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/15 to-transparent" />
-          <div className="highlights-search-scroll-blur absolute inset-0 backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)]" />
-        </div>
-        <HighlightsSearch
-          value={searchQuery}
-          onChange={setSearchQuery}
-          isCompact={isSearchCompact}
-          selectedColors={selectedColors}
-          onToggleColor={handleToggleColor}
         />
-      </div>
-      {bookIndexGroups.length > 0 && (
-        <div className="mx-auto max-w-[1600px] px-4">
-          <MobileBookIndex
+        <div className="sticky top-3 z-30 isolate mx-auto w-full max-w-2xl shrink-0 px-4">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -inset-x-4 -top-3 -bottom-5 -z-10"
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/15 to-transparent" />
+            <div className="highlights-search-scroll-blur absolute inset-0 backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)]" />
+          </div>
+          <HighlightsSearch
+            value={searchQuery}
+            onChange={setSearchQuery}
+            isCompact={isSearchCompact}
+            selectedColors={selectedColors}
+            onToggleColor={handleToggleColor}
+          />
+        </div>
+        {bookIndexGroups.length > 0 && (
+          <div className="mx-auto max-w-[1600px] px-4">
+            <MobileBookIndex
+              groups={bookIndexGroups}
+              activeBookId={activeBookId}
+              onNavigate={handleBookNavigate}
+            />
+          </div>
+        )}
+
+        <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
+          {isLoading ? (
+            <div className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
+              Loading highlights…
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="flex min-h-80 flex-col items-center justify-center text-center">
+              <div className="mb-5 rounded-full bg-secondary p-5">
+                <Highlighter
+                  className="size-9 text-muted-foreground"
+                  aria-hidden="true"
+                />
+              </div>
+              <h2 className="font-serif text-3xl font-medium">
+                No highlights yet
+              </h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Start reading and highlighting text to see it here.
+              </p>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "grid lg:items-start",
+                hasNoMatches && "h-full",
+                isBookIndexPinned &&
+                  visibleGroups.length > 0 &&
+                  "gap-8 lg:grid-cols-[minmax(0,1fr)_248px] xl:gap-10",
+              )}
+            >
+              <div className={cn("min-w-0", hasNoMatches && "h-full")}>
+                {visibleGroups.length > 0 ? (
+                  visibleGroups.map(({ group, highlights }, index) => {
+                    const sectionId = getBookSectionId(group.book.id);
+                    const headingId = getBookHeadingId(group.book.id);
+
+                    return (
+                      <section
+                        key={group.book.id}
+                        id={sectionId}
+                        aria-labelledby={headingId}
+                        className={cn(
+                          "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
+                          index > 0 && "mt-16 border-t pt-14",
+                        )}
+                      >
+                        <HighlightsMosaic
+                          group={group}
+                          headingId={headingId}
+                          highlights={highlights}
+                          isMobile={isMobile}
+                          readingTimeMs={
+                            readingTimeByBookId.get(group.book.id) ?? 0
+                          }
+                          tooltipHandle={tooltipHandle}
+                          onCopy={handleDesktopCopy}
+                          onOpenActions={setSelectedHighlight}
+                          onOpenBook={handleOpenBook}
+                        />
+                      </section>
+                    );
+                  })
+                ) : (
+                  <div className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
+                    <Search
+                      className="mb-4 size-7 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <h2 className="font-serif text-2xl font-medium">
+                      No matching highlights
+                    </h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Change the search text or color filters.
+                    </p>
+                  </div>
+                )}
+              </div>
+              {visibleGroups.length > 0 && isBookIndexPinned && (
+                <BookIndexPanel
+                  groups={bookIndexGroups}
+                  activeBookId={activeBookId}
+                  isPinned
+                  onNavigate={handleBookNavigate}
+                  onPinChange={setIsBookIndexPinned}
+                  className="sticky top-[calc((100svh-min(64svh,560px))/2)] hidden h-[min(64svh,560px)] self-start lg:flex"
+                />
+              )}
+            </div>
+          )}
+        </main>
+        {!isLoading && !isBookIndexPinned && bookIndexGroups.length > 0 && (
+          <FloatingBookIndex
             groups={bookIndexGroups}
             activeBookId={activeBookId}
             onNavigate={handleBookNavigate}
+            onPin={() => setIsBookIndexPinned(true)}
+            scrollProgress={displayedProgress}
           />
-        </div>
-      )}
-
-      <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
-        {isLoading ? (
-          <div className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
-            Loading highlights…
-          </div>
-        ) : groups.length === 0 ? (
-          <div className="flex min-h-80 flex-col items-center justify-center text-center">
-            <div className="mb-5 rounded-full bg-secondary p-5">
-              <Highlighter
-                className="size-9 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </div>
-            <h2 className="font-serif text-3xl font-medium">
-              No highlights yet
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Start reading and highlighting text to see it here.
-            </p>
-          </div>
-        ) : (
-          <div
-            className={cn(
-              "grid lg:items-start",
-              hasNoMatches && "h-full",
-              isBookIndexPinned &&
-                visibleGroups.length > 0 &&
-                "gap-8 lg:grid-cols-[minmax(0,1fr)_248px] xl:gap-10",
-            )}
-          >
-            <div className={cn("min-w-0", hasNoMatches && "h-full")}>
-              {visibleGroups.length > 0 ? (
-                visibleGroups.map(({ group, highlights }, index) => {
-                  const sectionId = getBookSectionId(group.book.id);
-                  const headingId = getBookHeadingId(group.book.id);
-
-                  return (
-                    <section
-                      key={group.book.id}
-                      id={sectionId}
-                      aria-labelledby={headingId}
-                      className={cn(
-                        "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
-                        index > 0 && "mt-16 border-t pt-14",
-                      )}
-                    >
-                      <HighlightsMosaic
-                        group={group}
-                        headingId={headingId}
-                        highlights={highlights}
-                        isMobile={isMobile}
-                        onCopy={handleDesktopCopy}
-                        onOpenActions={setSelectedHighlight}
-                        onOpenBook={handleOpenBook}
-                      />
-                    </section>
-                  );
-                })
-              ) : (
-                <div className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
-                  <Search
-                    className="mb-4 size-7 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <h2 className="font-serif text-2xl font-medium">
-                    No matching highlights
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Change the search text or color filters.
-                  </p>
-                </div>
-              )}
-            </div>
-            {visibleGroups.length > 0 && isBookIndexPinned && (
-              <BookIndexPanel
-                groups={bookIndexGroups}
-                activeBookId={activeBookId}
-                isPinned
-                onNavigate={handleBookNavigate}
-                onPinChange={setIsBookIndexPinned}
-                className="sticky top-[calc((100svh-min(64svh,560px))/2)] hidden h-[min(64svh,560px)] self-start lg:flex"
-              />
-            )}
-          </div>
         )}
-      </main>
-      {!isLoading && !isBookIndexPinned && bookIndexGroups.length > 0 && (
-        <FloatingBookIndex
-          groups={bookIndexGroups}
-          activeBookId={activeBookId}
-          onNavigate={handleBookNavigate}
-          onPin={() => setIsBookIndexPinned(true)}
-          scrollProgress={displayedProgress}
-        />
-      )}
-      {isMobile && (
-        <HighlightActionsSheet
-          highlight={selectedHighlight}
-          onClose={() => setSelectedHighlight(null)}
-          onCopy={handleMobileCopy}
-          onOpenBook={handleOpenBook}
-        />
-      )}
-    </div>
+        {isMobile && (
+          <HighlightActionsSheet
+            highlight={selectedHighlight}
+            onClose={() => setSelectedHighlight(null)}
+            onCopy={handleMobileCopy}
+            onOpenBook={handleOpenBook}
+          />
+        )}
+      </div>
+      <SharedHighlightsTooltip handle={tooltipHandle} />
+    </Tooltip.Provider>
   );
 }

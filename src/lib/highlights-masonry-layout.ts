@@ -8,7 +8,7 @@ export interface MosaicItemMeasurement {
   preferredColumnSpan?: 1 | 2;
 }
 
-export type MosaicTileKind = "cover" | "details" | "highlight";
+export type MosaicTileKind = "cover" | "details" | "highlight" | "filler";
 
 export interface MosaicPlacement {
   id: string;
@@ -113,6 +113,12 @@ interface TileSlot {
   rowSpan: number;
 }
 
+interface EmptyColumnRun {
+  column: number;
+  row: number;
+  rowSpan: number;
+}
+
 function getRotatedColumns(columnCount: number, seed: number) {
   const columns = Array.from({ length: columnCount }, (_, index) => index);
   const offset = Math.abs(seed) % Math.max(1, columnCount);
@@ -206,6 +212,87 @@ function findTileSlot({
 }
 
 /**
+ * Turns substantial holes inside the packed content boundary into decorative
+ * wall blocks. Adjacent column runs with the same shape become one wider block.
+ */
+function createFillerPlacements({
+  occupiedRows,
+  columnCount,
+  columnWidth,
+  gap,
+  rowHeight,
+}: {
+  occupiedRows: boolean[][];
+  columnCount: number;
+  columnWidth: number;
+  gap: number;
+  rowHeight: number;
+}): MosaicPlacement[] {
+  const minimumRowSpan = Math.ceil(56 / rowHeight);
+  const emptyRuns: EmptyColumnRun[] = [];
+
+  for (let column = 0; column < columnCount; column += 1) {
+    let runStart = -1;
+
+    for (let row = 0; row <= occupiedRows.length; row += 1) {
+      const isOccupied =
+        row === occupiedRows.length || occupiedRows[row]?.[column];
+
+      if (!isOccupied && runStart === -1) {
+        runStart = row;
+        continue;
+      }
+
+      if (!isOccupied || runStart === -1) continue;
+
+      const rowSpan = row - runStart;
+      if (rowSpan >= minimumRowSpan) {
+        emptyRuns.push({ column, row: runStart, rowSpan });
+      }
+      runStart = -1;
+    }
+  }
+
+  const unplacedRuns = [...emptyRuns];
+  const placements: MosaicPlacement[] = [];
+
+  while (unplacedRuns.length > 0) {
+    const run = unplacedRuns.shift();
+    if (!run) break;
+
+    let columnSpan = 1;
+    while (run.column + columnSpan < columnCount) {
+      const adjacentRunIndex = unplacedRuns.findIndex(
+        (candidate) =>
+          candidate.column === run.column + columnSpan &&
+          candidate.row === run.row &&
+          candidate.rowSpan === run.rowSpan,
+      );
+      if (adjacentRunIndex === -1) break;
+
+      unplacedRuns.splice(adjacentRunIndex, 1);
+      columnSpan += 1;
+    }
+
+    const width = columnWidth * columnSpan + gap * Math.max(0, columnSpan - 1);
+    const height = run.rowSpan * rowHeight - gap;
+    placements.push({
+      id: `mosaic-filler-${placements.length}`,
+      kind: "filler",
+      column: run.column,
+      columnSpan,
+      left: run.column * (columnWidth + gap),
+      top: run.row * rowHeight,
+      width,
+      height,
+      naturalHeight: height,
+    });
+  }
+
+  return placements;
+}
+
+/**
  * Packs a bento mosaic on a small virtual row grid. The dense occupancy scan
  * lets narrow cards fill gaps below wide cards instead of forcing every column
  * to stretch to the same bottom edge.
@@ -244,7 +331,13 @@ export function computeHighlightsBentoLayout(
       ? 0
       : 1 + (Math.abs(layoutSeed) % Math.max(1, columnCount - coverColumnSpan));
   const nestedCoverColumn = Math.abs(layoutSeed) % columnCount;
-  const coverNaturalHeight = coverWidth * coverAspectRatio;
+  const coverFootprintWidth =
+    columnWidth * coverColumnSpan + gap * Math.max(0, coverColumnSpan - 1);
+  const resolvedCoverWidth =
+    coverColumnSpan === 1
+      ? coverWidth
+      : Math.min(coverFootprintWidth * 0.86, 520);
+  const coverNaturalHeight = resolvedCoverWidth * coverAspectRatio;
   const detailsRowSpan = Math.ceil((detailsHeight + gap) / rowHeight);
   const coverInsertionIndex = hasEnoughHighlightsToNestCover
     ? Math.min(items.length, 2 + (Math.abs(layoutSeed) % 3))
@@ -329,14 +422,21 @@ export function computeHighlightsBentoLayout(
   const height = Math.max(
     ...placements.map((placement) => placement.top + placement.height),
   );
+  const fillerPlacements = createFillerPlacements({
+    occupiedRows,
+    columnCount,
+    columnWidth,
+    gap,
+    rowHeight,
+  });
 
   return {
     columnCount,
     columnWidth,
     coverColumn: coverPlacement?.column ?? 0,
     coverColumnSpan,
-    coverWidth,
+    coverWidth: resolvedCoverWidth,
     height,
-    placements,
+    placements: [...placements, ...fillerPlacements],
   };
 }
