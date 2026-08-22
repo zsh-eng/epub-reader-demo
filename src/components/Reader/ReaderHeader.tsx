@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronLeft, MoreHorizontal } from "lucide-react";
 import { motion } from "motion/react";
 import type { ReaderChromeSurfaceProps } from "./chrome";
 
@@ -47,6 +47,8 @@ interface ReaderHeaderProps {
   chromeVisible: boolean;
   chromeSurfaceProps?: ReaderChromeSurfaceProps;
   bookTitle: string;
+  showBackButton: boolean;
+  onBackToLibrary: () => void;
   isBookmarked: boolean;
   onToggleBookmark: () => void;
   onOpenMenu: () => void;
@@ -56,6 +58,8 @@ export function ReaderHeader({
   chromeVisible,
   chromeSurfaceProps,
   bookTitle,
+  showBackButton,
+  onBackToLibrary,
   isBookmarked,
   onToggleBookmark,
   onOpenMenu,
@@ -149,8 +153,20 @@ export function ReaderHeader({
           }}
         />
         <div className="relative z-10 mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
-          {/* Zone 1 — Left: reserved for the application-level trigger. */}
-          <div />
+          {/* Zone 1 — Left: mobile reader navigation or desktop sidebar space. */}
+          <div className="flex items-center">
+            {showBackButton && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={onBackToLibrary}
+                aria-label="Back to library"
+                className={CHROME_BUTTON_CLASS_NAME}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+            )}
+          </div>
 
           {/* Zone 2 — Center: Book title */}
           <p className="max-w-[min(64vw,36rem)] truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">

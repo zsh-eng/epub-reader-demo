@@ -2,7 +2,7 @@ import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightTo
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
@@ -104,25 +104,6 @@ export function Reader() {
     contentReady: isReaderStageMeasured && sessionState.status === "ready",
     stageContentRef,
   });
-  const [showPreparationStatus, setShowPreparationStatus] = useState(false);
-
-  useEffect(() => {
-    const hasTerminalError =
-      sessionState.status === "not-found" ||
-      sessionState.status === "file-error";
-    if (sessionState.book || hasTerminalError) {
-      setShowPreparationStatus(false);
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setShowPreparationStatus(true);
-    }, 400);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [sessionState.book, sessionState.status]);
 
   if (sessionState.status === "not-found" || !bookId) {
     return (
@@ -157,7 +138,6 @@ export function Reader() {
             bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
           }}
         />
-        {showPreparationStatus && <ReaderStateScreen title="Preparing book" />}
       </div>
     );
   }
@@ -311,6 +291,8 @@ export function Reader() {
                 chromeVisible={!displayReady || chromeVisible}
                 chromeSurfaceProps={chromeSurfaceProps}
                 bookTitle={book.title}
+                showBackButton={isMobile}
+                onBackToLibrary={() => navigate("/")}
                 isBookmarked={chromeState.isBookmarked}
                 onToggleBookmark={chromeActions.toggleBookmark}
                 onOpenMenu={() => {

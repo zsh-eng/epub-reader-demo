@@ -16,7 +16,7 @@ import {
   Trash2,
   XCircle,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface BookCardProps {
@@ -89,13 +89,13 @@ export function BookCard({
   const navigate = useNavigate();
   const { toast } = useToast();
   const setStatus = useSetReadingStatus(book.id);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (coverUrl || !book.coverContentHash || !onCoverRequest) return;
+    if (!cardElement) return;
 
-    const card = cardRef.current;
-    if (!card || typeof IntersectionObserver === "undefined") {
+    if (typeof IntersectionObserver === "undefined") {
       onCoverRequest(book);
       return;
     }
@@ -108,12 +108,12 @@ export function BookCard({
       },
       { rootMargin: "400px 0px" },
     );
-    observer.observe(card);
+    observer.observe(cardElement);
 
     return () => {
       observer.disconnect();
     };
-  }, [book, coverUrl, onCoverRequest]);
+  }, [book, cardElement, coverUrl, onCoverRequest]);
 
   const handleClick = () => {
     // Navigate to reader - the reader will handle downloading/processing if needed
@@ -154,7 +154,7 @@ export function BookCard({
     <ResponsiveContextMenu>
       <ResponsiveContextMenuTrigger>
         <div
-          ref={cardRef}
+          ref={setCardElement}
           className="group relative flex flex-col gap-3 w-full"
           onFocusCapture={handlePrefetch}
           onPointerDown={handlePrefetch}

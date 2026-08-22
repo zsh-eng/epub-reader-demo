@@ -186,6 +186,10 @@ export function AppSidebar() {
     void refetchBooks();
   }, [isSidebarOpen, refetchBooks]);
 
+  useEffect(() => {
+    if (isMobile) setOpenMobile(false);
+  }, [isMobile, location.pathname, setOpenMobile]);
+
   const closeSidebar = () => {
     setOpen(false);
     setOpenMobile(false);

@@ -26,7 +26,6 @@ import {
 } from "react";
 
 const SIDEBAR_WIDTH = "18rem";
-const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_ENTER_DURATION_MS = 200;
 const SIDEBAR_EXIT_DURATION_MS = 140;
 
@@ -221,12 +220,12 @@ export function Sidebar({
 
   if (isMobile) {
     return (
-      <Drawer direction="left" open={openMobile} onOpenChange={setOpenMobile}>
+      <Drawer direction="bottom" open={openMobile} onOpenChange={setOpenMobile}>
         <DrawerContent
           data-slot="sidebar"
-          className="inset-y-3! left-3! h-auto! w-[calc(100vw-1.5rem)]! max-w-(--sidebar-width)! gap-0 rounded-2xl border border-sidebar-border/80 bg-sidebar/96 p-0 text-sidebar-foreground shadow-2xl backdrop-blur-xl transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)]! data-[starting-style]:[transform:translate3d(-12px,0,0)]! data-[starting-style]:opacity-0 data-[ending-style]:[transform:translate3d(-12px,0,0)]! data-[ending-style]:opacity-0 motion-reduce:data-[starting-style]:transform-none! motion-reduce:data-[ending-style]:transform-none!"
+          className="mx-auto h-[min(42rem,88dvh)]! w-full! max-w-3xl! gap-0 overflow-hidden rounded-t-[1.9rem]! border border-sidebar-border/80 bg-sidebar/96 p-0 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)] backdrop-blur-xl transition-transform ease-[cubic-bezier(0.23,1,0.32,1)]! data-[drawer-direction=bottom]:max-h-[88dvh]! [&>div:first-child]:mt-3 [&>div:first-child]:h-1 [&>div:first-child]:w-10 [&>div:first-child]:bg-sidebar-border/80"
           overlayClassName={cn(
-            "bg-background/15 backdrop-blur-[1px] ease-[cubic-bezier(0.23,1,0.32,1)]!",
+            "bg-transparent ease-[cubic-bezier(0.23,1,0.32,1)]!",
             transitionMode === "instant"
               ? "duration-0!"
               : openMobile
@@ -235,7 +234,6 @@ export function Sidebar({
           )}
           style={
             {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
               transitionDuration: `${transitionDuration}ms`,
             } as CSSProperties
           }

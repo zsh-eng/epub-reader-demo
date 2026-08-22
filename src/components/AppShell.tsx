@@ -88,7 +88,9 @@ export function AppShell() {
         aria-hidden={!hasRevealed}
       >
         <AppSidebar />
-        <SidebarFloatingTrigger />
+        <SidebarFloatingTrigger
+          className={isReaderRoute ? "max-md:hidden" : undefined}
+        />
         <SidebarInset
           className={cn(
             isReaderRoute
