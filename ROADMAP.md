@@ -119,6 +119,9 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] "Jump back" ideas for reference (need to start storing jump history though)
 - [ ] Fix overscroll in reader
 - [ ] Add more "continue reading" in the sidebar
+- [ ] Fix measurement for "in this page" pinned sidebar scroll detection
+- [ ] Consider tanstack virtual for highlights page? Slight lag
+- [ ] Keeping the images and the book name in the same column on mobile (since one column only)
 
 ### Later
 
