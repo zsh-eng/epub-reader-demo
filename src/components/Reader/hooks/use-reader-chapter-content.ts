@@ -64,6 +64,7 @@ export function useReaderChapterContent({
     fileHash,
     chapterEntries,
     publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
   });
   const highlightsQuery = useBookHighlightsQuery(bookId);
   const bookHighlights = highlightsQuery.data ?? [];

@@ -84,6 +84,7 @@ describe("reader body cache", () => {
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
     });
 
     const chapterContent = result.baseContentByChapter.get(0);
@@ -111,6 +112,7 @@ describe("reader body cache", () => {
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
     });
     await db.bookFiles.put(createChapterFile("book-1", "<p>Changed</p>"));
 
@@ -119,6 +121,7 @@ describe("reader body cache", () => {
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
     });
 
     expect(
@@ -134,6 +137,7 @@ describe("reader body cache", () => {
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
     });
     await db.bookFiles.put(createChapterFile("book-1", "<p>Second file</p>"));
 
@@ -142,6 +146,7 @@ describe("reader body cache", () => {
       fileHash: "hash-2",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
     });
 
     expect(
@@ -170,6 +175,7 @@ describe("reader body cache", () => {
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
     });
 
     expect(
@@ -184,6 +190,7 @@ describe("reader body cache", () => {
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: true,
+      matchPublisherBodyTextSize: false,
     });
 
     expect(
@@ -212,11 +219,27 @@ describe("reader body cache", () => {
       ),
     ]);
 
+    const defaultResult = await loadReaderBodyCache({
+      bookId: "book-1",
+      fileHash: "hash-1",
+      chapterEntries: [chapterEntry],
+      publisherBookStylingEnabled: true,
+      matchPublisherBodyTextSize: false,
+    });
+
+    expect(
+      defaultResult.baseContentByChapter.get(0)?.publisherBodyFontScale,
+    ).toBeUndefined();
+    expect(
+      (await getBookChapterSourceCache("book-1"))?.publisherBodyScaleLoaded,
+    ).toBe(false);
+
     const result = await loadReaderBodyCache({
       bookId: "book-1",
       fileHash: "hash-1",
       chapterEntries: [chapterEntry],
-      publisherBookStylingEnabled: false,
+      publisherBookStylingEnabled: true,
+      matchPublisherBodyTextSize: true,
     });
 
     expect(
@@ -225,6 +248,9 @@ describe("reader body cache", () => {
     expect(
       (await getBookChapterSourceCache("book-1"))?.publisherBodyFontScale,
     ).toBeCloseTo(0.75, 5);
+    expect(
+      (await getBookChapterSourceCache("book-1"))?.publisherBodyScaleLoaded,
+    ).toBe(true);
   });
 
   it("removes the body cache when a book is deleted", async () => {

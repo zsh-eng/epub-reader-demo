@@ -8,7 +8,6 @@ import {
 } from "@/lib/db";
 import {
   inferPublisherBodyFontScale,
-  parseChapterHtml,
   type PublisherFontFace,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
@@ -17,13 +16,12 @@ import {
   buildReaderChapterCachedContent,
   decorateChapterContent,
   loadBaseChapterContent,
+  type ParsedChapterBlocks,
   type ReaderBaseChapterContent,
   type ReaderChapterCachedContent,
   type ReaderDecoratedChapterArtifact,
 } from "../chapter-content-pipeline";
-import {
-  createChapterStylesheetLoader,
-} from "../chapter-stylesheets";
+import { createChapterStylesheetLoader } from "../chapter-stylesheets";
 import {
   createPublisherFontFaceLoader,
   dedupePublisherFontFaces,
@@ -89,28 +87,12 @@ function buildBaseContentByChapter(
   return baseContentByChapter;
 }
 
-function inferPublisherBodyFontScaleFromChapterContents(
-  chapterEntries: ChapterEntry[],
-  chapterContentsByPath: Map<string, ReaderChapterCachedContent>,
-): number | undefined {
-  const blocks = chapterEntries.flatMap((chapter) => {
-    const chapterContent = chapterContentsByPath.get(chapter.href);
-    if (!chapterContent) return [];
-
-    return parseChapterHtml(chapterContent.bodyHtml, {
-      publisherBookStylingEnabled: true,
-      bookStylesheets: chapterContent.bookStylesheets ?? [],
-    });
-  });
-
-  return inferPublisherBodyFontScale(blocks);
-}
-
 async function buildChapterContentsFromFiles(
   bookId: string,
   chapterEntries: ChapterEntry[],
   allChapterFiles: Map<string, BookFile>,
   includePublisherResources: boolean,
+  includePublisherBodyScale: boolean,
 ): Promise<{
   chaptersByPath: Record<string, BookChapterSourceCacheEntry>;
   chapterContentsByPath: Map<string, ReaderChapterCachedContent>;
@@ -121,6 +103,7 @@ async function buildChapterContentsFromFiles(
   const chapterContentsByPath = new Map<string, ReaderChapterCachedContent>();
   const loadedResourceFiles = new Map<string, BookFile>();
   const publisherFontFaces: PublisherFontFace[] = [];
+  const publisherBodyScaleBlocks: ParsedChapterBlocks = [];
 
   function getTypedContent(file: BookFile): Blob {
     if (file.content.type || !file.mediaType) return file.content;
@@ -157,6 +140,7 @@ async function buildChapterContentsFromFiles(
       chapter,
       loadResource,
       includePublisherResources,
+      collectPublisherBodyScaleBlocks: includePublisherBodyScale,
       chapterStylesheetLoader,
       publisherFontFaceLoader,
     });
@@ -166,21 +150,21 @@ async function buildChapterContentsFromFiles(
       bookStylesheets: chapterContent.bookStylesheets,
     };
     publisherFontFaces.push(...(chapterContent.publisherFontFaces ?? []));
+    publisherBodyScaleBlocks.push(
+      ...(chapterContent.publisherBodyScaleBlocks ?? []),
+    );
     chapterContentsByPath.set(chapter.href, chapterContent);
   }
 
-  const publisherBodyFontScale = inferPublisherBodyFontScaleFromChapterContents(
-    chapterEntries,
-    chapterContentsByPath,
-  );
+  const publisherBodyFontScale = includePublisherBodyScale
+    ? inferPublisherBodyFontScale(publisherBodyScaleBlocks)
+    : undefined;
 
   return {
     chaptersByPath,
     chapterContentsByPath,
     publisherFontFaces: dedupePublisherFontFaces(publisherFontFaces),
-    ...(publisherBodyFontScale !== undefined
-      ? { publisherBodyFontScale }
-      : {}),
+    ...(publisherBodyFontScale !== undefined ? { publisherBodyFontScale } : {}),
   };
 }
 
@@ -194,13 +178,17 @@ export async function loadReaderBodyCache(options: {
   fileHash: string;
   chapterEntries: ChapterEntry[];
   publisherBookStylingEnabled: boolean;
+  matchPublisherBodyTextSize: boolean;
 }): Promise<ReaderBodyCacheData> {
   const {
     bookId,
     fileHash,
     chapterEntries,
     publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
   } = options;
+  const includePublisherBodyScale =
+    publisherBookStylingEnabled && matchPublisherBodyTextSize;
   const startedAt = performance.now();
   const cachedChapterSourceRow = await getBookChapterSourceCache(bookId);
 
@@ -209,7 +197,9 @@ export async function loadReaderBodyCache(options: {
     cachedChapterSourceRow.cacheVersion === READER_BODY_CACHE_SCHEMA_VERSION &&
     cachedChapterSourceRow.fileHash === fileHash &&
     (!publisherBookStylingEnabled ||
-      cachedChapterSourceRow.publisherResourcesLoaded === true)
+      cachedChapterSourceRow.publisherResourcesLoaded === true) &&
+    (!includePublisherBodyScale ||
+      cachedChapterSourceRow.publisherBodyScaleLoaded === true)
   ) {
     const chapterContentsByPath = readCachedChapterContents(
       cachedChapterSourceRow.chaptersByPath,
@@ -237,6 +227,7 @@ export async function loadReaderBodyCache(options: {
     chapterEntries,
     allChapterFiles,
     publisherBookStylingEnabled,
+    includePublisherBodyScale,
   );
 
   await putBookChapterSourceCache(
@@ -246,6 +237,7 @@ export async function loadReaderBodyCache(options: {
     READER_BODY_CACHE_SCHEMA_VERSION,
     publisherBookStylingEnabled,
     builtChapterContents.publisherFontFaces,
+    includePublisherBodyScale,
     builtChapterContents.publisherBodyFontScale,
   );
 

@@ -72,8 +72,8 @@ export function SpreadStage({
         onClick={handlePageContentClick}
         className="relative h-full w-full overflow-hidden"
       >
-        {disableAnimations ? (
-          spread ? (
+        <AnimatePresence custom={direction} initial={false} mode="sync">
+          {spread && (
             <AnimatedSpread
               key={spread.currentSpread}
               spread={spread}
@@ -81,31 +81,14 @@ export function SpreadStage({
               columnSpacingPx={columnSpacingPx}
               paginationConfig={paginationConfig}
               showDebugOutlines={showDebugOutlines}
-              disableAnimations
+              disableAnimations={disableAnimations}
               paddingTopPx={paddingTopPx}
               paddingBottomPx={paddingBottomPx}
               paddingLeftPx={paddingLeftPx}
               paddingRightPx={paddingRightPx}
             />
-          ) : null
-        ) : (
-          <AnimatePresence custom={direction} mode="sync">
-            {spread && (
-              <AnimatedSpread
-                key={spread.currentSpread}
-                spread={spread}
-                spreadConfig={spreadConfig}
-                columnSpacingPx={columnSpacingPx}
-                paginationConfig={paginationConfig}
-                showDebugOutlines={showDebugOutlines}
-                paddingTopPx={paddingTopPx}
-                paddingBottomPx={paddingBottomPx}
-                paddingLeftPx={paddingLeftPx}
-                paddingRightPx={paddingRightPx}
-              />
-            )}
-          </AnimatePresence>
-        )}
+          )}
+        </AnimatePresence>
       </div>
     </MotionConfig>
   );

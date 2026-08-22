@@ -177,23 +177,15 @@ export function AnimatedSpread({
     </>
   );
 
-  if (disableAnimations) {
-    return (
-      <div className="absolute inset-0 h-full w-full overflow-hidden bg-background">
-        {content}
-      </div>
-    );
-  }
-
   return (
     <motion.div
       className="absolute inset-0 h-full w-full overflow-hidden bg-background"
       style={{ zIndex }}
       custom={direction}
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
+      variants={disableAnimations ? undefined : pageVariants}
+      initial={disableAnimations ? false : "initial"}
+      animate={disableAnimations ? undefined : "animate"}
+      exit={disableAnimations ? undefined : "exit"}
     >
       {content}
     </motion.div>

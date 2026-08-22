@@ -56,7 +56,12 @@ export async function prefetchReaderBook(
 
   if (chapterEntries.length === 0) return;
 
-  const bodyCacheKey = readerBodyCacheKeys.book(book.id, book.fileHash, false);
+  const bodyCacheKey = readerBodyCacheKeys.book(
+    book.id,
+    book.fileHash,
+    false,
+    false,
+  );
   const checkpointKey = readerCheckpointKeys.currentDevice(book.id);
   const highlightsKey = highlightKeys.book(book.id);
 
@@ -81,6 +86,7 @@ export async function prefetchReaderBook(
           fileHash: book.fileHash,
           chapterEntries,
           publisherBookStylingEnabled: false,
+          matchPublisherBodyTextSize: false,
         }),
       staleTime: Infinity,
       gcTime: Infinity,
@@ -103,14 +109,12 @@ export async function prefetchReaderBook(
 
   if (!includeArtifacts) return;
 
-  const bodyCache =
-    queryClient.getQueryData<ReaderBodyCacheData>(bodyCacheKey);
+  const bodyCache = queryClient.getQueryData<ReaderBodyCacheData>(bodyCacheKey);
   if (!bodyCache) return;
 
   const checkpointData =
     queryClient.getQueryData<ReaderCheckpointData>(checkpointKey);
-  const highlights =
-    queryClient.getQueryData<Highlight[]>(highlightsKey) ?? [];
+  const highlights = queryClient.getQueryData<Highlight[]>(highlightsKey) ?? [];
   const initialLocation = resolveInitialReaderLocation(
     checkpointData?.checkpoint,
     chapterEntries.length,

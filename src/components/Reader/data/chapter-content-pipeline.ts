@@ -42,6 +42,7 @@ export interface ReaderChapterCachedContent {
   canonicalText: ChapterCanonicalText;
   bookStylesheets?: BookStylesheet[];
   publisherFontFaces?: PublisherFontFace[];
+  publisherBodyScaleBlocks?: ParsedChapterBlocks;
 }
 
 export interface ReaderDecoratedChapterArtifact {
@@ -147,6 +148,7 @@ export async function buildReaderChapterCachedContent(options: {
   chapter: ChapterEntry;
   loadResource?: (path: string) => Promise<Blob | null>;
   includePublisherResources?: boolean;
+  collectPublisherBodyScaleBlocks?: boolean;
   chapterStylesheetLoader?: ChapterStylesheetLoader;
   publisherFontFaceLoader?: PublisherFontFaceLoader;
 }): Promise<ReaderChapterCachedContent> {
@@ -156,6 +158,7 @@ export async function buildReaderChapterCachedContent(options: {
     chapter,
     loadResource = async () => null,
     includePublisherResources = false,
+    collectPublisherBodyScaleBlocks = false,
     chapterStylesheetLoader,
     publisherFontFaceLoader,
   } = options;
@@ -168,7 +171,6 @@ export async function buildReaderChapterCachedContent(options: {
     loadLinkedResources: false,
   });
   const bodyHtml = chapterDoc.querySelector("body")?.innerHTML ?? "";
-  const { canonicalText } = parseChapterHtmlWithCanonicalText(bodyHtml);
 
   // Book Page Break Hints are structural, so linked and embedded CSS is loaded
   // even when Publisher Book Styling is off. Font-face loading remains gated by
@@ -180,25 +182,41 @@ export async function buildReaderChapterCachedContent(options: {
     chapter,
     stylesheetLoader,
   });
+  const parsedChapter = parseChapterHtmlWithCanonicalText(
+    bodyHtml,
+    collectPublisherBodyScaleBlocks
+      ? {
+          publisherBookStylingEnabled: true,
+          bookStylesheets,
+        }
+      : {},
+  );
 
   if (!includePublisherResources) {
     return {
       bodyHtml,
-      canonicalText,
+      canonicalText: parsedChapter.canonicalText,
       bookStylesheets,
       publisherFontFaces: [],
+      ...(collectPublisherBodyScaleBlocks
+        ? { publisherBodyScaleBlocks: parsedChapter.blocks }
+        : {}),
     };
   }
 
   const fontFaceLoader =
     publisherFontFaceLoader ?? createPublisherFontFaceLoader(loadResource);
-  const publisherFontFaces = await fontFaceLoader.loadFontFaces(bookStylesheets);
+  const publisherFontFaces =
+    await fontFaceLoader.loadFontFaces(bookStylesheets);
 
   return {
     bodyHtml,
-    canonicalText,
+    canonicalText: parsedChapter.canonicalText,
     bookStylesheets,
     publisherFontFaces,
+    ...(collectPublisherBodyScaleBlocks
+      ? { publisherBodyScaleBlocks: parsedChapter.blocks }
+      : {}),
   };
 }
 
@@ -218,9 +236,7 @@ export function loadBaseChapterContent(options: {
     canonicalText: chapterContent.canonicalText,
     bookStylesheets: chapterContent.bookStylesheets ?? [],
     publisherFontFaces: chapterContent.publisherFontFaces ?? [],
-    ...(publisherBodyFontScale !== undefined
-      ? { publisherBodyFontScale }
-      : {}),
+    ...(publisherBodyFontScale !== undefined ? { publisherBodyFontScale } : {}),
   };
 }
 

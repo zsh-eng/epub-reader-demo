@@ -2,7 +2,6 @@ import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightTo
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
@@ -111,7 +110,7 @@ export function Reader() {
     const hasTerminalError =
       sessionState.status === "not-found" ||
       sessionState.status === "file-error";
-    if (displayReady || hasTerminalError) {
+    if (sessionState.book || hasTerminalError) {
       setShowPreparationStatus(false);
       return;
     }
@@ -123,7 +122,7 @@ export function Reader() {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [displayReady, sessionState.status]);
+  }, [sessionState.book, sessionState.status]);
 
   if (sessionState.status === "not-found" || !bookId) {
     return (
@@ -224,10 +223,7 @@ export function Reader() {
 
   return (
     <div className="relative h-dvh overflow-hidden bg-background">
-      <div
-        className={cn("h-full", !displayReady && "invisible")}
-        aria-hidden={!displayReady}
-      >
+      <div className="h-full">
         <ReaderController
           onNextPage={sessionActions.nextSpread}
           onPrevPage={sessionActions.prevSpread}
@@ -237,7 +233,8 @@ export function Reader() {
           isChromeSuppressed={
             chromeState.activeReaderSheet !== null ||
             isSidebarOpen ||
-            isMobileSidebarOpen
+            isMobileSidebarOpen ||
+            !displayReady
           }
           containerRef={stageSlotRef}
           topRailHeight={topRailHeight}
@@ -302,7 +299,6 @@ export function Reader() {
                     paginationConfig={sessionState.pagination.paginationConfig}
                     stageContentRef={stageContentRef}
                     onLinkActivate={sessionActions.openInternalHref}
-                    disableAnimations={!displayReady}
                     paddingTopPx={stagePadding.paddingTop}
                     paddingBottomPx={stagePadding.paddingBottom}
                     paddingLeftPx={stagePadding.paddingX}
@@ -310,6 +306,17 @@ export function Reader() {
                   />
                 </DeferredEpubImageProvider>
               </div>
+
+              <ReaderHeader
+                chromeVisible={!displayReady || chromeVisible}
+                chromeSurfaceProps={chromeSurfaceProps}
+                bookTitle={book.title}
+                isBookmarked={chromeState.isBookmarked}
+                onToggleBookmark={chromeActions.toggleBookmark}
+                onOpenMenu={() => {
+                  if (displayReady) chromeActions.openReaderSheet("tools");
+                }}
+              />
 
               {displayReady && (
                 <>
@@ -319,16 +326,6 @@ export function Reader() {
                       className="absolute inset-0 z-[16] bg-transparent"
                     />
                   )}
-
-                  {/* Floating header — reading padding is rail-based, not chrome-height-based. */}
-                  <ReaderHeader
-                    chromeVisible={chromeVisible}
-                    chromeSurfaceProps={chromeSurfaceProps}
-                    bookTitle={book.title}
-                    isBookmarked={chromeState.isBookmarked}
-                    onToggleBookmark={chromeActions.toggleBookmark}
-                    onOpenMenu={() => chromeActions.openReaderSheet("tools")}
-                  />
 
                   <ReaderSheetHost
                     activeSheet={chromeState.activeReaderSheet}
@@ -401,11 +398,6 @@ export function Reader() {
           )}
         </ReaderController>
       </div>
-      {!displayReady && showPreparationStatus && (
-        <div className="absolute inset-0">
-          <ReaderStateScreen title="Preparing book" />
-        </div>
-      )}
     </div>
   );
 }

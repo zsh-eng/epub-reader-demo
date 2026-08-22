@@ -36,6 +36,7 @@ export const readerBodyCacheKeys = {
     bookId: string,
     fileHash: string,
     publisherBookStylingEnabled: boolean,
+    matchPublisherBodyTextSize: boolean,
   ) =>
     [
       "readerBodyCache",
@@ -43,6 +44,7 @@ export const readerBodyCacheKeys = {
       bookId,
       fileHash,
       getPublisherStylingCacheKey(publisherBookStylingEnabled),
+      matchPublisherBodyTextSize ? "body-size-match-on" : "body-size-match-off",
     ] as const,
 };
 
@@ -112,12 +114,14 @@ export function useReaderBodyCacheQuery(options: {
   fileHash?: string;
   chapterEntries: ChapterEntry[];
   publisherBookStylingEnabled: boolean;
+  matchPublisherBodyTextSize: boolean;
 }) {
   const {
     bookId,
     fileHash,
     chapterEntries,
     publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
   } = options;
 
   return useQuery({
@@ -125,6 +129,7 @@ export function useReaderBodyCacheQuery(options: {
       bookId ?? "",
       fileHash ?? "",
       publisherBookStylingEnabled,
+      matchPublisherBodyTextSize,
     ),
     queryFn: () =>
       loadReaderBodyCache({
@@ -132,6 +137,7 @@ export function useReaderBodyCacheQuery(options: {
         fileHash: fileHash!,
         chapterEntries,
         publisherBookStylingEnabled,
+        matchPublisherBodyTextSize,
       }),
     enabled: !!bookId && !!fileHash && chapterEntries.length > 0,
     staleTime: Infinity,
@@ -215,9 +221,7 @@ export function useReaderChapterArtifactsLoader(options: {
     Map<number, ReaderDecoratedChapterArtifact>
   >(new Map());
   const signaturesByChapterRef = useRef<Map<number, string>>(new Map());
-  const listenersRef = useRef<Set<ReaderChapterArtifactSubscriber>>(
-    new Set(),
-  );
+  const listenersRef = useRef<Set<ReaderChapterArtifactSubscriber>>(new Set());
 
   const highlightsBySpineItemId = useMemo(
     () => buildHighlightsBySpineItemId(highlights),
@@ -305,8 +309,7 @@ export function useReaderChapterArtifactsLoader(options: {
 
         const currentSignature =
           signaturesByChapterRef.current.get(chapterIndex);
-        const currentArtifact =
-          artifactsByChapterRef.current.get(chapterIndex);
+        const currentArtifact = artifactsByChapterRef.current.get(chapterIndex);
 
         if (currentArtifact && currentSignature === artifactSignature) {
           continue;
@@ -356,24 +359,21 @@ export function useReaderChapterArtifactsLoader(options: {
     [],
   );
 
-  const subscribe = useCallback(
-    (listener: ReaderChapterArtifactSubscriber) => {
-      listenersRef.current.add(listener);
+  const subscribe = useCallback((listener: ReaderChapterArtifactSubscriber) => {
+    listenersRef.current.add(listener);
 
-      for (const artifact of artifactsByChapterRef.current.values()) {
-        listener({
-          kind: "loaded",
-          chapterIndex: artifact.chapterIndex,
-          artifact,
-        });
-      }
+    for (const artifact of artifactsByChapterRef.current.values()) {
+      listener({
+        kind: "loaded",
+        chapterIndex: artifact.chapterIndex,
+        artifact,
+      });
+    }
 
-      return () => {
-        listenersRef.current.delete(listener);
-      };
-    },
-    [],
-  );
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
 
   return {
     getChapterBlocks,

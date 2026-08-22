@@ -213,6 +213,7 @@ export interface BookChapterSourceCache {
   fileHash: string;
   cacheVersion: number;
   publisherResourcesLoaded?: boolean;
+  publisherBodyScaleLoaded?: boolean;
   publisherBodyFontScale?: number;
   chaptersByPath: Record<string, BookChapterSourceCacheEntry>;
   publisherFontFaces?: {
@@ -582,6 +583,7 @@ export async function putBookChapterSourceCache(
   cacheVersion: number,
   publisherResourcesLoaded: boolean,
   publisherFontFaces: BookChapterSourceCache["publisherFontFaces"] = [],
+  publisherBodyScaleLoaded = false,
   publisherBodyFontScale?: number,
 ): Promise<string> {
   await db.bookChapterSourceCache.put({
@@ -589,6 +591,7 @@ export async function putBookChapterSourceCache(
     fileHash,
     cacheVersion,
     publisherResourcesLoaded,
+    publisherBodyScaleLoaded,
     ...(publisherBodyFontScale !== undefined ? { publisherBodyFontScale } : {}),
     chaptersByPath,
     publisherFontFaces,
