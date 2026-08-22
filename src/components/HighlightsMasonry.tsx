@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input";
+import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { useFileUrl } from "@/hooks/use-file-url";
 import {
   useAllHighlightsQuery,
@@ -962,9 +963,13 @@ export function HighlightsMasonry() {
   return (
     <div className="min-h-svh bg-background text-foreground">
       <section className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
-        <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
-          Highlights
-        </h1>
+        <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
+          <MobileBackToLibrary />
+          <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
+            Highlights
+          </h1>
+          <div className="size-8 md:hidden" aria-hidden="true" />
+        </div>
         {!isLoading && groups.length > 0 && (
           <p className="mt-3 text-sm text-muted-foreground">
             {totalHighlightCount} highlights across {groups.length}{" "}

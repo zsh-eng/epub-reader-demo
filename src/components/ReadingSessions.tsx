@@ -1,5 +1,6 @@
+import { ContinueReadingCard } from "@/components/ContinueReadingCard";
+import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SEGMENTED_PILL_TRANSITION } from "@/components/ui/segmented-controls";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReadingSessionsQuery } from "@/hooks/use-reading-sessions-query";
 import {
@@ -16,8 +17,7 @@ import {
 } from "@/lib/reading-session-stats";
 import { format, formatDistanceToNow, subMonths } from "date-fns";
 import { BookOpenText, CalendarDays, Clock3, Timer } from "lucide-react";
-import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 type ReadingSessionScale = "week" | "month" | "year" | "all";
@@ -105,83 +105,57 @@ function TimeRangeNavigator({
   onRangeChange: (range: ReadingSessionRange) => void;
 }) {
   const activeRangeKey = getRangeKey(range);
-  const scaleLayoutGroupId = useId();
-  const rangeLayoutGroupId = useId();
-  const reducedMotion = useReducedMotion() ?? false;
-  const selectionTransition = reducedMotion
-    ? { duration: 0 }
-    : SEGMENTED_PILL_TRANSITION;
 
   return (
     <div className="mx-auto w-full max-w-2xl">
-      <LayoutGroup id={scaleLayoutGroupId}>
-        <nav
-          aria-label="Reading history scale"
-          className="relative isolate mx-auto flex h-9 w-full max-w-sm rounded-xl bg-muted p-1"
-        >
-          {SCALE_OPTIONS.map((option) => {
-            const isActive = option.value === scale;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => onScaleChange(option.value)}
-                className={`relative flex-1 cursor-pointer rounded-lg px-3 text-xs font-medium outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring ${
-                  isActive
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {isActive && (
-                  <motion.span
-                    layout="position"
-                    layoutId="sessions-scale-selection"
-                    aria-hidden="true"
-                    initial={false}
-                    transition={selectionTransition}
-                    className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-background shadow-sm ring-1 ring-border/70"
-                  />
-                )}
-                <span className="relative z-10">{option.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </LayoutGroup>
+      <nav
+        aria-label="Reading history scale"
+        className="relative mx-auto flex h-12 w-full max-w-sm rounded-xl bg-muted p-0.5 md:h-9 md:p-1"
+      >
+        {SCALE_OPTIONS.map((option) => {
+          const isActive = option.value === scale;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => onScaleChange(option.value)}
+              className={`relative flex-1 cursor-pointer rounded-lg px-3 text-sm font-medium outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98] motion-reduce:transition-colors motion-reduce:active:scale-100 md:text-xs ${
+                isActive
+                  ? "bg-background text-foreground shadow-sm ring-1 ring-border/70"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </nav>
 
-      <LayoutGroup id={rangeLayoutGroupId}>
-        <nav
-          aria-label="Reading history period"
-          className="relative isolate mt-2 -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
-        >
-          {rangeOptions.map((option) => {
-            const optionKey = getRangeKey(option.range);
-            const isActive = optionKey === activeRangeKey;
-            return (
-              <button
-                key={optionKey}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => onRangeChange(option.range)}
-                className="relative shrink-0 cursor-pointer rounded-full px-3 py-1.5 text-xs font-medium text-foreground outline-none transition-colors duration-150 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {isActive && (
-                  <motion.span
-                    layout="position"
-                    layoutId={`sessions-range-selection-${scale}`}
-                    aria-hidden="true"
-                    initial={false}
-                    transition={selectionTransition}
-                    className="pointer-events-none absolute inset-0 z-0 rounded-[inherit] bg-secondary shadow-sm ring-1 ring-border/70"
-                  />
-                )}
-                <span className="relative z-10">{option.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </LayoutGroup>
+      <nav
+        aria-label="Reading history period"
+        className="relative mt-2 -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] md:mx-0 md:px-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {rangeOptions.map((option) => {
+          const optionKey = getRangeKey(option.range);
+          const isActive = optionKey === activeRangeKey;
+          return (
+            <button
+              key={optionKey}
+              type="button"
+              aria-pressed={isActive}
+              onClick={() => onRangeChange(option.range)}
+              className={`relative min-h-11 shrink-0 cursor-pointer rounded-full px-4 py-2.5 text-sm font-medium text-foreground outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100 md:min-h-0 md:px-3 md:py-1.5 md:text-xs ${
+                isActive
+                  ? "bg-secondary shadow-sm ring-1 ring-border/70"
+                  : "hover:bg-muted"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </nav>
     </div>
   );
 }
@@ -309,13 +283,12 @@ type ReadingInvitation =
       kind: "keep-reading";
       bookId: string;
       bookTitle: string;
-      hasStartedReading: boolean;
+      lastReadAt: number | null;
     };
 
 function getReadingInvitation(
   books: readonly ReadingSessionBookRecord[],
   sessions: readonly ReadingSessionAnalyticsRecord[],
-  totalRecordedReadingTime: number,
   now: number,
 ): ReadingInvitation {
   const firstBook = books.at(0);
@@ -344,34 +317,51 @@ function getReadingInvitation(
     kind: "keep-reading",
     bookId: targetBook.id,
     bookTitle: targetBook.title,
-    hasStartedReading: totalRecordedReadingTime > 0,
+    lastReadAt: Number.isFinite(latestReadAt) ? latestReadAt : null,
   };
 }
 
 function SessionsHeader() {
   return (
     <header className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
-      <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
-        Sessions
-      </h1>
+      <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
+        <MobileBackToLibrary />
+        <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
+          Sessions
+        </h1>
+        <div className="size-8 md:hidden" aria-hidden="true" />
+      </div>
     </header>
   );
 }
 
-function SessionsEmptyState({ invitation }: { invitation: ReadingInvitation }) {
-  const hasEmptyLibrary = invitation.kind === "empty-library";
-  const title = hasEmptyLibrary ? "Find your next book" : "Keep reading";
-  const description = hasEmptyLibrary
-    ? "Add something to your library and begin. Your reading history will gather here as you go."
-    : invitation.hasStartedReading
-      ? `Return to ${invitation.bookTitle} and let your reading history take shape.`
-      : `Open ${invitation.bookTitle} and begin your reading history.`;
-  const destination = hasEmptyLibrary ? "/" : `/reader/${invitation.bookId}`;
-  const action = hasEmptyLibrary
-    ? "Browse library"
-    : invitation.hasStartedReading
-      ? "Continue reading"
-      : "Start reading";
+function getInvitationActivityLabel(lastReadAt: number | null): string {
+  if (!lastReadAt) return "Open your book to begin";
+  return `Last read ${formatDistanceToNow(new Date(lastReadAt), {
+    addSuffix: true,
+  })}`;
+}
+
+function SessionsEmptyState({
+  invitation,
+  coverUrl,
+}: {
+  invitation: ReadingInvitation;
+  coverUrl: string | undefined;
+}) {
+  if (invitation.kind === "keep-reading") {
+    return (
+      <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-20">
+        <ContinueReadingCard
+          bookId={invitation.bookId}
+          bookTitle={invitation.bookTitle}
+          coverUrl={coverUrl}
+          activityLabel={getInvitationActivityLabel(invitation.lastReadAt)}
+          className="w-full max-w-sm"
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-20">
@@ -387,16 +377,17 @@ function SessionsEmptyState({ invitation }: { invitation: ReadingInvitation }) {
           </span>
         </div>
         <h2 className="font-serif text-3xl font-medium tracking-tight md:text-4xl">
-          {title}
+          Find your next book
         </h2>
         <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
-          {description}
+          Add something to your library and begin. Your reading history will
+          gather here as you go.
         </p>
         <Link
-          to={destination}
+          to="/"
           className="mt-7 inline-flex min-h-10 items-center justify-center rounded-full bg-foreground px-5 py-2.5 text-sm font-medium text-background outline-none transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
         >
-          {action}
+          Browse library
         </Link>
       </section>
     </main>
@@ -406,30 +397,23 @@ function SessionsEmptyState({ invitation }: { invitation: ReadingInvitation }) {
 function RecentReadingEmptyState({
   bookId,
   bookTitle,
+  coverUrl,
+  lastReadAt,
 }: {
   bookId: string;
   bookTitle: string;
+  coverUrl: string | undefined;
+  lastReadAt: number | null;
 }) {
   return (
-    <div className="flex min-h-72 flex-1 flex-col items-center justify-center px-5 py-8 text-center">
-      <span className="mb-5 grid size-14 place-items-center rounded-full bg-secondary">
-        <BookOpenText
-          className="size-5 text-muted-foreground"
-          aria-hidden="true"
-        />
-      </span>
-      <p className="max-w-xs font-serif text-2xl font-medium tracking-tight">
-        Continue {bookTitle}
-      </p>
-      <p className="mt-2 max-w-xs text-sm leading-6 text-muted-foreground">
-        Return to your book and your next reading session will appear here.
-      </p>
-      <Link
-        to={`/reader/${bookId}`}
-        className="mt-6 inline-flex min-h-9 items-center justify-center rounded-full border bg-background px-4 py-2 text-sm font-medium outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
-      >
-        Continue reading
-      </Link>
+    <div className="flex min-h-72 flex-1 items-center justify-center px-4 py-8">
+      <ContinueReadingCard
+        bookId={bookId}
+        bookTitle={bookTitle}
+        coverUrl={coverUrl}
+        activityLabel={getInvitationActivityLabel(lastReadAt)}
+        className="w-full max-w-sm"
+      />
     </div>
   );
 }
@@ -467,16 +451,6 @@ export function ReadingSessions() {
       }),
     [query.data?.books, query.data?.sessions, range],
   );
-  const summaryBooks = useMemo(() => {
-    const booksById = new Map(
-      (query.data?.books ?? []).map((book) => [book.id, book]),
-    );
-    return overview.bookSummaries
-      .map((summary) => booksById.get(summary.bookId))
-      .filter((book) => book !== undefined);
-  }, [overview.bookSummaries, query.data?.books]);
-  const { coverUrls } = useLibraryCoverUrls(summaryBooks);
-  const maxBookTime = overview.bookSummaries[0]?.activeMs ?? 0;
   const totalRecordedReadingTime = useMemo(
     () =>
       getTotalRecordedReadingTime(query.data?.sessions ?? [], now.getTime()),
@@ -487,11 +461,30 @@ export function ReadingSessions() {
       getReadingInvitation(
         query.data?.books ?? [],
         query.data?.sessions ?? [],
-        totalRecordedReadingTime,
         now.getTime(),
       ),
-    [now, query.data?.books, query.data?.sessions, totalRecordedReadingTime],
+    [now, query.data?.books, query.data?.sessions],
   );
+  const summaryBooks = useMemo(() => {
+    const booksById = new Map(
+      (query.data?.books ?? []).map((book) => [book.id, book]),
+    );
+    const books = overview.bookSummaries
+      .map((summary) => booksById.get(summary.bookId))
+      .filter((book) => book !== undefined);
+
+    if (invitation.kind === "empty-library") return books;
+    const invitationBook = booksById.get(invitation.bookId);
+    if (
+      !invitationBook ||
+      books.some((book) => book.id === invitationBook.id)
+    ) {
+      return books;
+    }
+    return [...books, invitationBook];
+  }, [invitation, overview.bookSummaries, query.data?.books]);
+  const { coverUrls } = useLibraryCoverUrls(summaryBooks);
+  const maxBookTime = overview.bookSummaries[0]?.activeMs ?? 0;
   if (query.isLoading) {
     return (
       <div className="min-h-svh bg-background text-foreground">
@@ -525,7 +518,14 @@ export function ReadingSessions() {
     return (
       <div className="flex min-h-svh flex-col bg-background text-foreground">
         <SessionsHeader />
-        <SessionsEmptyState invitation={invitation} />
+        <SessionsEmptyState
+          invitation={invitation}
+          coverUrl={
+            invitation.kind === "keep-reading"
+              ? coverUrls.get(invitation.bookId)
+              : undefined
+          }
+        />
       </div>
     );
   }
@@ -714,6 +714,8 @@ export function ReadingSessions() {
                 <RecentReadingEmptyState
                   bookId={invitation.bookId}
                   bookTitle={invitation.bookTitle}
+                  coverUrl={coverUrls.get(invitation.bookId)}
+                  lastReadAt={invitation.lastReadAt}
                 />
               )}
             </section>

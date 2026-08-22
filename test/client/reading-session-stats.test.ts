@@ -129,7 +129,7 @@ describe("buildReadingSessionsOverview", () => {
     ]);
   });
 
-  it("filters a calendar year and keeps short visits out of recent reading", () => {
+  it("filters a calendar year and keeps visits under five minutes out of recent reading", () => {
     const overview = buildReadingSessionsOverview({
       sessions: [
         {
@@ -142,7 +142,7 @@ describe("buildReadingSessionsOverview", () => {
           id: "short-last-year",
           bookId: "book-b",
           startedAt: new Date(2025, 6, 15, 9).getTime(),
-          activeMs: 9 * 60 * 1000,
+          activeMs: 4 * 60 * 1000,
         },
         session("this-year", "book-b", 1, HOUR * 2),
       ],
@@ -155,6 +155,19 @@ describe("buildReadingSessionsOverview", () => {
     expect(overview.timeBuckets).toHaveLength(12);
     expect(overview.recentSessions.map((item) => item.id)).toEqual([
       "last-year",
+    ]);
+  });
+
+  it("counts a five-minute visit as recent reading", () => {
+    const overview = buildReadingSessionsOverview({
+      sessions: [session("five-minutes", "book-a", 0, 5 * 60 * 1000)],
+      books,
+      range: { kind: "rolling", days: 7 },
+      now: NOW,
+    });
+
+    expect(overview.recentSessions.map((item) => item.id)).toEqual([
+      "five-minutes",
     ]);
   });
 });

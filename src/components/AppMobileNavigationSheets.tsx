@@ -1,12 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { ContinueReadingCard } from "@/components/ContinueReadingCard";
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import type { RecentlyReadBook } from "@/lib/library-sort";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import {
-  BookOpenText,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -180,7 +180,6 @@ function ContinueReadingOrb({
   coverUrl,
   isActive,
 }: ContinueReadingOrbProps) {
-  const springPress = useSpringPressAnimation();
   const activityLabel = isActive
     ? "Reading now"
     : `Last read ${formatDistanceToNow(new Date(recentReading.lastRead), {
@@ -194,51 +193,13 @@ function ContinueReadingOrb({
       animate={{ opacity: 1, transform: "translateY(0px)" }}
       transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
     >
-      <MotionLink
-        to={`/reader/${recentReading.book.id}`}
-        aria-label={`Continue reading ${recentReading.book.title}`}
-        aria-current={isActive ? "page" : undefined}
-        className="group relative block overflow-hidden rounded-[1.5rem] border border-border/60 bg-secondary/35 px-4 pb-4 pt-3 text-center outline-none transition-[background-color,border-color] hover:bg-secondary/55 focus-visible:ring-2 focus-visible:ring-ring/60"
-        {...springPress}
-      >
-        <span
-          className="pointer-events-none absolute left-1/2 top-8 size-36 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-          aria-hidden="true"
-        />
-        <span
-          className="pointer-events-none absolute inset-x-8 bottom-0 h-16 rounded-full bg-secondary/80 blur-2xl"
-          aria-hidden="true"
-        />
-
-        <span className="relative z-10 block text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-          Continue reading
-        </span>
-
-        <span className="relative z-10 my-3 flex justify-center">
-          <span className="relative flex size-24 items-center justify-center overflow-hidden rounded-full border-[5px] border-background bg-secondary shadow-sm ring-1 ring-border/70 transition-transform duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.025] motion-reduce:transition-none">
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt=""
-                aria-hidden="true"
-                className="size-full object-cover"
-              />
-            ) : (
-              <BookOpenText
-                className="size-7 text-muted-foreground/60"
-                aria-hidden="true"
-              />
-            )}
-          </span>
-        </span>
-
-        <span className="relative z-10 block truncate font-serif text-base font-medium tracking-[-0.01em] text-foreground">
-          {recentReading.book.title}
-        </span>
-        <span className="relative z-10 mt-1 block text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          {activityLabel}
-        </span>
-      </MotionLink>
+      <ContinueReadingCard
+        bookId={recentReading.book.id}
+        bookTitle={recentReading.book.title}
+        coverUrl={coverUrl}
+        activityLabel={activityLabel}
+        isActive={isActive}
+      />
     </motion.div>
   );
 }

@@ -23,7 +23,7 @@ export const DEFAULT_READING_SESSION_RANGE: ReadingSessionRange = {
   days: 30,
 };
 
-export const MIN_MEANINGFUL_READING_MS = 10 * 60 * 1000;
+export const MIN_MEANINGFUL_READING_MS = 5 * 60 * 1000;
 
 export interface ReadingSessionAnalyticsRecord {
   id: string;

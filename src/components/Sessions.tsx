@@ -1,4 +1,5 @@
 import { Card } from "@/components/ui/card";
+import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useSessions } from "@/hooks/use-sessions";
@@ -118,11 +119,15 @@ export function Devices() {
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 pt-16 pb-6 md:px-6 md:py-10">
         {/* Header */}
-        <header className="mb-8 flex flex-col">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
-            Devices
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+        <header className="mb-8">
+          <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3 md:block">
+            <MobileBackToLibrary />
+            <h1 className="text-center text-2xl font-bold tracking-tight text-foreground md:text-left">
+              Devices
+            </h1>
+            <div className="size-8 md:hidden" aria-hidden="true" />
+          </div>
+          <p className="mt-1 text-center text-sm text-muted-foreground md:text-left">
             Browsers that are signed in to your account.
           </p>
         </header>
