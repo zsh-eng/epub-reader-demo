@@ -1,4 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AppMobileNavigationSheets } from "@/components/AppMobileNavigationSheets";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -254,6 +255,28 @@ export function AppSidebar() {
       });
     }
   };
+
+  if (isMobile) {
+    return (
+      <AppMobileNavigationSheets
+        isOpen={openMobile}
+        onClose={() => setOpenMobile(false)}
+        activePath={location.pathname}
+        recentReading={recentReading}
+        recentBookCoverUrl={recentBookCoverUrl}
+        isDarkTheme={isDarkTheme}
+        onThemeToggle={handleThemeToggle}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+        onSync={handleSync}
+        isAuthenticated={isAuthenticated}
+        isAuthLoading={isAuthLoading}
+        user={user ?? null}
+        onSignIn={handleGoogleSignIn}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
 
   return (
     <Sidebar>
