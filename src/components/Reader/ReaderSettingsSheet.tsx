@@ -9,6 +9,7 @@ import {
   SegmentedTabsTrigger,
 } from "@/components/ui/segmented-controls";
 import type { ReaderSettings } from "@/types/reader.types";
+import { cn } from "@/lib/utils";
 import { AlignLeft, ChevronLeft, Palette, Type } from "lucide-react";
 import { useState } from "react";
 import { ReaderSheet } from "./shared/ReaderSheet";
@@ -20,6 +21,7 @@ interface ReaderSettingsPanelProps {
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
   activeTab: ReaderSettingsPanelTab;
   onActiveTabChange: (tab: ReaderSettingsPanelTab) => void;
+  className?: string;
 }
 
 interface ReaderSettingsSheetProps {
@@ -81,6 +83,7 @@ export function ReaderSettingsPanel({
   onUpdateSettings,
   activeTab,
   onActiveTabChange,
+  className,
 }: ReaderSettingsPanelProps) {
   return (
     <SegmentedTabs
@@ -88,7 +91,10 @@ export function ReaderSettingsPanel({
       onValueChange={(value) =>
         onActiveTabChange(value as ReaderSettingsPanelTab)
       }
-      className="mt-3 flex h-[30rem] min-h-0 w-full max-w-full flex-col overflow-x-hidden"
+      className={cn(
+        "mt-3 flex h-[30rem] min-h-0 w-full max-w-full flex-col overflow-x-hidden",
+        className,
+      )}
     >
       <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-3 rounded-full bg-secondary/50 p-1 self-center">
         <SegmentedTabsTrigger

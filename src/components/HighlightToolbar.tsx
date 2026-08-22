@@ -33,13 +33,15 @@ export function HighlightToolbar({
   const isMobile = useIsMobile();
   const [noteText, setNoteText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const isBareDesktopPicker = !isMobile && !onNoteSubmit;
 
   // Calculate position directly to avoid layout thrashing/jumping
   // Vertical layout: colors on top, input bar below
-  // Desktop: ~200px width, ~88px height (colors row + input row)
+  // Desktop color-only mode is tightly fitted to the four larger swatches.
+  // A note composer keeps the wider two-row surface.
   // Mobile: ~260px width, ~120px height
-  const toolbarWidth = isMobile ? 260 : 220;
-  const toolbarHeight = isMobile ? 120 : 88;
+  const toolbarWidth = isBareDesktopPicker ? 164 : isMobile ? 260 : 220;
+  const toolbarHeight = isBareDesktopPicker ? 32 : isMobile ? 120 : 88;
   const padding = 12;
 
   let x = position.x - toolbarWidth / 2;
@@ -114,7 +116,12 @@ export function HighlightToolbar({
 
   return (
     <div
-      className="highlight-toolbar fixed z-50 flex flex-col gap-2 p-2 rounded-2xl bg-background shadow-xl border border-border animate-in fade-in zoom-in-95 duration-200"
+      className={cn(
+        "highlight-toolbar fixed z-50 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200",
+        isBareDesktopPicker
+          ? "bg-transparent"
+          : "rounded-2xl border border-border bg-background p-2 shadow-xl",
+      )}
       style={{
         left: `${x}px`,
         top: `${y}px`,
@@ -122,7 +129,7 @@ export function HighlightToolbar({
       }}
     >
       {/* Color buttons row */}
-      <div className="flex items-center justify-center gap-3 md:gap-2">
+      <div className="flex items-center justify-center gap-3">
         {HIGHLIGHT_COLORS.map((color) => {
           const handlePointerDown = () => {
             const isRemoveExistingHighlight =
@@ -140,11 +147,13 @@ export function HighlightToolbar({
               key={color.name}
               onPointerDown={handlePointerDown}
               className={cn(
-                "cursor-pointer w-10 h-10 md:w-6 md:h-6 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400 shadow-sm",
-                "border border-black/5 hover:border-black/10",
+                "size-10 cursor-pointer rounded-full border-2 border-background/80 shadow-[0_2px_10px_hsl(var(--foreground)/0.18)]",
+                "transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95 md:size-8",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110",
                 currentColor &&
                   color.name === currentColor &&
-                  "ring-2 ring-offset-2 ring-gray-900",
+                  "ring-2 ring-foreground ring-offset-2 ring-offset-background",
               )}
               style={{ backgroundColor: `var(--${color.name}-secondary)` }}
               aria-label={

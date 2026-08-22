@@ -3,9 +3,11 @@ import type { ReaderSettings } from "@/types/reader.types";
 import { ReaderContentsSheet } from "./ReaderContentsSheet";
 import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import { ReaderToolsLauncherSheet } from "./ReaderToolsLauncherSheet";
+import { ReaderToolsSidebar } from "./ReaderToolsSidebar";
 import type { ChapterEntry, ReaderSheetId } from "./types";
 
 interface ReaderSheetHostProps {
+  isMobile: boolean;
   activeSheet: ReaderSheetId | null;
   onOpenSheet: (sheet: ReaderSheetId) => void;
   onCloseSheet: () => void;
@@ -20,12 +22,13 @@ interface ReaderSheetHostProps {
 }
 
 /**
- * Coordinates the reader's peer-level bottom sheets.
+ * Coordinates the reader's peer-level overlays.
  *
- * Keeping these overlays in one host makes their shared lifecycle explicit
- * while each sheet remains a destination that closes directly back to reading.
+ * Mobile retains the compact launcher and peer sheets. Desktop tools share one
+ * right-side workspace so contents and appearance stay beside the book.
  */
 export function ReaderSheetHost({
+  isMobile,
   activeSheet,
   onOpenSheet,
   onCloseSheet,
@@ -38,6 +41,24 @@ export function ReaderSheetHost({
   onNavigateToHref,
   onCopyDebugDump,
 }: ReaderSheetHostProps) {
+  if (!isMobile) {
+    return (
+      <ReaderToolsSidebar
+        activeSheet={activeSheet}
+        onOpenPanel={onOpenSheet}
+        onClose={onCloseSheet}
+        settings={settings}
+        onUpdateSettings={onUpdateSettings}
+        toc={toc}
+        chapterEntries={chapterEntries}
+        chapterStartPages={chapterStartPages}
+        currentChapterHref={currentChapterHref}
+        onNavigateToHref={onNavigateToHref}
+        onCopyDebugDump={onCopyDebugDump}
+      />
+    );
+  }
+
   return (
     <>
       <ReaderToolsLauncherSheet

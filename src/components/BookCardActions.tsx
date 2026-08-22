@@ -18,7 +18,7 @@ import {
   type ReactElement,
 } from "react";
 
-const LONG_PRESS_HOLD_MS = 550;
+const LONG_PRESS_HOLD_MS = 200;
 const LONG_PRESS_COMPRESSION_MS = 100;
 const LONG_PRESS_SLOP_PX = 10;
 
@@ -91,12 +91,18 @@ export function BookCardActions({
     clearLongPressTracking();
     didLongPressRef.current = false;
     startPointRef.current = { x: event.clientX, y: event.clientY };
-    // Delay visual feedback until the hold is deliberate. The final 100 ms
-    // compression then completes before the sheet opens and the card rebounds.
+    document.getSelection()?.removeAllRanges();
+
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       if (!startPointRef.current) return;
 
+      didLongPressRef.current = true;
+      clearLongPressTracking();
+      document.getSelection()?.removeAllRanges();
+
+      // The 200 ms hold commits the gesture. Complete the visible press-down
+      // before the sheet enters, then rebound from that compressed state.
       void pressControls.start(
         prefersReducedMotion
           ? {
@@ -111,11 +117,6 @@ export function BookCardActions({
 
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        if (!startPointRef.current) return;
-
-        didLongPressRef.current = true;
-        clearLongPressTracking();
-        document.getSelection()?.removeAllRanges();
         animateToRest(true);
         navigator.vibrate?.(10);
         onOpenMobileActions();
@@ -143,19 +144,14 @@ export function BookCardActions({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={() => {
-          if (didLongPressRef.current) {
-            clearLongPressTracking();
-            return;
-          }
+          if (didLongPressRef.current) return;
           cancelLongPress();
         }}
         onPointerCancel={() => {
-          if (didLongPressRef.current) {
-            clearLongPressTracking();
-            return;
-          }
+          if (didLongPressRef.current) return;
           cancelLongPress();
         }}
+        onDragStart={(event) => event.preventDefault()}
         onContextMenu={(event) => event.preventDefault()}
         onClickCapture={(event) => {
           if (!didLongPressRef.current) return;
