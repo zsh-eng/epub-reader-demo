@@ -1,5 +1,6 @@
 import { useAppShellReady } from "@/components/AppShell";
 import { BookCard } from "@/components/BookCard";
+import { LibraryBookStatusSheet } from "@/components/LibraryBookStatusSheet";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
@@ -12,7 +13,7 @@ import {
   prefetchReaderBook,
   prefetchReaderBooks,
 } from "@/components/Reader/data/reader-cache/prefetch";
-import type { Book, SyncedBook } from "@/lib/db";
+import type { Book, ReadingStatus, SyncedBook } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,9 +27,20 @@ import {
   useState,
 } from "react";
 
+interface MobileBookActionsState {
+  instance: number;
+  book: SyncedBook;
+  coverUrl: string | undefined;
+  status: ReadingStatus | null;
+}
+
 export function Library() {
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileBookActions, setMobileBookActions] =
+    useState<MobileBookActionsState | null>(null);
+  const [isMobileBookActionsOpen, setIsMobileBookActionsOpen] = useState(false);
+  const mobileBookActionsInstanceRef = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { importFiles, isProcessing, openFilePicker } = useEpubImport();
@@ -105,6 +117,21 @@ export function Library() {
     },
     [queryClient],
   );
+
+  const handleOpenMobileBookActions = (
+    book: SyncedBook,
+    status: ReadingStatus | null,
+    coverUrl: string | undefined,
+  ) => {
+    mobileBookActionsInstanceRef.current += 1;
+    setMobileBookActions({
+      instance: mobileBookActionsInstanceRef.current,
+      book,
+      status,
+      coverUrl,
+    });
+    setIsMobileBookActionsOpen(true);
+  };
 
   const { continueReadingBooks, allBooks } = useMemo(() => {
     if (!booksData) {
@@ -245,6 +272,13 @@ export function Library() {
                         onDelete={handleDeleteBook}
                         onCoverRequest={requestCover}
                         onPrefetch={handlePrefetchBook}
+                        onOpenMobileActions={() =>
+                          handleOpenMobileBookActions(
+                            book,
+                            booksData?.statuses.get(book.id) ?? null,
+                            coverUrls.get(book.id),
+                          )
+                        }
                       />
                     ))}
                   </div>
@@ -274,6 +308,13 @@ export function Library() {
                         onDelete={handleDeleteBook}
                         onCoverRequest={requestCover}
                         onPrefetch={handlePrefetchBook}
+                        onOpenMobileActions={() =>
+                          handleOpenMobileBookActions(
+                            book,
+                            booksData?.statuses.get(book.id) ?? null,
+                            coverUrls.get(book.id),
+                          )
+                        }
                       />
                     ))}
                   </div>
@@ -331,6 +372,18 @@ export function Library() {
           </div>
         ) : null}
       </main>
+
+      {mobileBookActions && (
+        <LibraryBookStatusSheet
+          key={mobileBookActions.instance}
+          open={isMobileBookActionsOpen}
+          onOpenChange={setIsMobileBookActionsOpen}
+          book={mobileBookActions.book}
+          coverUrl={mobileBookActions.coverUrl}
+          initialStatus={mobileBookActions.status}
+          onDelete={(bookId) => void handleDeleteBook(bookId)}
+        />
+      )}
     </div>
   );
 }

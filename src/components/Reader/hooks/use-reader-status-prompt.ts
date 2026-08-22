@@ -5,7 +5,6 @@ import { toast } from "sonner";
 
 interface ReaderStatusPrompt {
   title: string;
-  description: string;
   actionLabel: string;
 }
 
@@ -15,7 +14,6 @@ export function getReaderStatusPrompt(
   if (status === "dnf") {
     return {
       title: "Giving this book another try?",
-      description: "Move it back to Reading and continue where you left off.",
       actionLabel: "Start again",
     };
   }
@@ -23,7 +21,6 @@ export function getReaderStatusPrompt(
   if (status === null || status === "want-to-read") {
     return {
       title: "Ready to start reading?",
-      description: "Mark this book as Reading to track your progress.",
       actionLabel: "Start reading",
     };
   }
@@ -53,8 +50,10 @@ export function useReaderStatusPrompt({
     if (!prompt) return;
 
     toast(prompt.title, {
-      description: prompt.description,
       duration: 8000,
+      classNames: {
+        actionButton: "!h-8 !rounded-full !px-3",
+      },
       action: {
         label: prompt.actionLabel,
         onClick: () => {

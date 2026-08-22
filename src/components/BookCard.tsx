@@ -1,4 +1,5 @@
 import { BookCardActions } from "@/components/BookCardActions";
+import { READING_STATUS_LABELS } from "@/components/BookStatusSheet";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
@@ -13,6 +14,7 @@ interface BookCardProps {
   onDelete: (bookId: string) => void;
   onCoverRequest?: (book: Book) => void;
   onPrefetch?: (book: Book) => void;
+  onOpenMobileActions?: () => void;
 }
 
 function formatOpenedDate(timestamp: number) {
@@ -72,6 +74,7 @@ export function BookCard({
   onDelete,
   onCoverRequest,
   onPrefetch,
+  onOpenMobileActions,
 }: BookCardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -134,14 +137,8 @@ export function BookCard({
 
     setStatus.mutate(newStatus, {
       onSuccess: () => {
-        const statusLabels: Record<ReadingStatus, string> = {
-          "want-to-read": "Want to Read",
-          reading: "Reading",
-          finished: "Finished",
-          dnf: "Did Not Finish",
-        };
         toast({
-          title: `Marked ${book.title} as ${statusLabels[newStatus]}`,
+          title: `Marked ${book.title} as ${READING_STATUS_LABELS[newStatus]}`,
         });
       },
       onError: () => {
@@ -157,13 +154,11 @@ export function BookCard({
 
   return (
     <BookCardActions
-      bookTitle={book.title}
-      bookAuthor={book.author}
-      coverUrl={coverUrl}
       status={displayStatus}
       isUpdating={setStatus.isPending}
       onSelectStatus={handleSetStatus}
       onRemove={handleDelete}
+      onOpenMobileActions={() => onOpenMobileActions?.()}
     >
       <div
         ref={setCardElement}

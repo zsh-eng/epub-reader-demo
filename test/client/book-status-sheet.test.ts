@@ -24,6 +24,8 @@ describe("BookStatusSheet", () => {
       }),
     );
 
+    expect(screen.getAllByText("Reading status")).toHaveLength(1);
+
     const selectedOption = screen.getByRole("button", { name: "Reading" });
     expect(selectedOption.getAttribute("aria-pressed")).toBe("true");
     expect(selectedOption.classList.contains("border-foreground")).toBe(true);

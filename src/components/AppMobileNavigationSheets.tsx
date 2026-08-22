@@ -270,6 +270,7 @@ export function AppMobileNavigationSheets({
           if (!open) onClose();
         }}
         title="Reader"
+        showHeader={false}
         panelClassName="max-w-md"
         bodyClassName="overflow-y-auto"
         disableBodyDrag

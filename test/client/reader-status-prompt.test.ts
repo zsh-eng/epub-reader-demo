@@ -43,7 +43,6 @@ describe("getReaderStatusPrompt", () => {
     (status) => {
       expect(getReaderStatusPrompt(status)).toEqual({
         title: "Ready to start reading?",
-        description: "Mark this book as Reading to track your progress.",
         actionLabel: "Start reading",
       });
     },
@@ -52,7 +51,6 @@ describe("getReaderStatusPrompt", () => {
   it("uses a return message for a did-not-finish book", () => {
     expect(getReaderStatusPrompt("dnf")).toEqual({
       title: "Giving this book another try?",
-      description: "Move it back to Reading and continue where you left off.",
       actionLabel: "Start again",
     });
   });
@@ -74,6 +72,13 @@ describe("getReaderStatusPrompt", () => {
     rerender({ isReady: true });
 
     await waitFor(() => expect(mocks.prompt).toHaveBeenCalledOnce());
+    expect(mocks.prompt).toHaveBeenCalledWith("Ready to start reading?", {
+      duration: 8000,
+      classNames: {
+        actionButton: "!h-8 !rounded-full !px-3",
+      },
+      action: expect.objectContaining({ label: "Start reading" }),
+    });
     rerender({ isReady: false });
     rerender({ isReady: true });
     expect(mocks.prompt).toHaveBeenCalledOnce();

@@ -20,11 +20,26 @@ export interface ReadingStatusOption {
   icon: LucideIcon;
 }
 
+export const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
+  "want-to-read": "Want to Read",
+  reading: "Reading",
+  finished: "Finished",
+  dnf: "Did Not Finish",
+};
+
 export const READING_STATUS_OPTIONS: ReadingStatusOption[] = [
-  { value: "want-to-read", label: "Want to Read", icon: BookMarked },
-  { value: "reading", label: "Reading", icon: BookOpen },
-  { value: "finished", label: "Finished", icon: CheckCircle },
-  { value: "dnf", label: "Did Not Finish", icon: XCircle },
+  {
+    value: "want-to-read",
+    label: READING_STATUS_LABELS["want-to-read"],
+    icon: BookMarked,
+  },
+  { value: "reading", label: READING_STATUS_LABELS.reading, icon: BookOpen },
+  {
+    value: "finished",
+    label: READING_STATUS_LABELS.finished,
+    icon: CheckCircle,
+  },
+  { value: "dnf", label: READING_STATUS_LABELS.dnf, icon: XCircle },
 ];
 
 interface BookStatusSheetProps {
@@ -58,6 +73,7 @@ export function BookStatusSheet({
       open={open}
       onOpenChange={onOpenChange}
       title="Reading status"
+      showHeader={false}
       panelClassName="max-w-md"
       bodyClassName="overflow-y-auto"
       disableBodyDrag
