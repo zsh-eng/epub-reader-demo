@@ -18,8 +18,11 @@ import {
 } from "react";
 
 const STORAGE_KEY = "epub-reader-settings";
+const APPEARANCE_STORAGE_KEY = "epub-reader-appearance";
 const THEME_TRANSITION_CLASS = "theme-transitioning";
 const LEGACY_FONT_SIZE_BASE_PX = 16;
+
+export type AppearanceMode = "light" | "dark" | "system";
 
 const DEFAULT_SETTINGS = {
   fontSize: READER_FONT_SIZE_DEFAULT_PX,
@@ -64,10 +67,29 @@ function normalizeReaderSettings(settings: ReaderSettings): ReaderSettings {
   };
 }
 
+function isDarkReaderTheme(theme: ReaderSettings["theme"]): boolean {
+  return theme === "dark" || theme === "flexoki-dark";
+}
+
+function resolveAppearanceTheme(
+  currentTheme: ReaderSettings["theme"],
+  useDarkTheme: boolean,
+): ReaderSettings["theme"] {
+  const useFlexoki = currentTheme.startsWith("flexoki");
+  if (useFlexoki) return useDarkTheme ? "flexoki-dark" : "flexoki-light";
+  return useDarkTheme ? "dark" : "light";
+}
+
+function isAppearanceMode(value: string | null): value is AppearanceMode {
+  return value === "light" || value === "dark" || value === "system";
+}
+
 interface ReaderSettingsContextValue {
   settings: ReaderSettings;
   updateSettings: (newSettings: Partial<ReaderSettings>) => void;
   resetSettings: () => void;
+  appearanceMode: AppearanceMode;
+  setAppearanceMode: (appearanceMode: AppearanceMode) => void;
 }
 
 const ReaderSettingsContext = createContext<ReaderSettingsContextValue | null>(
@@ -105,6 +127,17 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       return DEFAULT_SETTINGS;
     }
   });
+  const [appearanceMode, setAppearanceModeState] = useState<AppearanceMode>(
+    () => {
+      if (typeof window === "undefined") return "light";
+
+      const storedAppearance = window.localStorage.getItem(
+        APPEARANCE_STORAGE_KEY,
+      );
+      if (isAppearanceMode(storedAppearance)) return storedAppearance;
+      return isDarkReaderTheme(settings.theme) ? "dark" : "light";
+    },
+  );
 
   // Update localStorage when settings change
   useEffect(() => {
@@ -147,17 +180,74 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [settings]);
 
+  useEffect(() => {
+    window.localStorage.setItem(APPEARANCE_STORAGE_KEY, appearanceMode);
+  }, [appearanceMode]);
+
+  useEffect(() => {
+    if (appearanceMode !== "system") return;
+
+    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const applySystemTheme = (useDarkTheme: boolean) => {
+      setSettings((previousSettings) => ({
+        ...previousSettings,
+        theme: resolveAppearanceTheme(previousSettings.theme, useDarkTheme),
+      }));
+    };
+
+    applySystemTheme(systemTheme.matches);
+    const handleSystemThemeChange = (event: MediaQueryListEvent) => {
+      applySystemTheme(event.matches);
+    };
+    systemTheme.addEventListener("change", handleSystemThemeChange);
+    return () => {
+      systemTheme.removeEventListener("change", handleSystemThemeChange);
+    };
+  }, [appearanceMode]);
+
   const updateSettings = useCallback((newSettings: Partial<ReaderSettings>) => {
     setSettings((prev) => normalizeReaderSettings({ ...prev, ...newSettings }));
+
+    if (newSettings.theme) {
+      setAppearanceModeState(
+        isDarkReaderTheme(newSettings.theme) ? "dark" : "light",
+      );
+    }
+  }, []);
+
+  const setAppearanceMode = useCallback((nextAppearance: AppearanceMode) => {
+    const useDarkTheme =
+      nextAppearance === "system"
+        ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        : nextAppearance === "dark";
+
+    setAppearanceModeState(nextAppearance);
+    setSettings((previousSettings) => ({
+      ...previousSettings,
+      theme: resolveAppearanceTheme(previousSettings.theme, useDarkTheme),
+    }));
   }, []);
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
+    setAppearanceModeState("light");
   }, []);
 
   const value = useMemo<ReaderSettingsContextValue>(
-    () => ({ settings, updateSettings, resetSettings }),
-    [resetSettings, settings, updateSettings],
+    () => ({
+      settings,
+      updateSettings,
+      resetSettings,
+      appearanceMode,
+      setAppearanceMode,
+    }),
+    [
+      appearanceMode,
+      resetSettings,
+      setAppearanceMode,
+      settings,
+      updateSettings,
+    ],
   );
 
   return createElement(ReaderSettingsContext.Provider, { value }, children);

@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
+import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -860,6 +861,8 @@ function HighlightActionsSheet({
   onOpenBook: (highlight: SyncedHighlight) => void;
 }) {
   const reducedMotion = useReducedMotion() ?? false;
+  const copyPress = useSpringPressAnimation();
+  const openBookPress = useSpringPressAnimation();
   const [isCopied, setIsCopied] = useState(false);
   const resetTimerRef = useRef(0);
 
@@ -891,7 +894,6 @@ function HighlightActionsSheet({
       }}
       title="Highlight actions"
       panelClassName="max-w-md"
-      disableBodyDrag
     >
       <div
         className="px-4 pt-2"
@@ -915,10 +917,11 @@ function HighlightActionsSheet({
         )}
 
         <div className="grid gap-2">
-          <button
+          <motion.button
             type="button"
             onClick={() => void handleCopy()}
-            className="flex h-14 items-center gap-3 rounded-2xl border bg-card px-4 text-left font-medium outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+            className="flex h-14 items-center gap-3 rounded-2xl border bg-card px-4 text-left font-medium outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+            {...copyPress}
           >
             <span className="relative grid size-8 place-items-center rounded-full bg-secondary">
               <AnimatePresence initial={false} mode="wait">
@@ -952,19 +955,20 @@ function HighlightActionsSheet({
             <span aria-live="polite">
               {isCopied ? "Copied" : "Copy highlight"}
             </span>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             type="button"
             onClick={() => {
               if (highlight) onOpenBook(highlight);
             }}
-            className="flex h-14 items-center gap-3 rounded-2xl border bg-card px-4 text-left font-medium outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+            className="flex h-14 items-center gap-3 rounded-2xl border bg-card px-4 text-left font-medium outline-none transition-colors hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring"
+            {...openBookPress}
           >
             <span className="grid size-8 place-items-center rounded-full bg-secondary">
               <BookOpen className="size-4" aria-hidden="true" />
             </span>
             Open in book
-          </button>
+          </motion.button>
         </div>
       </div>
     </BottomSheet>

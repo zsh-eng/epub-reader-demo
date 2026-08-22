@@ -3,6 +3,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/AppShell", () => ({
@@ -67,7 +68,11 @@ describe("Library hotkeys", () => {
       createElement(
         QueryClientProvider,
         { client: queryClient },
-        createElement(SidebarProvider, null, createElement(Library)),
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(SidebarProvider, null, createElement(Library)),
+        ),
       ),
     );
     const searchInput = screen.getByRole<HTMLInputElement>("textbox", {
@@ -94,7 +99,11 @@ describe("Library hotkeys", () => {
       createElement(
         QueryClientProvider,
         { client: queryClient },
-        createElement(SidebarProvider, null, createElement(Library)),
+        createElement(
+          MemoryRouter,
+          null,
+          createElement(SidebarProvider, null, createElement(Library)),
+        ),
       ),
     );
 

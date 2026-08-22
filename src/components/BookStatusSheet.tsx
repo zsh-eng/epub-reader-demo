@@ -50,8 +50,69 @@ interface BookStatusSheetProps {
   coverUrl: string | undefined;
   status: ReadingStatus | null;
   isUpdating: boolean;
+  onOpenBook: () => void;
   onSelectStatus: (status: ReadingStatus) => void;
   onRemove: () => boolean;
+}
+
+function BookStatusOptionButton({
+  option,
+  index,
+  isSelected,
+  isUpdating,
+  onSelect,
+}: {
+  option: ReadingStatusOption;
+  index: number;
+  isSelected: boolean;
+  isUpdating: boolean;
+  onSelect: () => void;
+}) {
+  const springPress = useSpringPressAnimation();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, transform: "translateY(16px)" }}
+      animate={{ opacity: 1, transform: "translateY(0px)" }}
+      transition={{
+        duration: 0.2,
+        ease: [0.16, 1, 0.3, 1],
+        delay: 0.03 + index * 0.05,
+      }}
+    >
+      <motion.button
+        type="button"
+        aria-pressed={isSelected}
+        disabled={isUpdating}
+        className={cn(
+          "flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] border bg-secondary/35 px-4 py-3 text-left outline-none transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring/60",
+          isSelected
+            ? "border-foreground bg-secondary/65"
+            : "border-border/60 hover:bg-secondary/55",
+          isUpdating && "cursor-wait opacity-70",
+        )}
+        onClick={onSelect}
+        {...springPress}
+      >
+        <option.icon
+          className={cn(
+            "size-5 shrink-0",
+            isSelected ? "text-foreground" : "text-muted-foreground",
+          )}
+          aria-hidden="true"
+        />
+        <span className="min-w-0 flex-1 text-[15px] font-medium text-foreground">
+          {option.label}
+        </span>
+        {isSelected && (
+          <Check
+            className="size-5 shrink-0 text-foreground"
+            aria-hidden="true"
+          />
+        )}
+      </motion.button>
+    </motion.div>
+  );
 }
 
 /** Mobile book actions with persistent, directly visible reading statuses. */
@@ -63,10 +124,11 @@ export function BookStatusSheet({
   coverUrl,
   status,
   isUpdating,
+  onOpenBook,
   onSelectStatus,
   onRemove,
 }: BookStatusSheetProps) {
-  const springPress = useSpringPressAnimation();
+  const removePress = useSpringPressAnimation();
 
   return (
     <BottomSheet
@@ -76,7 +138,6 @@ export function BookStatusSheet({
       showHeader={false}
       panelClassName="max-w-md"
       bodyClassName="overflow-y-auto"
-      disableBodyDrag
     >
       <div
         className="px-4 pt-3"
@@ -84,8 +145,11 @@ export function BookStatusSheet({
           paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
         }}
       >
-        <motion.div
-          className="mb-5 flex min-w-0 items-center gap-4 px-2"
+        <motion.button
+          type="button"
+          aria-label={`Open ${bookTitle}`}
+          onClick={onOpenBook}
+          className="mb-5 flex w-full min-w-0 items-center gap-4 rounded-[1.25rem] px-2 py-1 text-left outline-none transition-colors hover:bg-secondary/35 focus-visible:ring-2 focus-visible:ring-ring/60"
           initial={{ opacity: 0, transform: "translateY(12px)" }}
           animate={{ opacity: 1, transform: "translateY(0px)" }}
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
@@ -99,66 +163,32 @@ export function BookStatusSheet({
               {bookAuthor}
             </p>
           </div>
-        </motion.div>
+        </motion.button>
 
         <div className="flex flex-col gap-2">
           {READING_STATUS_OPTIONS.map((option, index) => {
             const isSelected = status === option.value;
 
             return (
-              <motion.div
+              <BookStatusOptionButton
                 key={option.value}
-                initial={{ opacity: 0, transform: "translateY(16px)" }}
-                animate={{ opacity: 1, transform: "translateY(0px)" }}
-                transition={{
-                  duration: 0.2,
-                  ease: [0.16, 1, 0.3, 1],
-                  delay: 0.03 + index * 0.05,
-                }}
-              >
-                <motion.button
-                  type="button"
-                  aria-pressed={isSelected}
-                  disabled={isUpdating}
-                  className={cn(
-                    "flex min-h-14 w-full items-center gap-3 rounded-[1.25rem] border bg-secondary/35 px-4 py-3 text-left outline-none transition-[background-color,border-color] focus-visible:ring-2 focus-visible:ring-ring/60",
-                    isSelected
-                      ? "border-foreground bg-secondary/65"
-                      : "border-border/60 hover:bg-secondary/55",
-                    isUpdating && "cursor-wait opacity-70",
-                  )}
-                  onClick={() => onSelectStatus(option.value)}
-                  {...springPress}
-                >
-                  <option.icon
-                    className={cn(
-                      "size-5 shrink-0",
-                      isSelected ? "text-foreground" : "text-muted-foreground",
-                    )}
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0 flex-1 text-[15px] font-medium text-foreground">
-                    {option.label}
-                  </span>
-                  {isSelected && (
-                    <Check
-                      className="size-5 shrink-0 text-foreground"
-                      aria-hidden="true"
-                    />
-                  )}
-                </motion.button>
-              </motion.div>
+                option={option}
+                index={index}
+                isSelected={isSelected}
+                isUpdating={isUpdating}
+                onSelect={() => onSelectStatus(option.value)}
+              />
             );
           })}
         </div>
 
         <motion.button
           type="button"
-          className="mt-3 flex min-h-12 w-full items-center gap-3 rounded-[1.1rem] px-4 py-3 text-left text-sm font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/60"
+          className="mt-6 flex min-h-12 w-full items-center justify-center gap-2.5 rounded-[1.1rem] border border-destructive/40 bg-destructive/5 px-4 py-3 text-center text-sm font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/60"
           onClick={() => {
             if (onRemove()) onOpenChange(false);
           }}
-          {...springPress}
+          {...removePress}
         >
           <Trash2 className="size-5" aria-hidden="true" />
           Remove Book

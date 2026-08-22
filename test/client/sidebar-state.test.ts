@@ -62,6 +62,18 @@ function ThemeProbe({ label }: { label: string }) {
   );
 }
 
+function AppearanceProbe() {
+  const { appearanceMode, setAppearanceMode, settings } = useReaderSettings();
+  return createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setAppearanceMode("system"),
+    },
+    `${appearanceMode}:${settings.theme}`,
+  );
+}
+
 function getHotkeyRegistration(hotkey: Hotkey): HotkeyRegistration {
   const registration = Array.from(
     getHotkeyManager().registrations.state.values(),
@@ -249,5 +261,40 @@ describe("ReaderSettingsProvider", () => {
     expect(screen.getByRole("button", { name: "second" }).textContent).toBe(
       "dark",
     );
+  });
+
+  it("resolves system appearance and keeps following the system theme", () => {
+    let onSystemThemeChange: ((event: MediaQueryListEvent) => void) | null =
+      null;
+    window.matchMedia = vi.fn(
+      () =>
+        ({
+          ...createMediaQueryList("(prefers-color-scheme: dark)"),
+          addEventListener: vi.fn(
+            (
+              eventName: string,
+              listener: (event: MediaQueryListEvent) => void,
+            ) => {
+              if (eventName === "change") onSystemThemeChange = listener;
+            },
+          ),
+        }) as MediaQueryList,
+    );
+
+    render(
+      createElement(
+        ReaderSettingsProvider,
+        null,
+        createElement(AppearanceProbe),
+      ),
+    );
+
+    fireEvent.click(screen.getByRole("button"));
+    expect(screen.getByRole("button").textContent).toBe("system:light");
+
+    act(() => {
+      onSystemThemeChange?.({ matches: true } as MediaQueryListEvent);
+    });
+    expect(screen.getByRole("button").textContent).toBe("system:dark");
   });
 });

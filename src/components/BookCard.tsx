@@ -48,7 +48,8 @@ function BookCoverVisual({
           <img
             src={coverUrl}
             alt={`Cover of ${title}`}
-            className="absolute inset-0 block h-full w-full object-cover"
+            draggable={false}
+            className="pointer-events-none absolute inset-0 block h-full w-full select-none object-cover"
             loading="eager"
           />
         ) : (

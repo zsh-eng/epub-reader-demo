@@ -52,9 +52,10 @@ export function ReaderSettingsSheet({
       }}
       title="Reading Settings"
       panelClassName="max-w-md"
-      bodyClassName="overflow-hidden"
+      contentClassName="data-[drawer-direction=bottom]:mt-4 data-[drawer-direction=bottom]:max-h-[94dvh]"
+      bodyClassName="w-full max-w-full overflow-hidden"
       header={
-        <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
+        <div className="flex h-8 items-center">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -64,12 +65,6 @@ export function ReaderSettingsSheet({
           >
             <ChevronLeft className="size-4" />
           </Button>
-
-          <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Reading Settings
-          </p>
-
-          <div className="size-8" aria-hidden="true" />
         </div>
       }
     >
@@ -95,7 +90,7 @@ export function ReaderSettingsPanel({
       onValueChange={(value) =>
         onActiveTabChange(value as ReaderSettingsPanelTab)
       }
-      className="mt-3 flex h-[36rem] min-h-0 flex-col"
+      className="mt-3 flex h-[40rem] min-h-0 w-full max-w-full flex-col overflow-x-hidden"
     >
       <SegmentedTabsList className="mx-4 mb-3 grid h-auto grid-cols-2 rounded-full bg-secondary/50 p-1 self-center">
         <SegmentedTabsTrigger
@@ -118,8 +113,9 @@ export function ReaderSettingsPanel({
           cap, then becomes the scroll container instead of truncating the
           active settings panel at a fixed intermediate height. */}
       <ScrollArea
-        className="min-h-0 flex-1 px-4 pb-3"
-        data-base-ui-swipe-ignore
+        className="min-h-0 w-full max-w-full flex-1 px-4 pb-3"
+        viewportClassName="overflow-x-hidden"
+        contentClassName="min-w-0 max-w-full overflow-x-hidden"
       >
         <SegmentedTabsContent value="typography" className="mt-0">
           <TypographyPanel

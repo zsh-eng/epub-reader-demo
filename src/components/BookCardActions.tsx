@@ -124,7 +124,7 @@ export function BookCardActions({
   if (isMobile) {
     return (
       <motion.div
-        className="min-w-0 touch-pan-y select-none [-webkit-touch-callout:none]"
+        className="min-w-0 touch-pan-y select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none]"
         initial={{ transform: "scale(1)", opacity: 1 }}
         animate={pressControls}
         onPointerDown={handlePointerDown}

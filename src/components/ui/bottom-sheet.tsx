@@ -14,7 +14,6 @@ export interface BottomSheetProps {
   contentClassName?: string;
   panelClassName?: string;
   bodyClassName?: string;
-  disableBodyDrag?: boolean;
   snapPoints?: readonly BottomSheetSnapPoint[];
   activeSnapPoint?: BottomSheetSnapPoint | null;
   setActiveSnapPoint?: (snapPoint: BottomSheetSnapPoint | null) => void;
@@ -36,14 +35,10 @@ export function BottomSheet({
   contentClassName,
   panelClassName,
   bodyClassName,
-  disableBodyDrag = false,
   snapPoints,
   activeSnapPoint,
   setActiveSnapPoint,
 }: BottomSheetProps) {
-  const bodyDragProps = disableBodyDrag
-    ? { "data-base-ui-swipe-ignore": "" }
-    : {};
   // A full-height snap point is clamped to auto-height content by Base UI. Its
   // presence also enables damped upward over-drag and settle-back.
   const resolvedSnapPoints = snapPoints ?? [1];
@@ -66,7 +61,7 @@ export function BottomSheet({
       <DrawerContent
         overlayClassName="bg-transparent"
         className={cn(
-          "border-none bg-transparent shadow-none",
+          "border-none bg-transparent shadow-none after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-dvh after:bg-background after:content-['']",
           "data-[drawer-direction=bottom]:mt-12",
           "data-[drawer-direction=bottom]:max-h-[88vh]",
           "[&>div:first-child]:hidden",
@@ -75,9 +70,9 @@ export function BottomSheet({
       >
         <div
           className={cn(
-            "mx-auto flex w-full max-w-3xl min-h-0 flex-col overflow-hidden",
-            "rounded-t-[1.9rem] border border-border/70 bg-background/95",
-            "backdrop-blur-xl shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)]",
+            "mx-auto flex max-h-full min-h-0 w-full max-w-3xl select-none flex-col overflow-hidden [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none]",
+            "rounded-t-[1.9rem] border border-border/70 bg-background",
+            "shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)]",
             panelClassName,
           )}
         >
@@ -101,12 +96,7 @@ export function BottomSheet({
             </div>
           )}
 
-          <div
-            className={cn("min-h-0 flex-1", bodyClassName)}
-            {...bodyDragProps}
-          >
-            {children}
-          </div>
+          <div className={cn("min-h-0 flex-1", bodyClassName)}>{children}</div>
         </div>
       </DrawerContent>
     </Drawer>

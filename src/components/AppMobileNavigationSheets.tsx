@@ -3,12 +3,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { ContinueReadingCard } from "@/components/ContinueReadingCard";
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
+import type { AppearanceMode } from "@/hooks/use-reader-settings";
 import type { RecentlyReadBook } from "@/lib/library-sort";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import {
   ChevronLeft,
-  ChevronRight,
+  BookPlus,
   Clock3,
   Cloud,
   CloudOff,
@@ -17,6 +18,7 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Monitor,
   MonitorSmartphone,
   Moon,
   Sun,
@@ -42,8 +44,10 @@ interface AppMobileNavigationSheetsProps {
   activePath: string;
   recentReading: RecentlyReadBook | null;
   recentBookCoverUrl: string | undefined;
-  isDarkTheme: boolean;
-  onThemeToggle: () => void;
+  appearanceMode: AppearanceMode;
+  onAppearanceChange: (appearanceMode: AppearanceMode) => void;
+  isImporting: boolean;
+  onAddBook: () => void;
   isOnline: boolean;
   isSyncing: boolean;
   onSync: () => Promise<void>;
@@ -66,6 +70,15 @@ interface MobileSheetRowProps {
   disabled?: boolean;
   destructive?: boolean;
   delay: number;
+}
+
+interface SheetUtilityButtonProps {
+  label: string;
+  accessibleLabel?: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  className?: string;
+  children: ReactNode;
 }
 
 function getUserInitials(name: string | null | undefined): string {
@@ -145,6 +158,7 @@ function MobileSheetRow({
           to={to}
           aria-current={isActive ? "page" : undefined}
           className={className}
+          onClick={onClick}
           {...springPress}
         >
           {content}
@@ -162,6 +176,44 @@ function MobileSheetRow({
       )}
     </motion.div>
   );
+}
+
+function SheetUtilityButton({
+  label,
+  accessibleLabel,
+  onClick,
+  disabled = false,
+  className,
+  children,
+}: SheetUtilityButtonProps) {
+  const springPress = useSpringPressAnimation();
+
+  return (
+    <motion.button
+      type="button"
+      aria-label={accessibleLabel ?? label}
+      title={accessibleLabel ?? label}
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "flex min-h-16 min-w-0 flex-col items-center justify-center gap-1.5 px-2 py-2.5 text-muted-foreground outline-none transition-[background-color,color] hover:bg-secondary/55 hover:text-foreground focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60",
+        disabled && "cursor-not-allowed opacity-55",
+        className,
+      )}
+      {...springPress}
+    >
+      {children}
+      <span className="max-w-full truncate text-[10px] font-medium uppercase tracking-[0.12em]">
+        {label}
+      </span>
+    </motion.button>
+  );
+}
+
+function getNextAppearanceMode(appearanceMode: AppearanceMode): AppearanceMode {
+  if (appearanceMode === "light") return "dark";
+  if (appearanceMode === "dark") return "system";
+  return "light";
 }
 
 interface ContinueReadingOrbProps {
@@ -232,8 +284,10 @@ export function AppMobileNavigationSheets({
   activePath,
   recentReading,
   recentBookCoverUrl,
-  isDarkTheme,
-  onThemeToggle,
+  appearanceMode,
+  onAppearanceChange,
+  isImporting,
+  onAddBook,
   isOnline,
   isSyncing,
   onSync,
@@ -245,22 +299,22 @@ export function AppMobileNavigationSheets({
 }: AppMobileNavigationSheetsProps) {
   const [activeSheet, setActiveSheet] =
     useState<MobileNavigationSheet>("navigation");
+  const AppearanceIcon =
+    appearanceMode === "light"
+      ? Sun
+      : appearanceMode === "dark"
+        ? Moon
+        : Monitor;
+  const appearanceLabel =
+    appearanceMode === "light"
+      ? "Light"
+      : appearanceMode === "dark"
+        ? "Dark"
+        : "System";
 
   useEffect(() => {
     if (!isOpen) setActiveSheet("navigation");
   }, [isOpen]);
-
-  const accountTrailing = user ? (
-    <span className="flex shrink-0 items-center gap-2">
-      <Avatar className="size-7">
-        <AvatarImage src={user.image || undefined} alt={user.name || "User"} />
-        <AvatarFallback className="text-[10px]">
-          {getUserInitials(user.name)}
-        </AvatarFallback>
-      </Avatar>
-      <ChevronRight className="size-4 text-muted-foreground" />
-    </span>
-  ) : null;
 
   return (
     <>
@@ -273,7 +327,6 @@ export function AppMobileNavigationSheets({
         showHeader={false}
         panelClassName="max-w-md"
         bodyClassName="overflow-y-auto"
-        disableBodyDrag
       >
         {recentReading && (
           <ContinueReadingOrb
@@ -296,6 +349,7 @@ export function AppMobileNavigationSheets({
               icon={Library}
               to="/"
               isActive={activePath === "/"}
+              onClick={onClose}
               delay={0.04}
             />
             <MobileSheetRow
@@ -304,6 +358,7 @@ export function AppMobileNavigationSheets({
               icon={Highlighter}
               to="/highlights"
               isActive={activePath === "/highlights"}
+              onClick={onClose}
               delay={0.08}
             />
             <MobileSheetRow
@@ -312,45 +367,78 @@ export function AppMobileNavigationSheets({
               icon={Clock3}
               to="/reading-sessions"
               isActive={activePath === "/reading-sessions"}
+              onClick={onClose}
               delay={0.12}
             />
-            <MobileSheetRow
-              index="04"
-              label={
-                isDarkTheme ? "Use light appearance" : "Use dark appearance"
+          </div>
+
+          <motion.div
+            className="mt-3 grid w-full grid-cols-3 overflow-hidden rounded-[1.25rem] border border-border/60 bg-secondary/20"
+            initial={{ opacity: 0, transform: "translateY(12px)" }}
+            animate={{ opacity: 1, transform: "translateY(0px)" }}
+            transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1], delay: 0.16 }}
+          >
+            <SheetUtilityButton
+              label="Theme"
+              accessibleLabel={`Switch appearance. Current setting: ${appearanceLabel}`}
+              onClick={() =>
+                onAppearanceChange(getNextAppearanceMode(appearanceMode))
               }
-              icon={isDarkTheme ? Sun : Moon}
-              onClick={onThemeToggle}
-              delay={0.16}
-            />
+            >
+              <AppearanceIcon className="size-5" aria-hidden="true" />
+            </SheetUtilityButton>
+
+            <SheetUtilityButton
+              label={isImporting ? "Adding…" : "Add book"}
+              accessibleLabel={isImporting ? "Adding book" : "Add book"}
+              onClick={onAddBook}
+              disabled={isImporting}
+              className="border-l border-border/60"
+            >
+              {isImporting ? (
+                <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              ) : (
+                <BookPlus className="size-5" aria-hidden="true" />
+              )}
+            </SheetUtilityButton>
 
             {isAuthLoading ? (
-              <MobileSheetRow
-                index="05"
-                label="Loading account…"
-                icon={Loader2}
+              <SheetUtilityButton
+                label="Account"
+                accessibleLabel="Loading account"
                 disabled
-                delay={0.24}
-              />
+                className="border-l border-border/60"
+              >
+                <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+              </SheetUtilityButton>
             ) : isAuthenticated && user ? (
-              <MobileSheetRow
-                index="05"
-                label={user.name || "Account"}
-                description={user.email}
-                trailing={accountTrailing}
+              <SheetUtilityButton
+                label="Account"
+                accessibleLabel={`${user.name || "Account"}, ${user.email}`}
                 onClick={() => setActiveSheet("account")}
-                delay={0.2}
-              />
+                className="border-l border-border/60"
+              >
+                <Avatar className="size-7">
+                  <AvatarImage
+                    src={user.image || undefined}
+                    alt={user.name || "User"}
+                  />
+                  <AvatarFallback className="text-[10px]">
+                    {getUserInitials(user.name)}
+                  </AvatarFallback>
+                </Avatar>
+              </SheetUtilityButton>
             ) : (
-              <MobileSheetRow
-                index="05"
-                label="Sign in with Google"
-                icon={LogIn}
+              <SheetUtilityButton
+                label="Sign in"
+                accessibleLabel="Sign in with Google"
                 onClick={() => void onSignIn()}
-                delay={0.2}
-              />
+                className="border-l border-border/60"
+              >
+                <LogIn className="size-5" aria-hidden="true" />
+              </SheetUtilityButton>
             )}
-          </div>
+          </motion.div>
         </div>
       </BottomSheet>
 
@@ -404,6 +492,7 @@ export function AppMobileNavigationSheets({
                 icon={MonitorSmartphone}
                 to="/devices"
                 isActive={activePath === "/devices"}
+                onClick={onClose}
                 delay={0.04}
               />
               <MobileSheetRow
