@@ -1,6 +1,10 @@
 import { Drawer, DrawerContent, DrawerTitle } from "@/components/ui/drawer";
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import {
+  useRef,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 
 type BottomSheetSnapPoint = number | string;
 
@@ -39,6 +43,10 @@ export function BottomSheet({
   activeSnapPoint,
   setActiveSnapPoint,
 }: BottomSheetProps) {
+  // Base UI can report an upward over-drag as a swipe dismiss after release.
+  // Keep the total displacement so only a downward gesture can close the sheet.
+  const swipeStartYRef = useRef<number | null>(null);
+  const swipeDeltaYRef = useRef(0);
   // A full-height snap point is clamped to auto-height content by Base UI. Its
   // presence also enables damped upward over-drag and settle-back.
   const resolvedSnapPoints = snapPoints ?? [1];
@@ -55,7 +63,23 @@ export function BottomSheet({
     <Drawer
       direction="bottom"
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(nextOpen, eventDetails) => {
+        const isUpwardSwipeDismiss =
+          !nextOpen &&
+          eventDetails.reason === "swipe" &&
+          swipeDeltaYRef.current < 0;
+
+        if (isUpwardSwipeDismiss) {
+          eventDetails.cancel();
+          return;
+        }
+
+        if (!nextOpen) {
+          swipeStartYRef.current = null;
+          swipeDeltaYRef.current = 0;
+        }
+        onOpenChange(nextOpen);
+      }}
       {...snapPointProps}
     >
       <DrawerContent
@@ -67,11 +91,19 @@ export function BottomSheet({
           "[&>div:first-child]:hidden",
           contentClassName,
         )}
+        onPointerDownCapture={(event: ReactPointerEvent<HTMLDivElement>) => {
+          swipeStartYRef.current = event.clientY;
+          swipeDeltaYRef.current = 0;
+        }}
+        onPointerMoveCapture={(event: ReactPointerEvent<HTMLDivElement>) => {
+          if (swipeStartYRef.current === null) return;
+          swipeDeltaYRef.current = event.clientY - swipeStartYRef.current;
+        }}
       >
         <div
           className={cn(
-            "mx-auto flex max-h-full min-h-0 w-full max-w-3xl select-none flex-col overflow-hidden [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none]",
-            "rounded-t-[1.9rem] border border-border/70 bg-background",
+            "mx-auto flex max-h-full min-h-0 w-full max-w-3xl select-none flex-col overflow-hidden [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]",
+            "rounded-t-[1.9rem] border-x border-t border-border/70 bg-background",
             "shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)]",
             panelClassName,
           )}

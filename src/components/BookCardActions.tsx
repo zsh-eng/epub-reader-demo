@@ -18,7 +18,8 @@ import {
   type ReactElement,
 } from "react";
 
-const LONG_PRESS_DELAY_MS = 500;
+const LONG_PRESS_HOLD_MS = 550;
+const LONG_PRESS_COMPRESSION_MS = 100;
 const LONG_PRESS_SLOP_PX = 10;
 
 interface BookCardActionsProps {
@@ -90,24 +91,36 @@ export function BookCardActions({
     clearLongPressTracking();
     didLongPressRef.current = false;
     startPointRef.current = { x: event.clientX, y: event.clientY };
-    void pressControls.start(
-      prefersReducedMotion
-        ? {
-            opacity: 0.82,
-            transition: { duration: 0.1, ease: "easeOut" },
-          }
-        : {
-            transform: "scale(0.97)",
-            transition: { type: "spring", duration: 0.16, bounce: 0 },
-          },
-    );
+    // Delay visual feedback until the hold is deliberate. The final 100 ms
+    // compression then completes before the sheet opens and the card rebounds.
     timerRef.current = setTimeout(() => {
-      didLongPressRef.current = true;
-      clearLongPressTracking();
-      animateToRest(true);
-      navigator.vibrate?.(10);
-      onOpenMobileActions();
-    }, LONG_PRESS_DELAY_MS);
+      timerRef.current = null;
+      if (!startPointRef.current) return;
+
+      void pressControls.start(
+        prefersReducedMotion
+          ? {
+              opacity: 0.82,
+              transition: { duration: 0.1, ease: [0.23, 1, 0.32, 1] },
+            }
+          : {
+              transform: "scale(0.97)",
+              transition: { duration: 0.1, ease: [0.23, 1, 0.32, 1] },
+            },
+      );
+
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        if (!startPointRef.current) return;
+
+        didLongPressRef.current = true;
+        clearLongPressTracking();
+        document.getSelection()?.removeAllRanges();
+        animateToRest(true);
+        navigator.vibrate?.(10);
+        onOpenMobileActions();
+      }, LONG_PRESS_COMPRESSION_MS);
+    }, LONG_PRESS_HOLD_MS);
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -124,7 +137,7 @@ export function BookCardActions({
   if (isMobile) {
     return (
       <motion.div
-        className="min-w-0 touch-pan-y select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none]"
+        className="min-w-0 touch-pan-y select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
         initial={{ transform: "scale(1)", opacity: 1 }}
         animate={pressControls}
         onPointerDown={handlePointerDown}

@@ -61,7 +61,7 @@ describe("BookCardActions", () => {
       clientX: 30,
       clientY: 10,
     });
-    act(() => vi.advanceTimersByTime(500));
+    act(() => vi.advanceTimersByTime(650));
     expect(onOpenMobileActions).not.toHaveBeenCalled();
 
     fireEvent.pointerDown(trigger, {
@@ -69,7 +69,10 @@ describe("BookCardActions", () => {
       clientX: 10,
       clientY: 10,
     });
-    act(() => vi.advanceTimersByTime(500));
+    act(() => vi.advanceTimersByTime(649));
+    expect(onOpenMobileActions).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
 
     expect(onOpenMobileActions).toHaveBeenCalledOnce();
   });
