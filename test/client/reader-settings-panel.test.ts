@@ -1,4 +1,5 @@
 import {
+  ReaderSettingsList,
   ReaderSettingsPanel,
   type ReaderSettingsPanelTab,
 } from "@/components/Reader/ReaderSettingsSheet";
@@ -55,5 +56,22 @@ describe("ReaderSettingsPanel", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Theme" }));
     expect(screen.getByRole("heading", { name: "Theme" })).toBeTruthy();
+  });
+
+  it("shows all appearance controls in one desktop scroll list", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    render(
+      createElement(ReaderSettingsList, {
+        settings,
+        onUpdateSettings: vi.fn(),
+      }),
+    );
+
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Theme" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Font Family" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Font Size" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Line Height" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Alignment" })).toBeTruthy();
   });
 });

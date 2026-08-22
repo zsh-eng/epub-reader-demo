@@ -16,12 +16,8 @@ import {
   SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
 import { ReaderContentsPanel } from "./ReaderContentsSheet";
-import {
-  ReaderSettingsPanel,
-  type ReaderSettingsPanelTab,
-} from "./ReaderSettingsSheet";
+import { ReaderSettingsList } from "./ReaderSettingsSheet";
 import type { ChapterEntry, ReaderSheetId } from "./types";
 
 type ReaderSidebarPanel = "contents" | "search" | "settings";
@@ -77,8 +73,6 @@ export function ReaderToolsSidebar({
   onNavigateToHref,
   onCopyDebugDump,
 }: ReaderToolsSidebarProps) {
-  const [settingsTab, setSettingsTab] =
-    useState<ReaderSettingsPanelTab>("type");
   const activePanel = resolveActivePanel(activeSheet);
   const isOpen = activeSheet !== null;
 
@@ -196,12 +190,10 @@ export function ReaderToolsSidebar({
             )}
 
             {activePanel === "settings" && (
-              <ReaderSettingsPanel
+              <ReaderSettingsList
                 settings={settings}
                 onUpdateSettings={onUpdateSettings}
-                activeTab={settingsTab}
-                onActiveTabChange={setSettingsTab}
-                className="mt-0 h-full pb-[env(safe-area-inset-bottom)]"
+                className="pb-[env(safe-area-inset-bottom)]"
               />
             )}
           </div>

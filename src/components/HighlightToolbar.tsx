@@ -10,6 +10,7 @@ import {
 } from "@/types/reader.types";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { Send } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
 interface HighlightToolbarProps {
@@ -31,17 +32,18 @@ export function HighlightToolbar({
   onNoteSubmit,
 }: HighlightToolbarProps) {
   const isMobile = useIsMobile();
+  const prefersReducedMotion = useReducedMotion();
   const [noteText, setNoteText] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const isBareDesktopPicker = !isMobile && !onNoteSubmit;
 
   // Calculate position directly to avoid layout thrashing/jumping
   // Vertical layout: colors on top, input bar below
-  // Desktop color-only mode is tightly fitted to the four larger swatches.
+  // Desktop color-only mode follows the compact floating pill used by Papers.
   // A note composer keeps the wider two-row surface.
   // Mobile: ~260px width, ~120px height
-  const toolbarWidth = isBareDesktopPicker ? 164 : isMobile ? 260 : 220;
-  const toolbarHeight = isBareDesktopPicker ? 32 : isMobile ? 120 : 88;
+  const toolbarWidth = isBareDesktopPicker ? 172 : isMobile ? 260 : 220;
+  const toolbarHeight = isBareDesktopPicker ? 44 : isMobile ? 120 : 88;
   const padding = 12;
 
   let x = position.x - toolbarWidth / 2;
@@ -60,9 +62,11 @@ export function HighlightToolbar({
 
     // Adjust vertical position (show below if not enough space above)
     if (y < padding) {
-      y = position.y + toolbarHeight + padding;
+      y = position.y + padding;
     }
   }
+
+  const opensBelowSelection = y > position.y;
 
   // Close toolbar when clicking outside
   useEffect(() => {
@@ -115,23 +119,36 @@ export function HighlightToolbar({
   };
 
   return (
-    <div
+    <motion.div
       className={cn(
-        "highlight-toolbar fixed z-50 flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200",
+        "highlight-toolbar fixed z-50 flex flex-col gap-2",
         isBareDesktopPicker
-          ? "bg-transparent"
+          ? "rounded-full border border-border bg-popover/95 px-3 py-2 shadow-[0_8px_28px_hsl(var(--foreground)/0.14)] backdrop-blur-sm"
           : "rounded-2xl border border-border bg-background p-2 shadow-xl",
       )}
+      initial={
+        prefersReducedMotion
+          ? { opacity: 0, transform: "scale(1)" }
+          : { opacity: 0, transform: "scale(0.95)" }
+      }
+      animate={{ opacity: 1, transform: "scale(1)" }}
+      exit={
+        prefersReducedMotion
+          ? { opacity: 0, transform: "scale(1)" }
+          : { opacity: 0, transform: "scale(0.95)" }
+      }
+      transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
       style={{
         left: `${x}px`,
         top: `${y}px`,
         width: `${toolbarWidth}px`,
+        transformOrigin: opensBelowSelection ? "center top" : "center bottom",
       }}
     >
       {/* Color buttons row */}
       <div className="flex items-center justify-center gap-3">
         {HIGHLIGHT_COLORS.map((color) => {
-          const handlePointerDown = () => {
+          const handleColorSelect = () => {
             const isRemoveExistingHighlight =
               currentColor && color.name === currentColor && onDelete;
             if (isRemoveExistingHighlight) {
@@ -145,15 +162,19 @@ export function HighlightToolbar({
           return (
             <button
               key={color.name}
-              onPointerDown={handlePointerDown}
+              onClick={handleColorSelect}
               className={cn(
-                "size-10 cursor-pointer rounded-full border-2 border-background/80 shadow-[0_2px_10px_hsl(var(--foreground)/0.18)]",
-                "transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95 md:size-8",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/70 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "cursor-pointer rounded-full transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/70 focus-visible:ring-offset-2",
                 "[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110",
+                isBareDesktopPicker
+                  ? "size-7 shadow-inner shadow-foreground/10 focus-visible:ring-offset-popover"
+                  : "size-10 border-2 border-background/80 shadow-[0_2px_10px_hsl(var(--foreground)/0.18)] focus-visible:ring-offset-background md:size-8",
                 currentColor &&
                   color.name === currentColor &&
-                  "ring-2 ring-foreground ring-offset-2 ring-offset-background",
+                  (isBareDesktopPicker
+                    ? "ring-2 ring-foreground ring-offset-2 ring-offset-popover"
+                    : "ring-2 ring-foreground ring-offset-2 ring-offset-background"),
               )}
               style={{ backgroundColor: `var(--${color.name}-secondary)` }}
               aria-label={
@@ -184,10 +205,10 @@ export function HighlightToolbar({
             className="flex-1 px-3 py-1.5 text-sm rounded-full bg-muted border-0 focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
           <button
-            onPointerDown={handleNoteSubmit}
+            onClick={handleNoteSubmit}
             disabled={!noteText.trim()}
             className={cn(
-              "p-2 rounded-full transition-all",
+              "rounded-full p-2 transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
               noteText.trim()
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "bg-muted text-muted-foreground cursor-not-allowed",
@@ -199,6 +220,6 @@ export function HighlightToolbar({
           </button>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

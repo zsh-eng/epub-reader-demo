@@ -69,24 +69,27 @@ describe("BookCardActions", () => {
       clientX: 10,
       clientY: 10,
     });
+    expect(trigger.parentElement?.dataset.longPressPhase).toBe("pressing");
     act(() => vi.advanceTimersByTime(199));
     expect(onOpenMobileActions).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(1));
 
     expect(onOpenMobileActions).not.toHaveBeenCalled();
+    expect(trigger.parentElement?.dataset.longPressPhase).toBe("popping");
     fireEvent.pointerUp(trigger, {
       pointerType: "touch",
       clientX: 10,
       clientY: 10,
     });
 
-    act(() => vi.advanceTimersByTime(99));
+    act(() => vi.advanceTimersByTime(149));
 
     expect(onOpenMobileActions).not.toHaveBeenCalled();
 
     act(() => vi.advanceTimersByTime(1));
 
     expect(onOpenMobileActions).toHaveBeenCalledOnce();
+    expect(trigger.parentElement?.dataset.longPressPhase).toBe("settling");
   });
 });

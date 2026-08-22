@@ -24,6 +24,12 @@ interface ReaderSettingsPanelProps {
   className?: string;
 }
 
+interface ReaderSettingsListProps {
+  settings: ReaderSettings;
+  onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
+  className?: string;
+}
+
 interface ReaderSettingsSheetProps {
   isOpen: boolean;
   onClose: () => void;
@@ -149,5 +155,45 @@ export function ReaderSettingsPanel({
         </SegmentedTabsContent>
       </ScrollArea>
     </SegmentedTabs>
+  );
+}
+
+/** Desktop settings use one continuous list because the sidebar has height. */
+export function ReaderSettingsList({
+  settings,
+  onUpdateSettings,
+  className,
+}: ReaderSettingsListProps) {
+  return (
+    <div
+      className={cn(
+        "flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden",
+        className,
+      )}
+    >
+      <ScrollArea
+        className="min-h-0 w-full max-w-full flex-1"
+        viewportClassName="overflow-x-hidden"
+        contentClassName="min-w-0 max-w-full overflow-x-hidden"
+      >
+        <div className="space-y-7 px-4 py-3">
+          <ThemePanel settings={settings} onUpdateSettings={onUpdateSettings} />
+          <div className="h-px bg-border/60" aria-hidden="true" />
+          <TypographyPanel
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            section="type"
+            showContentWidthControl={false}
+          />
+          <div className="h-px bg-border/60" aria-hidden="true" />
+          <TypographyPanel
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            section="layout"
+            showContentWidthControl={false}
+          />
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
