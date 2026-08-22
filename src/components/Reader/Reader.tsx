@@ -17,6 +17,7 @@ import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
 import { useReaderDisplayReadiness } from "./hooks/use-reader-display-readiness";
 import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
 import { useReaderSession } from "./hooks/use-reader-session";
+import { useReaderStatusPrompt } from "./hooks/use-reader-status-prompt";
 import {
   buildReaderPageDebugDump,
   collectReaderPageDebugDumpEnvironment,
@@ -104,6 +105,7 @@ export function Reader() {
     contentReady: isReaderStageMeasured && sessionState.status === "ready",
     stageContentRef,
   });
+  useReaderStatusPrompt({ bookId, isReady: displayReady });
 
   if (sessionState.status === "not-found" || !bookId) {
     return (

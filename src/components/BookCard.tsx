@@ -1,21 +1,8 @@
-import {
-  ResponsiveContextMenu,
-  ResponsiveContextMenuContent,
-  ResponsiveContextMenuItem,
-  ResponsiveContextMenuSeparator,
-  ResponsiveContextMenuTrigger,
-} from "@/components/ui/responsive-context-menu";
+import { BookCardActions } from "@/components/BookCardActions";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
-import {
-  Book as BookIcon,
-  BookMarked,
-  BookOpen,
-  CheckCircle,
-  Trash2,
-  XCircle,
-} from "lucide-react";
+import { Book as BookIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -90,6 +77,11 @@ export function BookCard({
   const { toast } = useToast();
   const setStatus = useSetReadingStatus(book.id);
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
+  const [displayStatus, setDisplayStatus] = useState(status);
+
+  useEffect(() => {
+    setDisplayStatus(status);
+  }, [status]);
 
   useEffect(() => {
     if (coverUrl || !book.coverContentHash || !onCoverRequest) return;
@@ -124,17 +116,22 @@ export function BookCard({
     onPrefetch?.(book);
   };
 
-  const handleDelete = () => {
-    if (
-      window.confirm(
-        `Are you sure you want to remove "${book.title}" from your library?`,
-      )
-    ) {
-      onDelete(book.id);
-    }
+  const handleDelete = (): boolean => {
+    const shouldDelete = window.confirm(
+      `Are you sure you want to remove "${book.title}" from your library?`,
+    );
+    if (!shouldDelete) return false;
+
+    onDelete(book.id);
+    return true;
   };
 
   const handleSetStatus = (newStatus: ReadingStatus) => {
+    if (newStatus === displayStatus || setStatus.isPending) return;
+
+    const previousStatus = displayStatus;
+    setDisplayStatus(newStatus);
+
     setStatus.mutate(newStatus, {
       onSuccess: () => {
         const statusLabels: Record<ReadingStatus, string> = {
@@ -147,97 +144,63 @@ export function BookCard({
           title: `Marked ${book.title} as ${statusLabels[newStatus]}`,
         });
       },
+      onError: () => {
+        setDisplayStatus(previousStatus);
+        toast({
+          title: "Could not update reading status",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      },
     });
   };
 
   return (
-    <ResponsiveContextMenu>
-      <ResponsiveContextMenuTrigger>
+    <BookCardActions
+      bookTitle={book.title}
+      bookAuthor={book.author}
+      coverUrl={coverUrl}
+      status={displayStatus}
+      isUpdating={setStatus.isPending}
+      onSelectStatus={handleSetStatus}
+      onRemove={handleDelete}
+    >
+      <div
+        ref={setCardElement}
+        className="group relative flex w-full flex-col gap-3"
+        onFocusCapture={handlePrefetch}
+        onPointerDown={handlePrefetch}
+        onPointerEnter={handlePrefetch}
+      >
+        {/* Book Cover Container */}
         <div
-          ref={setCardElement}
-          className="group relative flex flex-col gap-3 w-full"
-          onFocusCapture={handlePrefetch}
-          onPointerDown={handlePrefetch}
-          onPointerEnter={handlePrefetch}
+          onClick={handleClick}
+          className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
         >
-          {/* Book Cover Container */}
-          <div
-            onClick={handleClick}
-            className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
-          >
-            <div className="relative w-full h-full transition-transform duration-300 ease-out group-hover:-translate-y-2 group-hover:scale-[1.02]">
-              <BookCoverVisual coverUrl={coverUrl} title={book.title} />
-            </div>
-          </div>
-
-          {/* Book Info */}
-          <div className="space-y-1 text-center px-1">
-            <h3
-              onClick={handleClick}
-              className="font-medium text-sm leading-tight text-foreground line-clamp-2 cursor-pointer hover:text-primary transition-colors"
-              title={book.title}
-            >
-              {book.title}
-            </h3>
-            <p className="text-xs text-muted-foreground line-clamp-1">
-              {book.author}
-            </p>
-            {book.lastOpened && (
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Opened {formatOpenedDate(book.lastOpened)}
-              </p>
-            )}
+          <div className="relative h-full w-full transition-transform duration-300 ease-out group-hover:-translate-y-2 group-hover:scale-[1.02]">
+            <BookCoverVisual coverUrl={coverUrl} title={book.title} />
           </div>
         </div>
-      </ResponsiveContextMenuTrigger>
 
-      {/* Context Menu Content */}
-      <ResponsiveContextMenuContent>
-        <ResponsiveContextMenuItem
-          icon={<BookMarked className="h-4 w-4" />}
-          onClick={() => handleSetStatus("want-to-read")}
-        >
-          Want to Read
-          {status === "want-to-read" && (
-            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
+        {/* Book Info */}
+        <div className="space-y-1 px-1 text-center">
+          <h3
+            onClick={handleClick}
+            className="line-clamp-2 cursor-pointer text-sm leading-tight font-medium text-foreground transition-colors hover:text-primary"
+            title={book.title}
+          >
+            {book.title}
+          </h3>
+          <p className="line-clamp-1 text-xs text-muted-foreground">
+            {book.author}
+          </p>
+          {book.lastOpened && (
+            <p className="text-[10px] tracking-wider text-muted-foreground/60 uppercase">
+              Opened {formatOpenedDate(book.lastOpened)}
+            </p>
           )}
-        </ResponsiveContextMenuItem>
-        <ResponsiveContextMenuItem
-          icon={<BookOpen className="h-4 w-4" />}
-          onClick={() => handleSetStatus("reading")}
-        >
-          Reading
-          {status === "reading" && (
-            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
-          )}
-        </ResponsiveContextMenuItem>
-        <ResponsiveContextMenuItem
-          icon={<CheckCircle className="h-4 w-4" />}
-          onClick={() => handleSetStatus("finished")}
-        >
-          Finished
-          {status === "finished" && (
-            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
-          )}
-        </ResponsiveContextMenuItem>
-        <ResponsiveContextMenuItem
-          icon={<XCircle className="h-4 w-4" />}
-          onClick={() => handleSetStatus("dnf")}
-        >
-          Did Not Finish
-          {status === "dnf" && (
-            <CheckCircle className="ml-auto h-4 w-4 text-primary" />
-          )}
-        </ResponsiveContextMenuItem>
-        <ResponsiveContextMenuSeparator />
-        <ResponsiveContextMenuItem
-          icon={<Trash2 className="h-4 w-4" />}
-          destructive
-          onClick={handleDelete}
-        >
-          Remove Book
-        </ResponsiveContextMenuItem>
-      </ResponsiveContextMenuContent>
-    </ResponsiveContextMenu>
+        </div>
+      </div>
+    </BookCardActions>
   );
 }

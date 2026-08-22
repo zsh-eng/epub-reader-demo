@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const originalMaxTouchPoints = navigator.maxTouchPoints;
+const originalInnerWidth = window.innerWidth;
 
 vi.mock("@/hooks/use-reading-status", () => ({
   useSetReadingStatus: () => ({ mutate: vi.fn() }),
@@ -39,9 +39,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  Object.defineProperty(navigator, "maxTouchPoints", {
+  Object.defineProperty(window, "innerWidth", {
     configurable: true,
-    value: originalMaxTouchPoints,
+    value: originalInnerWidth,
   });
 });
 
@@ -69,9 +69,9 @@ describe("BookCard cover loading", () => {
     }
 
     vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
-    Object.defineProperty(navigator, "maxTouchPoints", {
+    Object.defineProperty(window, "innerWidth", {
       configurable: true,
-      value: 1,
+      value: 500,
     });
 
     const requestCover = vi.fn();

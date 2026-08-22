@@ -238,13 +238,22 @@ Recommended sequencing:
 
 ## 20260816 Next Tasks
 
+20260822
+- [x] Fix performance regressions
+- [x] Fix missing images on the library page
+- [x] Remove the sidebar icon (or make it part of the header) when in mobile (or maybe even desktop mode)
+- [x] New "continue reading" screen
+- [x] For mobile, sessions, devices screen etc. should have back button, not the 3 dots for the sidebar
 - [ ] Sessions screen
-	- [ ] Recent reading state
-		- [ ] Still not good enough - it should show book cover - something specific to *you*
-	- [ ] Spacing between months and "year" is ugly
+	- [x] Recent reading state
+		- [x] Still not good enough - it should show book cover - something specific to *you* (we can use the mobile same card)
+	- [x] At least 5 minutes of reading time, rather than 10 to show on the "recent reading"
+	- [x] Reading space?
+	- [x] Spacing between months and "year" is ugly
 	- [ ] Fix hover bug again where it looks like there are 2 elements because of the user hovering (update AGENTS.md)
-	- [ ] Length of the button should not animate (e.g. switching from "month" to "all"). Also switching from All back to month - (let's say) I already selected an earlier month before I switched to the all - it should just be instant, it shouldn't animate from left to right
-- [ ] Sidebar button and search bar alignment has to be better
+	- [x] Length of the button should not animate (e.g. switching from "month" to "all"). Also switching from All back to month - (let's say) I already selected an earlier month before I switched to the all - it should just be instant, it shouldn't animate from left to right
+
+- [ ] Better long press options
 
 - [ ] New highlights page: 'bento style'
 	- [ ] Space at the bottom of the page is only important if the last book's section is too short
@@ -261,9 +270,6 @@ Recommended sequencing:
 
 - [ ] Desktop highlight bar is ugly
 	- [ ] Buttons shouldn't have any "dead zone" between them
-
-- [ ] Sidebar ugly on mobile
-- [ ] Not loading book images properly
 
 Continue resolving papercuts in EPUB Reader Demo
 Remove reader "preparing book" - consider other animations?

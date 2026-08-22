@@ -357,7 +357,8 @@ function SessionsEmptyState({
           bookTitle={invitation.bookTitle}
           coverUrl={coverUrl}
           activityLabel={getInvitationActivityLabel(invitation.lastReadAt)}
-          className="w-full max-w-sm"
+          appearance="open"
+          className="w-full max-w-xl"
         />
       </main>
     );
@@ -412,7 +413,8 @@ function RecentReadingEmptyState({
         bookTitle={bookTitle}
         coverUrl={coverUrl}
         activityLabel={getInvitationActivityLabel(lastReadAt)}
-        className="w-full max-w-sm"
+        appearance="open"
+        className="w-full max-w-lg"
       />
     </div>
   );
