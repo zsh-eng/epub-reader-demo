@@ -92,118 +92,66 @@ Recommended sequencing:
 - [ ] Decide whether the reader stays WebView-based or moves toward a native
       implementation.
 
-## Current App Product Work
+## PWA Product Work
 
-- [ ] OLED reading theme (the text shouldn't be pure white, it should be something dimmer to suit reading at nightime).
-- [x] Improve the Library page design.
-- [ ] Explore searchable list-style Library design.
-- [x] Make Continue Reading order by most recently read.
-- [x] Make the front page and Continue Reading screen sleeker.
-- [ ] Improve book search.
-- [x] Add sort order for books, with most recently read first.
-- [x] Consider bringing back auto-start-reading behavior.
-- [ ] Improve the add-new-EPUB flow.
-- [x] Remove unnecessary "loading library" UI.
-- [ ] Standardize the UI font, likely around DM Sans.
-- [ ] Rename the project/repository from the prototype name when ready.
-- [ ] Optional: add a landing page.
+The recent Library, Continue Reading, Sessions, Highlights, mobile navigation,
+long-press, and reader-settings redesign is the current baseline. The backlog
+below contains only work that still has a clear product or reliability reason.
+
+### Next
+
+- [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,
+      then verify that the hover state does not create a duplicate visual layer.
+- [ ] Diagnose slow-network startup flicker across Library and Reader. Keep the
+      atomic reveal, and fix the first real blocking boundary that the evidence
+      identifies.
+- [ ] Improve the EPUB import handoff. After a successful import, offer a clear
+      mobile-friendly path to open the new book, while preserving multi-file,
+      duplicate, and failure outcomes.
+- [ ] Decide the mobile Continue Reading entry point. Wire the existing
+      `ContinueReadingCarousel` only if it is the chosen surface; otherwise
+      remove the unused component and keep the current card design.
+- [ ] Add an OLED reading theme with dim reading text and theme values that are
+      distinct from the current dark theme.
+
+### Later
+
+- [ ] Choose the product name and rename the project/repository from the
+      prototype name.
 
 ## Reader Experience Work
 
-- [ ] Keep chrome hidden during initial reader load.
-- [ ] Fade in the first page on mount if it feels better.
-- [ ] Add slide gestures for previous and next page.
-- [ ] Add jump-back history, similar to Libby-style navigation.
-- [ ] Add anchor highlighting after navigation, resizing, or relayout.
-- [ ] Add a search interface for the reader.
-- [ ] Highlight search results and allow jumping between matches.
-- [ ] Improve the Contents sheet:
-      scroll active chapter into view, fix chapter row indexing, and hide search
-      until it works well.
-- [ ] Add a better desktop reader chrome when there is enough width, including
-      contents and font buttons instead of hiding everything under a menu.
-- [ ] Improve the highlight selection toolbar, especially on desktop.
-- [ ] Make selecting a whole paragraph reliably show the toolbar.
-- [ ] Build the note-taking flow.
-- [ ] Move notes closer to highlights in the product model.
-- [ ] Build an initial highlight browser.
-- [ ] Improve the highlight browser design.
-- [ ] Consider a masonry layout for highlights.
-- [ ] Make Sessions show time spent per book.
-- [ ] Ignore very short sessions in session totals.
-- [ ] Add a reading stats interface.
+### Next
 
-## Reader Rendering And Pagination Bugs
+- [ ] Ship reader search end to end. Connect the existing local text index to
+      the Reader tools, show match context, highlight matches, and support
+      moving between results without losing the reading anchor.
+- [ ] Finish the note-taking flow. Wire the existing note composer to create,
+      edit, and delete notes attached to highlights.
+- [ ] Make whole-paragraph selection reliably open the highlight toolbar on
+      desktop and touch devices.
 
-- [ ] Investigate horizontal navigation and browser back behavior.
-- [ ] Fix horizontal overflow.
-- [ ] Fix hanging-indent paragraphs when justification is enabled.
-- [ ] Fix cases where switching Publisher Book Styling off and on does not
-      update justification or related typography correctly.
-- [ ] Fix words breaking halfway through a word. Determine whether the cause is
-      EPUB content, CSS, or the pagination engine.
-- [ ] Prevent descenders from being clipped at the bottom of the page.
-- [ ] Fix spreads not rendering correctly on first open.
-- [ ] Fix preferred-slot-index navigation bugs if they recur.
-- [ ] Fix image flicker on first load.
-- [ ] Fix overflow issues reported by screenshots.
-- [ ] Fix citation badge weight inconsistencies.
-- [ ] Fix highlight margin issues.
-- [ ] Fix block quote rendering and compare against the legacy reader.
-- [ ] Fix input text truncation for letters like "j".
-- [ ] Fix empty UI positioning.
-- [ ] Change internal superscript references back from the pill treatment if the
-      old rendering reads better.
-- [ ] Add syntax highlighting and better code block rendering where feasible.
-- [ ] Respect Publisher Book Styling for fonts and layout where it materially
-      improves book beauty, such as heading fonts in specific EPUBs.
-- [ ] Investigate useful EPUB roles such as `noteref`.
-- [ ] Support drop caps.
-- [ ] Improve table rendering.
-- [ ] Improve header wrapping balance.
-- [ ] Add original EPUB design and spacing where appropriate.
-- [ ] Ensure text can visually overflow rather than clipping baselines.
-- [ ] Clean up style injection so the reader injects as few styles as possible.
-- [ ] Reduce lag when theme or typography changes force pagination reflow.
-- [ ] Support navigation while only partial pagination is available.
-- [ ] Remove or hide debug timers when they are no longer useful.
-- [ ] Make worker loading a singleton if it improves font-loading speed.
-- [ ] Extract pagination into a separate library when the API stabilizes.
-- [ ] Extract Ctrl+F and highlight logic into the same library if it shares
-      enough primitives with pagination.
-- [ ] Investigate reader highlight placement bug on indented paragraphs.
+### Later
 
-## Storage And EPUB Processing Ideas
+- [ ] Add direct swipe navigation for previous and next spreads if the current
+      touch tap zones are not sufficient.
+- [ ] Add jump-back history for meaningful reader navigation points.
+- [ ] Add a visible anchor cue after navigation, resize, or typography reflow
+      when users need help finding their place.
 
-- [ ] Investigate OPFS for book files and extracted EPUB contents.
-- [ ] Store normalized HTML strings as files/blobs instead of many small records
-      if that improves performance and portability.
-- [ ] Compute image maps during EPUB processing.
-- [ ] Move EPUB-derived cache work earlier so reader startup reads less from
-      blobs at open time.
-- [ ] Extract reader data loading behind a cleaner interface.
-- [ ] Fix migrations affected by reader processor changes.
+## Reader Engine And Reliability
 
-## Future Reader Modes
+Keep this list evidence-led. Add a task only after a Reader Page Debug Dump or
+repeatable device report identifies a real failure.
 
-- [ ] Add infinite scrolling mode.
-- [ ] Add virtualization for infinite scrolling.
-- [ ] Allow switching between paginated and infinite view.
-- [ ] Consider a paperback-style reader presentation.
-- [ ] Consider a visual relayout indicator for the current anchor text after
-      resize or setting changes.
-
-## Design Inspiration
-
-- [ ] Explore the desktop sidebar idea.
-- [ ] Explore Kami-inspired interface elements.
-- [ ] Explore beautiful sheets round 2.
-- [ ] Explore a "scanning in the book" loading animation.
-- [ ] Explore book cover effects on the Library page.
-- [ ] Explore richer book presentation inspired by visible-shelf style layouts.
-- [ ] Revisit popover/context-menu interaction polish:
-      anchored clone, fast scale, opacity, shadow, viewport constraints, and
-      preventing background scroll while open.
+- [ ] Fix horizontal overflow and baseline clipping in affected EPUBs.
+- [ ] Investigate first-open spread and image-flicker regressions.
+- [ ] Reduce lag when theme or typography changes trigger pagination reflow.
+- [ ] Improve table, code-block, and publisher-specific layout only when a
+      reproducible book exposes a gap.
+- [ ] Investigate highlight placement on indented paragraphs.
+- [ ] Extract pagination or search into a separate library only after the
+      relevant APIs stop changing.
 
 ## Research Queue
 
@@ -233,52 +181,3 @@ Recommended sequencing:
 - CRDT rewrite before the simpler HLC/log model has been evaluated.
 - Full design-system migration unless it directly supports the mobile shell or
   reader workflows.
-
-## 20260816 Next Tasks
-
-20260822
-- [x] Fix performance regressions
-- [x] Fix missing images on the library page
-- [x] Remove the sidebar icon (or make it part of the header) when in mobile (or maybe even desktop mode)
-- [x] New "continue reading" screen
-- [x] For mobile, sessions, devices screen etc. should have back button, not the 3 dots for the sidebar
-- [x] Sessions screen
-	- [x] Recent reading state
-		- [x] Still not good enough - it should show book cover - something specific to *you* (we can use the mobile same card)
-	- [x] At least 5 minutes of reading time, rather than 10 to show on the "recent reading"
-	- [x] Reading space?
-	- [x] Spacing between months and "year" is ugly
-	- [x] Length of the button should not animate (e.g. switching from "month" to "all"). Also switching from All back to month - (let's say) I already selected an earlier month before I switched to the all - it should just be instant, it shouldn't animate from left to right
-
-- [x] Better long press options
-- [x] Continue reading
-- [x] Fix theme settings sheet
-
-- [x] New highlights page: 'bento style'
-	- [x] Space at the bottom of the page is only important if the last book's section is too short
-	- [x] No matching highlights Should not be scrollable
-	- [x]  X button should be more discreet and normal for a searchbar - it looks ugly  - and make the highlight circles bigger
-	- [x] "Search all highlights" has too much left padding, and the highlight circles should be a bit more left - too little padding on the right side (optically should be aligned based on roudness)
-	
-	- [x] Where to put the bookcover - alternate, if low number of highlights (cannot tesselate, then we just put the book cover next to the continue reading - this is column 1, book cover columns 2-3 for example). If enough highlights, can put 1-2, 2-3, etc. columns for varied look, usually nested somewhere between the highlights
-	- [x] Long quotes can take up 2 columns as well (though we need to think of a nice way to lay it out)
-	- [x] Large search bar, when scroll down shrinks a little as it becomes stickied
-	- [x] Mobile design
-		- [x] On mobile, clicking a highlight opens a sheet with 2 options - copy or open the book to that page
-		- [x] Copy should be animated
-	- [x] Right click context menu on desktop should do the same
-	- [x] Desktop clicking the highlight should copy (and trigger a toast), should not be jumping straight to book
-	- [x] Entry animations
-	- [x] Word cloud idea
-
-- [x] Desktop highlight bar is ugly
-	- [x] Buttons shouldn't have any "dead zone" between them
-	
-- [ ] Sessions screen: Fix hover bug again where it looks like there are 2 elements because of the user hovering (update AGENTS.md)
-- [ ] Immediately "start reading" after adding a new book in (some kind of card on mobile?)
-- [ ] Carousel / horizontal scroll style for the continue reading on mobile (maybe slightly smaller cards)
-- [ ] Flicker bug for overscrolling in the sessions page
-
-Flicker
-"Slow network" messing up the loads
-Install Emil animations and figure out if something makes sense for the animation
