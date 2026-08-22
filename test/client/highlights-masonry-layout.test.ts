@@ -18,19 +18,19 @@ function placementsOverlap(left: MosaicPlacement, right: MosaicPlacement) {
 
 describe("getHighlightsMosaicGeometry", () => {
   it("adds a column only when every card can keep its minimum width", () => {
-    const threeColumns = getHighlightsMosaicGeometry(915);
-    const fourColumns = getHighlightsMosaicGeometry(916);
+    const threeColumns = getHighlightsMosaicGeometry(903);
+    const fourColumns = getHighlightsMosaicGeometry(904);
 
     expect(threeColumns.columnCount).toBe(3);
-    expect(threeColumns.columnWidth).toBe(297);
+    expect(threeColumns.columnWidth).toBeCloseTo(295.67, 1);
     expect(fourColumns.columnCount).toBe(4);
     expect(fourColumns.columnWidth).toBe(220);
   });
 
-  it("scales the book cover with the available horizontal space", () => {
-    expect(getHighlightsMosaicGeometry(1_000).coverWidth).toBe(180);
-    expect(getHighlightsMosaicGeometry(1_500).coverWidth).toBe(270);
-    expect(getHighlightsMosaicGeometry(1_800).coverWidth).toBe(280);
+  it("makes a one-column book cover fill its full column", () => {
+    const geometry = getHighlightsMosaicGeometry(1_000);
+
+    expect(geometry.coverWidth).toBe(geometry.columnWidth);
   });
 });
 
@@ -97,7 +97,10 @@ describe("computeHighlightsBentoLayout", () => {
     expect(
       alternateMosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
     ).toMatchObject({ column: 2, columnSpan: 2, top: 0 });
-    expect(mosaic.coverWidth).toBeCloseTo(424.83, 1);
+    expect(mosaic.coverWidth).toBeCloseTo(496, 1);
+    expect(mosaic.coverWidth).toBe(
+      mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID)?.width,
+    );
     expect(
       mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID)?.height,
     ).toBeGreaterThan(630);

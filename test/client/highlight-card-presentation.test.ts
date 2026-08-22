@@ -1,4 +1,5 @@
 import {
+  getHighlightCardPresentation,
   getHighlightWordCount,
   usesWordCloudHighlightStyle,
 } from "@/lib/highlight-card-presentation";
@@ -16,5 +17,17 @@ describe("highlight card presentation", () => {
       false,
     );
     expect(usesWordCloudHighlightStyle("   ")).toBe(false);
+  });
+
+  it("centers short quotes only when they fit on one rendered line", () => {
+    expect(getHighlightCardPresentation("a very short quotation", 1)).toBe(
+      "compact-quote",
+    );
+    expect(getHighlightCardPresentation("a very short quotation", 2)).toBe(
+      "quote",
+    );
+    expect(getHighlightCardPresentation("one small phrase", 1)).toBe(
+      "word-cloud",
+    );
   });
 });

@@ -37,22 +37,16 @@ export interface HighlightsMosaicLayoutOptions {
   maxColumnCount: number;
   minColumnWidth: number;
   coverAspectRatio: number;
-  coverWidthRatio: number;
-  maxCoverWidth: number;
-  minCoverWidth: number;
   detailsHeight: number;
   rowHeight: number;
   layoutSeed: number;
 }
 
 const DEFAULT_OPTIONS: HighlightsMosaicLayoutOptions = {
-  gap: 12,
+  gap: 8,
   maxColumnCount: 4,
   minColumnWidth: 220,
   coverAspectRatio: 1.5,
-  coverWidthRatio: 0.18,
-  maxCoverWidth: 280,
-  minCoverWidth: 160,
   detailsHeight: 250,
   rowHeight: 8,
   layoutSeed: 0,
@@ -62,14 +56,7 @@ export function getHighlightsMosaicGeometry(
   containerWidth: number,
   options: Partial<HighlightsMosaicLayoutOptions> = {},
 ): Pick<HighlightsMosaicLayout, "columnCount" | "columnWidth" | "coverWidth"> {
-  const {
-    coverWidthRatio,
-    gap,
-    maxColumnCount,
-    maxCoverWidth,
-    minColumnWidth,
-    minCoverWidth,
-  } = {
+  const { gap, maxColumnCount, minColumnWidth } = {
     ...DEFAULT_OPTIONS,
     ...options,
   };
@@ -87,11 +74,7 @@ export function getHighlightsMosaicGeometry(
   );
 
   const columnWidth = (containerWidth - gap * (columnCount - 1)) / columnCount;
-  const coverWidth = Math.min(
-    columnWidth,
-    maxCoverWidth,
-    Math.max(minCoverWidth, containerWidth * coverWidthRatio),
-  );
+  const coverWidth = columnWidth;
 
   return { columnCount, columnWidth, coverWidth };
 }
@@ -333,10 +316,7 @@ export function computeHighlightsBentoLayout(
   const nestedCoverColumn = Math.abs(layoutSeed) % columnCount;
   const coverFootprintWidth =
     columnWidth * coverColumnSpan + gap * Math.max(0, coverColumnSpan - 1);
-  const resolvedCoverWidth =
-    coverColumnSpan === 1
-      ? coverWidth
-      : Math.min(coverFootprintWidth * 0.86, 520);
+  const resolvedCoverWidth = coverFootprintWidth;
   const coverNaturalHeight = resolvedCoverWidth * coverAspectRatio;
   const detailsRowSpan = Math.ceil((detailsHeight + gap) / rowHeight);
   const coverInsertionIndex = hasEnoughHighlightsToNestCover

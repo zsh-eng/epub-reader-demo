@@ -18,8 +18,10 @@ import {
 import { formatHighlightTime } from "@/lib/date-utils";
 import type { SyncedHighlight } from "@/lib/db";
 import {
+  COMPACT_HIGHLIGHT_CARD_HEIGHT,
   SHORT_HIGHLIGHT_CARD_HEIGHT,
-  usesWordCloudHighlightStyle,
+  getHighlightCardPresentation,
+  type HighlightCardPresentation,
 } from "@/lib/highlight-card-presentation";
 import {
   ALL_HIGHLIGHT_COLORS,
@@ -79,7 +81,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
-const MOSAIC_GAP = 12;
+const MOSAIC_GAP = 8;
 const MOSAIC_MAX_COLUMNS = 4;
 const MOSAIC_MIN_CARD_WIDTH = 220;
 const QUOTE_FONT = '400 18px "EB Garamond"';
@@ -761,12 +763,10 @@ function BookDetailsTile({
 
 function BookCoverTile({
   group,
-  coverWidth,
   readingTimeMs,
   tooltipHandle,
 }: {
   group: BookHighlightGroup;
-  coverWidth: number;
   readingTimeMs: number;
   tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
 }) {
@@ -774,19 +774,15 @@ function BookCoverTile({
     skip: !group.book.coverContentHash,
   });
   const cover = (
-    <div className="flex h-full items-center justify-center overflow-hidden rounded-2xl border border-border/50 bg-secondary/25">
+    <div className="h-full overflow-hidden rounded-2xl border border-border/50 bg-secondary/25">
       {coverUrl ? (
         <img
           src={coverUrl}
           alt={`Cover of ${group.book.title}`}
-          className="aspect-2/3 max-h-full rounded-r-lg rounded-l-sm object-cover shadow-xl"
-          style={{ width: coverWidth }}
+          className="size-full object-cover"
         />
       ) : (
-        <div
-          className="flex aspect-2/3 max-h-full items-center justify-center rounded-r-lg rounded-l-sm border bg-secondary shadow-xl"
-          style={{ width: coverWidth }}
-        >
+        <div className="flex size-full items-center justify-center bg-secondary">
           <BookOpenText
             className="size-10 text-muted-foreground"
             aria-hidden="true"
@@ -817,6 +813,7 @@ function BookCoverTile({
 
 function HighlightQuoteCard({
   highlight,
+  presentation,
   isMobile,
   chapterTitle,
   tooltipHandle,
@@ -825,6 +822,7 @@ function HighlightQuoteCard({
   onOpenBook,
 }: {
   highlight: SyncedHighlight;
+  presentation: HighlightCardPresentation;
   isMobile: boolean;
   chapterTitle: string;
   tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
@@ -832,21 +830,22 @@ function HighlightQuoteCard({
   onOpenActions: (highlight: SyncedHighlight) => void;
   onOpenBook: (highlight: SyncedHighlight) => void;
 }) {
-  const usesWordCloud = usesWordCloudHighlightStyle(highlight.selectedText);
+  const usesWordCloud = presentation === "word-cloud";
+  const usesCompactQuote = presentation === "compact-quote";
+  const showsMetadata = presentation === "quote";
   const card = (
     <article
       className={cn(
         "relative h-full overflow-hidden rounded-xl border text-card-foreground",
-        usesWordCloud ? "bg-secondary/35" : "bg-card",
+        usesWordCloud
+          ? "bg-secondary/35"
+          : usesCompactQuote
+            ? "bg-secondary/20"
+            : "bg-card",
       )}
       style={getHighlightAccentStyle(highlight.color)}
     >
-      {usesWordCloud ? (
-        <span
-          className="absolute top-4 left-4 size-2.5 rounded-full bg-[var(--highlight-accent)]"
-          aria-hidden="true"
-        />
-      ) : (
+      {showsMetadata && (
         <div
           className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-[var(--highlight-accent)]"
           aria-hidden="true"
@@ -862,7 +861,7 @@ function HighlightQuoteCard({
         }
         className={cn(
           "group flex h-full w-full cursor-pointer flex-col px-5 pt-4 pb-5 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy",
-          usesWordCloud && "text-center",
+          !showsMetadata && "text-center",
         )}
       >
         {usesWordCloud ? (
@@ -877,6 +876,24 @@ function HighlightQuoteCard({
               />
             </span>
           </blockquote>
+        ) : usesCompactQuote ? (
+          <blockquote className="m-0 flex min-h-0 flex-1 items-center justify-center px-1 py-3 font-serif text-[19px] leading-6">
+            <span className="inline text-balance">
+              <span
+                className="mr-1 text-[24px] leading-0 text-[var(--highlight-accent)]"
+                aria-hidden="true"
+              >
+                “
+              </span>
+              {highlight.selectedText}
+              <span
+                className="ml-1 text-[24px] leading-0 text-[var(--highlight-accent)]"
+                aria-hidden="true"
+              >
+                ”
+              </span>
+            </span>
+          </blockquote>
         ) : (
           <blockquote className="m-0 break-words font-serif text-[18px] leading-6">
             <span
@@ -888,29 +905,34 @@ function HighlightQuoteCard({
             {highlight.selectedText}
           </blockquote>
         )}
-        <footer className="mt-auto flex min-h-8 shrink-0 items-center justify-end gap-1.5 pt-3 text-[11px] leading-none text-muted-foreground">
-          <span
-            className="size-1.5 shrink-0 rounded-full bg-[var(--highlight-accent)]"
-            aria-hidden="true"
-          />
-          <time
-            className="whitespace-nowrap"
-            dateTime={new Date(highlight.createdAt).toISOString()}
-          >
-            {formatHighlightTime(highlight.createdAt)}
-          </time>
-          {isMobile ? (
-            <Ellipsis className="ml-1 size-3.5 opacity-60" aria-hidden="true" />
-          ) : (
-            <Copy
-              className="ml-1 size-3.5 opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70"
+        {showsMetadata && (
+          <footer className="mt-auto flex min-h-8 shrink-0 items-center justify-end gap-1.5 pt-3 text-[11px] leading-none text-muted-foreground">
+            <span
+              className="size-1.5 shrink-0 rounded-full bg-[var(--highlight-accent)]"
               aria-hidden="true"
             />
-          )}
-          <span className="sr-only">
-            {isMobile ? "Show actions" : "Copy highlight"}
-          </span>
-        </footer>
+            <time
+              className="whitespace-nowrap"
+              dateTime={new Date(highlight.createdAt).toISOString()}
+            >
+              {formatHighlightTime(highlight.createdAt)}
+            </time>
+            {isMobile ? (
+              <Ellipsis
+                className="ml-1 size-3.5 opacity-60"
+                aria-hidden="true"
+              />
+            ) : (
+              <Copy
+                className="ml-1 size-3.5 opacity-0 transition-opacity duration-150 group-hover:opacity-70 group-focus-visible:opacity-70"
+                aria-hidden="true"
+              />
+            )}
+            <span className="sr-only">
+              {isMobile ? "Show actions" : "Copy highlight"}
+            </span>
+          </footer>
+        )}
       </button>
     </article>
   );
@@ -1113,20 +1135,46 @@ function HighlightsMosaic({
     });
   }, [fontReady, geometry.columnWidth, group, titleFontSize]);
 
-  const mosaic = useMemo(() => {
+  const { mosaic, presentationByHighlightId } = useMemo(() => {
+    const presentationByHighlightId = new Map<
+      string,
+      HighlightCardPresentation
+    >();
     const isReady =
       width > 0 && fontReady && preparedById.size === group.highlights.length;
     if (!isReady) {
-      return computeHighlightsBentoLayout(0, []);
+      return {
+        mosaic: computeHighlightsBentoLayout(0, []),
+        presentationByHighlightId,
+      };
     }
 
     const textWidth = Math.max(1, geometry.columnWidth - 40);
+    const compactTextWidth = Math.max(1, geometry.columnWidth - 72);
     const wideTextWidth = Math.max(
       1,
       geometry.columnWidth * 2 + MOSAIC_GAP - 40,
     );
     const measurements = highlights.flatMap((highlight) => {
-      if (usesWordCloudHighlightStyle(highlight.selectedText)) {
+      const prepared = preparedById.get(highlight.id);
+      if (!prepared) return [];
+
+      const compactTextHeight = layout(
+        prepared,
+        compactTextWidth,
+        QUOTE_LINE_HEIGHT,
+      ).height;
+      const renderedLineCount = Math.max(
+        1,
+        Math.ceil(compactTextHeight / QUOTE_LINE_HEIGHT),
+      );
+      const presentation = getHighlightCardPresentation(
+        highlight.selectedText,
+        renderedLineCount,
+      );
+      presentationByHighlightId.set(highlight.id, presentation);
+
+      if (presentation === "word-cloud") {
         return [
           {
             id: highlight.id,
@@ -1137,8 +1185,16 @@ function HighlightsMosaic({
         ];
       }
 
-      const prepared = preparedById.get(highlight.id);
-      if (!prepared) return [];
+      if (presentation === "compact-quote") {
+        return [
+          {
+            id: highlight.id,
+            height: COMPACT_HIGHLIGHT_CARD_HEIGHT,
+            wideHeight: COMPACT_HIGHLIGHT_CARD_HEIGHT,
+            preferredColumnSpan: 1 as const,
+          },
+        ];
+      }
 
       const textHeight = layout(prepared, textWidth, QUOTE_LINE_HEIGHT).height;
       const shouldUseWideCard =
@@ -1164,13 +1220,16 @@ function HighlightsMosaic({
       ];
     });
 
-    return computeHighlightsBentoLayout(width, measurements, {
-      gap: MOSAIC_GAP,
-      maxColumnCount: MOSAIC_MAX_COLUMNS,
-      minColumnWidth: MOSAIC_MIN_CARD_WIDTH,
-      detailsHeight,
-      layoutSeed: getStableNumber(group.book.id),
-    });
+    return {
+      mosaic: computeHighlightsBentoLayout(width, measurements, {
+        gap: MOSAIC_GAP,
+        maxColumnCount: MOSAIC_MAX_COLUMNS,
+        minColumnWidth: MOSAIC_MIN_CARD_WIDTH,
+        detailsHeight,
+        layoutSeed: getStableNumber(group.book.id),
+      }),
+      presentationByHighlightId,
+    };
   }, [
     detailsHeight,
     fontReady,
@@ -1248,7 +1307,6 @@ function HighlightsMosaic({
         >
           <BookCoverTile
             group={group}
-            coverWidth={mosaic.coverWidth}
             readingTimeMs={readingTimeMs}
             tooltipHandle={tooltipHandle}
           />
@@ -1267,6 +1325,9 @@ function HighlightsMosaic({
           >
             <HighlightQuoteCard
               highlight={highlight}
+              presentation={
+                presentationByHighlightId.get(highlight.id) ?? "quote"
+              }
               isMobile={isMobile}
               chapterTitle={
                 chapterTitleByHighlightId.get(highlight.id) ??
@@ -1641,7 +1702,7 @@ export function HighlightsMasonry() {
                         aria-labelledby={headingId}
                         className={cn(
                           "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
-                          index > 0 && "mt-16 border-t pt-14",
+                          index > 0 && "mt-2",
                         )}
                       >
                         <HighlightsMosaic
