@@ -113,6 +113,12 @@ below contains only work that still has a clear product or reliability reason.
       remove the unused component and keep the current card design.
 - [ ] Add an OLED reading theme with dim reading text and theme values that are
       distinct from the current dark theme.
+- [ ] Fix long press
+- [ ] Clean up highlights page mobile - spacing, background and stickiness, etc.
+- [ ] LRU Cache of books (continue reading, etc.) - do some napkin math
+- [ ] "Jump back" ideas for reference (need to start storing jump history though)
+- [ ] Fix overscroll in reader
+- [ ] Add more "continue reading" in the sidebar
 
 ### Later
 
