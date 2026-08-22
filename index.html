@@ -17,6 +17,7 @@
     <script>
       (function () {
         const STORAGE_KEY = "epub-reader-settings";
+        const APPEARANCE_STORAGE_KEY = "epub-reader-appearance";
         const THEME_CLASSES = [
           "light",
           "dark",
@@ -28,10 +29,24 @@
         try {
           const stored = localStorage.getItem(STORAGE_KEY);
           const settings = stored ? JSON.parse(stored) : null;
-          const theme =
+          let theme =
             settings?.theme && THEME_CLASSES.includes(settings.theme)
               ? settings.theme
               : DEFAULT_THEME;
+          const appearance = localStorage.getItem(APPEARANCE_STORAGE_KEY);
+          if (appearance === "system") {
+            const useDarkTheme = matchMedia(
+              "(prefers-color-scheme: dark)",
+            ).matches;
+            const useFlexoki = theme.startsWith("flexoki");
+            theme = useFlexoki
+              ? useDarkTheme
+                ? "flexoki-dark"
+                : "flexoki-light"
+              : useDarkTheme
+                ? "dark"
+                : "light";
+          }
           document.documentElement.classList.add(theme);
         } catch (e) {
           document.documentElement.classList.add(DEFAULT_THEME);

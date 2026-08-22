@@ -54,6 +54,7 @@ describe("LibraryBookStatusSheet", () => {
       book,
       coverUrl: undefined,
       initialStatus: "want-to-read" as const,
+      onOpenBook: vi.fn(),
       onDelete: vi.fn(),
     };
     const { rerender } = render(createElement(LibraryBookStatusSheet, props));

@@ -332,8 +332,6 @@ function ChapterRow({
         paddingLeft: `${0.5 + item.visualDepth * 0.85}rem`,
         paddingRight: "0.5rem",
       }}
-      whileTap={reducedMotion ? undefined : { scale: 0.985 }}
-      transition={reducedMotion ? { duration: 0 } : { duration: 0.12 }}
     >
       {isCurrent ? (
         <motion.span
@@ -442,7 +440,6 @@ export function ReaderContentsSheet({
       title="Contents"
       panelClassName="max-w-md"
       bodyClassName="w-full min-w-0 max-w-full overflow-hidden"
-      disableBodyDrag
       header={
         <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
           <Button

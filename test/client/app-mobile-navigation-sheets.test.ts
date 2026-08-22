@@ -36,6 +36,8 @@ const recentReading: RecentlyReadBook = {
 function renderSheets() {
   const onClose = vi.fn();
   const onSignOut = vi.fn(async () => undefined);
+  const onAppearanceChange = vi.fn();
+  const onAddBook = vi.fn();
 
   render(
     createElement(
@@ -47,8 +49,10 @@ function renderSheets() {
         activePath: "/",
         recentReading,
         recentBookCoverUrl: "blob:cover",
-        isDarkTheme: false,
-        onThemeToggle: vi.fn(),
+        appearanceMode: "system",
+        onAppearanceChange,
+        isImporting: false,
+        onAddBook,
         isOnline: true,
         isSyncing: false,
         onSync: vi.fn(async () => undefined),
@@ -65,7 +69,7 @@ function renderSheets() {
     ),
   );
 
-  return { onClose, onSignOut };
+  return { onAddBook, onAppearanceChange, onClose, onSignOut };
 }
 
 afterEach(cleanup);
@@ -84,12 +88,34 @@ describe("AppMobileNavigationSheets", () => {
     expect(screen.getAllByText("Reader")).toHaveLength(1);
   });
 
+  it("keeps utility actions separate from the three navigation rows", () => {
+    const { onAddBook, onAppearanceChange, onClose } = renderSheets();
+
+    const libraryLink = screen.getByRole("link", { name: /01 Library/ });
+    expect(libraryLink).toBeTruthy();
+    expect(screen.getByRole("link", { name: /02 Highlights/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /03 Sessions/ })).toBeTruthy();
+    expect(screen.queryByText("04")).toBeNull();
+
+    const appearanceButton = screen.getByRole("button", {
+      name: "Switch appearance. Current setting: System",
+    });
+
+    fireEvent.click(appearanceButton);
+    fireEvent.click(screen.getByRole("button", { name: "Add book" }));
+    fireEvent.click(libraryLink);
+
+    expect(onAppearanceChange).toHaveBeenCalledWith("light");
+    expect(onAddBook).toHaveBeenCalledOnce();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("opens account actions as a peer sheet and returns to navigation", async () => {
     renderSheets();
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: /05 Jane Reader jane@example.com/,
+        name: "Jane Reader, jane@example.com",
       }),
     );
 

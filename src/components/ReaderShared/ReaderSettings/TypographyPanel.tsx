@@ -32,12 +32,14 @@ import { useEffect, useRef } from "react";
 interface TypographyPanelProps {
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
+  section: "type" | "layout";
   showContentWidthControl?: boolean;
 }
 
 export function TypographyPanel({
   settings,
   onUpdateSettings,
+  section,
   showContentWidthControl = true,
 }: TypographyPanelProps) {
   const alignmentValue = isJustifiedTextAlign(settings.textAlign)
@@ -95,68 +97,70 @@ export function TypographyPanel({
 
   return (
     <div className="space-y-5 pb-2">
-      {/* Font Family */}
-      <div className="space-y-2.5">
-        <h4 className={sectionLabelClassName}>Font Family</h4>
-        <div
-          ref={scrollContainerRef}
-          className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-        >
-          {fonts.map((font) => {
-            const isSelected = settings.fontFamily === font.value;
-            return (
-              <button
-                key={font.value}
-                data-state={isSelected ? "on" : "off"}
-                onClick={() => onUpdateSettings({ fontFamily: font.value })}
-                className={cn(
-                  "flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-colors active:scale-[0.98]",
-                  isSelected
-                    ? "border-border bg-background ring-1 ring-border/70"
-                    : "border-border/40 bg-secondary/20 hover:bg-secondary/35",
-                )}
-              >
-                <span
-                  className="text-3xl leading-none text-foreground"
-                  style={{ fontFamily: font.stack }}
-                >
-                  Aa
-                </span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  {font.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Line Height */}
-      <div className="space-y-2">
-        <h4 className={sectionLabelClassName}>Line Height</h4>
-        <div className="flex items-center gap-2">
-          <MoveVertical className="h-4 w-4 text-muted-foreground" />
-          <SegmentedToggleGroup
-            value={settings.lineHeight.toString()}
-            onValueChange={(value) =>
-              value && onUpdateSettings({ lineHeight: parseFloat(value) })
-            }
-            className={cn("flex-1", segmentedGroupClassName)}
+      {section === "type" && (
+        <div className="space-y-2.5">
+          <h4 className={sectionLabelClassName}>Font Family</h4>
+          <div
+            ref={scrollContainerRef}
+            className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
           >
-            {lineHeights.map((lh) => (
-              <SegmentedToggleGroupItem
-                key={lh}
-                value={lh.toString()}
-                className={cn("flex-1 text-xs", segmentedItemClassName)}
-              >
-                {lh}
-              </SegmentedToggleGroupItem>
-            ))}
-          </SegmentedToggleGroup>
+            {fonts.map((font) => {
+              const isSelected = settings.fontFamily === font.value;
+              return (
+                <button
+                  key={font.value}
+                  data-state={isSelected ? "on" : "off"}
+                  onClick={() => onUpdateSettings({ fontFamily: font.value })}
+                  className={cn(
+                    "flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-colors active:scale-[0.98]",
+                    isSelected
+                      ? "border-border bg-background ring-1 ring-border/70"
+                      : "border-border/40 bg-secondary/20 hover:bg-secondary/35",
+                  )}
+                >
+                  <span
+                    className="text-3xl leading-none text-foreground"
+                    style={{ fontFamily: font.stack }}
+                  >
+                    Aa
+                  </span>
+                  <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                    {font.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
-      {showContentWidthControl && (
+      {section === "layout" && (
+        <div className="space-y-2">
+          <h4 className={sectionLabelClassName}>Line Height</h4>
+          <div className="flex items-center gap-2">
+            <MoveVertical className="h-4 w-4 text-muted-foreground" />
+            <SegmentedToggleGroup
+              value={settings.lineHeight.toString()}
+              onValueChange={(value) =>
+                value && onUpdateSettings({ lineHeight: parseFloat(value) })
+              }
+              className={cn("flex-1", segmentedGroupClassName)}
+            >
+              {lineHeights.map((lh) => (
+                <SegmentedToggleGroupItem
+                  key={lh}
+                  value={lh.toString()}
+                  className={cn("flex-1 text-xs", segmentedItemClassName)}
+                >
+                  {lh}
+                </SegmentedToggleGroupItem>
+              ))}
+            </SegmentedToggleGroup>
+          </div>
+        </div>
+      )}
+
+      {section === "layout" && showContentWidthControl && (
         <div className="space-y-2 hidden sm:block">
           <h4 className={sectionLabelClassName}>Content Width</h4>
           {/* Paginated mode keeps measure automatic; this stays available for scroll layouts. */}
@@ -184,134 +188,137 @@ export function TypographyPanel({
         </div>
       )}
 
-      {/* Text Align */}
-      <div className="space-y-2">
-        <h4 className={sectionLabelClassName}>Alignment</h4>
-        <SegmentedToggleGroup
-          value={alignmentValue}
-          onValueChange={(value) =>
-            value &&
-            onUpdateSettings({
-              textAlign:
-                value === "justify"
-                  ? "justify-knuth-plass"
-                  : (value as Exclude<TextAlign, "justify-knuth-plass">),
-            })
-          }
-          className={segmentedGroupClassName}
-        >
-          <SegmentedToggleGroupItem
-            value="left"
-            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
-          >
-            <AlignLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Left</span>
-          </SegmentedToggleGroupItem>
-          <SegmentedToggleGroupItem
-            value="center"
-            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
-          >
-            <AlignCenter className="h-4 w-4" />
-            <span className="hidden sm:inline">Center</span>
-          </SegmentedToggleGroupItem>
-          <SegmentedToggleGroupItem
-            value="right"
-            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
-          >
-            <AlignRight className="h-4 w-4" />
-            <span className="hidden sm:inline">Right</span>
-          </SegmentedToggleGroupItem>
-          <SegmentedToggleGroupItem
-            value="justify"
-            className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
-          >
-            <AlignJustify className="h-4 w-4" />
-            <span className="hidden sm:inline">Justify</span>
-          </SegmentedToggleGroupItem>
-        </SegmentedToggleGroup>
-      </div>
-
-      {/* Publisher Book Styling */}
-      <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
-        <h4 className={sectionLabelClassName}>Publisher Styling</h4>
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-medium text-foreground">
-            Book styles
-          </span>
-          <Switch
-            checked={settings.publisherBookStylingEnabled}
-            onCheckedChange={(publisherBookStylingEnabled) =>
-              onUpdateSettings({ publisherBookStylingEnabled })
-            }
-            aria-label="Toggle publisher book styling"
-          />
-        </div>
-        <div
-          className={cn(
-            "flex items-center justify-between gap-4",
-            !settings.publisherBookStylingEnabled && "opacity-50",
-          )}
-        >
-          <span className="text-sm font-medium text-foreground">
-            Match body text size
-          </span>
-          <Switch
-            checked={settings.matchPublisherBodyTextSize}
-            onCheckedChange={(matchPublisherBodyTextSize) =>
-              onUpdateSettings({ matchPublisherBodyTextSize })
-            }
-            disabled={!settings.publisherBookStylingEnabled}
-            aria-label="Toggle matched publisher body text size"
-          />
-        </div>
-      </div>
-
-      {/* Font Size */}
-      <div className="space-y-2">
-        <h4 className={sectionLabelClassName}>Font Size</h4>
-        <div className="flex items-center justify-between rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-full border-border/60 bg-background/80 hover:bg-background"
-            onClick={() =>
+      {section === "layout" && (
+        <div className="space-y-2">
+          <h4 className={sectionLabelClassName}>Alignment</h4>
+          <SegmentedToggleGroup
+            value={alignmentValue}
+            onValueChange={(value) =>
+              value &&
               onUpdateSettings({
-                fontSize: Math.max(
-                  READER_FONT_SIZE_MIN_PX,
-                  settings.fontSize - 1,
-                ),
+                textAlign:
+                  value === "justify"
+                    ? "justify-knuth-plass"
+                    : (value as Exclude<TextAlign, "justify-knuth-plass">),
               })
             }
-            disabled={settings.fontSize <= READER_FONT_SIZE_MIN_PX}
+            className={segmentedGroupClassName}
           >
-            <Minus className="h-4 w-4" />
-            <span className="sr-only">Decrease font size</span>
-          </Button>
-          <span className="inline-flex min-w-[4rem] items-baseline justify-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
-            <span className="inline-flex w-[2ch] justify-center">
-              <AnimatedNumber value={settings.fontSize} variant="pop" />
+            <SegmentedToggleGroupItem
+              value="left"
+              className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+            >
+              <AlignLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Left</span>
+            </SegmentedToggleGroupItem>
+            <SegmentedToggleGroupItem
+              value="center"
+              className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+            >
+              <AlignCenter className="h-4 w-4" />
+              <span className="hidden sm:inline">Center</span>
+            </SegmentedToggleGroupItem>
+            <SegmentedToggleGroupItem
+              value="right"
+              className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+            >
+              <AlignRight className="h-4 w-4" />
+              <span className="hidden sm:inline">Right</span>
+            </SegmentedToggleGroupItem>
+            <SegmentedToggleGroupItem
+              value="justify"
+              className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
+            >
+              <AlignJustify className="h-4 w-4" />
+              <span className="hidden sm:inline">Justify</span>
+            </SegmentedToggleGroupItem>
+          </SegmentedToggleGroup>
+        </div>
+      )}
+
+      {section === "type" && (
+        <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
+          <h4 className={sectionLabelClassName}>Publisher Styling</h4>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm font-medium text-foreground">
+              Book styles
             </span>
-            <span className="ml-0.5 shrink-0">px</span>
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-full border-border/60 bg-background/80 hover:bg-background"
-            onClick={() =>
-              onUpdateSettings({
-                fontSize: Math.min(
-                  READER_FONT_SIZE_MAX_PX,
-                  settings.fontSize + 1,
-                ),
-              })
-            }
-            disabled={settings.fontSize >= READER_FONT_SIZE_MAX_PX}
+            <Switch
+              checked={settings.publisherBookStylingEnabled}
+              onCheckedChange={(publisherBookStylingEnabled) =>
+                onUpdateSettings({ publisherBookStylingEnabled })
+              }
+              aria-label="Toggle publisher book styling"
+            />
+          </div>
+          <div
+            className={cn(
+              "flex items-center justify-between gap-4",
+              !settings.publisherBookStylingEnabled && "opacity-50",
+            )}
           >
-            <Plus className="h-4 w-4" />
-            <span className="sr-only">Increase font size</span>
-          </Button>
+            <span className="text-sm font-medium text-foreground">
+              Match body text size
+            </span>
+            <Switch
+              checked={settings.matchPublisherBodyTextSize}
+              onCheckedChange={(matchPublisherBodyTextSize) =>
+                onUpdateSettings({ matchPublisherBodyTextSize })
+              }
+              disabled={!settings.publisherBookStylingEnabled}
+              aria-label="Toggle matched publisher body text size"
+            />
+          </div>
         </div>
-      </div>
+      )}
+
+      {section === "type" && (
+        <div className="space-y-2">
+          <h4 className={sectionLabelClassName}>Font Size</h4>
+          <div className="flex items-center justify-between rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full border-border/60 bg-background/80 hover:bg-background"
+              onClick={() =>
+                onUpdateSettings({
+                  fontSize: Math.max(
+                    READER_FONT_SIZE_MIN_PX,
+                    settings.fontSize - 1,
+                  ),
+                })
+              }
+              disabled={settings.fontSize <= READER_FONT_SIZE_MIN_PX}
+            >
+              <Minus className="h-4 w-4" />
+              <span className="sr-only">Decrease font size</span>
+            </Button>
+            <span className="inline-flex min-w-[4rem] items-baseline justify-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
+              <span className="inline-flex w-[2ch] justify-center">
+                <AnimatedNumber value={settings.fontSize} variant="pop" />
+              </span>
+              <span className="ml-0.5 shrink-0">px</span>
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full border-border/60 bg-background/80 hover:bg-background"
+              onClick={() =>
+                onUpdateSettings({
+                  fontSize: Math.min(
+                    READER_FONT_SIZE_MAX_PX,
+                    settings.fontSize + 1,
+                  ),
+                })
+              }
+              disabled={settings.fontSize >= READER_FONT_SIZE_MAX_PX}
+            >
+              <Plus className="h-4 w-4" />
+              <span className="sr-only">Increase font size</span>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

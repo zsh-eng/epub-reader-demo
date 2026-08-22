@@ -26,6 +26,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 interface MobileBookActionsState {
   instance: number;
@@ -35,6 +36,7 @@ interface MobileBookActionsState {
 }
 
 export function Library() {
+  const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileBookActions, setMobileBookActions] =
@@ -381,6 +383,7 @@ export function Library() {
           book={mobileBookActions.book}
           coverUrl={mobileBookActions.coverUrl}
           initialStatus={mobileBookActions.status}
+          onOpenBook={(bookId) => navigate(`/reader/${bookId}`)}
           onDelete={(bookId) => void handleDeleteBook(bookId)}
         />
       )}

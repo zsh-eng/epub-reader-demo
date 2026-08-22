@@ -23,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
@@ -147,7 +148,8 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const { settings, updateSettings } = useReaderSettings();
+  const { settings, appearanceMode, setAppearanceMode } = useReaderSettings();
+  const { isProcessing: isImporting, openFilePicker } = useEpubImport();
   const { isSyncing, triggerSync } = useSync();
   const { data: booksData, refetch: refetchBooks } = useBooksWithStatuses();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
@@ -197,14 +199,7 @@ export function AppSidebar() {
   };
 
   const handleThemeToggle = () => {
-    const nextTheme = {
-      "flexoki-light": "flexoki-dark",
-      "flexoki-dark": "flexoki-light",
-      light: "dark",
-      dark: "light",
-    }[settings.theme] as typeof settings.theme | undefined;
-
-    updateSettings({ theme: nextTheme ?? (isDarkTheme ? "light" : "dark") });
+    setAppearanceMode(isDarkTheme ? "light" : "dark");
   };
 
   const handleSync = async () => {
@@ -264,8 +259,13 @@ export function AppSidebar() {
         activePath={location.pathname}
         recentReading={recentReading}
         recentBookCoverUrl={recentBookCoverUrl}
-        isDarkTheme={isDarkTheme}
-        onThemeToggle={handleThemeToggle}
+        appearanceMode={appearanceMode}
+        onAppearanceChange={setAppearanceMode}
+        isImporting={isImporting}
+        onAddBook={() => {
+          openFilePicker();
+          closeSidebar();
+        }}
         isOnline={isOnline}
         isSyncing={isSyncing}
         onSync={handleSync}

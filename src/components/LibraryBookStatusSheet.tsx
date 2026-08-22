@@ -13,6 +13,7 @@ interface LibraryBookStatusSheetProps {
   book: SyncedBook;
   coverUrl: string | undefined;
   initialStatus: ReadingStatus | null;
+  onOpenBook: (bookId: string) => void;
   onDelete: (bookId: string) => void;
 }
 
@@ -26,6 +27,7 @@ export function LibraryBookStatusSheet({
   book,
   coverUrl,
   initialStatus,
+  onOpenBook,
   onDelete,
 }: LibraryBookStatusSheetProps) {
   const { toast } = useToast();
@@ -73,6 +75,10 @@ export function LibraryBookStatusSheet({
       coverUrl={coverUrl}
       status={displayStatus}
       isUpdating={setReadingStatus.isPending}
+      onOpenBook={() => {
+        onOpenChange(false);
+        onOpenBook(book.id);
+      }}
       onSelectStatus={handleSetStatus}
       onRemove={handleRemove}
     />
