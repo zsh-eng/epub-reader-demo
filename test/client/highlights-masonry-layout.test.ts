@@ -35,6 +35,31 @@ describe("getHighlightsMosaicGeometry", () => {
 });
 
 describe("computeHighlightsBentoLayout", () => {
+  it("combines the book details and cover when only one column is available", () => {
+    const mosaic = computeHighlightsBentoLayout(
+      360,
+      [{ id: "a", height: 160 }],
+      { detailsHeight: 180 },
+    );
+    const detailsPlacement = mosaic.placements.find(
+      ({ id }) => id === BOOK_DETAILS_TILE_ID,
+    );
+
+    expect(mosaic.columnCount).toBe(1);
+    expect(
+      mosaic.placements.find(({ id }) => id === BOOK_COVER_TILE_ID),
+    ).toBeUndefined();
+    expect(detailsPlacement).toMatchObject({
+      kind: "details",
+      column: 0,
+      top: 0,
+      columnSpan: 1,
+    });
+    expect(mosaic.placements.find(({ id }) => id === "a")?.top).toBeGreaterThan(
+      detailsPlacement?.top ?? 0,
+    );
+  });
+
   it("nests the cover and lets a long quote span two columns", () => {
     const mosaic = computeHighlightsBentoLayout(
       1_000,

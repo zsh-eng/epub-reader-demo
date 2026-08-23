@@ -224,13 +224,6 @@
     user-select: none !important;
   }
 
-  @media (prefers-reduced-transparency: reduce) {
-    .highlights-search-scroll-blur {
-      -webkit-backdrop-filter: none;
-      backdrop-filter: none;
-    }
-  }
-
   [data-slot="scroll-area-viewport"][data-has-overflow-y] {
     --scroll-area-fade-size: 2rem;
     -webkit-mask-image: linear-gradient(

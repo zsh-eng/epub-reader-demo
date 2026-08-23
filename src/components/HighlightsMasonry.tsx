@@ -90,6 +90,10 @@ const WIDE_QUOTE_MIN_LINES = 7;
 const BOOK_TITLE_MAX_FONT = '500 44px "EB Garamond"';
 const BOOK_INDEX_PIN_STORAGE_KEY = "highlights-masonry-book-index-pinned-v2";
 const BOOK_INDEX_ACTIVE_LAYOUT_ID = "highlights-book-index-active";
+const MOBILE_BOOK_COVER_MIN_WIDTH = 84;
+const MOBILE_BOOK_COVER_MAX_WIDTH = 104;
+// The search surface and the mobile book row occupy this much vertical space.
+const MOBILE_BOOK_NAV_SCROLL_OFFSET_PX = 160;
 const BOOK_INDEX_ACTIVE_TRANSITION = {
   type: "spring" as const,
   stiffness: 390,
@@ -284,6 +288,37 @@ function getBookDetailsHeight({
   return Math.ceil(titleHeight + (group.book.author ? 180 : 144));
 }
 
+function getSingleColumnBookCoverWidth(columnWidth: number) {
+  return Math.min(
+    MOBILE_BOOK_COVER_MAX_WIDTH,
+    Math.max(MOBILE_BOOK_COVER_MIN_WIDTH, Math.round(columnWidth * 0.28)),
+  );
+}
+
+function getSingleColumnBookDetailsHeight({
+  group,
+  columnWidth,
+  titleFontSize,
+}: {
+  group: BookHighlightGroup;
+  columnWidth: number;
+  titleFontSize: number;
+}) {
+  const coverWidth = getSingleColumnBookCoverWidth(columnWidth);
+  const compactTitleFontSize = Math.min(titleFontSize, 32);
+  const titleLineHeight = compactTitleFontSize * 0.96;
+  const titleWidth = Math.max(1, columnWidth - coverWidth - 36);
+  const preparedTitle = prepare(
+    group.book.title,
+    `500 ${compactTitleFontSize}px "EB Garamond"`,
+  );
+  const titleHeight = layout(preparedTitle, titleWidth, titleLineHeight).height;
+  const detailsHeight = titleHeight + (group.book.author ? 99 : 59);
+  const coverHeight = coverWidth * 1.5;
+
+  return Math.ceil(Math.max(detailsHeight, coverHeight) + 32);
+}
+
 function PositionedTile({
   placement,
   entranceKey,
@@ -338,7 +373,7 @@ function getBookHeadingId(bookId: string) {
   return `highlights-book-heading-${bookId}`;
 }
 
-function useActiveBookId(bookIds: string[]) {
+function useActiveBookId(bookIds: string[], isMobile: boolean) {
   const [activeBookId, setActiveBookId] = useState(bookIds[0] ?? "");
 
   useEffect(() => {
@@ -377,12 +412,15 @@ function useActiveBookId(bookIds: string[]) {
 
         setActiveBookId(firstVisibleSection.id.replace("highlights-book-", ""));
       },
-      { rootMargin: "-96px 0px -68% 0px", threshold: 0 },
+      {
+        rootMargin: `${isMobile ? -MOBILE_BOOK_NAV_SCROLL_OFFSET_PX : -96}px 0px -68% 0px`,
+        threshold: 0,
+      },
     );
 
     sections.forEach((section) => observer.observe(section));
     return () => observer.disconnect();
-  }, [bookIds]);
+  }, [bookIds, isMobile]);
 
   return { activeBookId, setActiveBookId };
 }
@@ -606,32 +644,24 @@ function MobileBookIndex({
   const reducedMotion = useReducedMotion() ?? false;
 
   return (
-    <div className="lg:hidden">
-      <div className="flex items-baseline gap-2 px-1 pb-1.5">
-        <h2 className="font-serif text-base font-medium">In this page</h2>
-        <span className="text-[11px] text-muted-foreground">
-          {groups.length}
-        </span>
-      </div>
-      <LayoutGroup id={layoutGroupId}>
-        <nav
-          aria-label="Books on this highlights page"
-          className="relative isolate -mx-4 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-        >
-          {groups.map((group) => (
-            <BookIndexItem
-              key={group.book.id}
-              group={group}
-              isActive={group.book.id === activeBookId}
-              layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
-              onNavigate={() => onNavigate(group.book.id)}
-              reducedMotion={reducedMotion}
-              className="border bg-card/95 shadow-sm"
-            />
-          ))}
-        </nav>
-      </LayoutGroup>
-    </div>
+    <LayoutGroup id={layoutGroupId}>
+      <nav
+        aria-label="Books on this highlights page"
+        className="relative isolate -mx-4 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
+        {groups.map((group) => (
+          <BookIndexItem
+            key={group.book.id}
+            group={group}
+            isActive={group.book.id === activeBookId}
+            layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
+            onNavigate={() => onNavigate(group.book.id)}
+            reducedMotion={reducedMotion}
+            className="border bg-card shadow-sm"
+          />
+        ))}
+      </nav>
+    </LayoutGroup>
   );
 }
 
@@ -723,11 +753,13 @@ function BookDetailsTile({
   headingId,
   visibleCount,
   titleFontSize,
+  compactCover,
 }: {
   group: BookHighlightGroup;
   headingId: string;
   visibleCount: number;
   titleFontSize: number;
+  compactCover?: React.ReactNode;
 }) {
   const totalCount = group.highlights.length;
   const countLabel =
@@ -736,25 +768,38 @@ function BookDetailsTile({
       : `${visibleCount} of ${totalCount} highlights`;
 
   return (
-    <div className="flex h-full flex-col justify-start py-4 pr-4 pl-1">
-      <span className="mb-3 text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
-        Book
-      </span>
-      <h2
-        id={headingId}
-        className="font-serif font-medium tracking-[-0.035em] text-balance"
-        style={{ fontSize: titleFontSize, lineHeight: 0.96 }}
-      >
-        {group.book.title}
-      </h2>
-      {group.book.author && (
-        <p className="mt-4 font-serif text-base text-muted-foreground italic md:text-lg">
-          {group.book.author}
-        </p>
+    <div
+      className={cn(
+        "flex h-full justify-start py-4 pr-4 pl-1",
+        compactCover ? "items-start gap-4" : "flex-col",
       )}
-      <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="size-1.5 rounded-full bg-green-primary" />
-        <span>{countLabel}</span>
+    >
+      {compactCover}
+      <div className={cn("min-w-0", compactCover && "flex-1 pt-1")}>
+        <span className="mb-3 text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
+          Book
+        </span>
+        <h2
+          id={headingId}
+          className="font-serif font-medium tracking-[-0.035em] text-balance"
+          style={{
+            fontSize: compactCover
+              ? Math.min(titleFontSize, 32)
+              : titleFontSize,
+            lineHeight: 0.96,
+          }}
+        >
+          {group.book.title}
+        </h2>
+        {group.book.author && (
+          <p className="mt-4 font-serif text-base text-muted-foreground italic md:text-lg">
+            {group.book.author}
+          </p>
+        )}
+        <div className="mt-5 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-green-primary" />
+          <span>{countLabel}</span>
+        </div>
       </div>
     </div>
   );
@@ -1113,15 +1158,27 @@ function HighlightsMosaic({
     [width],
   );
   const titleFontSize = getBookTitleFontSize(width);
+  const isSingleColumn = geometry.columnCount === 1;
+  const compactCoverWidth = isSingleColumn
+    ? getSingleColumnBookCoverWidth(geometry.columnWidth)
+    : 0;
   const detailsHeight = useMemo(() => {
     if (!fontReady || geometry.columnWidth === 0) return 250;
+
+    if (isSingleColumn) {
+      return getSingleColumnBookDetailsHeight({
+        group,
+        columnWidth: geometry.columnWidth,
+        titleFontSize,
+      });
+    }
 
     return getBookDetailsHeight({
       group,
       columnWidth: geometry.columnWidth,
       fontSize: titleFontSize,
     });
-  }, [fontReady, geometry.columnWidth, group, titleFontSize]);
+  }, [fontReady, geometry.columnWidth, group, isSingleColumn, titleFontSize]);
 
   const { mosaic, presentationByHighlightId } = useMemo(() => {
     const presentationByHighlightId = new Map<
@@ -1284,6 +1341,23 @@ function HighlightsMosaic({
             headingId={headingId}
             visibleCount={highlights.length}
             titleFontSize={titleFontSize}
+            compactCover={
+              isSingleColumn ? (
+                <div
+                  className="shrink-0"
+                  style={{
+                    width: compactCoverWidth,
+                    height: compactCoverWidth * 1.5,
+                  }}
+                >
+                  <BookCoverTile
+                    group={group}
+                    readingTimeMs={readingTimeMs}
+                    tooltipHandle={tooltipHandle}
+                  />
+                </div>
+              ) : undefined
+            }
           />
         </PositionedTile>
       )}
@@ -1415,7 +1489,7 @@ function HighlightsSearch({
         placeholder="Search all highlights…"
         aria-label="Search all highlights"
         className={cn(
-          "h-14 appearance-none bg-card pl-10 shadow-md backdrop-blur-xl dark:bg-card/95 [&::-webkit-search-cancel-button]:hidden",
+          "h-14 appearance-none bg-card pl-10 shadow-md [&::-webkit-search-cancel-button]:hidden",
           value ? "pr-44 md:pr-48" : "pr-36 md:pr-40",
         )}
       />
@@ -1516,7 +1590,10 @@ export function HighlightsMasonry() {
       })),
     [visibleGroups],
   );
-  const { activeBookId, setActiveBookId } = useActiveBookId(visibleBookIds);
+  const { activeBookId, setActiveBookId } = useActiveBookId(
+    visibleBookIds,
+    isMobile,
+  );
   const totalHighlightCount = useMemo(
     () => groups.reduce((total, group) => total + group.highlights.length, 0),
     [groups],
@@ -1630,14 +1707,7 @@ export function HighlightsMasonry() {
           className="h-px shrink-0"
           aria-hidden="true"
         />
-        <div className="sticky top-3 z-30 isolate mx-auto w-full max-w-2xl shrink-0 px-4">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -inset-x-4 -top-3 -bottom-5 -z-10"
-          >
-            <div className="absolute inset-0 bg-gradient-to-b from-background/50 via-background/15 to-transparent" />
-            <div className="highlights-search-scroll-blur absolute inset-0 backdrop-blur-md [mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_0%,transparent_100%)]" />
-          </div>
+        <div className="sticky top-3 z-30 isolate mx-auto w-full max-w-2xl shrink-0 bg-background px-4">
           <HighlightsSearch
             value={searchQuery}
             onChange={setSearchQuery}
@@ -1647,16 +1717,20 @@ export function HighlightsMasonry() {
           />
         </div>
         {bookIndexGroups.length > 0 && (
-          <div className="sticky top-[4.75rem] z-20 mx-auto w-full max-w-[1600px] px-4 pt-2 lg:hidden">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 -top-2 -bottom-3 -z-10 bg-gradient-to-b from-background/90 via-background/75 to-transparent backdrop-blur-md"
-            />
-            <MobileBookIndex
-              groups={bookIndexGroups}
-              activeBookId={activeBookId}
-              onNavigate={handleBookNavigate}
-            />
+          <div className="mx-auto w-full max-w-[1600px] lg:hidden">
+            <div className="flex items-baseline gap-2 px-5 pb-1.5">
+              <h2 className="font-serif text-base font-medium">In this page</h2>
+              <span className="text-[11px] text-muted-foreground">
+                {bookIndexGroups.length}
+              </span>
+            </div>
+            <div className="sticky top-[4.75rem] z-20 isolate bg-background px-4 pt-2 pb-2">
+              <MobileBookIndex
+                groups={bookIndexGroups}
+                activeBookId={activeBookId}
+                onNavigate={handleBookNavigate}
+              />
+            </div>
           </div>
         )}
 
@@ -1702,7 +1776,7 @@ export function HighlightsMasonry() {
                         id={sectionId}
                         aria-labelledby={headingId}
                         className={cn(
-                          "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
+                          "scroll-mt-40 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
                           index > 0 && "mt-2",
                         )}
                       >

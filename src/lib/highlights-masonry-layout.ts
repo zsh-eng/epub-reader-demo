@@ -307,8 +307,10 @@ export function computeHighlightsBentoLayout(
 
   const hasEnoughHighlightsToNestCover =
     items.length >= Math.max(5, columnCount + 3);
-  // A cover remains book-sized even in sparse sections. Let quote cards use
-  // wide spans, but never enlarge the cover beyond one masonry column.
+  // The one-column renderer places the compact cover inside the details tile.
+  const combinesBookTiles = columnCount === 1;
+  // Desktop covers remain book-sized even in sparse sections. Let quote cards
+  // use wide spans, but never enlarge a cover beyond one masonry column.
   const coverColumnSpan = 1;
   const lowDensityCoverColumn =
     columnCount === 1
@@ -320,9 +322,11 @@ export function computeHighlightsBentoLayout(
   const resolvedCoverWidth = coverFootprintWidth;
   const coverNaturalHeight = resolvedCoverWidth * coverAspectRatio;
   const detailsRowSpan = Math.ceil((detailsHeight + gap) / rowHeight);
-  const coverInsertionIndex = hasEnoughHighlightsToNestCover
-    ? Math.min(items.length, 2 + (Math.abs(layoutSeed) % 3))
-    : 0;
+  const coverInsertionIndex = combinesBookTiles
+    ? -1
+    : hasEnoughHighlightsToNestCover
+      ? Math.min(items.length, 2 + (Math.abs(layoutSeed) % 3))
+      : 0;
   const tiles: BentoTile[] = [
     {
       id: BOOK_DETAILS_TILE_ID,
@@ -351,7 +355,9 @@ export function computeHighlightsBentoLayout(
   };
 
   items.forEach((item, itemIndex) => {
-    if (itemIndex === coverInsertionIndex) tiles.push(coverTile);
+    if (!combinesBookTiles && itemIndex === coverInsertionIndex) {
+      tiles.push(coverTile);
+    }
 
     const columnSpan = Math.min(columnCount, item.preferredColumnSpan ?? 1);
     tiles.push({
@@ -364,7 +370,9 @@ export function computeHighlightsBentoLayout(
     });
   });
 
-  if (coverInsertionIndex === items.length) tiles.push(coverTile);
+  if (!combinesBookTiles && coverInsertionIndex === items.length) {
+    tiles.push(coverTile);
+  }
 
   const occupiedRows: boolean[][] = [];
   const placements: MosaicPlacement[] = [];
