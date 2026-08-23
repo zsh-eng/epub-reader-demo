@@ -5,6 +5,7 @@ import {
 } from "@/components/ui/carousel";
 import { useFileUrl } from "@/hooks/use-file-url";
 import type { SyncedBook } from "@/lib/db";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { cn } from "@/lib/utils";
 import { Book as BookIcon, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -123,6 +124,11 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
   }, [coverUrl, isDarkMode]);
 
   const handleClick = () => {
+    beginReaderTrace({
+      bookId: book.id,
+      bookTitle: book.title,
+      source: "continue-reading",
+    });
     navigate(`/reader/${book.id}`);
   };
 

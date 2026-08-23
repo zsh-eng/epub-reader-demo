@@ -3,6 +3,11 @@ import {
   getReadingCheckpointsForBook,
   type SyncedReadingCheckpoint,
 } from "@/lib/db";
+import {
+  endReaderTraceSpan,
+  startReaderTraceSpan,
+  withReaderTraceSpan,
+} from "@/lib/reader-performance-trace";
 import { ensurePublisherFontsReadyFromBlocks } from "@/lib/pagination-v2/shared/publisher-fonts";
 import type { Highlight } from "@/types/highlight";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -149,7 +154,11 @@ export function useReaderCheckpointQuery(bookId: string | undefined) {
   return useQuery({
     queryKey: readerCheckpointKeys.currentDevice(bookId ?? ""),
     queryFn: async (): Promise<ReaderCheckpointData> => ({
-      checkpoint: await getCurrentDeviceReadingCheckpoint(bookId!),
+      checkpoint: await withReaderTraceSpan(
+        "reading-checkpoint-read",
+        "storage",
+        () => getCurrentDeviceReadingCheckpoint(bookId!),
+      ),
     }),
     enabled: !!bookId,
     staleTime: Infinity,
@@ -161,7 +170,11 @@ export function useReaderCheckpointsQuery(bookId: string | undefined) {
   return useQuery({
     queryKey: readerCheckpointKeys.book(bookId ?? ""),
     queryFn: async (): Promise<ReaderCheckpointsData> => ({
-      checkpoints: await getReadingCheckpointsForBook(bookId!),
+      checkpoints: await withReaderTraceSpan(
+        "reading-checkpoints-read",
+        "storage",
+        () => getReadingCheckpointsForBook(bookId!),
+      ),
     }),
     enabled: !!bookId,
     staleTime: Infinity,
@@ -255,86 +268,139 @@ export function useReaderChapterArtifactsLoader(options: {
     const resolvedInitialLocation = initialLocation;
 
     async function loadArtifacts() {
-      for (const chapterIndex of buildReaderChapterLoadOrder(
+      const chapterLoadOrder = buildReaderChapterLoadOrder(
         chapterEntries.length,
         resolvedInitialLocation.chapterIndex,
-      )) {
-        const chapter = chapterEntries[chapterIndex]!;
-        const baseContent = resolvedBaseContentByChapter.get(chapterIndex)!;
-        const chapterHighlights =
-          highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
-        const highlightSignature = buildHighlightSignature(chapterHighlights);
-        const artifactSignature = `${getPublisherStylingCacheKey(
-          publisherBookStylingEnabled,
-        )}:${getPublisherBodySizeCacheKey(
-          publisherBookStylingEnabled,
-          matchPublisherBodyTextSize,
-          baseContent.publisherBodyFontScale,
-        )}:${highlightSignature}`;
-        const previousSignature =
-          signaturesByChapterRef.current.get(chapterIndex);
-        const previousArtifact =
-          artifactsByChapterRef.current.get(chapterIndex);
+      );
+      const firstChapterIndex = chapterLoadOrder[0];
+      const allArtifactsSpan = startReaderTraceSpan(
+        "chapter-artifacts-load",
+        "processing",
+        { chapterCount: chapterLoadOrder.length },
+      );
+      const firstArtifactSpan = startReaderTraceSpan(
+        "initial-chapter-artifact",
+        "processing",
+        { chapterIndex: firstChapterIndex ?? 0 },
+      );
+      let firstArtifactEnded = false;
+      let cachedArtifactCount = 0;
+      let builtArtifactCount = 0;
 
-        if (previousArtifact && previousSignature === artifactSignature) {
-          continue;
+      const endFirstArtifact = (
+        details: Record<string, string | number | boolean>,
+      ) => {
+        if (firstArtifactEnded) return;
+        firstArtifactEnded = true;
+        endReaderTraceSpan(firstArtifactSpan, details);
+      };
+
+      try {
+        for (const chapterIndex of chapterLoadOrder) {
+          const chapter = chapterEntries[chapterIndex]!;
+          const baseContent = resolvedBaseContentByChapter.get(chapterIndex)!;
+          const chapterHighlights =
+            highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
+          const highlightSignature = buildHighlightSignature(chapterHighlights);
+          const artifactSignature = `${getPublisherStylingCacheKey(
+            publisherBookStylingEnabled,
+          )}:${getPublisherBodySizeCacheKey(
+            publisherBookStylingEnabled,
+            matchPublisherBodyTextSize,
+            baseContent.publisherBodyFontScale,
+          )}:${highlightSignature}`;
+          const previousSignature =
+            signaturesByChapterRef.current.get(chapterIndex);
+          const previousArtifact =
+            artifactsByChapterRef.current.get(chapterIndex);
+
+          if (previousArtifact && previousSignature === artifactSignature) {
+            if (chapterIndex === firstChapterIndex) {
+              endFirstArtifact({ cache: "loader-memory" });
+            }
+            continue;
+          }
+
+          const queryKey = readerChapterArtifactKeys.chapter(
+            resolvedBookId,
+            resolvedFileHash,
+            chapterIndex,
+            chapter.spineItemId,
+            highlightSignature,
+            publisherBookStylingEnabled,
+            matchPublisherBodyTextSize,
+            baseContent.publisherBodyFontScale,
+          );
+          const cachedArtifact =
+            queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
+          const artifact =
+            cachedArtifact ??
+            (await queryClient.ensureQueryData({
+              queryKey,
+              queryFn: () =>
+                buildReaderChapterArtifact({
+                  baseContent,
+                  highlights: chapterHighlights,
+                  publisherBookStylingEnabled,
+                  matchPublisherBodyTextSize,
+                }),
+              staleTime: Infinity,
+              gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,
+            }))!;
+
+          if (cachedArtifact) cachedArtifactCount += 1;
+          else builtArtifactCount += 1;
+
+          const currentSignature =
+            signaturesByChapterRef.current.get(chapterIndex);
+          const currentArtifact =
+            artifactsByChapterRef.current.get(chapterIndex);
+
+          if (currentArtifact && currentSignature === artifactSignature) {
+            if (chapterIndex === firstChapterIndex) {
+              endFirstArtifact({ cache: "loader-memory" });
+            }
+            continue;
+          }
+
+          if (currentSignature !== previousSignature) continue;
+
+          await ensurePublisherFontsReadyFromBlocks(artifact.blocks);
+
+          artifactsByChapterRef.current.set(chapterIndex, artifact);
+          signaturesByChapterRef.current.set(chapterIndex, artifactSignature);
+
+          if (chapterIndex === firstChapterIndex) {
+            endFirstArtifact({
+              cache: cachedArtifact ? "react-query" : "built",
+              blockCount: artifact.blocks.length,
+            });
+          }
+
+          if (!currentArtifact) {
+            notify({ kind: "loaded", chapterIndex, artifact });
+            continue;
+          }
+
+          if (
+            currentSignature !== artifactSignature ||
+            didDecoratedChapterBlocksChange(currentArtifact, artifact)
+          ) {
+            notify({ kind: "updated", chapterIndex, artifact });
+          }
         }
-
-        const queryKey = readerChapterArtifactKeys.chapter(
-          resolvedBookId,
-          resolvedFileHash,
-          chapterIndex,
-          chapter.spineItemId,
-          highlightSignature,
-          publisherBookStylingEnabled,
-          matchPublisherBodyTextSize,
-          baseContent.publisherBodyFontScale,
-        );
-        const cachedArtifact =
-          queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
-        const artifact =
-          cachedArtifact ??
-          (await queryClient.ensureQueryData({
-            queryKey,
-            queryFn: () =>
-              buildReaderChapterArtifact({
-                baseContent,
-                highlights: chapterHighlights,
-                publisherBookStylingEnabled,
-                matchPublisherBodyTextSize,
-              }),
-            staleTime: Infinity,
-            gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,
-          }))!;
-
-        const currentSignature =
-          signaturesByChapterRef.current.get(chapterIndex);
-        const currentArtifact = artifactsByChapterRef.current.get(chapterIndex);
-
-        if (currentArtifact && currentSignature === artifactSignature) {
-          continue;
-        }
-
-        if (currentSignature !== previousSignature) {
-          continue;
-        }
-
-        await ensurePublisherFontsReadyFromBlocks(artifact.blocks);
-
-        artifactsByChapterRef.current.set(chapterIndex, artifact);
-        signaturesByChapterRef.current.set(chapterIndex, artifactSignature);
-
-        if (!currentArtifact) {
-          notify({ kind: "loaded", chapterIndex, artifact });
-          continue;
-        }
-
-        if (
-          currentSignature !== artifactSignature ||
-          didDecoratedChapterBlocksChange(currentArtifact, artifact)
-        ) {
-          notify({ kind: "updated", chapterIndex, artifact });
-        }
+        endFirstArtifact({ cache: "not-loaded" });
+        endReaderTraceSpan(allArtifactsSpan, {
+          cachedArtifactCount,
+          builtArtifactCount,
+        });
+      } catch (error) {
+        const details = {
+          error: error instanceof Error ? error.message : String(error),
+        };
+        endReaderTraceSpan(firstArtifactSpan, details, "error");
+        endReaderTraceSpan(allArtifactsSpan, details, "error");
+        throw error;
       }
     }
 

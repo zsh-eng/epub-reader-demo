@@ -7,6 +7,10 @@ import {
   type BookFile,
 } from "@/lib/db";
 import {
+  endReaderTraceSpan,
+  startReaderTraceSpan,
+} from "@/lib/reader-performance-trace";
+import {
   inferPublisherBodyFontScale,
   type PublisherFontFace,
 } from "@/lib/pagination-v2";
@@ -190,6 +194,18 @@ export async function loadReaderBodyCache(options: {
   const includePublisherBodyScale =
     publisherBookStylingEnabled && matchPublisherBodyTextSize;
   const startedAt = performance.now();
+  const bodyCacheSpan = startReaderTraceSpan(
+    "reader-body-cache-load",
+    "processing",
+    {
+      chapterCount: chapterEntries.length,
+      publisherBookStylingEnabled,
+    },
+  );
+  const cacheReadSpan = startReaderTraceSpan(
+    "reader-body-cache-read",
+    "storage",
+  );
   const cachedChapterSourceRow = await getBookChapterSourceCache(bookId);
 
   if (
@@ -201,26 +217,46 @@ export async function loadReaderBodyCache(options: {
     (!includePublisherBodyScale ||
       cachedChapterSourceRow.publisherBodyScaleLoaded === true)
   ) {
+    endReaderTraceSpan(cacheReadSpan, { cacheHit: true });
     const chapterContentsByPath = readCachedChapterContents(
       cachedChapterSourceRow.chaptersByPath,
       chapterEntries,
     );
+    const hydrationSpan = startReaderTraceSpan(
+      "base-content-hydration",
+      "processing",
+    );
+    const baseContentByChapter = buildBaseContentByChapter(
+      chapterEntries,
+      chapterContentsByPath,
+      cachedChapterSourceRow.publisherFontFaces ?? [],
+      cachedChapterSourceRow.publisherBodyFontScale,
+    );
+    endReaderTraceSpan(hydrationSpan, { chapterCount: chapterEntries.length });
+    endReaderTraceSpan(bodyCacheSpan, { loadKind: "cache-hit" });
 
     return {
-      baseContentByChapter: buildBaseContentByChapter(
-        chapterEntries,
-        chapterContentsByPath,
-        cachedChapterSourceRow.publisherFontFaces ?? [],
-        cachedChapterSourceRow.publisherBodyFontScale,
-      ),
+      baseContentByChapter,
       loadWallClockMs: performance.now() - startedAt,
       loadKind: "cache-hit",
     };
   }
 
+  endReaderTraceSpan(cacheReadSpan, { cacheHit: false });
+  const chapterFilesReadSpan = startReaderTraceSpan(
+    "chapter-files-read",
+    "storage",
+  );
   const allChapterFiles = await getBookFilesByPaths(
     bookId,
     chapterEntries.map((chapter) => chapter.href),
+  );
+  endReaderTraceSpan(chapterFilesReadSpan, {
+    fileCount: allChapterFiles.size,
+  });
+  const sourceBuildSpan = startReaderTraceSpan(
+    "chapter-source-normalization",
+    "processing",
   );
   const builtChapterContents = await buildChapterContentsFromFiles(
     bookId,
@@ -229,7 +265,15 @@ export async function loadReaderBodyCache(options: {
     publisherBookStylingEnabled,
     includePublisherBodyScale,
   );
+  endReaderTraceSpan(sourceBuildSpan, {
+    chapterCount: chapterEntries.length,
+    publisherFontCount: builtChapterContents.publisherFontFaces.length,
+  });
 
+  const cacheWriteSpan = startReaderTraceSpan(
+    "reader-body-cache-write",
+    "storage",
+  );
   await putBookChapterSourceCache(
     bookId,
     fileHash,
@@ -240,14 +284,23 @@ export async function loadReaderBodyCache(options: {
     includePublisherBodyScale,
     builtChapterContents.publisherBodyFontScale,
   );
+  endReaderTraceSpan(cacheWriteSpan, { chapterCount: chapterEntries.length });
+
+  const hydrationSpan = startReaderTraceSpan(
+    "base-content-hydration",
+    "processing",
+  );
+  const baseContentByChapter = buildBaseContentByChapter(
+    chapterEntries,
+    builtChapterContents.chapterContentsByPath,
+    builtChapterContents.publisherFontFaces,
+    builtChapterContents.publisherBodyFontScale,
+  );
+  endReaderTraceSpan(hydrationSpan, { chapterCount: chapterEntries.length });
+  endReaderTraceSpan(bodyCacheSpan, { loadKind: "rebuilt" });
 
   return {
-    baseContentByChapter: buildBaseContentByChapter(
-      chapterEntries,
-      builtChapterContents.chapterContentsByPath,
-      builtChapterContents.publisherFontFaces,
-      builtChapterContents.publisherBodyFontScale,
-    ),
+    baseContentByChapter,
     loadWallClockMs: performance.now() - startedAt,
     loadKind: "rebuilt",
   };

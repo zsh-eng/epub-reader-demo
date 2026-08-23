@@ -11,6 +11,13 @@ import { PAGINATION_TASK_YIELD_BUDGET_MS } from "./scheduler-policy";
 const workerFontsReady = ensurePaginationWorkerFontsReady();
 let publisherFontsReady: Promise<void> = Promise.resolve();
 
+void workerFontsReady.then(() => {
+  postMessage({
+    type: "trace",
+    name: "worker-fonts-ready",
+  } satisfies PaginationEvent);
+});
+
 // ---------------------------------------------------------------------------
 // Worker state
 // ---------------------------------------------------------------------------
@@ -19,12 +26,34 @@ let layoutEpoch = 0;
 let activeEventEpoch = 0;
 let pumpScheduled = false;
 let isPumping = false;
+let workerRunStartedAtMs: number | null = null;
+let workerActiveMs = 0;
+let currentWorkStepStartedAtMs: number | null = null;
 
 const TASK_YIELD_BUDGET_MS = PAGINATION_TASK_YIELD_BUDGET_MS;
 
 function emitEvent(event: EnginePaginationEvent): void {
   if (event.type === "error") {
     postMessage(event);
+    return;
+  }
+
+  if (event.type === "partialReady" || event.type === "ready") {
+    const now = performance.now();
+    const activeMs =
+      workerActiveMs +
+      (currentWorkStepStartedAtMs === null
+        ? 0
+        : now - currentWorkStepStartedAtMs);
+    postMessage({
+      ...event,
+      epoch: activeEventEpoch,
+      workerTiming: {
+        activeMs,
+        elapsedMs:
+          workerRunStartedAtMs === null ? 0 : now - workerRunStartedAtMs,
+      },
+    } satisfies PaginationEvent);
     return;
   }
 
@@ -109,7 +138,10 @@ async function pump(): Promise<void> {
       if (!job) continue;
 
       prepareJobStep(job);
+      currentWorkStepStartedAtMs = performance.now();
       const result = job.work.next();
+      workerActiveMs += performance.now() - currentWorkStepStartedAtMs;
+      currentWorkStepStartedAtMs = null;
       if (result.done) scheduler.remove(job);
 
       if (performance.now() - sliceStartedAt >= TASK_YIELD_BUDGET_MS) {
@@ -129,6 +161,12 @@ async function pump(): Promise<void> {
 
 self.onmessage = (e: MessageEvent<PaginationCommand>) => {
   const command = e.data;
+  if (command.type === "init") {
+    workerRunStartedAtMs = performance.now();
+    workerActiveMs = 0;
+    currentWorkStepStartedAtMs = null;
+  }
+
   publisherFontsReady = publisherFontsReady
     .then(() => {
       switch (command.type) {
@@ -146,6 +184,15 @@ self.onmessage = (e: MessageEvent<PaginationCommand>) => {
     .catch((error) => {
       console.warn("[pagination worker] Failed to load publisher fonts", error);
     });
+
+  if (command.type === "init") {
+    void publisherFontsReady.then(() => {
+      postMessage({
+        type: "trace",
+        name: "publisher-fonts-ready",
+      } satisfies PaginationEvent);
+    });
+  }
 
   scheduler.pushCommand(command);
   schedulePump();

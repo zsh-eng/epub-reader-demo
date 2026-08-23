@@ -92,6 +92,16 @@ interface PaginationEventMetadata {
   intent: SpreadIntent;
 }
 
+/**
+ * Separates worker engine execution from total worker pipeline time. The
+ * remaining time includes font waits, scheduler yields, and waits for chapter
+ * input from the main thread.
+ */
+export interface WorkerTiming {
+  activeMs: number;
+  elapsedMs: number;
+}
+
 // ---------------------------------------------------------------------------
 // Events (worker → main thread)
 // All events carry the `epoch` so the hook can discard stale responses.
@@ -102,6 +112,7 @@ export interface PartialReadyEvent extends PaginationEventMetadata {
   epoch: number;
   spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
+  workerTiming?: WorkerTiming;
 }
 
 export interface ReadyEvent extends PaginationEventMetadata {
@@ -109,6 +120,7 @@ export interface ReadyEvent extends PaginationEventMetadata {
   epoch: number;
   spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics[];
+  workerTiming?: WorkerTiming;
 }
 
 export interface ProgressEvent extends PaginationEventMetadata {
@@ -145,6 +157,11 @@ export interface ErrorEvent extends PaginationEventMetadata {
   message: string;
 }
 
+export interface TraceEvent {
+  type: "trace";
+  name: "worker-fonts-ready" | "publisher-fonts-ready";
+}
+
 export type PaginationEvent =
   | PartialReadyEvent
   | ReadyEvent
@@ -152,4 +169,5 @@ export type PaginationEvent =
   | PageContentEvent
   | PageUnavailableEvent
   | ChapterUnavailableEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | TraceEvent;

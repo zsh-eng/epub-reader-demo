@@ -16,6 +16,10 @@ import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
 import { useReaderDisplayReadiness } from "./hooks/use-reader-display-readiness";
 import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
+import {
+  useReaderPerformanceTraceLifecycle,
+  useReaderPerformanceTraceRoute,
+} from "./hooks/use-reader-performance-trace";
 import { useReaderSession } from "./hooks/use-reader-session";
 import { useReaderStatusPrompt } from "./hooks/use-reader-status-prompt";
 import {
@@ -34,6 +38,7 @@ export function Reader() {
 
   const { state: chromeState, actions: chromeActions } = useReaderChromeState();
   const { chromeInteractionMode } = useInputBehavior();
+  useReaderPerformanceTraceRoute(bookId);
 
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const [stageSlotElement, setStageSlotElement] =
@@ -105,6 +110,17 @@ export function Reader() {
     bookId,
     contentReady: isReaderStageMeasured && sessionState.status === "ready",
     stageContentRef,
+  });
+  useReaderPerformanceTraceLifecycle({
+    bookId,
+    book: sessionState.book,
+    status: sessionState.status,
+    paginationStatus: sessionState.pagination.status,
+    displayReady,
+    chapterCount: sessionState.chapters.entries.length,
+    viewport: stageViewport,
+    spreadColumns: resolvedSpreadColumns,
+    settings: sessionState.settings,
   });
   useReaderStatusPrompt({ bookId, isReady: displayReady });
 

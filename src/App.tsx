@@ -6,6 +6,7 @@ import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
 import { ReaderDiagnostics } from "@/components/Reader/diagnostics/ReaderDiagnostics";
 import { ReadingSessions } from "@/components/ReadingSessions";
+import { ReaderTraceViewer } from "@/components/ReaderTraceViewer";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Devices } from "@/components/Sessions";
 import { ReadingSessionsDebug } from "@/components/debug/ReadingSessionsDebug";
@@ -44,6 +45,10 @@ function App() {
                     <Route
                       path="/reading-sessions"
                       element={<ReadingSessions />}
+                    />
+                    <Route
+                      path="/reader-traces"
+                      element={<ReaderTraceViewer />}
                     />
                     <Route
                       path="/sessions"

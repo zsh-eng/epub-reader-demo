@@ -1,6 +1,10 @@
 import { fileManager } from "@/lib/files/file-manager";
 import { processEpubToBookFiles } from "@/lib/sync/epub-processing";
 import { db, hasBookFiles } from "@/lib/db";
+import {
+  endReaderTraceSpan,
+  startReaderTraceSpan,
+} from "@/lib/reader-performance-trace";
 import { useState, useEffect } from "react";
 
 export interface UseEpubProcessorReturn {
@@ -42,15 +46,25 @@ export function useEpubProcessor(
     let isCancelled = false;
 
     async function ensureBookProcessed() {
+      const preparationSpan = startReaderTraceSpan(
+        "epub-preparation",
+        "processing",
+      );
       try {
         // Check if bookFiles already exist
+        const lookupSpan = startReaderTraceSpan(
+          "extracted-book-files-check",
+          "storage",
+        );
         const hasExistingFiles = await hasBookFiles(bookId!);
+        endReaderTraceSpan(lookupSpan, { cacheHit: hasExistingFiles });
 
         if (hasExistingFiles) {
           // Book is already processed
           if (!isCancelled) {
             setIsReady(true);
           }
+          endReaderTraceSpan(preparationSpan, { loadKind: "cache-hit" });
           return;
         }
 
@@ -63,12 +77,19 @@ export function useEpubProcessor(
         console.log("[useEpubProcessor] Fetching EPUB:", fileHash);
 
         // Fetch EPUB from fileManager (checks local cache first, then network)
+        const epubReadSpan = startReaderTraceSpan("epub-blob-read", "storage");
         const { blob } = await fileManager.getFile(fileHash!, "epub");
+        endReaderTraceSpan(epubReadSpan, { sizeBytes: blob.size });
 
         console.log("[useEpubProcessor] Processing EPUB...");
 
         // Process EPUB to extract bookFiles
+        const extractionSpan = startReaderTraceSpan(
+          "epub-extraction",
+          "processing",
+        );
         const bookFiles = await processEpubToBookFiles(blob, bookId!);
+        endReaderTraceSpan(extractionSpan, { fileCount: bookFiles.length });
 
         console.log(
           "[useEpubProcessor] Storing",
@@ -77,12 +98,17 @@ export function useEpubProcessor(
         );
 
         // Store bookFiles in IndexedDB
+        const writeSpan = startReaderTraceSpan(
+          "extracted-book-files-write",
+          "storage",
+        );
         await db.bookFiles.bulkAdd(bookFiles);
 
         // Mark book as downloaded
         await db.books.update(bookId!, {
           isDownloaded: 1,
         });
+        endReaderTraceSpan(writeSpan, { fileCount: bookFiles.length });
 
         console.log("[useEpubProcessor] Book ready!");
 
@@ -90,7 +116,16 @@ export function useEpubProcessor(
           setIsReady(true);
           setIsProcessing(false);
         }
+        endReaderTraceSpan(preparationSpan, {
+          loadKind: "extracted",
+          fileCount: bookFiles.length,
+        });
       } catch (err) {
+        endReaderTraceSpan(
+          preparationSpan,
+          { error: err instanceof Error ? err.message : String(err) },
+          "error",
+        );
         console.error("[useEpubProcessor] Error processing EPUB:", err);
         if (!isCancelled) {
           setError(

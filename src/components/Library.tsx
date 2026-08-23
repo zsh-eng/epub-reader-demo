@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useSync } from "@/hooks/use-sync";
@@ -383,7 +384,14 @@ export function Library() {
           book={mobileBookActions.book}
           coverUrl={mobileBookActions.coverUrl}
           initialStatus={mobileBookActions.status}
-          onOpenBook={(bookId) => navigate(`/reader/${bookId}`)}
+          onOpenBook={(bookId) => {
+            beginReaderTrace({
+              bookId,
+              bookTitle: mobileBookActions.book.title,
+              source: "mobile-book-actions",
+            });
+            navigate(`/reader/${bookId}`);
+          }}
           onDelete={(bookId) => void handleDeleteBook(bookId)}
         />
       )}

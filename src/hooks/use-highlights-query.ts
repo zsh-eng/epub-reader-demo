@@ -5,6 +5,7 @@ import {
   getHighlights,
   updateHighlight as updateHighlightInDb,
 } from "@/lib/db";
+import { withReaderTraceSpan } from "@/lib/reader-performance-trace";
 import type { Highlight } from "@/types/highlight";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -26,7 +27,10 @@ export const HIGHLIGHTS_QUERY_GC_TIME_MS = 30 * 60 * 1000;
 export function useBookHighlightsQuery(bookId: string | undefined) {
   return useQuery({
     queryKey: highlightKeys.book(bookId ?? ""),
-    queryFn: () => getBookHighlights(bookId!),
+    queryFn: () =>
+      withReaderTraceSpan("highlights-read", "storage", () =>
+        getBookHighlights(bookId!),
+      ),
     enabled: !!bookId,
     staleTime: Infinity,
     gcTime: HIGHLIGHTS_QUERY_GC_TIME_MS,

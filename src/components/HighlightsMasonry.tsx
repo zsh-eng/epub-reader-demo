@@ -41,6 +41,7 @@ import {
   type HighlightColor,
 } from "@/lib/highlight-constants";
 import { formatReadingDuration } from "@/lib/reading-session-stats";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@base-ui/react/tooltip";
@@ -1589,6 +1590,12 @@ export function HighlightsMasonry() {
   const handleOpenBook = useCallback(
     (highlight: SyncedHighlight) => {
       setSelectedHighlight(null);
+      beginReaderTrace({
+        bookId: highlight.bookId,
+        bookTitle: groups.find((group) => group.book.id === highlight.bookId)
+          ?.book.title,
+        source: "highlight",
+      });
       navigate(`/reader/${highlight.bookId}`, {
         state: {
           scrollToHighlight: {
@@ -1598,7 +1605,7 @@ export function HighlightsMasonry() {
         },
       });
     },
-    [navigate],
+    [groups, navigate],
   );
 
   return (

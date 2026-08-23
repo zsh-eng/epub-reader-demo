@@ -6,6 +6,7 @@ import {
   type Book,
   type ReadingProgress,
 } from "@/lib/db";
+import { withReaderTraceSpan } from "@/lib/reader-performance-trace";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
@@ -54,7 +55,11 @@ function useBook(bookId: string | undefined) {
       if (!bookId) {
         throw new Error("No book ID provided");
       }
-      const book = await getBook(bookId);
+      const book = await withReaderTraceSpan(
+        "book-metadata-read",
+        "storage",
+        () => getBook(bookId),
+      );
       if (!book) {
         throw new Error("Book not found");
       }

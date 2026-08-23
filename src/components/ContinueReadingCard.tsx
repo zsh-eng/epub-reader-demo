@@ -1,4 +1,5 @@
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { cn } from "@/lib/utils";
 import { BookOpenText } from "lucide-react";
 import { motion } from "motion/react";
@@ -69,6 +70,13 @@ export function ContinueReadingCard({
       to={`/reader/${bookId}`}
       aria-label={`Continue reading ${bookTitle}`}
       aria-current={isActive ? "page" : undefined}
+      onClick={() =>
+        beginReaderTrace({
+          bookId,
+          bookTitle,
+          source: "continue-reading-card",
+        })
+      }
       className={cn(
         "group relative block overflow-hidden text-center outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
         isOpen

@@ -1,3 +1,7 @@
+import {
+  endReaderTraceSpan,
+  startReaderTraceSpan,
+} from "@/lib/reader-performance-trace";
 import { useEffect, useState, type RefObject } from "react";
 
 interface UseReaderDisplayReadinessOptions {
@@ -26,15 +30,36 @@ export function useReaderDisplayReadiness({
 
     let cancelled = false;
     let frameId: number | null = null;
+    const displaySettleSpan = startReaderTraceSpan(
+      "display-assets-settle",
+      "reveal",
+    );
+    const documentFontsSpan = startReaderTraceSpan(
+      "document-fonts-ready",
+      "assets",
+    );
+    let visibleImagesSpan = stage.querySelector("[data-reader-image-pending]")
+      ? startReaderTraceSpan("visible-images-ready", "assets")
+      : null;
 
     const markReadyIfSettled = () => {
-      if (stage.querySelector("[data-reader-image-pending]")) return;
+      if (stage.querySelector("[data-reader-image-pending]")) {
+        visibleImagesSpan ??= startReaderTraceSpan(
+          "visible-images-ready",
+          "assets",
+        );
+        return;
+      }
+
+      endReaderTraceSpan(visibleImagesSpan);
+      visibleImagesSpan = null;
 
       if (frameId !== null) cancelAnimationFrame(frameId);
       frameId = requestAnimationFrame(() => {
         frameId = null;
         if (cancelled) return;
         if (stage.querySelector("[data-reader-image-pending]")) return;
+        endReaderTraceSpan(displaySettleSpan);
         setReadyBookId(bookId);
       });
     };
@@ -47,7 +72,9 @@ export function useReaderDisplayReadiness({
     });
 
     void document.fonts.ready.then(() => {
-      if (!cancelled) markReadyIfSettled();
+      if (cancelled) return;
+      endReaderTraceSpan(documentFontsSpan);
+      markReadyIfSettled();
     });
 
     return () => {
