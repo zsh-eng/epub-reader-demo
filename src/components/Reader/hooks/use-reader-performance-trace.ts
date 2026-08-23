@@ -10,7 +10,7 @@ import {
   updateReaderTraceMetadata,
 } from "@/lib/reader-performance-trace";
 import type { ReaderSettings } from "@/types/reader.types";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ReaderSessionStatus } from "./use-reader-session";
 
 /** Starts a fallback trace for direct reader URLs and browser restores. */
@@ -71,6 +71,7 @@ export function useReaderPerformanceTraceLifecycle(options: {
   status: ReaderSessionStatus;
   paginationStatus: PaginationStatus;
   displayReady: boolean;
+  settledPaintReady: boolean;
   chapterCount: number;
   viewport: { width: number; height: number };
   spreadColumns: 1 | 2 | 3;
@@ -82,13 +83,12 @@ export function useReaderPerformanceTraceLifecycle(options: {
     status,
     paginationStatus,
     displayReady,
+    settledPaintReady,
     chapterCount,
     viewport,
     spreadColumns,
     settings,
   } = options;
-  const [paintedBookId, setPaintedBookId] = useState<string | null>(null);
-
   useEffect(() => {
     if (!book) return;
 
@@ -157,26 +157,19 @@ export function useReaderPerformanceTraceLifecycle(options: {
     if (!bookId || !displayReady) return;
 
     markReaderTraceOnce("reader-display-ready", "reveal");
-    let secondFrameId: number | null = null;
-    const firstFrameId = requestAnimationFrame(() => {
-      secondFrameId = requestAnimationFrame(() => {
-        markReaderTraceOnce("reader-settled-frame-painted", "reveal");
-        setPaintedBookId(bookId);
-      });
-    });
-
-    return () => {
-      cancelAnimationFrame(firstFrameId);
-      if (secondFrameId !== null) cancelAnimationFrame(secondFrameId);
-    };
   }, [bookId, displayReady]);
 
   useEffect(() => {
-    if (!bookId || paintedBookId !== bookId || paginationStatus !== "ready") {
+    if (!bookId || !settledPaintReady) return;
+    markReaderTraceOnce("reader-settled-frame-painted", "reveal");
+  }, [bookId, settledPaintReady]);
+
+  useEffect(() => {
+    if (!bookId || !settledPaintReady || paginationStatus !== "ready") {
       return;
     }
 
     markReaderTraceOnce("all-chapters-paginated", "pagination");
     completeReaderTrace("completed");
-  }, [bookId, paginationStatus, paintedBookId]);
+  }, [bookId, paginationStatus, settledPaintReady]);
 }

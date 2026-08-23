@@ -1,13 +1,25 @@
 import {
   endReaderTraceSpan,
   startReaderTraceSpan,
+  type ReaderTraceSpanToken,
 } from "@/lib/reader-performance-trace";
-import { useEffect, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 
 interface UseReaderDisplayReadinessOptions {
   bookId?: string;
   contentReady: boolean;
   stageContentRef: RefObject<HTMLDivElement | null>;
+}
+
+interface ReaderDisplayReadiness {
+  displayReady: boolean;
+  settledPaintReady: boolean;
 }
 
 /**
@@ -19,8 +31,17 @@ export function useReaderDisplayReadiness({
   bookId,
   contentReady,
   stageContentRef,
-}: UseReaderDisplayReadinessOptions): boolean {
+}: UseReaderDisplayReadinessOptions): ReaderDisplayReadiness {
   const [readyBookId, setReadyBookId] = useState<string | null>(null);
+  const [settledBookId, setSettledBookId] = useState<string | null>(null);
+  const readyCommitSpanRef = useRef<ReaderTraceSpanToken | null>(null);
+  const displayReady = !!bookId && readyBookId === bookId;
+
+  useLayoutEffect(() => {
+    if (!displayReady) return;
+    endReaderTraceSpan(readyCommitSpanRef.current);
+    readyCommitSpanRef.current = null;
+  }, [displayReady]);
 
   useEffect(() => {
     if (!bookId || !contentReady || readyBookId === bookId) return;
@@ -60,6 +81,11 @@ export function useReaderDisplayReadiness({
         if (cancelled) return;
         if (stage.querySelector("[data-reader-image-pending]")) return;
         endReaderTraceSpan(displaySettleSpan);
+        readyCommitSpanRef.current = startReaderTraceSpan(
+          "display-ready-react-transition",
+          "processing",
+          { trigger: "visible-assets-settled" },
+        );
         setReadyBookId(bookId);
       });
     };
@@ -84,5 +110,24 @@ export function useReaderDisplayReadiness({
     };
   }, [bookId, contentReady, readyBookId, stageContentRef]);
 
-  return !!bookId && readyBookId === bookId;
+  useEffect(() => {
+    if (!bookId || !displayReady || settledBookId === bookId) return;
+
+    let secondFrameId: number | null = null;
+    const firstFrameId = requestAnimationFrame(() => {
+      secondFrameId = requestAnimationFrame(() => {
+        setSettledBookId(bookId);
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrameId);
+      if (secondFrameId !== null) cancelAnimationFrame(secondFrameId);
+    };
+  }, [bookId, displayReady, settledBookId]);
+
+  return {
+    displayReady,
+    settledPaintReady: !!bookId && settledBookId === bookId,
+  };
 }
