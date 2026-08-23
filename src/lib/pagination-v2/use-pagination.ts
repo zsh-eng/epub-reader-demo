@@ -61,6 +61,13 @@ function roundTraceMilliseconds(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
+export function isCompletePaginationReadyEvent(
+  event: Extract<PaginationEvent, { type: "ready" }>,
+  expectedChapterCount: number,
+): boolean {
+  return event.chapterDiagnostics.length >= expectedChapterCount;
+}
+
 function getWorkerTraceDetails(
   event: PaginationEvent,
   roundTripStartedAtMs: number | null,
@@ -167,6 +174,7 @@ export function usePagination(
   const allChaptersSpanRef = useRef<ReaderTraceSpanToken | null>(null);
   const firstSpreadRoundTripStartedAtRef = useRef<number | null>(null);
   const allChaptersRoundTripStartedAtRef = useRef<number | null>(null);
+  const expectedChapterCountRef = useRef(0);
 
   // Keep config in a ref so init and config update effects can read the
   // latest value without capturing it as a closure dependency.
@@ -286,7 +294,11 @@ export function usePagination(
       }
 
       case "ready": {
-        if (allChaptersSpanRef.current) {
+        const isComplete = isCompletePaginationReadyEvent(
+          event,
+          expectedChapterCountRef.current,
+        );
+        if (isComplete && allChaptersSpanRef.current) {
           markReaderTrace("pagination-ready-handler-entered", "processing", {
             mainHandlerEnteredAt: new Date(
               mainHandlerEnteredAtEpochMs,
@@ -304,19 +316,22 @@ export function usePagination(
           mainHandlerEnteredAtEpochMs,
         );
         currentEpochRef.current = event.epoch;
-        tracerRef.current.markReady();
         tracerRef.current.recordChapterDiagnosticsList(
           event.chapterDiagnostics,
         );
         setSpread(event.spread);
-        setStatus("ready");
+        setStatus(isComplete ? "ready" : "partial");
         endReaderTraceSpan(firstSpreadSpanRef.current, {
-          readiness: "complete",
+          readiness: isComplete ? "complete" : "partial",
           totalPagesKnown: event.spread.totalPages,
           ...firstWorkerDetails,
         });
         firstSpreadSpanRef.current = null;
         firstSpreadRoundTripStartedAtRef.current = null;
+        publishChapterPageCounts(event.chapterDiagnostics);
+        if (!isComplete) break;
+
+        tracerRef.current.markReady();
         endReaderTraceSpan(allChaptersSpanRef.current, {
           totalPages: event.spread.totalPages,
           chapterCount: event.chapterDiagnostics.length,
@@ -324,7 +339,6 @@ export function usePagination(
         });
         allChaptersSpanRef.current = null;
         allChaptersRoundTripStartedAtRef.current = null;
-        publishChapterPageCounts(event.chapterDiagnostics);
         break;
       }
 
@@ -464,6 +478,7 @@ export function usePagination(
       const currentPaginationConfig = paginationConfigRef.current;
       const currentSpreadConfig = spreadConfigRef.current;
       currentEpochRef.current = 0;
+      expectedChapterCountRef.current = opts.totalChapters;
       prevPaginationConfigRef.current = currentPaginationConfig;
       prevSpreadConfigRef.current = currentSpreadConfig;
       tracerRef.current.reset();
