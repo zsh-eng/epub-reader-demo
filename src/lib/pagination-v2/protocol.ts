@@ -8,6 +8,9 @@ import type {
   SpreadIntent,
 } from "./types";
 
+export const PAGINATION_WORKER_FONTS_READY_MARK =
+  "pagination-worker-fonts-ready";
+
 // ---------------------------------------------------------------------------
 // Commands (main thread → worker)
 // ---------------------------------------------------------------------------
@@ -173,3 +176,32 @@ export type PaginationEvent =
   | ChapterUnavailableEvent
   | ErrorEvent
   | TraceEvent;
+
+// ---------------------------------------------------------------------------
+// App-lifetime worker transport
+// ---------------------------------------------------------------------------
+
+/**
+ * The worker outlives Reader routes, so each command carries the generation of
+ * the active book session. A cancel releases the current engine state without
+ * terminating the worker or unloading its built-in fonts.
+ */
+export type PaginationWorkerMessage =
+  | {
+      type: "command";
+      sessionGeneration: number;
+      command: PaginationCommand;
+    }
+  | {
+      type: "cancel";
+      sessionGeneration: number;
+    };
+
+/**
+ * A null generation is reserved for worker-lifetime events, such as built-in
+ * font readiness. Book-specific events always use their session generation.
+ */
+export interface PaginationWorkerEventMessage {
+  sessionGeneration: number | null;
+  event: PaginationEvent;
+}

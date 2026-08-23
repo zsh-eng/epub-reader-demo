@@ -7,6 +7,10 @@ import {
 } from "@/lib/reader-performance-trace";
 import { PaginationTracer } from "./diagnostics/tracer";
 import type { PaginationCommand, PaginationEvent } from "./protocol";
+import {
+  acquirePaginationWorkerSession,
+  type PaginationWorkerSession,
+} from "./worker/pagination-worker-service";
 import type {
   Block,
   ContentAnchor,
@@ -153,7 +157,7 @@ export function usePagination(
     Map<number, number>
   >(new Map());
 
-  const workerRef = useRef<Worker | null>(null);
+  const workerSessionRef = useRef<PaginationWorkerSession | null>(null);
   const currentEpochRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
   const pendingChapterPageCountsRef = useRef<Map<number, number>>(new Map());
@@ -177,7 +181,7 @@ export function usePagination(
   const prevSpreadConfigRef = useRef<SpreadConfig | null>(null);
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    workerRef.current?.postMessage(cmd);
+    workerSessionRef.current?.postCommand(cmd);
   }, []);
 
   const recordChapterPageCount = useCallback(
@@ -365,36 +369,53 @@ export function usePagination(
   handleEventRef.current = handleEvent;
 
   useEffect(() => {
+    const session = acquirePaginationWorkerSession({
+      onEvent: (event, mainHandlerEnteredAtEpochMs) => {
+        handleEventRef.current(event, mainHandlerEnteredAtEpochMs);
+      },
+      onError: (event) => {
+        endReaderTraceSpan(
+          workerStartupSpanRef.current,
+          { error: event.message, workerLifetime: "app" },
+          "error",
+        );
+        workerStartupSpanRef.current = null;
+        console.error("[pagination worker error]", event);
+      },
+    });
+    workerSessionRef.current = session;
     workerStartupSpanRef.current = startReaderTraceSpan(
       "pagination-worker-fonts",
       "assets",
-      { readinessBarrier: true },
+      {
+        readinessBarrier: !session.workerFontsReadyAtAcquire,
+        workerLifetime: "app",
+        workerWarmAtAcquire: session.workerFontsReadyAtAcquire,
+      },
     );
-    const worker = new Worker(
-      new URL("./worker/pagination.worker.ts", import.meta.url),
-      { type: "module" },
-    );
-
-    worker.onmessage = (e: MessageEvent<PaginationEvent>) => {
-      handleEventRef.current(
-        e.data,
-        performance.timeOrigin + performance.now(),
-      );
-    };
-
-    worker.onerror = (e) => {
-      console.error("[pagination worker error]", e);
-    };
-
-    workerRef.current = worker;
-
-    return () => {
+    const unsubscribeFromWorkerFonts = session.onWorkerFontsReady(() => {
       endReaderTraceSpan(workerStartupSpanRef.current, {
-        terminatedBeforeReady: true,
+        blocksPagination: !session.workerFontsReadyAtAcquire,
+        includes: session.workerFontsReadyAtAcquire
+          ? "app-lifetime worker and built-in fonts were already ready"
+          : "worker startup, built-in font readiness, and trace delivery",
+        workerLifetime: "app",
+        workerWarmAtAcquire: session.workerFontsReadyAtAcquire,
       });
       workerStartupSpanRef.current = null;
-      worker.terminate();
-      workerRef.current = null;
+    });
+
+    return () => {
+      unsubscribeFromWorkerFonts();
+      endReaderTraceSpan(workerStartupSpanRef.current, {
+        sessionReleasedBeforeReady: true,
+        workerLifetime: "app",
+      });
+      workerStartupSpanRef.current = null;
+      session.release();
+      if (workerSessionRef.current === session) {
+        workerSessionRef.current = null;
+      }
     };
   }, []);
 

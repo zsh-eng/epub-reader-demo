@@ -16,6 +16,7 @@ import {
 } from "@/components/Reader/data/reader-cache/prefetch";
 import type { Book, ReadingStatus, SyncedBook } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
+import { warmPaginationWorker } from "@/lib/pagination-v2/worker/pagination-worker-service";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Library as LibraryIcon, Upload } from "lucide-react";
@@ -198,6 +199,26 @@ export function Library() {
   }, [booksLoaded, fontsReady, initialCoversReady]);
 
   useAppShellReady(libraryDisplayReady);
+
+  // Warm the app-lifetime pagination worker only after the atomic Library
+  // reveal has painted. Reader routes then reuse its loaded built-in fonts.
+  useEffect(() => {
+    if (!libraryDisplayReady) return;
+
+    let secondFrameId: number | null = null;
+    const firstFrameId = window.requestAnimationFrame(() => {
+      secondFrameId = window.requestAnimationFrame(() => {
+        warmPaginationWorker();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrameId);
+      if (secondFrameId !== null) {
+        window.cancelAnimationFrame(secondFrameId);
+      }
+    };
+  }, [libraryDisplayReady]);
 
   useHotkey("/", () => searchInputRef.current?.focus(), {
     ignoreInputs: true,

@@ -2,6 +2,7 @@ import { chromium, type Browser, type Page } from "@playwright/test";
 import { spawn, type Subprocess } from "bun";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { PAGINATION_WORKER_FONTS_READY_MARK } from "../src/lib/pagination-v2/protocol";
 
 const TRACE_STORAGE_KEY = "reader-performance-traces-v1";
 const TRACE_RECORDING_KEY = "reader-performance-tracing-enabled-v1";
@@ -18,6 +19,7 @@ interface CliOptions {
   firstPaintTimeoutMs: number;
   completionTimeoutMs: number;
   publisherBookStylingEnabled: boolean;
+  waitForWorkerWarm: boolean;
 }
 
 interface StoredTraceSpan {
@@ -61,6 +63,7 @@ Options:
   --first-paint-timeout <ms> First-paint timeout. Defaults to 120000.
   --completion-timeout <ms>  Full-pagination timeout. Defaults to 300000.
   --publisher-styles <mode>  Use "on" or "off". Defaults to "on".
+  --wait-for-worker-warm     Wait for the post-Library-paint worker warm-up.
   --help                     Show this help.
 `);
   process.exit(0);
@@ -92,6 +95,7 @@ function parseArgs(args: string[]): CliOptions {
     firstPaintTimeoutMs: 120_000,
     completionTimeoutMs: 300_000,
     publisherBookStylingEnabled: true,
+    waitForWorkerWarm: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -134,6 +138,9 @@ function parseArgs(args: string[]): CliOptions {
       }
       case "--headed":
         options.headed = true;
+        break;
+      case "--wait-for-worker-warm":
+        options.waitForWorkerWarm = true;
         break;
       case "--no-start-server":
         options.startServer = false;
@@ -290,6 +297,13 @@ async function runBenchmark(
 
     const bookTitle = page.locator(`h3[title=${JSON.stringify(title)}]`);
     await bookTitle.waitFor({ state: "visible", timeout: 120_000 });
+    if (options.waitForWorkerWarm) {
+      await page.waitForFunction(
+        (markName) => performance.getEntriesByName(markName).length > 0,
+        PAGINATION_WORKER_FONTS_READY_MARK,
+        { timeout: options.firstPaintTimeoutMs },
+      );
+    }
     await bookTitle.dispatchEvent("click");
 
     const firstSpreadFrameTrace = await waitForTraceMilestone(
@@ -374,7 +388,10 @@ async function main(): Promise<void> {
       const report = {
         epub: path.resolve(options.epub),
         measuredAt: new Date().toISOString(),
-        scenario: "first-reader-open-after-import",
+        scenario: options.waitForWorkerWarm
+          ? "first-reader-open-after-import-with-warm-worker"
+          : "first-reader-open-after-import",
+        waitedForWorkerWarm: options.waitForWorkerWarm,
         publisherBookStylingEnabled: options.publisherBookStylingEnabled,
         runs,
       };
