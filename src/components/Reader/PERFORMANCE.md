@@ -183,10 +183,44 @@ styles on after it observed the real post-Library-paint worker-ready mark:
 This verifies the lifecycle change, but it does not assign a clean end-to-end
 gain. In this cold publisher-style run, body normalization used 200.6 ms at 1x
 and 1,676.4 ms at 4x before the first artifact could enter pagination. That
-stage hid most or all of the removed worker-startup wait. A warm body-cache
-Library-to-Reader A/B is still required to measure the expected 30-40 ms gain
-from trace `2ba71392-5eed-4b22-b721-58a425165da0`. The change should not
+stage hid most or all of the removed worker-startup wait. The change should not
 materially change full-pagination time.
+
+### Controlled warm-library 4x comparison
+
+The harness then ran five 4x main-thread samples per version with publisher
+styles off, a desktop hover prefetch, and a 3 second Library dwell. Every run
+started with the body cache outside the trace, two decorated artifacts cached,
+and 128 artifacts left to build. Medians are:
+
+| Metric | Before global worker | Global worker | Global worker + deferred handoff |
+| --- | ---: | ---: | ---: |
+| First spread frame | 216.6 ms | 215.8 ms | 195.9 ms |
+| Visible content settled | 526.1 ms | 505.4 ms | 473.8 ms |
+| Full pagination | 2,528.5 ms | 2,519.9 ms | 2,438.3 ms |
+| First-spread worker round trip | 39.4 ms | 22.3 ms | 20.4 ms |
+| All-device checkpoint wall time | 70.7 ms | 72.1 ms | 1.2 ms |
+| Extracted-file check | 57.0 ms | 57.8 ms | 52.6 ms |
+
+The global worker reduced its first-spread round trip by 17.1 ms, but that work
+overlapped route startup, so the first-spread median stayed flat. The controlled
+storage medians also stayed flat. The earlier 369 ms checkpoint sample was not
+a persistent storage regression.
+
+An intermediate experiment started the all-device checkpoint query immediately
+after settled paint. Artifact work delayed its callback to a 727.2 ms median,
+and full pagination regressed to 2,770.4 ms. This shows that the storage span is
+a wall-clock measurement which includes main-thread callback starvation. Commit
+`5035bec` instead starts this optional handoff query after both settled paint
+and full pagination. This is also the first point where the handoff prompt has
+the complete chapter-to-page map that it needs.
+
+Commit `74792f7` splits settled-frame confirmation into its two animation
+frames, React commit, and passive-effect confirmation. The final five runs had
+a 94.8 ms median confirmation at 4x. Median stage delays were 47.4 ms to the
+first frame, 25.3 ms to the second frame, 19.6 ms to commit, and 7.2 ms to the
+effect. All runs stayed visible and focused. The earlier 548 ms confirmation
+gap was not reproduced.
 
 ## Changes and measured effect
 
@@ -199,6 +233,8 @@ materially change full-pagination time.
 | Compound `[bookId+path]` file index (`48996c1`) | Cover read fell from 530.9 ms to 9.0 ms at 1x and from 2,831.8 ms to 33.8 ms at 4x. | Yes for image spreads. Artifact work still delayed image decode after the bytes arrived. |
 | Resume remaining artifacts after visible readiness (`b2accc9`) | With the index already present, first-spread-to-settled fell from 625.4 ms to 81.1 ms at 1x and from 2,273.7 ms to 384.0 ms at 4x. | Yes. This removed background artifact work from the reveal path. |
 | App-lifetime pagination worker (`bde13b2`) | The publisher-style normal/4x harness acquired a warm worker in both runs. Worker/font readiness became non-blocking, and first-spread worker round trips were 4.4 ms and 12.9 ms. | Yes when worker startup is the final barrier. The cold styled-body rebuild hid its end-to-end gain in this reference run. |
+| Settled-frame scheduling trace (`74792f7`) | Splits both frame callbacks, the resulting React commit, and the passive-effect confirmation. It also records page visibility and focus changes. | Measurement only. |
+| Deferred handoff checkpoint query (`5035bec`) | Five 4x medians improved from 215.8 ms to 195.9 ms for first spread, 505.4 ms to 473.8 ms for settled content, and 2,519.9 ms to 2,438.3 ms for full pagination. | Yes. The optional all-device query now starts only after the page map is complete. |
 | First-spread label correction (`a246fa6`) | Clarifies that the first spread frame can contain an image placeholder. | Measurement only. |
 | Settled-frame artifact gate (`bc99686`) | First-spread-to-settled fell from 81.1 ms to 67.8 ms at 1x and from 384.0 ms to 279.9 ms at 4x. The first artifact yield now starts after settled paint. | Yes. It prevents background work from delaying the paint-confirmation frames and adds render/commit attribution. |
 
@@ -241,6 +277,13 @@ bun run benchmark:reader-startup -- \
 
 The output directory contains `reader-startup-benchmark.json` and one trace
 screenshot for each CPU scope. Compare JSON span values, not screenshots alone.
+
+To reproduce the five-run warm-Library comparison, add:
+
+```bash
+--publisher-styles off --cpu-rate 4 --repetitions 5 \
+  --hover-prefetch --library-wait 3000 --wait-for-worker-warm
+```
 
 To reuse an existing production preview:
 
