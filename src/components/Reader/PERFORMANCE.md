@@ -131,6 +131,53 @@ and eleven marks. These main-thread animation updates can contend with source
 normalization under 4x slowdown. A follow-up test must keep the footer structure
 and disable only its loading animations, then compare repeated medians.
 
+### Warm-library worker startup finding
+
+Trace `2ba71392-5eed-4b22-b721-58a425165da0` is a hard-restart, unthrottled
+Library-to-Reader run. Publisher styles were off, so this is not the final
+target scenario. It is representative of a fresh app session after normal
+Library preload and desktop hover:
+
+| Milestone | Time from open intent |
+| --- | ---: |
+| Route mounted | 28 ms |
+| Initial chapter artifact ready | 47 ms |
+| Publisher fonts ready | 65 ms |
+| Worker and built-in fonts ready | 109 ms |
+| First spread returned | 110 ms |
+| First spread frame | 117 ms |
+
+The worker waited 44 ms and command delivery used 18 ms. Worker and built-in
+font readiness was the last first-spread barrier in this trace. Exactly two
+artifacts were cached and 128 were built later. This matches the Library hover
+prefetch limit and does not represent a fully warm Reader cache. Remaining
+artifact work resumed only after the 198 ms reveal gate, so it did not delay the
+first spread.
+
+An app-lifetime pagination worker can remove repeated worker creation and
+built-in font startup from this warm-library path. The expected improvement is
+about 30-40 ms, moving an equivalent 117 ms first spread toward 80-90 ms. It
+should not materially change full-pagination time. This optimization does not
+help the cold publisher-style reference while its body cache rebuild remains
+the dominant barrier.
+
+The first implementation must retain only worker and font readiness:
+
+1. Create one worker after the Library's first painted frame and keep it alive
+   across Library and Reader routes.
+2. Give each Reader book session a new generation. Stamp every command and
+   event with it, and discard stale events on the main thread.
+3. On a new `init`, cancel queued background jobs and reset the engine. The
+   current scheduler already clears queued jobs, and `PaginationEngine.init()`
+   replaces all per-chapter arrays.
+4. Invalidate the active generation when the Reader unmounts. Do not terminate
+   the worker unless it fails or the app closes.
+5. Do not retain complete pagination state for multiple books yet.
+
+Repeat the warm-library test with publisher styles on and explicit normal/4x
+scope before assigning a final expected gain. Selective worker-font loading is
+still lower priority than removing repeated worker startup.
+
 ## Changes and measured effect
 
 | Change | Evidence | Critical path? |
@@ -222,11 +269,18 @@ is 30 runs with at most 160 spans per run.
 
 ## Next measurements
 
-1. Add a controlled warm reopen run for the publisher-style body cache.
-2. Make Library prefetch use the active publisher-style cache key, then measure
+1. Repeat the warm Library-to-Reader trace with publisher styles on and explicit
+   normal/4x scope.
+2. Add the app-lifetime worker with session generations, then compare
+   first-spread and full-pagination medians against that warm baseline.
+3. Keep the footer structure but disable only its loading animations, then
+   repeat the 4x benchmark to isolate their main-thread cost.
+4. Add a controlled warm reopen run for the publisher-style body cache.
+5. Make Library prefetch use the active publisher-style cache key, then measure
    continue-reading opens against the cold reference.
-3. Attribute the synchronous work which remains after the display-ready Reader
+6. Attribute the synchronous work which remains after the display-ready Reader
    render/commit in the 4x long task.
-4. Keep selective worker-font loading behind the reveal and React-commit work.
-5. Keep the initial image case in the benchmark. A text-only case is useful as
+7. Keep selective worker-font loading behind the app-lifetime worker and reveal
+   work.
+8. Keep the initial image case in the benchmark. A text-only case is useful as
    a comparison, not as the primary target.
