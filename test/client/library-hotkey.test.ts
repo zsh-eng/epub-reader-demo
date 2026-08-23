@@ -48,6 +48,15 @@ vi.mock("@/hooks/use-library-cover-urls", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-reader-settings", () => ({
+  useReaderSettings: () => ({
+    settings: {
+      publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
+    },
+  }),
+}));
+
 vi.mock("@/hooks/use-sync", () => ({
   useSync: () => ({ deleteBook: vi.fn() }),
 }));

@@ -45,6 +45,8 @@ interface PrefetchReaderBookOptions {
    */
   includeArtifacts?: boolean;
   artifactLimit?: number;
+  publisherBookStylingEnabled?: boolean;
+  matchPublisherBodyTextSize?: boolean;
 }
 
 export async function prefetchReaderBook(
@@ -53,6 +55,10 @@ export async function prefetchReaderBook(
   options: PrefetchReaderBookOptions = {},
 ): Promise<void> {
   const includeArtifacts = options.includeArtifacts ?? true;
+  const publisherBookStylingEnabled =
+    options.publisherBookStylingEnabled ?? false;
+  const matchPublisherBodyTextSize =
+    options.matchPublisherBodyTextSize ?? false;
   const chapterEntries = buildChapterEntries(book);
 
   if (chapterEntries.length === 0) return;
@@ -62,8 +68,8 @@ export async function prefetchReaderBook(
   const bodyCacheKey = readerBodyCacheKeys.book(
     book.id,
     book.fileHash,
-    false,
-    false,
+    publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
   );
   const checkpointKey = readerCheckpointKeys.currentDevice(book.id);
   const highlightsKey = highlightKeys.book(book.id);
@@ -88,8 +94,8 @@ export async function prefetchReaderBook(
           bookId: book.id,
           fileHash: book.fileHash,
           chapterEntries,
-          publisherBookStylingEnabled: false,
-          matchPublisherBodyTextSize: false,
+          publisherBookStylingEnabled,
+          matchPublisherBodyTextSize,
         }),
       staleTime: Infinity,
       gcTime: Infinity,
@@ -146,16 +152,16 @@ export async function prefetchReaderBook(
         chapterIndex,
         chapter.spineItemId,
         highlightSignature,
-        false,
-        false,
+        publisherBookStylingEnabled,
+        matchPublisherBodyTextSize,
         baseContent.publisherBodyFontScale,
       ),
       queryFn: () =>
         buildReaderChapterArtifact({
           baseContent,
           highlights: chapterHighlights,
-          publisherBookStylingEnabled: false,
-          matchPublisherBodyTextSize: false,
+          publisherBookStylingEnabled,
+          matchPublisherBodyTextSize,
         }),
       staleTime: Infinity,
       gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,

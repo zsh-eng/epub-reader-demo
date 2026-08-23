@@ -8,6 +8,7 @@ import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
+import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -48,6 +49,7 @@ export function Library() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { importFiles, isProcessing, openFilePicker } = useEpubImport();
+  const { settings } = useReaderSettings();
   const queryClient = useQueryClient();
 
   const { data: booksData } = useBooksWithStatuses();
@@ -59,8 +61,15 @@ export function Library() {
 
     void prefetchReaderBooks(queryClient, books, {
       includeArtifacts: false,
+      publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
+      matchPublisherBodyTextSize: settings.matchPublisherBodyTextSize,
     });
-  }, [booksData?.categorized.continueReading, queryClient]);
+  }, [
+    booksData?.categorized.continueReading,
+    queryClient,
+    settings.matchPublisherBodyTextSize,
+    settings.publisherBookStylingEnabled,
+  ]);
 
   // Handle drag and drop
   const handleDragEnter = (e: React.DragEvent) => {
@@ -117,9 +126,15 @@ export function Library() {
       void prefetchReaderBook(queryClient, book, {
         includeArtifacts: true,
         artifactLimit: 2,
+        publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
+        matchPublisherBodyTextSize: settings.matchPublisherBodyTextSize,
       });
     },
-    [queryClient],
+    [
+      queryClient,
+      settings.matchPublisherBodyTextSize,
+      settings.publisherBookStylingEnabled,
+    ],
   );
 
   const handleOpenMobileBookActions = (
