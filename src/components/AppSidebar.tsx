@@ -31,8 +31,6 @@ import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import type { SyncedBook } from "@/lib/db";
 import { findMostRecentlyReadBook } from "@/lib/library-sort";
-import { cn } from "@/lib/utils";
-import { formatDistanceToNow } from "date-fns";
 import {
   BookOpenText,
   Clock3,
@@ -68,6 +66,29 @@ interface ContinueReadingCardProps {
   lastRead: number;
 }
 
+function formatCompactLastRead(lastRead: number): string {
+  const elapsedMinutes = Math.max(
+    0,
+    Math.floor((Date.now() - lastRead) / (60 * 1000)),
+  );
+  if (elapsedMinutes < 1) return "now";
+  if (elapsedMinutes < 60) return `${elapsedMinutes}m`;
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) return `${elapsedHours}h`;
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  if (elapsedDays < 7) return `${elapsedDays}d`;
+
+  const elapsedWeeks = Math.floor(elapsedDays / 7);
+  if (elapsedWeeks < 5) return `${elapsedWeeks}w`;
+
+  const elapsedMonths = Math.floor(elapsedDays / 30);
+  if (elapsedMonths < 12) return `${elapsedMonths}mo`;
+
+  return `${Math.floor(elapsedDays / 365)}y`;
+}
+
 /** A quiet resume destination for one book in the reading list. */
 function ContinueReadingCard({
   book,
@@ -75,51 +96,46 @@ function ContinueReadingCard({
   isActive,
   lastRead,
 }: ContinueReadingCardProps) {
-  const activityLabel = isActive
-    ? "Reading now"
-    : `Last read ${formatDistanceToNow(new Date(lastRead), {
-        addSuffix: true,
-      })}`;
+  const activityLabel = isActive ? "now" : formatCompactLastRead(lastRead);
 
   return (
-    <Link
-      to={`/reader/${book.id}`}
-      aria-label={`Continue reading ${book.title}`}
-      aria-current={isActive ? "page" : undefined}
-      className={cn(
-        "group relative flex min-h-[80px] w-full overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5 text-sidebar-foreground outline-none transition-[transform,border-color,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100",
-        "hover:border-sidebar-foreground/15 hover:bg-sidebar-accent/55",
-        isActive && "border-sidebar-foreground/20 bg-sidebar-accent/65",
-      )}
-      title={`Continue reading ${book.title}`}
+    <SidebarMenuButton
+      render={
+        <Link
+          to={`/reader/${book.id}`}
+          aria-label={`Continue reading ${book.title}`}
+          aria-current={isActive ? "page" : undefined}
+          title={`Continue reading ${book.title}`}
+        />
+      }
+      isActive={isActive}
+      className="min-h-10 gap-2 px-2.5 py-1.5"
     >
-      <span className="relative flex min-w-0 items-center gap-2.5">
-        <span className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-sidebar-border/80 bg-sidebar-accent shadow-sm">
-          {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt=""
-              aria-hidden="true"
-              className="size-full object-cover"
-            />
-          ) : (
-            <BookOpenText
-              className="size-4 text-sidebar-foreground/45"
-              aria-hidden="true"
-            />
-          )}
-        </span>
+      <span className="flex h-8 w-6 shrink-0 items-center justify-center overflow-hidden rounded-[3px] border border-sidebar-border/80 bg-sidebar-accent">
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt=""
+            aria-hidden="true"
+            className="size-full object-cover"
+          />
+        ) : (
+          <BookOpenText
+            className="size-3.5 text-sidebar-foreground/45"
+            aria-hidden="true"
+          />
+        )}
+      </span>
 
-        <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 font-serif text-[13px] font-medium leading-[17px] tracking-[-0.01em]">
-            {book.title}
-          </span>
-          <span className="mt-1 block truncate text-[11px] leading-4 text-sidebar-foreground/55">
-            {activityLabel}
-          </span>
+      <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate text-[14px] font-normal">
+          {book.title}
+        </span>
+        <span className="shrink-0 text-[10px] font-normal tabular-nums text-sidebar-foreground/45">
+          {activityLabel}
         </span>
       </span>
-    </Link>
+    </SidebarMenuButton>
   );
 }
 
