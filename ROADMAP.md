@@ -104,18 +104,25 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Add more "continue reading" in the sidebar
 - [x] Fix gradient continue reading
 - [x] Reference telegram and simplify / unify the sidebar design
+- [x] Add an OLED reading theme with dim reading text and theme values that are
+      distinct from the current dark theme.
+- [x] Fix overscroll in reader
+- [x] Swipe to toggle chrome
+- [x] Trace debugging UI
 - [ ] Fix library search bar cannot type text
+- [ ] Perf improvements
+- [ ] Right click menu also hover UI - do this check for all context menus and add to AGENTS.md for this project
 
 - [ ] Keeping the images and the book name in the same column on mobile (since one column only)
 - [ ] Fix gradient, spacing in highlights page
-- [ ] Fix overscroll in reader
+
+- [ ] Sync progress toast
+  - [ ] Also handles downloading a new book
+- [ ] Swipe to change page (carousel style)
 
 - [ ] Fix measurement for "in this page" pinned sidebar scroll detection for highlights
 - [ ] Consider tanstack virtual for highlights page? Slight lag for production (sometimes in the thousands of highlights)
 - [ ] Clean up highlights page mobile - spacing, background and stickiness, etc.
-
-- [ ] Add an OLED reading theme with dim reading text and theme values that are
-      distinct from the current dark theme.
 
 - [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,
       then verify that the hover state does not create a duplicate visual layer.

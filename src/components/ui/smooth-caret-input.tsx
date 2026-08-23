@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { motion, useReducedMotion } from "motion/react";
 import {
   forwardRef,
   useCallback,
@@ -24,6 +25,17 @@ interface CaretState {
   x: number;
 }
 
+interface PendingSelection {
+  end: number;
+  start: number;
+  value: string;
+}
+
+const smoothCaretTransition = {
+  duration: 0.1,
+  ease: [0.23, 1, 0.32, 1],
+} as const;
+
 const initialCaretState: CaretState = {
   animate: false,
   blinkRevision: 0,
@@ -39,9 +51,9 @@ function parsePixelValue(value: string): number {
 }
 
 /**
- * Keeps native input behavior while drawing an accurately measured caret that
- * can ease between positions. Pointer placement and layout changes snap so the
- * visual caret never trails a direct spatial action.
+ * Keeps native controlled-input behavior while drawing an accurately measured
+ * caret that can ease between positions. Pointer placement and layout changes
+ * snap so the visual caret never trails a direct spatial action.
  */
 export const SmoothCaretInput = forwardRef<
   HTMLInputElement,
@@ -70,16 +82,20 @@ export const SmoothCaretInput = forwardRef<
   const mirrorRef = useRef<HTMLDivElement | null>(null);
   const mirrorTextRef = useRef<HTMLSpanElement | null>(null);
   const mirrorMarkerRef = useRef<HTMLSpanElement | null>(null);
+  const pendingSelectionRef = useRef<PendingSelection | null>(null);
+  const selectionRestoreFrameRef = useRef<number | null>(null);
   const selectionFrameRef = useRef<number | null>(null);
   const transitionFrameRef = useRef<number | null>(null);
   const blinkTimeoutRef = useRef<number | null>(null);
   const pointerInteractionRef = useRef(false);
   const composingRef = useRef(false);
   const lastCaretSignatureRef = useRef("");
+  const reducedMotion = useReducedMotion() ?? false;
   const [isComposing, setIsComposing] = useState(false);
   const [caret, setCaret] = useState(initialCaretState);
 
   const suspendCaret = useCallback(() => {
+    pendingSelectionRef.current = null;
     lastCaretSignatureRef.current = "";
     if (blinkTimeoutRef.current !== null) {
       window.clearTimeout(blinkTimeoutRef.current);
@@ -225,7 +241,46 @@ export const SmoothCaretInput = forwardRef<
   );
 
   useLayoutEffect(() => {
-    updateCaret(false);
+    const input = inputRef.current;
+    const selection = pendingSelectionRef.current;
+
+    if (!input || !selection || input.value !== selection.value) {
+      pendingSelectionRef.current = null;
+      updateCaret(false);
+      return;
+    }
+
+    const restoreSelection = () => {
+      if (pendingSelectionRef.current !== selection) return;
+      if (document.activeElement !== input || input.value !== selection.value) {
+        return;
+      }
+
+      const max = input.value.length;
+      input.setSelectionRange(
+        Math.min(selection.start, max),
+        Math.min(selection.end, max),
+      );
+      updateCaret(false);
+    };
+
+    // Restore before paint for the animated caret, then once more after React's
+    // controlled-input selection restoration has finished.
+    restoreSelection();
+    selectionRestoreFrameRef.current = window.requestAnimationFrame(() => {
+      restoreSelection();
+      if (pendingSelectionRef.current === selection) {
+        pendingSelectionRef.current = null;
+      }
+      selectionRestoreFrameRef.current = null;
+    });
+
+    return () => {
+      if (selectionRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(selectionRestoreFrameRef.current);
+        selectionRestoreFrameRef.current = null;
+      }
+    };
   }, [updateCaret, value]);
 
   useEffect(() => {
@@ -258,6 +313,9 @@ export const SmoothCaretInput = forwardRef<
       if (selectionFrameRef.current !== null) {
         window.cancelAnimationFrame(selectionFrameRef.current);
       }
+      if (selectionRestoreFrameRef.current !== null) {
+        window.cancelAnimationFrame(selectionRestoreFrameRef.current);
+      }
       if (transitionFrameRef.current !== null) {
         window.cancelAnimationFrame(transitionFrameRef.current);
       }
@@ -286,6 +344,14 @@ export const SmoothCaretInput = forwardRef<
           onBlur?.(event);
         }}
         onChange={(event) => {
+          const input = event.currentTarget;
+          if (!composingRef.current) {
+            pendingSelectionRef.current = {
+              end: input.selectionEnd ?? input.value.length,
+              start: input.selectionStart ?? input.value.length,
+              value: input.value,
+            };
+          }
           onChange?.(event);
           updateCaret(false);
         }}
@@ -345,20 +411,25 @@ export const SmoothCaretInput = forwardRef<
       </div>
 
       {caret.ready ? (
-        <span
+        <motion.span
           data-slot="smooth-caret"
           data-motion={caret.animate ? "smooth" : "instant"}
           aria-hidden="true"
+          initial={false}
+          animate={{
+            transform: `translate3d(${caret.x}px, -50%, 0)`,
+          }}
+          transition={
+            caret.animate && !reducedMotion
+              ? smoothCaretTransition
+              : { duration: 0 }
+          }
           className={cn(
             "pointer-events-none absolute top-1/2 left-0 z-20 w-0.5 will-change-transform",
             caret.visible ? "opacity-100" : "opacity-0",
-            caret.animate
-              ? "transition-transform duration-100 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none"
-              : "transition-none",
           )}
           style={{
             height: `${caret.height}px`,
-            transform: `translate3d(${caret.x}px, -50%, 0)`,
           }}
         >
           <span
@@ -370,7 +441,7 @@ export const SmoothCaretInput = forwardRef<
                 : "none",
             }}
           />
-        </span>
+        </motion.span>
       ) : null}
     </div>
   );

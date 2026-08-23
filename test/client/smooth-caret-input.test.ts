@@ -6,7 +6,7 @@ import {
   render,
   screen,
 } from "@testing-library/react";
-import { createElement, useState } from "react";
+import { createElement, useLayoutEffect, useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 function rect(left: number): DOMRect {
@@ -32,6 +32,24 @@ function ControlledInput() {
   });
 }
 
+function ControlledInputWithLateSelectionReset() {
+  const [value, setValue] = useState("reader");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.setSelectionRange(input.value.length, input.value.length);
+  }, [value]);
+
+  return createElement(SmoothCaretInput, {
+    ref: inputRef,
+    "aria-label": "Library search",
+    value,
+    onChange: (event) => setValue(event.target.value),
+  });
+}
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -46,6 +64,41 @@ describe("SmoothCaretInput", () => {
     fireEvent.change(input, { target: { value: "reader" } });
 
     expect((input as HTMLInputElement).value).toBe("reader");
+  });
+
+  it("preserves an insertion point and keeps the caret motion smooth", () => {
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    });
+
+    render(createElement(ControlledInputWithLateSelectionReset));
+    const input = screen.getByRole<HTMLInputElement>("textbox", {
+      name: "Library search",
+    });
+
+    input.focus();
+    fireEvent.change(input, {
+      target: {
+        selectionEnd: 4,
+        selectionStart: 4,
+        value: "reaXder",
+      },
+    });
+
+    act(() => {
+      for (const callback of animationFrames.splice(0)) callback(0);
+    });
+
+    expect(input.value).toBe("reaXder");
+    expect(input.selectionStart).toBe(4);
+    expect(input.selectionEnd).toBe(4);
+    expect(
+      document
+        .querySelector('[data-slot="smooth-caret"]')
+        ?.getAttribute("data-motion"),
+    ).toBe("smooth");
   });
 
   it("stays solid during typing and starts blinking when typing stops", () => {
@@ -127,9 +180,6 @@ describe("SmoothCaretInput", () => {
     fireEvent.keyUp(input, { key: "ArrowLeft" });
 
     expect(caret?.getAttribute("data-motion")).toBe("smooth");
-    expect(caret?.classList.contains("motion-reduce:transition-none")).toBe(
-      true,
-    );
   });
 
   it("snaps when the pointer places the caret", () => {

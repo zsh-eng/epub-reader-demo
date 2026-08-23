@@ -35,11 +35,6 @@ interface MobileBookActionsState {
   status: ReadingStatus | null;
 }
 
-interface SearchSelection {
-  end: number;
-  start: number;
-}
-
 export function Library() {
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
@@ -49,7 +44,6 @@ export function Library() {
   const [isMobileBookActionsOpen, setIsMobileBookActionsOpen] = useState(false);
   const mobileBookActionsInstanceRef = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchSelectionRef = useRef<SearchSelection | null>(null);
   const { toast } = useToast();
   const { importFiles, isProcessing, openFilePicker } = useEpubImport();
   const queryClient = useQueryClient();
@@ -202,17 +196,6 @@ export function Library() {
     }
   }, [booksLoaded, fontsReady, initialCoversReady]);
 
-  // React can restore a controlled input's selection after this render. Save
-  // the browser selection and apply it after the search state update.
-  useEffect(() => {
-    const selection = searchSelectionRef.current;
-    const input = searchInputRef.current;
-    if (!selection || !input || document.activeElement !== input) return;
-
-    input.setSelectionRange(selection.start, selection.end);
-    searchSelectionRef.current = null;
-  }, [searchQuery]);
-
   useAppShellReady(libraryDisplayReady);
 
   useHotkey("/", () => searchInputRef.current?.focus(), {
@@ -260,14 +243,7 @@ export function Library() {
             aria-label="Search library"
             placeholder="Search my library..."
             value={searchQuery}
-            onChange={(event) => {
-              const input = event.currentTarget;
-              searchSelectionRef.current = {
-                end: input.selectionEnd ?? input.value.length,
-                start: input.selectionStart ?? input.value.length,
-              };
-              setSearchQuery(input.value);
-            }}
+            onChange={(event) => setSearchQuery(event.currentTarget.value)}
             containerClassName="min-w-0 flex-1"
             className="w-full bg-transparent border-none outline-none text-xl md:indent-[0.25em] md:text-4xl lg:text-5xl 2xl:text-7xl md:font-serif md:italic placeholder:text-muted-foreground/40 md:placeholder:italic text-foreground"
           />
