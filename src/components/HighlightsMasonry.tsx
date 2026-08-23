@@ -93,7 +93,7 @@ const BOOK_INDEX_ACTIVE_LAYOUT_ID = "highlights-book-index-active";
 const MOBILE_BOOK_COVER_MIN_WIDTH = 84;
 const MOBILE_BOOK_COVER_MAX_WIDTH = 104;
 // The search surface and the mobile book row occupy this much vertical space.
-const MOBILE_BOOK_NAV_SCROLL_OFFSET_PX = 160;
+const MOBILE_BOOK_NAV_SCROLL_OFFSET_PX = 176;
 const BOOK_INDEX_ACTIVE_TRANSITION = {
   type: "spring" as const,
   stiffness: 390,
@@ -382,7 +382,7 @@ function useActiveBookId(bookIds: string[], isMobile: boolean) {
       bookIds.includes(current) ? current : fallbackBookId,
     );
 
-    if (bookIds.length === 0 || typeof IntersectionObserver === "undefined") {
+    if (bookIds.length === 0 || typeof window === "undefined") {
       return;
     }
 
@@ -390,36 +390,37 @@ function useActiveBookId(bookIds: string[], isMobile: boolean) {
       const section = document.getElementById(getBookSectionId(bookId));
       return section ? [section] : [];
     });
-    const visibleSectionIds = new Set<string>();
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            visibleSectionIds.add(entry.target.id);
-          } else {
-            visibleSectionIds.delete(entry.target.id);
-          }
-        });
-        const visibleSections = sections
-          .filter((section) => visibleSectionIds.has(section.id))
-          .sort(
-            (left, right) =>
-              left.getBoundingClientRect().top -
-              right.getBoundingClientRect().top,
-          );
-        const firstVisibleSection = visibleSections[0];
-        if (!firstVisibleSection) return;
+    const activeOffset = isMobile ? MOBILE_BOOK_NAV_SCROLL_OFFSET_PX : 96;
+    let frame = 0;
+    const updateActiveBook = () => {
+      frame = 0;
+      let currentSection = sections[0];
 
-        setActiveBookId(firstVisibleSection.id.replace("highlights-book-", ""));
-      },
-      {
-        rootMargin: `${isMobile ? -MOBILE_BOOK_NAV_SCROLL_OFFSET_PX : -96}px 0px -68% 0px`,
-        threshold: 0,
-      },
-    );
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top > activeOffset) break;
+        currentSection = section;
+      }
 
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
+      const nextBookId = currentSection?.id.replace("highlights-book-", "");
+      if (!nextBookId) return;
+      setActiveBookId((current) =>
+        current === nextBookId ? current : nextBookId,
+      );
+    };
+    const scheduleUpdate = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(updateActiveBook);
+    };
+
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+    scheduleUpdate();
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
   }, [bookIds, isMobile]);
 
   return { activeBookId, setActiveBookId };
@@ -1707,31 +1708,39 @@ export function HighlightsMasonry() {
           className="h-px shrink-0"
           aria-hidden="true"
         />
-        <div className="sticky top-3 z-30 isolate mx-auto w-full max-w-2xl shrink-0 bg-background px-4">
-          <HighlightsSearch
-            value={searchQuery}
-            onChange={setSearchQuery}
-            isCompact={isSearchCompact}
-            selectedColors={selectedColors}
-            onToggleColor={handleToggleColor}
-          />
+        <div className="sticky top-0 z-30 isolate w-full bg-background pt-3">
+          <div className="mx-auto w-full max-w-2xl px-4">
+            <HighlightsSearch
+              value={searchQuery}
+              onChange={setSearchQuery}
+              isCompact={isSearchCompact}
+              selectedColors={selectedColors}
+              onToggleColor={handleToggleColor}
+            />
+          </div>
         </div>
         {bookIndexGroups.length > 0 && (
-          <div className="mx-auto w-full max-w-[1600px] lg:hidden">
-            <div className="flex items-baseline gap-2 px-5 pb-1.5">
-              <h2 className="font-serif text-base font-medium">In this page</h2>
-              <span className="text-[11px] text-muted-foreground">
-                {bookIndexGroups.length}
-              </span>
+          <>
+            <div className="mx-auto w-full max-w-[1600px] px-4 lg:hidden">
+              <div className="flex items-baseline gap-2 px-1 pb-1.5">
+                <h2 className="font-serif text-base font-medium">
+                  In this page
+                </h2>
+                <span className="text-[11px] text-muted-foreground">
+                  {bookIndexGroups.length}
+                </span>
+              </div>
             </div>
-            <div className="sticky top-[4.75rem] z-20 isolate bg-background px-4 pt-2 pb-2">
-              <MobileBookIndex
-                groups={bookIndexGroups}
-                activeBookId={activeBookId}
-                onNavigate={handleBookNavigate}
-              />
+            <div className="sticky top-[4.75rem] z-20 isolate w-full bg-background lg:hidden">
+              <div className="mx-auto w-full max-w-[1600px] px-4 pt-2 pb-2">
+                <MobileBookIndex
+                  groups={bookIndexGroups}
+                  activeBookId={activeBookId}
+                  onNavigate={handleBookNavigate}
+                />
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
@@ -1776,7 +1785,7 @@ export function HighlightsMasonry() {
                         id={sectionId}
                         aria-labelledby={headingId}
                         className={cn(
-                          "scroll-mt-40 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
+                          "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
                           index > 0 && "mt-2",
                         )}
                       >

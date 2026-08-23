@@ -112,16 +112,17 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Fix library search bar cannot type text
 - [x] Right click menu also hover UI - do this check for all context menus and add to AGENTS.md for this project
 
-- [ ] Keeping the images and the book name in the same column on mobile (since one column only)
-- [ ] Fix gradient, spacing in highlights page
-- [ ] Clean up highlights page mobile - spacing, background and stickiness, etc.
+- [x] Keeping the images and the book name in the same column on mobile (since one column only)
+- [x] Fix gradient, spacing in highlights page
+- [x] Clean up highlights page mobile - spacing, background and stickiness, etc.
 - [ ] Fix measurement for "in this page" pinned sidebar scroll detection for highlights
+
+- [ ] Swipe to change page (carousel style)
 
 - [ ] Perf improvements
 
 - [ ] Sync progress toast
   - [ ] Also handles downloading a new book
-- [ ] Swipe to change page (carousel style)
 
 - [ ] Consider tanstack virtual for highlights page? Slight lag for production (sometimes in the thousands of highlights)
 
