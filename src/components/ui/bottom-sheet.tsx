@@ -12,6 +12,7 @@ export interface BottomSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  modal?: boolean | "trap-focus";
   header?: ReactNode;
   showHeader?: boolean;
   children: ReactNode;
@@ -33,6 +34,7 @@ export function BottomSheet({
   open,
   onOpenChange,
   title,
+  modal = true,
   header,
   showHeader = true,
   children,
@@ -63,6 +65,7 @@ export function BottomSheet({
     <Drawer
       direction="bottom"
       open={open}
+      modal={modal}
       onOpenChange={(nextOpen, eventDetails) => {
         const isUpwardSwipeDismiss =
           !nextOpen &&

@@ -67,6 +67,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -75,6 +76,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -92,8 +94,11 @@ const BOOK_INDEX_PIN_STORAGE_KEY = "highlights-masonry-book-index-pinned-v2";
 const BOOK_INDEX_ACTIVE_LAYOUT_ID = "highlights-book-index-active";
 const MOBILE_BOOK_COVER_MIN_WIDTH = 84;
 const MOBILE_BOOK_COVER_MAX_WIDTH = 104;
-// The search surface and the mobile book row occupy this much vertical space.
-const MOBILE_BOOK_NAV_SCROLL_OFFSET_PX = 176;
+// The sticky search surface occupies this much vertical space on mobile.
+const MOBILE_BOOK_NAV_SCROLL_OFFSET_PX = 80;
+// Leave a small buffer so fractional layout values do not keep the previous
+// book active when a selected section lands exactly on the scroll margin.
+const MOBILE_BOOK_ACTIVE_OFFSET_PX = MOBILE_BOOK_NAV_SCROLL_OFFSET_PX + 8;
 const BOOK_INDEX_ACTIVE_TRANSITION = {
   type: "spring" as const,
   stiffness: 390,
@@ -390,7 +395,7 @@ function useActiveBookId(bookIds: string[], isMobile: boolean) {
       const section = document.getElementById(getBookSectionId(bookId));
       return section ? [section] : [];
     });
-    const activeOffset = isMobile ? MOBILE_BOOK_NAV_SCROLL_OFFSET_PX : 96;
+    const activeOffset = isMobile ? MOBILE_BOOK_ACTIVE_OFFSET_PX : 96;
     let frame = 0;
     const updateActiveBook = () => {
       frame = 0;
@@ -423,7 +428,7 @@ function useActiveBookId(bookIds: string[], isMobile: boolean) {
     };
   }, [bookIds, isMobile]);
 
-  return { activeBookId, setActiveBookId };
+  return { activeBookId };
 }
 
 /**
@@ -484,6 +489,7 @@ function useBookNavigationProgress(scrollProgress: MotionValue<number>) {
 
 function BookIndexItem({
   className,
+  compact = false,
   group,
   isActive,
   layoutId,
@@ -491,10 +497,11 @@ function BookIndexItem({
   reducedMotion,
 }: {
   className?: string;
+  compact?: boolean;
   group: BookHighlightGroup;
   isActive: boolean;
-  layoutId: string;
-  onNavigate: () => void;
+  layoutId?: string;
+  onNavigate: (event: MouseEvent<HTMLAnchorElement>) => void;
   reducedMotion: boolean;
 }) {
   const { url: coverUrl } = useFileUrl(group.book.coverContentHash, "cover", {
@@ -507,14 +514,19 @@ function BookIndexItem({
   return (
     <a
       href={`#${getBookSectionId(group.book.id)}`}
-      onClick={onNavigate}
+      onClick={(event) => {
+        event.preventDefault();
+        onNavigate(event);
+      }}
       aria-current={isActive ? "location" : undefined}
       className={cn(
-        "relative flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
+        "relative flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
+        compact && "gap-2 rounded-lg p-1.5",
+        !layoutId && isActive && "bg-secondary",
         className,
       )}
     >
-      {isActive && (
+      {isActive && layoutId ? (
         <motion.span
           layoutId={layoutId}
           aria-hidden="true"
@@ -526,8 +538,20 @@ function BookIndexItem({
         >
           <span className="absolute top-3 bottom-3 left-0 w-0.5 rounded-full bg-foreground/70" />
         </motion.span>
+      ) : (
+        isActive && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-foreground/70 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]"
+          />
+        )
       )}
-      <span className="relative z-10 aspect-2/3 w-11 shrink-0 overflow-hidden rounded-r-md rounded-l-xs shadow-md">
+      <span
+        className={cn(
+          "relative z-10 aspect-2/3 w-11 shrink-0 overflow-hidden rounded-r-md rounded-l-xs shadow-md",
+          compact && "w-9",
+        )}
+      >
         {coverUrl ? (
           <img src={coverUrl} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -540,15 +564,30 @@ function BookIndexItem({
         )}
       </span>
       <span className="relative z-10 min-w-0 flex-1">
-        <span className="line-clamp-2 font-serif text-base font-medium leading-[1.05]">
+        <span
+          className={cn(
+            "line-clamp-2 font-serif text-base font-medium leading-[1.05]",
+            compact && "text-sm",
+          )}
+        >
           {group.book.title}
         </span>
         {group.book.author && (
-          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+          <span
+            className={cn(
+              "mt-1 block truncate text-[11px] text-muted-foreground",
+              compact && "mt-0.5 text-[10px]",
+            )}
+          >
             {group.book.author}
           </span>
         )}
-        <span className="mt-1.5 block text-[11px] text-muted-foreground">
+        <span
+          className={cn(
+            "mt-1.5 block text-[11px] text-muted-foreground",
+            compact && "mt-1 text-[10px]",
+          )}
+        >
           {highlightCount} {highlightCount === 1 ? "highlight" : "highlights"}
         </span>
       </span>
@@ -635,34 +674,65 @@ function BookIndexPanel({
 function MobileBookIndex({
   groups,
   activeBookId,
+  isOpen,
   onNavigate,
+  onOpenChange,
 }: {
   groups: BookHighlightGroup[];
   activeBookId: string;
+  isOpen: boolean;
   onNavigate: (bookId: string) => void;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const layoutGroupId = useId();
-  const reducedMotion = useReducedMotion() ?? false;
-
   return (
-    <LayoutGroup id={layoutGroupId}>
-      <nav
-        aria-label="Books on this highlights page"
-        className="relative isolate -mx-4 grid auto-cols-[210px] grid-flow-col gap-2 overflow-x-auto px-4 pb-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+    <>
+      <button
+        type="button"
+        aria-label="Choose a book on this page"
+        title="Books on this page"
+        aria-expanded={isOpen}
+        aria-controls="mobile-highlights-book-index"
+        onClick={() => onOpenChange(true)}
+        className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 grid size-12 place-items-center rounded-full border bg-card text-foreground shadow-xl outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] lg:hidden"
       >
-        {groups.map((group) => (
-          <BookIndexItem
-            key={group.book.id}
-            group={group}
-            isActive={group.book.id === activeBookId}
-            layoutId={BOOK_INDEX_ACTIVE_LAYOUT_ID}
-            onNavigate={() => onNavigate(group.book.id)}
-            reducedMotion={reducedMotion}
-            className="border bg-card shadow-sm"
-          />
-        ))}
-      </nav>
-    </LayoutGroup>
+        <span
+          className="grid size-6 content-center gap-0.5"
+          aria-hidden="true"
+        >
+          <span className="ml-auto h-0.5 w-5 rounded-full bg-current" />
+          <span className="ml-auto h-0.5 w-3.5 rounded-full bg-current" />
+          <span className="ml-auto h-0.5 w-2 rounded-full bg-current" />
+        </span>
+      </button>
+
+      <BottomSheet
+        open={isOpen}
+        onOpenChange={onOpenChange}
+        title="Books on this page"
+        modal="trap-focus"
+        panelClassName="max-w-md"
+        bodyClassName="overflow-y-auto overscroll-contain"
+      >
+        <div className="px-4 pb-4 pt-2">
+          <nav
+            id="mobile-highlights-book-index"
+            aria-label="Books on this highlights page"
+            className="space-y-1"
+          >
+            {groups.map((group) => (
+              <BookIndexItem
+                key={group.book.id}
+                group={group}
+                isActive={group.book.id === activeBookId}
+                onNavigate={() => onNavigate(group.book.id)}
+                reducedMotion={false}
+                compact
+              />
+            ))}
+          </nav>
+        </div>
+      </BottomSheet>
+    </>
   );
 }
 
@@ -1409,6 +1479,8 @@ function HighlightsMosaic({
   );
 }
 
+const MemoizedHighlightsMosaic = memo(HighlightsMosaic);
+
 function ColorFilters({
   selectedColors,
   onToggle,
@@ -1529,6 +1601,7 @@ export function HighlightsMasonry() {
     null,
   );
   const copiedHighlightTimerRef = useRef(0);
+  const [isMobileBookIndexOpen, setIsMobileBookIndexOpen] = useState(false);
   const [isBookIndexPinned, setIsBookIndexPinned] = useState(
     () => localStorage.getItem(BOOK_INDEX_PIN_STORAGE_KEY) !== "false",
   );
@@ -1591,10 +1664,7 @@ export function HighlightsMasonry() {
       })),
     [visibleGroups],
   );
-  const { activeBookId, setActiveBookId } = useActiveBookId(
-    visibleBookIds,
-    isMobile,
-  );
+  const { activeBookId } = useActiveBookId(visibleBookIds, isMobile);
   const totalHighlightCount = useMemo(
     () => groups.reduce((total, group) => total + group.highlights.length, 0),
     [groups],
@@ -1614,6 +1684,10 @@ export function HighlightsMasonry() {
   }, [isMobile]);
 
   useEffect(() => {
+    if (!isMobile) setIsMobileBookIndexOpen(false);
+  }, [isMobile]);
+
+  useEffect(() => {
     return () => window.clearTimeout(copiedHighlightTimerRef.current);
   }, []);
 
@@ -1625,10 +1699,13 @@ export function HighlightsMasonry() {
 
   const handleBookNavigate = useCallback(
     (bookId: string) => {
-      setActiveBookId(bookId);
+      const section = document.getElementById(getBookSectionId(bookId));
+      if (!section) return;
+
+      section.scrollIntoView({ behavior: "auto", block: "start" });
       animateAfterInstantNavigation();
     },
-    [animateAfterInstantNavigation, setActiveBookId],
+    [animateAfterInstantNavigation],
   );
 
   const copyHighlight = useCallback(async (highlight: SyncedHighlight) => {
@@ -1719,30 +1796,6 @@ export function HighlightsMasonry() {
             />
           </div>
         </div>
-        {bookIndexGroups.length > 0 && (
-          <>
-            <div className="mx-auto w-full max-w-[1600px] px-4 lg:hidden">
-              <div className="flex items-baseline gap-2 px-1 pb-1.5">
-                <h2 className="font-serif text-base font-medium">
-                  In this page
-                </h2>
-                <span className="text-[11px] text-muted-foreground">
-                  {bookIndexGroups.length}
-                </span>
-              </div>
-            </div>
-            <div className="sticky top-[4.75rem] z-20 isolate w-full bg-background lg:hidden">
-              <div className="mx-auto w-full max-w-[1600px] px-4 pt-2 pb-2">
-                <MobileBookIndex
-                  groups={bookIndexGroups}
-                  activeBookId={activeBookId}
-                  onNavigate={handleBookNavigate}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
         <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
           {isLoading ? (
             <div className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
@@ -1785,11 +1838,11 @@ export function HighlightsMasonry() {
                         id={sectionId}
                         aria-labelledby={headingId}
                         className={cn(
-                          "scroll-mt-44 last:min-h-[calc(100svh-11rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
+                          "scroll-mt-20 last:min-h-[calc(100svh-5rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
                           index > 0 && "mt-2",
                         )}
                       >
-                        <HighlightsMosaic
+                        <MemoizedHighlightsMosaic
                           group={group}
                           headingId={headingId}
                           highlights={highlights}
@@ -1834,6 +1887,15 @@ export function HighlightsMasonry() {
             </div>
           )}
         </main>
+        {isMobile && bookIndexGroups.length > 0 && (
+          <MobileBookIndex
+            groups={bookIndexGroups}
+            activeBookId={activeBookId}
+            isOpen={isMobileBookIndexOpen}
+            onNavigate={handleBookNavigate}
+            onOpenChange={setIsMobileBookIndexOpen}
+          />
+        )}
         {!isLoading && !isBookIndexPinned && bookIndexGroups.length > 0 && (
           <FloatingBookIndex
             groups={bookIndexGroups}
