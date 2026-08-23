@@ -100,6 +100,22 @@ below contains only work that still has a clear product or reliability reason.
 
 ### Next
 
+- [ ] Context menu when right click should keep the book card remained in the pressed state (so we know what we are right clicking)
+- [ ] Add more "continue reading" in the sidebar
+- [ ] Fix gradient continue reading
+
+- [ ] Fix library search bar cannot type text
+- [ ] Keeping the images and the book name in the same column on mobile (since one column only)
+- [ ] Fix gradient, spacing in highlights page
+- [ ] Fix overscroll in reader
+
+- [ ] Fix measurement for "in this page" pinned sidebar scroll detection for highlights
+- [ ] Consider tanstack virtual for highlights page? Slight lag for production (sometimes in the thousands of highlights)
+- [ ] Clean up highlights page mobile - spacing, background and stickiness, etc.
+
+- [ ] Add an OLED reading theme with dim reading text and theme values that are
+      distinct from the current dark theme.
+
 - [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,
       then verify that the hover state does not create a duplicate visual layer.
 - [ ] Diagnose slow-network startup flicker across Library and Reader. Keep the
@@ -111,17 +127,9 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] Decide the mobile Continue Reading entry point. Wire the existing
       `ContinueReadingCarousel` only if it is the chosen surface; otherwise
       remove the unused component and keep the current card design.
-- [ ] Add an OLED reading theme with dim reading text and theme values that are
-      distinct from the current dark theme.
 - [ ] Fix long press
-- [ ] Clean up highlights page mobile - spacing, background and stickiness, etc.
 - [ ] LRU Cache of books (continue reading, etc.) - do some napkin math
 - [ ] "Jump back" ideas for reference (need to start storing jump history though)
-- [ ] Fix overscroll in reader
-- [ ] Add more "continue reading" in the sidebar
-- [ ] Fix measurement for "in this page" pinned sidebar scroll detection
-- [ ] Consider tanstack virtual for highlights page? Slight lag
-- [ ] Keeping the images and the book name in the same column on mobile (since one column only)
 
 ### Later
 
