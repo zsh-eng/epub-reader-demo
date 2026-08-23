@@ -70,7 +70,7 @@ const TIMELINE_GUIDE_DEFINITIONS: Array<{
   },
   {
     spanName: "first-spread-frame-painted",
-    label: "First content painted",
+    label: "First spread frame",
     edge: "start",
     color: LANE_COLOR_VALUES.reveal,
   },
