@@ -109,9 +109,9 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Fix overscroll in reader
 - [x] Swipe to toggle chrome
 - [x] Trace debugging UI
-- [ ] Fix library search bar cannot type text
-- [ ] Perf improvements
+- [x] Fix library search bar cannot type text
 - [ ] Right click menu also hover UI - do this check for all context menus and add to AGENTS.md for this project
+- [ ] Perf improvements
 
 - [ ] Keeping the images and the book name in the same column on mobile (since one column only)
 - [ ] Fix gradient, spacing in highlights page

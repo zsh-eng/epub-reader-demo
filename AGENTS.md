@@ -18,6 +18,7 @@ This repository uses **bun** as the package manager and for running scripts.
 - **Colours**: Avoid introducing new colours. Use existing CSS variables from `index.css`. Refactor any hardcoded colours to use theme variables. Clarify with user before adding new colours
 - **Animations**: Use the `motion` library for complex animations (simpler than verbose CSS)
 - **Shared layout indicators**: A conditional `layoutId` marker inside the active list row is valid only when all rows share one stacking context. Do not give each row `isolate`, `z-index`, `transform`, or opacity that creates a separate stacking context; DOM order can then place the moving marker above row content in one direction. Put the stacking context on the list container and keep all row foreground layers above the marker, or render the marker as a container-level sibling.
+- **Context menus**: A context-menu trigger must keep the object’s hover visual state while its menu is open. Use Base UI’s `data-popup-open` state, typically with `group-data-[popup-open]` on the hovered descendant. Apply the same visual treatment to focused or selected objects.
 - **Data Fetching**: Use TanStack React Query for data fetching and caching
 - **UI components**: Keep only components in `src/components/ui` that are actually used. Add specific ones as needed via `bunx shadcn@latest add <component>` rather than pre-adding a broad library, and remove any that fall out of use.
 

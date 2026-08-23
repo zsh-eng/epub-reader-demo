@@ -844,7 +844,7 @@ function HighlightQuoteCard({
   const card = (
     <article
       className={cn(
-        "relative h-full overflow-hidden rounded-xl border text-card-foreground",
+        "group relative h-full overflow-hidden rounded-xl border text-card-foreground",
         usesWordCloud
           ? "bg-secondary/35"
           : usesCompactQuote
@@ -868,7 +868,7 @@ function HighlightQuoteCard({
           isMobile ? "Show highlight actions" : "Copy highlight to clipboard"
         }
         className={cn(
-          "group flex h-full w-full cursor-pointer flex-col px-5 pt-4 pb-5 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy",
+          "group flex h-full w-full cursor-pointer flex-col px-5 pt-4 pb-5 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 group-data-[popup-open]:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy",
           !showsMetadata && "text-center",
         )}
       >
