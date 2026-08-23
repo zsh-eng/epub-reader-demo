@@ -53,6 +53,7 @@ interface UseReaderCoreResult {
   getChapterCanonicalText: (
     chapterIndex: number,
   ) => ChapterCanonicalText | null;
+  resumeBackgroundLoad: () => void;
 }
 
 function getNamedBodyFont(fontFamily: FontFamily): string {
@@ -180,7 +181,6 @@ export function useReaderCore(
     chapterEntries,
     getChapterBlocks,
     subscribe: subscribeToChapterArtifacts,
-    resumeBackgroundLoad: resumeBackgroundChapterArtifacts,
     initialLocation,
     enabled: layoutReady,
   });
@@ -238,5 +238,6 @@ export function useReaderCore(
     chapterStartPages,
     getChapterBlocks,
     getChapterCanonicalText,
+    resumeBackgroundLoad: resumeBackgroundChapterArtifacts,
   };
 }

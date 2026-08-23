@@ -2,7 +2,7 @@ import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightTo
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
@@ -111,6 +111,10 @@ export function Reader() {
     contentReady: isReaderStageMeasured && sessionState.status === "ready",
     stageContentRef,
   });
+  useEffect(() => {
+    if (!displayReady) return;
+    sessionActions.resumeBackgroundLoad();
+  }, [displayReady, sessionActions.resumeBackgroundLoad]);
   useReaderPerformanceTraceLifecycle({
     bookId,
     book: sessionState.book,

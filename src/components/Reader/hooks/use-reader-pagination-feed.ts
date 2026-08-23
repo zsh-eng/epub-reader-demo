@@ -16,7 +16,6 @@ interface UseReaderPaginationFeedOptions {
   chapterEntries: ChapterEntry[];
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
   subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
-  resumeBackgroundLoad: () => void;
   initialLocation: ReaderInitialLocation | null;
   enabled?: boolean;
 }
@@ -26,8 +25,9 @@ interface UseReaderPaginationFeedOptions {
  *
  * The content hook owns loading and decoration. This hook owns the imperative
  * "feed the worker" contract: initialize with the first available chapter,
- * resume background artifacts after the first spread commits, stream remaining
- * chapters as they arrive, and send targeted updates when loaded blocks change.
+ * stream remaining chapters as they arrive, and send targeted updates when
+ * loaded blocks change. The reader UI resumes background artifact work after
+ * the first visible content is ready.
  */
 export function useReaderPaginationFeed({
   pagination,
@@ -35,22 +35,15 @@ export function useReaderPaginationFeed({
   chapterEntries,
   getChapterBlocks,
   subscribe,
-  resumeBackgroundLoad,
   initialLocation,
   enabled = true,
 }: UseReaderPaginationFeedOptions): void {
-  const { addChapter, init, status, updateChapter } = pagination;
+  const { addChapter, init, updateChapter } = pagination;
   const initializedBookIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     initializedBookIdRef.current = null;
   }, [bookId]);
-
-  useEffect(() => {
-    if (initializedBookIdRef.current !== bookId) return;
-    if (status !== "partial" && status !== "ready") return;
-    resumeBackgroundLoad();
-  }, [bookId, resumeBackgroundLoad, status]);
 
   useEffect(() => {
     if (
