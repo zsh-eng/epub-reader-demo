@@ -271,7 +271,7 @@ export function Library() {
                 onChange={(event) =>
                   setSearchQuery(event.currentTarget.value)
                 }
-                className="h-14 w-full appearance-none rounded-full border border-input bg-background/75 pr-12 pl-10 text-sm text-foreground shadow-md backdrop-blur-xl transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 [&::-webkit-search-cancel-button]:hidden"
+                className="h-14 w-full appearance-none rounded-full border border-input bg-background/75 pr-12 pl-10 text-base text-foreground shadow-md backdrop-blur-xl transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 [&::-webkit-search-cancel-button]:hidden"
               />
               {searchQuery && (
                 <button

@@ -1548,7 +1548,7 @@ function HighlightsSearch({
         placeholder="Search all highlights…"
         aria-label="Search all highlights"
         className={cn(
-          "h-14 appearance-none bg-background/75 pl-10 shadow-md backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 [&::-webkit-search-cancel-button]:hidden",
+          "h-14 appearance-none bg-background/75 pl-10 text-base shadow-md backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 md:text-base [&::-webkit-search-cancel-button]:hidden",
           value ? "pr-48" : "pr-40",
         )}
       />
