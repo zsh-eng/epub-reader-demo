@@ -69,14 +69,20 @@ const TIMELINE_GUIDE_DEFINITIONS: Array<{
     color: LANE_COLOR_VALUES.pagination,
   },
   {
+    spanName: "first-spread-frame-painted",
+    label: "First content painted",
+    edge: "start",
+    color: LANE_COLOR_VALUES.reveal,
+  },
+  {
     spanName: "display-assets-settle",
     label: "Visible assets settled",
     edge: "end",
     color: LANE_COLOR_VALUES.assets,
   },
   {
-    spanName: "first-reader-frame-painted",
-    label: "Reader painted",
+    spanName: "reader-settled-frame-painted",
+    label: "Reader settled",
     edge: "start",
     color: LANE_COLOR_VALUES.reveal,
   },
@@ -112,10 +118,25 @@ function getTraceDuration(trace: ReaderPerformanceTrace): number {
   );
 }
 
-function getFirstPaintMs(trace: ReaderPerformanceTrace): number | null {
+function getFirstSpreadFrameMs(trace: ReaderPerformanceTrace): number | null {
   return (
+    trace.spans.find((span) => span.name === "first-spread-frame-painted")
+      ?.startMs ??
     trace.spans.find((span) => span.name === "first-reader-frame-painted")
-      ?.startMs ?? null
+      ?.startMs ??
+    null
+  );
+}
+
+function getSettledContentPaintMs(
+  trace: ReaderPerformanceTrace,
+): number | null {
+  return (
+    trace.spans.find((span) => span.name === "reader-settled-frame-painted")
+      ?.startMs ??
+    trace.spans.find((span) => span.name === "first-reader-frame-painted")
+      ?.startMs ??
+    null
   );
 }
 
@@ -438,18 +459,31 @@ function TraceMetadata({
 }: {
   trace: ReaderPerformanceTrace;
 }): React.ReactNode {
-  const firstPaintMs = getFirstPaintMs(trace);
+  const firstSpreadFrameMs = getFirstSpreadFrameMs(trace);
+  const settledContentPaintMs = getSettledContentPaintMs(trace);
   const durationMs = getTraceDuration(trace);
   const bodyCacheLoadKind = trace.spans.find(
     (span) => span.name === "reader-body-cache-load",
   )?.details.loadKind;
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
       <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-xs text-muted-foreground">First painted content</p>
+        <p className="text-xs text-muted-foreground">First spread frame</p>
         <p className="mt-1 text-xl font-semibold tabular-nums">
-          {firstPaintMs === null ? "Pending" : formatMilliseconds(firstPaintMs)}
+          {firstSpreadFrameMs === null
+            ? "Pending"
+            : formatMilliseconds(firstSpreadFrameMs)}
+        </p>
+      </div>
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="text-xs text-muted-foreground">
+          Visible content settled
+        </p>
+        <p className="mt-1 text-xl font-semibold tabular-nums">
+          {settledContentPaintMs === null
+            ? "Pending"
+            : formatMilliseconds(settledContentPaintMs)}
         </p>
       </div>
       <div className="rounded-xl border border-border bg-card p-4">
@@ -570,7 +604,7 @@ export function ReaderTraceViewer(): React.ReactNode {
               </p>
               <div className="flex gap-2 overflow-x-auto pb-2 xl:flex-col xl:overflow-visible">
                 {snapshot.traces.map((trace) => {
-                  const firstPaintMs = getFirstPaintMs(trace);
+                  const firstPaintMs = getSettledContentPaintMs(trace);
                   return (
                     <button
                       key={trace.id}

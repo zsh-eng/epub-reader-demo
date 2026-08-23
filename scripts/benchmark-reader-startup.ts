@@ -40,6 +40,7 @@ interface StoredTrace {
 
 interface BenchmarkRun {
   mainThreadCpuThrottleRate: number;
+  firstSpreadFrameMs: number;
   firstPaintMs: number;
   fullPaginationMs: number | null;
   traceStatus: string;
@@ -201,7 +202,10 @@ async function importBook(page: Page, epubPath: string): Promise<string> {
 
 async function waitForTraceMilestone(
   page: Page,
-  milestone: "first-reader-frame-painted" | "completed",
+  milestone:
+    | "first-spread-frame-painted"
+    | "reader-settled-frame-painted"
+    | "completed",
   timeoutMs: number,
 ): Promise<StoredTrace> {
   await page.waitForFunction(
@@ -288,13 +292,21 @@ async function runBenchmark(
     await bookTitle.waitFor({ state: "visible", timeout: 120_000 });
     await bookTitle.dispatchEvent("click");
 
+    const firstSpreadFrameTrace = await waitForTraceMilestone(
+      page,
+      "first-spread-frame-painted",
+      options.firstPaintTimeoutMs,
+    );
+    const firstSpreadFrameMs = firstSpreadFrameTrace.spans.find(
+      (span) => span.name === "first-spread-frame-painted",
+    )!.startMs;
     const firstPaintTrace = await waitForTraceMilestone(
       page,
-      "first-reader-frame-painted",
+      "reader-settled-frame-painted",
       options.firstPaintTimeoutMs,
     );
     const firstPaintMs = firstPaintTrace.spans.find(
-      (span) => span.name === "first-reader-frame-painted",
+      (span) => span.name === "reader-settled-frame-painted",
     )!.startMs;
 
     let completedTrace = firstPaintTrace;
@@ -330,6 +342,7 @@ async function runBenchmark(
 
     return {
       mainThreadCpuThrottleRate,
+      firstSpreadFrameMs,
       firstPaintMs,
       fullPaginationMs: completedTrace.durationMs,
       traceStatus: completedTrace.status,

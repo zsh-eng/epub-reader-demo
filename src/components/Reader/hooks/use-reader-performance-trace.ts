@@ -2,13 +2,15 @@ import type { Book } from "@/lib/db";
 import type { PaginationStatus } from "@/lib/pagination-v2";
 import {
   completeReaderTrace,
+  endReaderTraceSpan,
   ensureReaderTrace,
   markReaderTraceOnce,
   recordReaderTraceSpan,
+  startReaderTraceSpan,
   updateReaderTraceMetadata,
 } from "@/lib/reader-performance-trace";
 import type { ReaderSettings } from "@/types/reader.types";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReaderSessionStatus } from "./use-reader-session";
 
 /** Starts a fallback trace for direct reader URLs and browser restores. */
@@ -59,9 +61,9 @@ export function useReaderPerformanceTraceRoute(
 }
 
 /**
- * Records the reader-level milestones which sit above storage and pagination.
- * The trace ends after two animation frames so its duration includes the first
- * frame which can contain the fully revealed reader.
+ * Records separate first-content and fully-settled paint milestones. The first
+ * spread stays mounted while its images load, so asset readiness must not be
+ * reported as the first time browser content can paint.
  */
 export function useReaderPerformanceTraceLifecycle(options: {
   bookId: string | undefined;
@@ -129,6 +131,28 @@ export function useReaderPerformanceTraceLifecycle(options: {
     }
   }, [status]);
 
+  useLayoutEffect(() => {
+    if (!bookId || status !== "ready") return;
+
+    markReaderTraceOnce("first-spread-dom-committed", "reveal");
+    const frameSpan = startReaderTraceSpan(
+      "first-spread-commit-to-painted-frame",
+      "reveal",
+    );
+    let secondFrameId: number | null = null;
+    const firstFrameId = requestAnimationFrame(() => {
+      secondFrameId = requestAnimationFrame(() => {
+        endReaderTraceSpan(frameSpan);
+        markReaderTraceOnce("first-spread-frame-painted", "reveal");
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrameId);
+      if (secondFrameId !== null) cancelAnimationFrame(secondFrameId);
+    };
+  }, [bookId, status]);
+
   useEffect(() => {
     if (!bookId || !displayReady) return;
 
@@ -136,7 +160,7 @@ export function useReaderPerformanceTraceLifecycle(options: {
     let secondFrameId: number | null = null;
     const firstFrameId = requestAnimationFrame(() => {
       secondFrameId = requestAnimationFrame(() => {
-        markReaderTraceOnce("first-reader-frame-painted", "reveal");
+        markReaderTraceOnce("reader-settled-frame-painted", "reveal");
         setPaintedBookId(bookId);
       });
     });

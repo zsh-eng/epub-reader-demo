@@ -4,6 +4,10 @@ import {
   getDeferredEpubImagePath,
 } from "@/lib/epub-resource-utils";
 import {
+  endReaderTraceSpan,
+  startReaderTraceSpan,
+} from "@/lib/reader-performance-trace";
+import {
   createContext,
   useCallback,
   useContext,
@@ -63,29 +67,85 @@ export function DeferredEpubImageProvider({
       }
 
       const loadPromise = (async () => {
-        const resourceBlob = loadResource
-          ? await loadResource(resourcePath)
-          : bookId
-            ? (await getBookFile(bookId, resourcePath))?.content
-            : null;
+        const resourceLoadSpan = startReaderTraceSpan(
+          "epub-image-resource-load",
+          "assets",
+          { resourcePath },
+        );
+        const fileReadSpan = startReaderTraceSpan(
+          "epub-image-file-read",
+          "storage",
+          {
+            resourcePath,
+            source: loadResource ? "custom-loader" : "indexed-db",
+          },
+        );
+        let resourceBlob: Blob | null = null;
+
+        try {
+          resourceBlob = loadResource
+            ? await loadResource(resourcePath)
+            : bookId
+              ? ((await getBookFile(bookId, resourcePath))?.content ?? null)
+              : null;
+          endReaderTraceSpan(fileReadSpan, {
+            found: resourceBlob !== null,
+            sizeBytes: resourceBlob?.size ?? 0,
+            mediaType: resourceBlob?.type || "unknown",
+          });
+        } catch (error) {
+          endReaderTraceSpan(
+            fileReadSpan,
+            {
+              error: error instanceof Error ? error.message : String(error),
+            },
+            "error",
+          );
+          endReaderTraceSpan(resourceLoadSpan, {}, "error");
+          throw error;
+        }
 
         if (!resourceBlob) {
           console.warn("[LazyImage] Deferred image not found:", resourcePath);
+          endReaderTraceSpan(
+            resourceLoadSpan,
+            { found: false },
+            "error",
+          );
           return null;
         }
 
         const existingUrl = objectUrlsRef.current.get(resourcePath);
         if (existingUrl) {
+          endReaderTraceSpan(resourceLoadSpan, {
+            cache: "provider-memory",
+            sizeBytes: resourceBlob.size,
+          });
           return existingUrl;
         }
 
+        const objectUrlSpan = startReaderTraceSpan(
+          "epub-image-object-url-create",
+          "assets",
+          { resourcePath },
+        );
         const objectUrl = URL.createObjectURL(resourceBlob);
+        endReaderTraceSpan(objectUrlSpan, { sizeBytes: resourceBlob.size });
         if (disposedRef.current) {
           URL.revokeObjectURL(objectUrl);
+          endReaderTraceSpan(resourceLoadSpan, {
+            disposed: true,
+            sizeBytes: resourceBlob.size,
+          });
           return null;
         }
 
         objectUrlsRef.current.set(resourcePath, objectUrl);
+        endReaderTraceSpan(resourceLoadSpan, {
+          found: true,
+          sizeBytes: resourceBlob.size,
+          mediaType: resourceBlob.type || "unknown",
+        });
         return objectUrl;
       })();
 
@@ -175,6 +235,7 @@ export function useDeferredEpubImage(src: string) {
 
   return {
     isLoading: !!resourcePath && !cachedSrc && !resourceLoadSettled,
+    resourcePath,
     resolvedSrc,
   };
 }
