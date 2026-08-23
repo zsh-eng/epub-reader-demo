@@ -232,11 +232,18 @@ export function usePagination(
     switch (event.type) {
       case "trace":
         if (event.name === "worker-fonts-ready") {
-          endReaderTraceSpan(workerStartupSpanRef.current);
+          endReaderTraceSpan(workerStartupSpanRef.current, {
+            blocksPagination: true,
+            includes:
+              "worker startup, built-in font readiness, and trace delivery",
+          });
           workerStartupSpanRef.current = null;
           break;
         }
-        endReaderTraceSpan(publisherFontsSpanRef.current);
+        endReaderTraceSpan(publisherFontsSpanRef.current, {
+          blocksPagination: true,
+          includes: "publisher font readiness and trace delivery",
+        });
         publisherFontsSpanRef.current = null;
         break;
 
@@ -361,6 +368,7 @@ export function usePagination(
     workerStartupSpanRef.current = startReaderTraceSpan(
       "pagination-worker-fonts",
       "assets",
+      { readinessBarrier: true },
     );
     const worker = new Worker(
       new URL("./worker/pagination.worker.ts", import.meta.url),
@@ -461,6 +469,7 @@ export function usePagination(
       publisherFontsSpanRef.current ??= startReaderTraceSpan(
         "pagination-publisher-fonts",
         "assets",
+        { readinessBarrier: true },
       );
 
       setSpread(null);

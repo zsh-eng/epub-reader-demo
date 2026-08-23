@@ -11,7 +11,7 @@ import {
   useReaderTraceSnapshot,
 } from "@/lib/reader-performance-trace";
 import { cn } from "@/lib/utils";
-import { Activity, Search, Trash2 } from "lucide-react";
+import { Activity, Check, ClipboardCopy, Search, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 const LANE_LABELS: Record<ReaderTraceLane, string> = {
@@ -138,6 +138,91 @@ function getSettledContentPaintMs(
       ?.startMs ??
     null
   );
+}
+
+function getSpanTime(
+  trace: ReaderPerformanceTrace,
+  spanName: string,
+  edge: "start" | "end" = "start",
+): number | null {
+  const span = trace.spans.find((candidate) => candidate.name === spanName);
+  if (!span) return null;
+  return edge === "end" ? (span.endMs ?? span.startMs) : span.startMs;
+}
+
+function getChapterSource(trace: ReaderPerformanceTrace): string {
+  const bodyCacheLoadKind = trace.spans.find(
+    (span) => span.name === "reader-body-cache-load",
+  )?.details.loadKind;
+
+  if (bodyCacheLoadKind === "cache-hit") return "Cache hit";
+  if (bodyCacheLoadKind === "rebuilt") return "Rebuilt";
+  return trace.status === "recording" ? "Pending" : "Outside trace";
+}
+
+function formatTraceDetailsForClipboard(trace: ReaderPerformanceTrace): string {
+  const firstSpreadFrameMs = getFirstSpreadFrameMs(trace);
+  const assetsSettledMs = getSpanTime(trace, "display-assets-settle", "end");
+  const displayReadyMs = getSpanTime(trace, "reader-display-ready");
+  const settledContentPaintMs = getSettledContentPaintMs(trace);
+  const durationMs = getTraceDuration(trace);
+  const formatOptionalTime = (value: number | null) =>
+    value === null ? "not recorded" : formatMilliseconds(value);
+  const formatInterval = (start: number | null, end: number | null) =>
+    start === null || end === null
+      ? "not recorded"
+      : formatMilliseconds(Math.max(0, end - start));
+  const metadata = Object.entries(trace.metadata)
+    .map(([key, value]) => `- ${key}: ${String(value)}`)
+    .join("\n");
+  const events = [...trace.spans]
+    .sort((left, right) => left.startMs - right.startMs)
+    .map((span) => {
+      const endMs = span.endMs ?? span.startMs;
+      const details = Object.entries(span.details)
+        .map(([key, value]) => `${key}=${formatTraceDetail(key, value)}`)
+        .join(", ");
+      return [
+        `- ${formatMilliseconds(span.startMs)} → ${formatMilliseconds(endMs)}`,
+        `[${span.lane}]`,
+        span.name,
+        `(${formatMilliseconds(Math.max(0, endMs - span.startMs))}, ${span.status})`,
+        details ? `{ ${details} }` : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+    })
+    .join("\n");
+
+  return [
+    "Reader performance trace",
+    `Book: ${trace.bookTitle ?? trace.bookId}`,
+    `Trace ID: ${trace.id}`,
+    `Started: ${new Date(trace.startedAt).toISOString()}`,
+    `Source: ${trace.source}`,
+    `Status: ${trace.status}`,
+    `CPU throttle: ${formatCpuThrottle(trace)}`,
+    `Publisher styles: ${trace.metadata.publisherBookStylingEnabled === true ? "On" : "Off"}`,
+    `Chapter source: ${getChapterSource(trace)}`,
+    "",
+    "Milestones",
+    `- First spread frame: ${formatOptionalTime(firstSpreadFrameMs)}`,
+    `- Visible assets settled: ${formatOptionalTime(assetsSettledMs)}`,
+    `- Reader display-ready commit: ${formatOptionalTime(displayReadyMs)}`,
+    `- Visible content settled: ${formatOptionalTime(settledContentPaintMs)}`,
+    `- Full pagination trace: ${formatMilliseconds(durationMs)}`,
+    "",
+    "First spread to settled breakdown",
+    `- Visible image and document-font wait: ${formatInterval(firstSpreadFrameMs, assetsSettledMs)}`,
+    `- Ready-state React commit: ${formatInterval(assetsSettledMs, displayReadyMs)}`,
+    `- Painted-frame confirmation: ${formatInterval(displayReadyMs, settledContentPaintMs)}`,
+    "",
+    "Run metadata",
+    metadata || "- none",
+    "",
+    "Events",
+    events || "- none",
+  ].join("\n");
 }
 
 function formatTraceTimestamp(timestamp: number): string {
@@ -462,9 +547,6 @@ function TraceMetadata({
   const firstSpreadFrameMs = getFirstSpreadFrameMs(trace);
   const settledContentPaintMs = getSettledContentPaintMs(trace);
   const durationMs = getTraceDuration(trace);
-  const bodyCacheLoadKind = trace.spans.find(
-    (span) => span.name === "reader-body-cache-load",
-  )?.details.loadKind;
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -507,14 +589,74 @@ function TraceMetadata({
       <div className="rounded-xl border border-border bg-card p-4">
         <p className="text-xs text-muted-foreground">Chapter source</p>
         <p className="mt-1 text-xl font-semibold">
-          {bodyCacheLoadKind === "cache-hit"
-            ? "Cache hit"
-            : bodyCacheLoadKind === "rebuilt"
-              ? "Rebuilt"
-              : trace.status === "recording"
-                ? "Pending"
-                : "Outside trace"}
+          {getChapterSource(trace)}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function TraceReadinessBreakdown({
+  trace,
+}: {
+  trace: ReaderPerformanceTrace;
+}): React.ReactNode {
+  const firstSpreadFrameMs = getFirstSpreadFrameMs(trace);
+  const assetsSettledMs = getSpanTime(trace, "display-assets-settle", "end");
+  const displayReadyMs = getSpanTime(trace, "reader-display-ready");
+  const settledContentPaintMs = getSettledContentPaintMs(trace);
+  const steps = [
+    {
+      label: "Visible assets",
+      durationMs:
+        firstSpreadFrameMs === null || assetsSettledMs === null
+          ? null
+          : Math.max(0, assetsSettledMs - firstSpreadFrameMs),
+      description: "Decode visible EPUB images and wait for document fonts.",
+    },
+    {
+      label: "Ready commit",
+      durationMs:
+        assetsSettledMs === null || displayReadyMs === null
+          ? null
+          : Math.max(0, displayReadyMs - assetsSettledMs),
+      description: "Commit the display-ready state through React.",
+    },
+    {
+      label: "Paint confirmation",
+      durationMs:
+        displayReadyMs === null || settledContentPaintMs === null
+          ? null
+          : Math.max(0, settledContentPaintMs - displayReadyMs),
+      description: "Wait two animation frames to confirm the settled paint.",
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-4">
+      <div>
+        <p className="text-sm font-medium">First spread to settled content</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          The first spread can contain an image placeholder. Settled content
+          confirms that visible assets and the ready-state paint have completed.
+        </p>
+      </div>
+      <div className="mt-4 grid gap-3 md:grid-cols-3">
+        {steps.map((step) => (
+          <div key={step.label} className="rounded-lg bg-secondary/35 p-3">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-xs font-medium">{step.label}</p>
+              <p className="text-sm font-semibold tabular-nums">
+                {step.durationMs === null
+                  ? "Pending"
+                  : `+${formatMilliseconds(step.durationMs)}`}
+              </p>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {step.description}
+            </p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -526,6 +668,9 @@ export function ReaderTraceViewer(): React.ReactNode {
     snapshot.traces[0]?.id ?? null,
   );
   const [search, setSearch] = useState("");
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
 
   useEffect(() => {
     if (snapshot.traces.length === 0) {
@@ -550,6 +695,29 @@ export function ReaderTraceViewer(): React.ReactNode {
     if (!window.confirm("Clear all saved reader performance traces?")) return;
     clearReaderTraces();
   };
+
+  const handleCopyTrace = async () => {
+    if (!selectedTrace) return;
+
+    try {
+      await navigator.clipboard.writeText(
+        formatTraceDetailsForClipboard(selectedTrace),
+      );
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    setCopyStatus("idle");
+  }, [selectedTraceId]);
+
+  useEffect(() => {
+    if (copyStatus === "idle") return;
+    const resetTimer = window.setTimeout(() => setCopyStatus("idle"), 2_000);
+    return () => window.clearTimeout(resetTimer);
+  }, [copyStatus]);
 
   return (
     <main className="mx-auto min-h-svh w-full max-w-[96rem] px-4 pb-16 pt-16 md:px-8 md:pt-12">
@@ -652,18 +820,37 @@ export function ReaderTraceViewer(): React.ReactNode {
                       {selectedTrace.spans.length} events
                     </p>
                   </div>
-                  <div className="relative w-full sm:w-64">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
-                      placeholder="Find a span"
-                      className="pl-9"
-                    />
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+                    <Button
+                      variant="outline"
+                      onClick={handleCopyTrace}
+                      className="sm:w-auto"
+                    >
+                      {copyStatus === "copied" ? (
+                        <Check className="size-4" />
+                      ) : (
+                        <ClipboardCopy className="size-4" />
+                      )}
+                      {copyStatus === "copied"
+                        ? "Copied"
+                        : copyStatus === "error"
+                          ? "Copy failed"
+                          : "Copy trace"}
+                    </Button>
+                    <div className="relative w-full sm:w-64">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Find a span"
+                        className="pl-9"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <TraceMetadata trace={selectedTrace} />
+                <TraceReadinessBreakdown trace={selectedTrace} />
                 <TraceTimeline trace={selectedTrace} searchTerm={searchTerm} />
 
                 <details className="rounded-xl border border-border bg-card p-4 text-sm">
