@@ -17,6 +17,7 @@ interface CliOptions {
   startServer: boolean;
   firstPaintTimeoutMs: number;
   completionTimeoutMs: number;
+  publisherBookStylingEnabled: boolean;
 }
 
 interface StoredTraceSpan {
@@ -58,6 +59,7 @@ Options:
   --no-start-server          Use an already running app server.
   --first-paint-timeout <ms> First-paint timeout. Defaults to 120000.
   --completion-timeout <ms>  Full-pagination timeout. Defaults to 300000.
+  --publisher-styles <mode>  Use "on" or "off". Defaults to "on".
   --help                     Show this help.
 `);
   process.exit(0);
@@ -88,6 +90,7 @@ function parseArgs(args: string[]): CliOptions {
     startServer: true,
     firstPaintTimeoutMs: 120_000,
     completionTimeoutMs: 300_000,
+    publisherBookStylingEnabled: true,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -119,6 +122,15 @@ function parseArgs(args: string[]): CliOptions {
         );
         index += 1;
         break;
+      case "--publisher-styles": {
+        const value = readOptionValue(args, index, argument);
+        if (value !== "on" && value !== "off") {
+          throw new Error(`${argument} must be "on" or "off".`);
+        }
+        options.publisherBookStylingEnabled = value === "on";
+        index += 1;
+        break;
+      }
       case "--headed":
         options.headed = true;
         break;
@@ -226,7 +238,7 @@ async function runBenchmark(
     viewport: { width: 1440, height: 1000 },
   });
   await context.addInitScript(
-    ({ recordingKey, settingsKey, rate }) => {
+    ({ recordingKey, settingsKey, rate, publisherBookStylingEnabled }) => {
       localStorage.setItem(recordingKey, "true");
       localStorage.setItem(
         settingsKey,
@@ -237,7 +249,7 @@ async function runBenchmark(
           theme: "light",
           textAlign: "left",
           contentWidth: "narrow",
-          publisherBookStylingEnabled: true,
+          publisherBookStylingEnabled,
           matchPublisherBodyTextSize: false,
         }),
       );
@@ -253,6 +265,7 @@ async function runBenchmark(
       recordingKey: TRACE_RECORDING_KEY,
       settingsKey: SETTINGS_STORAGE_KEY,
       rate: mainThreadCpuThrottleRate,
+      publisherBookStylingEnabled: options.publisherBookStylingEnabled,
     },
   );
 
@@ -349,7 +362,7 @@ async function main(): Promise<void> {
         epub: path.resolve(options.epub),
         measuredAt: new Date().toISOString(),
         scenario: "first-reader-open-after-import",
-        publisherBookStylingEnabled: true,
+        publisherBookStylingEnabled: options.publisherBookStylingEnabled,
         runs,
       };
       const reportPath = path.resolve(

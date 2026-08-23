@@ -1,5 +1,5 @@
 import { usePagination } from "@/lib/pagination-v2";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type {
   ParsedChapterBlocks,
   ReaderInitialLocation,
@@ -10,12 +10,13 @@ import type { ChapterEntry } from "../types";
 interface UseReaderPaginationFeedOptions {
   pagination: Pick<
     ReturnType<typeof usePagination>,
-    "init" | "addChapter" | "updateChapter"
+    "init" | "addChapter" | "updateChapter" | "status"
   >;
   bookId?: string;
   chapterEntries: ChapterEntry[];
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
   subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
+  resumeBackgroundLoad: () => void;
   initialLocation: ReaderInitialLocation | null;
   enabled?: boolean;
 }
@@ -25,8 +26,8 @@ interface UseReaderPaginationFeedOptions {
  *
  * The content hook owns loading and decoration. This hook owns the imperative
  * "feed the worker" contract: initialize with the first available chapter,
- * stream remaining chapters as they arrive, and send targeted updates when a
- * loaded chapter's decorated blocks change.
+ * resume background artifacts after the first spread commits, stream remaining
+ * chapters as they arrive, and send targeted updates when loaded blocks change.
  */
 export function useReaderPaginationFeed({
   pagination,
@@ -34,10 +35,22 @@ export function useReaderPaginationFeed({
   chapterEntries,
   getChapterBlocks,
   subscribe,
+  resumeBackgroundLoad,
   initialLocation,
   enabled = true,
 }: UseReaderPaginationFeedOptions): void {
-  const { addChapter, init, updateChapter } = pagination;
+  const { addChapter, init, status, updateChapter } = pagination;
+  const initializedBookIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    initializedBookIdRef.current = null;
+  }, [bookId]);
+
+  useEffect(() => {
+    if (initializedBookIdRef.current !== bookId) return;
+    if (status !== "partial" && status !== "ready") return;
+    resumeBackgroundLoad();
+  }, [bookId, resumeBackgroundLoad, status]);
 
   useEffect(() => {
     if (
@@ -68,6 +81,7 @@ export function useReaderPaginationFeed({
       });
 
       initialized = true;
+      initializedBookIdRef.current = bookId;
       return true;
     };
 

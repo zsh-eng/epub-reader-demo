@@ -52,6 +52,7 @@ function emitEvent(event: EnginePaginationEvent): void {
         activeMs,
         elapsedMs:
           workerRunStartedAtMs === null ? 0 : now - workerRunStartedAtMs,
+        postedAtEpochMs: performance.timeOrigin + now,
       },
     } satisfies PaginationEvent);
     return;

@@ -75,4 +75,28 @@ describe("reader performance trace storage", () => {
       restored?.spans.find((span) => span.name === "pending-work"),
     ).toMatchObject({ status: "error", details: { interrupted: true } });
   });
+
+  it("records completed Performance API spans at their original time", async () => {
+    const traceStore = await import("@/lib/reader-performance-trace");
+    traceStore.setReaderTraceRecordingEnabled(true);
+    traceStore.beginReaderTrace({ bookId: "book-1", source: "test" });
+    const traceStartedAt = performance.now();
+
+    traceStore.recordReaderTraceSpan({
+      name: "main-thread-long-task",
+      lane: "processing",
+      startPerformanceMs: traceStartedAt + 20,
+      endPerformanceMs: traceStartedAt + 90,
+      details: { durationMs: 70 },
+    });
+
+    const [recorded] = traceStore.getReaderTraceSnapshot().traces;
+    expect(
+      recorded?.spans.find((span) => span.name === "main-thread-long-task"),
+    ).toMatchObject({
+      startMs: 20,
+      endMs: 90,
+      details: { durationMs: 70 },
+    });
+  });
 });

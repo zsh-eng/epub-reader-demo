@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   endReaderTraceSpan,
+  markReaderTrace,
   startReaderTraceSpan,
   type ReaderTraceSpanToken,
 } from "@/lib/reader-performance-trace";
@@ -59,7 +60,8 @@ function roundTraceMilliseconds(value: number): number {
 function getWorkerTraceDetails(
   event: PaginationEvent,
   roundTripStartedAtMs: number | null,
-): Record<string, number> {
+  mainHandlerEnteredAtEpochMs: number,
+): Record<string, number | string> {
   if (
     (event.type !== "partialReady" && event.type !== "ready") ||
     !event.workerTiming
@@ -73,13 +75,22 @@ function getWorkerTraceDetails(
     roundTripStartedAtMs === null
       ? elapsedMs
       : performance.now() - roundTripStartedAtMs;
+  const responseDeliveryMs = Math.max(
+    0,
+    mainHandlerEnteredAtEpochMs - event.workerTiming.postedAtEpochMs,
+  );
+  const outsideWorkerMs = Math.max(0, roundTripMs - elapsedMs);
   return {
     workerActiveMs: activeMs,
     workerWaitMs: Math.max(0, roundTraceMilliseconds(elapsedMs - activeMs)),
-    outsideWorkerMs: Math.max(
+    workerResponseDeliveryMs: roundTraceMilliseconds(responseDeliveryMs),
+    workerCommandDeliveryMs: Math.max(
       0,
-      roundTraceMilliseconds(roundTripMs - elapsedMs),
+      roundTraceMilliseconds(outsideWorkerMs - responseDeliveryMs),
     ),
+    outsideWorkerMs: roundTraceMilliseconds(outsideWorkerMs),
+    workerPostedAt: new Date(event.workerTiming.postedAtEpochMs).toISOString(),
+    mainHandlerEnteredAt: new Date(mainHandlerEnteredAtEpochMs).toISOString(),
   };
 }
 
@@ -210,7 +221,10 @@ export function usePagination(
   // Worker lifecycle
   // -------------------------------------------------------------------------
 
-  const handleEvent = (event: PaginationEvent) => {
+  const handleEvent = (
+    event: PaginationEvent,
+    mainHandlerEnteredAtEpochMs: number,
+  ) => {
     // Discard events from previous layout epochs.
     if ("epoch" in event && event.epoch < currentEpochRef.current) return;
     if ("epoch" in event) currentEpochRef.current = event.epoch;
@@ -227,9 +241,21 @@ export function usePagination(
         break;
 
       case "partialReady": {
+        if (firstSpreadSpanRef.current) {
+          markReaderTrace(
+            "pagination-partial-ready-handler-entered",
+            "processing",
+            {
+              mainHandlerEnteredAt: new Date(
+                mainHandlerEnteredAtEpochMs,
+              ).toISOString(),
+            },
+          );
+        }
         const partialWorkerDetails = getWorkerTraceDetails(
           event,
           firstSpreadRoundTripStartedAtRef.current,
+          mainHandlerEnteredAtEpochMs,
         );
         currentEpochRef.current = event.epoch;
         tracerRef.current.markFirstVisible();
@@ -249,13 +275,22 @@ export function usePagination(
       }
 
       case "ready": {
+        if (allChaptersSpanRef.current) {
+          markReaderTrace("pagination-ready-handler-entered", "processing", {
+            mainHandlerEnteredAt: new Date(
+              mainHandlerEnteredAtEpochMs,
+            ).toISOString(),
+          });
+        }
         const firstWorkerDetails = getWorkerTraceDetails(
           event,
           firstSpreadRoundTripStartedAtRef.current,
+          mainHandlerEnteredAtEpochMs,
         );
         const allWorkerDetails = getWorkerTraceDetails(
           event,
           allChaptersRoundTripStartedAtRef.current,
+          mainHandlerEnteredAtEpochMs,
         );
         currentEpochRef.current = event.epoch;
         tracerRef.current.markReady();
@@ -333,7 +368,10 @@ export function usePagination(
     );
 
     worker.onmessage = (e: MessageEvent<PaginationEvent>) => {
-      handleEventRef.current(e.data);
+      handleEventRef.current(
+        e.data,
+        performance.timeOrigin + performance.now(),
+      );
     };
 
     worker.onerror = (e) => {

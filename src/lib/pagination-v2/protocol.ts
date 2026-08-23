@@ -100,6 +100,8 @@ interface PaginationEventMetadata {
 export interface WorkerTiming {
   activeMs: number;
   elapsedMs: number;
+  /** Absolute monotonic timestamp taken immediately before postMessage. */
+  postedAtEpochMs: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ import {
   completeReaderTrace,
   ensureReaderTrace,
   markReaderTraceOnce,
+  recordReaderTraceSpan,
   updateReaderTraceMetadata,
 } from "@/lib/reader-performance-trace";
 import type { ReaderSettings } from "@/types/reader.types";
@@ -25,8 +26,26 @@ export function useReaderPerformanceTraceRoute(
 
     ensureReaderTrace({ bookId });
     markReaderTraceOnce("reader-route-mounted", "navigation");
+    const supportsLongTasks =
+      typeof PerformanceObserver !== "undefined" &&
+      PerformanceObserver.supportedEntryTypes?.includes("longtask");
+    const longTaskObserver = supportsLongTasks
+      ? new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            recordReaderTraceSpan({
+              name: "main-thread-long-task",
+              lane: "processing",
+              startPerformanceMs: entry.startTime,
+              endPerformanceMs: entry.startTime + entry.duration,
+              details: { durationMs: Math.round(entry.duration * 10) / 10 },
+            });
+          }
+        })
+      : null;
+    longTaskObserver?.observe({ type: "longtask", buffered: true });
 
     return () => {
+      longTaskObserver?.disconnect();
       // Defer the interrupt so React Strict Mode can remount the same route
       // without producing a false interrupted trace in development.
       deferredInterruptRef.current = window.setTimeout(() => {

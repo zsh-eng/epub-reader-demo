@@ -36,6 +36,9 @@ import {
 
 export type { ReaderBodyCacheLoadKind };
 
+const CHAPTER_ARTIFACT_TASK_BUDGET_MS = 8;
+const MAX_RECORDED_CHAPTER_ARTIFACT_YIELDS = 12;
+
 export const readerBodyCacheKeys = {
   book: (
     bookId: string,
@@ -104,6 +107,34 @@ function getPublisherBodySizeCacheKey(
   return publisherBodyFontScale
     ? `body-size-matched:${publisherBodyFontScale}`
     : "body-size-matched:none";
+}
+
+function scheduleArtifactTaskProbe(initialChapterIndex: number): void {
+  const scheduledAtMs = performance.now();
+  const probeSpan = startReaderTraceSpan(
+    "chapter-artifacts-event-loop-probe",
+    "processing",
+    { initialChapterIndex },
+  );
+  window.setTimeout(() => {
+    endReaderTraceSpan(probeSpan, {
+      taskDelayMs: Math.round((performance.now() - scheduledAtMs) * 10) / 10,
+    });
+  }, 0);
+}
+
+async function yieldToMainThreadTask(): Promise<void> {
+  const browserScheduler = (
+    globalThis as {
+      scheduler?: { yield?: () => Promise<void> };
+    }
+  ).scheduler;
+  if (browserScheduler?.yield) {
+    await browserScheduler.yield();
+    return;
+  }
+
+  await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
 export interface ReaderCheckpointData {
@@ -201,11 +232,14 @@ export type ReaderChapterArtifactSubscriber = (
 export interface ReaderChapterArtifactsLoader {
   getChapterBlocks: (chapterIndex: number) => ParsedChapterBlocks | null;
   subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
+  resumeBackgroundLoad: () => void;
 }
 
 /**
  * Keeps decorated reader artifacts out of React render data. Highlight changes
  * update the relevant chapter cache row and notify subscribers imperatively.
+ * Startup builds the initial chapter first. It waits for the first spread to
+ * commit before it loads the remaining chapters in bounded main-thread tasks.
  */
 export function useReaderChapterArtifactsLoader(options: {
   bookId?: string;
@@ -235,6 +269,8 @@ export function useReaderChapterArtifactsLoader(options: {
   >(new Map());
   const signaturesByChapterRef = useRef<Map<number, string>>(new Map());
   const listenersRef = useRef<Set<ReaderChapterArtifactSubscriber>>(new Set());
+  const backgroundLoadAllowedRef = useRef(false);
+  const backgroundLoadWaitersRef = useRef<Set<() => void>>(new Set());
 
   const highlightsBySpineItemId = useMemo(
     () => buildHighlightsBySpineItemId(highlights),
@@ -245,7 +281,23 @@ export function useReaderChapterArtifactsLoader(options: {
     for (const listener of listenersRef.current) listener(event);
   }, []);
 
+  const resumeBackgroundLoad = useCallback(() => {
+    backgroundLoadAllowedRef.current = true;
+    for (const resolve of backgroundLoadWaitersRef.current) resolve();
+    backgroundLoadWaitersRef.current.clear();
+  }, []);
+
+  const waitForBackgroundLoad = useCallback(async () => {
+    if (backgroundLoadAllowedRef.current) return;
+    await new Promise<void>((resolve) => {
+      backgroundLoadWaitersRef.current.add(resolve);
+    });
+  }, []);
+
   useEffect(() => {
+    for (const resolve of backgroundLoadWaitersRef.current) resolve();
+    backgroundLoadWaitersRef.current.clear();
+    backgroundLoadAllowedRef.current = false;
     artifactsByChapterRef.current.clear();
     signaturesByChapterRef.current.clear();
     listenersRef.current.clear();
@@ -286,6 +338,12 @@ export function useReaderChapterArtifactsLoader(options: {
       let firstArtifactEnded = false;
       let cachedArtifactCount = 0;
       let builtArtifactCount = 0;
+      let taskSliceStartedAtMs = performance.now();
+      let maxTaskSliceMs = 0;
+      let taskYieldCount = 0;
+      let recordedTaskYieldCount = 0;
+      let totalTaskYieldWaitMs = 0;
+      let revealGateWaitMs = 0;
 
       const endFirstArtifact = (
         details: Record<string, string | number | boolean>,
@@ -296,7 +354,58 @@ export function useReaderChapterArtifactsLoader(options: {
       };
 
       try {
-        for (const chapterIndex of chapterLoadOrder) {
+        for (
+          let loadIndex = 0;
+          loadIndex < chapterLoadOrder.length;
+          loadIndex += 1
+        ) {
+          const chapterIndex = chapterLoadOrder[loadIndex]!;
+          if (loadIndex === 1) {
+            const gateStartedAtMs = performance.now();
+            const gateSpan = startReaderTraceSpan(
+              "chapter-artifacts-reveal-gate",
+              "processing",
+              { afterChapterIndex: firstChapterIndex ?? 0 },
+            );
+            await waitForBackgroundLoad();
+            revealGateWaitMs = performance.now() - gateStartedAtMs;
+            endReaderTraceSpan(gateSpan, {
+              waitMs: Math.round(revealGateWaitMs * 10) / 10,
+            });
+            taskSliceStartedAtMs = performance.now();
+          } else if (
+            loadIndex > 1 &&
+            performance.now() - taskSliceStartedAtMs >=
+              CHAPTER_ARTIFACT_TASK_BUDGET_MS
+          ) {
+            const taskSliceMs = performance.now() - taskSliceStartedAtMs;
+            maxTaskSliceMs = Math.max(maxTaskSliceMs, taskSliceMs);
+            const shouldRecordYield =
+              recordedTaskYieldCount < MAX_RECORDED_CHAPTER_ARTIFACT_YIELDS;
+            const yieldSpan = shouldRecordYield
+              ? startReaderTraceSpan(
+                  "chapter-artifacts-task-yield",
+                  "processing",
+                  {
+                    afterChapterIndex: chapterLoadOrder[loadIndex - 1]!,
+                    taskSliceMs: Math.round(taskSliceMs * 10) / 10,
+                  },
+                )
+              : null;
+            const yieldStartedAtMs = performance.now();
+            await yieldToMainThreadTask();
+            const yieldWaitMs = performance.now() - yieldStartedAtMs;
+            taskYieldCount += 1;
+            totalTaskYieldWaitMs += yieldWaitMs;
+            if (shouldRecordYield) {
+              recordedTaskYieldCount += 1;
+              endReaderTraceSpan(yieldSpan, {
+                waitMs: Math.round(yieldWaitMs * 10) / 10,
+              });
+            }
+            taskSliceStartedAtMs = performance.now();
+          }
+
           const chapter = chapterEntries[chapterIndex]!;
           const baseContent = resolvedBaseContentByChapter.get(chapterIndex)!;
           const chapterHighlights =
@@ -379,6 +488,9 @@ export function useReaderChapterArtifactsLoader(options: {
 
           if (!currentArtifact) {
             notify({ kind: "loaded", chapterIndex, artifact });
+            if (chapterIndex === firstChapterIndex) {
+              scheduleArtifactTaskProbe(chapterIndex);
+            }
             continue;
           }
 
@@ -389,10 +501,18 @@ export function useReaderChapterArtifactsLoader(options: {
             notify({ kind: "updated", chapterIndex, artifact });
           }
         }
+        maxTaskSliceMs = Math.max(
+          maxTaskSliceMs,
+          performance.now() - taskSliceStartedAtMs,
+        );
         endFirstArtifact({ cache: "not-loaded" });
         endReaderTraceSpan(allArtifactsSpan, {
           cachedArtifactCount,
           builtArtifactCount,
+          revealGateWaitMs: Math.round(revealGateWaitMs * 10) / 10,
+          taskYieldCount,
+          taskYieldWaitMs: Math.round(totalTaskYieldWaitMs * 10) / 10,
+          maxTaskSliceMs: Math.round(maxTaskSliceMs * 10) / 10,
         });
       } catch (error) {
         const details = {
@@ -417,6 +537,7 @@ export function useReaderChapterArtifactsLoader(options: {
     notify,
     publisherBookStylingEnabled,
     queryClient,
+    waitForBackgroundLoad,
   ]);
 
   const getChapterBlocks = useCallback(
@@ -444,5 +565,6 @@ export function useReaderChapterArtifactsLoader(options: {
   return {
     getChapterBlocks,
     subscribe,
+    resumeBackgroundLoad,
   };
 }

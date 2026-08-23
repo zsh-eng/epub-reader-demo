@@ -166,6 +166,7 @@ export function useReaderCore(
     getChapterBlocks,
     getChapterCanonicalText,
     subscribe: subscribeToChapterArtifacts,
+    resumeBackgroundLoad: resumeBackgroundChapterArtifacts,
   } = useReaderChapterContent({
     bookId: epubPreparation.chapterContentBookId,
     book: epubPreparation.chapterContentBook,
@@ -179,6 +180,7 @@ export function useReaderCore(
     chapterEntries,
     getChapterBlocks,
     subscribe: subscribeToChapterArtifacts,
+    resumeBackgroundLoad: resumeBackgroundChapterArtifacts,
     initialLocation,
     enabled: layoutReady,
   });

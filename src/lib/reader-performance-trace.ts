@@ -387,6 +387,47 @@ export function endReaderTraceSpan(
   }));
 }
 
+/** Records completed browser work whose Performance API timestamps predate the callback. */
+export function recordReaderTraceSpan(options: {
+  name: string;
+  lane: ReaderTraceLane;
+  startPerformanceMs: number;
+  endPerformanceMs: number;
+  details?: ReaderTraceDetails;
+}): void {
+  if (!activeRuntime) return;
+  if (options.endPerformanceMs < activeRuntime.startedAtMs) return;
+
+  const traceId = activeRuntime.traceId;
+  const startMs = Math.max(
+    0,
+    options.startPerformanceMs - activeRuntime.startedAtMs,
+  );
+  const endMs = Math.max(
+    startMs,
+    options.endPerformanceMs - activeRuntime.startedAtMs,
+  );
+  updateTrace(traceId, (trace) => {
+    if (trace.spans.length >= MAX_SPANS_PER_TRACE) return trace;
+    return {
+      ...trace,
+      spans: [
+        ...trace.spans,
+        {
+          id: createId(),
+          name: options.name,
+          lane: options.lane,
+          kind: "span",
+          startMs,
+          endMs,
+          status: "ok",
+          details: options.details ?? {},
+        },
+      ],
+    };
+  });
+}
+
 export function markReaderTrace(
   name: string,
   lane: ReaderTraceLane,
