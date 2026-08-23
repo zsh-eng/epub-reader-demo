@@ -58,6 +58,7 @@ const INTERACTIVE_TARGET_SELECTOR = [
 
 export const TOUCH_TAP_MOVE_TOLERANCE_PX = 10;
 export const MAX_TOUCH_TAP_DURATION_MS = 450;
+export const MAX_TOUCH_CHROME_GESTURE_DURATION_MS = 700;
 
 function getTargetElement(target: EventTarget | null): Element | null {
   if (target instanceof Element) return target;
@@ -116,6 +117,31 @@ export function isCleanTouchTap(candidate: TouchTapCandidate): boolean {
 function hasActiveTextSelection(): boolean {
   const selection = window.getSelection();
   return Boolean(selection && !selection.isCollapsed && selection.toString());
+}
+
+export function isReaderScrollGesture(candidate: {
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  startedAt: number;
+  endedAt: number;
+  target: EventTarget | null;
+  isDefaultPrevented: boolean;
+}): boolean {
+  if (candidate.isDefaultPrevented) return false;
+  if (isInteractiveTapTarget(candidate.target)) return false;
+  if (
+    candidate.endedAt - candidate.startedAt >
+    MAX_TOUCH_CHROME_GESTURE_DURATION_MS
+  ) {
+    return false;
+  }
+
+  const distanceX = Math.abs(candidate.endX - candidate.startX);
+  const distanceY = Math.abs(candidate.endY - candidate.startY);
+
+  return distanceY > TOUCH_TAP_MOVE_TOLERANCE_PX && distanceY > distanceX;
 }
 
 function clearDomSelectionSoon(): void {
@@ -235,15 +261,33 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       isDefaultPrevented: boolean,
       preventDefault: () => void,
     ) => {
+      const endedAt = Date.now();
       const isCleanTap = isCleanTouchTap({
         startX: press.startX,
         startY: press.startY,
         endX: clientX,
         endY: clientY,
         startedAt: press.startedAt,
-        endedAt: Date.now(),
+        endedAt,
         moved: press.moved,
       });
+
+      if (
+        isReaderScrollGesture({
+          startX: press.startX,
+          startY: press.startY,
+          endX: clientX,
+          endY: clientY,
+          startedAt: press.startedAt,
+          endedAt,
+          target: press.target ?? endTarget,
+          isDefaultPrevented,
+        }) &&
+        !hasActiveTextSelection()
+      ) {
+        showChromeRef.current?.();
+        return;
+      }
 
       if (!isCleanTap || hasActiveTextSelection()) return;
 

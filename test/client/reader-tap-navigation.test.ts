@@ -2,6 +2,8 @@ import {
   getHorizontalTapZone,
   isCleanTouchTap,
   isInteractiveTapTarget,
+  isReaderScrollGesture,
+  MAX_TOUCH_CHROME_GESTURE_DURATION_MS,
   MAX_TOUCH_TAP_DURATION_MS,
   resolveTapNavigationAction,
   TOUCH_TAP_MOVE_TOLERANCE_PX,
@@ -78,6 +80,69 @@ describe("Reader tap navigation", () => {
           startedAt: 1000,
           endedAt: 1100,
           moved: false,
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("isReaderScrollGesture", () => {
+    it("accepts a quick vertical gesture on reading content", () => {
+      const paragraph = document.createElement("p");
+
+      expect(
+        isReaderScrollGesture({
+          startX: 100,
+          startY: 100,
+          endX: 105,
+          endY: 150,
+          startedAt: 1000,
+          endedAt: 1500,
+          target: paragraph,
+          isDefaultPrevented: false,
+        }),
+      ).toBe(true);
+    });
+
+    it("rejects highlighting-style, interactive, and long gestures", () => {
+      const paragraph = document.createElement("p");
+      const button = document.createElement("button");
+
+      expect(
+        isReaderScrollGesture({
+          startX: 100,
+          startY: 100,
+          endX: 150,
+          endY: 105,
+          startedAt: 1000,
+          endedAt: 1200,
+          target: paragraph,
+          isDefaultPrevented: false,
+        }),
+      ).toBe(false);
+
+      expect(
+        isReaderScrollGesture({
+          startX: 100,
+          startY: 100,
+          endX: 105,
+          endY: 150,
+          startedAt: 1000,
+          endedAt: 1000 + MAX_TOUCH_CHROME_GESTURE_DURATION_MS + 1,
+          target: paragraph,
+          isDefaultPrevented: false,
+        }),
+      ).toBe(false);
+
+      expect(
+        isReaderScrollGesture({
+          startX: 100,
+          startY: 100,
+          endX: 105,
+          endY: 150,
+          startedAt: 1000,
+          endedAt: 1200,
+          target: button,
+          isDefaultPrevented: false,
         }),
       ).toBe(false);
     });
