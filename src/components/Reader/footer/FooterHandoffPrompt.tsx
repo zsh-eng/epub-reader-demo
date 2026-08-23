@@ -27,7 +27,7 @@ export function FooterHandoffPrompt({ prompt }: FooterHandoffPromptProps) {
         <button
           type="button"
           onClick={prompt.onJump}
-          className="group flex min-w-0 flex-1 items-center gap-2 rounded-full px-2 py-1.5 text-left transition-colors hover:bg-secondary/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          className="group flex min-w-0 flex-1 items-center gap-2 rounded-full px-2 py-1.5 text-left transition-[background-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary/70 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 motion-reduce:active:scale-100 motion-reduce:active:opacity-80"
         >
           <span className="grid size-7 shrink-0 place-items-center rounded-full border border-border/70 bg-secondary/70 text-foreground">
             <Laptop className="size-3.5" aria-hidden="true" />

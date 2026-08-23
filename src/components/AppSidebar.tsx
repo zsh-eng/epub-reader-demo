@@ -299,7 +299,7 @@ export function AppSidebar() {
         <div className="flex h-[38px] items-center">
           <Link
             to="/"
-            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 outline-none hover:bg-sidebar-accent/50 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/50 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
             title="Go to library"
           >
             <BookOpenText
@@ -421,7 +421,7 @@ export function AppSidebar() {
               render={
                 <button
                   type="button"
-                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left outline-none transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
                 />
               }
             >

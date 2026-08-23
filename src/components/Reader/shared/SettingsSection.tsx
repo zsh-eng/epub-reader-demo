@@ -129,7 +129,7 @@ export function SettingsSection({
                   key={font.value}
                   onClick={() => onUpdateSettings({ fontFamily: font.value })}
                   className={cn(
-                    "flex flex-col items-center justify-center w-14 h-14 rounded-lg border transition-all duration-150 flex-shrink-0 cursor-pointer",
+                    "flex h-14 w-14 flex-shrink-0 cursor-pointer flex-col items-center justify-center rounded-lg border transition-[background-color,border-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
                     isSelected
                       ? "border-foreground/30 bg-muted"
                       : "border-transparent hover:bg-muted/50",

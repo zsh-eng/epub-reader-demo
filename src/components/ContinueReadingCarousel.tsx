@@ -230,7 +230,7 @@ function CarouselDots({
           key={index}
           onClick={() => onDotClick(index)}
           className={cn(
-            "w-2 h-2 rounded-full transition-all duration-200",
+            "h-2 w-2 rounded-full transition-[background-color,transform,width] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.9] motion-reduce:transition-colors motion-reduce:active:scale-100",
             index === activeIndex
               ? "bg-primary w-4"
               : "bg-muted-foreground/30 hover:bg-muted-foreground/50",

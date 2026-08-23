@@ -105,7 +105,7 @@ export function FooterChapterRow({
             key="prev"
             onClick={handlePrevClick}
             className={cn(
-              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors",
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] motion-reduce:active:scale-100",
               showBlurredLoadingDetails
                 ? "pointer-events-none"
                 : "hover:bg-secondary/70 hover:text-foreground",
@@ -189,7 +189,7 @@ export function FooterChapterRow({
             key="next"
             onClick={handleNextClick}
             className={cn(
-              "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-colors",
+              "ml-auto flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] tabular-nums text-muted-foreground transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.97] motion-reduce:active:scale-100",
               showBlurredLoadingDetails
                 ? "pointer-events-none"
                 : "hover:bg-secondary/70 hover:text-foreground",

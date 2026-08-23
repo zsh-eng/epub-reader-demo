@@ -279,7 +279,7 @@ function SectionHeading({
         onSelect(heading.href);
       }}
       className={cn(
-        "flex w-full min-w-0 items-center gap-3 rounded-none border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
+        "flex w-full min-w-0 items-center gap-3 rounded-none border-b border-border/70 px-1 pb-2 text-left outline-none transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:bg-secondary/45 focus-visible:ring-2 focus-visible:ring-ring/50",
         isCurrent && "border-foreground/70",
       )}
     >
@@ -331,7 +331,7 @@ function ChapterRow({
       onClick={() => {
         onSelect(item.href);
       }}
-      className="relative isolate min-h-12 w-full rounded-xl py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="relative isolate min-h-12 w-full rounded-xl py-3 text-left outline-none transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/50"
       style={{
         paddingLeft: `${0.5 + item.visualDepth * 0.85}rem`,
         paddingRight: "0.5rem",

@@ -508,11 +508,12 @@ function BookIndexItem({
     skip: !group.book.coverContentHash,
   });
   const highlightCount = group.highlights.length;
+  const springPress = useSpringPressAnimation();
 
   // Keep rows in the nav's shared stacking context. Otherwise the target row's
   // DOM order can lift the moving selection marker above rows that it crosses.
   return (
-    <a
+    <motion.a
       href={`#${getBookSectionId(group.book.id)}`}
       onClick={(event) => {
         event.preventDefault();
@@ -520,11 +521,15 @@ function BookIndexItem({
       }}
       aria-current={isActive ? "location" : undefined}
       className={cn(
-        "relative flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]",
+        "relative flex min-w-0 items-center gap-2.5 rounded-xl p-2 text-left outline-none transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring",
         compact && "gap-2 rounded-lg p-1.5",
+        layoutId && "active:bg-secondary/70",
         !layoutId && isActive && "bg-secondary",
         className,
       )}
+      initial={layoutId ? undefined : springPress.initial}
+      animate={layoutId ? undefined : springPress.animate}
+      onTap={layoutId ? undefined : springPress.onTap}
     >
       {isActive && layoutId ? (
         <motion.span
@@ -591,7 +596,7 @@ function BookIndexItem({
           {highlightCount} {highlightCount === 1 ? "highlight" : "highlights"}
         </span>
       </span>
-    </a>
+    </motion.a>
   );
 }
 

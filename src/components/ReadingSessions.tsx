@@ -629,7 +629,7 @@ export function ReadingSessions() {
                       <Link
                         key={book.bookId}
                         to={`/reader/${book.bookId}`}
-                        className="group flex min-w-0 items-center gap-3 rounded-2xl p-2 outline-none transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring"
+                        className="group flex min-w-0 items-center gap-3 rounded-2xl p-2 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
                       >
                         <span className="flex aspect-2/3 w-10 shrink-0 items-center justify-center overflow-hidden rounded-r-md rounded-l-xs border bg-muted shadow-sm">
                           {coverUrl ? (
@@ -693,7 +693,7 @@ export function ReadingSessions() {
                     <li key={session.id}>
                       <Link
                         to={`/reader/${session.bookId}`}
-                        className="flex items-center justify-between gap-4 rounded-xl px-2 py-3 outline-none transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring"
+                        className="flex items-center justify-between gap-4 rounded-xl px-2 py-3 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
                       >
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-medium">

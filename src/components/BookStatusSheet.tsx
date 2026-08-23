@@ -134,7 +134,7 @@ export function BookStatusSheet({
           type="button"
           aria-label={`Open ${bookTitle}`}
           onClick={onOpenBook}
-          className="mb-5 flex w-full min-w-0 items-center gap-4 rounded-[1.25rem] px-2 py-1 text-left outline-none transition-colors hover:bg-secondary/35 focus-visible:ring-2 focus-visible:ring-ring/60"
+          className="mb-5 flex w-full min-w-0 items-center gap-4 rounded-[1.25rem] px-2 py-1 text-left outline-none transition-[background-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary/35 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/60 motion-reduce:active:scale-100 motion-reduce:active:opacity-80"
         >
           <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
           <div className="min-w-0">

@@ -114,7 +114,7 @@ export function TypographyPanel({
                   data-state={isSelected ? "on" : "off"}
                   onClick={() => onUpdateSettings({ fontFamily: font.value })}
                   className={cn(
-                    "flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-colors active:scale-[0.98]",
+                    "flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-[background-color,border-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
                     isSelected
                       ? "border-border bg-background ring-1 ring-border/70"
                       : "border-border/40 bg-secondary/20 hover:bg-secondary/35",

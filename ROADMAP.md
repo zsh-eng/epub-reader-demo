@@ -115,10 +115,12 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Keeping the images and the book name in the same column on mobile (since one column only)
 - [x] Fix gradient, spacing in highlights page
 - [x] Clean up highlights page mobile - spacing, background and stickiness, etc.
-- [ ] Fix measurement for "in this page" pinned sidebar scroll detection for highlights
+- [x] Fix measurement for "in this page" pinned sidebar scroll detection for highlights
+- [x] Change book row in highlight masonry mobile
+- [x] Fix animations when tapping sheet button
 
+- [ ] Highlight button circles should be bigger
 - [ ] Swipe to change page (carousel style)
-
 - [ ] Perf improvements
 
 - [ ] Sync progress toast
@@ -138,7 +140,6 @@ below contains only work that still has a clear product or reliability reason.
       `ContinueReadingCarousel` only if it is the chosen surface; otherwise
       remove the unused component and keep the current card design.
 - [ ] Fix long press
-- [ ] LRU Cache of books (continue reading, etc.) - do some napkin math
 - [ ] "Jump back" ideas for reference (need to start storing jump history though)
 - [ ] History tab for total time read
 
