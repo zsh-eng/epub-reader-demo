@@ -20,6 +20,10 @@ interface CliOptions {
   completionTimeoutMs: number;
   publisherBookStylingEnabled: boolean;
   waitForWorkerWarm: boolean;
+  cpuThrottleRates: number[];
+  repetitions: number;
+  libraryWaitMs: number;
+  hoverPrefetch: boolean;
 }
 
 interface StoredTraceSpan {
@@ -41,6 +45,7 @@ interface StoredTrace {
 }
 
 interface BenchmarkRun {
+  repetition: number;
   mainThreadCpuThrottleRate: number;
   firstSpreadFrameMs: number;
   firstPaintMs: number;
@@ -64,6 +69,10 @@ Options:
   --completion-timeout <ms>  Full-pagination timeout. Defaults to 300000.
   --publisher-styles <mode>  Use "on" or "off". Defaults to "on".
   --wait-for-worker-warm     Wait for the post-Library-paint worker warm-up.
+  --cpu-rate <number>        Run only this CPU throttle rate. Defaults to 1x and 4x.
+  --repetitions <count>      Runs per CPU rate. Defaults to 1.
+  --library-wait <ms>        Wait after Library readiness before opening. Defaults to 0.
+  --hover-prefetch           Hover the book before the Library wait.
   --help                     Show this help.
 `);
   process.exit(0);
@@ -85,6 +94,14 @@ function parsePositiveInteger(value: string, flag: string): number {
   return parsed;
 }
 
+function parseNonNegativeInteger(value: string, flag: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`${flag} must be a non-negative integer.`);
+  }
+  return parsed;
+}
+
 function parseArgs(args: string[]): CliOptions {
   const options: CliOptions = {
     epub: "",
@@ -96,6 +113,10 @@ function parseArgs(args: string[]): CliOptions {
     completionTimeoutMs: 300_000,
     publisherBookStylingEnabled: true,
     waitForWorkerWarm: false,
+    cpuThrottleRates: [1, 4],
+    repetitions: 1,
+    libraryWaitMs: 0,
+    hoverPrefetch: false,
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -141,6 +162,32 @@ function parseArgs(args: string[]): CliOptions {
         break;
       case "--wait-for-worker-warm":
         options.waitForWorkerWarm = true;
+        break;
+      case "--cpu-rate":
+        options.cpuThrottleRates = [
+          parsePositiveInteger(
+            readOptionValue(args, index, argument),
+            argument,
+          ),
+        ];
+        index += 1;
+        break;
+      case "--repetitions":
+        options.repetitions = parsePositiveInteger(
+          readOptionValue(args, index, argument),
+          argument,
+        );
+        index += 1;
+        break;
+      case "--library-wait":
+        options.libraryWaitMs = parseNonNegativeInteger(
+          readOptionValue(args, index, argument),
+          argument,
+        );
+        index += 1;
+        break;
+      case "--hover-prefetch":
+        options.hoverPrefetch = true;
         break;
       case "--no-start-server":
         options.startServer = false;
@@ -244,6 +291,7 @@ async function runBenchmark(
   browser: Browser,
   options: CliOptions,
   mainThreadCpuThrottleRate: number,
+  repetition: number,
 ): Promise<BenchmarkRun> {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
@@ -297,6 +345,12 @@ async function runBenchmark(
 
     const bookTitle = page.locator(`h3[title=${JSON.stringify(title)}]`);
     await bookTitle.waitFor({ state: "visible", timeout: 120_000 });
+    if (options.hoverPrefetch) {
+      await bookTitle.hover();
+    }
+    if (options.libraryWaitMs > 0) {
+      await page.waitForTimeout(options.libraryWaitMs);
+    }
     if (options.waitForWorkerWarm) {
       await page.waitForFunction(
         (markName) => performance.getEntriesByName(markName).length > 0,
@@ -350,11 +404,12 @@ async function runBenchmark(
     await page.getByRole("heading", { name: "Loading traces" }).waitFor();
     const screenshot = path.resolve(
       options.outputDirectory,
-      `reader-trace-${mainThreadCpuThrottleRate}x-main.png`,
+      `reader-trace-${mainThreadCpuThrottleRate}x-main-run-${repetition}.png`,
     );
     await page.screenshot({ path: screenshot, fullPage: true });
 
     return {
+      repetition,
       mainThreadCpuThrottleRate,
       firstSpreadFrameMs,
       firstPaintMs,
@@ -378,11 +433,17 @@ async function main(): Promise<void> {
     const browser = await chromium.launch({ headless: !options.headed });
     try {
       const runs: BenchmarkRun[] = [];
-      for (const rate of [1, 4]) {
-        console.error(
-          `Running reader startup benchmark at ${rate}x main-thread CPU…`,
-        );
-        runs.push(await runBenchmark(browser, options, rate));
+      for (const rate of options.cpuThrottleRates) {
+        for (
+          let repetition = 1;
+          repetition <= options.repetitions;
+          repetition += 1
+        ) {
+          console.error(
+            `Running reader startup benchmark at ${rate}x main-thread CPU (${repetition}/${options.repetitions})…`,
+          );
+          runs.push(await runBenchmark(browser, options, rate, repetition));
+        }
       }
 
       const report = {
@@ -392,6 +453,8 @@ async function main(): Promise<void> {
           ? "first-reader-open-after-import-with-warm-worker"
           : "first-reader-open-after-import",
         waitedForWorkerWarm: options.waitForWorkerWarm,
+        libraryWaitMs: options.libraryWaitMs,
+        hoverPrefetch: options.hoverPrefetch,
         publisherBookStylingEnabled: options.publisherBookStylingEnabled,
         runs,
       };
