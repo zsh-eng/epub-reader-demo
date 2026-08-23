@@ -113,12 +113,6 @@ export function Reader() {
     layoutReady: isReaderStageMeasured,
   });
   const resumeBackgroundLoad = sessionActions.resumeBackgroundLoad;
-  const { prompt: handoffPrompt } = useReaderHandoffPrompt({
-    bookId,
-    chapterStartPages: sessionState.navigation.chapterStartPages,
-    totalPages: sessionState.navigation.totalPages,
-    onJumpToPage: sessionActions.jumpToHandoffPage,
-  });
 
   const {
     state: annotationState,
@@ -148,6 +142,15 @@ export function Reader() {
     bookId,
     contentReady: isReaderStageMeasured && sessionState.status === "ready",
     stageContentRef,
+  });
+  const { prompt: handoffPrompt } = useReaderHandoffPrompt({
+    bookId,
+    // The handoff target needs the complete chapter-to-page map. Starting this
+    // optional storage query earlier only makes it compete with startup work.
+    enabled: settledPaintReady && sessionState.pagination.status === "ready",
+    chapterStartPages: sessionState.navigation.chapterStartPages,
+    totalPages: sessionState.navigation.totalPages,
+    onJumpToPage: sessionActions.jumpToHandoffPage,
   });
   useReaderPerformanceTraceLifecycle({
     bookId,

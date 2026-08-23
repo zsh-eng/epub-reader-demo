@@ -197,7 +197,10 @@ export function useReaderCheckpointQuery(bookId: string | undefined) {
   });
 }
 
-export function useReaderCheckpointsQuery(bookId: string | undefined) {
+export function useReaderCheckpointsQuery(
+  bookId: string | undefined,
+  enabled = true,
+) {
   return useQuery({
     queryKey: readerCheckpointKeys.book(bookId ?? ""),
     queryFn: async (): Promise<ReaderCheckpointsData> => ({
@@ -207,7 +210,7 @@ export function useReaderCheckpointsQuery(bookId: string | undefined) {
         () => getReadingCheckpointsForBook(bookId!),
       ),
     }),
-    enabled: !!bookId,
+    enabled: !!bookId && enabled,
     staleTime: Infinity,
     gcTime: Infinity,
   });

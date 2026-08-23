@@ -16,12 +16,7 @@ import {
   QueryClientProvider,
   type QueryClient as QueryClientType,
 } from "@tanstack/react-query";
-import {
-  act,
-  cleanup,
-  renderHook,
-  waitFor,
-} from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -63,7 +58,11 @@ function createQueryClient(): QueryClientType {
 
 function createWrapper(queryClient: QueryClientType) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return createElement(QueryClientProvider, { client: queryClient }, children);
+    return createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      children,
+    );
   };
 }
 
@@ -179,6 +178,44 @@ describe("reader handoff checkpoint helpers", () => {
 });
 
 describe("useReaderHandoffPrompt", () => {
+  it("defers cached handoff data until the query is enabled", async () => {
+    const queryClient = createQueryClient();
+    const currentCheckpoint = makeCheckpoint({
+      _hlc: "1000-0-device-current",
+    });
+    const remoteCheckpoint = makeCheckpoint({
+      deviceId: "device-remote",
+      _hlc: "1001-0-device-remote",
+    });
+    setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
+    setHandoffDevices(queryClient, [
+      { clientId: "device-remote", deviceName: "Safari on iPadOS" },
+    ]);
+
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) =>
+        useReaderHandoffPrompt({
+          bookId: BOOK_ID,
+          enabled,
+          currentDeviceId: CURRENT_DEVICE_ID,
+          sessionStartedAt: SESSION_STARTED_AT,
+        }),
+      {
+        initialProps: { enabled: false },
+        wrapper: createWrapper(queryClient),
+      },
+    );
+
+    expect(result.current.promptState.show).toBe(false);
+    rerender({ enabled: true });
+
+    await waitFor(() => {
+      expect(result.current.promptState.show).toBe(true);
+    });
+
+    queryClient.clear();
+  });
+
   it("shows an initial remote checkpoint that is newer than the session-start current device checkpoint", async () => {
     const queryClient = createQueryClient();
     const currentCheckpoint = makeCheckpoint({
@@ -289,9 +326,7 @@ describe("useReaderHandoffPrompt", () => {
     await waitFor(() => {
       expect(result.current.promptState.show).toBe(true);
     });
-    expect(result.current.promptState.sourceDeviceLabel).toBe(
-      "another device",
-    );
+    expect(result.current.promptState.sourceDeviceLabel).toBe("another device");
 
     queryClient.clear();
   });
