@@ -154,14 +154,8 @@ prefetch limit and does not represent a fully warm Reader cache. Remaining
 artifact work resumed only after the 198 ms reveal gate, so it did not delay the
 first spread.
 
-An app-lifetime pagination worker can remove repeated worker creation and
-built-in font startup from this warm-library path. The expected improvement is
-about 30-40 ms, moving an equivalent 117 ms first spread toward 80-90 ms. It
-should not materially change full-pagination time. This optimization does not
-help the cold publisher-style reference while its body cache rebuild remains
-the dominant barrier.
-
-The first implementation must retain only worker and font readiness:
+Commit `bde13b2` implements the app-lifetime pagination worker. It retains only
+the worker and its built-in font readiness:
 
 1. Create one worker after the Library's first painted frame and keep it alive
    across Library and Reader routes.
@@ -174,9 +168,25 @@ The first implementation must retain only worker and font readiness:
    the worker unless it fails or the app closes.
 5. Do not retain complete pagination state for multiple books yet.
 
-Repeat the warm-library test with publisher styles on and explicit normal/4x
-scope before assigning a final expected gain. Selective worker-font loading is
-still lower priority than removing repeated worker startup.
+The production harness ran the supplied 21.7 MB reference book with publisher
+styles on after it observed the real post-Library-paint worker-ready mark:
+
+| Metric | Normal CPU | 4x main-thread CPU |
+| --- | ---: | ---: |
+| Worker warm at Reader acquire | Yes | Yes |
+| Worker/font readiness blocks pagination | No | No |
+| First-spread worker round trip | 4.4 ms | 12.9 ms |
+| First spread frame | 291.7 ms | 2,081.6 ms |
+| Visible content settled | 351.8 ms | 2,336.6 ms |
+| Full pagination | 2,335.4 ms | 5,030.9 ms |
+
+This verifies the lifecycle change, but it does not assign a clean end-to-end
+gain. In this cold publisher-style run, body normalization used 200.6 ms at 1x
+and 1,676.4 ms at 4x before the first artifact could enter pagination. That
+stage hid most or all of the removed worker-startup wait. A warm body-cache
+Library-to-Reader A/B is still required to measure the expected 30-40 ms gain
+from trace `2ba71392-5eed-4b22-b721-58a425165da0`. The change should not
+materially change full-pagination time.
 
 ## Changes and measured effect
 
@@ -188,6 +198,7 @@ still lower priority than removing repeated worker startup.
 | Image readiness tracing (`772ef4e`) | Splits first spread paint from image read, decode, DOM commit, and settled reader paint. | Measurement only. |
 | Compound `[bookId+path]` file index (`48996c1`) | Cover read fell from 530.9 ms to 9.0 ms at 1x and from 2,831.8 ms to 33.8 ms at 4x. | Yes for image spreads. Artifact work still delayed image decode after the bytes arrived. |
 | Resume remaining artifacts after visible readiness (`b2accc9`) | With the index already present, first-spread-to-settled fell from 625.4 ms to 81.1 ms at 1x and from 2,273.7 ms to 384.0 ms at 4x. | Yes. This removed background artifact work from the reveal path. |
+| App-lifetime pagination worker (`bde13b2`) | The publisher-style normal/4x harness acquired a warm worker in both runs. Worker/font readiness became non-blocking, and first-spread worker round trips were 4.4 ms and 12.9 ms. | Yes when worker startup is the final barrier. The cold styled-body rebuild hid its end-to-end gain in this reference run. |
 | First-spread label correction (`a246fa6`) | Clarifies that the first spread frame can contain an image placeholder. | Measurement only. |
 | Settled-frame artifact gate (`bc99686`) | First-spread-to-settled fell from 81.1 ms to 67.8 ms at 1x and from 384.0 ms to 279.9 ms at 4x. The first artifact yield now starts after settled paint. | Yes. It prevents background work from delaying the paint-confirmation frames and adds render/commit attribution. |
 
@@ -269,18 +280,16 @@ is 30 runs with at most 160 spans per run.
 
 ## Next measurements
 
-1. Repeat the warm Library-to-Reader trace with publisher styles on and explicit
-   normal/4x scope.
-2. Add the app-lifetime worker with session generations, then compare
-   first-spread and full-pagination medians against that warm baseline.
-3. Keep the footer structure but disable only its loading animations, then
+1. Compare warm-body-cache Library-to-Reader medians with and without the
+   app-lifetime worker, using publisher styles on and explicit normal/4x scope.
+2. Keep the footer structure but disable only its loading animations, then
    repeat the 4x benchmark to isolate their main-thread cost.
-4. Add a controlled warm reopen run for the publisher-style body cache.
-5. Make Library prefetch use the active publisher-style cache key, then measure
+3. Add a controlled warm reopen run for the publisher-style body cache.
+4. Make Library prefetch use the active publisher-style cache key, then measure
    continue-reading opens against the cold reference.
-6. Attribute the synchronous work which remains after the display-ready Reader
+5. Attribute the synchronous work which remains after the display-ready Reader
    render/commit in the 4x long task.
-7. Keep selective worker-font loading behind the app-lifetime worker and reveal
+6. Keep selective worker-font loading behind the app-lifetime worker and reveal
    work.
-8. Keep the initial image case in the benchmark. A text-only case is useful as
+7. Keep the initial image case in the benchmark. A text-only case is useful as
    a comparison, not as the primary target.
