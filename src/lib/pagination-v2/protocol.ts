@@ -8,6 +8,9 @@ import type {
   SpreadIntent,
 } from "./types";
 
+export const PAGINATION_WORKER_FONTS_READY_MARK =
+  "pagination-worker-fonts-ready";
+
 // ---------------------------------------------------------------------------
 // Commands (main thread → worker)
 // ---------------------------------------------------------------------------
@@ -98,6 +101,18 @@ interface SpreadWindowEventMetadata {
   nextSpread: ResolvedSpread | null;
 }
 
+/**
+ * Separates worker engine execution from total worker pipeline time. The
+ * remaining time includes font waits, scheduler yields, and waits for chapter
+ * input from the main thread.
+ */
+export interface WorkerTiming {
+  activeMs: number;
+  elapsedMs: number;
+  /** Absolute monotonic timestamp taken immediately before postMessage. */
+  postedAtEpochMs: number;
+}
+
 // ---------------------------------------------------------------------------
 // Events (worker → main thread)
 // All events carry the `epoch` so the hook can discard stale responses.
@@ -108,6 +123,7 @@ export interface PartialReadyEvent
   type: "partialReady";
   epoch: number;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
+  workerTiming?: WorkerTiming;
 }
 
 export interface ReadyEvent
@@ -115,6 +131,7 @@ export interface ReadyEvent
   type: "ready";
   epoch: number;
   chapterDiagnostics: PaginationChapterDiagnostics[];
+  workerTiming?: WorkerTiming;
 }
 
 export interface ProgressEvent extends PaginationEventMetadata {
@@ -151,6 +168,11 @@ export interface ErrorEvent extends PaginationEventMetadata {
   message: string;
 }
 
+export interface TraceEvent {
+  type: "trace";
+  name: "worker-fonts-ready" | "publisher-fonts-ready";
+}
+
 export type PaginationEvent =
   | PartialReadyEvent
   | ReadyEvent
@@ -158,4 +180,34 @@ export type PaginationEvent =
   | PageContentEvent
   | PageUnavailableEvent
   | ChapterUnavailableEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | TraceEvent;
+
+// ---------------------------------------------------------------------------
+// App-lifetime worker transport
+// ---------------------------------------------------------------------------
+
+/**
+ * The worker outlives Reader routes, so each command carries the generation of
+ * the active book session. A cancel releases the current engine state without
+ * terminating the worker or unloading its built-in fonts.
+ */
+export type PaginationWorkerMessage =
+  | {
+      type: "command";
+      sessionGeneration: number;
+      command: PaginationCommand;
+    }
+  | {
+      type: "cancel";
+      sessionGeneration: number;
+    };
+
+/**
+ * A null generation is reserved for worker-lifetime events, such as built-in
+ * font readiness. Book-specific events always use their session generation.
+ */
+export interface PaginationWorkerEventMessage {
+  sessionGeneration: number | null;
+  event: PaginationEvent;
+}

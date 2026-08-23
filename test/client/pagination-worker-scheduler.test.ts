@@ -306,4 +306,17 @@ describe("PaginationJobScheduler", () => {
 
     expect(runAll(harness)).toEqual(["init"]);
   });
+
+  it("cancels incoming and active work when a Reader session ends", () => {
+    const harness = createHarness({ "add:1": 3 });
+
+    harness.scheduler.pushCommand(addChapter(1));
+    expect(stepScheduler(harness)).toBe("add:1");
+    harness.scheduler.pushCommand(addChapter(2));
+
+    harness.scheduler.cancelAll();
+
+    expect(harness.scheduler.hasWork()).toBe(false);
+    expect(runAll(harness)).toEqual([]);
+  });
 });

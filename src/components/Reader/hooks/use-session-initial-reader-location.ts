@@ -1,5 +1,5 @@
 import type { SyncedReadingCheckpoint } from "@/lib/db";
-import { useEffect, useState } from "react";
+import { useRef } from "react";
 import {
   resolveInitialReaderLocation,
   type ReaderInitialLocation,
@@ -31,40 +31,25 @@ export function useSessionInitialReaderLocation({
   checkpoint,
   checkpointReady,
 }: UseSessionInitialReaderLocationOptions): ReaderInitialLocation | null {
-  const [capturedLocation, setCapturedLocation] =
-    useState<CapturedInitialLocation | null>(null);
-
-  useEffect(() => {
-    if (!bookId || totalChapters === 0) {
-      setCapturedLocation(null);
-      return;
-    }
-
-    setCapturedLocation((current) => {
-      if (
-        current?.bookId === bookId &&
-        current.totalChapters === totalChapters
-      ) {
-        return current;
-      }
-
-      if (!checkpointReady) return null;
-
-      return {
-        bookId,
-        totalChapters,
-        location: resolveInitialReaderLocation(checkpoint, totalChapters),
-      };
-    });
-  }, [bookId, checkpoint, checkpointReady, totalChapters]);
-
+  const capturedLocationRef = useRef<CapturedInitialLocation | null>(null);
+  const capturedLocation = capturedLocationRef.current;
   if (
-    !capturedLocation ||
-    capturedLocation.bookId !== bookId ||
-    capturedLocation.totalChapters !== totalChapters
+    capturedLocation &&
+    capturedLocation.bookId === bookId &&
+    capturedLocation.totalChapters === totalChapters
   ) {
-    return null;
+    return capturedLocation.location;
   }
 
-  return capturedLocation.location;
+  if (!bookId || totalChapters === 0 || !checkpointReady) return null;
+
+  const nextCapturedLocation = {
+    bookId,
+    totalChapters,
+    location: resolveInitialReaderLocation(checkpoint, totalChapters),
+  };
+  // This immutable per-book capture lets a warm checkpoint feed pagination in
+  // the same render. Later checkpoint refetches cannot restart the Reader.
+  capturedLocationRef.current = nextCapturedLocation;
+  return nextCapturedLocation.location;
 }

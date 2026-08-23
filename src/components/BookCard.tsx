@@ -3,6 +3,7 @@ import { READING_STATUS_LABELS } from "@/components/BookStatusSheet";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { Book as BookIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -112,6 +113,11 @@ export function BookCard({
   }, [book, cardElement, coverUrl, onCoverRequest]);
 
   const handleClick = () => {
+    beginReaderTrace({
+      bookId: book.id,
+      bookTitle: book.title,
+      source: "library-card",
+    });
     // Navigate to reader - the reader will handle downloading/processing if needed
     navigate(`/reader/${book.id}`);
   };

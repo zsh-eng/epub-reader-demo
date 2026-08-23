@@ -8,6 +8,7 @@ import type { RecentlyReadBook } from "@/lib/library-sort";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import {
+  Activity,
   ChevronLeft,
   BookPlus,
   Clock3,
@@ -369,6 +370,15 @@ export function AppMobileNavigationSheets({
               isActive={activePath === "/reading-sessions"}
               onClick={onClose}
               delay={0.12}
+            />
+            <MobileSheetRow
+              index="04"
+              label="Performance"
+              icon={Activity}
+              to="/reader-traces"
+              isActive={activePath === "/reader-traces"}
+              onClick={onClose}
+              delay={0.16}
             />
           </div>
 

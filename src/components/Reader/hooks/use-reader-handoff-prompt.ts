@@ -38,6 +38,7 @@ export interface ReaderHandoffPromptState {
 
 export interface UseReaderHandoffPromptOptions {
   bookId?: string;
+  enabled?: boolean;
   currentDeviceId?: string;
   /**
    * Stable session start timestamp. Passing this from the caller keeps the
@@ -248,6 +249,7 @@ export function resolveHandoffCheckpointPage(
  */
 export function useReaderHandoffPrompt({
   bookId,
+  enabled = true,
   currentDeviceId: explicitCurrentDeviceId,
   sessionStartedAt: explicitSessionStartedAt,
   chapterStartPages,
@@ -256,9 +258,10 @@ export function useReaderHandoffPrompt({
 }: UseReaderHandoffPromptOptions): UseReaderHandoffPromptResult {
   const currentDeviceId = useCurrentDeviceId(explicitCurrentDeviceId);
   const sessionStartedAt = useStableSessionStartedAt(explicitSessionStartedAt);
-  const checkpointsQuery = useReaderCheckpointsQuery(bookId);
-  const checkpoints =
-    checkpointsQuery.data?.checkpoints ?? EMPTY_READING_CHECKPOINTS;
+  const checkpointsQuery = useReaderCheckpointsQuery(bookId, enabled);
+  const checkpoints = enabled
+    ? (checkpointsQuery.data?.checkpoints ?? EMPTY_READING_CHECKPOINTS)
+    : EMPTY_READING_CHECKPOINTS;
   const [sessionStart, setSessionStart] =
     useState<ReaderHandoffSessionStart | null>(null);
   const [dismissedCheckpointHlc, setDismissedCheckpointHlc] = useState<
@@ -273,6 +276,7 @@ export function useReaderHandoffPrompt({
   useEffect(() => {
     if (
       sessionStart !== null ||
+      !enabled ||
       !bookId ||
       !currentDeviceId ||
       !checkpointsQuery.isSuccess
@@ -293,6 +297,7 @@ export function useReaderHandoffPrompt({
     checkpoints,
     checkpointsQuery.isSuccess,
     currentDeviceId,
+    enabled,
     sessionStart,
     sessionStartedAt,
   ]);
@@ -307,10 +312,7 @@ export function useReaderHandoffPrompt({
   );
   const sourceDeviceLabel = useMemo(
     () =>
-      getSourceDeviceLabel(
-        latestUnreadCheckpoint,
-        devicesQuery.data?.devices,
-      ),
+      getSourceDeviceLabel(latestUnreadCheckpoint, devicesQuery.data?.devices),
     [devicesQuery.data?.devices, latestUnreadCheckpoint],
   );
 

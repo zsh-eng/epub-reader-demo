@@ -48,6 +48,15 @@ vi.mock("@/hooks/use-library-cover-urls", () => ({
   }),
 }));
 
+vi.mock("@/hooks/use-reader-settings", () => ({
+  useReaderSettings: () => ({
+    settings: {
+      publisherBookStylingEnabled: false,
+      matchPublisherBodyTextSize: false,
+    },
+  }),
+}));
+
 vi.mock("@/hooks/use-sync", () => ({
   useSync: () => ({ deleteBook: vi.fn() }),
 }));
@@ -75,7 +84,7 @@ describe("Library hotkeys", () => {
         ),
       ),
     );
-    const searchInput = screen.getByRole<HTMLInputElement>("textbox", {
+    const searchInput = screen.getByRole<HTMLInputElement>("searchbox", {
       name: "Search library",
     });
 
@@ -107,14 +116,14 @@ describe("Library hotkeys", () => {
       ),
     );
 
-    const searchInput = screen.getByRole("textbox", {
+    const searchInput = screen.getByRole("searchbox", {
       name: "Search library",
     });
     const navigationTrigger = screen.getByRole("button", {
       name: "Open navigation",
     });
 
-    expect(searchInput.parentElement?.parentElement).toBe(
+    expect(searchInput.parentElement?.parentElement?.parentElement).toBe(
       navigationTrigger.parentElement,
     );
   });

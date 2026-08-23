@@ -36,6 +36,7 @@ interface UseReaderChapterContentResult {
     chapterIndex: number,
   ) => ChapterCanonicalText | null;
   subscribe: (listener: ReaderChapterArtifactSubscriber) => () => void;
+  resumeBackgroundLoad: () => void;
 }
 
 /**
@@ -97,5 +98,6 @@ export function useReaderChapterContent({
     getChapterBlocks: artifactsLoader.getChapterBlocks,
     getChapterCanonicalText,
     subscribe: artifactsLoader.subscribe,
+    resumeBackgroundLoad: artifactsLoader.resumeBackgroundLoad,
   };
 }

@@ -88,14 +88,15 @@ describe("AppMobileNavigationSheets", () => {
     expect(screen.getAllByText("Reader")).toHaveLength(1);
   });
 
-  it("keeps utility actions separate from the three navigation rows", () => {
+  it("keeps utility actions separate from the navigation rows", () => {
     const { onAddBook, onAppearanceChange, onClose } = renderSheets();
 
     const libraryLink = screen.getByRole("link", { name: /01 Library/ });
     expect(libraryLink).toBeTruthy();
     expect(screen.getByRole("link", { name: /02 Highlights/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /03 Sessions/ })).toBeTruthy();
-    expect(screen.queryByText("04")).toBeNull();
+    expect(screen.getByRole("link", { name: /04 Performance/ })).toBeTruthy();
+    expect(screen.queryByText("05")).toBeNull();
 
     const appearanceButton = screen.getByRole("button", {
       name: "Switch appearance. Current setting: System",

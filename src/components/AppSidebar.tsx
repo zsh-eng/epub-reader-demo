@@ -31,7 +31,9 @@ import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import type { SyncedBook } from "@/lib/db";
 import { findMostRecentlyReadBook } from "@/lib/library-sort";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import {
+  Activity,
   BookOpenText,
   Clock3,
   Cloud,
@@ -103,6 +105,13 @@ function ContinueReadingCard({
       render={
         <Link
           to={`/reader/${book.id}`}
+          onClick={() =>
+            beginReaderTrace({
+              bookId: book.id,
+              bookTitle: book.title,
+              source: "sidebar-continue-reading",
+            })
+          }
           aria-label={`Continue reading ${book.title}`}
           aria-current={isActive ? "page" : undefined}
           title={`Continue reading ${book.title}`}
@@ -342,6 +351,15 @@ export function AppSidebar() {
               >
                 <Clock3 />
                 <span>Sessions</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                isActive={location.pathname === "/reader-traces"}
+                render={<Link to="/reader-traces" />}
+              >
+                <Activity />
+                <span>Performance</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

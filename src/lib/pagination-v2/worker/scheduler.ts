@@ -78,6 +78,12 @@ export class PaginationJobScheduler {
     );
   }
 
+  /** Cancels all work owned by the current Reader session. */
+  cancelAll(): void {
+    this.incomingCommands = [];
+    this.clearJobQueues();
+  }
+
   private enqueueCommand(command: PaginationCommand): void {
     if (command.type === "init") {
       this.clearJobQueues();

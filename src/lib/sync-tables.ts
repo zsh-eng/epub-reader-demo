@@ -99,7 +99,7 @@ export const SYNC_TABLES = {
 export const LOCAL_TABLES = {
   // Book files are local-only (large binary data)
   // These are extracted EPUB contents for rendering
-  bookFiles: "id, bookId, path",
+  bookFiles: "id, bookId, path, [bookId+path]",
 
   // Generic file storage (content-addressed)
   // Used for EPUBs, covers, and other files

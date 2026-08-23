@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  endReaderTraceSpan,
+  markReaderTrace,
+  startReaderTraceSpan,
+  type ReaderTraceSpanToken,
+} from "@/lib/reader-performance-trace";
 import { PaginationTracer } from "./diagnostics/tracer";
 import type { PaginationCommand, PaginationEvent } from "./protocol";
+import {
+  acquirePaginationWorkerSession,
+  type PaginationWorkerSession,
+} from "./worker/pagination-worker-service";
 import type {
   Block,
   ContentAnchor,
@@ -46,6 +56,54 @@ function mergeChapterPageCounts(
   }
 
   return nextCounts ?? previousCounts;
+}
+
+function roundTraceMilliseconds(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+export function isCompletePaginationReadyEvent(
+  event: Extract<PaginationEvent, { type: "ready" }>,
+  expectedChapterCount: number,
+): boolean {
+  return event.chapterDiagnostics.length >= expectedChapterCount;
+}
+
+function getWorkerTraceDetails(
+  event: PaginationEvent,
+  roundTripStartedAtMs: number | null,
+  mainHandlerEnteredAtEpochMs: number,
+): Record<string, number | string> {
+  if (
+    (event.type !== "partialReady" && event.type !== "ready") ||
+    !event.workerTiming
+  ) {
+    return {};
+  }
+
+  const activeMs = roundTraceMilliseconds(event.workerTiming.activeMs);
+  const elapsedMs = roundTraceMilliseconds(event.workerTiming.elapsedMs);
+  const roundTripMs =
+    roundTripStartedAtMs === null
+      ? elapsedMs
+      : performance.now() - roundTripStartedAtMs;
+  const responseDeliveryMs = Math.max(
+    0,
+    mainHandlerEnteredAtEpochMs - event.workerTiming.postedAtEpochMs,
+  );
+  const outsideWorkerMs = Math.max(0, roundTripMs - elapsedMs);
+  return {
+    workerActiveMs: activeMs,
+    workerWaitMs: Math.max(0, roundTraceMilliseconds(elapsedMs - activeMs)),
+    workerResponseDeliveryMs: roundTraceMilliseconds(responseDeliveryMs),
+    workerCommandDeliveryMs: Math.max(
+      0,
+      roundTraceMilliseconds(outsideWorkerMs - responseDeliveryMs),
+    ),
+    outsideWorkerMs: roundTraceMilliseconds(outsideWorkerMs),
+    workerPostedAt: new Date(event.workerTiming.postedAtEpochMs).toISOString(),
+    mainHandlerEnteredAt: new Date(mainHandlerEnteredAtEpochMs).toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -111,10 +169,17 @@ export function usePagination(
     Map<number, number>
   >(new Map());
 
-  const workerRef = useRef<Worker | null>(null);
+  const workerSessionRef = useRef<PaginationWorkerSession | null>(null);
   const currentEpochRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
   const pendingChapterPageCountsRef = useRef<Map<number, number>>(new Map());
+  const workerStartupSpanRef = useRef<ReaderTraceSpanToken | null>(null);
+  const publisherFontsSpanRef = useRef<ReaderTraceSpanToken | null>(null);
+  const firstSpreadSpanRef = useRef<ReaderTraceSpanToken | null>(null);
+  const allChaptersSpanRef = useRef<ReaderTraceSpanToken | null>(null);
+  const firstSpreadRoundTripStartedAtRef = useRef<number | null>(null);
+  const allChaptersRoundTripStartedAtRef = useRef<number | null>(null);
+  const expectedChapterCountRef = useRef(0);
 
   // Keep config in a ref so init and config update effects can read the
   // latest value without capturing it as a closure dependency.
@@ -129,7 +194,7 @@ export function usePagination(
   const prevSpreadConfigRef = useRef<SpreadConfig | null>(null);
 
   const postCommand = useCallback((cmd: PaginationCommand) => {
-    workerRef.current?.postMessage(cmd);
+    workerSessionRef.current?.postCommand(cmd);
   }, []);
 
   const recordChapterPageCount = useCallback(
@@ -173,13 +238,49 @@ export function usePagination(
   // Worker lifecycle
   // -------------------------------------------------------------------------
 
-  const handleEvent = (event: PaginationEvent) => {
+  const handleEvent = (
+    event: PaginationEvent,
+    mainHandlerEnteredAtEpochMs: number,
+  ) => {
     // Discard events from previous layout epochs.
     if ("epoch" in event && event.epoch < currentEpochRef.current) return;
     if ("epoch" in event) currentEpochRef.current = event.epoch;
 
     switch (event.type) {
-      case "partialReady":
+      case "trace":
+        if (event.name === "worker-fonts-ready") {
+          endReaderTraceSpan(workerStartupSpanRef.current, {
+            blocksPagination: true,
+            includes:
+              "worker startup, built-in font readiness, and trace delivery",
+          });
+          workerStartupSpanRef.current = null;
+          break;
+        }
+        endReaderTraceSpan(publisherFontsSpanRef.current, {
+          blocksPagination: true,
+          includes: "publisher font readiness and trace delivery",
+        });
+        publisherFontsSpanRef.current = null;
+        break;
+
+      case "partialReady": {
+        if (firstSpreadSpanRef.current) {
+          markReaderTrace(
+            "pagination-partial-ready-handler-entered",
+            "processing",
+            {
+              mainHandlerEnteredAt: new Date(
+                mainHandlerEnteredAtEpochMs,
+              ).toISOString(),
+            },
+          );
+        }
+        const partialWorkerDetails = getWorkerTraceDetails(
+          event,
+          firstSpreadRoundTripStartedAtRef.current,
+          mainHandlerEnteredAtEpochMs,
+        );
         currentEpochRef.current = event.epoch;
         tracerRef.current.markFirstVisible();
         tracerRef.current.recordChapterDiagnostics(event.chapterDiagnostics);
@@ -190,12 +291,40 @@ export function usePagination(
           next: event.nextSpread,
         });
         setStatus("partial");
+        endReaderTraceSpan(firstSpreadSpanRef.current, {
+          readiness: "partial",
+          totalPagesKnown: event.spread.totalPages,
+          ...partialWorkerDetails,
+        });
+        firstSpreadSpanRef.current = null;
+        firstSpreadRoundTripStartedAtRef.current = null;
         publishChapterPageCounts([]);
         break;
+      }
 
-      case "ready":
+      case "ready": {
+        const isComplete = isCompletePaginationReadyEvent(
+          event,
+          expectedChapterCountRef.current,
+        );
+        if (isComplete && allChaptersSpanRef.current) {
+          markReaderTrace("pagination-ready-handler-entered", "processing", {
+            mainHandlerEnteredAt: new Date(
+              mainHandlerEnteredAtEpochMs,
+            ).toISOString(),
+          });
+        }
+        const firstWorkerDetails = getWorkerTraceDetails(
+          event,
+          firstSpreadRoundTripStartedAtRef.current,
+          mainHandlerEnteredAtEpochMs,
+        );
+        const allWorkerDetails = getWorkerTraceDetails(
+          event,
+          allChaptersRoundTripStartedAtRef.current,
+          mainHandlerEnteredAtEpochMs,
+        );
         currentEpochRef.current = event.epoch;
-        tracerRef.current.markReady();
         tracerRef.current.recordChapterDiagnosticsList(
           event.chapterDiagnostics,
         );
@@ -204,9 +333,27 @@ export function usePagination(
           current: event.spread,
           next: event.nextSpread,
         });
-        setStatus("ready");
+        setStatus(isComplete ? "ready" : "partial");
+        endReaderTraceSpan(firstSpreadSpanRef.current, {
+          readiness: isComplete ? "complete" : "partial",
+          totalPagesKnown: event.spread.totalPages,
+          ...firstWorkerDetails,
+        });
+        firstSpreadSpanRef.current = null;
+        firstSpreadRoundTripStartedAtRef.current = null;
         publishChapterPageCounts(event.chapterDiagnostics);
+        if (!isComplete) break;
+
+        tracerRef.current.markReady();
+        endReaderTraceSpan(allChaptersSpanRef.current, {
+          totalPages: event.spread.totalPages,
+          chapterCount: event.chapterDiagnostics.length,
+          ...allWorkerDetails,
+        });
+        allChaptersSpanRef.current = null;
+        allChaptersRoundTripStartedAtRef.current = null;
         break;
+      }
 
       case "progress":
         tracerRef.current.recordChapterDiagnostics(event.chapterDiagnostics);
@@ -227,6 +374,20 @@ export function usePagination(
         break;
 
       case "error":
+        endReaderTraceSpan(
+          firstSpreadSpanRef.current,
+          { error: event.message },
+          "error",
+        );
+        firstSpreadSpanRef.current = null;
+        firstSpreadRoundTripStartedAtRef.current = null;
+        endReaderTraceSpan(
+          allChaptersSpanRef.current,
+          { error: event.message },
+          "error",
+        );
+        allChaptersSpanRef.current = null;
+        allChaptersRoundTripStartedAtRef.current = null;
         console.error("[pagination worker]", event.message);
         break;
     }
@@ -239,24 +400,53 @@ export function usePagination(
   handleEventRef.current = handleEvent;
 
   useEffect(() => {
-    const worker = new Worker(
-      new URL("./worker/pagination.worker.ts", import.meta.url),
-      { type: "module" },
+    const session = acquirePaginationWorkerSession({
+      onEvent: (event, mainHandlerEnteredAtEpochMs) => {
+        handleEventRef.current(event, mainHandlerEnteredAtEpochMs);
+      },
+      onError: (event) => {
+        endReaderTraceSpan(
+          workerStartupSpanRef.current,
+          { error: event.message, workerLifetime: "app" },
+          "error",
+        );
+        workerStartupSpanRef.current = null;
+        console.error("[pagination worker error]", event);
+      },
+    });
+    workerSessionRef.current = session;
+    workerStartupSpanRef.current = startReaderTraceSpan(
+      "pagination-worker-fonts",
+      "assets",
+      {
+        readinessBarrier: !session.workerFontsReadyAtAcquire,
+        workerLifetime: "app",
+        workerWarmAtAcquire: session.workerFontsReadyAtAcquire,
+      },
     );
-
-    worker.onmessage = (e: MessageEvent<PaginationEvent>) => {
-      handleEventRef.current(e.data);
-    };
-
-    worker.onerror = (e) => {
-      console.error("[pagination worker error]", e);
-    };
-
-    workerRef.current = worker;
+    const unsubscribeFromWorkerFonts = session.onWorkerFontsReady(() => {
+      endReaderTraceSpan(workerStartupSpanRef.current, {
+        blocksPagination: !session.workerFontsReadyAtAcquire,
+        includes: session.workerFontsReadyAtAcquire
+          ? "app-lifetime worker and built-in fonts were already ready"
+          : "worker startup, built-in font readiness, and trace delivery",
+        workerLifetime: "app",
+        workerWarmAtAcquire: session.workerFontsReadyAtAcquire,
+      });
+      workerStartupSpanRef.current = null;
+    });
 
     return () => {
-      worker.terminate();
-      workerRef.current = null;
+      unsubscribeFromWorkerFonts();
+      endReaderTraceSpan(workerStartupSpanRef.current, {
+        sessionReleasedBeforeReady: true,
+        workerLifetime: "app",
+      });
+      workerStartupSpanRef.current = null;
+      session.release();
+      if (workerSessionRef.current === session) {
+        workerSessionRef.current = null;
+      }
     };
   }, []);
 
@@ -305,10 +495,35 @@ export function usePagination(
       const currentPaginationConfig = paginationConfigRef.current;
       const currentSpreadConfig = spreadConfigRef.current;
       currentEpochRef.current = 0;
+      expectedChapterCountRef.current = opts.totalChapters;
       prevPaginationConfigRef.current = currentPaginationConfig;
       prevSpreadConfigRef.current = currentSpreadConfig;
       tracerRef.current.reset();
       tracerRef.current.startRun();
+      const roundTripStartedAtMs = performance.now();
+      firstSpreadRoundTripStartedAtRef.current = roundTripStartedAtMs;
+      allChaptersRoundTripStartedAtRef.current = roundTripStartedAtMs;
+      firstSpreadSpanRef.current ??= startReaderTraceSpan(
+        "pagination-first-spread",
+        "pagination",
+        {
+          initialChapterIndex: opts.initialChapterIndex,
+          executionContext: "worker-round-trip-wall",
+        },
+      );
+      allChaptersSpanRef.current ??= startReaderTraceSpan(
+        "pagination-all-chapters",
+        "pagination",
+        {
+          totalChapters: opts.totalChapters,
+          executionContext: "worker-pipeline",
+        },
+      );
+      publisherFontsSpanRef.current ??= startReaderTraceSpan(
+        "pagination-publisher-fonts",
+        "assets",
+        { readinessBarrier: true },
+      );
 
       setSpreadWindow(null);
       setStatus("idle");

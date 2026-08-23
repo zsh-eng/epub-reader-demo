@@ -1,5 +1,5 @@
 import { usePagination } from "@/lib/pagination-v2";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type {
   ParsedChapterBlocks,
   ReaderInitialLocation,
@@ -10,7 +10,7 @@ import type { ChapterEntry } from "../types";
 interface UseReaderPaginationFeedOptions {
   pagination: Pick<
     ReturnType<typeof usePagination>,
-    "init" | "addChapter" | "updateChapter"
+    "init" | "addChapter" | "updateChapter" | "status"
   >;
   bookId?: string;
   chapterEntries: ChapterEntry[];
@@ -25,8 +25,9 @@ interface UseReaderPaginationFeedOptions {
  *
  * The content hook owns loading and decoration. This hook owns the imperative
  * "feed the worker" contract: initialize with the first available chapter,
- * stream remaining chapters as they arrive, and send targeted updates when a
- * loaded chapter's decorated blocks change.
+ * stream remaining chapters as they arrive, and send targeted updates when
+ * loaded blocks change. The reader UI resumes background artifact work after
+ * the first visible content is ready.
  */
 export function useReaderPaginationFeed({
   pagination,
@@ -38,8 +39,13 @@ export function useReaderPaginationFeed({
   enabled = true,
 }: UseReaderPaginationFeedOptions): void {
   const { addChapter, init, updateChapter } = pagination;
+  const initializedBookIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    initializedBookIdRef.current = null;
+  }, [bookId]);
+
+  useLayoutEffect(() => {
     if (
       !enabled ||
       !bookId ||
@@ -68,6 +74,7 @@ export function useReaderPaginationFeed({
       });
 
       initialized = true;
+      initializedBookIdRef.current = bookId;
       return true;
     };
 

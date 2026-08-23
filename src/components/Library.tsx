@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
+import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSearchStickyState } from "@/hooks/use-search-sticky-state";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -16,6 +18,7 @@ import {
 } from "@/components/Reader/data/reader-cache/prefetch";
 import type { Book, ReadingStatus, SyncedBook } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
+import { warmPaginationWorker } from "@/lib/pagination-v2/worker/pagination-worker-service";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { Library as LibraryIcon, Search, Upload, X } from "lucide-react";
@@ -51,6 +54,7 @@ export function Library() {
     useSearchStickyState();
   const { toast } = useToast();
   const { importFiles, isProcessing, openFilePicker } = useEpubImport();
+  const { settings } = useReaderSettings();
   const queryClient = useQueryClient();
 
   const { data: booksData } = useBooksWithStatuses();
@@ -62,8 +66,15 @@ export function Library() {
 
     void prefetchReaderBooks(queryClient, books, {
       includeArtifacts: false,
+      publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
+      matchPublisherBodyTextSize: settings.matchPublisherBodyTextSize,
     });
-  }, [booksData?.categorized.continueReading, queryClient]);
+  }, [
+    booksData?.categorized.continueReading,
+    queryClient,
+    settings.matchPublisherBodyTextSize,
+    settings.publisherBookStylingEnabled,
+  ]);
 
   // Handle drag and drop
   const handleDragEnter = (e: React.DragEvent) => {
@@ -120,9 +131,15 @@ export function Library() {
       void prefetchReaderBook(queryClient, book, {
         includeArtifacts: true,
         artifactLimit: 2,
+        publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
+        matchPublisherBodyTextSize: settings.matchPublisherBodyTextSize,
       });
     },
-    [queryClient],
+    [
+      queryClient,
+      settings.matchPublisherBodyTextSize,
+      settings.publisherBookStylingEnabled,
+    ],
   );
 
   const handleOpenMobileBookActions = (
@@ -202,6 +219,26 @@ export function Library() {
   }, [booksLoaded, fontsReady, initialCoversReady]);
 
   useAppShellReady(libraryDisplayReady);
+
+  // Warm the app-lifetime pagination worker only after the atomic Library
+  // reveal has painted. Reader routes then reuse its loaded built-in fonts.
+  useEffect(() => {
+    if (!libraryDisplayReady) return;
+
+    let secondFrameId: number | null = null;
+    const firstFrameId = window.requestAnimationFrame(() => {
+      secondFrameId = window.requestAnimationFrame(() => {
+        warmPaginationWorker();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrameId);
+      if (secondFrameId !== null) {
+        window.cancelAnimationFrame(secondFrameId);
+      }
+    };
+  }, [libraryDisplayReady]);
 
   useHotkey("/", () => searchInputRef.current?.focus(), {
     ignoreInputs: true,
@@ -422,7 +459,14 @@ export function Library() {
           book={mobileBookActions.book}
           coverUrl={mobileBookActions.coverUrl}
           initialStatus={mobileBookActions.status}
-          onOpenBook={(bookId) => navigate(`/reader/${bookId}`)}
+          onOpenBook={(bookId) => {
+            beginReaderTrace({
+              bookId,
+              bookTitle: mobileBookActions.book.title,
+              source: "mobile-book-actions",
+            });
+            navigate(`/reader/${bookId}`);
+          }}
           onDelete={(bookId) => void handleDeleteBook(bookId)}
         />
       )}

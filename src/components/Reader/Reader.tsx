@@ -2,7 +2,14 @@ import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightTo
 import { useInputBehavior } from "@/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
-import { useCallback, useRef, useState } from "react";
+import { recordReaderTraceSpan } from "@/lib/reader-performance-trace";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
@@ -16,6 +23,10 @@ import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
 import { useReaderDisplayReadiness } from "./hooks/use-reader-display-readiness";
 import { useReaderHandoffPrompt } from "./hooks/use-reader-handoff-prompt";
+import {
+  useReaderPerformanceTraceLifecycle,
+  useReaderPerformanceTraceRoute,
+} from "./hooks/use-reader-performance-trace";
 import { useReaderSession } from "./hooks/use-reader-session";
 import { useReaderStatusPrompt } from "./hooks/use-reader-status-prompt";
 import {
@@ -24,6 +35,36 @@ import {
   serializeReaderPageDebugDump,
 } from "./debug/page-debug-dump";
 import { DeferredEpubImageProvider } from "./shared/DeferredEpubImageProvider";
+
+function DisplayReadyCommitProbe({
+  paginationStatus,
+  readerStatus,
+}: {
+  paginationStatus: string;
+  readerStatus: string;
+}): null {
+  const renderStartedAtMsRef = useRef(performance.now());
+  const statusRef = useRef({ paginationStatus, readerStatus });
+
+  useLayoutEffect(() => {
+    const committedAtMs = performance.now();
+    const initialStatus = statusRef.current;
+    recordReaderTraceSpan({
+      name: "display-ready-reader-render-commit",
+      lane: "processing",
+      startPerformanceMs: renderStartedAtMsRef.current,
+      endPerformanceMs: committedAtMs,
+      details: {
+        durationMs:
+          Math.round((committedAtMs - renderStartedAtMsRef.current) * 10) / 10,
+        paginationStatus: initialStatus.paginationStatus,
+        readerStatus: initialStatus.readerStatus,
+      },
+    });
+  }, []);
+
+  return null;
+}
 
 export function Reader() {
   const { open: isSidebarOpen, openMobile: isMobileSidebarOpen } = useSidebar();
@@ -34,6 +75,7 @@ export function Reader() {
 
   const { state: chromeState, actions: chromeActions } = useReaderChromeState();
   const { chromeInteractionMode } = useInputBehavior();
+  useReaderPerformanceTraceRoute(bookId);
 
   const stageSlotRef = useRef<HTMLDivElement>(null);
   const [stageSlotElement, setStageSlotElement] =
@@ -70,12 +112,7 @@ export function Reader() {
     spreadColumns: resolvedSpreadColumns,
     layoutReady: isReaderStageMeasured,
   });
-  const { prompt: handoffPrompt } = useReaderHandoffPrompt({
-    bookId,
-    chapterStartPages: sessionState.navigation.chapterStartPages,
-    totalPages: sessionState.navigation.totalPages,
-    onJumpToPage: sessionActions.jumpToHandoffPage,
-  });
+  const resumeBackgroundLoad = sessionActions.resumeBackgroundLoad;
 
   const {
     state: annotationState,
@@ -101,11 +138,36 @@ export function Reader() {
     onCreateHighlight: sessionActions.createHighlight,
   });
 
-  const displayReady = useReaderDisplayReadiness({
+  const { displayReady, settledPaintReady } = useReaderDisplayReadiness({
     bookId,
     contentReady: isReaderStageMeasured && sessionState.status === "ready",
     stageContentRef,
   });
+  const { prompt: handoffPrompt } = useReaderHandoffPrompt({
+    bookId,
+    // The handoff target needs the complete chapter-to-page map. Starting this
+    // optional storage query earlier only makes it compete with startup work.
+    enabled: settledPaintReady && sessionState.pagination.status === "ready",
+    chapterStartPages: sessionState.navigation.chapterStartPages,
+    totalPages: sessionState.navigation.totalPages,
+    onJumpToPage: sessionActions.jumpToHandoffPage,
+  });
+  useReaderPerformanceTraceLifecycle({
+    bookId,
+    book: sessionState.book,
+    status: sessionState.status,
+    paginationStatus: sessionState.pagination.status,
+    displayReady,
+    settledPaintReady,
+    chapterCount: sessionState.chapters.entries.length,
+    viewport: stageViewport,
+    spreadColumns: resolvedSpreadColumns,
+    settings: sessionState.settings,
+  });
+  useEffect(() => {
+    if (!settledPaintReady) return;
+    resumeBackgroundLoad();
+  }, [resumeBackgroundLoad, settledPaintReady]);
   useReaderStatusPrompt({ bookId, isReady: displayReady });
 
   if (sessionState.status === "not-found" || !bookId) {
@@ -215,6 +277,13 @@ export function Reader() {
 
   return (
     <div className="relative h-dvh overflow-hidden overscroll-none bg-background">
+      {displayReady && (
+        <DisplayReadyCommitProbe
+          key={bookId}
+          paginationStatus={sessionState.pagination.status}
+          readerStatus={sessionState.status}
+        />
+      )}
       <div className="h-full">
         <ReaderController
           onNextPage={sessionActions.nextSpread}

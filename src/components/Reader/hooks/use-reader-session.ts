@@ -93,6 +93,7 @@ export interface ReaderSessionActions {
   goToNextChapter: ReaderNavigationActions["goToNextChapter"];
   openInternalHref: ReaderNavigationActions["openInternalHref"];
   createHighlight: (highlight: Highlight) => void;
+  resumeBackgroundLoad: () => void;
 }
 
 export interface UseReaderSessionResult {
@@ -212,8 +213,14 @@ export function useReaderSession(
       updateSettings: core.onUpdateSettings,
       ...navigationActions,
       createHighlight,
+      resumeBackgroundLoad: core.resumeBackgroundLoad,
     }),
-    [core.onUpdateSettings, createHighlight, navigationActions],
+    [
+      core.onUpdateSettings,
+      core.resumeBackgroundLoad,
+      createHighlight,
+      navigationActions,
+    ],
   );
 
   return {

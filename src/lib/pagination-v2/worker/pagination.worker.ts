@@ -1,5 +1,10 @@
 import { PaginationEngine, type EnginePaginationEvent } from "../engine";
-import type { PaginationCommand, PaginationEvent } from "../protocol";
+import type {
+  PaginationCommand,
+  PaginationEvent,
+  PaginationWorkerEventMessage,
+  PaginationWorkerMessage,
+} from "../protocol";
 import { ensurePublisherFontsReadyFromBlocks } from "../shared/publisher-fonts";
 import { ensurePaginationWorkerFontsReady } from "./fonts";
 import {
@@ -11,27 +16,69 @@ import { PAGINATION_TASK_YIELD_BUDGET_MS } from "./scheduler-policy";
 const workerFontsReady = ensurePaginationWorkerFontsReady();
 let publisherFontsReady: Promise<void> = Promise.resolve();
 
+void workerFontsReady.then(() => {
+  postMessage({
+    sessionGeneration: null,
+    event: {
+      type: "trace",
+      name: "worker-fonts-ready",
+    },
+  } satisfies PaginationWorkerEventMessage);
+});
+
 // ---------------------------------------------------------------------------
 // Worker state
 // ---------------------------------------------------------------------------
 
 let layoutEpoch = 0;
 let activeEventEpoch = 0;
+let activeSessionGeneration: number | null = null;
 let pumpScheduled = false;
 let isPumping = false;
+let workerRunStartedAtMs: number | null = null;
+let workerActiveMs = 0;
+let currentWorkStepStartedAtMs: number | null = null;
 
 const TASK_YIELD_BUDGET_MS = PAGINATION_TASK_YIELD_BUDGET_MS;
 
+function postSessionEvent(event: PaginationEvent): void {
+  if (activeSessionGeneration === null) return;
+  postMessage({
+    sessionGeneration: activeSessionGeneration,
+    event,
+  } satisfies PaginationWorkerEventMessage);
+}
+
 function emitEvent(event: EnginePaginationEvent): void {
   if (event.type === "error") {
-    postMessage(event);
+    postSessionEvent(event);
     return;
   }
 
-  postMessage({ ...event, epoch: activeEventEpoch } as PaginationEvent);
+  if (event.type === "partialReady" || event.type === "ready") {
+    const now = performance.now();
+    const activeMs =
+      workerActiveMs +
+      (currentWorkStepStartedAtMs === null
+        ? 0
+        : now - currentWorkStepStartedAtMs);
+    postSessionEvent({
+      ...event,
+      epoch: activeEventEpoch,
+      workerTiming: {
+        activeMs,
+        elapsedMs:
+          workerRunStartedAtMs === null ? 0 : now - workerRunStartedAtMs,
+        postedAtEpochMs: performance.timeOrigin + now,
+      },
+    });
+    return;
+  }
+
+  postSessionEvent({ ...event, epoch: activeEventEpoch } as PaginationEvent);
 }
 
-const engine = new PaginationEngine(emitEvent);
+let engine = new PaginationEngine(emitEvent);
 const scheduler = new PaginationJobScheduler((command) =>
   engine.createWork(command),
 );
@@ -102,14 +149,19 @@ async function pump(): Promise<void> {
     await workerFontsReady;
 
     while (scheduler.hasWork()) {
-      await publisherFontsReady;
+      const publisherFontsReadyForWork = publisherFontsReady;
+      await publisherFontsReadyForWork;
+      if (publisherFontsReadyForWork !== publisherFontsReady) continue;
       scheduler.expandIncomingCommands();
 
       const job = scheduler.peek();
       if (!job) continue;
 
       prepareJobStep(job);
+      currentWorkStepStartedAtMs = performance.now();
       const result = job.work.next();
+      workerActiveMs += performance.now() - currentWorkStepStartedAtMs;
+      currentWorkStepStartedAtMs = null;
       if (result.done) scheduler.remove(job);
 
       if (performance.now() - sliceStartedAt >= TASK_YIELD_BUDGET_MS) {
@@ -127,25 +179,73 @@ async function pump(): Promise<void> {
 // Message handler
 // ---------------------------------------------------------------------------
 
-self.onmessage = (e: MessageEvent<PaginationCommand>) => {
-  const command = e.data;
-  publisherFontsReady = publisherFontsReady
-    .then(() => {
-      switch (command.type) {
-        case "init":
-          return ensurePublisherFontsReadyFromBlocks(
-            command.firstChapterBlocks,
-          );
-        case "addChapter":
-        case "updateChapter":
-          return ensurePublisherFontsReadyFromBlocks(command.blocks);
-        default:
-          return undefined;
-      }
-    })
-    .catch((error) => {
-      console.warn("[pagination worker] Failed to load publisher fonts", error);
+function resetWorkerSession(sessionGeneration: number | null): void {
+  scheduler.cancelAll();
+  engine = new PaginationEngine(emitEvent);
+  layoutEpoch = 0;
+  activeEventEpoch = 0;
+  activeSessionGeneration = sessionGeneration;
+  publisherFontsReady = Promise.resolve();
+  workerRunStartedAtMs = null;
+  workerActiveMs = 0;
+  currentWorkStepStartedAtMs = null;
+}
+
+function waitForCommandPublisherFonts(
+  command: PaginationCommand,
+): Promise<void> {
+  const loadCommandFonts = () => {
+    switch (command.type) {
+      case "init":
+        return ensurePublisherFontsReadyFromBlocks(command.firstChapterBlocks);
+      case "addChapter":
+      case "updateChapter":
+        return ensurePublisherFontsReadyFromBlocks(command.blocks);
+      default:
+        return undefined;
+    }
+  };
+
+  const fontsReady =
+    command.type === "init"
+      ? Promise.resolve(loadCommandFonts())
+      : publisherFontsReady.then(loadCommandFonts);
+  return fontsReady.catch((error) => {
+    console.warn("[pagination worker] Failed to load publisher fonts", error);
+  });
+}
+
+self.onmessage = (e: MessageEvent<PaginationWorkerMessage>) => {
+  const message = e.data;
+  if (message.type === "cancel") {
+    if (message.sessionGeneration !== activeSessionGeneration) return;
+    resetWorkerSession(null);
+    return;
+  }
+
+  const { command, sessionGeneration } = message;
+  if (command.type === "init") {
+    if (sessionGeneration !== activeSessionGeneration) {
+      resetWorkerSession(sessionGeneration);
+    }
+    workerRunStartedAtMs = performance.now();
+    workerActiveMs = 0;
+    currentWorkStepStartedAtMs = null;
+  } else if (sessionGeneration !== activeSessionGeneration) {
+    return;
+  }
+
+  publisherFontsReady = waitForCommandPublisherFonts(command);
+
+  if (command.type === "init") {
+    void publisherFontsReady.then(() => {
+      if (activeSessionGeneration !== sessionGeneration) return;
+      postSessionEvent({
+        type: "trace",
+        name: "publisher-fonts-ready",
+      });
     });
+  }
 
   scheduler.pushCommand(command);
   schedulePump();
