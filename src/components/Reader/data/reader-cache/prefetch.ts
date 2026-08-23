@@ -3,6 +3,7 @@ import {
   HIGHLIGHTS_QUERY_GC_TIME_MS,
 } from "@/hooks/use-highlights-query";
 import { bookKeys } from "@/hooks/use-book-loader";
+import { ensureEpubPreparationReady } from "@/hooks/use-epub-processor";
 import {
   getBook,
   getBookHighlights,
@@ -55,6 +56,8 @@ export async function prefetchReaderBook(
   const chapterEntries = buildChapterEntries(book);
 
   if (chapterEntries.length === 0) return;
+
+  await ensureEpubPreparationReady(queryClient, book.id, book.fileHash);
 
   const bodyCacheKey = readerBodyCacheKeys.book(
     book.id,

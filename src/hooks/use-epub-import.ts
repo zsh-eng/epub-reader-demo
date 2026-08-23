@@ -1,5 +1,6 @@
 import { DuplicateBookDialog } from "@/components/DuplicateBookDialog";
 import { useToast } from "@/hooks/use-toast";
+import { markEpubPreparationReady } from "@/hooks/use-epub-processor";
 import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
 import type { Book } from "@/lib/db";
 import { useQueryClient } from "@tanstack/react-query";
@@ -63,7 +64,12 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
       try {
         for (const file of epubFiles) {
           try {
-            await addBookFromFile(file);
+            const importedBook = await addBookFromFile(file);
+            markEpubPreparationReady(
+              queryClient,
+              importedBook.id,
+              importedBook.fileHash,
+            );
             successCount += 1;
           } catch (error) {
             console.error("Error adding book:", error);
