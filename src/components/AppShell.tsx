@@ -79,6 +79,54 @@ export function AppShell() {
     if (canReveal) setHasRevealed(true);
   }, [canReveal]);
 
+  useLayoutEffect(() => {
+    if (!isReaderRoute) return;
+
+    const { body, documentElement } = document;
+    const previousBodyStyles = {
+      left: body.style.left,
+      overflow: body.style.overflow,
+      overscrollBehavior: body.style.overscrollBehavior,
+      position: body.style.position,
+      right: body.style.right,
+      top: body.style.top,
+      width: body.style.width,
+    };
+    const previousDocumentStyles = {
+      overflow: documentElement.style.overflow,
+      overscrollBehavior: documentElement.style.overscrollBehavior,
+    };
+    const previousScrollY = window.scrollY;
+
+    // iOS Safari can still move the document viewport when the page is a
+    // fixed, non-scrollable layout. Lock the document itself while Reader is
+    // active; descendant sheet scroll containers remain independently usable.
+    body.style.position = "fixed";
+    body.style.top = "0px";
+    body.style.left = "0px";
+    body.style.right = "0px";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    documentElement.style.overflow = "hidden";
+    documentElement.style.overscrollBehavior = "none";
+    window.scrollTo(0, 0);
+
+    return () => {
+      body.style.left = previousBodyStyles.left;
+      body.style.overflow = previousBodyStyles.overflow;
+      body.style.overscrollBehavior = previousBodyStyles.overscrollBehavior;
+      body.style.position = previousBodyStyles.position;
+      body.style.right = previousBodyStyles.right;
+      body.style.top = previousBodyStyles.top;
+      body.style.width = previousBodyStyles.width;
+      documentElement.style.overflow = previousDocumentStyles.overflow;
+      documentElement.style.overscrollBehavior =
+        previousDocumentStyles.overscrollBehavior;
+      window.scrollTo(0, previousScrollY);
+    };
+  }, [isReaderRoute]);
+
   return (
     <AppShellReadinessContext.Provider value={handleRouteReady}>
       <SidebarProvider
@@ -92,7 +140,7 @@ export function AppShell() {
         <SidebarInset
           className={cn(
             isReaderRoute
-              ? "h-dvh min-h-0 overflow-hidden"
+              ? "h-dvh min-h-0 overflow-hidden overscroll-none"
               : "min-h-svh overflow-x-clip",
           )}
         >

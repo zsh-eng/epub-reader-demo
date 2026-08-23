@@ -130,7 +130,7 @@ export function Reader() {
 
   if (!sessionState.book) {
     return (
-      <div className="relative h-dvh overflow-hidden bg-background">
+      <div className="relative h-dvh overflow-hidden overscroll-none bg-background">
         <div
           ref={handleStageSlotRef}
           data-reader-stage-slot="measurement"
@@ -205,7 +205,7 @@ export function Reader() {
   };
 
   return (
-    <div className="relative h-dvh overflow-hidden bg-background">
+    <div className="relative h-dvh overflow-hidden overscroll-none bg-background">
       <div className="h-full">
         <ReaderController
           onNextPage={sessionActions.nextSpread}
