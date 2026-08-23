@@ -54,7 +54,7 @@ inside that interval.
 ## Controlled production result
 
 The current reference report is
-`diagnostics/reader-startup-visible-first/reader-startup-benchmark.json`.
+`diagnostics/reader-startup-settled-gate-v3/reader-startup-benchmark.json`.
 
 Test scope:
 
@@ -71,32 +71,38 @@ Test scope:
 
 | Metric | 1x main | 4x main |
 | --- | ---: | ---: |
-| Route mounted | 5.6 ms | 41.1 ms |
-| Styled body cache rebuild | 278.4 ms | 2,394.0 ms |
-| Worker fonts ready | 121.9 ms | 222.5 ms |
-| Publisher fonts for first artifact | 2.0 ms | 12.6 ms |
-| First-spread worker round trip | 4.3 ms | 15.0 ms |
-| First spread frame | **339.5 ms** | **2,690.4 ms** |
-| First image file read | 1.6 ms | 15.4 ms |
-| First image decode | 33.9 ms | 33.4 ms |
-| Visible content settled | **420.6 ms** | **3,074.4 ms** |
-| Full pagination | 2,895.6 ms | 6,369.6 ms |
+| Route mounted | 5.0 ms | 32.9 ms |
+| Styled body cache rebuild | 246.8 ms | 2,037.8 ms |
+| Worker fonts ready | 87.6 ms | 178.4 ms |
+| Publisher fonts for first artifact | 1.5 ms | 11.5 ms |
+| First-spread worker round trip | 3.8 ms | 13.9 ms |
+| First spread frame | **299.9 ms** | **2,297.1 ms** |
+| First image file read | 1.4 ms | 14.9 ms |
+| First image decode | 25.5 ms | 30.4 ms |
+| Visible content settled | **367.7 ms** | **2,577.0 ms** |
+| Full pagination | 2,491.4 ms | 5,375.8 ms |
 
 In this cold-cache test, worker font startup was not on the critical path. It
 finished before the styled body cache rebuild. Publisher font readiness was on
-the worker round-trip path, but it used only 2.0 ms at 1x and 12.6 ms in the 4x
+the worker round-trip path, but it used only 1.5 ms at 1x and 11.5 ms in the 4x
 main-thread run. The benchmark does not slow the worker, so it cannot predict
 worker time on a slower mobile CPU.
 
-At 4x, the dominant first-spread cost was the 2.39 second publisher-style body
+At 4x, the dominant first-spread cost was the 2.04 second publisher-style body
 cache rebuild on the main thread. This is measured evidence. A publisher-style
 cache hit should remove most of that rebuild, but the current benchmark has not
 measured a controlled warm reopen yet.
 
 The final 1x interval from first spread frame to visible content settled was
-81.1 ms. The cover decoded at 364.0 ms, committed at 364.4 ms, reached
-`displayReady` at 393.1 ms, and reached the settled painted frame at 420.6 ms.
-The equivalent 4x interval was 384.0 ms.
+67.8 ms. The equivalent 4x interval was 279.9 ms. Remaining chapter artifacts
+do not resume until after the settled-frame mark.
+
+The display-ready transition took 10.0 ms at 1x, including a 7.6 ms Reader
+render/commit. At 4x it took 65.5 ms, including a 52.2 ms Reader render/commit.
+The 4x render was part of a 114 ms main-thread long task. The trace therefore
+attributes nearly half of that long task to the Reader render/commit. The
+remaining synchronous post-commit work in the same task still needs finer
+attribution.
 
 ## Changes and measured effect
 
@@ -109,6 +115,7 @@ The equivalent 4x interval was 384.0 ms.
 | Compound `[bookId+path]` file index (`48996c1`) | Cover read fell from 530.9 ms to 9.0 ms at 1x and from 2,831.8 ms to 33.8 ms at 4x. | Yes for image spreads. Artifact work still delayed image decode after the bytes arrived. |
 | Resume remaining artifacts after visible readiness (`b2accc9`) | With the index already present, first-spread-to-settled fell from 625.4 ms to 81.1 ms at 1x and from 2,273.7 ms to 384.0 ms at 4x. | Yes. This removed background artifact work from the reveal path. |
 | First-spread label correction (`a246fa6`) | Clarifies that the first spread frame can contain an image placeholder. | Measurement only. |
+| Settled-frame artifact gate (`bc99686`) | First-spread-to-settled fell from 81.1 ms to 67.8 ms at 1x and from 384.0 ms to 279.9 ms at 4x. The first artifact yield now starts after settled paint. | Yes. It prevents background work from delaying the paint-confirmation frames and adds render/commit attribution. |
 
 The full-pagination duration can stay similar or increase between runs. This is
 acceptable when visible content improves because distant chapter work is now
@@ -191,7 +198,8 @@ is 30 runs with at most 160 spans per run.
 1. Add a controlled warm reopen run for the publisher-style body cache.
 2. Make Library prefetch use the active publisher-style cache key, then measure
    continue-reading opens against the cold reference.
-3. If fonts overlap the first-spread path in a new trace, measure their end time
-   against body/artifact readiness before changing font loading.
-4. Keep the initial image case in the benchmark. A text-only case is useful as
+3. Attribute the synchronous work which remains after the display-ready Reader
+   render/commit in the 4x long task.
+4. Keep selective worker-font loading behind the reveal and React-commit work.
+5. Keep the initial image case in the benchmark. A text-only case is useful as
    a comparison, not as the primary target.
