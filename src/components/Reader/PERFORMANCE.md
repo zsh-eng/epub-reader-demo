@@ -223,6 +223,57 @@ first frame, 25.3 ms to the second frame, 19.6 ms to commit, and 7.2 ms to the
 effect. All runs stayed visible and focused. The earlier 548 ms confirmation
 gap was not reproduced.
 
+### Warm-input and publisher-prefetch 4x comparison
+
+The next benchmark used the same production build, supplied 21.7 MB book,
+five-run median, 4x main-thread slowdown, 3 second Library dwell, desktop hover
+prefetch, and warm app-lifetime worker.
+
+With publisher styles off:
+
+| Stage | First spread | Visible settled | Full pagination | Initial artifact ready |
+| --- | ---: | ---: | ---: | ---: |
+| Before the three changes | 154.5 ms | 386.1 ms | 2,161.7 ms | 93.9 ms |
+| Cached extraction readiness | 154.1 ms | 387.5 ms | 2,245.7 ms | 64.6 ms |
+| Synchronous warm location and artifact | **123.8 ms** | **380.7 ms** | **2,156.0 ms** | **45.8 ms** |
+
+Caching extraction readiness removed the repeated 36.1 ms IndexedDB existence
+check and made the initial artifact ready 29.3 ms earlier. It did not improve
+the first-spread median by itself because the earlier worker response still
+overlapped other main-thread route work. Starting from the warm checkpoint and
+artifact in the same render then reduced first spread by 30.3 ms against that
+intermediate build, or 19.9% against the original baseline. Visible-settled and
+full-pagination medians stayed effectively flat.
+
+Publisher-style prefetch was measured separately while the first two changes
+were held constant:
+
+| Publisher styles on | Before settings-aware prefetch | After | Difference |
+| --- | ---: | ---: | ---: |
+| First spread frame | 1,214.3 ms | **122.5 ms** | -1,091.8 ms (-89.9%) |
+| Visible content settled | 1,410.5 ms | **369.0 ms** | -1,041.5 ms (-73.8%) |
+| Full pagination | 3,421.9 ms | **2,460.2 ms** | -961.7 ms (-28.1%) |
+
+The old Library hover path always prefetched the publisher-styles-off cache
+key. The Reader therefore rebuilt and normalized all 130 styled chapters after
+navigation. The new prefetch uses the active publisher-style and body-size
+settings, so the Reader receives the correct warm body cache and initial
+artifact.
+
+The final route markers put the median DOM commit at 36.7 ms, the warm artifact
+seed at 37.1 ms, and the passive route effect at 40.0 ms. The layout-to-passive
+gap is only about 3.3 ms at 4x. This does not support route mounting as the next
+optimization target. The first pagination command started at a 63.4 ms median;
+publisher-font readiness then used a 27.5 ms median on that direct path.
+
+Reports:
+
+- `diagnostics/reader-startup-optimizations/baseline-styles-off/reader-startup-benchmark.json`
+- `diagnostics/reader-startup-optimizations/extracted-readiness-corrected-styles-off/reader-startup-benchmark.json`
+- `diagnostics/reader-startup-optimizations/synchronous-warm-start-styles-off/reader-startup-benchmark.json`
+- `diagnostics/reader-startup-optimizations/before-settings-aware-prefetch-styles-on/reader-startup-benchmark.json`
+- `diagnostics/reader-startup-optimizations/final-styles-on/reader-startup-benchmark.json`
+
 ## Changes and measured effect
 
 | Change | Evidence | Critical path? |
@@ -238,6 +289,10 @@ gap was not reproduced.
 | Deferred handoff checkpoint query (`5035bec`) | Five 4x medians improved from 215.8 ms to 195.9 ms for first spread, 505.4 ms to 473.8 ms for settled content, and 2,519.9 ms to 2,438.3 ms for full pagination. | Yes. The optional all-device query now starts only after the page map is complete. |
 | First-spread label correction (`a246fa6`) | Clarifies that the first spread frame can contain an image placeholder. | Measurement only. |
 | Settled-frame artifact gate (`bc99686`) | First-spread-to-settled fell from 81.1 ms to 67.8 ms at 1x and from 384.0 ms to 279.9 ms at 4x. The first artifact yield now starts after settled paint. | Yes. It prevents background work from delaying the paint-confirmation frames and adds render/commit attribution. |
+| Cached EPUB preparation readiness (`06a211c`) | The repeated 36.1 ms extracted-file check left the warm Reader path. The initial artifact became ready 29.3 ms earlier, but first-spread and settled medians stayed flat in isolation. | Not the final first-spread barrier in this sample. It removes redundant storage work and remains necessary for cold/direct opens. |
+| Synchronous warm location and artifact (`4618744`) | Against the readiness-only build, the 4x first-spread median fell from 154.1 ms to 123.8 ms. | Yes. It removes passive-effect turns before pagination can consume warm data. |
+| Settings-aware publisher prefetch (`96c0767`) | With the first two changes held constant, the publisher-styles-on 4x first-spread median fell from 1,214.3 ms to 122.5 ms. | Yes. It removes the 130-chapter styled body rebuild from the navigation path. |
+| Route startup markers (`8ff26e3`) | Splits the route DOM commit, passive effect, and warm artifact seed. Their final 4x medians were 36.7 ms, 40.0 ms, and 37.1 ms. | Measurement only. |
 
 The full-pagination duration can stay similar or increase between runs. This is
 acceptable when visible content improves because distant chapter work is now
@@ -254,7 +309,7 @@ current harness.
 | Visible-first pagination | `4b6fe4e`, `3588dd2`, `6e9f989` | Loads chapters middle-out, emits a partial visible spread, and avoids React updates for each pagination progress event. Architectural effect; no comparable benchmark. |
 | Durable normalized body cache | `b1f446a`, `408f562`, `ebd60b4` | Avoids repeated `Blob.text()`, resource normalization, body extraction, and canonical-text parsing after a cache hit. Earlier Poco F3 diagnosis found source HTML materialization slow; no current warm/cold comparison. |
 | In-memory reader queries and artifacts | `ddf53f0`, `2a46aca`, `4498b57`, `2633f89`, `90d08ac` | Uses TanStack Query for deduplication and keeps artifact progress out of React render state. Architectural effect; no isolated current measurement. |
-| Library prefetch | `b0d8a0e`, `8cbdfe8` | Warms continue-reading inputs and up to two artifacts for an interacted book. Current prefetch uses publisher styles off, so it does not warm the publisher-style cache variant used by the reference test. |
+| Library prefetch | `b0d8a0e`, `8cbdfe8`, `96c0767` | Warms continue-reading inputs and up to two artifacts for an interacted book. It now uses the active publisher-style cache variant; the current controlled comparison is in the section above. |
 | Stepwise worker scheduler | `350cdb7` | Lets navigation preempt background pagination at chapter yield boundaries. This protects interaction latency more than first-open wall time. |
 | Atomic reader reveal | `c430d59` | Coordinates the first spread, visible images, and document fonts while preserving one mounted spread stage. This improves reveal correctness and defines the settled-content gate; it is not a raw CPU optimization. |
 | Worker font correctness | `02010f8`, `63dbf38`, `688053a` | Self-hosts app fonts, loads matching faces in the worker, and makes font CSS parsing consistent in dev and preview. These changes protect layout agreement. They do not prove that font startup became faster. |
