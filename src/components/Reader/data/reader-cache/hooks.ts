@@ -5,6 +5,7 @@ import {
 } from "@/lib/db";
 import {
   endReaderTraceSpan,
+  markReaderTraceOnce,
   startReaderTraceSpan,
   withReaderTraceSpan,
 } from "@/lib/reader-performance-trace";
@@ -378,6 +379,10 @@ export function useReaderChapterArtifactsLoader(options: {
 
     artifactsByChapterRef.current.set(chapterIndex, cachedArtifact);
     signaturesByChapterRef.current.set(chapterIndex, artifactSignature);
+    markReaderTraceOnce("initial-artifact-cache-seeded", "processing", {
+      chapterIndex,
+      cache: "react-query",
+    });
   }, [
     baseContentByChapter,
     bookId,

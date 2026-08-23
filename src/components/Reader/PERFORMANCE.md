@@ -19,7 +19,8 @@ background completion metric and is not a reveal gate.
 
 | Metric | Meaning |
 | --- | --- |
-| Route mounted | The reader route effect ran. It does not include later source or pagination work. |
+| Route DOM committed | The Reader layout effect ran after React committed the route DOM. |
+| Route passive effect | The Reader passive effect ran. The gap from the DOM commit shows React's effect scheduling delay, not storage or pagination work. |
 | First spread returned | The main thread entered the handler for the worker's first partial result. |
 | First spread frame | React committed the first spread DOM and the browser passed two animation frames. An image can still be a size-preserving placeholder. |
 | Visible assets settled | `document.fonts.ready` resolved and the visible spread had no pending EPUB images. |

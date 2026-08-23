@@ -57,8 +57,14 @@ const TIMELINE_GUIDE_DEFINITIONS: Array<{
   spanName: string;
 }> = [
   {
+    spanName: "reader-route-dom-committed",
+    label: "Route DOM committed",
+    edge: "start",
+    color: LANE_COLOR_VALUES.navigation,
+  },
+  {
     spanName: "reader-route-mounted",
-    label: "Route mounted",
+    label: "Route passive effect",
     edge: "start",
     color: LANE_COLOR_VALUES.navigation,
   },

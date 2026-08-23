@@ -20,6 +20,16 @@ export function useReaderPerformanceTraceRoute(
 ): void {
   const deferredInterruptRef = useRef<number | null>(null);
 
+  useLayoutEffect(() => {
+    if (!bookId) return;
+
+    ensureReaderTrace({ bookId });
+    markReaderTraceOnce("reader-route-dom-committed", "navigation", {
+      visibilityState: document.visibilityState,
+      documentHasFocus: document.hasFocus(),
+    });
+  }, [bookId]);
+
   useEffect(() => {
     if (!bookId) return;
     if (deferredInterruptRef.current !== null) {
@@ -29,6 +39,7 @@ export function useReaderPerformanceTraceRoute(
 
     ensureReaderTrace({ bookId });
     markReaderTraceOnce("reader-route-mounted", "navigation", {
+      phase: "passive-effect",
       visibilityState: document.visibilityState,
       documentHasFocus: document.hasFocus(),
     });
