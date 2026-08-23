@@ -1760,7 +1760,7 @@ export function HighlightsMasonry() {
         <section className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
           <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
             <MobileBackToLibrary />
-            <h1 className="font-serif text-5xl font-medium leading-none tracking-tight md:text-6xl">
+            <h1 className="font-serif text-2xl font-medium leading-none tracking-tight md:text-6xl">
               Highlights
             </h1>
             <div className="size-8 md:hidden" aria-hidden="true" />
