@@ -174,7 +174,7 @@ export function BookCard({
           onClick={handleClick}
           className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
         >
-          <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02]">
+          <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02] group-data-[popup-open]:-translate-y-2 group-data-[popup-open]:scale-[1.02]">
             <BookCoverVisual coverUrl={coverUrl} title={book.title} />
           </div>
         </div>
