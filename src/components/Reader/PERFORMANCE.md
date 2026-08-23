@@ -104,6 +104,33 @@ attributes nearly half of that long task to the Reader render/commit. The
 remaining synchronous post-commit work in the same task still needs finer
 attribution.
 
+### One-run footer suppression experiment
+
+The report in
+`diagnostics/reader-startup-no-footer/reader-startup-benchmark.json` temporarily
+omitted `ReaderFooter` and its handoff hook. The production source was restored
+after the run. This is one A/B sample, so treat large differences as directional
+until repeated runs produce a stable median.
+
+| 4x main-thread metric | Reference | No footer | Difference |
+| --- | ---: | ---: | ---: |
+| Styled body cache rebuild | 2,037.8 ms | 1,176.8 ms | -861.0 ms |
+| Chapter source normalization | 1,810.7 ms | 1,008.8 ms | -801.9 ms |
+| First spread frame | 2,297.1 ms | 1,368.9 ms | -928.2 ms |
+| Visible assets to settled frame | 229.3 ms | 218.9 ms | -10.4 ms |
+| Display-ready transition | 65.5 ms | 61.7 ms | -3.8 ms |
+| Reader render/commit | 52.2 ms | 50.4 ms | -1.8 ms |
+| First spread to settled frame | 279.9 ms | 255.6 ms | -24.3 ms |
+| Full pagination | 5,375.8 ms | 4,215.4 ms | -1,160.4 ms |
+
+Removing the footer did not explain the post-asset settling interval. It saved
+only 10.4 ms from visible assets to the settled frame. The larger difference
+appeared before the first spread, while the styled body cache was rebuilt. The
+footer loading scrubber continuously animates a container, a blurred shimmer,
+and eleven marks. These main-thread animation updates can contend with source
+normalization under 4x slowdown. A follow-up test must keep the footer structure
+and disable only its loading animations, then compare repeated medians.
+
 ## Changes and measured effect
 
 | Change | Evidence | Critical path? |
