@@ -1,43 +1,44 @@
 // Engine orchestrator: owns pagination state, creates stepwise pagination jobs,
 // and delegates anchor/spread calculations to the engine helper modules.
 import type {
-    ChapterUnavailableEvent,
-    ErrorEvent,
-    PageContentEvent,
-    PageUnavailableEvent,
-    PaginationCommand,
-    PartialReadyEvent,
-    ProgressEvent,
-    ReadyEvent,
+  ChapterUnavailableEvent,
+  ErrorEvent,
+  PageContentEvent,
+  PageUnavailableEvent,
+  PaginationCommand,
+  PartialReadyEvent,
+  ProgressEvent,
+  ReadyEvent,
 } from "../protocol";
 import { layoutPages } from "../shared/layout-pages";
 import { prepareBlocks } from "../shared/prepare-blocks";
 import type {
-    Block,
-    Page,
-    PaginationChapterDiagnostics,
-    PreparedBlock,
+  Block,
+  Page,
+  PaginationChapterDiagnostics,
+  PreparedBlock,
 } from "../shared/types";
 import { areFontConfigsEqual } from "../shared/types";
 import type {
-    ContentAnchor,
-    PaginationConfig,
-    ResolvedSpread,
-    SpreadConfig,
-    SpreadIntent,
+  ContentAnchor,
+  PaginationConfig,
+  ResolvedSpread,
+  ResolvedSpreadWindow,
+  SpreadConfig,
+  SpreadIntent,
 } from "../types";
 import { DEFAULT_SPREAD_CONFIG } from "../types";
 import {
-    pickAnchorForPage,
-    resolveAnchorToGlobalPage,
-    resolveAnchorToPage,
-    resolveTargetToAnchor,
+  pickAnchorForPage,
+  resolveAnchorToGlobalPage,
+  resolveAnchorToPage,
+  resolveTargetToAnchor,
 } from "./anchors";
 import {
-    buildResolvedSpread,
-    countTotalSpreads,
-    resolveAnchorForSpreadIndex,
-    resolveCurrentSpreadIndex,
+  buildResolvedSpreadWindow,
+  countTotalSpreads,
+  resolveAnchorForSpreadIndex,
+  resolveCurrentSpreadIndex,
 } from "./spreads";
 
 export type EnginePaginationEvent =
@@ -247,8 +248,8 @@ export class PaginationEngine {
     }
     this.preferredAnchorSlotIndex = null;
 
-    const spread = this.buildResolvedSpread(intent);
-    if (!spread) {
+    const spreadWindow = this.buildResolvedSpreadWindow(intent);
+    if (!spreadWindow) {
       this.emit({
         type: "error",
         intent,
@@ -256,6 +257,7 @@ export class PaginationEngine {
       });
       return;
     }
+    const spread = spreadWindow.current;
     this.capturePreferredAnchorSlot(spread);
 
     if (this.totalChapters === 1) {
@@ -263,6 +265,8 @@ export class PaginationEngine {
         type: "ready",
         intent,
         spread,
+        previousSpread: spreadWindow.previous,
+        nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics ? [diagnostics] : [],
       });
     } else {
@@ -270,6 +274,8 @@ export class PaginationEngine {
         type: "partialReady",
         intent,
         spread,
+        previousSpread: spreadWindow.previous,
+        nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics,
       });
     }
@@ -293,18 +299,20 @@ export class PaginationEngine {
 
     this.blocksByChapter[chapterIndex] = blocks;
     const diagnostics = this.prepareAndLayoutChapter(chapterIndex);
-    const resolvedSpread = this.buildResolvedSpread(intent);
-    if (resolvedSpread) {
-      this.capturePreferredAnchorSlot(resolvedSpread);
+    const spreadWindow = this.buildResolvedSpreadWindow(intent);
+    if (spreadWindow) {
+      this.capturePreferredAnchorSlot(spreadWindow.current);
     }
 
     if (this.receivedChapters === this.totalChapters) {
-      if (!resolvedSpread) return;
+      if (!spreadWindow) return;
 
       this.emit({
         type: "ready",
         intent,
-        spread: resolvedSpread,
+        spread: spreadWindow.current,
+        previousSpread: spreadWindow.previous,
+        nextSpread: spreadWindow.next,
         chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
           (diag): diag is PaginationChapterDiagnostics => diag !== null,
         ),
@@ -313,13 +321,15 @@ export class PaginationEngine {
     }
 
     if (
-      resolvedSpread &&
-      this.spreadContainsChapter(resolvedSpread, chapterIndex)
+      spreadWindow &&
+      this.spreadContainsChapter(spreadWindow.current, chapterIndex)
     ) {
       this.emit({
         type: "partialReady",
         intent,
-        spread: resolvedSpread,
+        spread: spreadWindow.current,
+        previousSpread: spreadWindow.previous,
+        nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics,
       });
       return;
@@ -330,10 +340,10 @@ export class PaginationEngine {
       intent,
       chaptersCompleted: this.receivedChapters,
       totalChapters: this.totalChapters,
-      currentPage: resolvedSpread?.currentPage ?? 1,
-      totalPages: resolvedSpread?.totalPages ?? this.totalPages,
-      currentSpread: resolvedSpread?.currentSpread ?? 1,
-      totalSpreads: resolvedSpread?.totalSpreads ?? this.totalSpreads,
+      currentPage: spreadWindow?.current.currentPage ?? 1,
+      totalPages: spreadWindow?.current.totalPages ?? this.totalPages,
+      currentSpread: spreadWindow?.current.currentSpread ?? 1,
+      totalSpreads: spreadWindow?.current.totalSpreads ?? this.totalSpreads,
       chapterDiagnostics: diagnostics,
     });
   }
@@ -593,10 +603,11 @@ export class PaginationEngine {
     chapterIndex: number,
     diagnostics: PaginationChapterDiagnostics,
   ): void {
-    const spread = this.buildResolvedSpread(intent);
-    if (spread) {
-      this.capturePreferredAnchorSlot(spread);
+    const spreadWindow = this.buildResolvedSpreadWindow(intent);
+    if (spreadWindow) {
+      this.capturePreferredAnchorSlot(spreadWindow.current);
     }
+    const spread = spreadWindow?.current;
     const currentPage = spread?.currentPage ?? 1;
     const totalPages = spread?.totalPages ?? this.totalPages;
     const currentSpread = spread?.currentSpread ?? 1;
@@ -607,6 +618,8 @@ export class PaginationEngine {
         type: "partialReady",
         intent,
         spread,
+        previousSpread: spreadWindow.previous,
+        nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics,
       });
       return;
@@ -626,14 +639,16 @@ export class PaginationEngine {
   }
 
   private emitReady(intent: SpreadIntent): void {
-    const spread = this.buildResolvedSpread(intent);
-    if (!spread) return;
-    this.capturePreferredAnchorSlot(spread);
+    const spreadWindow = this.buildResolvedSpreadWindow(intent);
+    if (!spreadWindow) return;
+    this.capturePreferredAnchorSlot(spreadWindow.current);
 
     this.emit({
       type: "ready",
       intent,
-      spread,
+      spread: spreadWindow.current,
+      previousSpread: spreadWindow.previous,
+      nextSpread: spreadWindow.next,
       chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
         (diag): diag is PaginationChapterDiagnostics => diag !== null,
       ),
@@ -713,8 +728,10 @@ export class PaginationEngine {
     });
   }
 
-  private buildResolvedSpread(intent: SpreadIntent) {
-    return buildResolvedSpread(intent, this.buildResolvedSpreadState());
+  private buildResolvedSpreadWindow(
+    intent: SpreadIntent,
+  ): ResolvedSpreadWindow | null {
+    return buildResolvedSpreadWindow(intent, this.buildResolvedSpreadState());
   }
 
   private buildResolvedSpreadState() {
@@ -766,13 +783,20 @@ export class PaginationEngine {
   }
 
   private emitPageContent(intent: SpreadIntent): void {
-    const spread = this.buildResolvedSpread(intent);
-    if (!spread) {
+    const spreadWindow = this.buildResolvedSpreadWindow(intent);
+    if (!spreadWindow) {
       this.emitPageUnavailable(intent);
       return;
     }
+    const spread = spreadWindow.current;
     this.capturePreferredAnchorSlot(spread);
-    this.emit({ type: "pageContent", intent, spread });
+    this.emit({
+      type: "pageContent",
+      intent,
+      spread,
+      previousSpread: spreadWindow.previous,
+      nextSpread: spreadWindow.next,
+    });
   }
 
   private emitPageUnavailable(intent: SpreadIntent): void {

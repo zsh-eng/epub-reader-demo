@@ -5,6 +5,7 @@ import type {
   PaginationConfig,
   PaginationStatus,
   ResolvedSpread,
+  ResolvedSpreadWindow,
   SpreadConfig,
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
@@ -60,6 +61,7 @@ export interface ReaderSessionNavigationState {
 
 export interface ReaderSessionPaginationState {
   spread: ResolvedSpread | null;
+  spreadWindow: ResolvedSpreadWindow | null;
   status: PaginationStatus;
   spreadConfig: SpreadConfig;
   paginationConfig: PaginationConfig;
@@ -158,6 +160,7 @@ export function useReaderSession(
       },
       pagination: {
         spread: core.pagination.spread,
+        spreadWindow: core.pagination.spreadWindow,
         status: core.pagination.status,
         spreadConfig: core.spreadConfig,
         paginationConfig: core.paginationConfig,
@@ -187,6 +190,7 @@ export function useReaderSession(
     core.epubProcessError,
     core.isBookLoading,
     core.pagination.spread,
+    core.pagination.spreadWindow,
     core.pagination.status,
     core.paginationConfig,
     core.settings,

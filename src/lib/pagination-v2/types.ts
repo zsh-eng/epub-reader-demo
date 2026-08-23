@@ -155,4 +155,11 @@ export interface ResolvedSpread {
   chapterIndexEnd: number | null;
 }
 
+/** The current spread and the immediate pages that can be turned to. */
+export interface ResolvedSpreadWindow {
+  previous: ResolvedSpread | null;
+  current: ResolvedSpread;
+  next: ResolvedSpread | null;
+}
+
 export type PaginationStatus = "idle" | "partial" | "recalculating" | "ready";

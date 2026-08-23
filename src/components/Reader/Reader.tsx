@@ -152,6 +152,15 @@ export function Reader() {
         sessionState.navigation.currentChapterIndex
     ] ??
     sessionState.chapters.entries[sessionState.navigation.currentChapterIndex];
+  const isReaderInteractionSuppressed =
+    chromeState.activeReaderSheet !== null ||
+    isSidebarOpen ||
+    isMobileSidebarOpen ||
+    !displayReady;
+  const shouldPrepareSwipePages =
+    chromeInteractionMode === "touch" && displayReady;
+  const swipeNavigationEnabled =
+    shouldPrepareSwipePages && !isReaderInteractionSuppressed;
   const handleCopyDebugDump = async () => {
     const spread = sessionState.pagination.spread;
 
@@ -213,12 +222,7 @@ export function Reader() {
           canGoPrev={sessionState.navigation.canGoPrev}
           canGoNext={sessionState.navigation.canGoNext}
           chromeInteractionMode={chromeInteractionMode}
-          isChromeSuppressed={
-            chromeState.activeReaderSheet !== null ||
-            isSidebarOpen ||
-            isMobileSidebarOpen ||
-            !displayReady
-          }
+          isChromeSuppressed={isReaderInteractionSuppressed}
           containerRef={stageSlotRef}
           topRailHeight={topRailHeight}
           bottomRailHeight={bottomRailHeight}
@@ -277,11 +281,19 @@ export function Reader() {
                 <DeferredEpubImageProvider key={bookId} bookId={bookId}>
                   <SpreadStage
                     spread={sessionState.pagination.spread}
+                    previousSpread={
+                      sessionState.pagination.spreadWindow?.previous
+                    }
+                    nextSpread={sessionState.pagination.spreadWindow?.next}
                     spreadConfig={sessionState.pagination.spreadConfig}
                     columnSpacingPx={columnGapPx}
                     paginationConfig={sessionState.pagination.paginationConfig}
                     stageContentRef={stageContentRef}
                     onLinkActivate={sessionActions.openInternalHref}
+                    renderAdjacentSpreads={shouldPrepareSwipePages}
+                    swipeEnabled={swipeNavigationEnabled}
+                    onSwipeNext={sessionActions.nextSpread}
+                    onSwipePrevious={sessionActions.prevSpread}
                     paddingTopPx={stagePadding.paddingTop}
                     paddingBottomPx={stagePadding.paddingBottom}
                     paddingLeftPx={stagePadding.paddingX}

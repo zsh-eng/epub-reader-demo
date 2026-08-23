@@ -352,6 +352,7 @@ describe("init + addChapter lifecycle", () => {
     const ready = getReadyEvent(events);
     expect(ready?.intent).toEqual(REPLACE_INTENT);
     expect(ready?.spread.intent).toEqual(REPLACE_INTENT);
+    expect(ready?.previousSpread).toBeNull();
   });
 
   it("transitions from partial to ready once all chapters are added", () => {
@@ -553,12 +554,14 @@ describe("updateChapter lifecycle", () => {
 describe("navigation", () => {
   it("nextSpread advances to the next spread", () => {
     const { engine, events } = createEngine({
-      blocks: makeLongTextBlocks("long-text"),
+      blocks: makeFixedPageBlocks(0, 12),
       spreadConfig: { columns: 3, chapterFlow: "continuous" },
     });
 
     const ready = getReadyEvent(events)!;
     expect(ready.spread.totalPages).toBeGreaterThan(3);
+    expect(ready.previousSpread).toBeNull();
+    expect(ready.nextSpread?.currentSpread).toBe(2);
 
     events.length = 0;
     runCommand(engine, {
@@ -571,6 +574,30 @@ describe("navigation", () => {
     expect(pageContent?.intent).toEqual(FORWARD_LINEAR_INTENT);
     expect(pageContent?.spread.intent).toEqual(FORWARD_LINEAR_INTENT);
     expect(pageContent!.spread.currentSpread).toBe(2);
+    expect(pageContent?.previousSpread?.currentSpread).toBe(1);
+    expect(pageContent?.nextSpread?.currentSpread).toBe(3);
+  });
+
+  it("does not expose a next spread at the end of the book", () => {
+    const { engine, events } = createEngine({
+      blocks: makeLongTextBlocks("long-text"),
+      spreadConfig: { columns: 1, chapterFlow: "continuous" },
+    });
+    const ready = getReadyEvent(events)!;
+
+    events.length = 0;
+    runCommand(engine, {
+      type: "goToPage",
+      page: ready.spread.totalPages,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
+
+    const pageContent = getPageContentEvent(events)!;
+    expect(pageContent.spread.currentSpread).toBe(
+      pageContent.spread.totalSpreads,
+    );
+    expect(pageContent.previousSpread).not.toBeNull();
+    expect(pageContent.nextSpread).toBeNull();
   });
 
   it("nextSpread should advance from a pre-split spacer anchor (regression)", () => {

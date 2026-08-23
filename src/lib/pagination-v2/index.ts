@@ -63,6 +63,7 @@ export type {
   PublisherTextStyle,
   ResolvedLeafPage,
   ResolvedSpread,
+  ResolvedSpreadWindow,
   SpacerSlice,
   SpreadConfig,
   SpreadGapReason,

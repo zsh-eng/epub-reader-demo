@@ -118,9 +118,8 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Fix measurement for "in this page" pinned sidebar scroll detection for highlights
 - [x] Change book row in highlight masonry mobile
 - [x] Fix animations when tapping sheet button
-
-- [ ] Highlight button circles should be bigger
-- [ ] Move search bar to the bottom of the page for standardisation?
+- [x] Highlight button circles should be bigger
+- [x] Improve library page search bar
 - [ ] Swipe to change page (carousel style)
 - [ ] Perf improvements
 
@@ -143,6 +142,9 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] Fix long press
 - [ ] "Jump back" ideas for reference (need to start storing jump history though)
 - [ ] History tab for total time read
+
+- [ ] Handle sync states
+- [ ] Proper animations for "downloading" and "processing" of book - popup from below on mobile, when done tap to open
 
 ### Later
 

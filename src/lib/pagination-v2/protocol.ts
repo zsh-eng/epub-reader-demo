@@ -92,22 +92,28 @@ interface PaginationEventMetadata {
   intent: SpreadIntent;
 }
 
+interface SpreadWindowEventMetadata {
+  spread: ResolvedSpread;
+  previousSpread: ResolvedSpread | null;
+  nextSpread: ResolvedSpread | null;
+}
+
 // ---------------------------------------------------------------------------
 // Events (worker → main thread)
 // All events carry the `epoch` so the hook can discard stale responses.
 // ---------------------------------------------------------------------------
 
-export interface PartialReadyEvent extends PaginationEventMetadata {
+export interface PartialReadyEvent
+  extends PaginationEventMetadata, SpreadWindowEventMetadata {
   type: "partialReady";
   epoch: number;
-  spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
-export interface ReadyEvent extends PaginationEventMetadata {
+export interface ReadyEvent
+  extends PaginationEventMetadata, SpreadWindowEventMetadata {
   type: "ready";
   epoch: number;
-  spread: ResolvedSpread;
   chapterDiagnostics: PaginationChapterDiagnostics[];
 }
 
@@ -123,10 +129,10 @@ export interface ProgressEvent extends PaginationEventMetadata {
   chapterDiagnostics: PaginationChapterDiagnostics | null;
 }
 
-export interface PageContentEvent extends PaginationEventMetadata {
+export interface PageContentEvent
+  extends PaginationEventMetadata, SpreadWindowEventMetadata {
   type: "pageContent";
   epoch: number;
-  spread: ResolvedSpread;
 }
 
 export interface PageUnavailableEvent extends PaginationEventMetadata {

@@ -8,6 +8,7 @@ import type {
   PaginationConfig,
   PaginationStatus,
   ResolvedSpread,
+  ResolvedSpreadWindow,
   SpreadConfig,
   SpreadIntent,
 } from "./types";
@@ -53,6 +54,7 @@ function mergeChapterPageCounts(
 
 export interface UsePaginationResult {
   spread: ResolvedSpread | null;
+  spreadWindow: ResolvedSpreadWindow | null;
   status: PaginationStatus;
   /** Maps chapterIndex → page count, published with visible partials and final ready. */
   chapterPageCounts: Map<number, number>;
@@ -100,7 +102,10 @@ export function usePagination(
 ): UsePaginationResult {
   const { paginationConfig, spreadConfig = DEFAULT_SPREAD_CONFIG } = options;
 
-  const [spread, setSpread] = useState<ResolvedSpread | null>(null);
+  const [spreadWindow, setSpreadWindow] = useState<ResolvedSpreadWindow | null>(
+    null,
+  );
+  const spread = spreadWindow?.current ?? null;
   const [status, setStatus] = useState<PaginationStatus>("idle");
   const [chapterPageCounts, setChapterPageCounts] = useState<
     Map<number, number>
@@ -179,7 +184,11 @@ export function usePagination(
         tracerRef.current.markFirstVisible();
         tracerRef.current.recordChapterDiagnostics(event.chapterDiagnostics);
         recordChapterPageCount(event.chapterDiagnostics);
-        setSpread(event.spread);
+        setSpreadWindow({
+          previous: event.previousSpread,
+          current: event.spread,
+          next: event.nextSpread,
+        });
         setStatus("partial");
         publishChapterPageCounts([]);
         break;
@@ -187,8 +196,14 @@ export function usePagination(
       case "ready":
         currentEpochRef.current = event.epoch;
         tracerRef.current.markReady();
-        tracerRef.current.recordChapterDiagnosticsList(event.chapterDiagnostics);
-        setSpread(event.spread);
+        tracerRef.current.recordChapterDiagnosticsList(
+          event.chapterDiagnostics,
+        );
+        setSpreadWindow({
+          previous: event.previousSpread,
+          current: event.spread,
+          next: event.nextSpread,
+        });
         setStatus("ready");
         publishChapterPageCounts(event.chapterDiagnostics);
         break;
@@ -199,7 +214,11 @@ export function usePagination(
         break;
 
       case "pageContent":
-        setSpread(event.spread);
+        setSpreadWindow({
+          previous: event.previousSpread,
+          current: event.spread,
+          next: event.nextSpread,
+        });
         break;
 
       case "pageUnavailable":
@@ -291,7 +310,7 @@ export function usePagination(
       tracerRef.current.reset();
       tracerRef.current.startRun();
 
-      setSpread(null);
+      setSpreadWindow(null);
       setStatus("idle");
       pendingChapterPageCountsRef.current.clear();
       setChapterPageCounts(new Map());
@@ -373,6 +392,7 @@ export function usePagination(
 
   return {
     spread,
+    spreadWindow,
     status,
     chapterPageCounts,
     nextSpread,

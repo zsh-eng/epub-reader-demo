@@ -28,13 +28,25 @@ export function useReaderDisplayReadiness({
     let frameId: number | null = null;
 
     const markReadyIfSettled = () => {
-      if (stage.querySelector("[data-reader-image-pending]")) return;
+      if (
+        stage.querySelector(
+          "[data-reader-spread-layer='current'] [data-reader-image-pending]",
+        )
+      ) {
+        return;
+      }
 
       if (frameId !== null) cancelAnimationFrame(frameId);
       frameId = requestAnimationFrame(() => {
         frameId = null;
         if (cancelled) return;
-        if (stage.querySelector("[data-reader-image-pending]")) return;
+        if (
+          stage.querySelector(
+            "[data-reader-spread-layer='current'] [data-reader-image-pending]",
+          )
+        ) {
+          return;
+        }
         setReadyBookId(bookId);
       });
     };

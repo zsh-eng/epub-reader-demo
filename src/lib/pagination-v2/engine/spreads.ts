@@ -5,6 +5,7 @@ import type {
   ContentAnchor,
   ResolvedLeafPage,
   ResolvedSpread,
+  ResolvedSpreadWindow,
   SpreadConfig,
   SpreadGapReason,
   SpreadIntent,
@@ -186,6 +187,59 @@ export function buildResolvedSpread(
   const spreadIndex = projection.spreadIndexByGlobalPage.get(anchorGlobalPage);
   if (spreadIndex === undefined) return null;
 
+  return buildResolvedSpreadAtIndex(intent, state, projection, spreadIndex);
+}
+
+export function buildResolvedSpreadWindow(
+  intent: SpreadIntent,
+  state: SpreadComputationState,
+): ResolvedSpreadWindow | null {
+  const anchorGlobalPage = resolveAnchorToGlobalPage(
+    state.pagesByChapter,
+    state.chapterPageOffsets,
+    state.anchor,
+  );
+  if (anchorGlobalPage === null) return null;
+
+  const projection = buildSpreadProjection(state);
+  const spreadIndex = projection.spreadIndexByGlobalPage.get(anchorGlobalPage);
+  if (spreadIndex === undefined) return null;
+
+  const current = buildResolvedSpreadAtIndex(
+    intent,
+    state,
+    projection,
+    spreadIndex,
+  );
+  if (!current) return null;
+
+  return {
+    previous: buildResolvedSpreadAtIndex(
+      intent,
+      state,
+      projection,
+      spreadIndex - 1,
+    ),
+    current,
+    next: buildResolvedSpreadAtIndex(
+      intent,
+      state,
+      projection,
+      spreadIndex + 1,
+    ),
+  };
+}
+
+function buildResolvedSpreadAtIndex(
+  intent: SpreadIntent,
+  state: SpreadComputationState,
+  projection: SpreadProjection,
+  spreadIndex: number,
+): ResolvedSpread | null {
+  if (spreadIndex < 0 || spreadIndex >= projection.spreadMap.length) {
+    return null;
+  }
+
   const spread = projection.spreadMap[spreadIndex];
   if (!spread) return null;
 
@@ -219,7 +273,8 @@ export function buildResolvedSpread(
     (slot): slot is Extract<(typeof slots)[number], { kind: "page" }> =>
       slot.kind === "page",
   );
-  const firstVisiblePage = pageSlots[0]?.page.currentPage ?? anchorGlobalPage;
+  const firstVisiblePage = pageSlots[0]?.page.currentPage;
+  if (firstVisiblePage === undefined) return null;
 
   return {
     slots,

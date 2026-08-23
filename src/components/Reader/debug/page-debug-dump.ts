@@ -846,7 +846,7 @@ export function collectReaderPageDebugDumpEnvironment(options: {
   const { documentElement } = document;
   const pageSlotElements = Array.from(
     options.stageContentElement?.querySelectorAll<HTMLElement>(
-      "[data-reader-page-slot]",
+      "[data-reader-spread-layer='current'] [data-reader-page-slot]",
     ) ?? [],
   );
 

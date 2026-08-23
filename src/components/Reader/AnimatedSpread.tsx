@@ -6,17 +6,20 @@ import { PageSliceView } from "./PageSliceView";
 
 export type NavDirection = "forward" | "backward" | "instant";
 
-interface AnimatedSpreadProps {
+export interface SpreadViewProps {
   spread: ResolvedSpread;
   spreadConfig: SpreadConfig;
   columnSpacingPx: number;
   paginationConfig: PaginationConfig;
   showDebugOutlines?: boolean;
-  disableAnimations?: boolean;
   paddingTopPx: number;
   paddingBottomPx: number;
   paddingLeftPx: number;
   paddingRightPx: number;
+}
+
+interface AnimatedSpreadProps extends SpreadViewProps {
+  disableAnimations?: boolean;
 }
 
 const EASE_OUT_QUAD = [0.25, 0.46, 0.45, 0.94] as [
@@ -29,6 +32,84 @@ const EASE_OUT_QUAD = [0.25, 0.46, 0.45, 0.94] as [
 /** Padding added around the text area so text doesn't sit at the edge of the page. */
 export const PAGE_PADDING_X = 32;
 export const PAGE_PADDING_Y = 48;
+
+export function SpreadView({
+  spread,
+  spreadConfig,
+  columnSpacingPx,
+  paginationConfig,
+  showDebugOutlines = false,
+  paddingTopPx,
+  paddingBottomPx,
+  paddingLeftPx,
+  paddingRightPx,
+}: SpreadViewProps) {
+  return (
+    <div
+      className="h-full w-full overflow-hidden"
+      style={{
+        paddingTop: `${paddingTopPx}px`,
+        paddingBottom: `${paddingBottomPx}px`,
+        paddingLeft: `${paddingLeftPx}px`,
+        paddingRight: `${paddingRightPx}px`,
+      }}
+    >
+      <div
+        className="h-full w-full overflow-hidden grid"
+        style={{
+          gridTemplateColumns: `repeat(${spreadConfig.columns}, minmax(0, 1fr))`,
+          columnGap: `${columnSpacingPx}px`,
+        }}
+      >
+        {spread.slots.map((slot) => {
+          if (slot.kind === "gap") {
+            return (
+              <div
+                key={`gap-${slot.slotIndex}`}
+                className={
+                  showDebugOutlines
+                    ? "h-full w-full bg-transparent reader-container-outline"
+                    : "h-full w-full bg-transparent"
+                }
+              />
+            );
+          }
+
+          return (
+            <div
+              key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
+              data-reader-page-slot={slot.slotIndex}
+              data-reader-current-page={slot.page.currentPage}
+              className={
+                showDebugOutlines
+                  ? "relative h-full w-full overflow-hidden reader-container-outline"
+                  : "relative h-full w-full overflow-hidden"
+              }
+            >
+              <div
+                className="pointer-events-none absolute inset-0"
+                aria-hidden="true"
+              />
+              <div
+                className="relative z-10 h-full w-full overflow-hidden"
+                data-reader-page-content
+              >
+                {slot.page.content.map((slice, i) => (
+                  <PageSliceView
+                    key={`${slice.blockId}-${slot.slotIndex}-${i}`}
+                    slice={slice}
+                    sliceIndex={i}
+                    baseFontSize={paginationConfig.fontConfig.baseSizePx}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const pageVariants = {
   initial: (dir: NavDirection) => ({
@@ -94,88 +175,27 @@ export function AnimatedSpread({
     setPresenceSnapshot({ direction: rawDirection, isPresent });
   }
 
-  // Z-index rules:
+  // While the swipe stage owns movement, AnimatePresence can retain the old
+  // spread for one commit even though its exit animation is disabled. Keep that
+  // retained spread below the new current spread so it cannot flash over the
+  // adjacent page that the swipe already revealed.
+  //
+  // Tap-navigation z-index rules:
   //   backward exit  → 1 (slides away on top, revealing the incoming page beneath)
   //   forward enter  → 2 (slides in on top; must beat any stale backward-exit at 1)
   //   everything else → 0
   // The forward-enter value is intentionally higher than backward-exit so that an
   // interrupted prev→next sequence doesn't leave a stale exiting page above the
   // new incoming page.
-  const zIndex =
-    isPresent && direction === "forward"
+  const zIndex = disableAnimations
+    ? isPresent
+      ? 1
+      : 0
+    : isPresent && direction === "forward"
       ? 2
       : !isPresent && direction === "backward"
         ? 1
         : 0;
-
-  const content = (
-    <>
-      {/* Padding wrapper — keeps text away from the page edges */}
-      <div
-        className="h-full w-full overflow-hidden"
-        style={{
-          paddingTop: `${paddingTopPx}px`,
-          paddingBottom: `${paddingBottomPx}px`,
-          paddingLeft: `${paddingLeftPx}px`,
-          paddingRight: `${paddingRightPx}px`,
-        }}
-      >
-        <div
-          className="h-full w-full overflow-hidden grid"
-          style={{
-            gridTemplateColumns: `repeat(${spreadConfig.columns}, minmax(0, 1fr))`,
-            columnGap: `${columnSpacingPx}px`,
-          }}
-        >
-          {spread.slots.map((slot) => {
-            if (slot.kind === "gap") {
-              return (
-                <div
-                  key={`gap-${slot.slotIndex}`}
-                  className={
-                    showDebugOutlines
-                      ? "h-full w-full bg-transparent reader-container-outline"
-                      : "h-full w-full bg-transparent"
-                  }
-                />
-              );
-            }
-
-            return (
-              <div
-                key={`page-${slot.slotIndex}-${slot.page.currentPage}`}
-                data-reader-page-slot={slot.slotIndex}
-                data-reader-current-page={slot.page.currentPage}
-                className={
-                  showDebugOutlines
-                    ? "relative h-full w-full overflow-hidden reader-container-outline"
-                    : "relative h-full w-full overflow-hidden"
-                }
-              >
-                <div
-                  className="pointer-events-none absolute inset-0"
-                  aria-hidden="true"
-                />
-                <div
-                  className="relative z-10 h-full w-full overflow-hidden"
-                  data-reader-page-content
-                >
-                  {slot.page.content.map((slice, i) => (
-                    <PageSliceView
-                      key={`${slice.blockId}-${slot.slotIndex}-${i}`}
-                      slice={slice}
-                      sliceIndex={i}
-                      baseFontSize={paginationConfig.fontConfig.baseSizePx}
-                    />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </>
-  );
 
   return (
     <motion.div
@@ -187,7 +207,17 @@ export function AnimatedSpread({
       animate={disableAnimations ? undefined : "animate"}
       exit={disableAnimations ? undefined : "exit"}
     >
-      {content}
+      <SpreadView
+        spread={spread}
+        spreadConfig={spreadConfig}
+        columnSpacingPx={columnSpacingPx}
+        paginationConfig={paginationConfig}
+        showDebugOutlines={showDebugOutlines}
+        paddingTopPx={paddingTopPx}
+        paddingBottomPx={paddingBottomPx}
+        paddingLeftPx={paddingLeftPx}
+        paddingRightPx={paddingRightPx}
+      />
     </motion.div>
   );
 }
