@@ -11,7 +11,13 @@ import {
 import { ensurePublisherFontsReadyFromBlocks } from "@/lib/pagination-v2/shared/publisher-fonts";
 import type { Highlight } from "@/types/highlight";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   buildHighlightSignature,
   buildHighlightsBySpineItemId,
@@ -107,6 +113,27 @@ function getPublisherBodySizeCacheKey(
   return publisherBodyFontScale
     ? `body-size-matched:${publisherBodyFontScale}`
     : "body-size-matched:none";
+}
+
+function getReaderChapterArtifactSignature(options: {
+  highlightSignature: string;
+  publisherBookStylingEnabled: boolean;
+  matchPublisherBodyTextSize: boolean;
+  publisherBodyFontScale: number | undefined;
+}): string {
+  const {
+    highlightSignature,
+    publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
+    publisherBodyFontScale,
+  } = options;
+  return `${getPublisherStylingCacheKey(
+    publisherBookStylingEnabled,
+  )}:${getPublisherBodySizeCacheKey(
+    publisherBookStylingEnabled,
+    matchPublisherBodyTextSize,
+    publisherBodyFontScale,
+  )}:${highlightSignature}`;
 }
 
 function scheduleArtifactTaskProbe(initialChapterIndex: number): void {
@@ -274,6 +301,7 @@ export function useReaderChapterArtifactsLoader(options: {
   const listenersRef = useRef<Set<ReaderChapterArtifactSubscriber>>(new Set());
   const backgroundLoadAllowedRef = useRef(false);
   const backgroundLoadWaitersRef = useRef<Set<() => void>>(new Set());
+  const activeBookIdRef = useRef<string | undefined>(undefined);
 
   const highlightsBySpineItemId = useMemo(
     () => buildHighlightsBySpineItemId(highlights),
@@ -297,14 +325,71 @@ export function useReaderChapterArtifactsLoader(options: {
     });
   }, []);
 
-  useEffect(() => {
-    for (const resolve of backgroundLoadWaitersRef.current) resolve();
-    backgroundLoadWaitersRef.current.clear();
-    backgroundLoadAllowedRef.current = false;
-    artifactsByChapterRef.current.clear();
-    signaturesByChapterRef.current.clear();
-    listenersRef.current.clear();
-  }, [bookId]);
+  useLayoutEffect(() => {
+    if (activeBookIdRef.current !== bookId) {
+      for (const resolve of backgroundLoadWaitersRef.current) resolve();
+      backgroundLoadWaitersRef.current.clear();
+      backgroundLoadAllowedRef.current = false;
+      artifactsByChapterRef.current.clear();
+      signaturesByChapterRef.current.clear();
+      listenersRef.current.clear();
+      activeBookIdRef.current = bookId;
+    }
+
+    if (
+      !enabled ||
+      !bookId ||
+      !fileHash ||
+      !baseContentByChapter ||
+      !initialLocation
+    ) {
+      return;
+    }
+
+    const chapterIndex = initialLocation.chapterIndex;
+    if (artifactsByChapterRef.current.has(chapterIndex)) return;
+
+    const chapter = chapterEntries[chapterIndex];
+    const baseContent = baseContentByChapter.get(chapterIndex);
+    if (!chapter || !baseContent) return;
+
+    const chapterHighlights =
+      highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
+    const highlightSignature = buildHighlightSignature(chapterHighlights);
+    const artifactSignature = getReaderChapterArtifactSignature({
+      highlightSignature,
+      publisherBookStylingEnabled,
+      matchPublisherBodyTextSize,
+      publisherBodyFontScale: baseContent.publisherBodyFontScale,
+    });
+    const queryKey = readerChapterArtifactKeys.chapter(
+      bookId,
+      fileHash,
+      chapterIndex,
+      chapter.spineItemId,
+      highlightSignature,
+      publisherBookStylingEnabled,
+      matchPublisherBodyTextSize,
+      baseContent.publisherBodyFontScale,
+    );
+    const cachedArtifact =
+      queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
+    if (!cachedArtifact) return;
+
+    artifactsByChapterRef.current.set(chapterIndex, cachedArtifact);
+    signaturesByChapterRef.current.set(chapterIndex, artifactSignature);
+  }, [
+    baseContentByChapter,
+    bookId,
+    chapterEntries,
+    enabled,
+    fileHash,
+    highlightsBySpineItemId,
+    initialLocation,
+    matchPublisherBodyTextSize,
+    publisherBookStylingEnabled,
+    queryClient,
+  ]);
 
   useEffect(() => {
     if (
@@ -414,13 +499,12 @@ export function useReaderChapterArtifactsLoader(options: {
           const chapterHighlights =
             highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
           const highlightSignature = buildHighlightSignature(chapterHighlights);
-          const artifactSignature = `${getPublisherStylingCacheKey(
-            publisherBookStylingEnabled,
-          )}:${getPublisherBodySizeCacheKey(
+          const artifactSignature = getReaderChapterArtifactSignature({
+            highlightSignature,
             publisherBookStylingEnabled,
             matchPublisherBodyTextSize,
-            baseContent.publisherBodyFontScale,
-          )}:${highlightSignature}`;
+            publisherBodyFontScale: baseContent.publisherBodyFontScale,
+          });
           const previousSignature =
             signaturesByChapterRef.current.get(chapterIndex);
           const previousArtifact =

@@ -1,5 +1,5 @@
 import { usePagination } from "@/lib/pagination-v2";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import type {
   ParsedChapterBlocks,
   ReaderInitialLocation,
@@ -45,7 +45,7 @@ export function useReaderPaginationFeed({
     initializedBookIdRef.current = null;
   }, [bookId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (
       !enabled ||
       !bookId ||
