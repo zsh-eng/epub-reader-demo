@@ -12,6 +12,7 @@ import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useReadingSessionsQuery } from "@/hooks/use-reading-sessions-query";
+import { useSearchStickyState } from "@/hooks/use-search-sticky-state";
 import {
   useAllHighlightsQuery,
   type BookHighlightGroup,
@@ -206,26 +207,6 @@ function useElementWidth() {
   }, []);
 
   return { elementRef, width };
-}
-
-function useSearchStickyState() {
-  const anchorRef = useRef<HTMLDivElement>(null);
-  const [isCompact, setIsCompact] = useState(false);
-
-  useEffect(() => {
-    const anchor = anchorRef.current;
-    if (!anchor || typeof IntersectionObserver === "undefined") return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setIsCompact(!entry.isIntersecting),
-      { rootMargin: "-12px 0px 0px 0px", threshold: 0 },
-    );
-    observer.observe(anchor);
-
-    return () => observer.disconnect();
-  }, []);
-
-  return { anchorRef, isCompact };
 }
 
 /**
@@ -1497,7 +1478,7 @@ function ColorFilters({
     <div
       role="group"
       aria-label="Filter by highlight color"
-      className="flex items-center gap-1.5"
+      className="flex items-center gap-1 md:gap-1.5"
     >
       {HIGHLIGHT_COLORS.map(({ name }) => {
         const isSelected = selectedColors.includes(name);
@@ -1518,7 +1499,7 @@ function ColorFilters({
             aria-pressed={isSelected}
             title={actionLabel}
             className={cn(
-              "size-6 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94]",
+              "size-8 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-6",
               !isSelected && "opacity-25 shadow-none",
             )}
             style={getHighlightAccentStyle(name)}
@@ -1567,20 +1548,20 @@ function HighlightsSearch({
         placeholder="Search all highlights…"
         aria-label="Search all highlights"
         className={cn(
-          "h-14 appearance-none bg-card pl-10 shadow-md [&::-webkit-search-cancel-button]:hidden",
-          value ? "pr-44 md:pr-48" : "pr-36 md:pr-40",
+          "h-14 appearance-none bg-background/75 pl-10 shadow-md backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 [&::-webkit-search-cancel-button]:hidden",
+          value ? "pr-48" : "pr-40",
         )}
       />
-      <div className="absolute top-1/2 right-4 flex -translate-y-1/2 items-center gap-2.5">
+      <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 md:right-4 md:gap-2.5">
         {value && (
           <button
             type="button"
             onClick={() => onChange("")}
             aria-label="Clear highlight search"
             title="Clear search"
-            className="grid size-7 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94]"
+            className="grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-7"
           >
-            <X className="size-3.5" aria-hidden="true" />
+            <X className="size-4 md:size-3.5" aria-hidden="true" />
           </button>
         )}
         <ColorFilters
@@ -1790,7 +1771,7 @@ export function HighlightsMasonry() {
           className="h-px shrink-0"
           aria-hidden="true"
         />
-        <div className="sticky top-0 z-30 isolate w-full bg-background pt-3">
+        <div className="sticky top-0 z-30 isolate w-full pt-3">
           <div className="mx-auto w-full max-w-2xl px-4">
             <HighlightsSearch
               value={searchQuery}

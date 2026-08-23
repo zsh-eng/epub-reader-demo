@@ -7,6 +7,7 @@ import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
+import { useSearchStickyState } from "@/hooks/use-search-sticky-state";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -17,7 +18,8 @@ import type { Book, ReadingStatus, SyncedBook } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
-import { Library as LibraryIcon, Upload } from "lucide-react";
+import { Library as LibraryIcon, Search, Upload, X } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import {
   useCallback,
   useEffect,
@@ -44,6 +46,9 @@ export function Library() {
   const [isMobileBookActionsOpen, setIsMobileBookActionsOpen] = useState(false);
   const mobileBookActionsInstanceRef = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const reducedMotion = useReducedMotion() ?? false;
+  const { anchorRef: searchAnchorRef, isCompact: isSearchCompact } =
+    useSearchStickyState();
   const { toast } = useToast();
   const { importFiles, isProcessing, openFilePicker } = useEpubImport();
   const queryClient = useQueryClient();
@@ -235,23 +240,57 @@ export function Library() {
 
       {/* Main Content */}
       <main className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
-        {/* Hero Search Bar */}
-        <div className="mb-10 flex max-w-3xl items-center gap-3 md:mb-16">
-          <SmoothCaretInput
-            ref={searchInputRef}
-            type="text"
-            aria-label="Search library"
-            placeholder="Search my library..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.currentTarget.value)}
-            containerClassName="min-w-0 flex-1"
-            className="w-full bg-transparent border-none outline-none text-xl md:indent-[0.25em] md:text-4xl lg:text-5xl 2xl:text-7xl md:font-serif md:italic placeholder:text-muted-foreground/40 md:placeholder:italic text-foreground"
-          />
-          <SidebarTrigger
-            aria-label="Open navigation"
-            title="Open navigation"
-            className="size-9 rounded-full border border-border/60 bg-background/75 text-muted-foreground shadow-sm backdrop-blur-xl hover:bg-background/95 hover:text-foreground md:hidden"
-          />
+        <div
+          ref={searchAnchorRef}
+          className="h-px shrink-0"
+          aria-hidden="true"
+        />
+        <div className="sticky top-0 z-30 isolate mb-10 pt-3 md:mb-16">
+          <motion.div
+            className="mx-auto flex w-full max-w-3xl origin-top items-center gap-3"
+            initial={false}
+            animate={{
+              transform:
+                isSearchCompact && !reducedMotion
+                  ? "translate3d(0, 0, 0) scale(0.94)"
+                  : "translate3d(0, 0, 0) scale(1)",
+            }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+          >
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute top-1/2 left-3.5 z-30 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <SmoothCaretInput
+                ref={searchInputRef}
+                type="search"
+                aria-label="Search library"
+                placeholder="Search my library…"
+                value={searchQuery}
+                onChange={(event) =>
+                  setSearchQuery(event.currentTarget.value)
+                }
+                className="h-14 w-full appearance-none rounded-full border border-input bg-background/75 pr-12 pl-10 text-sm text-foreground shadow-md backdrop-blur-xl transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  aria-label="Clear library search"
+                  title="Clear search"
+                  className="absolute top-1/2 right-3 z-30 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94]"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <SidebarTrigger
+              aria-label="Open navigation"
+              title="Open navigation"
+              className="size-14 rounded-full border border-border/60 bg-background/75 text-muted-foreground shadow-md backdrop-blur-xl hover:bg-background/95 hover:text-foreground [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none md:hidden"
+            />
+          </motion.div>
         </div>
 
         {/* Books Content */}

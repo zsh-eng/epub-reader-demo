@@ -120,6 +120,7 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Fix animations when tapping sheet button
 
 - [ ] Highlight button circles should be bigger
+- [ ] Move search bar to the bottom of the page for standardisation?
 - [ ] Swipe to change page (carousel style)
 - [ ] Perf improvements
 
