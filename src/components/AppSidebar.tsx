@@ -68,10 +68,7 @@ interface ContinueReadingCardProps {
   lastRead: number;
 }
 
-/**
- * A quiet resume destination. The cover wash adds identity, while the sharp
- * thumbnail and sidebar-toned gradient keep arbitrary cover art legible.
- */
+/** A quiet resume destination for one book in the reading list. */
 function ContinueReadingCard({
   book,
   coverUrl,
@@ -85,62 +82,44 @@ function ContinueReadingCard({
       })}`;
 
   return (
-    <div className="px-1">
-      <p className="mb-2 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
-        Continue reading
-      </p>
-      <Link
-        to={`/reader/${book.id}`}
-        aria-label={`Continue reading ${book.title}`}
-        aria-current={isActive ? "page" : undefined}
-        className={cn(
-          "group relative flex min-h-[80px] w-full overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5 text-sidebar-foreground outline-none transition-[transform,border-color,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100",
-          "hover:border-sidebar-foreground/15 hover:bg-sidebar-accent/55",
-          isActive && "border-sidebar-foreground/20 bg-sidebar-accent/65",
-        )}
-        title={`Continue reading ${book.title}`}
-      >
-        {coverUrl && (
-          <img
-            src={coverUrl}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 size-full scale-110 object-cover opacity-30 blur-lg saturate-75"
-          />
-        )}
-        <span
-          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-sidebar via-sidebar/90 to-sidebar/65"
-          aria-hidden="true"
-        />
+    <Link
+      to={`/reader/${book.id}`}
+      aria-label={`Continue reading ${book.title}`}
+      aria-current={isActive ? "page" : undefined}
+      className={cn(
+        "group relative flex min-h-[80px] w-full overflow-hidden rounded-xl border border-sidebar-border/80 bg-sidebar-accent/35 p-2.5 text-sidebar-foreground outline-none transition-[transform,border-color,background-color] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100",
+        "hover:border-sidebar-foreground/15 hover:bg-sidebar-accent/55",
+        isActive && "border-sidebar-foreground/20 bg-sidebar-accent/65",
+      )}
+      title={`Continue reading ${book.title}`}
+    >
+      <span className="relative flex min-w-0 items-center gap-2.5">
+        <span className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-sidebar-border/80 bg-sidebar-accent shadow-sm">
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt=""
+              aria-hidden="true"
+              className="size-full object-cover"
+            />
+          ) : (
+            <BookOpenText
+              className="size-4 text-sidebar-foreground/45"
+              aria-hidden="true"
+            />
+          )}
+        </span>
 
-        <span className="relative flex min-w-0 items-center gap-2.5">
-          <span className="flex h-14 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[5px] border border-sidebar-border/80 bg-sidebar-accent shadow-sm">
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt=""
-                aria-hidden="true"
-                className="size-full object-cover"
-              />
-            ) : (
-              <BookOpenText
-                className="size-4 text-sidebar-foreground/45"
-                aria-hidden="true"
-              />
-            )}
+        <span className="min-w-0 flex-1">
+          <span className="line-clamp-2 font-serif text-[13px] font-medium leading-[17px] tracking-[-0.01em]">
+            {book.title}
           </span>
-
-          <span className="min-w-0 flex-1">
-            <span className="line-clamp-2 font-serif text-[13px] font-medium leading-[17px] tracking-[-0.01em]">
-              {book.title}
-            </span>
-            <span className="mt-1 block truncate text-[11px] leading-4 text-sidebar-foreground/55">
-              {activityLabel}
-            </span>
+          <span className="mt-1 block truncate text-[11px] leading-4 text-sidebar-foreground/55">
+            {activityLabel}
           </span>
         </span>
-      </Link>
-    </div>
+      </span>
+    </Link>
   );
 }
 
@@ -160,9 +139,27 @@ export function AppSidebar() {
     if (!booksData) return null;
     return findMostRecentlyReadBook(booksData.books, booksData.lastReadByBook);
   }, [booksData]);
+  const continueReadingBooks = useMemo(() => {
+    if (!booksData) return [];
+
+    return booksData.categorized.continueReading.map((book) => ({
+      book,
+      lastRead:
+        booksData.lastReadByBook.get(book.id) ??
+        book.lastOpened ??
+        book.dateAdded,
+    }));
+  }, [booksData]);
   const recentBooks = useMemo(
-    () => (recentReading ? [recentReading.book] : []),
-    [recentReading],
+    () =>
+      [
+        ...continueReadingBooks.map(({ book }) => book),
+        ...(recentReading ? [recentReading.book] : []),
+      ].filter(
+        (book, index, books) =>
+          books.findIndex((candidate) => candidate.id === book.id) === index,
+      ),
+    [continueReadingBooks, recentReading],
   );
   const { coverUrls } = useLibraryCoverUrls(recentBooks);
   const isSidebarOpen = isMobile ? openMobile : open;
@@ -299,9 +296,9 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-3 py-2">
-        <SidebarGroup>
-          <SidebarMenu>
+      <SidebarContent className="min-h-0 overflow-hidden px-3 py-2">
+        <SidebarGroup className="min-h-0 flex-1">
+          <SidebarMenu className="shrink-0">
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location.pathname === "/"}
@@ -331,17 +328,25 @@ export function AppSidebar() {
             </SidebarMenuItem>
           </SidebarMenu>
 
-          {recentReading && (
+          {continueReadingBooks.length > 0 && (
             <>
-              <SidebarSeparator className="my-3" />
-              <ContinueReadingCard
-                book={recentReading.book}
-                coverUrl={recentBookCoverUrl}
-                lastRead={recentReading.lastRead}
-                isActive={
-                  location.pathname === `/reader/${recentReading.book.id}`
-                }
-              />
+              <SidebarSeparator className="my-3 shrink-0" />
+              <div className="flex min-h-0 flex-1 flex-col px-1">
+                <p className="mb-2 shrink-0 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
+                  Continue reading
+                </p>
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                  {continueReadingBooks.map(({ book, lastRead }) => (
+                    <ContinueReadingCard
+                      key={book.id}
+                      book={book}
+                      coverUrl={coverUrls.get(book.id)}
+                      lastRead={lastRead}
+                      isActive={location.pathname === `/reader/${book.id}`}
+                    />
+                  ))}
+                </div>
+              </div>
             </>
           )}
         </SidebarGroup>
