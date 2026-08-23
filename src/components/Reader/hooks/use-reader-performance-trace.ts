@@ -4,6 +4,7 @@ import {
   completeReaderTrace,
   endReaderTraceSpan,
   ensureReaderTrace,
+  markReaderTrace,
   markReaderTraceOnce,
   recordReaderTraceSpan,
   startReaderTraceSpan,
@@ -27,7 +28,25 @@ export function useReaderPerformanceTraceRoute(
     }
 
     ensureReaderTrace({ bookId });
-    markReaderTraceOnce("reader-route-mounted", "navigation");
+    markReaderTraceOnce("reader-route-mounted", "navigation", {
+      visibilityState: document.visibilityState,
+      documentHasFocus: document.hasFocus(),
+    });
+    const recordVisibility = () => {
+      markReaderTrace("document-visibility-changed", "navigation", {
+        visibilityState: document.visibilityState,
+        documentHasFocus: document.hasFocus(),
+      });
+    };
+    const recordFocus = () => {
+      markReaderTrace("window-focus-changed", "navigation", {
+        visibilityState: document.visibilityState,
+        documentHasFocus: document.hasFocus(),
+      });
+    };
+    document.addEventListener("visibilitychange", recordVisibility);
+    window.addEventListener("focus", recordFocus);
+    window.addEventListener("blur", recordFocus);
     const supportsLongTasks =
       typeof PerformanceObserver !== "undefined" &&
       PerformanceObserver.supportedEntryTypes?.includes("longtask");
@@ -47,6 +66,9 @@ export function useReaderPerformanceTraceRoute(
     longTaskObserver?.observe({ type: "longtask", buffered: true });
 
     return () => {
+      document.removeEventListener("visibilitychange", recordVisibility);
+      window.removeEventListener("focus", recordFocus);
+      window.removeEventListener("blur", recordFocus);
       longTaskObserver?.disconnect();
       // Defer the interrupt so React Strict Mode can remount the same route
       // without producing a false interrupted trace in development.
@@ -104,6 +126,8 @@ export function useReaderPerformanceTraceLifecycle(options: {
         matchPublisherBodyTextSize: settings.matchPublisherBodyTextSize,
         fontFamily: settings.fontFamily,
         fontSize: settings.fontSize,
+        visibilityState: document.visibilityState,
+        documentHasFocus: document.hasFocus(),
       },
       book.title,
     );
@@ -161,7 +185,10 @@ export function useReaderPerformanceTraceLifecycle(options: {
 
   useEffect(() => {
     if (!bookId || !settledPaintReady) return;
-    markReaderTraceOnce("reader-settled-frame-painted", "reveal");
+    markReaderTraceOnce("reader-settled-frame-painted", "reveal", {
+      visibilityState: document.visibilityState,
+      documentHasFocus: document.hasFocus(),
+    });
   }, [bookId, settledPaintReady]);
 
   useEffect(() => {
