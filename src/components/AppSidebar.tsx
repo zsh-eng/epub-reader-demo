@@ -184,7 +184,9 @@ export function AppSidebar() {
     : undefined;
 
   const isDarkTheme =
-    settings.theme === "dark" || settings.theme === "flexoki-dark";
+    settings.theme === "dark" ||
+    settings.theme === "night" ||
+    settings.theme === "flexoki-dark";
 
   useEffect(() => {
     const markOnline = () => setIsOnline(true);

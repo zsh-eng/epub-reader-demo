@@ -21,6 +21,7 @@
         const THEME_CLASSES = [
           "light",
           "dark",
+          "night",
           "flexoki-light",
           "flexoki-dark",
         ];
@@ -39,15 +40,21 @@
               "(prefers-color-scheme: dark)",
             ).matches;
             const useFlexoki = theme.startsWith("flexoki");
-            theme = useFlexoki
-              ? useDarkTheme
-                ? "flexoki-dark"
-                : "flexoki-light"
-              : useDarkTheme
-                ? "dark"
-                : "light";
+            const useNight = theme === "night";
+            if (useFlexoki) {
+              theme = useDarkTheme ? "flexoki-dark" : "flexoki-light";
+            } else if (useNight) {
+              theme = useDarkTheme ? "night" : "light";
+            } else {
+              theme = useDarkTheme ? "dark" : "light";
+            }
           }
           document.documentElement.classList.add(theme);
+          if (theme === "night") {
+            document
+              .querySelector('meta[name="theme-color"]')
+              ?.setAttribute("content", "#000000");
+          }
         } catch (e) {
           document.documentElement.classList.add(DEFAULT_THEME);
         }

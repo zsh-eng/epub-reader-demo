@@ -100,11 +100,12 @@ below contains only work that still has a clear product or reliability reason.
 
 ### Next
 
-- [ ] Context menu when right click should keep the book card remained in the pressed state (so we know what we are right clicking)
-- [ ] Add more "continue reading" in the sidebar
-- [ ] Fix gradient continue reading
-
+- [x] Context menu when right click should keep the book card remained in the pressed state (so we know what we are right clicking)
+- [x] Add more "continue reading" in the sidebar
+- [x] Fix gradient continue reading
+- [x] Reference telegram and simplify / unify the sidebar design
 - [ ] Fix library search bar cannot type text
+
 - [ ] Keeping the images and the book name in the same column on mobile (since one column only)
 - [ ] Fix gradient, spacing in highlights page
 - [ ] Fix overscroll in reader
@@ -130,6 +131,7 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] Fix long press
 - [ ] LRU Cache of books (continue reading, etc.) - do some napkin math
 - [ ] "Jump back" ideas for reference (need to start storing jump history though)
+- [ ] History tab for total time read
 
 ### Later
 

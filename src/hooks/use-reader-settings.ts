@@ -68,7 +68,7 @@ function normalizeReaderSettings(settings: ReaderSettings): ReaderSettings {
 }
 
 function isDarkReaderTheme(theme: ReaderSettings["theme"]): boolean {
-  return theme === "dark" || theme === "flexoki-dark";
+  return theme === "dark" || theme === "night" || theme === "flexoki-dark";
 }
 
 function resolveAppearanceTheme(
@@ -77,6 +77,7 @@ function resolveAppearanceTheme(
 ): ReaderSettings["theme"] {
   const useFlexoki = currentTheme.startsWith("flexoki");
   if (useFlexoki) return useDarkTheme ? "flexoki-dark" : "flexoki-light";
+  if (currentTheme === "night") return useDarkTheme ? "night" : "light";
   return useDarkTheme ? "dark" : "light";
 }
 
@@ -168,6 +169,16 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
 
       root.classList.remove(...THEME_CLASSES);
       root.classList.add(settings.theme);
+
+      const themeColorMeta = window.document.querySelector(
+        'meta[name="theme-color"]',
+      );
+      if (themeColorMeta) {
+        themeColorMeta.setAttribute(
+          "content",
+          settings.theme === "night" ? "#000000" : "#ffffff",
+        );
+      }
     } catch (error) {
       console.warn("Error saving settings to localStorage:", error);
     }

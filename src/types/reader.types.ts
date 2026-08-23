@@ -43,6 +43,7 @@ export interface ChapterInfo {
 export const THEME_CLASSES = [
   "light",
   "dark",
+  "night",
   "flexoki-light",
   "flexoki-dark",
 ] as const;

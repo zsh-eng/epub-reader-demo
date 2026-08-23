@@ -31,6 +31,11 @@ const themes: ThemeConfig[] = [
     themeClass: "dark",
   },
   {
+    value: "night",
+    label: "Night",
+    themeClass: "night",
+  },
+  {
     value: "flexoki-light",
     label: "Flexoki Light",
     themeClass: "flexoki-light",
