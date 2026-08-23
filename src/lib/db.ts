@@ -406,6 +406,12 @@ class EPUBReaderDB extends Dexie {
       ...LOCAL_TABLES,
     });
 
+    // Version 11: Read one extracted EPUB resource by its exact book and path.
+    this.version(11).stores({
+      ...syncSchemas,
+      ...LOCAL_TABLES,
+    });
+
     // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
   }
 }
@@ -536,9 +542,8 @@ export async function getBookFile(
   path: string,
 ): Promise<BookFile | undefined> {
   return db.bookFiles
-    .where("bookId")
-    .equals(bookId)
-    .and((file) => file.path === path)
+    .where("[bookId+path]")
+    .equals([bookId, path])
     .first();
 }
 
@@ -559,13 +564,10 @@ export async function getBookFilesByPaths(
   }
 
   const uniquePaths = [...new Set(paths)];
-  const files = await db.transaction("r", [db.bookFiles], async () => {
-    return db.bookFiles
-      .where("path")
-      .anyOf(uniquePaths)
-      .and((file) => file.bookId === bookId)
-      .toArray();
-  });
+  const files = await db.bookFiles
+    .where("[bookId+path]")
+    .anyOf(uniquePaths.map((path) => [bookId, path]))
+    .toArray();
 
   return new Map(files.map((file) => [file.path, file]));
 }
