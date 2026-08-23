@@ -159,6 +159,9 @@ Page Debug Dumps for the affected pages.
 
 ## Performance Optimization
 
+See [Reader performance](./PERFORMANCE.md) for the current startup metrics,
+controlled normal/4x results, critical-path findings, and benchmark procedure.
+
 Reader startup used to be dominated by materializing the source HTML. On slower Chrome on Android (Poco F3), opening a large EPUB spent most of the source time inside `Blob.text()`. This is less visible on faster devices like the iPhone 15 Pro Max or MacBook Pro M1 Pro.
 
 The fix is to split reader startup into two caches.
