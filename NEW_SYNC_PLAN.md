@@ -76,7 +76,7 @@ sync_records
 
 Do not drop `sync_data` yet. Do not edit the old migration.
 
-Use Drizzle for the schema and migration history. Use raw D1 SQL inside the endpoints for the batch operations. The sequence-number method is already proven in [sql.ts](/Users/admin/epub-reader-demo/packages/local-sync/src/adapters/d1/sql.ts:3) and documented in [SYNC.md](/Users/admin/epub-reader-demo/SYNC.md:522).
+Use Drizzle for the schema and migration history. Use raw D1 SQL inside the endpoints for the batch operations. The experimental package proved the sequence-number method. The production implementation now lives in [server/index.ts](/Users/admin/epub-reader-demo/server/index.ts:41) and is documented in [SYNC.md](/Users/admin/epub-reader-demo/SYNC.md:515).
 
 Completed on 2026-08-29:
 
@@ -129,7 +129,7 @@ apply device exclusion only when bootstrapped
 
 When the page is complete, return `nextCursor = head`. This advances the cursor across skipped own-device rows without losing concurrent writes above `head`.
 
-Use [local-sync-d1-conformance.test.ts](/Users/admin/epub-reader-demo/test/server/local-sync-d1-conformance.test.ts:62) as the reference. Keep its low-level transaction and query-plan checks until Step 9 transfers or removes them. The v2 endpoint suite should test:
+The retired package's D1 conformance suite was the original reference. The production [sync-v2.test.ts](/Users/admin/epub-reader-demo/test/server/sync-v2.test.ts:15) endpoint suite should test:
 
 - 500-row batches.
 - One-megabyte batches.
@@ -492,7 +492,7 @@ This completes the D1 backup prerequisite in Step 10. It does not apply the v2
 migration, deploy either server or client, transform `sync_data`, or seed
 `sync_records`.
 
-### 9. Retire the experimental package
+### 9. Retire the experimental package — Complete
 
 Only remove `packages/local-sync` after:
 
@@ -502,6 +502,30 @@ Only remove `packages/local-sync` after:
 - `bun run build` and the server tests pass.
 
 Then remove its workspace and lockfile references.
+
+Completed on 2026-08-29:
+
+- Confirmed that the application and new client do not import the experimental
+  package. The production server now owns the compacting D1 batch SQL and
+  sequence allocation.
+- Kept the relevant protocol guarantees in the authenticated v2 endpoint suite:
+  LWW acceptance and rejection, tie-breaking, soft-deleted values, retry
+  behavior, sequence gaps, 500-change batches, payload limits, fixed pull
+  heads, and own-device exclusion.
+- Removed the package-specific D1 conformance suite. Its old application,
+  table, and scope scan shapes are not part of the simpler v2 protocol. The v2
+  SQL names its required indexes, and the endpoint tests execute those paths.
+- Removed all 55 tracked `packages/local-sync` files and its generated build,
+  dependency, and test-result directories.
+- Removed the package Vitest project and stopped loading its migration into the
+  server test database.
+- Regenerated `bun.lock`. This removed the local-sync workspace entry and its
+  now-unused SQLite WASM and Bun type dependencies.
+- Removed the stale benchmark link and updated earlier plan references to point
+  to the production v2 implementation and tests.
+- Passed 67 server tests, 610 client tests, `bun run build`, `bun run lint`, and
+  targeted formatting checks. The repository-wide formatting check still
+  reports 63 pre-existing files outside this change.
 
 ### 10. Deploy the new server path without switching clients
 

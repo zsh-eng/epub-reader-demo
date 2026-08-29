@@ -263,12 +263,6 @@ exclude tombstones until generated filtered views or query helpers are added.
 Cross-table client transaction composition remains deferred; `putMany()` and
 `deleteMany()` are atomic within one table.
 
-The initial `putMany()` baseline and the planned flashcard-scale comparison with
-IndexedDB and Expo SQLite are recorded in
-[`packages/local-sync/BENCHMARKS.md`](packages/local-sync/BENCHMARKS.md). The
-baseline keeps per-row SQL because 500 rows remained sub-second in Chromium and
-Firefox OPFS on the measured M1 Pro development machine.
-
 ### Remote Apply DX
 
 Remote sync should use a separate code path:

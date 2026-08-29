@@ -8,12 +8,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig(async () => {
   // Read all migrations in the `migrations` directory
   const migrationsPath = path.join(__dirname, "drizzle");
-  const localSyncMigrationsPath = path.join(
-    __dirname,
-    "packages/local-sync/migrations/d1",
-  );
   const migrations = await readD1Migrations(migrationsPath);
-  const localSyncMigrations = await readD1Migrations(localSyncMigrationsPath);
 
   return {
     plugins: [
@@ -23,7 +18,7 @@ export default defineConfig(async () => {
           // Add a test-only binding for migrations, so we can apply them in a
           // setup file
           bindings: {
-            TEST_MIGRATIONS: [...migrations, ...localSyncMigrations],
+            TEST_MIGRATIONS: migrations,
           },
         },
       }),
