@@ -393,8 +393,8 @@ The transform from old `sync_data` should:
 - Preserve the old `device_id`.
 - Set `schemaVersion = 1`.
 - Exclude the obsolete append-only `readingProgress` log.
-- Exclude inferred `readingSessions` rows whose source is
-  `legacy-reading-progress`. Retain native `reader-v2` sessions and all compacted
+- Retain both inferred and native `readingSessions`, but remove the obsolete
+  `source` distinction from the new domain value. Retain all compacted
   `readingCheckpoints`.
 
 Test the tool against a local copy of the old D1 schema. Verify counts, tombstones, representative values, and deterministic output.
@@ -435,15 +435,18 @@ Production-filter amendment completed on 2026-08-29:
 
 - Added explicit exclusion reporting with source, retained, and excluded row
   counts. Deprecated rows are skipped before HLC, device, and value migration.
-- Excluded all 45,017 production `readingProgress` rows and all 172 inferred
-  `legacy-reading-progress` sessions. Retained all 32 checkpoints and all 209
-  native `reader-v2` sessions.
+- Excluded all 45,017 production `readingProgress` rows. Retained all 32
+  checkpoints and all 381 sessions, including the 172 sessions inferred from
+  legacy progress and the 209 sessions recorded by the current reader.
+- Removed the session `source` field from migrated values and from the current
+  client domain model. Inferred-session IDs keep their deterministic prefix so
+  the dormant rerunnable backfill can still identify them until cleanup.
 - Added a production-shaped test that locks the reduction from 45,975 source
-  rows to 786 seed records, plus a focused test for checkpoint and session
-  filtering.
+  rows to 958 seed records, plus a focused test that verifies both session
+  histories survive without a source label.
 - Updated the CLI to accept either a Wrangler SQL export or the verified local
-  SQLite backup. A read-only dry-run against the backup produced 786 records:
-  769 active and 17 retained soft deletes, with zero HLC-device mismatches.
+  SQLite backup. A read-only dry-run against the backup produced 958 records:
+  941 active and 17 retained soft deletes, with zero HLC-device mismatches.
 - Removed `readingProgress` from the v2 synced-table registration. Its Dexie
   table remains local-only for dormant legacy and debug code until final
   cleanup.

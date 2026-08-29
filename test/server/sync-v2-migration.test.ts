@@ -174,7 +174,7 @@ describe("sync v2 production-data migration", () => {
     });
   });
 
-  it("retains checkpoints and native sessions but excludes inferred sessions", () => {
+  it("retains all sessions without preserving their legacy source label", () => {
     const checkpoint = {
       ...legacyRow(
         "checkpoint-1",
@@ -215,23 +215,23 @@ describe("sync v2 production-data migration", () => {
 
     expect(migration.report).toMatchObject({
       sourceRows: 3,
-      totalRows: 2,
-      excludedRows: 1,
-      exclusions: [
-        {
-          reason: "inferred-legacy-reading-session",
-          tableName: "readingSessions",
-          totalRows: 1,
-        },
-      ],
+      totalRows: 3,
+      excludedRows: 0,
+      exclusions: [],
     });
     expect(migration.records.map((record) => record.key)).toEqual([
       encodeSyncKey("readingCheckpoints", "checkpoint-1"),
+      encodeSyncKey("readingSessions", "inferred-session"),
       encodeSyncKey("readingSessions", "native-session"),
     ]);
+    for (const record of migration.records.filter((record) =>
+      record.key.startsWith('["readingSessions",'),
+    )) {
+      expect(decodeSyncValue(record.value)).not.toHaveProperty("source");
+    }
   });
 
-  it("reduces the production-shaped source from 45,975 to 786 records", () => {
+  it("reduces the production-shaped source from 45,975 to 958 records", () => {
     const rows: LegacySyncDataRow[] = [];
     appendLegacyRows(rows, 45_017, "progress", "readingProgress");
     appendLegacyRows(rows, 172, "inferred-session", "readingSessions", {
@@ -249,18 +249,13 @@ describe("sync v2 production-data migration", () => {
 
     expect(migration.report).toMatchObject({
       sourceRows: 45_975,
-      totalRows: 786,
-      excludedRows: 45_189,
+      totalRows: 958,
+      excludedRows: 45_017,
       exclusions: [
         {
           reason: "deprecated-reading-progress",
           tableName: "readingProgress",
           totalRows: 45_017,
-        },
-        {
-          reason: "inferred-legacy-reading-session",
-          tableName: "readingSessions",
-          totalRows: 172,
         },
       ],
     });
@@ -275,7 +270,7 @@ describe("sync v2 production-data migration", () => {
       books: 27,
       highlights: 481,
       readingCheckpoints: 32,
-      readingSessions: 209,
+      readingSessions: 381,
       readingState: 37,
     });
   });

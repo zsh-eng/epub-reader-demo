@@ -100,20 +100,12 @@ export interface ReadingCheckpoint {
 }
 
 export const READING_SESSION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
-export const READER_V2_READING_SESSION_SOURCE = "reader-v2" as const;
-export const LEGACY_READING_PROGRESS_SESSION_SOURCE =
-  "legacy-reading-progress" as const;
-
-export type ReadingSessionSource =
-  | typeof READER_V2_READING_SESSION_SOURCE
-  | typeof LEGACY_READING_PROGRESS_SESSION_SOURCE;
 
 export interface ReadingSession {
   id: string; // UUID primary key for this reader-open session
   bookId: string; // Foreign key to Book
   deviceId: string; // Device that owns this session
   readerInstanceId: string; // Ephemeral mounted reader/window instance
-  source: ReadingSessionSource; // Native reader session or inferred legacy backfill
   startedAt: number; // Timestamp when the reader session began
   /**
    * Best-effort timestamp for when the reader session ended.
@@ -807,7 +799,7 @@ export async function closeStaleReadingSessionsForCurrentDevice(
   return staleSessions.length;
 }
 
-const LEGACY_READING_PROGRESS_SESSION_ID_PREFIX = `${LEGACY_READING_PROGRESS_SESSION_SOURCE}:v1:`;
+const LEGACY_READING_PROGRESS_SESSION_ID_PREFIX = "legacy-reading-progress:v1:";
 
 export interface BackfillLegacyReadingProgressSessionsOptions {
   /**
@@ -870,7 +862,7 @@ function createLegacyReadingProgressReaderInstanceId(
 }
 
 function isLegacyReadingProgressSession(session: ReadingSession): boolean {
-  return session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE;
+  return session.id.startsWith(LEGACY_READING_PROGRESS_SESSION_ID_PREFIX);
 }
 
 function compareLegacyReadingProgressRows(
@@ -938,7 +930,6 @@ function createReadingSessionFromLegacyDraft(
       draft.bookId,
       draft.startedAt,
     ),
-    source: LEGACY_READING_PROGRESS_SESSION_SOURCE,
     startedAt: draft.startedAt,
     endedAt: draft.lastActiveAt,
     lastActiveAt: draft.lastActiveAt,

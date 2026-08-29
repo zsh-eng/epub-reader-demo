@@ -30,14 +30,11 @@ import {
   backfillLegacyReadingProgressCheckpoints,
   backfillLegacyReadingProgressSessions,
   db,
-  LEGACY_READING_PROGRESS_SESSION_SOURCE,
-  READER_V2_READING_SESSION_SOURCE,
   READING_SESSION_IDLE_TIMEOUT_MS,
   type BackfillLegacyReadingProgressCheckpointsBookSummary,
   type BackfillLegacyReadingProgressCheckpointsResult,
   type BackfillLegacyReadingProgressSessionsBookSummary,
   type BackfillLegacyReadingProgressSessionsResult,
-  type ReadingSessionSource,
   type Book,
   type ReadingSession,
 } from "@/lib/db";
@@ -89,7 +86,6 @@ interface ReadingSessionDebugRow {
   bookId: string;
   bookTitle: string;
   bookAuthor: string;
-  source: ReadingSessionSource;
   startedAt: number;
   endedAt: number | null;
   lastActiveAt: number;
@@ -149,12 +145,6 @@ function formatPosition(spineIndex: number, scrollProgress: number): string {
   return `Ch ${spineIndex + 1} - ${progress.toFixed(1)}%`;
 }
 
-function formatSource(source: ReadingSessionSource): string {
-  return source === LEGACY_READING_PROGRESS_SESSION_SOURCE
-    ? "Legacy"
-    : "Reader v2";
-}
-
 function truncateId(id: string): string {
   if (id.length <= 12) return id;
   return `${id.slice(0, 8)}...${id.slice(-4)}`;
@@ -181,7 +171,6 @@ async function getReadingSessionsDebugData(): Promise<ReadingSessionsDebugData> 
         bookId: session.bookId,
         bookTitle,
         bookAuthor,
-        source: session.source,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         lastActiveAt: session.lastActiveAt,
@@ -206,7 +195,6 @@ async function getReadingSessionsDebugData(): Promise<ReadingSessionsDebugData> 
           session.bookId,
           session.deviceId,
           session.readerInstanceId,
-          session.source,
         ]
           .join(" ")
           .toLowerCase(),
@@ -286,21 +274,6 @@ const columns: DebugColumn[] = [
           {row.bookAuthor}
         </div>
       </div>
-    ),
-  },
-  {
-    id: "source",
-    header: () => "Source",
-    cell: (row) => (
-      <Badge
-        variant={
-          row.source === READER_V2_READING_SESSION_SOURCE
-            ? "default"
-            : "secondary"
-        }
-      >
-        {formatSource(row.source)}
-      </Badge>
     ),
   },
   {
@@ -834,9 +807,6 @@ function LegacyCheckpointBackfillDialog({
 
 export function ReadingSessionsDebug() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [sourceFilter, setSourceFilter] = useState<
-    "all" | ReadingSessionSource
-  >("all");
   const [bookFilter, setBookFilter] = useState("all");
   const [deviceFilter, setDeviceFilter] = useState("all");
   const [isBackfillDialogOpen, setIsBackfillDialogOpen] = useState(false);
@@ -859,7 +829,6 @@ export function ReadingSessionsDebug() {
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     return (query.data?.rows ?? []).filter((row) => {
-      if (sourceFilter !== "all" && row.source !== sourceFilter) return false;
       if (bookFilter !== "all" && row.bookId !== bookFilter) return false;
       if (deviceFilter !== "all" && row.deviceId !== deviceFilter) return false;
       if (normalizedSearch && !row.searchText.includes(normalizedSearch)) {
@@ -867,19 +836,15 @@ export function ReadingSessionsDebug() {
       }
       return true;
     });
-  }, [bookFilter, deviceFilter, query.data?.rows, searchQuery, sourceFilter]);
+  }, [bookFilter, deviceFilter, query.data?.rows, searchQuery]);
 
   const summary = useMemo(() => {
     const rows = query.data?.rows ?? [];
-    const readerV2 = rows.filter(
-      (row) => row.source === READER_V2_READING_SESSION_SOURCE,
-    ).length;
-    const legacy = rows.length - readerV2;
     const open = rows.filter((row) => row.endedAt === null).length;
     const staleOpen = rows.filter((row) => row.isStaleOpen).length;
     const activeMs = rows.reduce((total, row) => total + row.activeMs, 0);
 
-    return { total: rows.length, readerV2, legacy, open, staleOpen, activeMs };
+    return { total: rows.length, open, staleOpen, activeMs };
   }, [query.data?.rows]);
 
   const sortedRows = useMemo(
@@ -941,7 +906,7 @@ export function ReadingSessionsDebug() {
               Reading Sessions
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-              Local debug view for native and legacy-inferred reading sessions.
+              Local debug view for reading sessions and recovered history.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -969,16 +934,11 @@ export function ReadingSessionsDebug() {
           </div>
         </header>
 
-        <section className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="mb-6 grid gap-3 sm:grid-cols-3">
           <StatItem
             label="Total sessions"
             value={summary.total.toLocaleString()}
           />
-          <StatItem
-            label="Reader v2"
-            value={summary.readerV2.toLocaleString()}
-          />
-          <StatItem label="Legacy" value={summary.legacy.toLocaleString()} />
           <StatItem
             label="Open sessions"
             value={
@@ -1004,25 +964,6 @@ export function ReadingSessionsDebug() {
                 className="pl-9"
               />
             </div>
-            <Select
-              value={sourceFilter}
-              onValueChange={(value) =>
-                setSourceFilter(value as "all" | ReadingSessionSource)
-              }
-            >
-              <SelectTrigger className="w-full lg:w-[190px]">
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All sources</SelectItem>
-                <SelectItem value={READER_V2_READING_SESSION_SOURCE}>
-                  Reader v2
-                </SelectItem>
-                <SelectItem value={LEGACY_READING_PROGRESS_SESSION_SOURCE}>
-                  Legacy
-                </SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={bookFilter} onValueChange={setBookFilter}>
               <SelectTrigger className="w-full lg:w-[260px]">
                 <SelectValue placeholder="Book" />

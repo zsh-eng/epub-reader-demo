@@ -18,8 +18,6 @@ const LEGACY_SOURCE_TABLES = new Set([
   "notes",
 ]);
 
-const LEGACY_READING_PROGRESS_SESSION_SOURCE = "legacy-reading-progress";
-
 const LEGACY_METADATA_FIELDS = new Set([
   "_hlc",
   "_deviceId",
@@ -66,9 +64,7 @@ export interface SyncV2MigrationUserReport {
   tables: SyncV2MigrationTableReport[];
 }
 
-export type SyncV2MigrationExclusionReason =
-  | "deprecated-reading-progress"
-  | "inferred-legacy-reading-session";
+export type SyncV2MigrationExclusionReason = "deprecated-reading-progress";
 
 export interface SyncV2MigrationExclusionReport {
   reason: SyncV2MigrationExclusionReason;
@@ -273,20 +269,14 @@ function validateLegacyRow(row: LegacySyncDataRow): LegacySyncDataRow {
 }
 
 /**
- * Removes obsolete derived history before any HLC, device, or value migration.
- * Checkpoints and native reader sessions already contain the durable state.
+ * Removes the obsolete raw history before any HLC, device, or value migration.
+ * Its inferred sessions and compacted checkpoints remain durable state.
  */
 function getMigrationExclusionReason(
   row: LegacySyncDataRow,
 ): SyncV2MigrationExclusionReason | null {
   if (row.table_name === "readingProgress") {
     return "deprecated-reading-progress";
-  }
-
-  if (row.table_name !== "readingSessions") return null;
-  const data = parseLegacyData(row);
-  if (data.source === LEGACY_READING_PROGRESS_SESSION_SOURCE) {
-    return "inferred-legacy-reading-session";
   }
   return null;
 }
@@ -307,6 +297,7 @@ function migrateDomainValue(
       ([field]) =>
         field !== "id" &&
         field !== "isDeleted" &&
+        !(row.table_name === "readingSessions" && field === "source") &&
         !LEGACY_METADATA_FIELDS.has(field),
     ),
   );

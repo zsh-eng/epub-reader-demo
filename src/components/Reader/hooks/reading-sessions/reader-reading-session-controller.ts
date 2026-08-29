@@ -1,8 +1,4 @@
-import {
-  READER_V2_READING_SESSION_SOURCE,
-  READING_SESSION_IDLE_TIMEOUT_MS,
-} from "@/lib/db";
-import type { ReadingSessionSource } from "@/lib/db";
+import { READING_SESSION_IDLE_TIMEOUT_MS } from "@/lib/db";
 import type {
   ResolvedLeafPage,
   ResolvedSpread,
@@ -22,7 +18,6 @@ export interface ReaderReadingSessionSnapshot {
   id: string;
   bookId: string;
   readerInstanceId: string;
-  source: ReadingSessionSource;
   startedAt: number;
   endedAt: number | null;
   lastActiveAt: number;
@@ -116,7 +111,6 @@ export function getReaderReadingSessionSnapshotKey(
     snapshot.id,
     snapshot.bookId,
     snapshot.readerInstanceId,
-    snapshot.source,
     snapshot.startedAt,
     snapshot.endedAt,
     snapshot.lastActiveAt,
@@ -228,7 +222,6 @@ export class ReaderReadingSessionController {
       id: this.createId(),
       bookId: position.bookId,
       readerInstanceId: this.readerInstanceId,
-      source: READER_V2_READING_SESSION_SOURCE,
       startedAt: now,
       endedAt: null,
       lastActiveAt: now,
@@ -299,7 +292,6 @@ export class ReaderReadingSessionController {
       id: session.id,
       bookId: session.bookId,
       readerInstanceId: session.readerInstanceId,
-      source: session.source,
       startedAt: session.startedAt,
       endedAt: session.endedAt,
       lastActiveAt: session.lastActiveAt,

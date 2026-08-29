@@ -1,15 +1,13 @@
 import {
   backfillLegacyReadingProgressSessions,
   db,
-  LEGACY_READING_PROGRESS_SESSION_SOURCE,
-  READER_V2_READING_SESSION_SOURCE,
   type Book,
   type ReadingProgress,
   type ReadingSession,
 } from "@/lib/db";
 import { beforeEach, describe, expect, it } from "vitest";
 
-const LEGACY_SESSION_ID_PREFIX = `${LEGACY_READING_PROGRESS_SESSION_SOURCE}:v1:`;
+const LEGACY_SESSION_ID_PREFIX = "legacy-reading-progress:v1:";
 type StoredBook = Book & { isDeleted: boolean };
 type StoredProgress = ReadingProgress & { isDeleted: boolean };
 type StoredSession = ReadingSession & { isDeleted: boolean };
@@ -60,7 +58,6 @@ function makeSession(
     bookId: overrides.bookId ?? "book-1",
     deviceId: overrides.deviceId ?? "device-a",
     readerInstanceId: overrides.readerInstanceId ?? "reader-1",
-    source: overrides.source ?? READER_V2_READING_SESSION_SOURCE,
     startedAt: overrides.startedAt ?? 0,
     endedAt: overrides.endedAt ?? null,
     lastActiveAt: overrides.lastActiveAt ?? 0,
@@ -83,9 +80,7 @@ function legacySessionId(
 
 async function getLegacySessions(): Promise<ReadingSession[]> {
   return db.readingSessions
-    .filter(
-      (session) => session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE,
-    )
+    .filter((session) => session.id.startsWith(LEGACY_SESSION_ID_PREFIX))
     .toArray();
 }
 
@@ -93,8 +88,7 @@ async function getActiveLegacySessions(): Promise<ReadingSession[]> {
   return db.readingSessions
     .filter(
       (session) =>
-        session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE &&
-        !session.isDeleted,
+        session.id.startsWith(LEGACY_SESSION_ID_PREFIX) && !session.isDeleted,
     )
     .toArray();
 }
@@ -182,7 +176,6 @@ describe("legacy reading progress session backfill", () => {
       bookId: "book-1",
       deviceId: "device-a",
       readerInstanceId: "legacy-import:device-a:book-1:0",
-      source: LEGACY_READING_PROGRESS_SESSION_SOURCE,
       startedAt: 0,
       endedAt: 60_000,
       lastActiveAt: 60_000,
@@ -212,7 +205,6 @@ describe("legacy reading progress session backfill", () => {
     await db.readingSessions.add(
       makeSession({
         id: legacySessionId("device-a", "book-1", 123),
-        source: LEGACY_READING_PROGRESS_SESSION_SOURCE,
       }),
     );
     await db.readingProgress.bulkAdd([
@@ -254,7 +246,6 @@ describe("legacy reading progress session backfill", () => {
     await db.readingSessions.add(
       makeSession({
         id: "native-session",
-        source: READER_V2_READING_SESSION_SOURCE,
       }),
     );
     await db.readingProgress.bulkAdd([
@@ -314,7 +305,6 @@ describe("legacy reading progress session backfill", () => {
     ).toMatchObject({ isDeleted: true });
     expect(nativeSession).toMatchObject({
       id: "native-session",
-      source: READER_V2_READING_SESSION_SOURCE,
       isDeleted: false,
     });
   });
