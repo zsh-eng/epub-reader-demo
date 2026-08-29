@@ -10,7 +10,7 @@ import {
   readerCheckpointKeys,
   type ReaderCheckpointsData,
 } from "@/components/Reader/data/reader-cache/hooks";
-import type { SyncedReadingCheckpoint } from "@/lib/db";
+import type { ReadingCheckpoint } from "@/lib/db";
 import {
   QueryClient,
   QueryClientProvider,
@@ -25,11 +25,10 @@ const CURRENT_DEVICE_ID = "device-current";
 const SESSION_STARTED_AT = 1_800_000_000_000;
 
 function makeCheckpoint(
-  overrides: Partial<SyncedReadingCheckpoint> = {},
-): SyncedReadingCheckpoint {
+  overrides: Partial<ReadingCheckpoint> = {},
+): ReadingCheckpoint {
   const bookId = overrides.bookId ?? BOOK_ID;
   const deviceId = overrides.deviceId ?? CURRENT_DEVICE_ID;
-  const hlc = overrides._hlc ?? "1000-0-device-current";
 
   return {
     id: `resume:${deviceId}:${bookId}`,
@@ -38,10 +37,6 @@ function makeCheckpoint(
     currentSpineIndex: 1,
     scrollProgress: 25,
     lastRead: 1000,
-    _hlc: hlc,
-    _deviceId: deviceId,
-    _isDeleted: 0,
-    _serverTimestamp: 1000,
     ...overrides,
   };
 }
@@ -68,7 +63,7 @@ function createWrapper(queryClient: QueryClientType) {
 
 function setCheckpoints(
   queryClient: QueryClientType,
-  checkpoints: SyncedReadingCheckpoint[],
+  checkpoints: ReadingCheckpoint[],
 ): void {
   queryClient.setQueryData<ReaderCheckpointsData>(
     readerCheckpointKeys.book(BOOK_ID),
@@ -88,23 +83,19 @@ afterEach(() => {
 });
 
 describe("reader handoff checkpoint helpers", () => {
-  it("selects the newest remote checkpoint by HLC", () => {
+  it("selects the newest remote checkpoint by last-read time", () => {
     const olderRemote = makeCheckpoint({
       deviceId: "device-remote-a",
-      _hlc: "1000-0-device-remote-a",
+      lastRead: 1000,
     });
     const newerRemote = makeCheckpoint({
       deviceId: "device-remote-b",
-      _hlc: "1001-0-device-remote-b",
+      lastRead: 1001,
     });
 
     expect(
       getLatestRemoteReadingCheckpoint(
-        [
-          makeCheckpoint({ _hlc: "1002-0-device-current" }),
-          olderRemote,
-          newerRemote,
-        ],
+        [makeCheckpoint({ lastRead: 1002 }), olderRemote, newerRemote],
         CURRENT_DEVICE_ID,
       ),
     ).toBe(newerRemote);
@@ -112,11 +103,11 @@ describe("reader handoff checkpoint helpers", () => {
 
   it("ignores remote checkpoints that are not newer than the session-start current device checkpoint", () => {
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1002-0-device-current",
+      lastRead: 1002,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     const sessionStart = captureReaderHandoffSessionStart({
       bookId: BOOK_ID,
@@ -135,11 +126,11 @@ describe("reader handoff checkpoint helpers", () => {
 
   it("returns the latest remote checkpoint when it is newer than the session-start current device checkpoint", () => {
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     const sessionStart = captureReaderHandoffSessionStart({
       bookId: BOOK_ID,
@@ -181,11 +172,11 @@ describe("useReaderHandoffPrompt", () => {
   it("defers cached handoff data until the query is enabled", async () => {
     const queryClient = createQueryClient();
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
     setHandoffDevices(queryClient, [
@@ -219,13 +210,13 @@ describe("useReaderHandoffPrompt", () => {
   it("shows an initial remote checkpoint that is newer than the session-start current device checkpoint", async () => {
     const queryClient = createQueryClient();
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
       currentSpineIndex: 4,
       scrollProgress: 75,
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
     setHandoffDevices(queryClient, [
@@ -256,13 +247,13 @@ describe("useReaderHandoffPrompt", () => {
   it("returns a jump prompt once the checkpoint page can be resolved", async () => {
     const queryClient = createQueryClient();
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
       currentSpineIndex: 1,
       scrollProgress: 50,
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     const onJumpToPage = vi.fn();
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
@@ -302,11 +293,11 @@ describe("useReaderHandoffPrompt", () => {
   it("uses a generic source label when the remote device has no name", async () => {
     const queryClient = createQueryClient();
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
     setHandoffDevices(queryClient, [
@@ -334,11 +325,11 @@ describe("useReaderHandoffPrompt", () => {
   it("keeps a dismissed prompt hidden until a strictly newer remote checkpoint arrives", async () => {
     const queryClient = createQueryClient();
     const currentCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     const remoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
-      _hlc: "1001-0-device-remote",
+      lastRead: 1001,
     });
     setCheckpoints(queryClient, [currentCheckpoint, remoteCheckpoint]);
     setHandoffDevices(queryClient, [
@@ -378,7 +369,7 @@ describe("useReaderHandoffPrompt", () => {
     const newerRemoteCheckpoint = makeCheckpoint({
       deviceId: "device-remote",
       currentSpineIndex: 5,
-      _hlc: "1002-0-device-remote",
+      lastRead: 1002,
     });
     act(() => {
       setCheckpoints(queryClient, [currentCheckpoint, newerRemoteCheckpoint]);
@@ -397,7 +388,7 @@ describe("useReaderHandoffPrompt", () => {
   it("does not move the session-start baseline when the current device checkpoint updates", async () => {
     const queryClient = createQueryClient();
     const sessionStartCheckpoint = makeCheckpoint({
-      _hlc: "1000-0-device-current",
+      lastRead: 1000,
     });
     setCheckpoints(queryClient, [sessionStartCheckpoint]);
     setHandoffDevices(queryClient, [
@@ -419,11 +410,11 @@ describe("useReaderHandoffPrompt", () => {
     });
 
     const laterCurrentCheckpoint = makeCheckpoint({
-      _hlc: "1003-0-device-current",
+      lastRead: 1003,
     });
     const remoteAfterSessionStart = makeCheckpoint({
       deviceId: "device-remote",
-      _hlc: "1002-0-device-remote",
+      lastRead: 1002,
     });
     act(() => {
       setCheckpoints(queryClient, [

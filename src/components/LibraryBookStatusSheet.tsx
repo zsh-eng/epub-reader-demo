@@ -4,13 +4,13 @@ import {
 } from "@/components/BookStatusSheet";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
-import type { ReadingStatus, SyncedBook } from "@/lib/db";
+import type { ReadingStatus, Book } from "@/lib/db";
 import { useState } from "react";
 
 interface LibraryBookStatusSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  book: SyncedBook;
+  book: Book;
   coverUrl: string | undefined;
   initialStatus: ReadingStatus | null;
   onOpenBook: (bookId: string) => void;

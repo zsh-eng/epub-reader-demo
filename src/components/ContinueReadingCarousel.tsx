@@ -4,7 +4,7 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { useFileUrl } from "@/hooks/use-file-url";
-import type { SyncedBook } from "@/lib/db";
+import type { Book } from "@/lib/db";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { cn } from "@/lib/utils";
 import { Book as BookIcon, Loader2 } from "lucide-react";
@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 interface ContinueReadingCarouselProps {
-  books: SyncedBook[];
+  books: Book[];
+  lastReadByBook: ReadonlyMap<string, number>;
 }
 
 function formatLastReadDate(timestamp: number) {
@@ -24,7 +25,7 @@ function formatLastReadDate(timestamp: number) {
 }
 
 // Hero card for the most recently read book
-function HeroBookCard({ book }: { book: SyncedBook }) {
+function HeroBookCard({ book, lastRead }: { book: Book; lastRead?: number }) {
   const navigate = useNavigate();
   const imgRef = useRef<HTMLImageElement>(null);
   const [gradientColor, setGradientColor] = useState<string>("rgba(0,0,0,0.8)");
@@ -206,9 +207,9 @@ function HeroBookCard({ book }: { book: SyncedBook }) {
           <p className="text-xs md:text-sm text-gray-600 dark:text-white/70 line-clamp-1 mb-2 md:mb-3">
             {book.author}
           </p>
-          {book.lastOpened && (
+          {lastRead !== undefined && (
             <p className="text-xs text-gray-500 dark:text-white/50">
-              Last read {formatLastReadDate(book.lastOpened)}
+              Last read {formatLastReadDate(lastRead)}
             </p>
           )}
         </div>
@@ -250,15 +251,16 @@ function CarouselDots({
 
 export function ContinueReadingCarousel({
   books,
+  lastReadByBook,
 }: ContinueReadingCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [api, setApi] =
     useState<ReturnType<typeof import("embla-carousel-react").default>[1]>();
 
-  // Sort books by lastOpened (most recent first)
+  // Sort books by the latest reading checkpoint.
   const sortedBooks = [...books].sort((a, b) => {
-    const aTime = a.lastOpened ?? 0;
-    const bTime = b.lastOpened ?? 0;
+    const aTime = lastReadByBook.get(a.id) ?? 0;
+    const bTime = lastReadByBook.get(b.id) ?? 0;
     return bTime - aTime;
   });
 
@@ -288,7 +290,10 @@ export function ContinueReadingCarousel({
   if (sortedBooks.length === 1) {
     return (
       <section>
-        <HeroBookCard book={sortedBooks[0]} />
+        <HeroBookCard
+          book={sortedBooks[0]}
+          lastRead={lastReadByBook.get(sortedBooks[0].id)}
+        />
       </section>
     );
   }
@@ -310,7 +315,10 @@ export function ContinueReadingCarousel({
               key={book.id}
               className="basis-[85%] sm:basis-[70%] md:basis-[60%] lg:basis-[50%] first:ml-4 last:mr-4 md:first:ml-10 md:last:mr-10"
             >
-              <HeroBookCard book={book} />
+              <HeroBookCard
+                book={book}
+                lastRead={lastReadByBook.get(book.id)}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>

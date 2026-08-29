@@ -29,7 +29,7 @@ import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
-import type { SyncedBook } from "@/lib/db";
+import type { Book } from "@/lib/db";
 import { findMostRecentlyReadBook } from "@/lib/library-sort";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import {
@@ -62,7 +62,7 @@ function getUserInitials(name: string | null | undefined): string {
 }
 
 interface ContinueReadingCardProps {
-  book: SyncedBook;
+  book: Book;
   coverUrl: string | undefined;
   isActive: boolean;
   lastRead: number;
@@ -169,10 +169,7 @@ export function AppSidebar() {
 
     return booksData.categorized.continueReading.map((book) => ({
       book,
-      lastRead:
-        booksData.lastReadByBook.get(book.id) ??
-        book.lastOpened ??
-        book.dateAdded,
+      lastRead: booksData.lastReadByBook.get(book.id) ?? book.dateAdded,
     }));
   }, [booksData]);
   const recentBooks = useMemo(

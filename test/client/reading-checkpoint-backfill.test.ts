@@ -3,14 +3,16 @@ import {
   createReadingCheckpointId,
   db,
   type Book,
-  type SyncedBook,
-  type SyncedReadingCheckpoint,
-  type SyncedReadingProgress,
+  type ReadingCheckpoint,
+  type ReadingProgress,
 } from "@/lib/db";
-import { UNSYNCED_TIMESTAMP } from "@/lib/sync/hlc/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 
-function makeBook(id: string): SyncedBook {
+type StoredBook = Book & { isDeleted: boolean };
+type StoredProgress = ReadingProgress & { isDeleted: boolean };
+type StoredCheckpoint = ReadingCheckpoint & { isDeleted: boolean };
+
+function makeBook(id: string): StoredBook {
   return {
     id,
     fileHash: `hash-${id}`,
@@ -23,17 +25,18 @@ function makeBook(id: string): SyncedBook {
     spine: [],
     toc: [],
     isDownloaded: 1,
-  } as Book as SyncedBook;
+    isDeleted: false,
+  };
 }
 
 function makeProgress(
-  overrides: Partial<SyncedReadingProgress> & {
+  overrides: Partial<StoredProgress> & {
     id: string;
     bookId: string;
     deviceId: string;
     lastRead: number;
   },
-): SyncedReadingProgress {
+): StoredProgress {
   return {
     id: overrides.id,
     bookId: overrides.bookId,
@@ -41,20 +44,18 @@ function makeProgress(
     scrollProgress: overrides.scrollProgress ?? 0,
     lastRead: overrides.lastRead,
     createdAt: overrides.createdAt ?? overrides.lastRead,
+    deviceId: overrides.deviceId,
     triggerType: overrides.triggerType ?? "periodic",
-    _hlc: overrides._hlc ?? `${overrides.lastRead}-0-${overrides.deviceId}`,
-    _deviceId: overrides.deviceId,
-    _serverTimestamp: overrides._serverTimestamp ?? overrides.lastRead,
-    _isDeleted: overrides._isDeleted ?? 0,
+    isDeleted: overrides.isDeleted ?? false,
   };
 }
 
 function makeCheckpoint(
-  overrides: Partial<SyncedReadingCheckpoint> & {
+  overrides: Partial<StoredCheckpoint> & {
     bookId: string;
     deviceId: string;
   },
-): SyncedReadingCheckpoint {
+): StoredCheckpoint {
   return {
     id: createReadingCheckpointId(overrides.bookId, overrides.deviceId),
     bookId: overrides.bookId,
@@ -62,20 +63,16 @@ function makeCheckpoint(
     currentSpineIndex: overrides.currentSpineIndex ?? 0,
     scrollProgress: overrides.scrollProgress ?? 0,
     lastRead: overrides.lastRead ?? 0,
-    _hlc: overrides._hlc ?? "1-0-existing",
-    _deviceId: overrides._deviceId ?? "existing-writer",
-    _serverTimestamp: overrides._serverTimestamp ?? 1,
-    _isDeleted: overrides._isDeleted ?? 0,
+    isDeleted: overrides.isDeleted ?? false,
   };
 }
 
 describe("legacy reading progress checkpoint backfill", () => {
   beforeEach(async () => {
+    await db.delete();
+    await db.open();
     localStorage.clear();
     localStorage.setItem("epub-reader-device-id", "writer-device");
-    await db.readingCheckpoints.clear();
-    await db.readingProgress.clear();
-    await db.books.clear();
   });
 
   it("creates pending checkpoints from the latest progress row per book and device", async () => {
@@ -119,7 +116,7 @@ describe("legacy reading progress checkpoint backfill", () => {
         bookId: "book-2",
         deviceId: "device-a",
         lastRead: 300,
-        _isDeleted: 1,
+        isDeleted: true,
       }),
       makeProgress({
         id: "orphaned",
@@ -153,9 +150,7 @@ describe("legacy reading progress checkpoint backfill", () => {
       currentSpineIndex: 5,
       scrollProgress: 75,
       lastRead: 200,
-      _deviceId: "writer-device",
-      _serverTimestamp: UNSYNCED_TIMESTAMP,
-      _isDeleted: 0,
+      isDeleted: false,
     });
     expect(checkpointB).toMatchObject({
       bookId: "book-1",
@@ -163,9 +158,7 @@ describe("legacy reading progress checkpoint backfill", () => {
       currentSpineIndex: 3,
       scrollProgress: 88,
       lastRead: 150,
-      _deviceId: "writer-device",
-      _serverTimestamp: UNSYNCED_TIMESTAMP,
-      _isDeleted: 0,
+      isDeleted: false,
     });
   });
 

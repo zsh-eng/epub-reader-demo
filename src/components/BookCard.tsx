@@ -18,14 +18,6 @@ interface BookCardProps {
   onOpenMobileActions?: () => void;
 }
 
-function formatOpenedDate(timestamp: number) {
-  return new Date(timestamp).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
 // Extracted visual component for the book cover (used in both normal and preview state)
 function BookCoverVisual({
   coverUrl,
@@ -197,11 +189,6 @@ export function BookCard({
           <p className="line-clamp-1 text-xs text-muted-foreground">
             {book.author}
           </p>
-          {book.lastOpened && (
-            <p className="text-[10px] tracking-wider text-muted-foreground/60 uppercase">
-              Opened {formatOpenedDate(book.lastOpened)}
-            </p>
-          )}
         </div>
       </div>
     </BookCardActions>

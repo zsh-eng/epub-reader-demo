@@ -1,20 +1,17 @@
 /**
  * Database Layer
  *
- * Local database using Dexie (IndexedDB wrapper) with sync metadata.
- * This version uses the new sync architecture with HLC timestamps and middleware.
- *
- * Note: The sync middleware is registered by sync-service.ts to avoid circular imports.
+ * Local database helpers over the clean sync v2 Dexie schema.
  */
 
 import type { StoredFile, TransferTask } from "@/lib/files/types";
-import { isNotDeleted } from "@/lib/sync/hlc/middleware";
-import { getHLCService } from "@/lib/sync/hlc/hlc";
 import {
-  UNSYNCED_TIMESTAMP,
-  type WithSyncMetadata,
-} from "@/lib/sync/hlc/schema";
-import { generateDexieStores } from "@/lib/sync/hlc/schema";
+  syncV2Db,
+  type SyncV2Highlight,
+  type SyncV2Note,
+  type SyncV2ReadingProgress,
+  type SyncV2ReadingState,
+} from "@/lib/sync-v2/db";
 import {
   optionalTimestampMs,
   toTimestampMs,
@@ -23,9 +20,8 @@ import {
 import type { Highlight } from "@/types/highlight";
 import type { Note } from "@/types/note";
 import type { ReadingState } from "@/types/reading-state";
-import Dexie, { type Table } from "dexie";
+import Dexie from "dexie";
 import { getOrCreateDeviceId } from "./device";
-import { LOCAL_TABLES, SYNC_TABLES } from "./sync-tables";
 
 // ============================================================================
 // Type Definitions
@@ -38,7 +34,6 @@ export interface Book {
   author: string;
   fileSize: number;
   dateAdded: number;
-  lastOpened?: number | null;
   metadata: Record<string, unknown>;
   manifest: ManifestItem[];
   spine: SpineItem[];
@@ -88,6 +83,7 @@ export interface ReadingProgress {
   pageNumber?: number; // For paginated mode
   lastRead: number; // Timestamp when this progress was recorded
   createdAt: number; // When this record was created
+  deviceId: string; // Device that recorded this historical position
   /** What triggered this progress save (for filtering jump-back history) */
   triggerType?: ProgressTriggerType;
   /** Fragment or highlight ID for precise scroll restoration */
@@ -157,17 +153,6 @@ export interface BookFile {
   mediaType: string;
 }
 
-export interface SyncLog {
-  id?: number;
-  timestamp: number;
-  type: "push" | "pull" | "sync";
-  table: string;
-  pushed?: number;
-  pulled?: number;
-  conflicts?: number;
-  errors?: string[];
-}
-
 /**
  * Cached plain text extracted from book chapters for full-text search.
  * This is local-only (not synced) since it can be regenerated from BookFile.
@@ -224,15 +209,10 @@ export interface BookChapterSourceCache {
   updatedAt: number;
 }
 
-// Add sync metadata to synced types
-export type SyncedBook = WithSyncMetadata<Book>;
-export type SyncedReadingProgress = WithSyncMetadata<ReadingProgress>;
-export type SyncedReadingCheckpoint = WithSyncMetadata<ReadingCheckpoint>;
-export type SyncedReadingSession = WithSyncMetadata<ReadingSession>;
-export type SyncedHighlight = WithSyncMetadata<Highlight>;
-export type SyncedReadingSettings = WithSyncMetadata<ReadingSettings>;
-export type SyncedReadingState = WithSyncMetadata<ReadingState>;
-export type SyncedNote = WithSyncMetadata<Note>;
+type StoredReadingProgress = SyncV2ReadingProgress;
+type StoredHighlight = SyncV2Highlight;
+type StoredReadingState = SyncV2ReadingState;
+type StoredNote = SyncV2Note;
 
 // Re-export Highlight and Note types for convenience
 export type { ReadingState, ReadingStatus } from "@/types/reading-state";
@@ -241,23 +221,23 @@ export type { Highlight, Note };
 // Re-export StoredFile type for convenience
 export type { StoredFile, TransferTask };
 
-type LegacySyncedHighlight = Omit<
-  SyncedHighlight,
+type LegacyStoredHighlight = Omit<
+  StoredHighlight,
   "createdAt" | "updatedAt"
 > & {
   createdAt: TimestampInput;
   updatedAt?: TimestampInput;
 };
 
-type LegacySyncedNote = Omit<SyncedNote, "createdAt" | "updatedAt"> & {
+type LegacyStoredNote = Omit<StoredNote, "createdAt" | "updatedAt"> & {
   createdAt: TimestampInput;
   updatedAt?: TimestampInput;
 };
 
 function normalizeHighlightTimestamps(
-  highlight: SyncedHighlight,
-): SyncedHighlight {
-  const legacyHighlight = highlight as LegacySyncedHighlight;
+  highlight: StoredHighlight,
+): StoredHighlight {
+  const legacyHighlight = highlight as LegacyStoredHighlight;
   const updatedAt = optionalTimestampMs(legacyHighlight.updatedAt);
 
   return {
@@ -267,8 +247,8 @@ function normalizeHighlightTimestamps(
   };
 }
 
-function normalizeNoteTimestamps(note: SyncedNote): SyncedNote {
-  const legacyNote = note as LegacySyncedNote;
+function normalizeNoteTimestamps(note: StoredNote): StoredNote {
+  const legacyNote = note as LegacyStoredNote;
   const updatedAt = optionalTimestampMs(legacyNote.updatedAt);
 
   return {
@@ -286,137 +266,11 @@ function compareCreatedAtAscending(
   return a.id.localeCompare(b.id);
 }
 
-// ============================================================================
-// Database Class
-// ============================================================================
+export const db = syncV2Db;
 
-const {
-  bookChapterSourceCache: _bookChapterSourceCache,
-  ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE
-} = LOCAL_TABLES;
-
-class EPUBReaderDB extends Dexie {
-  // Synced tables (with metadata)
-  books!: Table<SyncedBook, string>;
-  readingProgress!: Table<SyncedReadingProgress, string>;
-  readingCheckpoints!: Table<SyncedReadingCheckpoint, string>;
-  readingSessions!: Table<SyncedReadingSession, string>;
-  highlights!: Table<SyncedHighlight, string>;
-  readingSettings!: Table<SyncedReadingSettings, string>;
-  readingState!: Table<SyncedReadingState, string>;
-  notes!: Table<SyncedNote, string>;
-
-  // Local-only tables
-  bookFiles!: Table<BookFile, string>;
-  files!: Table<StoredFile, string>;
-  transferQueue!: Table<TransferTask, string>;
-  syncLog!: Table<SyncLog, number>;
-  bookTextCache!: Table<BookTextCache, string>;
-  bookChapterSourceCache!: Table<BookChapterSourceCache, string>;
-
-  constructor() {
-    super("epub-reader-db");
-    const syncSchemas = generateDexieStores(SYNC_TABLES);
-
-    // Version 1: Initial schema
-    this.version(1).stores({
-      ...syncSchemas,
-      bookFiles: "id, bookId, path",
-      syncLog: "++id, timestamp, type, table",
-    });
-
-    // Version 2: Add generic files table
-    this.version(2).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 3: Migrate readingProgress to use UUID primary keys for historical tracking
-    this.version(3)
-      .stores({
-        ...syncSchemas,
-        ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-      })
-      .upgrade(async (tx) => {
-        // Migrate existing readingProgress records to use UUID instead of bookId as primary key
-        const progressRecords = await tx.table("readingProgress").toArray();
-
-        if (progressRecords.length > 0) {
-          // Clear existing records
-          const deletedRecords = progressRecords.map((record) => ({
-            ...record,
-            _deleted: 1,
-          }));
-
-          // Re-insert with new UUIDs and createdAt field
-          const migratedRecords = progressRecords.map((record) => ({
-            ...record,
-            id: crypto.randomUUID(), // Generate new UUID for id
-            createdAt: record.lastRead || Date.now(), // Use lastRead as createdAt
-          }));
-
-          await tx.table("readingProgress").bulkPut(migratedRecords);
-          await tx.table("readingProgress").bulkPut(deletedRecords);
-        }
-      });
-
-    // Version 4: Add readingState table for tracking reading status history
-    this.version(4).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 5: Add notes table for threaded annotations
-    this.version(5).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 6: Add bookTextCache table for full-text search
-    this.version(6).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 7: Schema marker retained for IndexedDB version continuity.
-    this.version(7).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 8: Add per-device reading checkpoints.
-    //
-    // Legacy progress import is intentionally manual instead of an IndexedDB
-    // migration because remote `readingProgress` rows may only arrive after the
-    // normal sync service starts.
-    this.version(8).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 9: Add mutable reading session rows for active-time analytics
-    this.version(9).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES_BEFORE_READER_BODY_CACHE,
-    });
-
-    // Version 10: Add normalized reader body source cache.
-    this.version(10).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES,
-    });
-
-    // Version 11: Read one extracted EPUB resource by its exact book and path.
-    this.version(11).stores({
-      ...syncSchemas,
-      ...LOCAL_TABLES,
-    });
-
-    // Note: Sync middleware is registered by sync-service.ts to avoid circular imports
-  }
+function isNotDeleted(record: { isDeleted: boolean }): boolean {
+  return !record.isDeleted;
 }
-
-export const db = new EPUBReaderDB();
 
 export function createReadingCheckpointId(
   bookId: string,
@@ -441,8 +295,8 @@ function normalizeCheckpointScrollProgress(value: number): number {
 }
 
 function isLegacyProgressNewer(
-  candidate: SyncedReadingProgress,
-  current: SyncedReadingProgress,
+  candidate: StoredReadingProgress,
+  current: StoredReadingProgress,
 ): boolean {
   if (candidate.lastRead !== current.lastRead) {
     return candidate.lastRead > current.lastRead;
@@ -452,7 +306,7 @@ function isLegacyProgressNewer(
     return candidate.createdAt > current.createdAt;
   }
 
-  return candidate._hlc > current._hlc;
+  return candidate.id > current.id;
 }
 
 // ============================================================================
@@ -460,15 +314,15 @@ function isLegacyProgressNewer(
 // ============================================================================
 //
 // NOTE: All query helper functions in this file automatically filter out
-// soft-deleted records (where _isDeleted=1) using the isNotDeleted() helper.
+// soft-deleted records using the isNotDeleted() helper.
 // This ensures application code only sees active records.
 //
-// For sync operations, the storage adapter intentionally does NOT filter
-// deleted records, as deletions need to be synced to the server.
+// The raw sync connection can read soft-deleted records when it applies and
+// reconciles remote winners.
 // ============================================================================
 
 export async function addBook(book: Book): Promise<string> {
-  return db.books.add(book as SyncedBook);
+  return db.books.add({ ...book, isDeleted: false });
 }
 
 /**
@@ -481,7 +335,7 @@ export async function addBookWithFiles(
 ): Promise<string> {
   return db.transaction("rw", [db.books, db.bookFiles, db.files], async () => {
     // Add book first
-    const bookId = await db.books.add(book as SyncedBook);
+    const bookId = await db.books.add({ ...book, isDeleted: false });
 
     // Add book files (extracted EPUB content)
     if (bookFiles.length > 0) {
@@ -492,41 +346,53 @@ export async function addBookWithFiles(
   });
 }
 
-export async function getBook(id: string): Promise<SyncedBook | undefined> {
+export async function getBook(id: string): Promise<Book | undefined> {
   const book = await db.books.get(id);
   return book && isNotDeleted(book) ? book : undefined;
 }
 
-export async function getAllBooks(): Promise<SyncedBook[]> {
+export async function getAllBooks(): Promise<Book[]> {
   return db.books.filter(isNotDeleted).toArray();
 }
 
 export async function deleteBook(id: string): Promise<void> {
   const book = await db.books.get(id);
-  if (!book) return;
+  if (!book || book.isDeleted) return;
 
-  // Mark as deleted (tombstone) instead of hard delete
-  await db.books.put({
-    ...book,
-    _isDeleted: 1,
-  });
-
-  // Clean up local-only data
-  await db.bookFiles.where("bookId").equals(id).delete();
-  await db.bookChapterSourceCache.delete(id);
-  await db.readingProgress.where("bookId").equals(id).delete();
-  await db.highlights.where("bookId").equals(id).delete();
+  await db.transaction(
+    "rw",
+    [
+      db.books,
+      db.readingProgress,
+      db.readingCheckpoints,
+      db.readingSessions,
+      db.highlights,
+      db.readingState,
+      db.notes,
+      db.bookFiles,
+      db.bookTextCache,
+      db.bookChapterSourceCache,
+    ],
+    async () => {
+      await db.books.delete(id);
+      await db.readingProgress.where("bookId").equals(id).delete();
+      await db.readingCheckpoints.where("bookId").equals(id).delete();
+      await db.readingSessions.where("bookId").equals(id).delete();
+      await db.highlights.where("bookId").equals(id).delete();
+      await db.readingState.where("bookId").equals(id).delete();
+      await db.notes.where("bookId").equals(id).delete();
+      await db.bookFiles.where("bookId").equals(id).delete();
+      await db.bookTextCache.delete(id);
+      await db.bookChapterSourceCache.delete(id);
+    },
+  );
 }
 
 export async function getBookByFileHash(
   fileHash: string,
-): Promise<SyncedBook | undefined> {
+): Promise<Book | undefined> {
   const book = await db.books.where("fileHash").equals(fileHash).first();
   return book && isNotDeleted(book) ? book : undefined;
-}
-
-export async function updateBookLastOpened(id: string): Promise<void> {
-  await db.books.update(id, { lastOpened: Date.now() });
 }
 
 // ============================================================================
@@ -541,10 +407,7 @@ export async function getBookFile(
   bookId: string,
   path: string,
 ): Promise<BookFile | undefined> {
-  return db.bookFiles
-    .where("[bookId+path]")
-    .equals([bookId, path])
-    .first();
+  return db.bookFiles.where("[bookId+path]").equals([bookId, path]).first();
 }
 
 export async function getBookFiles(bookId: string): Promise<BookFile[]> {
@@ -607,19 +470,20 @@ export async function putBookChapterSourceCache(
 // ============================================================================
 
 export async function saveReadingProgress(
-  progress: Omit<ReadingProgress, "id" | "createdAt">,
+  progress: Omit<ReadingProgress, "id" | "createdAt" | "deviceId">,
 ): Promise<string> {
   const record: ReadingProgress = {
     ...progress,
     id: crypto.randomUUID(),
     createdAt: Date.now(),
+    deviceId: getOrCreateDeviceId(),
   };
-  return db.readingProgress.add(record as SyncedReadingProgress);
+  return db.readingProgress.add({ ...record, isDeleted: false });
 }
 
 export async function getReadingProgress(
   bookId: string,
-): Promise<SyncedReadingProgress | undefined> {
+): Promise<ReadingProgress | undefined> {
   const latestProgress = await db.readingProgress
     .where("[bookId+lastRead]")
     .between([bookId, Dexie.minKey], [bookId, Dexie.maxKey])
@@ -633,7 +497,7 @@ export async function getReadingProgress(
 export async function getReadingProgressHistory(
   bookId: string,
   limit?: number,
-): Promise<SyncedReadingProgress[]> {
+): Promise<ReadingProgress[]> {
   // Get all progress history for a book, sorted by lastRead timestamp (oldest to newest)
   const results = await db.readingProgress
     .where("bookId")
@@ -653,7 +517,7 @@ export async function getReadingProgressHistory(
 export async function getReadingCheckpointForDevice(
   bookId: string,
   deviceId: string,
-): Promise<SyncedReadingCheckpoint | undefined> {
+): Promise<ReadingCheckpoint | undefined> {
   const checkpoint = await db.readingCheckpoints.get(
     createReadingCheckpointId(bookId, deviceId),
   );
@@ -662,13 +526,13 @@ export async function getReadingCheckpointForDevice(
 
 export async function getCurrentDeviceReadingCheckpoint(
   bookId: string,
-): Promise<SyncedReadingCheckpoint | undefined> {
+): Promise<ReadingCheckpoint | undefined> {
   return getReadingCheckpointForDevice(bookId, getOrCreateDeviceId());
 }
 
 export async function getReadingCheckpointsForBook(
   bookId: string,
-): Promise<SyncedReadingCheckpoint[]> {
+): Promise<ReadingCheckpoint[]> {
   return db.readingCheckpoints
     .where("bookId")
     .equals(bookId)
@@ -681,9 +545,8 @@ export async function getReadingCheckpointsForBook(
  *
  * This is the source of truth for "most recently read" ordering in the
  * library: reading checkpoints are written while reading (page turns,
- * periodic flushes, tab-hide), whereas "books.lastOpened" is a legacy field
- * that is not kept in sync. Taking the max across devices means a book read
- * on another device still sorts by its most recent activity.
+ * periodic flushes, and tab hide). Taking the max across devices means a book
+ * read on another device still sorts by its most recent activity.
  */
 export async function getAllReadingCheckpointLastReads(): Promise<
   Map<string, number>
@@ -713,9 +576,10 @@ export async function upsertReadingCheckpoint(
     ),
   };
 
-  await db.readingCheckpoints.put(
-    normalizedCheckpoint as SyncedReadingCheckpoint,
-  );
+  await db.readingCheckpoints.put({
+    ...normalizedCheckpoint,
+    isDeleted: false,
+  });
   return normalizedCheckpoint.id;
 }
 
@@ -758,31 +622,16 @@ type MutableCheckpointBookSummary =
   };
 
 function createCheckpointFromLegacyProgress(
-  row: SyncedReadingProgress,
+  row: StoredReadingProgress,
 ): ReadingCheckpoint {
   return {
-    id: createReadingCheckpointId(row.bookId, row._deviceId),
+    id: createReadingCheckpointId(row.bookId, row.deviceId),
     bookId: row.bookId,
-    deviceId: row._deviceId,
+    deviceId: row.deviceId,
     currentSpineIndex: row.currentSpineIndex,
     scrollProgress: normalizeCheckpointScrollProgress(row.scrollProgress),
     lastRead: row.lastRead,
   };
-}
-
-function addFallbackSyncMetadataToCheckpoints(
-  checkpoints: ReadingCheckpoint[],
-): SyncedReadingCheckpoint[] {
-  const writerDeviceId = getOrCreateDeviceId();
-  const hlcTimestamps = getHLCService().nextBatch(checkpoints.length);
-
-  return checkpoints.map((checkpoint, index) => ({
-    ...checkpoint,
-    _hlc: hlcTimestamps[index],
-    _deviceId: writerDeviceId,
-    _serverTimestamp: UNSYNCED_TIMESTAMP,
-    _isDeleted: 0,
-  }));
 }
 
 /**
@@ -808,14 +657,14 @@ export async function backfillLegacyReadingProgressCheckpoints(
       const bookTitles = new Map(
         activeBooks.map((book) => [book.id, book.title]),
       );
-      const progressRows = (await db.readingProgress
+      const progressRows = await db.readingProgress
         .filter(isNotDeleted)
-        .toArray()) as SyncedReadingProgress[];
-      const latestByCheckpointId = new Map<string, SyncedReadingProgress>();
+        .toArray();
+      const latestByCheckpointId = new Map<string, StoredReadingProgress>();
       const bookSummariesById = new Map<string, MutableCheckpointBookSummary>();
 
       for (const row of progressRows) {
-        if (!row.bookId || !row._deviceId) continue;
+        if (!row.bookId || !row.deviceId) continue;
         if (!activeBookIds.has(row.bookId)) continue;
 
         const summary = bookSummariesById.get(row.bookId) ?? {
@@ -833,13 +682,13 @@ export async function backfillLegacyReadingProgressCheckpoints(
           summary.latestLastRead === null
             ? row.lastRead
             : Math.max(summary.latestLastRead, row.lastRead);
-        summary.deviceIds.add(row._deviceId);
+        summary.deviceIds.add(row.deviceId);
         summary.devicesConsidered = summary.deviceIds.size;
         bookSummariesById.set(row.bookId, summary);
 
         const checkpointId = createReadingCheckpointId(
           row.bookId,
-          row._deviceId,
+          row.deviceId,
         );
         const existing = latestByCheckpointId.get(checkpointId);
 
@@ -889,7 +738,10 @@ export async function backfillLegacyReadingProgressCheckpoints(
       if (dryRun || checkpoints.length === 0) return result;
 
       await db.readingCheckpoints.bulkPut(
-        addFallbackSyncMetadataToCheckpoints(checkpoints),
+        checkpoints.map((checkpoint) => ({
+          ...checkpoint,
+          isDeleted: false,
+        })),
       );
 
       return result;
@@ -916,14 +768,14 @@ export async function createCurrentDeviceReadingSession(
   session: CurrentDeviceReadingSessionInput,
 ): Promise<string> {
   const record = withCurrentDeviceReadingSession(session);
-  return db.readingSessions.add(record as SyncedReadingSession);
+  return db.readingSessions.add({ ...record, isDeleted: false });
 }
 
 export async function updateCurrentDeviceReadingSession(
   session: CurrentDeviceReadingSessionInput,
 ): Promise<string> {
   const record = withCurrentDeviceReadingSession(session);
-  await db.readingSessions.put(record as SyncedReadingSession);
+  await db.readingSessions.put({ ...record, isDeleted: false });
   return record.id;
 }
 
@@ -1022,10 +874,10 @@ function isLegacyReadingProgressSession(session: ReadingSession): boolean {
 }
 
 function compareLegacyReadingProgressRows(
-  a: SyncedReadingProgress,
-  b: SyncedReadingProgress,
+  a: StoredReadingProgress,
+  b: StoredReadingProgress,
 ): number {
-  const deviceCompare = a._deviceId.localeCompare(b._deviceId);
+  const deviceCompare = a.deviceId.localeCompare(b.deviceId);
   if (deviceCompare !== 0) return deviceCompare;
 
   const bookCompare = a.bookId.localeCompare(b.bookId);
@@ -1037,13 +889,13 @@ function compareLegacyReadingProgressRows(
 }
 
 function createLegacyReadingProgressSessionDraft(
-  row: SyncedReadingProgress,
+  row: StoredReadingProgress,
 ): LegacyReadingProgressSessionDraft {
   const scrollProgress = normalizeCheckpointScrollProgress(row.scrollProgress);
 
   return {
     bookId: row.bookId,
-    deviceId: row._deviceId,
+    deviceId: row.deviceId,
     startedAt: row.lastRead,
     lastActiveAt: row.lastRead,
     activeMs: 0,
@@ -1056,7 +908,7 @@ function createLegacyReadingProgressSessionDraft(
 
 function appendLegacyReadingProgressRowToSessionDraft(
   draft: LegacyReadingProgressSessionDraft,
-  row: SyncedReadingProgress,
+  row: StoredReadingProgress,
 ): void {
   const gap = row.lastRead - draft.lastActiveAt;
   if (gap >= 0) {
@@ -1099,7 +951,7 @@ function createReadingSessionFromLegacyDraft(
 }
 
 function inferLegacyReadingProgressSessions(
-  rows: SyncedReadingProgress[],
+  rows: StoredReadingProgress[],
   idleTimeoutMs: number,
 ): ReadingSession[] {
   const sessions: ReadingSession[] = [];
@@ -1113,7 +965,7 @@ function inferLegacyReadingProgressSessions(
 
     const shouldStartNewSession =
       current.bookId !== row.bookId ||
-      current.deviceId !== row._deviceId ||
+      current.deviceId !== row.deviceId ||
       row.lastRead - current.lastActiveAt > idleTimeoutMs;
 
     if (shouldStartNewSession) {
@@ -1159,9 +1011,9 @@ export async function backfillLegacyReadingProgressSessions(
       const bookTitles = new Map(
         activeBooks.map((book) => [book.id, book.title]),
       );
-      const progressRows = (await db.readingProgress
+      const progressRows = await db.readingProgress
         .filter(isNotDeleted)
-        .toArray()) as SyncedReadingProgress[];
+        .toArray();
       const usableRows = progressRows
         .filter((row) => activeBookIds.has(row.bookId))
         .sort(compareLegacyReadingProgressRows);
@@ -1242,17 +1094,17 @@ export async function backfillLegacyReadingProgressSessions(
       if (dryRun) return result;
 
       if (existingLegacySessions.length > 0) {
-        await db.readingSessions.bulkPut(
-          existingLegacySessions.map((session) => ({
-            ...session,
-            _isDeleted: 1,
-          })),
+        await db.readingSessions.bulkDelete(
+          existingLegacySessions.map((session) => session.id),
         );
       }
 
       if (inferredSessions.length > 0) {
         await db.readingSessions.bulkPut(
-          inferredSessions as SyncedReadingSession[],
+          inferredSessions.map((session) => ({
+            ...session,
+            isDeleted: false,
+          })),
         );
       }
 
@@ -1265,7 +1117,7 @@ export async function backfillLegacyReadingProgressSessions(
 // Helper Functions (Reading Settings)
 // ============================================================================
 
-export async function getReadingSettings(): Promise<SyncedReadingSettings> {
+export async function getReadingSettings(): Promise<ReadingSettings> {
   const settings = await db.readingSettings.get("default");
 
   if (settings && isNotDeleted(settings)) {
@@ -1280,7 +1132,7 @@ export async function getReadingSettings(): Promise<SyncedReadingSettings> {
     theme: "light",
   };
 
-  await db.readingSettings.add(defaultSettings as SyncedReadingSettings);
+  await db.readingSettings.add({ ...defaultSettings, isDeleted: false });
   return (await db.readingSettings.get("default"))!;
 }
 
@@ -1291,6 +1143,7 @@ export async function updateReadingSettings(
   await db.readingSettings.put({
     ...current,
     ...settings,
+    isDeleted: false,
   });
 }
 
@@ -1299,13 +1152,13 @@ export async function updateReadingSettings(
 // ============================================================================
 
 export async function addHighlight(highlight: Highlight): Promise<string> {
-  return db.highlights.add(highlight as SyncedHighlight);
+  return db.highlights.add({ ...highlight, isDeleted: false });
 }
 
 export async function getHighlights(
   bookId: string,
   spineItemId: string,
-): Promise<SyncedHighlight[]> {
+): Promise<Highlight[]> {
   const highlights = await db.highlights
     .where("bookId")
     .equals(bookId)
@@ -1315,9 +1168,7 @@ export async function getHighlights(
   return highlights.map(normalizeHighlightTimestamps);
 }
 
-export async function getBookHighlights(
-  bookId: string,
-): Promise<SyncedHighlight[]> {
+export async function getBookHighlights(bookId: string): Promise<Highlight[]> {
   const highlights = await db.highlights
     .where("bookId")
     .equals(bookId)
@@ -1329,13 +1180,9 @@ export async function getBookHighlights(
 
 export async function deleteHighlight(id: string): Promise<void> {
   const highlight = await db.highlights.get(id);
-  if (!highlight) return;
+  if (!highlight || highlight.isDeleted) return;
 
-  // Mark as deleted (tombstone)
-  await db.highlights.put({
-    ...normalizeHighlightTimestamps(highlight),
-    _isDeleted: 1,
-  });
+  await db.highlights.delete(id);
 }
 
 export async function updateHighlight(
@@ -1352,7 +1199,7 @@ export async function updateHighlight(
   });
 }
 
-export async function getAllHighlights(): Promise<SyncedHighlight[]> {
+export async function getAllHighlights(): Promise<Highlight[]> {
   const highlights = await db.highlights.filter(isNotDeleted).toArray();
   return highlights.map(normalizeHighlightTimestamps);
 }
@@ -1362,12 +1209,12 @@ export async function getAllHighlights(): Promise<SyncedHighlight[]> {
 // ============================================================================
 
 export async function addNote(note: Note): Promise<string> {
-  return db.notes.add(note as SyncedNote);
+  return db.notes.add({ ...note, isDeleted: false });
 }
 
 export async function getNotesByAnnotation(
   annotationId: string,
-): Promise<SyncedNote[]> {
+): Promise<Note[]> {
   const notes = await db.notes
     .where("annotationId")
     .equals(annotationId)
@@ -1380,7 +1227,7 @@ export async function getNotesByAnnotation(
 export async function getChapterNotes(
   bookId: string,
   spineItemId: string,
-): Promise<SyncedNote[]> {
+): Promise<Note[]> {
   const notes = await db.notes
     .where("[bookId+spineItemId]")
     .equals([bookId, spineItemId])
@@ -1403,29 +1250,14 @@ export async function updateNote(id: string, content: string): Promise<void> {
 
 export async function deleteNote(id: string): Promise<void> {
   const note = await db.notes.get(id);
-  if (!note) return;
+  if (!note || note.isDeleted) return;
 
-  await db.notes.put({
-    ...normalizeNoteTimestamps(note),
-    _isDeleted: 1,
-  });
+  await db.notes.delete(id);
 }
 
-export async function getAllNotes(): Promise<SyncedNote[]> {
+export async function getAllNotes(): Promise<Note[]> {
   const notes = await db.notes.filter(isNotDeleted).toArray();
   return notes.map(normalizeNoteTimestamps);
-}
-
-// ============================================================================
-// Helper Functions (Sync Log)
-// ============================================================================
-
-export async function addSyncLogs(logs: Omit<SyncLog, "id">[]) {
-  return db.syncLog.bulkAdd(logs);
-}
-
-export async function getRecentSyncLogs(limit = 20): Promise<SyncLog[]> {
-  return db.syncLog.orderBy("timestamp").reverse().limit(limit).toArray();
 }
 
 // ============================================================================
@@ -1436,14 +1268,15 @@ export async function setReadingStatus(
   bookId: string,
   status: ReadingState["status"],
 ): Promise<string> {
+  const now = Date.now();
   const entry: ReadingState = {
     id: crypto.randomUUID(),
     bookId,
     status,
-    timestamp: Date.now(),
-    createdAt: Date.now(),
+    timestamp: now,
+    createdAt: now,
   };
-  return db.readingState.add(entry as SyncedReadingState);
+  return db.readingState.add({ ...entry, isDeleted: false });
 }
 
 export async function getReadingStatus(
@@ -1466,7 +1299,7 @@ export async function getAllReadingStatuses(): Promise<
   const allEntries = await db.readingState.filter(isNotDeleted).toArray();
 
   // Group by bookId and find latest for each
-  const latestByBook = new Map<string, SyncedReadingState>();
+  const latestByBook = new Map<string, StoredReadingState>();
   for (const entry of allEntries) {
     const existing = latestByBook.get(entry.bookId);
     if (!existing || entry.timestamp > existing.timestamp) {
@@ -1484,7 +1317,7 @@ export async function getAllReadingStatuses(): Promise<
 
 export async function getReadingHistory(
   bookId: string,
-): Promise<SyncedReadingState[]> {
+): Promise<ReadingState[]> {
   return db.readingState
     .where("bookId")
     .equals(bookId)
@@ -1496,7 +1329,7 @@ export async function getReadingHistory(
 // Helper Functions (Book Queries - Compatibility)
 // ============================================================================
 
-export async function getNotDownloadedBooks(): Promise<SyncedBook[]> {
+export async function getNotDownloadedBooks(): Promise<Book[]> {
   return db.books
     .filter((book) => !book.isDownloaded && isNotDeleted(book))
     .toArray();

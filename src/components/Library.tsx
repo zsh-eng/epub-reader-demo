@@ -16,7 +16,7 @@ import {
   prefetchReaderBook,
   prefetchReaderBooks,
 } from "@/components/Reader/data/reader-cache/prefetch";
-import type { Book, ReadingStatus, SyncedBook } from "@/lib/db";
+import type { Book, ReadingStatus } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { warmPaginationWorker } from "@/lib/pagination-v2/worker/pagination-worker-service";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -35,7 +35,7 @@ import { useNavigate } from "react-router-dom";
 
 interface MobileBookActionsState {
   instance: number;
-  book: SyncedBook;
+  book: Book;
   coverUrl: string | undefined;
   status: ReadingStatus | null;
 }
@@ -143,7 +143,7 @@ export function Library() {
   );
 
   const handleOpenMobileBookActions = (
-    book: SyncedBook,
+    book: Book,
     status: ReadingStatus | null,
     coverUrl: string | undefined,
   ) => {
@@ -160,13 +160,13 @@ export function Library() {
   const { continueReadingBooks, allBooks } = useMemo(() => {
     if (!booksData) {
       return {
-        continueReadingBooks: [] as SyncedBook[],
-        allBooks: [] as SyncedBook[],
+        continueReadingBooks: [] as Book[],
+        allBooks: [] as Book[],
       };
     }
 
     const normalizedSearch = searchQuery.toLowerCase();
-    const filterBySearch = (book: SyncedBook) =>
+    const filterBySearch = (book: Book) =>
       book.title.toLowerCase().includes(normalizedSearch) ||
       book.author.toLowerCase().includes(normalizedSearch);
     const continueReading =
@@ -305,9 +305,7 @@ export function Library() {
                 aria-label="Search library"
                 placeholder="Search my library…"
                 value={searchQuery}
-                onChange={(event) =>
-                  setSearchQuery(event.currentTarget.value)
-                }
+                onChange={(event) => setSearchQuery(event.currentTarget.value)}
                 className="h-14 w-full appearance-none rounded-full border border-input bg-background/75 pr-12 pl-10 text-base text-foreground shadow-md backdrop-blur-xl transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 [&::-webkit-search-cancel-button]:hidden"
               />
               {searchQuery && (

@@ -18,7 +18,7 @@ import {
   type BookHighlightGroup,
 } from "@/hooks/use-all-highlights-query";
 import { formatHighlightTime } from "@/lib/date-utils";
-import type { SyncedHighlight } from "@/lib/db";
+import type { Highlight } from "@/lib/db";
 import {
   COMPACT_HIGHLIGHT_CARD_HEIGHT,
   SHORT_HIGHLIGHT_CARD_HEIGHT,
@@ -214,7 +214,7 @@ function useElementWidth() {
  * Prepares quote text only after the display fonts are available. Pretext can
  * then recalculate card heights on resize without reading layout from the DOM.
  */
-function usePreparedHighlights(highlights: SyncedHighlight[]) {
+function usePreparedHighlights(highlights: Highlight[]) {
   const [fontReady, setFontReady] = useState(false);
 
   useEffect(() => {
@@ -682,10 +682,7 @@ function MobileBookIndex({
         onClick={() => onOpenChange(true)}
         className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 grid size-12 place-items-center rounded-full border bg-card text-foreground shadow-xl outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] lg:hidden"
       >
-        <span
-          className="grid size-6 content-center gap-0.5"
-          aria-hidden="true"
-        >
+        <span className="grid size-6 content-center gap-0.5" aria-hidden="true">
           <span className="ml-auto h-0.5 w-5 rounded-full bg-current" />
           <span className="ml-auto h-0.5 w-3.5 rounded-full bg-current" />
           <span className="ml-auto h-0.5 w-2 rounded-full bg-current" />
@@ -931,14 +928,14 @@ function HighlightQuoteCard({
   onOpenBook,
   isCopied,
 }: {
-  highlight: SyncedHighlight;
+  highlight: Highlight;
   presentation: HighlightCardPresentation;
   isMobile: boolean;
   chapterTitle: string;
   tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
-  onCopy: (highlight: SyncedHighlight) => void;
-  onOpenActions: (highlight: SyncedHighlight) => void;
-  onOpenBook: (highlight: SyncedHighlight) => void;
+  onCopy: (highlight: Highlight) => void;
+  onOpenActions: (highlight: Highlight) => void;
+  onOpenBook: (highlight: Highlight) => void;
   isCopied: boolean;
 }) {
   const usesWordCloud = presentation === "word-cloud";
@@ -1088,10 +1085,10 @@ function HighlightActionsSheet({
   onCopy,
   onOpenBook,
 }: {
-  highlight: SyncedHighlight | null;
+  highlight: Highlight | null;
   onClose: () => void;
-  onCopy: (highlight: SyncedHighlight) => Promise<boolean>;
-  onOpenBook: (highlight: SyncedHighlight) => void;
+  onCopy: (highlight: Highlight) => Promise<boolean>;
+  onOpenBook: (highlight: Highlight) => void;
 }) {
   const copyPress = useSpringPressAnimation();
   const openBookPress = useSpringPressAnimation();
@@ -1195,13 +1192,13 @@ function HighlightsMosaic({
 }: {
   group: BookHighlightGroup;
   headingId: string;
-  highlights: SyncedHighlight[];
+  highlights: Highlight[];
   isMobile: boolean;
   readingTimeMs: number;
   tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
-  onCopy: (highlight: SyncedHighlight) => void;
-  onOpenActions: (highlight: SyncedHighlight) => void;
-  onOpenBook: (highlight: SyncedHighlight) => void;
+  onCopy: (highlight: Highlight) => void;
+  onOpenActions: (highlight: Highlight) => void;
+  onOpenBook: (highlight: Highlight) => void;
   copiedHighlightId: string | null;
 }) {
   const { elementRef, width } = useElementWidth();
@@ -1582,8 +1579,9 @@ export function HighlightsMasonry() {
     [],
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedHighlight, setSelectedHighlight] =
-    useState<SyncedHighlight | null>(null);
+  const [selectedHighlight, setSelectedHighlight] = useState<Highlight | null>(
+    null,
+  );
   const [copiedHighlightId, setCopiedHighlightId] = useState<string | null>(
     null,
   );
@@ -1695,7 +1693,7 @@ export function HighlightsMasonry() {
     [animateAfterInstantNavigation],
   );
 
-  const copyHighlight = useCallback(async (highlight: SyncedHighlight) => {
+  const copyHighlight = useCallback(async (highlight: Highlight) => {
     try {
       await navigator.clipboard.writeText(highlight.selectedText);
       return true;
@@ -1708,7 +1706,7 @@ export function HighlightsMasonry() {
   }, []);
 
   const handleDesktopCopy = useCallback(
-    (highlight: SyncedHighlight) => {
+    (highlight: Highlight) => {
       void copyHighlight(highlight).then((didCopy) => {
         if (!didCopy) return;
 
@@ -1724,12 +1722,12 @@ export function HighlightsMasonry() {
   );
 
   const handleMobileCopy = useCallback(
-    (highlight: SyncedHighlight) => copyHighlight(highlight),
+    (highlight: Highlight) => copyHighlight(highlight),
     [copyHighlight],
   );
 
   const handleOpenBook = useCallback(
-    (highlight: SyncedHighlight) => {
+    (highlight: Highlight) => {
       setSelectedHighlight(null);
       beginReaderTrace({
         bookId: highlight.bookId,

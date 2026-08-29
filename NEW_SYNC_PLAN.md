@@ -327,7 +327,7 @@ Completed on 2026-08-29:
   replacement belongs to the Step 7 application cutover, when every consumer
   can use the clean domain tables in one change.
 
-### 7. Convert the application to clean domain types
+### 7. Convert the application to clean domain types — Complete
 
 This is the actual table replacement, not a separate IndexedDB migration.
 
@@ -346,6 +346,35 @@ Change the application to:
 At this gate, the application must build and pass its tests against the new database and client engine.
 
 Replace the existing provider and service usage starting at [App.tsx](/Users/admin/epub-reader-demo/src/App.tsx:16). Keep the current public hook shape where this reduces application changes.
+
+Completed on 2026-08-29:
+
+- Switched the running application to the fresh `epub-reader-db-v2` database.
+  This is a clean replacement. It does not upgrade or copy the old IndexedDB
+  database.
+- Replaced active application `Synced*` types with domain types. Removed reads
+  and writes of `_hlc`, `_deviceId`, `_isDeleted`, and `_serverTimestamp` from
+  the application path.
+- Added the ordinary `deviceId` domain field to historical reading progress.
+  Reading checkpoints and sessions retain their existing domain device IDs.
+- Made normal queries exclude rows whose plain `isDeleted` field is true.
+  Ordinary Dexie deletes now rely on the Step 5 middleware to retain values and
+  create compacted soft-delete outbox entries.
+- Made book deletion one atomic transaction across the book, all book-scoped
+  synced rows, and regenerable local caches.
+- Removed `books.lastOpened`. Reading checkpoints are now the only source for
+  recent-reading order and labels. Reading sessions continue to represent book
+  opens as a separate concept.
+- Replaced the legacy sync service internals with a small lifecycle wrapper
+  around `SyncV2Client`. The existing provider API now starts periodic full
+  sync, handles online recovery, and invalidates TanStack Query data after
+  changes.
+- Moved EPUB extraction from `src/lib/sync/epub-processing.ts` to
+  `src/lib/epub-processing.ts`. The old sync directory remains until the later
+  retirement and final-cleanup steps.
+- Updated the affected client fixtures to use clean rows and whole-database
+  test resets. All 616 client tests, the root build, full lint, changed-file
+  formatting, and diff checks passed.
 
 ### 8. Build and dry-run the migration tool
 

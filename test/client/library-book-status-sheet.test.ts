@@ -1,5 +1,5 @@
 import { LibraryBookStatusSheet } from "@/components/LibraryBookStatusSheet";
-import type { SyncedBook } from "@/lib/db";
+import type { Book } from "@/lib/db";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +22,7 @@ vi.mock("@/hooks/use-toast", () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 
-const book: SyncedBook = {
+const book: Book = {
   id: "book-1",
   fileHash: "epub-hash",
   title: "Book One",
@@ -34,10 +34,6 @@ const book: SyncedBook = {
   spine: [],
   toc: [],
   isDownloaded: 1,
-  _hlc: "1-0-device",
-  _deviceId: "device",
-  _isDeleted: 0,
-  _serverTimestamp: 1,
 };
 
 afterEach(() => {

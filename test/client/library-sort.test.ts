@@ -3,10 +3,10 @@ import {
   compareBooksByLastReadDesc,
   findMostRecentlyReadBook,
 } from "@/lib/library-sort";
-import type { SyncedBook } from "@/lib/db";
+import type { Book } from "@/lib/db";
 import { describe, expect, it } from "vitest";
 
-function makeBook(id: string, dateAdded: number): SyncedBook {
+function makeBook(id: string, dateAdded: number): Book {
   return {
     id,
     fileHash: `hash-${id}`,
@@ -19,7 +19,7 @@ function makeBook(id: string, dateAdded: number): SyncedBook {
     spine: [],
     toc: [],
     isDownloaded: 1,
-  } as SyncedBook;
+  } as Book;
 }
 
 describe("compareBooksByDateAddedDesc", () => {
@@ -106,16 +106,7 @@ describe("findMostRecentlyReadBook", () => {
     ).toEqual({ book: newest, lastRead: 2000 });
   });
 
-  it("falls back to legacy lastOpened and hides when nothing was read", () => {
-    const legacy = {
-      ...makeBook("legacy", 100),
-      lastOpened: 1500,
-    };
-
-    expect(findMostRecentlyReadBook([legacy], new Map())).toEqual({
-      book: legacy,
-      lastRead: 1500,
-    });
+  it("hides when no book has a reading checkpoint", () => {
     expect(
       findMostRecentlyReadBook([makeBook("never-read", 200)], new Map()),
     ).toBeNull();

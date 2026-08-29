@@ -20,7 +20,8 @@ describe("Reading Progress Historical Tracking", () => {
   const testBookId = "test-book-123";
 
   beforeEach(async () => {
-    db.readingProgress.clear();
+    await db.delete();
+    await db.open();
     localStorage.clear();
   });
 

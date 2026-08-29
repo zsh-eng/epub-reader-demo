@@ -1,4 +1,4 @@
-import type { Book, SyncedReadingCheckpoint } from "@/lib/db";
+import type { Book, ReadingCheckpoint } from "@/lib/db";
 import { processEmbeddedResources } from "@/lib/epub-resource-utils";
 import {
   parseChapterHtml,
@@ -104,7 +104,7 @@ export function buildChapterEntries(book: Book | null): ChapterEntry[] {
 }
 
 export function resolveInitialReaderLocation(
-  checkpoint: SyncedReadingCheckpoint | undefined,
+  checkpoint: ReadingCheckpoint | undefined,
   totalChapters: number,
 ): ReaderInitialLocation {
   const chapterIndex = Math.max(

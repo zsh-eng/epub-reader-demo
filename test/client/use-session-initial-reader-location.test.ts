@@ -1,12 +1,12 @@
 import { useSessionInitialReaderLocation } from "@/components/Reader/hooks/use-session-initial-reader-location";
-import type { SyncedReadingCheckpoint } from "@/lib/db";
+import type { ReadingCheckpoint } from "@/lib/db";
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 function checkpoint(
   currentSpineIndex: number,
   scrollProgress: number,
-): SyncedReadingCheckpoint {
+): ReadingCheckpoint {
   return {
     id: "resume:device-1:book-1",
     bookId: "book-1",
@@ -14,10 +14,6 @@ function checkpoint(
     currentSpineIndex,
     scrollProgress,
     lastRead: 1,
-    _hlc: "1-0-device-1",
-    _deviceId: "device-1",
-    _isDeleted: 0,
-    _serverTimestamp: 1,
   };
 }
 

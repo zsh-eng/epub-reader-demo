@@ -1,14 +1,13 @@
-import type { SyncedReadingCheckpoint } from "@/lib/db";
+import type { ReadingCheckpoint } from "@/lib/db";
 import { honoClient } from "@/lib/api";
 import { getOrCreateDeviceId } from "@/lib/device";
-import { compareHLC } from "@/lib/sync/hlc/hlc";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReaderCheckpointsQuery } from "../data/reader-cache/hooks";
 import type { ReaderHandoffPrompt } from "../types";
 
 const GENERIC_REMOTE_DEVICE_LABEL = "another device";
-const EMPTY_READING_CHECKPOINTS: readonly SyncedReadingCheckpoint[] = [];
+const EMPTY_READING_CHECKPOINTS: readonly ReadingCheckpoint[] = [];
 
 interface ReaderHandoffDevice {
   clientId: string;
@@ -26,13 +25,13 @@ export const readerHandoffDeviceKeys = {
 export interface ReaderHandoffSessionStart {
   bookId: string;
   currentDeviceId: string;
-  currentDeviceCheckpoint: SyncedReadingCheckpoint | null;
+  currentDeviceCheckpoint: ReadingCheckpoint | null;
   startedAt: number;
 }
 
 export interface ReaderHandoffPromptState {
   show: boolean;
-  checkpoint: SyncedReadingCheckpoint | null;
+  checkpoint: ReadingCheckpoint | null;
   sourceDeviceLabel: string;
 }
 
@@ -84,24 +83,28 @@ function clampPercentage(value: number): number {
 }
 
 function isCheckpointForRemoteDevice(
-  checkpoint: SyncedReadingCheckpoint,
+  checkpoint: ReadingCheckpoint,
   currentDeviceId: string,
 ): boolean {
   return checkpoint.deviceId !== currentDeviceId;
 }
 
-function compareCheckpointsByHlc(
-  a: SyncedReadingCheckpoint,
-  b: SyncedReadingCheckpoint,
+function compareCheckpoints(
+  a: ReadingCheckpoint,
+  b: ReadingCheckpoint,
 ): number {
-  return compareHLC(a._hlc, b._hlc);
+  if (a.lastRead !== b.lastRead) return a.lastRead - b.lastRead;
+
+  const deviceCompare = a.deviceId.localeCompare(b.deviceId);
+  if (deviceCompare !== 0) return deviceCompare;
+  return a.id.localeCompare(b.id);
 }
 
 export function getLatestRemoteReadingCheckpoint(
-  checkpoints: readonly SyncedReadingCheckpoint[],
+  checkpoints: readonly ReadingCheckpoint[],
   currentDeviceId: string,
-): SyncedReadingCheckpoint | null {
-  let latestCheckpoint: SyncedReadingCheckpoint | null = null;
+): ReadingCheckpoint | null {
+  let latestCheckpoint: ReadingCheckpoint | null = null;
 
   for (const checkpoint of checkpoints) {
     if (!isCheckpointForRemoteDevice(checkpoint, currentDeviceId)) {
@@ -110,7 +113,7 @@ export function getLatestRemoteReadingCheckpoint(
 
     if (
       latestCheckpoint === null ||
-      compareCheckpointsByHlc(checkpoint, latestCheckpoint) > 0
+      compareCheckpoints(checkpoint, latestCheckpoint) > 0
     ) {
       latestCheckpoint = checkpoint;
     }
@@ -121,7 +124,7 @@ export function getLatestRemoteReadingCheckpoint(
 
 export function captureReaderHandoffSessionStart(options: {
   bookId: string;
-  checkpoints: readonly SyncedReadingCheckpoint[];
+  checkpoints: readonly ReadingCheckpoint[];
   currentDeviceId: string;
   startedAt: number;
 }): ReaderHandoffSessionStart {
@@ -139,9 +142,9 @@ export function captureReaderHandoffSessionStart(options: {
 }
 
 export function getLatestUnreadRemoteReadingCheckpoint(
-  checkpoints: readonly SyncedReadingCheckpoint[],
+  checkpoints: readonly ReadingCheckpoint[],
   sessionStart: ReaderHandoffSessionStart,
-): SyncedReadingCheckpoint | null {
+): ReadingCheckpoint | null {
   const latestRemoteCheckpoint = getLatestRemoteReadingCheckpoint(
     checkpoints,
     sessionStart.currentDeviceId,
@@ -150,7 +153,7 @@ export function getLatestUnreadRemoteReadingCheckpoint(
 
   if (
     sessionStart.currentDeviceCheckpoint !== null &&
-    compareCheckpointsByHlc(
+    compareCheckpoints(
       latestRemoteCheckpoint,
       sessionStart.currentDeviceCheckpoint,
     ) <= 0
@@ -162,13 +165,22 @@ export function getLatestUnreadRemoteReadingCheckpoint(
 }
 
 function shouldShowPrompt(
-  checkpoint: SyncedReadingCheckpoint | null,
-  dismissedCheckpointHlc: string | null,
+  checkpoint: ReadingCheckpoint | null,
+  dismissedCheckpointVersion: string | null,
 ): boolean {
   if (checkpoint === null) return false;
-  if (dismissedCheckpointHlc === null) return true;
+  if (dismissedCheckpointVersion === null) return true;
 
-  return compareHLC(checkpoint._hlc, dismissedCheckpointHlc) > 0;
+  return getCheckpointVersion(checkpoint) !== dismissedCheckpointVersion;
+}
+
+function getCheckpointVersion(checkpoint: ReadingCheckpoint): string {
+  return JSON.stringify([
+    checkpoint.id,
+    checkpoint.lastRead,
+    checkpoint.currentSpineIndex,
+    checkpoint.scrollProgress,
+  ]);
 }
 
 function useReaderHandoffDevicesQuery(enabled: boolean) {
@@ -196,7 +208,7 @@ function useReaderHandoffDevicesQuery(enabled: boolean) {
 }
 
 function getSourceDeviceLabel(
-  checkpoint: SyncedReadingCheckpoint | null,
+  checkpoint: ReadingCheckpoint | null,
   devices: ReaderHandoffDevice[] | undefined,
 ): string {
   if (checkpoint === null) return GENERIC_REMOTE_DEVICE_LABEL;
@@ -217,7 +229,7 @@ function getSourceDeviceLabel(
  * are known, which avoids showing a jump control before it has a real target.
  */
 export function resolveHandoffCheckpointPage(
-  checkpoint: SyncedReadingCheckpoint,
+  checkpoint: ReadingCheckpoint,
   chapterStartPages: (number | null)[],
   totalPages: number,
 ): number | null {
@@ -264,13 +276,13 @@ export function useReaderHandoffPrompt({
     : EMPTY_READING_CHECKPOINTS;
   const [sessionStart, setSessionStart] =
     useState<ReaderHandoffSessionStart | null>(null);
-  const [dismissedCheckpointHlc, setDismissedCheckpointHlc] = useState<
+  const [dismissedCheckpointVersion, setDismissedCheckpointVersion] = useState<
     string | null
   >(null);
 
   useEffect(() => {
     setSessionStart(null);
-    setDismissedCheckpointHlc(null);
+    setDismissedCheckpointVersion(null);
   }, [bookId, currentDeviceId, sessionStartedAt]);
 
   useEffect(() => {
@@ -318,17 +330,20 @@ export function useReaderHandoffPrompt({
 
   const promptState = useMemo<ReaderHandoffPromptState>(
     () => ({
-      show: shouldShowPrompt(latestUnreadCheckpoint, dismissedCheckpointHlc),
+      show: shouldShowPrompt(
+        latestUnreadCheckpoint,
+        dismissedCheckpointVersion,
+      ),
       checkpoint: latestUnreadCheckpoint,
       sourceDeviceLabel,
     }),
-    [dismissedCheckpointHlc, latestUnreadCheckpoint, sourceDeviceLabel],
+    [dismissedCheckpointVersion, latestUnreadCheckpoint, sourceDeviceLabel],
   );
 
   const dismissPrompt = useCallback(() => {
     if (latestUnreadCheckpoint === null) return;
 
-    setDismissedCheckpointHlc(latestUnreadCheckpoint._hlc);
+    setDismissedCheckpointVersion(getCheckpointVersion(latestUnreadCheckpoint));
   }, [latestUnreadCheckpoint]);
 
   const handoffTargetPage = useMemo(() => {

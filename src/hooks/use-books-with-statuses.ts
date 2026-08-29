@@ -7,7 +7,7 @@ import {
   getAllBooks,
   getAllReadingCheckpointLastReads,
   getAllReadingStatuses,
-  type SyncedBook,
+  type Book,
   type ReadingStatus,
 } from "@/lib/db";
 import {
@@ -20,13 +20,13 @@ import { readingStatusKeys } from "./use-reading-status";
 
 export interface CategorizedBooks {
   /** Books currently being read, most recently read first */
-  continueReading: SyncedBook[];
+  continueReading: Book[];
   /** Books in the library (not started or want-to-read), most recently added first */
-  library: SyncedBook[];
+  library: Book[];
   /** Books that have been finished, most recently added first */
-  finished: SyncedBook[];
+  finished: Book[];
   /** All books for counting/filtering purposes */
-  all: SyncedBook[];
+  all: Book[];
 }
 
 /**
@@ -44,7 +44,7 @@ export function useBooksWithStatuses() {
     // which refetches checkpoint last-read timestamps alongside the books.
     queryKey: [...bookKeys.list(), ...readingStatusKeys.allStatuses()],
     queryFn: async (): Promise<{
-      books: SyncedBook[];
+      books: Book[];
       statuses: Map<string, ReadingStatus>;
       lastReadByBook: Map<string, number>;
       categorized: CategorizedBooks;
@@ -58,9 +58,9 @@ export function useBooksWithStatuses() {
       ]);
 
       // Categorize books by status
-      const continueReading: SyncedBook[] = [];
-      const library: SyncedBook[] = [];
-      const finished: SyncedBook[] = [];
+      const continueReading: Book[] = [];
+      const library: Book[] = [];
+      const finished: Book[] = [];
 
       for (const book of books) {
         const status = statuses.get(book.id);

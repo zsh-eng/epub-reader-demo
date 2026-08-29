@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { deleteBook as deleteBookFromDb } from "@/lib/db";
 import { syncService } from "@/lib/sync-service";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -100,13 +101,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   // Download a book from server
   const downloadBook = useCallback(
-    async (bookId: string) => {
+    async (_bookId: string) => {
       if (!isAuthenticated) {
         throw new Error("Must be authenticated to download books");
       }
 
-      // Sync the books table with specific entity filter
-      await syncService.syncTable("books", bookId);
+      await syncService.syncAll();
     },
     [isAuthenticated],
   );
@@ -115,19 +115,15 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const deleteBook = useCallback(
     async (bookId: string) => {
       if (!isAuthenticated) {
-        // If not authenticated, we can still delete locally
-        // but we'll use the regular db delete
-        const { deleteBook: deleteBookFromDb } = await import("@/lib/db");
         await deleteBookFromDb(bookId);
         return;
       }
 
       // Delete locally first
-      const { deleteBook: deleteBookFromDb } = await import("@/lib/db");
       await deleteBookFromDb(bookId);
 
-      // Then sync to push the deletion to server
-      await syncService.syncTable("books");
+      // Then run the normal pull-push flow.
+      await syncService.syncAll();
     },
     [isAuthenticated],
   );

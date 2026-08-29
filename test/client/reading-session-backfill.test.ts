@@ -4,16 +4,17 @@ import {
   LEGACY_READING_PROGRESS_SESSION_SOURCE,
   READER_V2_READING_SESSION_SOURCE,
   type Book,
+  type ReadingProgress,
   type ReadingSession,
-  type SyncedBook,
-  type SyncedReadingProgress,
-  type SyncedReadingSession,
 } from "@/lib/db";
 import { beforeEach, describe, expect, it } from "vitest";
 
 const LEGACY_SESSION_ID_PREFIX = `${LEGACY_READING_PROGRESS_SESSION_SOURCE}:v1:`;
+type StoredBook = Book & { isDeleted: boolean };
+type StoredProgress = ReadingProgress & { isDeleted: boolean };
+type StoredSession = ReadingSession & { isDeleted: boolean };
 
-function makeBook(id: string): SyncedBook {
+function makeBook(id: string): StoredBook {
   return {
     id,
     fileHash: `hash-${id}`,
@@ -26,17 +27,18 @@ function makeBook(id: string): SyncedBook {
     spine: [],
     toc: [],
     isDownloaded: 1,
-  } as Book as SyncedBook;
+    isDeleted: false,
+  };
 }
 
 function makeProgress(
-  overrides: Partial<SyncedReadingProgress> & {
+  overrides: Partial<StoredProgress> & {
     id: string;
     bookId: string;
     deviceId: string;
     lastRead: number;
   },
-): SyncedReadingProgress {
+): StoredProgress {
   return {
     id: overrides.id,
     bookId: overrides.bookId,
@@ -44,17 +46,15 @@ function makeProgress(
     scrollProgress: overrides.scrollProgress ?? 0,
     lastRead: overrides.lastRead,
     createdAt: overrides.createdAt ?? overrides.lastRead,
+    deviceId: overrides.deviceId,
     triggerType: overrides.triggerType ?? "periodic",
-    _hlc: overrides._hlc ?? `${overrides.lastRead}-0-${overrides.deviceId}`,
-    _deviceId: overrides.deviceId,
-    _serverTimestamp: overrides._serverTimestamp ?? overrides.lastRead,
-    _isDeleted: overrides._isDeleted ?? 0,
+    isDeleted: overrides.isDeleted ?? false,
   };
 }
 
 function makeSession(
-  overrides: Partial<ReadingSession> & { id: string },
-): SyncedReadingSession {
+  overrides: Partial<StoredSession> & { id: string },
+): StoredSession {
   return {
     id: overrides.id,
     bookId: overrides.bookId ?? "book-1",
@@ -69,10 +69,7 @@ function makeSession(
     startScrollProgress: overrides.startScrollProgress ?? 0,
     endSpineIndex: overrides.endSpineIndex ?? 0,
     endScrollProgress: overrides.endScrollProgress ?? 0,
-    _hlc: "0-0-test",
-    _deviceId: "test-device",
-    _serverTimestamp: 0,
-    _isDeleted: 0,
+    isDeleted: overrides.isDeleted ?? false,
   };
 }
 
@@ -84,7 +81,7 @@ function legacySessionId(
   return `${LEGACY_SESSION_ID_PREFIX}${deviceId}:${bookId}:${startedAt}`;
 }
 
-async function getLegacySessions(): Promise<SyncedReadingSession[]> {
+async function getLegacySessions(): Promise<ReadingSession[]> {
   return db.readingSessions
     .filter(
       (session) => session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE,
@@ -92,21 +89,21 @@ async function getLegacySessions(): Promise<SyncedReadingSession[]> {
     .toArray();
 }
 
-async function getActiveLegacySessions(): Promise<SyncedReadingSession[]> {
+async function getActiveLegacySessions(): Promise<ReadingSession[]> {
   return db.readingSessions
     .filter(
       (session) =>
         session.source === LEGACY_READING_PROGRESS_SESSION_SOURCE &&
-        session._isDeleted !== 1,
+        !session.isDeleted,
     )
     .toArray();
 }
 
 describe("legacy reading progress session backfill", () => {
   beforeEach(async () => {
-    await db.readingSessions.clear();
-    await db.readingProgress.clear();
-    await db.books.clear();
+    await db.delete();
+    await db.open();
+    localStorage.clear();
   });
 
   it("infers sessions by book and device, splitting after idle gaps", async () => {
@@ -157,7 +154,7 @@ describe("legacy reading progress session backfill", () => {
         bookId: "book-1",
         deviceId: "device-a",
         lastRead: 120_000,
-        _isDeleted: 1,
+        isDeleted: true,
       }),
       makeProgress({
         id: "orphaned",
@@ -247,7 +244,7 @@ describe("legacy reading progress session backfill", () => {
     expect(await db.readingSessions.toArray()).toEqual([
       expect.objectContaining({
         id: legacySessionId("device-a", "book-1", 123),
-        _isDeleted: 0,
+        isDeleted: false,
       }),
     ]);
   });
@@ -314,11 +311,11 @@ describe("legacy reading progress session backfill", () => {
         (session) =>
           session.id === legacySessionId("device-a", "book-1", 700_001),
       ),
-    ).toMatchObject({ _isDeleted: 1 });
+    ).toMatchObject({ isDeleted: true });
     expect(nativeSession).toMatchObject({
       id: "native-session",
       source: READER_V2_READING_SESSION_SOURCE,
-      _isDeleted: 0,
+      isDeleted: false,
     });
   });
 });

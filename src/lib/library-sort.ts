@@ -1,4 +1,4 @@
-import type { SyncedBook } from "@/lib/db";
+import type { Book } from "@/lib/db";
 
 /**
  * Library sorting rules.
@@ -17,10 +17,7 @@ import type { SyncedBook } from "@/lib/db";
  * Compares books by when they were added to the library, most recent first.
  * The book id provides a deterministic tie-break.
  */
-export function compareBooksByDateAddedDesc(
-  a: SyncedBook,
-  b: SyncedBook,
-): number {
+export function compareBooksByDateAddedDesc(a: Book, b: Book): number {
   if (a.dateAdded !== b.dateAdded) return b.dateAdded - a.dateAdded;
   return a.id.localeCompare(b.id);
 }
@@ -35,7 +32,7 @@ export function compareBooksByDateAddedDesc(
  */
 export function compareBooksByLastReadDesc(
   lastReadByBook: ReadonlyMap<string, number>,
-): (a: SyncedBook, b: SyncedBook) => number {
+): (a: Book, b: Book) => number {
   return (a, b) => {
     const aLastRead = lastReadByBook.get(a.id) ?? 0;
     const bLastRead = lastReadByBook.get(b.id) ?? 0;
@@ -45,23 +42,21 @@ export function compareBooksByLastReadDesc(
 }
 
 export interface RecentlyReadBook {
-  book: SyncedBook;
+  book: Book;
   lastRead: number;
 }
 
 /**
  * Finds the book with the latest reading activity across all statuses.
- * Checkpoints are authoritative; lastOpened only supports legacy books that
- * have not written a checkpoint yet.
  */
 export function findMostRecentlyReadBook(
-  books: readonly SyncedBook[],
+  books: readonly Book[],
   lastReadByBook: ReadonlyMap<string, number>,
 ): RecentlyReadBook | null {
   let mostRecent: RecentlyReadBook | null = null;
 
   for (const book of books) {
-    const lastRead = lastReadByBook.get(book.id) ?? book.lastOpened ?? 0;
+    const lastRead = lastReadByBook.get(book.id) ?? 0;
     if (lastRead <= 0) continue;
 
     if (!mostRecent || lastRead > mostRecent.lastRead) {

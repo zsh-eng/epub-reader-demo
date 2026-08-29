@@ -1,9 +1,5 @@
 import { bookKeys } from "@/hooks/use-book-loader";
-import {
-  saveReadingProgress,
-  type ReadingProgress,
-  type SyncedReadingProgress,
-} from "@/lib/db";
+import { saveReadingProgress, type ReadingProgress } from "@/lib/db";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 /**
@@ -22,7 +18,9 @@ export function useProgressMutation(bookId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (progress: Omit<ReadingProgress, "id" | "createdAt">) => {
+    mutationFn: async (
+      progress: Omit<ReadingProgress, "id" | "createdAt" | "deviceId">,
+    ) => {
       await saveReadingProgress(progress);
       return progress;
     },
@@ -33,17 +31,16 @@ export function useProgressMutation(bookId: string) {
       });
 
       // Snapshot the previous value
-      const previousProgress =
-        queryClient.getQueryData<SyncedReadingProgress | null>(
-          bookKeys.progress(bookId),
-        );
+      const previousProgress = queryClient.getQueryData<ReadingProgress | null>(
+        bookKeys.progress(bookId),
+      );
 
-      // Optimistically update to the new value (keeping existing sync metadata)
-      queryClient.setQueryData<SyncedReadingProgress | null>(
+      // Optimistically update the current domain value.
+      queryClient.setQueryData<ReadingProgress | null>(
         bookKeys.progress(bookId),
         previousProgress
           ? { ...previousProgress, ...newProgress }
-          : (newProgress as SyncedReadingProgress),
+          : (newProgress as ReadingProgress),
       );
 
       // Return context with previous value for rollback

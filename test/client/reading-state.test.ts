@@ -5,12 +5,12 @@
  */
 
 import {
+  db,
   getAllReadingStatuses,
   getReadingHistory,
   getReadingStatus,
   setReadingStatus,
 } from "@/lib/db";
-import Dexie from "dexie";
 import { describe, expect, it, beforeEach } from "vitest";
 
 // Use fake IndexedDB for tests
@@ -18,8 +18,9 @@ import "fake-indexeddb/auto";
 
 describe("Reading State", () => {
   beforeEach(async () => {
-    // Clear the database before each test
-    await Dexie.delete("epub-reader-db");
+    await db.delete();
+    await db.open();
+    localStorage.clear();
   });
 
   describe("setReadingStatus()", () => {

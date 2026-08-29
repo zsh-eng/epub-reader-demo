@@ -4,7 +4,6 @@ import {
   deleteBook,
   getAllBooks,
   getBookByFileHash,
-  updateBookLastOpened,
 } from "@/lib/db";
 import { parseEPUB } from "@/lib/epub-parser";
 import { hashFile } from "@/lib/file-hash";
@@ -111,11 +110,4 @@ export async function getLibraryBooks(): Promise<Book[]> {
  */
 export async function removeBook(bookId: string): Promise<void> {
   await deleteBook(bookId);
-}
-
-/**
- * Open a book (updates last opened timestamp)
- */
-export async function openBook(bookId: string): Promise<void> {
-  await updateBookLastOpened(bookId);
 }

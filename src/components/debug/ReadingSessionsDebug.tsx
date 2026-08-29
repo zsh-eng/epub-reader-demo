@@ -1,57 +1,57 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import {
-    backfillLegacyReadingProgressCheckpoints,
-    backfillLegacyReadingProgressSessions,
-    db,
-    LEGACY_READING_PROGRESS_SESSION_SOURCE,
-    READER_V2_READING_SESSION_SOURCE,
-    READING_SESSION_IDLE_TIMEOUT_MS,
-    type BackfillLegacyReadingProgressCheckpointsBookSummary,
-    type BackfillLegacyReadingProgressCheckpointsResult,
-    type BackfillLegacyReadingProgressSessionsBookSummary,
-    type BackfillLegacyReadingProgressSessionsResult,
-    type ReadingSessionSource,
-    type SyncedBook,
-    type SyncedReadingSession,
+  backfillLegacyReadingProgressCheckpoints,
+  backfillLegacyReadingProgressSessions,
+  db,
+  LEGACY_READING_PROGRESS_SESSION_SOURCE,
+  READER_V2_READING_SESSION_SOURCE,
+  READING_SESSION_IDLE_TIMEOUT_MS,
+  type BackfillLegacyReadingProgressCheckpointsBookSummary,
+  type BackfillLegacyReadingProgressCheckpointsResult,
+  type BackfillLegacyReadingProgressSessionsBookSummary,
+  type BackfillLegacyReadingProgressSessionsResult,
+  type ReadingSessionSource,
+  type Book,
+  type ReadingSession,
 } from "@/lib/db";
 import { syncService } from "@/lib/sync-service";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    ArrowLeft,
-    ArrowUpDown,
-    ChevronLeft,
-    ChevronRight,
-    Database,
-    RefreshCw,
-    Search,
+  ArrowLeft,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  RefreshCw,
+  Search,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -120,8 +120,8 @@ interface DebugPaginationState {
   pageSize: number;
 }
 
-function isActiveRecord(record: { _isDeleted?: number }): boolean {
-  return record._isDeleted !== 1;
+function isActiveRecord(record: { isDeleted: boolean }): boolean {
+  return !record.isDeleted;
 }
 
 function formatDateTime(timestamp: number | null | undefined): string {
@@ -162,9 +162,9 @@ function truncateId(id: string): string {
 
 async function getReadingSessionsDebugData(): Promise<ReadingSessionsDebugData> {
   const [books, sessions] = await Promise.all([
-    db.books.filter(isActiveRecord).toArray() as Promise<SyncedBook[]>,
+    db.books.filter(isActiveRecord).toArray() as Promise<Book[]>,
     db.readingSessions.filter(isActiveRecord).toArray() as Promise<
-      SyncedReadingSession[]
+      ReadingSession[]
     >,
   ]);
 
@@ -741,7 +741,7 @@ function LegacyCheckpointBackfillDialog({
       const result = await backfillLegacyReadingProgressCheckpoints();
 
       try {
-        await syncService.pushTable("readingCheckpoints");
+        await syncService.push();
         return { result, syncError: null as string | null };
       } catch (error) {
         const syncError =

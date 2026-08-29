@@ -1,5 +1,5 @@
 import { fileManager } from "@/lib/files/file-manager";
-import { processEpubToBookFiles } from "@/lib/sync/epub-processing";
+import { processEpubToBookFiles } from "@/lib/epub-processing";
 import { db, hasBookFiles } from "@/lib/db";
 import {
   endReaderTraceSpan,

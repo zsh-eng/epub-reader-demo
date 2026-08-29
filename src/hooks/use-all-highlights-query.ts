@@ -7,14 +7,14 @@
 import {
   getAllBooks,
   getAllHighlights,
-  type SyncedBook,
-  type SyncedHighlight,
+  type Book,
+  type Highlight,
 } from "@/lib/db";
 import { useQuery } from "@tanstack/react-query";
 
 export interface BookHighlightGroup {
-  book: SyncedBook;
-  highlights: SyncedHighlight[];
+  book: Book;
+  highlights: Highlight[];
   mostRecentHighlight: number;
 }
 
@@ -29,16 +29,16 @@ export const allHighlightsKeys = {
  * Groups highlights by book and sorts by most recent activity
  */
 function groupHighlightsByBook(
-  highlights: SyncedHighlight[],
-  books: SyncedBook[],
+  highlights: Highlight[],
+  books: Book[],
 ): BookHighlightGroup[] {
-  const bookMap = new Map<string, SyncedBook>();
+  const bookMap = new Map<string, Book>();
   for (const book of books) {
     bookMap.set(book.id, book);
   }
 
   // Group highlights by bookId
-  const groupedMap = new Map<string, SyncedHighlight[]>();
+  const groupedMap = new Map<string, Highlight[]>();
   for (const highlight of highlights) {
     const existing = groupedMap.get(highlight.bookId) ?? [];
     existing.push(highlight);

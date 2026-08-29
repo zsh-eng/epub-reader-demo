@@ -1,7 +1,7 @@
 import {
   getCurrentDeviceReadingCheckpoint,
   getReadingCheckpointsForBook,
-  type SyncedReadingCheckpoint,
+  type ReadingCheckpoint,
 } from "@/lib/db";
 import {
   endReaderTraceSpan,
@@ -166,11 +166,11 @@ async function yieldToMainThreadTask(): Promise<void> {
 }
 
 export interface ReaderCheckpointData {
-  checkpoint: SyncedReadingCheckpoint | undefined;
+  checkpoint: ReadingCheckpoint | undefined;
 }
 
 export interface ReaderCheckpointsData {
-  checkpoints: SyncedReadingCheckpoint[];
+  checkpoints: ReadingCheckpoint[];
 }
 
 export function useReaderBodyCacheQuery(options: {

@@ -1,4 +1,4 @@
-import type { SyncedReadingCheckpoint } from "@/lib/db";
+import type { ReadingCheckpoint } from "@/lib/db";
 import { useRef } from "react";
 import {
   resolveInitialReaderLocation,
@@ -8,7 +8,7 @@ import {
 interface UseSessionInitialReaderLocationOptions {
   bookId?: string;
   totalChapters: number;
-  checkpoint: SyncedReadingCheckpoint | undefined;
+  checkpoint: ReadingCheckpoint | undefined;
   checkpointReady: boolean;
 }
 

@@ -9,7 +9,7 @@
  * - Deduplication: Collapse consecutive positions in the same chapter
  */
 
-import type { ProgressTriggerType, SyncedReadingProgress } from "@/lib/db";
+import type { ProgressTriggerType, ReadingProgress } from "@/lib/db";
 import { getOrCreateDeviceId } from "@/lib/device";
 
 // Re-export for convenience
@@ -131,7 +131,7 @@ export function deduplicateConsecutivePositions<
  * @returns Transformed position history entries
  */
 export function transformToHistoryEntries(
-  records: SyncedReadingProgress[],
+  records: ReadingProgress[],
   currentDeviceId: string,
 ): PositionHistoryEntry[] {
   return records.map((record) => ({
@@ -142,8 +142,8 @@ export function transformToHistoryEntries(
     triggerType: (record.triggerType as ProgressTriggerType) || "periodic",
     targetElementId: record.targetElementId,
     timestamp: record.lastRead,
-    deviceId: record._deviceId,
-    isCurrentDevice: record._deviceId === currentDeviceId,
+    deviceId: record.deviceId,
+    isCurrentDevice: record.deviceId === currentDeviceId,
   }));
 }
 
@@ -166,7 +166,7 @@ export function transformToHistoryEntries(
  * @returns Processed position history entries
  */
 export function processPositionHistory(
-  records: SyncedReadingProgress[],
+  records: ReadingProgress[],
   limit: number = 10,
 ): PositionHistoryEntry[] {
   const currentDeviceId = getOrCreateDeviceId();

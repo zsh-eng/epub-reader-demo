@@ -1,8 +1,7 @@
 /**
  * Fresh client database for sync v2.
  *
- * The application still uses the legacy database during the cutover. This
- * database starts at version 1 and contains no legacy sync metadata.
+ * This database starts at version 1 and contains no legacy sync metadata.
  */
 
 import type {
@@ -16,6 +15,11 @@ import type {
   ReadingSettings,
 } from "@/lib/db";
 import type { StoredFile, TransferTask } from "@/lib/files/types";
+import { getOrCreateDeviceId } from "@/lib/device";
+import {
+  getOrCreateSyncClientState,
+  nextSyncHlcBatch,
+} from "@/lib/sync-v2/client-state";
 import { installSync } from "@/lib/sync-v2/middleware";
 import type { SyncPushChange } from "@/lib/sync-v2/protocol";
 import type { Highlight } from "@/types/highlight";
@@ -40,7 +44,7 @@ export interface SyncV2DeletionState {
 }
 
 export type SyncV2DomainRow<Row> = Row & SyncV2DeletionState;
-export type SyncV2Book = SyncV2DomainRow<Omit<Book, "lastOpened">>;
+export type SyncV2Book = SyncV2DomainRow<Book>;
 export type SyncV2ReadingProgress = SyncV2DomainRow<ReadingProgress>;
 export type SyncV2ReadingCheckpoint = SyncV2DomainRow<ReadingCheckpoint>;
 export type SyncV2ReadingSession = SyncV2DomainRow<ReadingSession>;
@@ -104,7 +108,10 @@ export function createSyncV2ApplicationDb(
   databaseName = SYNC_V2_DATABASE_NAME,
 ): EPUBReaderSyncV2DB {
   const db = new EPUBReaderSyncV2DB(databaseName);
-  installSync(db, SYNC_V2_SYNCED_TABLES);
+  installSync(db, SYNC_V2_SYNCED_TABLES, (count) => {
+    getOrCreateSyncClientState(getOrCreateDeviceId());
+    return nextSyncHlcBatch(count);
+  });
   return db;
 }
 

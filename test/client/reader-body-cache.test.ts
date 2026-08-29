@@ -66,9 +66,9 @@ function createBookFile(
 
 describe("reader body cache", () => {
   beforeEach(async () => {
-    await db.bookChapterSourceCache.clear();
-    await db.bookFiles.clear();
-    await db.books.clear();
+    await db.delete();
+    await db.open();
+    localStorage.clear();
   });
 
   it("builds normalized body HTML and canonical text from chapter files", async () => {

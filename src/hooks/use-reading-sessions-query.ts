@@ -1,17 +1,17 @@
-import { db, type SyncedBook, type SyncedReadingSession } from "@/lib/db";
+import { db, type Book, type ReadingSession } from "@/lib/db";
 import { useQuery } from "@tanstack/react-query";
 
 export const readingSessionKeys = {
   overview: ["readingSessions", "overview"] as const,
 };
 
-function isActiveRecord(record: { _isDeleted?: number }): boolean {
-  return record._isDeleted !== 1;
+function isActiveRecord(record: { isDeleted: boolean }): boolean {
+  return !record.isDeleted;
 }
 
 export interface ReadingSessionsData {
-  books: SyncedBook[];
-  sessions: SyncedReadingSession[];
+  books: Book[];
+  sessions: ReadingSession[];
 }
 
 /** Loads the local-first source records used by the product Sessions page. */

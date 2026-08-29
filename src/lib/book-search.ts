@@ -5,7 +5,7 @@
  * Extracts plain text from HTML chapters and provides search functionality.
  */
 
-import { db, type Book, type BookTextCache } from "@/lib/db";
+import { db, getBook, type Book, type BookTextCache } from "@/lib/db";
 
 // ============================================================================
 // Types
@@ -103,7 +103,7 @@ export async function extractBookText(
   onProgress?: ExtractionProgressCallback,
 ): Promise<BookTextCache> {
   // Get the book metadata
-  const book = await db.books.get(bookId);
+  const book = await getBook(bookId);
   if (!book) {
     throw new Error(`Book not found: ${bookId}`);
   }

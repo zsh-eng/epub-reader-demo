@@ -27,10 +27,15 @@ export interface SyncV2MutationMiddlewareOptions {
   nextHlcBatch?: (count: number) => readonly SyncHlc[];
 }
 
-export function installSync(db: Dexie, syncedTables: readonly string[]): void {
+export function installSync(
+  db: Dexie,
+  syncedTables: readonly string[],
+  nextHlcBatch = nextSyncHlcBatch,
+): void {
   db.use(
     createSyncV2MutationMiddleware({
       syncedTables: new Set(syncedTables),
+      nextHlcBatch,
     }),
   );
 }

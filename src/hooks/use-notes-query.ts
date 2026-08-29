@@ -3,7 +3,7 @@ import {
   getChapterNotes,
   getNotesByAnnotation,
   updateNote as updateNoteInDb,
-  type SyncedNote,
+  type Note,
 } from "@/lib/db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -57,8 +57,8 @@ export function useUpdateNoteMutation(annotationId: string | undefined) {
     },
     onMutate: async ({ id, content }) => {
       await queryClient.cancelQueries({ queryKey });
-      const previousNotes = queryClient.getQueryData<SyncedNote[]>(queryKey);
-      queryClient.setQueryData<SyncedNote[]>(queryKey, (old = []) =>
+      const previousNotes = queryClient.getQueryData<Note[]>(queryKey);
+      queryClient.setQueryData<Note[]>(queryKey, (old = []) =>
         old.map((n) => (n.id === id ? { ...n, content } : n)),
       );
       return { previousNotes };
@@ -89,8 +89,8 @@ export function useDeleteNoteMutation(annotationId: string | undefined) {
     },
     onMutate: async (noteId) => {
       await queryClient.cancelQueries({ queryKey });
-      const previousNotes = queryClient.getQueryData<SyncedNote[]>(queryKey);
-      queryClient.setQueryData<SyncedNote[]>(queryKey, (old = []) =>
+      const previousNotes = queryClient.getQueryData<Note[]>(queryKey);
+      queryClient.setQueryData<Note[]>(queryKey, (old = []) =>
         old.filter((n) => n.id !== noteId),
       );
       return { previousNotes };
