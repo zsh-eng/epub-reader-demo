@@ -750,9 +750,9 @@ After production checks pass:
 The implementation uses five review units: server v2, client substrate,
 application data-model cutover, migration tool, and final cleanup.
 
-### Final cleanup execution — In progress
+### Final cleanup execution — Complete
 
-Started on 2026-08-30:
+Completed on 2026-08-30:
 
 - Removed the unused legacy client sync engine, HLC middleware, table schema
   generator, adapters, migration helpers, progress-history utilities, and
@@ -779,5 +779,29 @@ Started on 2026-08-30:
   formatting for the cleanup files also passed. The repository-wide format
   check still reports unrelated pre-existing files, including an unstaged user
   edit, so it was not used to rewrite the whole checkout.
-- The production `sync_data` table remains intact until the cleanup build is
-  committed, deployed, and verified against the v2 endpoints.
+- Committed the code cleanup as `f0f11eb` and built that exact commit in an
+  isolated production worktree. Deployed Worker version
+  `e1335f70-29bd-4b00-866d-88f61772a28b`, serving
+  `assets/index-9K1wuVKV.js`. The deployed index and JavaScript asset matched
+  the isolated build with SHA-256 values
+  `cb9f9f0e06630cdd1a12b0458fc4a394e6adbc88142ca1d8a64875a72821150b`
+  and
+  `90edf3b65b15444097538400d73966d9250bf0fd8ed507620f074a1aad8a140e`.
+- Verified the authenticated production client before the database cleanup.
+  Library displayed Continue Reading, Highlights displayed 465 active
+  highlights across 19 books, and Sessions displayed current reading history.
+- Applied `0007_curved_gauntlet.sql` to production. Wrangler captured its own
+  pre-migration backup, and the migration removed only `sync_data`.
+- Verified the post-migration database: `sync_data` is absent; `sync_records`
+  contains 962 compacted records at server head 1930 with 17 tombstones;
+  `file_storage` still contains 54 rows; and the foreign-key check returned no
+  violations. The increase from the original 959 records and head 1919 was
+  normal application activity before final cleanup.
+- Reloaded the authenticated Library and Highlights pages after the table drop.
+  Continue Reading, book data, the 465-highlight count, and highlight cards
+  remained present. The v2 pull endpoint still requires authentication with a
+  `401`; both removed legacy endpoints return `404`.
+- Retained the immutable production SQLite backup at
+  `backups.local/d1/2026-08-29T16-17-22Z/reader-db.sqlite`, SHA-256
+  `4e121a0460f9162be5ac3feb18ee7b00ee81100e7e4c8f72a590295a76236fda`.
+  Git history retains the old implementation and one-time migration tooling.
