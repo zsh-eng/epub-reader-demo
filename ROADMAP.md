@@ -123,6 +123,11 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Swipe to change page (carousel style)
 - [x] Perf improvements
 
+- [ ] New simplified sync engine
+- [ ] New file storage sync
+- [ ] Decomp note-taking flow
+- [ ] Sync limits
+
 - [ ] Sync progress toast
   - [ ] Also handles downloading a new book
 - [ ] Squircle toast
