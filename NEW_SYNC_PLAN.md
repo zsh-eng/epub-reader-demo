@@ -164,7 +164,7 @@ Completed on 2026-08-29:
 - Passed all 68 server tests, the root build, targeted lint, formatting, and
   diff checks.
 
-### 4. Create the new client database
+### 4. Create the new client database — Complete
 
 Do not upgrade the existing `"epub-reader-db"` schema in place. Create a new database name, such as `"epub-reader-db-v2"`, with Dexie version 1.
 
@@ -198,6 +198,23 @@ The outbox is compacted by logical key. A second local change replaces the first
 
 Persist device ID, HLC state, pull cursor, and bootstrap status in
 `localStorage` under one validated state envelope.
+
+Completed on 2026-08-29:
+
+- Added the isolated `epub-reader-db-v2` Dexie database at version 1. The
+  running application still uses the legacy database until the client cutover.
+- Defined clean domain tables with only application indexes. Rows use the plain
+  `isDeleted` boolean and contain none of the four legacy sync metadata fields.
+- Removed `books.lastOpened` and its index. Reading checkpoints own recent
+  reading activity, while reading sessions already represent book opens.
+- Retained useful local EPUB, file, transfer, text, and reader-source caches.
+  Omitted `syncLog` because it only served the old sync implementation.
+- Added `_sync_outbox` as the only internal table. It stores the compacted
+  protocol change directly and uses its logical key as the primary key.
+- Added helpers that create, validate, read, and write one local-storage state
+  envelope. Its first initialization accepts the app's existing device ID.
+- Added two client-state behavior tests. The focused tests, root build,
+  targeted lint, formatting, and diff checks passed.
 
 ### 5. Add transparent Dexie mutation interception
 
