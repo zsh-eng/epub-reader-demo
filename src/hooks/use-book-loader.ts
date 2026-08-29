@@ -1,11 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
-import {
-  getAllBooks,
-  getBook,
-  getReadingProgress,
-  type Book,
-  type ReadingProgress,
-} from "@/lib/db";
+import { getAllBooks, getBook, type Book } from "@/lib/db";
 import { withReaderTraceSpan } from "@/lib/reader-performance-trace";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
@@ -14,8 +8,6 @@ import { useNavigate } from "react-router-dom";
 export interface UseBookLoaderReturn {
   /** The loaded book data */
   book: Book | null;
-  /** Initial reading progress from database */
-  initialProgress: ReadingProgress | null;
   /** Whether the book is currently loading */
   isLoading: boolean;
 }
@@ -27,7 +19,6 @@ export const bookKeys = {
   all: ["books"] as const,
   list: () => [...bookKeys.all, "list"] as const,
   detail: (bookId: string) => [...bookKeys.all, bookId] as const,
-  progress: (bookId: string) => [...bookKeys.all, bookId, "progress"] as const,
 };
 
 /**
@@ -74,53 +65,15 @@ function useBook(bookId: string | undefined) {
 }
 
 /**
- * Hook for querying reading progress
- */
-function useReadingProgress(
-  bookId: string | undefined,
-  enabled: boolean = true,
-) {
-  return useQuery({
-    queryKey: bookKeys.progress(bookId ?? ""),
-    queryFn: async () => {
-      if (!bookId) {
-        return null;
-      }
-      const progress = await getReadingProgress(bookId);
-      return progress ?? null;
-    },
-    enabled: enabled && !!bookId,
-    staleTime: 1 * 60 * 1000, // Consider data fresh for 1 minute
-    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
-    refetchOnWindowFocus: false,
-    retry: 1,
-  });
-}
-
-/**
- * Hook for loading book data and initial reading progress.
+ * Hook for loading book metadata.
  *
- * This hook is intentionally simple - it only handles:
- * - Loading the book from the database
- * - Loading the initial reading progress
- * - Navigation/error handling if book not found
- *
- * Scroll restoration is handled separately by the useScrollTarget and useProgressPersistence hooks.
+ * Reader location is loaded by the checkpoint controller.
  */
-interface UseBookLoaderOptions {
-  includeInitialProgress?: boolean;
-}
-
-export function useBookLoader(
-  bookId: string | undefined,
-  options: UseBookLoaderOptions = {},
-): UseBookLoaderReturn {
+export function useBookLoader(bookId: string | undefined): UseBookLoaderReturn {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { includeInitialProgress = true } = options;
 
   const bookQuery = useBook(bookId);
-  const progressQuery = useReadingProgress(bookId, includeInitialProgress);
 
   // Handle errors and navigation
   useEffect(() => {
@@ -148,14 +101,8 @@ export function useBookLoader(
     }
   }, [bookId, bookQuery.error, navigate, toast]);
 
-  const isLoading =
-    bookQuery.isLoading || (includeInitialProgress && progressQuery.isLoading);
-
   return {
     book: bookQuery.data ?? null,
-    initialProgress: includeInitialProgress
-      ? (progressQuery.data ?? null)
-      : null,
-    isLoading,
+    isLoading: bookQuery.isLoading,
   };
 }

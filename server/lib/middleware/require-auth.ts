@@ -28,10 +28,7 @@ export const requireAuth: MiddlewareHandler<Env> = async (c, next) => {
   await next();
 };
 
-/**
- * Middleware that requires only user authentication.
- * Returns 401 Unauthorized if user is not authenticated.
- */
+/** Require a signed-in user for routes that do not need a device ID. */
 export const requireUser: MiddlewareHandler<Env> = async (c, next) => {
   const user = c.get("user");
 

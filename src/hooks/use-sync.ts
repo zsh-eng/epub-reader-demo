@@ -21,8 +21,6 @@ interface SyncContextValue {
   lastSyncedAt: Date | null;
   /** Trigger a manual sync */
   triggerSync: () => Promise<void>;
-  /** Download a specific book */
-  downloadBook: (bookId: string) => Promise<void>;
   /** Delete a book (syncs deletion to server) */
   deleteBook: (bookId: string) => Promise<void>;
   /** Error from last sync attempt */
@@ -77,10 +75,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   // Manual sync trigger
   const triggerSync = useCallback(async () => {
-    if (!isAuthenticated) {
-      console.log("[useSync] Not authenticated, skipping sync");
-      return;
-    }
+    if (!isAuthenticated) return;
 
     setIsSyncing(true);
     setSyncError(null);
@@ -98,18 +93,6 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       setIsSyncing(false);
     }
   }, [isAuthenticated]);
-
-  // Download a book from server
-  const downloadBook = useCallback(
-    async (_bookId: string) => {
-      if (!isAuthenticated) {
-        throw new Error("Must be authenticated to download books");
-      }
-
-      await syncService.syncAll();
-    },
-    [isAuthenticated],
-  );
 
   // Delete a book (syncs to server)
   const deleteBook = useCallback(
@@ -133,11 +116,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       isSyncing,
       lastSyncedAt,
       triggerSync,
-      downloadBook,
       deleteBook,
       syncError,
     }),
-    [deleteBook, downloadBook, isSyncing, lastSyncedAt, syncError, triggerSync],
+    [deleteBook, isSyncing, lastSyncedAt, syncError, triggerSync],
   );
 
   return createElement(SyncContext.Provider, { value }, children);
@@ -149,30 +131,4 @@ export function useSync(): SyncContextValue {
     throw new Error("useSync must be used within SyncProvider");
   }
   return context;
-}
-
-/**
- * Hook to get the sync state for a specific book
- *
- * Note: This hook is currently a stub. The sync service doesn't expose
- * per-book sync state yet. To implement this, we'd need to track sync
- * metadata at a more granular level.
- */
-export function useBookSyncState(fileHash: string | undefined) {
-  const [status, setStatus] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    if (!fileHash) {
-      setIsLoading(false);
-      return;
-    }
-
-    // TODO: Implement per-book sync state tracking
-    // For now, we just return null status
-    setStatus(null);
-    setIsLoading(false);
-  }, [fileHash]);
-
-  return { status, isLoading };
 }

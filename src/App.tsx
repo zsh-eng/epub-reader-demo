@@ -9,7 +9,6 @@ import { ReadingSessions } from "@/components/ReadingSessions";
 import { ReaderTraceViewer } from "@/components/ReaderTraceViewer";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Devices } from "@/components/Sessions";
-import { ReadingSessionsDebug } from "@/components/debug/ReadingSessionsDebug";
 import { Toaster } from "@/components/ui/sonner";
 import { EpubImportProvider } from "@/hooks/use-epub-import";
 import { ReaderSettingsProvider } from "@/hooks/use-reader-settings";
@@ -62,10 +61,6 @@ function App() {
                   <Route
                     path="/diagnostics/reader"
                     element={<ReaderDiagnostics />}
-                  />
-                  <Route
-                    path="/debug/reading-sessions"
-                    element={<ReadingSessionsDebug />}
                   />
                 </Routes>
                 <Toaster

@@ -2,7 +2,6 @@ import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import {
   createSyncV2ApplicationDb,
   EPUBReaderSyncV2DB,
-  type SyncV2ReadingProgress,
   type SyncV2ReadingSettings,
   type SyncV2ReadingState,
 } from "@/lib/sync-v2/db";
@@ -85,21 +84,17 @@ describe("sync v2 mutation middleware", () => {
     );
   });
 
-  it("keeps deprecated reading progress local and out of the v2 outbox", async () => {
-    const progress: SyncV2ReadingProgress = {
-      id: "legacy-progress",
+  it("keeps local caches out of the v2 outbox", async () => {
+    const cache = {
       bookId: "book-a",
-      currentSpineIndex: 2,
-      scrollProgress: 35,
-      lastRead: 1_000,
-      createdAt: 1_000,
-      deviceId: "device-a",
-      isDeleted: false,
+      chapters: [],
+      totalCharacters: 0,
+      extractedAt: 1_000,
     };
 
-    await db.readingProgress.add(progress);
+    await db.bookTextCache.add(cache);
 
-    expect(await db.readingProgress.get(progress.id)).toEqual(progress);
+    expect(await db.bookTextCache.get(cache.bookId)).toEqual(cache);
     expect(await db._sync_outbox.count()).toBe(0);
   });
 

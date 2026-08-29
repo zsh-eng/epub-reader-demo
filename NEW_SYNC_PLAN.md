@@ -749,3 +749,35 @@ After production checks pass:
 
 The implementation uses five review units: server v2, client substrate,
 application data-model cutover, migration tool, and final cleanup.
+
+### Final cleanup execution — In progress
+
+Started on 2026-08-30:
+
+- Removed the unused legacy client sync engine, HLC middleware, table schema
+  generator, adapters, migration helpers, progress-history utilities, and
+  their obsolete tests.
+- Preserved `src/lib/sync-service.ts` and `src/hooks/use-sync.ts` because these
+  files now provide the active sync v2 lifecycle and UI state.
+- Removed the dormant local `readingProgress` model, writers, query helpers,
+  checkpoint/session backfills, and migration debug page. Dexie schema version
+  2 deletes the physical store while preserving every active v2 table.
+- Added an idempotent startup deletion for the pre-v2 `epub-reader-db`
+  database.
+- Removed the legacy table-scoped server routes and implementation. Removed
+  `syncData` from the Drizzle schema and generated migration
+  `0007_curved_gauntlet.sql`, which contains only `DROP TABLE sync_data`.
+- Removed the completed one-time v2 migration CLI and retained its full source
+  and tests in Git history. The immutable production SQLite backups and seed
+  artifacts remain outside the repository.
+- Replaced the old sync RFC with a short description of the implemented v2
+  contract.
+- Applied the drop migration to a writable copy of the pre-repair production
+  backup. It removed all 45,976 legacy rows, retained all 959 v2 records, and
+  produced zero foreign-key violations.
+- Passed 502 tests across 74 files, the production build, and lint. Targeted
+  formatting for the cleanup files also passed. The repository-wide format
+  check still reports unrelated pre-existing files, including an unstaged user
+  edit, so it was not used to rewrite the whole checkout.
+- The production `sync_data` table remains intact until the cleanup build is
+  committed, deployed, and verified against the v2 endpoints.

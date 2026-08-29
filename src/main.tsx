@@ -24,6 +24,11 @@ import "@fontsource/jetbrains-mono/400.css";
 
 import "./index.css";
 import App from "./App.tsx";
+import { deleteLegacyClientDatabase } from "./lib/sync-v2/db.ts";
+
+void deleteLegacyClientDatabase().catch((error: unknown) => {
+  console.error("Could not delete the legacy client database:", error);
+});
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

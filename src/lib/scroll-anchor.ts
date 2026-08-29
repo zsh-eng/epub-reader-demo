@@ -1,5 +1,4 @@
 import { findRangeByTextOffset } from "@zsh-eng/text-highlighter";
-import { saveReadingProgress } from "@/lib/db";
 
 /**
  * Represents a scroll anchor - a precise position in the text content
@@ -245,28 +244,4 @@ export function calculateScrollPercentage(): number {
 
   const progress = (scrollTop / scrollable) * 100;
   return isNaN(progress) ? 0 : Math.min(100, Math.max(0, progress));
-}
-
-/**
- * Saves the current reading progress for a book.
- * This is a convenience function for chapter navigation that resets scroll to 0.
- *
- * @param bookId - The book ID
- * @param currentChapterIndex - The current chapter/spine index
- * @param scrollProgress - Scroll progress percentage (0-100), defaults to 0
- */
-export async function saveCurrentProgress(
-  bookId: string,
-  currentChapterIndex: number,
-  scrollProgress: number = 0,
-): Promise<void> {
-  // Handle NaN values
-  const validScrollProgress = isNaN(scrollProgress) ? 0 : scrollProgress;
-
-  await saveReadingProgress({
-    bookId,
-    currentSpineIndex: currentChapterIndex,
-    scrollProgress: validScrollProgress,
-    lastRead: new Date().getTime(),
-  });
 }

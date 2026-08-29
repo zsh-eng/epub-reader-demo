@@ -68,16 +68,6 @@ class SyncService {
     return result;
   }
 
-  async push(): Promise<number> {
-    if (!this.isOnline) {
-      throw new Error("Cannot push while offline");
-    }
-
-    const pushed = await this.client.push();
-    if (pushed > 0) await this.invalidateQueries();
-    return pushed;
-  }
-
   private handleOnline = (): void => {
     this.isOnline = true;
     void this.syncAll().catch((error) => {

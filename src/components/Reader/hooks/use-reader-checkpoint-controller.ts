@@ -24,8 +24,7 @@ interface UseReaderCheckpointControllerOptions {
  * - flush immediately for committed page turns and jumps
  * - flush periodically and on lifecycle exits for restore/relayout snapshots
  *
- * This hook only writes the per-device `readingCheckpoints` row. It does not
- * create legacy `readingProgress` history rows.
+ * This hook writes one compacted checkpoint for this device and book.
  */
 export function useReaderCheckpointController({
   bookId,

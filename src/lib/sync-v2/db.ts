@@ -10,7 +10,6 @@ import type {
   BookFile,
   BookTextCache,
   ReadingCheckpoint,
-  ReadingProgress,
   ReadingSession,
   ReadingSettings,
 } from "@/lib/db";
@@ -28,6 +27,7 @@ import type { ReadingState } from "@/types/reading-state";
 import Dexie, { type Table } from "dexie";
 
 export const SYNC_V2_DATABASE_NAME = "epub-reader-db-v2";
+const LEGACY_DATABASE_NAME = "epub-reader-db";
 export const SYNC_V2_SYNCED_TABLES = [
   "books",
   "readingCheckpoints",
@@ -44,7 +44,6 @@ export interface SyncV2DeletionState {
 
 export type SyncV2DomainRow<Row> = Row & SyncV2DeletionState;
 export type SyncV2Book = SyncV2DomainRow<Book>;
-export type SyncV2ReadingProgress = SyncV2DomainRow<ReadingProgress>;
 export type SyncV2ReadingCheckpoint = SyncV2DomainRow<ReadingCheckpoint>;
 export type SyncV2ReadingSession = SyncV2DomainRow<ReadingSession>;
 export type SyncV2Highlight = SyncV2DomainRow<Highlight>;
@@ -57,8 +56,6 @@ export type SyncV2Note = SyncV2DomainRow<Note>;
  */
 export const SYNC_V2_STORES = {
   books: "id, dateAdded, &fileHash",
-  // Temporary local-only legacy history. Final cleanup removes this table.
-  readingProgress: "id, bookId, lastRead, [bookId+lastRead]",
   readingCheckpoints:
     "id, bookId, deviceId, lastRead, [bookId+deviceId], [bookId+lastRead]",
   readingSessions:
@@ -78,10 +75,14 @@ export const SYNC_V2_STORES = {
   _sync_outbox: "key",
 } as const;
 
+const SYNC_V2_VERSION_1_STORES = {
+  ...SYNC_V2_STORES,
+  readingProgress: "id, bookId, lastRead, [bookId+lastRead]",
+} as const;
+
 /** Schema-only connection used by the sync engine for direct remote writes. */
 export class EPUBReaderSyncV2DB extends Dexie {
   books!: Table<SyncV2Book, string>;
-  readingProgress!: Table<SyncV2ReadingProgress, string>;
   readingCheckpoints!: Table<SyncV2ReadingCheckpoint, string>;
   readingSessions!: Table<SyncV2ReadingSession, string>;
   highlights!: Table<SyncV2Highlight, string>;
@@ -99,8 +100,14 @@ export class EPUBReaderSyncV2DB extends Dexie {
 
   constructor(databaseName = SYNC_V2_DATABASE_NAME) {
     super(databaseName);
-    this.version(1).stores(SYNC_V2_STORES);
+    this.version(1).stores(SYNC_V2_VERSION_1_STORES);
+    this.version(2).stores({ readingProgress: null });
   }
+}
+
+/** Remove the pre-v2 database after the completed production cutover. */
+export async function deleteLegacyClientDatabase(): Promise<void> {
+  await Dexie.delete(LEGACY_DATABASE_NAME);
 }
 
 /** Create the application-facing connection that captures local mutations. */
