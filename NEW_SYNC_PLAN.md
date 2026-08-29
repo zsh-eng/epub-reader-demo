@@ -626,7 +626,7 @@ Completed on 2026-08-29:
   legacy metadata. The 54 blob metadata rows, all 45,976 legacy sync rows, old
   endpoints, and old client remain unchanged. No client cutover occurred.
 
-### 12. Deploy the new client and bootstrap
+### 12. Deploy the new client and bootstrap — Complete
 
 Switch the application to:
 
@@ -647,6 +647,76 @@ Verify:
 - Delete propagation.
 - Offline mutation and reconnect.
 - Incremental pulls skipping the requesting device.
+
+Completed on 2026-08-30:
+
+- Rechecked the production freeze before the client rollout. The legacy table
+  still contained 45,976 rows, the v2 table still contained 959 records with
+  head 960, and blob metadata still contained 54 rows.
+- Built committed source `4123e30` in an isolated directory. This excluded the
+  four unrelated unstaged Library and book-action files in the main checkout.
+- The first isolated build omitted the Git-ignored `.env.production` file and
+  compiled the auth client with its localhost fallback. Worker version
+  `cf337ff0-049c-4255-85bb-a6763403cf35` was superseded immediately. No
+  authenticated client sync occurred and production data did not change.
+- Rebuilt the same committed source with the existing production environment
+  file. Confirmed that the client contains `https://reader.zsheng.app` and no
+  localhost auth URL.
+- Deployed corrected Worker version
+  `971ac418-ceaf-48f2-a387-8a4daab45ae9`. Production serves
+  `assets/index-DjlLnChf.js`, and the production index is byte-for-byte equal
+  to the isolated build with SHA-256
+  `daffa21a497d682997b08e4476393a6c843894b85297e486ef4837035ff2d32c`.
+- Confirmed that the corrected JavaScript asset returns `200`, unauthenticated
+  v2 pull still returns `401`, and the v2, legacy, and blob row counts remain
+  unchanged.
+- After sign-in, the first bootstrap exposed a migration defect: books and
+  session totals loaded, but Continue Reading and Highlights were empty. The
+  932 entity-scoped legacy rows kept `bookId` in `sync_data.entity_id`, not in
+  their JSON payloads. The original migration had omitted that column.
+- Updated the migration to restore `bookId` for highlights, checkpoints,
+  sessions, reading state, and notes. Added a replacement-seed mode that gives
+  repaired winners new server sequences and a synthetic device ID, so every
+  existing client can pull the correction without own-device filtering.
+- Passed seven migration tests, including the production-shaped row counts,
+  required parent IDs, and replacement sequence behavior. Passed all 28
+  sync-v2 client tests and the production build.
+- Created a fresh immutable pre-repair backup at
+  `backups.local/d1/2026-08-29T16-17-22Z/reader-db.sqlite`, SHA-256
+  `4e121a0460f9162be5ac3feb18ee7b00ee81100e7e4c8f72a590295a76236fda`.
+- Generated and locally applied the 959-statement repair artifact
+  `sync-v2-entity-repair.sql`, SHA-256
+  `e390acbc82dbe06267dec17f85e870ccb5332aa8134d2bb7c7349a1bd335986b`.
+  Local verification found 959 logical records, 932 restored parent IDs, zero
+  parent mismatches, and no retained legacy session source fields.
+- Applied the repair to production at bookmark
+  `00000346-00000199-000050d6-55765bd007af1ed852426b716e428288`.
+  Production still has 959 logical records: 942 active and 17 deleted. Their
+  replacement stream spans sequences 961 through 1919, and every record uses
+  repair device `sync-v2-migration-repair`.
+- Verified all 481 highlights, 32 checkpoints, 382 sessions, and 37 reading
+  states against the legacy entity IDs with zero mismatches. The legacy table
+  remains at 45,976 rows and blob metadata remains at 54 rows.
+- Chrome pulled the repair through normal incremental sync. Continue Reading
+  returned with the expected recent books, Highlights displayed 465 active
+  highlights across 19 books, and the user confirmed the Sessions page still
+  reports about 128 hours read this year. Reading-state rows occupy the end of
+  the repair stream, so their presence also confirms that the client reached
+  head 1919. The unchanged server head after the next sync cycle confirms that
+  the client had no pending outbox changes.
+- The source contained no `readingSettings` row, so there was no server setting
+  to migrate. Client-local appearance and reader defaults remain in effect.
+- Retrieved one known cover and one known EPUB directly from production R2.
+  Both matched their recorded byte sizes; the cover decoded as JPEG and the
+  EPUB passed a complete ZIP integrity check. Production Chrome also rendered
+  the migrated book covers without errors.
+- Used an isolated temporary production account to exercise two devices. The
+  smoke test passed bootstrap, deterministic conflict resolution, a rejected
+  stale retry, own-device exclusion with cursor advancement, tombstone
+  propagation, and an offline-queued mutation pushed after reconnect. Deleted
+  the exact temporary account afterward; its account, session, devices, and
+  two compacted records cascaded. Production returned to 959 v2 records with
+  head 1919.
 
 ### 13. Keep a rollback window
 

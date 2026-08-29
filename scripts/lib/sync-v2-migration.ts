@@ -18,6 +18,16 @@ const LEGACY_SOURCE_TABLES = new Set([
   "notes",
 ]);
 
+const LEGACY_ENTITY_SCOPED_TABLES = new Set([
+  "readingCheckpoints",
+  "readingSessions",
+  "highlights",
+  "readingState",
+  "notes",
+]);
+
+export const SYNC_V2_MIGRATION_REPAIR_DEVICE_ID = "sync-v2-migration-repair";
+
 const LEGACY_METADATA_FIELDS = new Set([
   "_hlc",
   "_deviceId",
@@ -30,6 +40,7 @@ export interface LegacySyncDataRow {
   id: string;
   table_name: string;
   user_id: string;
+  entity_id: string | null;
   hlc: string;
   device_id: string;
   is_deleted: number | boolean;
@@ -200,16 +211,42 @@ export function migrateLegacySyncRows(
 export function createSyncV2SeedSql(
   records: readonly SyncV2SeedRecord[],
 ): string {
+  return createSyncV2InsertSql(
+    records,
+    "INSERT INTO",
+    (record) => record.deviceId,
+  );
+}
+
+/**
+ * Replaces an existing seed and assigns new server sequences. The synthetic
+ * device ID makes every client eligible to receive the repair incrementally.
+ */
+export function createSyncV2RepairSql(
+  records: readonly SyncV2SeedRecord[],
+): string {
+  return createSyncV2InsertSql(
+    records,
+    "INSERT OR REPLACE INTO",
+    () => SYNC_V2_MIGRATION_REPAIR_DEVICE_ID,
+  );
+}
+
+function createSyncV2InsertSql(
+  records: readonly SyncV2SeedRecord[],
+  command: "INSERT INTO" | "INSERT OR REPLACE INTO",
+  getDeviceId: (record: SyncV2SeedRecord) => string,
+): string {
   const sortedRecords = [...records].sort(compareSeedRecords);
   const statements = sortedRecords.map((record) => {
     const deletion = record.isDeleted ? 1 : 0;
 
     return (
-      "INSERT INTO sync_records " +
+      `${command} sync_records ` +
       "(user_id, key, value, schema_version, hlc_wall_time_ms, hlc_counter, device_id, is_deleted) " +
       `VALUES (${sqlText(record.userId)}, ${sqlText(record.key)}, ${sqlText(record.value)}, ` +
       `${record.schemaVersion}, ${record.hlc.wallTimeMs}, ${record.hlc.counter}, ` +
-      `${sqlText(record.deviceId)}, ${deletion});`
+      `${sqlText(getDeviceId(record))}, ${deletion});`
     );
   });
 
@@ -301,6 +338,14 @@ function migrateDomainValue(
         !LEGACY_METADATA_FIELDS.has(field),
     ),
   );
+
+  if (LEGACY_ENTITY_SCOPED_TABLES.has(row.table_name)) {
+    if (typeof row.entity_id !== "string" || row.entity_id.length === 0) {
+      throw migrationError(row, "entity-scoped row has no entity_id");
+    }
+
+    return { id: row.id, ...domainData, bookId: row.entity_id, isDeleted };
+  }
 
   return { id: row.id, ...domainData, isDeleted };
 }

@@ -4,6 +4,7 @@ import { Database } from "bun:sqlite";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  createSyncV2RepairSql,
   createSyncV2SeedSql,
   migrateLegacySyncRows,
   type LegacySyncDataRow,
@@ -15,6 +16,7 @@ interface CliOptions {
   reportPath?: string;
   dryRun: boolean;
   force: boolean;
+  replaceExisting: boolean;
 }
 
 const LEGACY_ROWS_SQL = `
@@ -22,6 +24,7 @@ const LEGACY_ROWS_SQL = `
     id,
     table_name,
     user_id,
+    entity_id,
     hlc,
     device_id,
     is_deleted,
@@ -49,7 +52,10 @@ async function main(): Promise<void> {
     options.force,
   );
 
-  await writeFile(outputPath, createSyncV2SeedSql(result.records), "utf8");
+  const outputSql = options.replaceExisting
+    ? createSyncV2RepairSql(result.records)
+    : createSyncV2SeedSql(result.records);
+  await writeFile(outputPath, outputSql, "utf8");
   await writeFile(reportPath, reportJson, "utf8");
   console.log(`Wrote ${result.records.length} rows to ${outputPath}`);
   console.log(`Wrote the verification report to ${reportPath}`);
@@ -61,6 +67,7 @@ function parseArgs(args: string[]): CliOptions {
   let reportPath: string | undefined;
   let dryRun = false;
   let force = false;
+  let replaceExisting = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -84,6 +91,10 @@ function parseArgs(args: string[]): CliOptions {
       force = true;
       continue;
     }
+    if (argument === "--replace-existing") {
+      replaceExisting = true;
+      continue;
+    }
     if (argument === "--help" || argument === "-h") {
       printHelp();
       process.exit(0);
@@ -100,6 +111,9 @@ function parseArgs(args: string[]): CliOptions {
   if (dryRun && (outputPath !== undefined || reportPath !== undefined)) {
     throw new Error("--dry-run does not write --output or --report files");
   }
+  if (dryRun && replaceExisting) {
+    throw new Error("--replace-existing requires a SQL output");
+  }
 
   return {
     inputPath: resolve(inputPath),
@@ -107,6 +121,7 @@ function parseArgs(args: string[]): CliOptions {
     ...(reportPath === undefined ? {} : { reportPath: resolve(reportPath) }),
     dryRun,
     force,
+    replaceExisting,
   };
 }
 
@@ -180,10 +195,11 @@ function requireValue(
 function printHelp(): void {
   console.log(`Usage:
   bun scripts/migrate-sync-v2.ts --input <d1-export.sql|backup.sqlite> --dry-run
-  bun scripts/migrate-sync-v2.ts --input <d1-export.sql|backup.sqlite> --output <seed.sql> [--report <report.json>] [--force]
+  bun scripts/migrate-sync-v2.ts --input <d1-export.sql|backup.sqlite> --output <seed.sql> [--report <report.json>] [--force] [--replace-existing]
 
 The input must be a Wrangler D1 SQL export or SQLite backup that contains sync_data.
-Dry-run prints a count-only verification report and writes no files.`);
+Dry-run prints a count-only verification report and writes no files.
+--replace-existing emits a repair seed that advances server sequences.`);
 }
 
 void main().catch((error: unknown) => {

@@ -1,6 +1,8 @@
 import {
+  createSyncV2RepairSql,
   createSyncV2SeedSql,
   migrateLegacySyncRows,
+  SYNC_V2_MIGRATION_REPAIR_DEVICE_ID,
   type LegacySyncDataRow,
 } from "../../scripts/lib/sync-v2-migration";
 import { decodeSyncValue, encodeSyncKey } from "@/lib/sync-v2/protocol";
@@ -50,11 +52,11 @@ describe("sync v2 production-data migration", () => {
       id: "progress-1",
       tableName: "readingProgress",
       userId,
+      entityId: "book-1",
       hlc: "101-0-progress-device",
       deviceId: "progress-device",
       isDeleted: true,
       data: {
-        bookId: "book-1",
         currentSpineIndex: 3,
         scrollProgress: 42,
         lastRead: 101,
@@ -66,10 +68,11 @@ describe("sync v2 production-data migration", () => {
       id: "note-1",
       tableName: "notes",
       userId,
+      entityId: "book-1",
       hlc: "102-4-note-device",
       deviceId: "note-device",
       isDeleted: false,
-      data: { bookId: "book-1", content: "A retained note" },
+      data: { content: "A retained note" },
     });
 
     const legacyRows = await readLegacyRows(userId);
@@ -138,6 +141,16 @@ describe("sync v2 production-data migration", () => {
       ),
     ).toBeUndefined();
 
+    const note = migration.records.find(
+      (record) => record.key === encodeSyncKey("notes", "note-1"),
+    )!;
+    expect(decodeSyncValue(note.value)).toEqual({
+      id: "note-1",
+      content: "A retained note",
+      bookId: "book-1",
+      isDeleted: false,
+    });
+
     expect(seedSql).not.toMatch(/\b(?:DELETE|UPDATE)\b/);
     await env.DATABASE.exec(seedSql);
 
@@ -182,8 +195,8 @@ describe("sync v2 production-data migration", () => {
         "user-a",
         "20-0-device-a",
       ),
+      entity_id: "book-1",
       data: {
-        bookId: "book-1",
         deviceId: "device-a",
         lastRead: 20,
       },
@@ -195,7 +208,8 @@ describe("sync v2 production-data migration", () => {
         "user-a",
         "21-0-device-a",
       ),
-      data: { bookId: "book-1", source: "reader-v2" },
+      entity_id: "book-1",
+      data: { source: "reader-v2" },
     };
     const inferredSession = {
       ...legacyRow(
@@ -204,7 +218,8 @@ describe("sync v2 production-data migration", () => {
         "user-a",
         "22-0-device-a",
       ),
-      data: { bookId: "book-1", source: "legacy-reading-progress" },
+      entity_id: "book-1",
+      data: { source: "legacy-reading-progress" },
     };
 
     const migration = migrateLegacySyncRows([
@@ -228,6 +243,7 @@ describe("sync v2 production-data migration", () => {
       record.key.startsWith('["readingSessions",'),
     )) {
       expect(decodeSyncValue(record.value)).not.toHaveProperty("source");
+      expect(decodeSyncValue(record.value)).toHaveProperty("bookId", "book-1");
     }
   });
 
@@ -273,6 +289,11 @@ describe("sync v2 production-data migration", () => {
       readingSessions: 382,
       readingState: 37,
     });
+    for (const record of migration.records) {
+      const [tableName] = JSON.parse(record.key) as [string, string];
+      if (tableName === "books") continue;
+      expect(decodeSyncValue(record.value)).toHaveProperty("bookId");
+    }
   });
 
   it("produces deterministic output independent of source row order", () => {
@@ -288,6 +309,57 @@ describe("sync v2 production-data migration", () => {
     expect(createSyncV2SeedSql(reverse.records)).toBe(
       createSyncV2SeedSql(forward.records),
     );
+  });
+
+  it("replaces an existing winner with a new repair sequence", async () => {
+    const migration = migrateLegacySyncRows([
+      {
+        ...legacyRow("highlight-1", "highlights", userId, "30-0-device-a"),
+        entity_id: "book-1",
+        data: JSON.stringify({ selectedText: "Retained text" }),
+      },
+    ]);
+    const record = migration.records[0]!;
+
+    await env.DATABASE.prepare(
+      `INSERT INTO sync_records (
+         user_id, key, value, schema_version, hlc_wall_time_ms,
+         hlc_counter, device_id, is_deleted
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        record.userId,
+        record.key,
+        JSON.stringify({ id: "highlight-1", selectedText: "Retained text" }),
+        record.schemaVersion,
+        record.hlc.wallTimeMs,
+        record.hlc.counter,
+        record.deviceId,
+        0,
+      )
+      .run();
+    const before = await env.DATABASE.prepare(
+      "SELECT server_seq FROM sync_records WHERE user_id = ? AND key = ?",
+    )
+      .bind(userId, record.key)
+      .first<{ server_seq: number }>();
+
+    await env.DATABASE.exec(createSyncV2RepairSql(migration.records));
+
+    const repaired = await env.DATABASE.prepare(
+      `SELECT server_seq, value, device_id
+       FROM sync_records
+       WHERE user_id = ? AND key = ?`,
+    )
+      .bind(userId, record.key)
+      .first<{ server_seq: number; value: string; device_id: string }>();
+    expect(repaired!.server_seq).toBeGreaterThan(before!.server_seq);
+    expect(repaired!.device_id).toBe(SYNC_V2_MIGRATION_REPAIR_DEVICE_ID);
+    expect(decodeSyncValue(repaired!.value)).toMatchObject({
+      id: "highlight-1",
+      bookId: "book-1",
+      isDeleted: false,
+    });
   });
 
   it("fails before output for malformed or unsupported source rows", () => {
@@ -325,6 +397,11 @@ describe("sync v2 production-data migration", () => {
         },
       ]),
     ).toThrow("value must not exceed");
+    expect(() =>
+      migrateLegacySyncRows([
+        legacyRow("missing-parent", "highlights", "user-a", "10-0-device-a"),
+      ]),
+    ).toThrow("entity-scoped row has no entity_id");
   });
 
   it("rejects duplicate logical keys", () => {
@@ -345,6 +422,7 @@ async function insertLegacyRow(row: {
   id: string;
   tableName: string;
   userId: string;
+  entityId?: string;
   hlc: string;
   deviceId: string;
   isDeleted: boolean;
@@ -354,12 +432,13 @@ async function insertLegacyRow(row: {
     `INSERT INTO sync_data (
        id, table_name, user_id, entity_id, hlc, device_id,
        is_deleted, server_timestamp, data
-     ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       row.id,
       row.tableName,
       row.userId,
+      row.entityId ?? null,
       row.hlc,
       row.deviceId,
       row.isDeleted ? 1 : 0,
@@ -371,7 +450,7 @@ async function insertLegacyRow(row: {
 
 async function readLegacyRows(userId: string): Promise<LegacySyncDataRow[]> {
   const result = await env.DATABASE.prepare(
-    `SELECT id, table_name, user_id, hlc, device_id, is_deleted, data
+    `SELECT id, table_name, user_id, entity_id, hlc, device_id, is_deleted, data
      FROM sync_data
      WHERE user_id = ?`,
   )
@@ -390,6 +469,7 @@ function legacyRow(
     id,
     table_name: tableName,
     user_id: userId,
+    entity_id: null,
     hlc,
     device_id: hlc.split("-").slice(2).join("-"),
     is_deleted: 0,
@@ -405,6 +485,10 @@ function appendLegacyRows(
   data: Record<string, unknown> = {},
 ): void {
   for (let index = 0; index < count; index += 1) {
+    const entityId =
+      tableName === "books" || tableName === "readingProgress"
+        ? null
+        : `book-${index % 24}`;
     rows.push({
       ...legacyRow(
         `${idPrefix}-${index}`,
@@ -412,6 +496,7 @@ function appendLegacyRows(
         "production-user",
         `${1_000 + index}-0-production-device`,
       ),
+      entity_id: entityId,
       data,
     });
   }
