@@ -1,5 +1,6 @@
 import {
   getOrCreateSyncClientState,
+  nextSyncHlcBatch,
   readSyncClientState,
   writeSyncClientState,
 } from "@/lib/sync-v2/client-state";
@@ -39,5 +40,22 @@ describe("sync v2 client state", () => {
     );
 
     expect(() => readSyncClientState()).toThrow();
+  });
+
+  it("reserves monotonic HLC values in batches", () => {
+    getOrCreateSyncClientState("device-a");
+
+    expect(nextSyncHlcBatch(3, localStorage, 1_000)).toEqual([
+      { wallTimeMs: 1_000, counter: 0 },
+      { wallTimeMs: 1_000, counter: 1 },
+      { wallTimeMs: 1_000, counter: 2 },
+    ]);
+    expect(nextSyncHlcBatch(1, localStorage, 900)).toEqual([
+      { wallTimeMs: 1_000, counter: 3 },
+    ]);
+    expect(readSyncClientState()?.hlc).toEqual({
+      wallTimeMs: 1_000,
+      counter: 3,
+    });
   });
 });

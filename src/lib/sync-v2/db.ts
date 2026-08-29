@@ -16,6 +16,7 @@ import type {
   ReadingSettings,
 } from "@/lib/db";
 import type { StoredFile, TransferTask } from "@/lib/files/types";
+import { installSync } from "@/lib/sync-v2/middleware";
 import type { SyncPushChange } from "@/lib/sync-v2/protocol";
 import type { Highlight } from "@/types/highlight";
 import type { Note } from "@/types/note";
@@ -23,6 +24,16 @@ import type { ReadingState } from "@/types/reading-state";
 import Dexie, { type Table } from "dexie";
 
 export const SYNC_V2_DATABASE_NAME = "epub-reader-db-v2";
+export const SYNC_V2_SYNCED_TABLES = [
+  "books",
+  "readingProgress",
+  "readingCheckpoints",
+  "readingSessions",
+  "highlights",
+  "readingSettings",
+  "readingState",
+  "notes",
+] as const;
 
 export interface SyncV2DeletionState {
   isDeleted: boolean;
@@ -63,6 +74,7 @@ export const SYNC_V2_STORES = {
   _sync_outbox: "key",
 } as const;
 
+/** Schema-only connection used by the sync engine for direct remote writes. */
 export class EPUBReaderSyncV2DB extends Dexie {
   books!: Table<SyncV2Book, string>;
   readingProgress!: Table<SyncV2ReadingProgress, string>;
@@ -87,4 +99,16 @@ export class EPUBReaderSyncV2DB extends Dexie {
   }
 }
 
-export const syncV2Db = new EPUBReaderSyncV2DB();
+/** Create the application-facing connection that captures local mutations. */
+export function createSyncV2ApplicationDb(
+  databaseName = SYNC_V2_DATABASE_NAME,
+): EPUBReaderSyncV2DB {
+  const db = new EPUBReaderSyncV2DB(databaseName);
+  installSync(db, SYNC_V2_SYNCED_TABLES);
+  return db;
+}
+
+export const syncV2Db = createSyncV2ApplicationDb();
+
+/** The sync engine uses this raw connection to avoid producing new changes. */
+export const syncV2SyncDb = new EPUBReaderSyncV2DB();

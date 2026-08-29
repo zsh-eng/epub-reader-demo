@@ -1,6 +1,7 @@
 import {
   SYNC_CLIENT_STATE_STORAGE_KEY,
   type SyncClientState,
+  type SyncHlc,
   syncClientStateSchema,
   syncDeviceIdSchema,
 } from "@/lib/sync-v2/protocol";
@@ -48,4 +49,73 @@ export function getOrCreateSyncClientState(
   const initialState = createSyncClientState(deviceId);
   writeSyncClientState(initialState, storage);
   return initialState;
+}
+
+/** Reserve a monotonic HLC range and persist the last value in one write. */
+export function nextSyncHlcBatch(
+  count: number,
+  storage: SyncClientStateStorage = localStorage,
+  now = Date.now(),
+): SyncHlc[] {
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new Error("HLC batch count must be a non-negative safe integer");
+  }
+  if (count === 0) {
+    return [];
+  }
+
+  const state = readSyncClientState(storage);
+  if (state === null) {
+    throw new Error(
+      "Sync client state must be initialized before local writes",
+    );
+  }
+
+  const wallTimeMs = Math.max(now, state.hlc.wallTimeMs);
+  const firstCounter =
+    wallTimeMs > state.hlc.wallTimeMs ? 0 : state.hlc.counter + 1;
+  const timestamps = Array.from({ length: count }, (_, index) => ({
+    wallTimeMs,
+    counter: firstCounter + index,
+  }));
+
+  writeSyncClientState(
+    {
+      ...state,
+      hlc: timestamps.at(-1)!,
+    },
+    storage,
+  );
+  return timestamps;
+}
+
+/** Observe remote clocks outside IndexedDB; harmless gaps are preferable. */
+export function observeSyncHlcBatch(
+  timestamps: readonly SyncHlc[],
+  storage: SyncClientStateStorage = localStorage,
+): void {
+  if (timestamps.length === 0) {
+    return;
+  }
+
+  const state = readSyncClientState(storage);
+  if (state === null) {
+    throw new Error("Sync client state must be initialized before remote sync");
+  }
+
+  const latest = timestamps.reduce((current, candidate) =>
+    compareHlc(candidate, current) > 0 ? candidate : current,
+  );
+  if (compareHlc(latest, state.hlc) <= 0) {
+    return;
+  }
+
+  writeSyncClientState({ ...state, hlc: latest }, storage);
+}
+
+function compareHlc(left: SyncHlc, right: SyncHlc): number {
+  if (left.wallTimeMs !== right.wallTimeMs) {
+    return left.wallTimeMs - right.wallTimeMs;
+  }
+  return left.counter - right.counter;
 }
