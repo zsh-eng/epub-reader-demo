@@ -572,7 +572,7 @@ Completed on 2026-08-29:
   byte-for-byte identical to the pre-deployment client index. No v2 seed or
   client cutover occurred.
 
-### 11. Export, transform, and seed production data
+### 11. Export, transform, and seed production data — Complete
 
 Use a short write freeze for the personal app. This is much simpler than designing a delta-capture migration.
 
@@ -587,6 +587,44 @@ During the freeze:
 7. Verify logical-key counts, tombstones, JSON decoding, and selected books, highlights, settings, and progress records.
 
 Keep blob storage unchanged. The migrated metadata should continue to reference the existing blobs.
+
+Completed on 2026-08-29:
+
+- Confirmed that the freeze held before seeding. Production and the immutable
+  backup matched on 45,976 legacy rows, 45,959 active rows, 17 deleted rows,
+  maximum server timestamp, payload bytes, and every per-table count. The v2
+  table was empty.
+- Used the fresh pre-migration snapshot at
+  `backups.local/d1/2026-08-29T15-34-17Z/reader-db.sqlite` as the immutable
+  source. The one row added after the first backup was a retained
+  `readingSessions` row.
+- Generated a read-only 959-statement seed at
+  `backups.local/d1/2026-08-29T15-34-17Z/sync-v2-seed.sql`, SHA-256
+  `89218349e9b43e94af1a1305632f9fd1476df963326d154025cb1e3faf0d0f90`,
+  plus a verification report with SHA-256
+  `143af8cbdcc91dd896ab18470abaebbfa1c6bb7e06dc9b7e603cc5c3815470f3`.
+- Transformed 45,976 source rows into 959 unique v2 records: 942 active and 17
+  soft-deleted. Excluded all 45,017 deprecated `readingProgress` log rows and
+  retained 27 books, 481 highlights, 32 reading checkpoints, 382 reading
+  sessions, and 37 reading-state records.
+- Retained every inferred and native reading session while removing the old
+  session `source` label. The source contained no `readingSettings` rows;
+  retained `readingState` and compacted checkpoints cover reading status and
+  progress. No settings record could be seeded because none existed.
+- Applied the seed through Wrangler's D1 import path. It processed all 959
+  statements successfully at bookmark
+  `00000343-000001a0-000050d6-62882a45d9e89f64d1765a183436161e`.
+- Verified 959 distinct logical keys, valid JSON keys and values, schema version
+  1 on every row, 942 active rows, and 17 tombstones with retained non-null
+  values. The records use server sequences 2 through 960; sequence 1 is the
+  expected gap from the cleaned-up Step 10 smoke record.
+- Joined every retained source row to production and confirmed matching IDs,
+  devices, HLC wall times and counters, deletion flags, payload deletion flags,
+  and all retained domain fields. Representative values from every migrated
+  table decoded correctly.
+- Confirmed that all 27 book file hashes and cover hashes still match the
+  legacy metadata. The 54 blob metadata rows, all 45,976 legacy sync rows, old
+  endpoints, and old client remain unchanged. No client cutover occurred.
 
 ### 12. Deploy the new client and bootstrap
 

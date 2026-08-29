@@ -231,13 +231,13 @@ describe("sync v2 production-data migration", () => {
     }
   });
 
-  it("reduces the production-shaped source from 45,975 to 958 records", () => {
+  it("reduces the production-shaped source from 45,976 to 959 records", () => {
     const rows: LegacySyncDataRow[] = [];
     appendLegacyRows(rows, 45_017, "progress", "readingProgress");
     appendLegacyRows(rows, 172, "inferred-session", "readingSessions", {
       source: "legacy-reading-progress",
     });
-    appendLegacyRows(rows, 209, "native-session", "readingSessions", {
+    appendLegacyRows(rows, 210, "native-session", "readingSessions", {
       source: "reader-v2",
     });
     appendLegacyRows(rows, 32, "checkpoint", "readingCheckpoints");
@@ -248,8 +248,8 @@ describe("sync v2 production-data migration", () => {
     const migration = migrateLegacySyncRows(rows);
 
     expect(migration.report).toMatchObject({
-      sourceRows: 45_975,
-      totalRows: 958,
+      sourceRows: 45_976,
+      totalRows: 959,
       excludedRows: 45_017,
       exclusions: [
         {
@@ -270,7 +270,7 @@ describe("sync v2 production-data migration", () => {
       books: 27,
       highlights: 481,
       readingCheckpoints: 32,
-      readingSessions: 381,
+      readingSessions: 382,
       readingState: 37,
     });
   });
