@@ -527,7 +527,7 @@ Completed on 2026-08-29:
   targeted formatting checks. The repository-wide formatting check still
   reports 63 pre-existing files outside this change.
 
-### 10. Deploy the new server path without switching clients
+### 10. Deploy the new server path without switching clients — Complete
 
 Production deployment order:
 
@@ -538,6 +538,39 @@ Production deployment order:
 5. Run small authenticated push/pull smoke checks against v2.
 
 This gives the new protocol a production validation point before the client cutover.
+
+Completed on 2026-08-29:
+
+- Checked the freeze immediately before the first production write. One legacy
+  sync row had arrived after the earlier snapshot, increasing `sync_data` from
+  45,975 to 45,976 rows.
+- Made a fresh verified pre-migration backup at
+  `backups.local/d1/2026-08-29T15-34-17Z/reader-db.sqlite`. It contains 46,086
+  application-owned rows and has SHA-256
+  `f0977e9ae6854e26b0946180eaa658857bdffb60090fdc468d5cc4dbd711d0dc`.
+- Applied additive migration `0006_clean_santa_claus.sql` to `reader-db`.
+  Confirmed that no migration remains pending, `sync_records` exists with both
+  required indexes, the table starts empty, and the legacy table is unchanged.
+- Preserved the exact client assets from production Worker version
+  `a81830b1-d777-4b24-8fb3-f1bf49d04ac7` while deploying the current server
+  bundle. Wrangler reported that there were no updated asset files to upload.
+- Deployed Worker version `d7130808-a7a7-4ce6-b691-55a40daf38a2` to 100% of
+  production traffic. The earlier Worker version remains available for server
+  rollback.
+- Confirmed that unauthenticated v2 push, v2 pull, and legacy pull requests all
+  return `401`, which verifies that all three routes are active behind the
+  authentication boundary.
+- Used a temporary Better Auth account for the authenticated production smoke
+  test. A v2 push was accepted at sequence 1, bootstrap pull returned the row,
+  incremental pull excluded the requesting device and advanced to the head,
+  and the legacy pull route returned `200`.
+- Deleted the exact temporary account after the smoke test. Its account,
+  session, and single v2 row cascaded with it. Final verification found zero
+  temporary users, zero temporary records, zero total `sync_records`, and all
+  45,976 legacy rows intact.
+- Fetched the production index again after deployment and confirmed that it is
+  byte-for-byte identical to the pre-deployment client index. No v2 seed or
+  client cutover occurred.
 
 ### 11. Export, transform, and seed production data
 
