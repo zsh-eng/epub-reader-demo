@@ -92,13 +92,13 @@ Completed on 2026-08-29:
 - Passed the server suite, root build, targeted lint, formatting, and diff
   checks.
 
-### 3. Add the new Hono endpoints
+### 3. Add the new Hono endpoints — Complete
 
 Add versioned routes in [server/index.ts](/Users/admin/epub-reader-demo/server/index.ts:205), while the old `/api/sync/:table` routes remain active:
 
 ```text
 POST /api/sync/v2/push
-POST /api/sync/v2/pull
+GET  /api/sync/v2/pull?cursor=...&head=...&limit=...&excludeOwnDevice=...
 ```
 
 The endpoints should use:
@@ -129,17 +129,40 @@ apply device exclusion only when bootstrapped
 
 When the page is complete, return `nextCursor = head`. This advances the cursor across skipped own-device rows without losing concurrent writes above `head`.
 
-Copy the important conformance tests from [local-sync-d1-conformance.test.ts](/Users/admin/epub-reader-demo/test/server/local-sync-d1-conformance.test.ts:62). Test:
+Use [local-sync-d1-conformance.test.ts](/Users/admin/epub-reader-demo/test/server/local-sync-d1-conformance.test.ts:62) as the reference. Keep its low-level transaction and query-plan checks until Step 9 transfers or removes them. The v2 endpoint suite should test:
 
 - 500-row batches.
 - One-megabyte batches.
 - LWW acceptance and rejection.
 - AUTOINCREMENT gaps.
-- Transaction rollback.
 - Bootstrap device inclusion.
 - Incremental device exclusion.
 - High-water advancement.
 - Pagination while new writes arrive.
+
+Completed on 2026-08-29:
+
+- Added authenticated `POST /api/sync/v2/push` and
+  `GET /api/sync/v2/pull` routes directly in `server/index.ts`. The legacy
+  routes remain active for cutover.
+- Pull uses validated query parameters and returns `Cache-Control: no-store`.
+- Added Hono body limits, Zod envelope and size validation, device-ID
+  validation, and the five-minute future-HLC limit.
+- Implemented one JSON-bound `INSERT ... SELECT ... ON CONFLICT DO UPDATE`
+  statement. Winning updates copy the attempted row's fresh AUTOINCREMENT
+  sequence into the compacted winner.
+- Read every submitted key's current winner in the same `D1Database.batch()`
+  transaction and restored results to request order by key.
+- Implemented fixed-head pull pagination and incremental own-device exclusion.
+  Complete pages advance to the head even when every intervening row was
+  omitted.
+- Added nine behavior-focused endpoint tests for auth, user isolation, retained
+  soft deletes, LWW rejection and retry, sequence renewal, 500-row batching,
+  size and clock limits, fixed-head pagination, and own-device advancement.
+- Kept the experimental package's low-level D1 transaction and query-plan
+  conformance tests active until package retirement.
+- Passed all 68 server tests, the root build, targeted lint, formatting, and
+  diff checks.
 
 ### 4. Create the new client database
 

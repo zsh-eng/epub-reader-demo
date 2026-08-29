@@ -116,6 +116,24 @@ export const syncPullBodySchema = z
     path: ["cursor"],
   });
 
+const syncQueryIntegerSchema = z
+  .string()
+  .regex(/^(0|[1-9]\d*)$/)
+  .transform(Number)
+  .pipe(safeNonNegativeInteger);
+
+/** Parse the read-only pull contract from HTTP query parameters. */
+export const syncPullQuerySchema = z
+  .strictObject({
+    cursor: syncQueryIntegerSchema,
+    head: syncQueryIntegerSchema.optional(),
+    limit: syncQueryIntegerSchema.optional(),
+    excludeOwnDevice: z
+      .enum(["true", "false"])
+      .transform((value) => value === "true"),
+  })
+  .pipe(syncPullBodySchema);
+
 export const syncPullResponseSchema = z
   .strictObject({
     records: z.array(syncRecordSchema).max(MAX_SYNC_PULL_LIMIT),
