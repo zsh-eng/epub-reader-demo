@@ -120,11 +120,14 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Fix animations when tapping sheet button
 - [x] Highlight button circles should be bigger
 - [x] Improve library page search bar
-- [ ] Swipe to change page (carousel style)
-- [ ] Perf improvements
+- [x] Swipe to change page (carousel style)
+- [x] Perf improvements
 
 - [ ] Sync progress toast
   - [ ] Also handles downloading a new book
+- [ ] Squircle toast
+- [ ] Fix gradient in themes, reorder for the dark theme, and fix background (not full colour in the theme sheet)
+- [ ] Fix horizontal scroll passthrough
 
 - [ ] Consider tanstack virtual for highlights page? Slight lag for production (sometimes in the thousands of highlights)
 
