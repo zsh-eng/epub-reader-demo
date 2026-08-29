@@ -376,7 +376,7 @@ Completed on 2026-08-29:
   test resets. All 616 client tests, the root build, full lint, changed-file
   formatting, and diff checks passed.
 
-### 8. Build and dry-run the migration tool
+### 8. Build and dry-run the migration tool — Complete
 
 Build this before touching production.
 
@@ -395,6 +395,35 @@ The transform from old `sync_data` should:
 Test the tool against a local copy of the old D1 schema. Verify counts, tombstones, representative values, and deterministic output.
 
 Use a direct one-time D1 seed/import rather than adding a permanent migration HTTP endpoint.
+
+Completed on 2026-08-29:
+
+- Added `bun run sync:migrate-v2` as a local-only CLI. It loads a Wrangler D1
+  SQL export into an in-memory SQLite database and reads the compacted
+  `sync_data` winners without contacting production.
+- Reconstructed each opaque key as `[tableName, id]` and each JSON value as
+  `{ id, ...data, isDeleted }`. The transform strips the old sync metadata and
+  converts the old reading-progress writer metadata into the ordinary domain
+  `deviceId` field.
+- Parsed each legacy HLC into numeric wall time and counter components. The new
+  row preserves the trusted old `device_id`; the report counts any difference
+  between that column and the device component embedded in the HLC.
+- Retained deleted values and set both the envelope and encoded domain value to
+  `isDeleted = true`. No null tombstone format is introduced.
+- Added fail-fast checks for unknown tables, duplicate logical keys, malformed
+  JSON and HLCs, invalid device IDs, control line breaks, and the v2 key and
+  value limits. The CLI writes no artifact until every source row passes.
+- Made dry-run print a count-only report by user and table. Artifact mode emits
+  a deterministic SQL seed plus the same JSON report, refuses to replace files
+  unless `--force` is explicit, and never modifies the source export.
+- Added a Wrangler-style export fixture and four D1-backed tests. They verify
+  counts, representative values, tombstones, reading-progress device origin,
+  SQL escaping, deterministic output, source validation, and direct insertion
+  into `sync_records`.
+- The fixture dry-run reported three rows, with two active and one deleted. Two
+  separate artifact runs produced identical seed and report files. All 77
+  server tests, the migration CLI's strict TypeScript check, the root build,
+  full lint, changed-file formatting, and diff checks passed.
 
 ### 9. Retire the experimental package
 

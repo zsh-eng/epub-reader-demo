@@ -27,6 +27,7 @@
     "test:e2e:headed": "playwright test --headed",
     "diagnostics:reader": "bun scripts/reader-diagnostics.ts",
     "benchmark:reader-startup": "bun run build && bun scripts/benchmark-reader-startup.ts",
+    "sync:migrate-v2": "bun scripts/migrate-sync-v2.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check"
   },
