@@ -425,6 +425,45 @@ Completed on 2026-08-29:
   server tests, the migration CLI's strict TypeScript check, the root build,
   full lint, changed-file formatting, and diff checks passed.
 
+### Production D1 backup checkpoint — Complete
+
+The personal app was treated as write-frozen before the production migration.
+The backup was made before applying the v2 D1 migration or deploying the v2
+server routes.
+
+Completed on 2026-08-29:
+
+- Confirmed that the `DATABASE` binding points to `reader-db`, database ID
+  `b830fea5-d461-4be0-8916-2e01d77c141f`, in the APAC region. D1 reported a
+  remote database size of 30,748,672 bytes.
+- Tried the official `wrangler d1 export` path first. Cloudflare's export API
+  rejected the current Wrangler OAuth session with authentication error 10000,
+  while read-only D1 information and query operations remained available. No
+  API token was present, and no credential was extracted or printed.
+- Added `bun run db:backup-remote` as a read-only logical-backup fallback. It
+  reads schema and application tables through Wrangler, pages by SQLite row ID,
+  writes through a partial file, refuses overwrites, and never logs row values.
+- Copied all 46,085 application-owned rows across `account`, `d1_migrations`,
+  `file_storage`, `session`, `sync_data`, `user`, `user_devices`, and
+  `verification`. This includes all 45,975 legacy sync winners.
+- Excluded only Cloudflare's internal `_cf_KV` table. D1 prohibits direct reads
+  of its value column; the table is not application-owned. The manifest records
+  this exclusion.
+- Stored the read-only SQLite snapshot and manifest under the Git-ignored
+  `backups.local/d1/2026-08-29T11-56-54Z/` directory. The SQLite file is
+  29,827,072 bytes with SHA-256
+  `349659875a53ff304d03f19c85523ccf86d4353f8f6140707147f30132c1e3c5`.
+- Reopened the snapshot read-only and confirmed `PRAGMA integrity_check = ok`,
+  zero foreign-key violations, and matching counts for every local table. A
+  second query against the remote primary returned the same per-table counts
+  after the backup completed. The local and remote `sync_data` row count,
+  maximum row ID, maximum and summed server timestamps, and payload-byte total
+  also matched.
+
+This completes the D1 backup prerequisite in Step 10. It does not apply the v2
+migration, deploy either server or client, transform `sync_data`, or seed
+`sync_records`.
+
 ### 9. Retire the experimental package
 
 Only remove `packages/local-sync` after:
