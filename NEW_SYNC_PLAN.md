@@ -245,7 +245,6 @@ Registration can remain simple:
 ```ts
 installSync(db, [
   "books",
-  "readingProgress",
   "readingCheckpoints",
   "readingSessions",
   "highlights",
@@ -278,7 +277,10 @@ Completed on 2026-08-29:
   no HLC or outbox entry and require no marker on domain values.
 - Kept value encoding at JSON and schema version 1. Oversized values fail
   before either IndexedDB table is changed.
-- Added eleven focused Step 5 behaviors covering clock batching, outbox
+- Kept the deprecated `readingProgress` table local-only until final cleanup.
+  It is not registered with sync v2, so dormant legacy writers cannot recreate
+  the remote append-only log.
+- Added twelve focused Step 5 behaviors covering clock batching, outbox
   compaction, bulk and multi-table writes, all delete shapes, cascades,
   rollback, value limits, and raw sync writes. The focused tests, root build,
   targeted lint, formatting, and diff checks passed.
@@ -390,7 +392,10 @@ The transform from old `sync_data` should:
 - Parse the old HLC into wall time, counter, and device components.
 - Preserve the old `device_id`.
 - Set `schemaVersion = 1`.
-- Convert meaningful metadata, such as reading-progress origin devices, into real domain fields.
+- Exclude the obsolete append-only `readingProgress` log.
+- Exclude inferred `readingSessions` rows whose source is
+  `legacy-reading-progress`. Retain native `reader-v2` sessions and all compacted
+  `readingCheckpoints`.
 
 Test the tool against a local copy of the old D1 schema. Verify counts, tombstones, representative values, and deterministic output.
 
@@ -399,12 +404,12 @@ Use a direct one-time D1 seed/import rather than adding a permanent migration HT
 Completed on 2026-08-29:
 
 - Added `bun run sync:migrate-v2` as a local-only CLI. It loads a Wrangler D1
-  SQL export into an in-memory SQLite database and reads the compacted
-  `sync_data` winners without contacting production.
+  SQL export into an in-memory SQLite database or opens a SQLite backup
+  read-only, then reads the compacted `sync_data` winners without contacting
+  production.
 - Reconstructed each opaque key as `[tableName, id]` and each JSON value as
   `{ id, ...data, isDeleted }`. The transform strips the old sync metadata and
-  converts the old reading-progress writer metadata into the ordinary domain
-  `deviceId` field.
+  retains only current domain tables.
 - Parsed each legacy HLC into numeric wall time and counter components. The new
   row preserves the trusted old `device_id`; the report counts any difference
   between that column and the device component embedded in the HLC.
@@ -416,14 +421,34 @@ Completed on 2026-08-29:
 - Made dry-run print a count-only report by user and table. Artifact mode emits
   a deterministic SQL seed plus the same JSON report, refuses to replace files
   unless `--force` is explicit, and never modifies the source export.
-- Added a Wrangler-style export fixture and four D1-backed tests. They verify
-  counts, representative values, tombstones, reading-progress device origin,
-  SQL escaping, deterministic output, source validation, and direct insertion
-  into `sync_records`.
-- The fixture dry-run reported three rows, with two active and one deleted. Two
-  separate artifact runs produced identical seed and report files. All 77
+- Added a Wrangler-style export fixture and six D1-backed tests. They verify
+  counts, representative values, tombstones, deprecated-history exclusion, SQL
+  escaping, deterministic output, source validation, and direct insertion into
+  `sync_records`.
+- The fixture dry-run reported two retained rows and one excluded deprecated
+  progress row. Two separate artifact runs produced identical seed and report
+  files. All 77
   server tests, the migration CLI's strict TypeScript check, the root build,
   full lint, changed-file formatting, and diff checks passed.
+
+Production-filter amendment completed on 2026-08-29:
+
+- Added explicit exclusion reporting with source, retained, and excluded row
+  counts. Deprecated rows are skipped before HLC, device, and value migration.
+- Excluded all 45,017 production `readingProgress` rows and all 172 inferred
+  `legacy-reading-progress` sessions. Retained all 32 checkpoints and all 209
+  native `reader-v2` sessions.
+- Added a production-shaped test that locks the reduction from 45,975 source
+  rows to 786 seed records, plus a focused test for checkpoint and session
+  filtering.
+- Updated the CLI to accept either a Wrangler SQL export or the verified local
+  SQLite backup. A read-only dry-run against the backup produced 786 records:
+  769 active and 17 retained soft deletes, with zero HLC-device mismatches.
+- Removed `readingProgress` from the v2 synced-table registration. Its Dexie
+  table remains local-only for dormant legacy and debug code until final
+  cleanup.
+- Passed all 74 server tests, all 610 client tests, the root build, full lint,
+  strict migration-script TypeScript checking, formatting, and diff checks.
 
 ### Production D1 backup checkpoint — Complete
 
@@ -551,6 +576,8 @@ After production checks pass:
 9. Replace the large RFC with a short document that describes the actual v2 contract.
 10. Delete the old IndexedDB database only after the rollback window.
 11. Retain the production export according to a deliberate backup policy.
+12. Remove the local-only `readingProgress` table and its dormant writers and
+    backfill helpers.
 
 The implementation uses five review units: server v2, client substrate,
 application data-model cutover, migration tool, and final cleanup.

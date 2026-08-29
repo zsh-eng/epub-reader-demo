@@ -111,11 +111,15 @@ function parseArgs(args: string[]): CliOptions {
 }
 
 async function loadLegacyRows(inputPath: string): Promise<LegacySyncDataRow[]> {
-  const exportSql = await readFile(inputPath, "utf8");
-  const database = new Database(":memory:", { strict: true });
+  const input = await readFile(inputPath);
+  const isSqliteDatabase =
+    input.subarray(0, 16).toString("utf8") === "SQLite format 3\u0000";
+  const database = isSqliteDatabase
+    ? new Database(inputPath, { readonly: true, strict: true })
+    : new Database(":memory:", { strict: true });
 
   try {
-    database.exec(exportSql);
+    if (!isSqliteDatabase) database.exec(input.toString("utf8"));
     const table = database
       .query<{ name: string }, []>(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sync_data'",
@@ -175,10 +179,10 @@ function requireValue(
 
 function printHelp(): void {
   console.log(`Usage:
-  bun scripts/migrate-sync-v2.ts --input <d1-export.sql> --dry-run
-  bun scripts/migrate-sync-v2.ts --input <d1-export.sql> --output <seed.sql> [--report <report.json>] [--force]
+  bun scripts/migrate-sync-v2.ts --input <d1-export.sql|backup.sqlite> --dry-run
+  bun scripts/migrate-sync-v2.ts --input <d1-export.sql|backup.sqlite> --output <seed.sql> [--report <report.json>] [--force]
 
-The input must be a Wrangler D1 SQL export that contains sync_data.
+The input must be a Wrangler D1 SQL export or SQLite backup that contains sync_data.
 Dry-run prints a count-only verification report and writes no files.`);
 }
 

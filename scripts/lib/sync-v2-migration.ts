@@ -7,7 +7,7 @@ import {
 
 export const SYNC_V2_MIGRATION_SCHEMA_VERSION = 1;
 
-const MIGRATED_TABLES = new Set([
+const LEGACY_SOURCE_TABLES = new Set([
   "books",
   "readingProgress",
   "readingCheckpoints",
@@ -17,6 +17,8 @@ const MIGRATED_TABLES = new Set([
   "readingState",
   "notes",
 ]);
+
+const LEGACY_READING_PROGRESS_SESSION_SOURCE = "legacy-reading-progress";
 
 const LEGACY_METADATA_FIELDS = new Set([
   "_hlc",
@@ -64,12 +66,25 @@ export interface SyncV2MigrationUserReport {
   tables: SyncV2MigrationTableReport[];
 }
 
+export type SyncV2MigrationExclusionReason =
+  | "deprecated-reading-progress"
+  | "inferred-legacy-reading-session";
+
+export interface SyncV2MigrationExclusionReport {
+  reason: SyncV2MigrationExclusionReason;
+  tableName: string;
+  totalRows: number;
+}
+
 export interface SyncV2MigrationReport {
   schemaVersion: number;
+  sourceRows: number;
   totalRows: number;
+  excludedRows: number;
   activeRows: number;
   deletedRows: number;
   hlcDeviceMismatches: number;
+  exclusions: SyncV2MigrationExclusionReport[];
   users: SyncV2MigrationUserReport[];
 }
 
@@ -94,6 +109,12 @@ interface MutableUserReport extends MutableTableReport {
   tables: Map<string, MutableTableReport>;
 }
 
+interface MutableExclusionReport {
+  reason: SyncV2MigrationExclusionReason;
+  tableName: string;
+  totalRows: number;
+}
+
 /**
  * Converts the compacted winners in the old `sync_data` table into the v2
  * opaque-key format. The result order is stable for repeatable review and seed
@@ -105,12 +126,22 @@ export function migrateLegacySyncRows(
   const records: SyncV2SeedRecord[] = [];
   const logicalKeys = new Set<string>();
   const users = new Map<string, MutableUserReport>();
+  const exclusions = new Map<
+    SyncV2MigrationExclusionReason,
+    MutableExclusionReport
+  >();
   let activeRows = 0;
   let deletedRows = 0;
   let hlcDeviceMismatches = 0;
 
   for (const rawRow of rows) {
     const row = validateLegacyRow(rawRow);
+    const exclusionReason = getMigrationExclusionReason(row);
+    if (exclusionReason !== null) {
+      addExclusionRow(exclusions, row.table_name, exclusionReason);
+      continue;
+    }
+
     const parsedHlc = withRowContext(row, () => parseLegacyHlc(row.hlc));
     const isDeleted = withRowContext(row, () =>
       parseLegacyDeletion(row.is_deleted),
@@ -129,7 +160,7 @@ export function migrateLegacySyncRows(
       syncDeviceIdSchema.parse(row.device_id),
     );
     const value = withRowContext(row, () =>
-      encodeSyncValue(migrateDomainValue(row, isDeleted, deviceId)),
+      encodeSyncValue(migrateDomainValue(row, isDeleted)),
     );
 
     records.push({
@@ -157,10 +188,13 @@ export function migrateLegacySyncRows(
     records,
     report: {
       schemaVersion: SYNC_V2_MIGRATION_SCHEMA_VERSION,
+      sourceRows: rows.length,
       totalRows: records.length,
+      excludedRows: rows.length - records.length,
       activeRows,
       deletedRows,
       hlcDeviceMismatches,
+      exclusions: finalizeExclusionReports(exclusions),
       users: finalizeUserReports(users),
     },
   };
@@ -224,7 +258,7 @@ function validateLegacyRow(row: LegacySyncDataRow): LegacySyncDataRow {
     }
   }
 
-  if (!MIGRATED_TABLES.has(row.table_name)) {
+  if (!LEGACY_SOURCE_TABLES.has(row.table_name)) {
     throw migrationError(row, `unknown table ${row.table_name}`);
   }
   if (
@@ -238,6 +272,25 @@ function validateLegacyRow(row: LegacySyncDataRow): LegacySyncDataRow {
   return row;
 }
 
+/**
+ * Removes obsolete derived history before any HLC, device, or value migration.
+ * Checkpoints and native reader sessions already contain the durable state.
+ */
+function getMigrationExclusionReason(
+  row: LegacySyncDataRow,
+): SyncV2MigrationExclusionReason | null {
+  if (row.table_name === "readingProgress") {
+    return "deprecated-reading-progress";
+  }
+
+  if (row.table_name !== "readingSessions") return null;
+  const data = parseLegacyData(row);
+  if (data.source === LEGACY_READING_PROGRESS_SESSION_SOURCE) {
+    return "inferred-legacy-reading-session";
+  }
+  return null;
+}
+
 function parseLegacyDeletion(value: number | boolean): boolean {
   if (value === true || value === 1) return true;
   if (value === false || value === 0) return false;
@@ -247,7 +300,6 @@ function parseLegacyDeletion(value: number | boolean): boolean {
 function migrateDomainValue(
   row: LegacySyncDataRow,
   isDeleted: boolean,
-  deviceId: string,
 ): Record<string, unknown> {
   const data = parseLegacyData(row);
   const domainData = Object.fromEntries(
@@ -258,10 +310,6 @@ function migrateDomainValue(
         !LEGACY_METADATA_FIELDS.has(field),
     ),
   );
-
-  if (row.table_name === "readingProgress") {
-    domainData.deviceId = deviceId;
-  }
 
   return { id: row.id, ...domainData, isDeleted };
 }
@@ -313,6 +361,28 @@ function addReportRow(
 
   user.tables.set(tableName, table);
   users.set(userId, user);
+}
+
+function addExclusionRow(
+  exclusions: Map<SyncV2MigrationExclusionReason, MutableExclusionReport>,
+  tableName: string,
+  reason: SyncV2MigrationExclusionReason,
+): void {
+  const exclusion = exclusions.get(reason) ?? {
+    reason,
+    tableName,
+    totalRows: 0,
+  };
+  exclusion.totalRows += 1;
+  exclusions.set(reason, exclusion);
+}
+
+function finalizeExclusionReports(
+  exclusions: Map<SyncV2MigrationExclusionReason, MutableExclusionReport>,
+): SyncV2MigrationExclusionReport[] {
+  return Array.from(exclusions.values()).sort((left, right) =>
+    left.tableName.localeCompare(right.tableName),
+  );
 }
 
 function finalizeUserReports(

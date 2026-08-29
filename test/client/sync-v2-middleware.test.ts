@@ -2,6 +2,7 @@ import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import {
   createSyncV2ApplicationDb,
   EPUBReaderSyncV2DB,
+  type SyncV2ReadingProgress,
   type SyncV2ReadingSettings,
   type SyncV2ReadingState,
 } from "@/lib/sync-v2/db";
@@ -82,6 +83,24 @@ describe("sync v2 mutation middleware", () => {
         encodeSyncKey("readingSettings", "settings-a"),
       ]),
     );
+  });
+
+  it("keeps deprecated reading progress local and out of the v2 outbox", async () => {
+    const progress: SyncV2ReadingProgress = {
+      id: "legacy-progress",
+      bookId: "book-a",
+      currentSpineIndex: 2,
+      scrollProgress: 35,
+      lastRead: 1_000,
+      createdAt: 1_000,
+      deviceId: "device-a",
+      isDeleted: false,
+    };
+
+    await db.readingProgress.add(progress);
+
+    expect(await db.readingProgress.get(progress.id)).toEqual(progress);
+    expect(await db._sync_outbox.count()).toBe(0);
   });
 
   it("converts bulk deletes into retained soft-deleted rows", async () => {

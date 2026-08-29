@@ -30,7 +30,6 @@ import Dexie, { type Table } from "dexie";
 export const SYNC_V2_DATABASE_NAME = "epub-reader-db-v2";
 export const SYNC_V2_SYNCED_TABLES = [
   "books",
-  "readingProgress",
   "readingCheckpoints",
   "readingSessions",
   "highlights",
@@ -58,6 +57,7 @@ export type SyncV2Note = SyncV2DomainRow<Note>;
  */
 export const SYNC_V2_STORES = {
   books: "id, dateAdded, &fileHash",
+  // Temporary local-only legacy history. Final cleanup removes this table.
   readingProgress: "id, bookId, lastRead, [bookId+lastRead]",
   readingCheckpoints:
     "id, bookId, deviceId, lastRead, [bookId+deviceId], [bookId+lastRead]",

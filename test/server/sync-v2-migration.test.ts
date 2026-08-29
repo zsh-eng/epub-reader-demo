@@ -78,16 +78,25 @@ describe("sync v2 production-data migration", () => {
 
     expect(migration.report).toMatchObject({
       schemaVersion: 1,
-      totalRows: 3,
+      sourceRows: 3,
+      totalRows: 2,
+      excludedRows: 1,
       activeRows: 2,
-      deletedRows: 1,
+      deletedRows: 0,
       hlcDeviceMismatches: 1,
+      exclusions: [
+        {
+          reason: "deprecated-reading-progress",
+          tableName: "readingProgress",
+          totalRows: 1,
+        },
+      ],
       users: [
         {
           userId,
-          totalRows: 3,
+          totalRows: 2,
           activeRows: 2,
-          deletedRows: 1,
+          deletedRows: 0,
           tables: [
             {
               tableName: "books",
@@ -100,12 +109,6 @@ describe("sync v2 production-data migration", () => {
               totalRows: 1,
               activeRows: 1,
               deletedRows: 0,
-            },
-            {
-              tableName: "readingProgress",
-              totalRows: 1,
-              activeRows: 0,
-              deletedRows: 1,
             },
           ],
         },
@@ -128,15 +131,12 @@ describe("sync v2 production-data migration", () => {
       isDeleted: false,
     });
 
-    const progress = migration.records.find(
-      (record) => record.key === encodeSyncKey("readingProgress", "progress-1"),
-    )!;
-    expect(decodeSyncValue(progress.value)).toMatchObject({
-      id: "progress-1",
-      bookId: "book-1",
-      deviceId: "progress-device",
-      isDeleted: true,
-    });
+    expect(
+      migration.records.find(
+        (record) =>
+          record.key === encodeSyncKey("readingProgress", "progress-1"),
+      ),
+    ).toBeUndefined();
 
     expect(seedSql).not.toMatch(/\b(?:DELETE|UPDATE)\b/);
     await env.DATABASE.exec(seedSql);
@@ -159,7 +159,7 @@ describe("sync v2 production-data migration", () => {
         is_deleted: number;
       }>();
 
-    expect(stored.results).toHaveLength(3);
+    expect(stored.results).toHaveLength(2);
     expect(
       stored.results.find(
         (row) => row.key === encodeSyncKey("books", "book-1"),
@@ -171,6 +171,112 @@ describe("sync v2 production-data migration", () => {
       hlc_counter: 2,
       device_id: "writer-device",
       is_deleted: 0,
+    });
+  });
+
+  it("retains checkpoints and native sessions but excludes inferred sessions", () => {
+    const checkpoint = {
+      ...legacyRow(
+        "checkpoint-1",
+        "readingCheckpoints",
+        "user-a",
+        "20-0-device-a",
+      ),
+      data: {
+        bookId: "book-1",
+        deviceId: "device-a",
+        lastRead: 20,
+      },
+    };
+    const nativeSession = {
+      ...legacyRow(
+        "native-session",
+        "readingSessions",
+        "user-a",
+        "21-0-device-a",
+      ),
+      data: { bookId: "book-1", source: "reader-v2" },
+    };
+    const inferredSession = {
+      ...legacyRow(
+        "inferred-session",
+        "readingSessions",
+        "user-a",
+        "22-0-device-a",
+      ),
+      data: { bookId: "book-1", source: "legacy-reading-progress" },
+    };
+
+    const migration = migrateLegacySyncRows([
+      checkpoint,
+      nativeSession,
+      inferredSession,
+    ]);
+
+    expect(migration.report).toMatchObject({
+      sourceRows: 3,
+      totalRows: 2,
+      excludedRows: 1,
+      exclusions: [
+        {
+          reason: "inferred-legacy-reading-session",
+          tableName: "readingSessions",
+          totalRows: 1,
+        },
+      ],
+    });
+    expect(migration.records.map((record) => record.key)).toEqual([
+      encodeSyncKey("readingCheckpoints", "checkpoint-1"),
+      encodeSyncKey("readingSessions", "native-session"),
+    ]);
+  });
+
+  it("reduces the production-shaped source from 45,975 to 786 records", () => {
+    const rows: LegacySyncDataRow[] = [];
+    appendLegacyRows(rows, 45_017, "progress", "readingProgress");
+    appendLegacyRows(rows, 172, "inferred-session", "readingSessions", {
+      source: "legacy-reading-progress",
+    });
+    appendLegacyRows(rows, 209, "native-session", "readingSessions", {
+      source: "reader-v2",
+    });
+    appendLegacyRows(rows, 32, "checkpoint", "readingCheckpoints");
+    appendLegacyRows(rows, 27, "book", "books");
+    appendLegacyRows(rows, 481, "highlight", "highlights");
+    appendLegacyRows(rows, 37, "reading-state", "readingState");
+
+    const migration = migrateLegacySyncRows(rows);
+
+    expect(migration.report).toMatchObject({
+      sourceRows: 45_975,
+      totalRows: 786,
+      excludedRows: 45_189,
+      exclusions: [
+        {
+          reason: "deprecated-reading-progress",
+          tableName: "readingProgress",
+          totalRows: 45_017,
+        },
+        {
+          reason: "inferred-legacy-reading-session",
+          tableName: "readingSessions",
+          totalRows: 172,
+        },
+      ],
+    });
+    expect(
+      Object.fromEntries(
+        migration.report.users[0]!.tables.map((table) => [
+          table.tableName,
+          table.totalRows,
+        ]),
+      ),
+    ).toEqual({
+      books: 27,
+      highlights: 481,
+      readingCheckpoints: 32,
+      readingSessions: 209,
+      readingState: 37,
     });
   });
 
@@ -294,4 +400,24 @@ function legacyRow(
     is_deleted: 0,
     data: JSON.stringify({ title: id }),
   };
+}
+
+function appendLegacyRows(
+  rows: LegacySyncDataRow[],
+  count: number,
+  idPrefix: string,
+  tableName: string,
+  data: Record<string, unknown> = {},
+): void {
+  for (let index = 0; index < count; index += 1) {
+    rows.push({
+      ...legacyRow(
+        `${idPrefix}-${index}`,
+        tableName,
+        "production-user",
+        `${1_000 + index}-0-production-device`,
+      ),
+      data,
+    });
+  }
 }
