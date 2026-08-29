@@ -52,7 +52,7 @@ Completed on 2026-08-29:
 - Accepted one active browser writer as a v1 limitation. Cross-tab HLC locking
   is deferred.
 
-### 2. Add the new server table alongside the old table
+### 2. Add the new server table alongside the old table — Complete
 
 Define the new table in [server/db/schema.ts](/Users/admin/epub-reader-demo/server/db/schema.ts:109) and generate a new Drizzle migration.
 
@@ -77,6 +77,20 @@ sync_records
 Do not drop `sync_data` yet. Do not edit the old migration.
 
 Use Drizzle for the schema and migration history. Use raw D1 SQL inside the endpoints for the batch operations. The sequence-number method is already proven in [sql.ts](/Users/admin/epub-reader-demo/packages/local-sync/src/adapters/d1/sql.ts:3) and documented in [SYNC.md](/Users/admin/epub-reader-demo/SYNC.md:522).
+
+Completed on 2026-08-29:
+
+- Added the `syncRecord` Drizzle schema while retaining the legacy `syncData`
+  schema and table.
+- Generated additive migration `drizzle/0006_clean_santa_claus.sql` and its
+  Drizzle snapshot. No earlier migration was edited.
+- Made `server_seq` an `AUTOINCREMENT` primary key and kept every protocol
+  field non-null, including the retained soft-deleted value.
+- Added the unique `(user_id, key)` index and ordered `(user_id, server_seq)`
+  pull index.
+- Linked records to the Better Auth user with `ON DELETE CASCADE`.
+- Passed the server suite, root build, targeted lint, formatting, and diff
+  checks.
 
 ### 3. Add the new Hono endpoints
 

@@ -149,3 +149,35 @@ export const syncDataRelations = relations(syncData, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+/**
+ * Sync v2 stores one compacted LWW winner for each opaque user key.
+ * Application schemas and value decoding remain client responsibilities.
+ */
+export const syncRecord = sqliteTable(
+  "sync_records",
+  {
+    serverSeq: integer("server_seq").primaryKey({ autoIncrement: true }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    hlcWallTimeMs: integer("hlc_wall_time_ms").notNull(),
+    hlcCounter: integer("hlc_counter").notNull(),
+    deviceId: text("device_id").notNull(),
+    isDeleted: integer("is_deleted", { mode: "boolean" }).notNull(),
+  },
+  (t) => [
+    unique("sync_records_user_key_unique").on(t.userId, t.key),
+    index("sync_records_user_seq_idx").on(t.userId, t.serverSeq),
+  ],
+);
+
+export const syncRecordRelations = relations(syncRecord, ({ one }) => ({
+  user: one(user, {
+    fields: [syncRecord.userId],
+    references: [user.id],
+  }),
+}));
