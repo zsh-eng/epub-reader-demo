@@ -216,7 +216,7 @@ Completed on 2026-08-29:
 - Added two client-state behavior tests. The focused tests, root build,
   targeted lint, formatting, and diff checks passed.
 
-### 5. Add transparent Dexie mutation interception
+### 5. Add transparent Dexie mutation interception — Complete
 
 Install one DBCore middleware over the new database.
 
@@ -257,7 +257,33 @@ installSync(db, [
 
 There is no codec or client schema framework in this version.
 
-### 6. Build the client sync loop
+Completed on 2026-08-29:
+
+- Added one `installSync(db, tableNames)` DBCore middleware. Read-write
+  transactions that touch a registered table automatically include
+  `_sync_outbox`, including existing explicit multi-table transactions.
+- `add`, `put`, `update`, and bulk writes now store a plain `isDeleted` boolean
+  and replace the compacted outbox entry for the row's encoded logical key.
+- Direct deletes, bulk deletes, indexed collection deletes, and `clear` now read
+  the current value and write a retained soft-deleted row instead.
+- Domain writes and their outbox writes share the same IndexedDB transaction.
+  Only successful bulk items produce outbox entries, and transaction rollback
+  removes both sides.
+- Added monotonic batched HLC reservation to the validated local-storage state
+  envelope. Clock advancement can survive a failed database transaction;
+  unused HLC values are safe gaps.
+- Split access into two Dexie connections over the same IndexedDB database.
+  The application connection installs mutation interception. The sync
+  connection uses the schema directly, so pulled rows and push winners create
+  no HLC or outbox entry and require no marker on domain values.
+- Kept value encoding at JSON and schema version 1. Oversized values fail
+  before either IndexedDB table is changed.
+- Added eleven focused Step 5 behaviors covering clock batching, outbox
+  compaction, bulk and multi-table writes, all delete shapes, cascades,
+  rollback, value limits, and raw sync writes. The focused tests, root build,
+  targeted lint, formatting, and diff checks passed.
+
+### 6. Build the client sync loop — Complete
 
 Implement one serialized sync operation:
 
@@ -272,7 +298,34 @@ Implement one serialized sync operation:
 
 Retries must be safe. A crash after the server accepts a push but before the client clears the outbox must only resend the same mutation.
 
-Replace the existing provider and service usage starting at [App.tsx](/Users/admin/epub-reader-demo/src/App.tsx:16). Keep the current public hook shape where this reduces application changes.
+Completed on 2026-08-29:
+
+- Added one `SyncV2Client` that coalesces concurrent full-sync calls and runs
+  pull before push. Pull continues over the server's fixed high-water head.
+- Added the typed Hono transport. Pull uses the read-only query contract and
+  push sends protocol-sized batches of at most 500 compacted changes.
+- Added a preprocessing boundary for server data. It checks the common key,
+  table, schema-version, object, ID, and deletion invariants, then decodes the
+  opaque JSON value into a domain row. It does not validate application fields.
+- Remote HLCs advance the local clock outside IndexedDB after preprocessing.
+  The remote rows, outbox conflict reads, and remote writes use one IndexedDB
+  transaction. The cursor advances only after that transaction commits.
+- Pull applies a remote row when no newer local outbox entry exists. A newer
+  local entry keeps the local row. A remote winner can replace the domain row
+  while the stale outbox remains for the normal push reconciliation path.
+- Push snapshots the compacted outbox. It removes an entry only when the live
+  entry still equals the sent mutation. A concurrent local edit therefore
+  stays pending and its domain row is not overwritten.
+- Push uses every returned current winner, including rejected writes. A
+  different winner replaces the domain row through the raw sync connection.
+  Retried accepted writes are idempotent.
+- Added seven sync-loop behavior tests for bootstrap and incremental pull,
+  conflict outcomes, stale-outbox reconciliation, concurrent edits, 501-row
+  batching, malformed values, and serialized calls. The focused suite, root
+  build, lint, formatting, and diff checks passed.
+- Kept the running application on its legacy provider and database. Provider
+  replacement belongs to the Step 7 application cutover, when every consumer
+  can use the clean domain tables in one change.
 
 ### 7. Convert the application to clean domain types
 
@@ -291,6 +344,8 @@ Change the application to:
 - Move `src/lib/sync/epub-processing.ts` outside the old sync directory before that directory is removed.
 
 At this gate, the application must build and pass its tests against the new database and client engine.
+
+Replace the existing provider and service usage starting at [App.tsx](/Users/admin/epub-reader-demo/src/App.tsx:16). Keep the current public hook shape where this reduces application changes.
 
 ### 8. Build and dry-run the migration tool
 
