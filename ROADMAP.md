@@ -126,10 +126,12 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] New simplified sync engine
 - [ ] New file storage sync
 - [ ] Decomp note-taking flow
-- [ ] Sync limits
 
-- [ ] Sync progress toast
+- [ ] Decomp Sync limits
+- [ ] Decomp Sync progress toast
   - [ ] Also handles downloading a new book
+- [ ] Decomp Sync merge behaviour (accidentally or purposefully log into another account)
+
 - [ ] Squircle toast
 - [ ] Fix gradient in themes, reorder for the dark theme, and fix background (not full colour in the theme sheet)
 - [ ] Fix horizontal scroll passthrough
