@@ -1,13 +1,22 @@
+# New Sync Implementation Plan
+
+**Status**: In progress
+
+**Last updated**: 2026-08-29
+
+This file is the implementation record. Update the status and completed work
+after each slice lands.
+
 ## Proposed implementation order
 
-### 1. Freeze the protocol and invariants
+### 1. Freeze the protocol and invariants — Complete
 
 Write the minimal contract before code changes:
 
 - A logical key is an opaque encoded pair such as `JSON.stringify([table, id])`.
 - A value is `JSON.stringify(domainObject)`.
 - `schemaVersion` starts at `1`.
-- Deletes have `isDeleted = true` and `value = null`.
+- Deletes have `isDeleted = true` and retain their serialized value.
 - The server stores only the current winner for each `(userId, key)`.
 - HLC determines the winner.
 - `serverSeq` determines pull order.
@@ -15,7 +24,8 @@ Write the minimal contract before code changes:
 - Apply explicit key, value, and total-request size limits.
 - The push response returns the current winner for every submitted key. It must return winners for accepted and rejected writes.
 
-Bootstrap must include rows from the requesting device. Incremental pulls can exclude that device. Annotation 1
+Bootstrap must include rows from the requesting device. Incremental pulls can
+exclude that device.
 
 Use an explicit client state such as `bootstrapped: boolean`. Do not infer bootstrap from `cursor === 0`, because bootstrap can require multiple pages:
 
@@ -26,6 +36,21 @@ incremental pages: exclude own-device rows
 ```
 
 Also audit which existing sync metadata is real domain information. For example, some reading-history code uses `_deviceId` as meaningful data. Such fields must become ordinary `deviceId` fields before `_deviceId` is removed.
+
+Completed on 2026-08-29:
+
+- Added the executable Zod contract, limits, key and JSON value helpers, HLC
+  comparison, and client-state shape in `src/lib/sync-v2/protocol.ts`.
+- Fixed pull pagination around a server-supplied high-water `head`.
+- Made bootstrap device inclusion explicit across every bootstrap page.
+- Put device ID, HLC state, pull cursor, and bootstrap status in `localStorage`.
+  Only the compacted outbox will use an internal Dexie table.
+- Kept soft-deleted values and added explicit `isDeleted` state so local undo
+  can restore a row with a newer HLC.
+- Added nine focused protocol tests. The tests, root build, lint, formatting,
+  and diff checks passed.
+- Accepted one active browser writer as a v1 limitation. Cross-tab HLC locking
+  is deferred.
 
 ### 2. Add the new server table alongside the old table
 
@@ -38,7 +63,7 @@ sync_records
   server_seq        INTEGER PRIMARY KEY AUTOINCREMENT
   user_id           TEXT NOT NULL
   key               TEXT NOT NULL
-  value             TEXT
+  value             TEXT NOT NULL
   schema_version    INTEGER NOT NULL
   hlc_wall_time_ms  INTEGER NOT NULL
   hlc_counter       INTEGER NOT NULL
@@ -117,7 +142,11 @@ Use the clean domain schemas currently described in [sync-tables.ts](/Users/admi
 
 Keep local-only tables such as EPUB files and caches if they are still useful. A fresh database means these caches initially start empty.
 
-Add only two internal tables:
+Every synced domain row gets a plain `isDeleted` field. This is application
+state used for soft deletion and undo, not one of the old underscored sync
+metadata fields. Normal queries exclude soft-deleted rows.
+
+Add only one internal table:
 
 ```text
 _sync_outbox
@@ -126,15 +155,12 @@ _sync_outbox
   schemaVersion
   HLC fields
   isDeleted
-
-_sync_state
-  deviceId
-  HLC state
-  pullCursor
-  bootstrapped
 ```
 
 The outbox is compacted by logical key. A second local change replaces the first pending change.
+
+Persist device ID, HLC state, pull cursor, and bootstrap status in
+`localStorage` under one validated state envelope.
 
 ### 5. Add transparent Dexie mutation interception
 
@@ -144,7 +170,8 @@ For every mutation to a registered table:
 
 1. Derive the logical key.
 2. Generate the next HLC.
-3. Apply the ordinary domain mutation.
+3. Apply the ordinary domain mutation. Convert deletes into soft-deleted puts
+   that preserve the current value.
 4. Upsert the corresponding outbox entry.
 5. Commit both changes in the same IndexedDB transaction.
 
@@ -155,7 +182,9 @@ This must cover:
 - Cascading operations such as deleting a book and its related rows.
 - Transaction rollback. A failed domain write must not leave an outbox row.
 
-Deletes become hard deletes in domain tables. The middleware writes the tombstone to the outbox.
+Deletes remain in domain tables with `isDeleted = true`. The middleware writes
+the retained value and deletion flag to the outbox. Undo writes
+`isDeleted = false` with a newer HLC.
 
 Registration can remain simple:
 
@@ -184,7 +213,8 @@ Implement one serialized sync operation:
 4. Reconcile every push result with the returned server winner.
 5. Remove an outbox entry only if it still represents the acknowledged mutation.
 6. Continue pulling until the server page is complete.
-7. Save the cursor and bootstrap state atomically.
+7. Commit remote rows before saving cursor and bootstrap state to
+   `localStorage`. A crash between these operations safely replays the page.
 
 Retries must be safe. A crash after the server accepts a push but before the client clears the outbox must only resend the same mutation.
 
@@ -197,8 +227,10 @@ This is the actual table replacement, not a separate IndexedDB migration.
 Change the application to:
 
 - Replace `SyncedBook`, `SyncedHighlight`, and similar types with domain types.
-- Remove `isNotDeleted()` filters.
-- Replace soft-delete writes with ordinary deletes.
+- Replace `_isDeleted` with a plain `isDeleted` domain field.
+- Update normal queries to exclude `isDeleted` rows.
+- Let application code use ordinary Dexie deletes; middleware converts them to
+  soft-deleted writes.
 - Remove application reads of `_hlc` and `_serverTimestamp`.
 - Add explicit domain `deviceId` fields only where the application needs them.
 - Make multi-table deletions atomic.
@@ -215,7 +247,8 @@ The transform from old `sync_data` should:
 - Convert `(table_name, id)` to the new opaque key.
 - Reconstruct the domain value as `{ id, ...data }`. The old adapter stripped `id` before upload in [storage-adapter.ts](/Users/admin/epub-reader-demo/src/lib/sync/storage-adapter.ts:123).
 - Strip any remaining legacy sync metadata.
-- Convert deleted rows to `value = null`.
+- Reconstruct and retain deleted row values, set `isDeleted = true` in the
+  envelope, and add the plain field to the encoded domain value.
 - Parse the old HLC into wall time, counter, and device components.
 - Preserve the old `device_id`.
 - Set `schemaVersion = 1`.
@@ -313,4 +346,5 @@ After production checks pass:
 10. Delete the old IndexedDB database only after the rollback window.
 11. Retain the production export according to a deliberate backup policy.
 
-I would implement this as five review units: server v2, client substrate, application data-model cutover, migration tool, and final cleanup. No files were changed during this planning pass.
+The implementation uses five review units: server v2, client substrate,
+application data-model cutover, migration tool, and final cleanup.

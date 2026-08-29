@@ -1,5 +1,68 @@
 # Sync Architecture and DX RFC
 
+## Active sync v2 contract
+
+**Status**: Accepted for the first implementation on 2026-08-29.
+
+The client owns application schemas, migrations, and JSON encoding. The server
+is a compacted last-write-wins register store. It permanently discards a
+superseded value when a newer winner replaces it. A soft deletion is a new
+winner with `isDeleted: true`; it retains its serialized value for local undo.
+
+The Cloudflare Worker deployment is the application namespace. Better Auth
+provides the user namespace. Neither namespace is repeated in the wire body.
+The server exposes two versioned HTTP endpoints:
+
+```text
+POST /api/sync/v2/push
+POST /api/sync/v2/pull
+```
+
+`X-Device-ID` supplies the trusted device ID once per request. Push records
+contain one opaque key, one opaque string value, an `isDeleted` flag, one client
+schema version, and an HLC pair. The server does not parse or validate the
+application value. The first client uses `JSON.stringify` and `JSON.parse`.
+
+The client encodes a logical key as `JSON.stringify([tableName, recordId])`.
+The server treats this result as opaque text. A push response returns the
+current winner for every submitted key, including rejected and idempotent
+writes. Results stay in submitted-key order. LWW compares HLC wall time, then
+HLC counter, then the trusted device ID. Schema version does not participate in
+conflict ordering.
+
+The server stores only the current winner for `(userId, key)`. A winning write
+gets a fresh `serverSeq`; a rejected write keeps the winner's existing
+sequence. Sequence gaps are valid.
+
+Pull pagination uses a fixed high-water mark. The first page captures `head`.
+All continuation pages send that same `head` and read only rows where
+`cursor < serverSeq <= head`. A partial page returns its last record sequence as
+the cursor. A complete page returns `cursor = head`, including when device
+filtering omitted rows.
+
+Bootstrap sets `excludeOwnDevice: false` on every page. After the final
+bootstrap page, the client persists `bootstrapped: true`. Incremental pulls set
+`excludeOwnDevice: true`. The client must not infer bootstrap mode from cursor
+zero.
+
+The existing device ID and the v2 HLC, cursor, and bootstrap state live in
+`localStorage`. Only the compacted pending-write outbox requires a Dexie table.
+The first implementation assumes one active browser writer and does not add
+cross-tab HLC coordination.
+
+Every synced domain row has a plain `isDeleted` field. The Dexie middleware
+will convert `delete()` into a write that preserves the row and sets this field
+to `true`. Undo sets it back to `false` and produces a newer sync version. The
+other legacy sync metadata fields do not remain on domain rows.
+
+The first limits are 500 changes per push or pull, 1 KiB per key, 64 KiB per
+value, and 1 MiB per encoded push body. Blob content remains outside sync. The
+server rejects HLC wall times more than five minutes in the future.
+
+The executable shapes and constants live in
+`src/lib/sync-v2/protocol.ts`. The remainder of this document describes the
+older SQLite-first package RFC and is historical until the final cleanup.
+
 This document records the proposed sync developer experience and the current
 epub-reader-demo sync infrastructure. The current proposal is SQLite-first and
 does not require Drizzle or Dexie in the sync core.
