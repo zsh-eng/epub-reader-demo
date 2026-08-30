@@ -2,10 +2,36 @@ import {
   BOOK_COVER_TILE_ID,
   BOOK_DETAILS_TILE_ID,
   computeHighlightsBentoLayout,
+  doesMosaicPlacementIntersectViewport,
   getHighlightsMosaicGeometry,
   type MosaicPlacement,
 } from "@/lib/highlights-masonry-layout";
 import { describe, expect, it } from "vitest";
+
+describe("doesMosaicPlacementIntersectViewport", () => {
+  const placement = { top: 200, height: 100 };
+
+  it("includes only tiles that overlap the captured viewport", () => {
+    expect(
+      doesMosaicPlacementIntersectViewport(placement, {
+        top: 100,
+        bottom: 250,
+      }),
+    ).toBe(true);
+    expect(
+      doesMosaicPlacementIntersectViewport(placement, {
+        top: 300,
+        bottom: 500,
+      }),
+    ).toBe(false);
+    expect(
+      doesMosaicPlacementIntersectViewport(placement, {
+        top: 0,
+        bottom: 200,
+      }),
+    ).toBe(false);
+  });
+});
 
 function placementsOverlap(left: MosaicPlacement, right: MosaicPlacement) {
   const horizontalOverlap =

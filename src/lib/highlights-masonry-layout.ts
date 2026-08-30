@@ -22,6 +22,11 @@ export interface MosaicPlacement {
   naturalHeight: number;
 }
 
+export interface MosaicViewportRange {
+  top: number;
+  bottom: number;
+}
+
 export interface HighlightsMosaicLayout {
   columnCount: number;
   columnWidth: number;
@@ -51,6 +56,17 @@ const DEFAULT_OPTIONS: HighlightsMosaicLayoutOptions = {
   rowHeight: 8,
   layoutSeed: 0,
 };
+
+/** Returns true only when a placed tile overlaps the captured viewport range. */
+export function doesMosaicPlacementIntersectViewport(
+  placement: Pick<MosaicPlacement, "top" | "height">,
+  viewportRange: MosaicViewportRange,
+): boolean {
+  return (
+    placement.top < viewportRange.bottom &&
+    placement.top + placement.height > viewportRange.top
+  );
+}
 
 export function getHighlightsMosaicGeometry(
   containerWidth: number,

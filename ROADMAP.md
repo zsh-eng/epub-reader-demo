@@ -141,7 +141,9 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] Fix gradient in themes, reorder for the dark theme, and fix background (not full colour in the theme sheet)
 - [ ] Fix horizontal scroll passthrough
 
-- [ ] Consider tanstack virtual for highlights page? Slight lag for production (sometimes in the thousands of highlights)
+- [x] Optimize Highlights rendering using the measured plan in
+      `src/components/HIGHLIGHTS_PERFORMANCE.md`. Start by bounding React and DOM
+      work; keep worker-based Pretext as a measured follow-up.
 
 - [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,
       then verify that the hover state does not create a duplicate visual layer.

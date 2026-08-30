@@ -72,9 +72,12 @@ function groupHighlightsByBook(
 /**
  * Hook for fetching all highlights grouped by book
  */
-export function useAllHighlightsQuery() {
+export function useAllHighlightsQuery({
+  enabled = true,
+}: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: allHighlightsKeys.all,
+    enabled,
     queryFn: async () => {
       const [highlights, books] = await Promise.all([
         getAllHighlights(),

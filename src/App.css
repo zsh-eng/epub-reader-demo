@@ -3,6 +3,41 @@
   text-align: left;
 }
 
+@keyframes highlight-tile-entrance {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--tile-entrance-x), var(--tile-entrance-y), 0)
+      scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.highlight-tile-entrance-pending {
+  opacity: 0;
+  transform: translate3d(var(--tile-entrance-x), var(--tile-entrance-y), 0)
+    scale(0.97);
+}
+
+.highlight-tile-entrance-running {
+  animation: highlight-tile-entrance 240ms cubic-bezier(0.23, 1, 0.32, 1)
+    var(--tile-entrance-delay) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .highlight-tile-entrance-pending {
+    transform: none;
+  }
+
+  .highlight-tile-entrance-running {
+    animation-name: fadeIn;
+    animation-delay: 0ms;
+  }
+}
+
 /* Reader Content Styles */
 @keyframes fadeIn {
   from {

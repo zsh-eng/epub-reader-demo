@@ -34,8 +34,11 @@ import {
   BOOK_COVER_TILE_ID,
   BOOK_DETAILS_TILE_ID,
   computeHighlightsBentoLayout,
+  doesMosaicPlacementIntersectViewport,
   getHighlightsMosaicGeometry,
+  type HighlightsMosaicLayout,
   type MosaicPlacement,
+  type MosaicViewportRange,
 } from "@/lib/highlights-masonry-layout";
 import {
   HIGHLIGHT_COLORS,
@@ -48,6 +51,7 @@ import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { layout, prepare, type PreparedText } from "@chenglou/pretext";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import {
   LayoutGroup,
   animate,
@@ -93,6 +97,7 @@ const QUOTE_CARD_CHROME_HEIGHT = 80;
 const QUOTE_CARD_MIN_HEIGHT = 96;
 const WIDE_QUOTE_MIN_LINES = 7;
 const BOOK_TITLE_MAX_FONT = '500 44px "EB Garamond"';
+const TILE_OVERSCAN_VIEWPORTS = 1;
 const BOOK_INDEX_PIN_STORAGE_KEY = "highlights-masonry-book-index-pinned-v2";
 const BOOK_INDEX_ACTIVE_LAYOUT_ID = "highlights-book-index-active";
 const MOBILE_BOOK_COVER_MIN_WIDTH = 84;
@@ -112,10 +117,8 @@ const BOOK_PROGRESS_NAVIGATION_TRANSITION = {
   duration: 0.25,
   ease: [0.77, 0, 0.175, 1] as const,
 };
-const TILE_ENTRANCE_TRANSITION = {
-  duration: 0.24,
-  ease: [0.23, 1, 0.32, 1] as const,
-};
+const TILE_ENTRANCE_SETTLE_MS = 450;
+const SEARCH_DEBOUNCE_MS = 100;
 
 const highlightAccentValues: Record<AnnotationColor, string> = {
   yellow: "var(--yellow-primary, var(--yellow-secondary))",
@@ -128,6 +131,14 @@ const highlightAccentValues: Record<AnnotationColor, string> = {
 type HighlightAccentStyle = CSSProperties & {
   "--highlight-accent": string;
 };
+
+type TileEntranceStyle = CSSProperties & {
+  "--tile-entrance-delay": string;
+  "--tile-entrance-x": string;
+  "--tile-entrance-y": string;
+};
+
+type TileEntrancePhase = "waiting" | "running" | "complete";
 
 interface HighlightsTooltipPayload {
   label: string;
@@ -185,6 +196,45 @@ function getTileEntrance(key: string) {
     ...offsets[hash % offsets.length],
     delay: (hash % 6) * 0.035,
   };
+}
+
+/**
+ * Holds the initial tiles still for one paint, then starts their compositor
+ * entrance. The captured scroll offset keeps later virtualized tiles settled.
+ */
+function useInitialTileEntrance(
+  isLayoutReady: boolean,
+  currentScrollOffset: number,
+) {
+  const initialScrollOffsetRef = useRef<number | null>(null);
+  if (isLayoutReady && initialScrollOffsetRef.current === null) {
+    initialScrollOffsetRef.current = currentScrollOffset;
+  }
+
+  const initialScrollOffset = initialScrollOffsetRef.current;
+  const [phase, setPhase] = useState<TileEntrancePhase>("waiting");
+  useEffect(() => {
+    if (initialScrollOffset === null) return;
+
+    let secondFrame = 0;
+    let settleTimer = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        setPhase("running");
+        settleTimer = window.setTimeout(() => {
+          setPhase("complete");
+        }, TILE_ENTRANCE_SETTLE_MS);
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(settleTimer);
+    };
+  }, [initialScrollOffset]);
+
+  return { initialScrollOffset, phase };
 }
 
 function useElementWidth() {
@@ -307,18 +357,195 @@ function getSingleColumnBookDetailsHeight({
   return Math.ceil(Math.max(detailsHeight, coverHeight) + 32);
 }
 
+interface HighlightsMosaicModel {
+  mosaic: HighlightsMosaicLayout;
+  presentationByHighlightId: Map<string, HighlightCardPresentation>;
+  titleFontSize: number;
+  isSingleColumn: boolean;
+  compactCoverWidth: number;
+}
+
+/** Calculates stable mosaic geometry without constructing highlight cards. */
+function createHighlightsMosaicModel({
+  group,
+  highlights,
+  width,
+  fontReady,
+  preparedById,
+}: {
+  group: BookHighlightGroup;
+  highlights: Highlight[];
+  width: number;
+  fontReady: boolean;
+  preparedById: Map<string, PreparedText>;
+}): HighlightsMosaicModel {
+  const geometry = getHighlightsMosaicGeometry(width, {
+    gap: MOSAIC_GAP,
+    maxColumnCount: MOSAIC_MAX_COLUMNS,
+    minColumnWidth: MOSAIC_MIN_CARD_WIDTH,
+  });
+  const titleFontSize = getBookTitleFontSize(width);
+  const isSingleColumn = geometry.columnCount === 1;
+  const compactCoverWidth = isSingleColumn
+    ? getSingleColumnBookCoverWidth(geometry.columnWidth)
+    : 0;
+  const presentationByHighlightId = new Map<
+    string,
+    HighlightCardPresentation
+  >();
+  const isReady =
+    width > 0 &&
+    fontReady &&
+    highlights.every((highlight) => preparedById.has(highlight.id));
+
+  if (!isReady) {
+    return {
+      mosaic: computeHighlightsBentoLayout(0, []),
+      presentationByHighlightId,
+      titleFontSize,
+      isSingleColumn,
+      compactCoverWidth,
+    };
+  }
+
+  const detailsHeight = isSingleColumn
+    ? getSingleColumnBookDetailsHeight({
+        group,
+        columnWidth: geometry.columnWidth,
+        titleFontSize,
+      })
+    : getBookDetailsHeight({
+        group,
+        columnWidth: geometry.columnWidth,
+        fontSize: titleFontSize,
+      });
+  const textWidth = Math.max(1, geometry.columnWidth - 40);
+  const compactTextWidth = Math.max(1, geometry.columnWidth - 72);
+  const wideTextWidth = Math.max(1, geometry.columnWidth * 2 + MOSAIC_GAP - 40);
+  const measurements = highlights.flatMap((highlight) => {
+    const prepared = preparedById.get(highlight.id);
+    if (!prepared) return [];
+
+    const compactTextHeight = layout(
+      prepared,
+      compactTextWidth,
+      QUOTE_LINE_HEIGHT,
+    ).height;
+    const renderedLineCount = Math.max(
+      1,
+      Math.ceil(compactTextHeight / QUOTE_LINE_HEIGHT),
+    );
+    const presentation = getHighlightCardPresentation(
+      highlight.selectedText,
+      renderedLineCount,
+    );
+    presentationByHighlightId.set(highlight.id, presentation);
+
+    if (presentation === "word-cloud") {
+      return [
+        {
+          id: highlight.id,
+          height: SHORT_HIGHLIGHT_CARD_HEIGHT,
+          wideHeight: SHORT_HIGHLIGHT_CARD_HEIGHT,
+          preferredColumnSpan: 1 as const,
+        },
+      ];
+    }
+
+    if (presentation === "compact-quote") {
+      return [
+        {
+          id: highlight.id,
+          height: COMPACT_HIGHLIGHT_CARD_HEIGHT,
+          wideHeight: COMPACT_HIGHLIGHT_CARD_HEIGHT,
+          preferredColumnSpan: 1 as const,
+        },
+      ];
+    }
+
+    const textHeight = layout(prepared, textWidth, QUOTE_LINE_HEIGHT).height;
+    const shouldUseWideCard =
+      geometry.columnCount > 1 &&
+      textHeight >= QUOTE_LINE_HEIGHT * WIDE_QUOTE_MIN_LINES;
+    const wideTextHeight = shouldUseWideCard
+      ? layout(prepared, wideTextWidth, QUOTE_LINE_HEIGHT).height
+      : textHeight;
+
+    return [
+      {
+        id: highlight.id,
+        height: Math.max(
+          QUOTE_CARD_MIN_HEIGHT,
+          textHeight + QUOTE_CARD_CHROME_HEIGHT,
+        ),
+        wideHeight: Math.max(
+          QUOTE_CARD_MIN_HEIGHT,
+          wideTextHeight + QUOTE_CARD_CHROME_HEIGHT,
+        ),
+        preferredColumnSpan: shouldUseWideCard ? (2 as const) : (1 as const),
+      },
+    ];
+  });
+
+  return {
+    mosaic: computeHighlightsBentoLayout(width, measurements, {
+      gap: MOSAIC_GAP,
+      maxColumnCount: MOSAIC_MAX_COLUMNS,
+      minColumnWidth: MOSAIC_MIN_CARD_WIDTH,
+      detailsHeight,
+      layoutSeed: getStableNumber(group.book.id),
+    }),
+    presentationByHighlightId,
+    titleFontSize,
+    isSingleColumn,
+    compactCoverWidth,
+  };
+}
+
+function TileEntrance({
+  entranceKey,
+  phase,
+  children,
+}: {
+  entranceKey: string;
+  phase: TileEntrancePhase;
+  children: React.ReactNode;
+}) {
+  const entrance = useMemo(() => getTileEntrance(entranceKey), [entranceKey]);
+  const style: TileEntranceStyle = {
+    "--tile-entrance-delay": `${entrance.delay}s`,
+    "--tile-entrance-x": `${entrance.x}px`,
+    "--tile-entrance-y": `${entrance.y}px`,
+  };
+
+  return (
+    <div
+      data-highlight-entrance=""
+      className={cn(
+        "h-full",
+        phase === "waiting" && "highlight-tile-entrance-pending",
+        phase === "running" && "highlight-tile-entrance-running",
+      )}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
+
 function PositionedTile({
   placement,
   entranceKey,
+  animateEntrance,
+  entrancePhase,
   children,
 }: {
   placement: MosaicPlacement;
   entranceKey: string;
+  animateEntrance: boolean;
+  entrancePhase: TileEntrancePhase;
   children: React.ReactNode;
 }) {
-  const reducedMotion = useReducedMotion() ?? false;
-  const entrance = useMemo(() => getTileEntrance(entranceKey), [entranceKey]);
-
   return (
     <div
       className="absolute top-0 left-0"
@@ -328,27 +555,13 @@ function PositionedTile({
         transform: `translate3d(${placement.left}px, ${placement.top}px, 0)`,
       }}
     >
-      <motion.div
-        className="h-full"
-        initial={
-          reducedMotion
-            ? { opacity: 0 }
-            : {
-                opacity: 0,
-                transform: `translate3d(${entrance.x}px, ${entrance.y}px, 0) scale(0.97)`,
-              }
-        }
-        animate={{
-          opacity: 1,
-          transform: "translate3d(0px, 0px, 0) scale(1)",
-        }}
-        transition={{
-          ...TILE_ENTRANCE_TRANSITION,
-          delay: reducedMotion ? 0 : entrance.delay,
-        }}
-      >
-        {children}
-      </motion.div>
+      {animateEntrance ? (
+        <TileEntrance entranceKey={entranceKey} phase={entrancePhase}>
+          {children}
+        </TileEntrance>
+      ) : (
+        <div className="h-full">{children}</div>
+      )}
     </div>
   );
 }
@@ -359,59 +572,6 @@ function getBookSectionId(bookId: string) {
 
 function getBookHeadingId(bookId: string) {
   return `highlights-book-heading-${bookId}`;
-}
-
-function useActiveBookId(bookIds: string[], isMobile: boolean) {
-  const [activeBookId, setActiveBookId] = useState(bookIds[0] ?? "");
-
-  useEffect(() => {
-    const fallbackBookId = bookIds[0] ?? "";
-    setActiveBookId((current) =>
-      bookIds.includes(current) ? current : fallbackBookId,
-    );
-
-    if (bookIds.length === 0 || typeof window === "undefined") {
-      return;
-    }
-
-    const sections = bookIds.flatMap((bookId) => {
-      const section = document.getElementById(getBookSectionId(bookId));
-      return section ? [section] : [];
-    });
-    const activeOffset = isMobile ? MOBILE_BOOK_ACTIVE_OFFSET_PX : 96;
-    let frame = 0;
-    const updateActiveBook = () => {
-      frame = 0;
-      let currentSection = sections[0];
-
-      for (const section of sections) {
-        if (section.getBoundingClientRect().top > activeOffset) break;
-        currentSection = section;
-      }
-
-      const nextBookId = currentSection?.id.replace("highlights-book-", "");
-      if (!nextBookId) return;
-      setActiveBookId((current) =>
-        current === nextBookId ? current : nextBookId,
-      );
-    };
-    const scheduleUpdate = () => {
-      if (frame) return;
-      frame = window.requestAnimationFrame(updateActiveBook);
-    };
-
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-    scheduleUpdate();
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [bookIds, isMobile]);
-
-  return { activeBookId };
 }
 
 /**
@@ -1185,6 +1345,10 @@ function HighlightsMosaic({
   group,
   headingId,
   highlights,
+  model,
+  renderRange,
+  entranceRange,
+  entrancePhase,
   isMobile,
   readingTimeMs,
   tooltipHandle,
@@ -1196,6 +1360,10 @@ function HighlightsMosaic({
   group: BookHighlightGroup;
   headingId: string;
   highlights: Highlight[];
+  model: HighlightsMosaicModel;
+  renderRange: MosaicViewportRange;
+  entranceRange: MosaicViewportRange;
+  entrancePhase: TileEntrancePhase;
   isMobile: boolean;
   readingTimeMs: number;
   tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
@@ -1204,147 +1372,13 @@ function HighlightsMosaic({
   onOpenBook: (highlight: Highlight) => void;
   copiedHighlightId: string | null;
 }) {
-  const { elementRef, width } = useElementWidth();
-  const { fontReady, preparedById } = usePreparedHighlights(group.highlights);
-  const geometry = useMemo(
-    () =>
-      getHighlightsMosaicGeometry(width, {
-        gap: MOSAIC_GAP,
-        maxColumnCount: MOSAIC_MAX_COLUMNS,
-        minColumnWidth: MOSAIC_MIN_CARD_WIDTH,
-      }),
-    [width],
-  );
-  const titleFontSize = getBookTitleFontSize(width);
-  const isSingleColumn = geometry.columnCount === 1;
-  const compactCoverWidth = isSingleColumn
-    ? getSingleColumnBookCoverWidth(geometry.columnWidth)
-    : 0;
-  const detailsHeight = useMemo(() => {
-    if (!fontReady || geometry.columnWidth === 0) return 250;
-
-    if (isSingleColumn) {
-      return getSingleColumnBookDetailsHeight({
-        group,
-        columnWidth: geometry.columnWidth,
-        titleFontSize,
-      });
-    }
-
-    return getBookDetailsHeight({
-      group,
-      columnWidth: geometry.columnWidth,
-      fontSize: titleFontSize,
-    });
-  }, [fontReady, geometry.columnWidth, group, isSingleColumn, titleFontSize]);
-
-  const { mosaic, presentationByHighlightId } = useMemo(() => {
-    const presentationByHighlightId = new Map<
-      string,
-      HighlightCardPresentation
-    >();
-    const isReady =
-      width > 0 && fontReady && preparedById.size === group.highlights.length;
-    if (!isReady) {
-      return {
-        mosaic: computeHighlightsBentoLayout(0, []),
-        presentationByHighlightId,
-      };
-    }
-
-    const textWidth = Math.max(1, geometry.columnWidth - 40);
-    const compactTextWidth = Math.max(1, geometry.columnWidth - 72);
-    const wideTextWidth = Math.max(
-      1,
-      geometry.columnWidth * 2 + MOSAIC_GAP - 40,
-    );
-    const measurements = highlights.flatMap((highlight) => {
-      const prepared = preparedById.get(highlight.id);
-      if (!prepared) return [];
-
-      const compactTextHeight = layout(
-        prepared,
-        compactTextWidth,
-        QUOTE_LINE_HEIGHT,
-      ).height;
-      const renderedLineCount = Math.max(
-        1,
-        Math.ceil(compactTextHeight / QUOTE_LINE_HEIGHT),
-      );
-      const presentation = getHighlightCardPresentation(
-        highlight.selectedText,
-        renderedLineCount,
-      );
-      presentationByHighlightId.set(highlight.id, presentation);
-
-      if (presentation === "word-cloud") {
-        return [
-          {
-            id: highlight.id,
-            height: SHORT_HIGHLIGHT_CARD_HEIGHT,
-            wideHeight: SHORT_HIGHLIGHT_CARD_HEIGHT,
-            preferredColumnSpan: 1 as const,
-          },
-        ];
-      }
-
-      if (presentation === "compact-quote") {
-        return [
-          {
-            id: highlight.id,
-            height: COMPACT_HIGHLIGHT_CARD_HEIGHT,
-            wideHeight: COMPACT_HIGHLIGHT_CARD_HEIGHT,
-            preferredColumnSpan: 1 as const,
-          },
-        ];
-      }
-
-      const textHeight = layout(prepared, textWidth, QUOTE_LINE_HEIGHT).height;
-      const shouldUseWideCard =
-        geometry.columnCount > 1 &&
-        textHeight >= QUOTE_LINE_HEIGHT * WIDE_QUOTE_MIN_LINES;
-      const wideTextHeight = shouldUseWideCard
-        ? layout(prepared, wideTextWidth, QUOTE_LINE_HEIGHT).height
-        : textHeight;
-
-      return [
-        {
-          id: highlight.id,
-          height: Math.max(
-            QUOTE_CARD_MIN_HEIGHT,
-            textHeight + QUOTE_CARD_CHROME_HEIGHT,
-          ),
-          wideHeight: Math.max(
-            QUOTE_CARD_MIN_HEIGHT,
-            wideTextHeight + QUOTE_CARD_CHROME_HEIGHT,
-          ),
-          preferredColumnSpan: shouldUseWideCard ? (2 as const) : (1 as const),
-        },
-      ];
-    });
-
-    return {
-      mosaic: computeHighlightsBentoLayout(width, measurements, {
-        gap: MOSAIC_GAP,
-        maxColumnCount: MOSAIC_MAX_COLUMNS,
-        minColumnWidth: MOSAIC_MIN_CARD_WIDTH,
-        detailsHeight,
-        layoutSeed: getStableNumber(group.book.id),
-      }),
-      presentationByHighlightId,
-    };
-  }, [
-    detailsHeight,
-    fontReady,
-    geometry.columnCount,
-    geometry.columnWidth,
-    group.book.id,
-    group.highlights.length,
-    highlights,
-    preparedById,
-    width,
-  ]);
-
+  const {
+    compactCoverWidth,
+    isSingleColumn,
+    mosaic,
+    presentationByHighlightId,
+    titleFontSize,
+  } = model;
   const placementById = useMemo(
     () =>
       new Map(mosaic.placements.map((placement) => [placement.id, placement])),
@@ -1352,12 +1386,29 @@ function HighlightsMosaic({
   );
   const detailsPlacement = placementById.get(BOOK_DETAILS_TILE_ID);
   const coverPlacement = placementById.get(BOOK_COVER_TILE_ID);
-  const fillerPlacements = mosaic.placements.filter(
-    ({ kind }) => kind === "filler",
+  const fillerPlacements = useMemo(
+    () =>
+      mosaic.placements.filter(
+        (placement) =>
+          placement.kind === "filler" &&
+          doesMosaicPlacementIntersectViewport(placement, renderRange),
+      ),
+    [mosaic.placements, renderRange],
+  );
+  const renderedHighlights = useMemo(
+    () =>
+      highlights.filter((highlight) => {
+        const placement = placementById.get(highlight.id);
+        return (
+          placement !== undefined &&
+          doesMosaicPlacementIntersectViewport(placement, renderRange)
+        );
+      }),
+    [highlights, placementById, renderRange],
   );
   const chapterTitleByHighlightId = useMemo(() => {
     return new Map(
-      highlights.map((highlight) => {
+      renderedHighlights.map((highlight) => {
         const spineIndex = group.book.spine.findIndex(
           ({ idref }) => idref === highlight.spineItemId,
         );
@@ -1368,19 +1419,20 @@ function HighlightsMosaic({
         return [highlight.id, chapterTitle] as const;
       }),
     );
-  }, [group.book, highlights]);
+  }, [group.book, renderedHighlights]);
 
   return (
-    <div
-      ref={elementRef}
-      className="relative"
-      style={{ height: mosaic.height || 520 }}
-    >
+    <div className="relative" style={{ height: mosaic.height || 520 }}>
       {fillerPlacements.map((placement) => (
         <PositionedTile
           key={placement.id}
           placement={placement}
           entranceKey={`${group.book.id}-${placement.id}`}
+          animateEntrance={doesMosaicPlacementIntersectViewport(
+            placement,
+            entranceRange,
+          )}
+          entrancePhase={entrancePhase}
         >
           <div
             aria-hidden="true"
@@ -1389,51 +1441,63 @@ function HighlightsMosaic({
         </PositionedTile>
       ))}
 
-      {detailsPlacement && (
-        <PositionedTile
-          placement={detailsPlacement}
-          entranceKey={`${group.book.id}-${BOOK_DETAILS_TILE_ID}`}
-        >
-          <BookDetailsTile
-            group={group}
-            headingId={headingId}
-            visibleCount={highlights.length}
-            titleFontSize={titleFontSize}
-            compactCover={
-              isSingleColumn ? (
-                <div
-                  className="shrink-0"
-                  style={{
-                    width: compactCoverWidth,
-                    height: compactCoverWidth * 1.5,
-                  }}
-                >
-                  <BookCoverTile
-                    group={group}
-                    readingTimeMs={readingTimeMs}
-                    tooltipHandle={tooltipHandle}
-                  />
-                </div>
-              ) : undefined
-            }
-          />
-        </PositionedTile>
-      )}
+      {detailsPlacement &&
+        doesMosaicPlacementIntersectViewport(detailsPlacement, renderRange) && (
+          <PositionedTile
+            placement={detailsPlacement}
+            entranceKey={`${group.book.id}-${BOOK_DETAILS_TILE_ID}`}
+            animateEntrance={doesMosaicPlacementIntersectViewport(
+              detailsPlacement,
+              entranceRange,
+            )}
+            entrancePhase={entrancePhase}
+          >
+            <BookDetailsTile
+              group={group}
+              headingId={headingId}
+              visibleCount={highlights.length}
+              titleFontSize={titleFontSize}
+              compactCover={
+                isSingleColumn ? (
+                  <div
+                    className="shrink-0"
+                    style={{
+                      width: compactCoverWidth,
+                      height: compactCoverWidth * 1.5,
+                    }}
+                  >
+                    <BookCoverTile
+                      group={group}
+                      readingTimeMs={readingTimeMs}
+                      tooltipHandle={tooltipHandle}
+                    />
+                  </div>
+                ) : undefined
+              }
+            />
+          </PositionedTile>
+        )}
 
-      {coverPlacement && (
-        <PositionedTile
-          placement={coverPlacement}
-          entranceKey={`${group.book.id}-${BOOK_COVER_TILE_ID}`}
-        >
-          <BookCoverTile
-            group={group}
-            readingTimeMs={readingTimeMs}
-            tooltipHandle={tooltipHandle}
-          />
-        </PositionedTile>
-      )}
+      {coverPlacement &&
+        doesMosaicPlacementIntersectViewport(coverPlacement, renderRange) && (
+          <PositionedTile
+            placement={coverPlacement}
+            entranceKey={`${group.book.id}-${BOOK_COVER_TILE_ID}`}
+            animateEntrance={doesMosaicPlacementIntersectViewport(
+              coverPlacement,
+              entranceRange,
+            )}
+            entrancePhase={entrancePhase}
+          >
+            <BookCoverTile
+              group={group}
+              readingTimeMs={readingTimeMs}
+              tooltipHandle={tooltipHandle}
+            />
+          </PositionedTile>
+        )}
 
-      {highlights.map((highlight) => {
+      {renderedHighlights.map((highlight) => {
         const placement = placementById.get(highlight.id);
         if (!placement) return null;
 
@@ -1442,6 +1506,11 @@ function HighlightsMosaic({
             key={highlight.id}
             placement={placement}
             entranceKey={highlight.id}
+            animateEntrance={doesMosaicPlacementIntersectViewport(
+              placement,
+              entranceRange,
+            )}
+            entrancePhase={entrancePhase}
           >
             <HighlightQuoteCard
               highlight={highlight}
@@ -1525,6 +1594,22 @@ function HighlightsSearch({
   onToggleColor: (color: HighlightColor) => void;
 }) {
   const reducedMotion = useReducedMotion() ?? false;
+  const [draftValue, setDraftValue] = useState(value);
+
+  useEffect(() => {
+    if (draftValue === value) return;
+
+    const timer = window.setTimeout(() => {
+      onChange(draftValue);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [draftValue, onChange, value]);
+
+  const clearSearch = () => {
+    setDraftValue("");
+    onChange("");
+  };
 
   return (
     <motion.div
@@ -1544,20 +1629,20 @@ function HighlightsSearch({
       />
       <Input
         type="search"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
+        value={draftValue}
+        onChange={(event) => setDraftValue(event.target.value)}
         placeholder="Search all highlights…"
         aria-label="Search all highlights"
         className={cn(
           "h-14 appearance-none bg-background/75 pl-10 text-base shadow-md backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 md:text-base [&::-webkit-search-cancel-button]:hidden",
-          value ? "pr-48" : "pr-40",
+          draftValue ? "pr-48" : "pr-40",
         )}
       />
       <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 md:right-4 md:gap-2.5">
-        {value && (
+        {draftValue && (
           <button
             type="button"
-            onClick={() => onChange("")}
+            onClick={clearSearch}
             aria-label="Clear highlight search"
             title="Clear search"
             className="grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-7"
@@ -1574,7 +1659,12 @@ function HighlightsSearch({
   );
 }
 
-export function HighlightsMasonry() {
+export function HighlightsMasonry({
+  groupsOverride,
+}: {
+  /** Test-only data seam for deterministic performance fixtures. */
+  groupsOverride?: BookHighlightGroup[];
+} = {}) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const tooltipHandle = useMemo(
@@ -1601,8 +1691,14 @@ export function HighlightsMasonry() {
     useSearchStickyState();
   const { displayedProgress, animateAfterInstantNavigation } =
     useBookNavigationProgress(scrollYProgress);
-  const { data: groups = [], isLoading } = useAllHighlightsQuery();
-  const { data: readingSessionsData } = useReadingSessionsQuery();
+  const shouldLoadStoredData = groupsOverride === undefined;
+  const { data: storedGroups = [], isLoading: isStoredDataLoading } =
+    useAllHighlightsQuery({ enabled: shouldLoadStoredData });
+  const { data: readingSessionsData } = useReadingSessionsQuery({
+    enabled: shouldLoadStoredData,
+  });
+  const groups = groupsOverride ?? storedGroups;
+  const isLoading = shouldLoadStoredData && isStoredDataLoading;
   const readingTimeByBookId = useMemo(() => {
     const totals = new Map<string, number>();
     if (!readingSessionsData) return totals;
@@ -1640,6 +1736,100 @@ export function HighlightsMasonry() {
       return highlights.length > 0 ? [{ group, highlights }] : [];
     });
   }, [groups, searchQuery, selectedColors]);
+  const visibleHighlights = useMemo(
+    () => visibleGroups.flatMap(({ highlights }) => highlights),
+    [visibleGroups],
+  );
+  const { elementRef: mosaicsElementRef, width: mosaicsWidth } =
+    useElementWidth();
+  const { fontReady, preparedById } = usePreparedHighlights(visibleHighlights);
+  const mosaicModelsByBookId = useMemo(() => {
+    return new Map(
+      visibleGroups.map(({ group, highlights }) => [
+        group.book.id,
+        createHighlightsMosaicModel({
+          group,
+          highlights,
+          width: mosaicsWidth,
+          fontReady,
+          preparedById,
+        }),
+      ]),
+    );
+  }, [fontReady, mosaicsWidth, preparedById, visibleGroups]);
+  const [mosaicsScrollMargin, setMosaicsScrollMargin] = useState(0);
+  useLayoutEffect(() => {
+    const element = mosaicsElementRef.current;
+    if (!element) return;
+    setMosaicsScrollMargin(element.offsetTop);
+  }, [mosaicsElementRef, mosaicsWidth]);
+  const estimateMosaicSectionSize = useCallback(
+    (index: number) => {
+      const entry = visibleGroups[index];
+      if (!entry) return 520;
+
+      const model = mosaicModelsByBookId.get(entry.group.book.id);
+      const contentHeight = model?.mosaic.height || 520;
+      if (index !== visibleGroups.length - 1) return contentHeight;
+
+      const lastSectionMinimumHeight = Math.max(
+        0,
+        window.innerHeight - (isMobile ? 80 : 112),
+      );
+      return Math.max(contentHeight, lastSectionMinimumHeight);
+    },
+    [isMobile, mosaicModelsByBookId, visibleGroups],
+  );
+  const getMosaicSectionKey = useCallback(
+    (index: number) => visibleGroups[index]?.group.book.id ?? index,
+    [visibleGroups],
+  );
+  const mosaicVirtualizer = useWindowVirtualizer({
+    count: visibleGroups.length,
+    estimateSize: estimateMosaicSectionSize,
+    getItemKey: getMosaicSectionKey,
+    gap: MOSAIC_GAP,
+    overscan: 1,
+    scrollPaddingStart: isMobile ? 80 : 112,
+    scrollMargin: mosaicsScrollMargin,
+  });
+  const virtualMosaicSections = mosaicVirtualizer.getVirtualItems();
+  const isMosaicLayoutReady =
+    fontReady &&
+    mosaicsWidth > 0 &&
+    visibleGroups.every(({ group }) => {
+      const model = mosaicModelsByBookId.get(group.book.id);
+      return model !== undefined && model.mosaic.height > 0;
+    });
+  const mosaicSectionSizesKey = isMosaicLayoutReady
+    ? visibleGroups
+        .map(
+          ({ group }, index) =>
+            `${group.book.id}:${estimateMosaicSectionSize(index)}`,
+        )
+        .join("|")
+    : "";
+  const measuredMosaicSizesKeyRef = useRef("");
+  useLayoutEffect(() => {
+    if (
+      !mosaicSectionSizesKey ||
+      measuredMosaicSizesKeyRef.current === mosaicSectionSizesKey
+    ) {
+      return;
+    }
+
+    // The virtualizer first mounts with fallback heights while fonts and text
+    // geometry load. Reset its cache once for each set of exact section sizes.
+    measuredMosaicSizesKeyRef.current = mosaicSectionSizesKey;
+    mosaicVirtualizer.measure();
+  }, [mosaicSectionSizesKey, mosaicVirtualizer]);
+  const {
+    initialScrollOffset: initialEntranceScrollOffset,
+    phase: entrancePhase,
+  } = useInitialTileEntrance(
+    isMosaicLayoutReady,
+    mosaicVirtualizer.scrollOffset ?? window.scrollY,
+  );
   const visibleBookIds = useMemo(
     () => visibleGroups.map(({ group }) => group.book.id),
     [visibleGroups],
@@ -1652,7 +1842,13 @@ export function HighlightsMasonry() {
       })),
     [visibleGroups],
   );
-  const { activeBookId } = useActiveBookId(visibleBookIds, isMobile);
+  const activeOffset = isMobile ? MOBILE_BOOK_ACTIVE_OFFSET_PX : 96;
+  const activeBookIndex = virtualMosaicSections.reduce((current, item) => {
+    const scrollOffset = mosaicVirtualizer.scrollOffset ?? 0;
+    return item.start <= scrollOffset + activeOffset ? item.index : current;
+  }, virtualMosaicSections[0]?.index ?? 0);
+  const activeBookId =
+    visibleBookIds[activeBookIndex] ?? visibleBookIds[0] ?? "";
   const totalHighlightCount = useMemo(
     () => groups.reduce((total, group) => total + group.highlights.length, 0),
     [groups],
@@ -1687,13 +1883,16 @@ export function HighlightsMasonry() {
 
   const handleBookNavigate = useCallback(
     (bookId: string) => {
-      const section = document.getElementById(getBookSectionId(bookId));
-      if (!section) return;
+      const bookIndex = visibleBookIds.indexOf(bookId);
+      if (bookIndex < 0) return;
 
-      section.scrollIntoView({ behavior: "auto", block: "start" });
+      mosaicVirtualizer.scrollToIndex(bookIndex, {
+        align: "start",
+        behavior: "auto",
+      });
       animateAfterInstantNavigation();
     },
-    [animateAfterInstantNavigation],
+    [animateAfterInstantNavigation, mosaicVirtualizer, visibleBookIds],
   );
 
   const copyHighlight = useCallback(async (highlight: Highlight) => {
@@ -1820,26 +2019,58 @@ export function HighlightsMasonry() {
                   "gap-8 lg:grid-cols-[minmax(0,1fr)_248px] xl:gap-10",
               )}
             >
-              <div className={cn("min-w-0", hasNoMatches && "h-full")}>
+              <div
+                ref={mosaicsElementRef}
+                className={cn("relative min-w-0", hasNoMatches && "h-full")}
+                style={{ height: mosaicVirtualizer.getTotalSize() }}
+              >
                 {visibleGroups.length > 0 ? (
-                  visibleGroups.map(({ group, highlights }, index) => {
+                  virtualMosaicSections.map((virtualSection) => {
+                    const entry = visibleGroups[virtualSection.index];
+                    if (!entry) return null;
+                    const { group, highlights } = entry;
                     const sectionId = getBookSectionId(group.book.id);
                     const headingId = getBookHeadingId(group.book.id);
+                    const model = mosaicModelsByBookId.get(group.book.id);
+                    if (!model) return null;
+                    const localViewportTop =
+                      (mosaicVirtualizer.scrollOffset ?? 0) -
+                      virtualSection.start;
+                    const tileOverscan =
+                      window.innerHeight * TILE_OVERSCAN_VIEWPORTS;
+                    const renderRange: MosaicViewportRange = {
+                      top: Math.max(0, localViewportTop - tileOverscan),
+                      bottom:
+                        localViewportTop + window.innerHeight + tileOverscan,
+                    };
+                    const initialLocalViewportTop =
+                      initialEntranceScrollOffset === null
+                        ? Number.POSITIVE_INFINITY
+                        : initialEntranceScrollOffset - virtualSection.start;
+                    const entranceRange: MosaicViewportRange = {
+                      top: Math.max(0, initialLocalViewportTop),
+                      bottom: initialLocalViewportTop + window.innerHeight,
+                    };
 
                     return (
                       <section
                         key={group.book.id}
                         id={sectionId}
                         aria-labelledby={headingId}
-                        className={cn(
-                          "scroll-mt-20 last:min-h-[calc(100svh-5rem)] lg:scroll-mt-28 lg:last:min-h-[calc(100svh-7rem)]",
-                          index > 0 && "mt-2",
-                        )}
+                        className="absolute top-0 left-0 w-full scroll-mt-20 lg:scroll-mt-28"
+                        style={{
+                          height: virtualSection.size,
+                          transform: `translate3d(0, ${virtualSection.start - mosaicsScrollMargin}px, 0)`,
+                        }}
                       >
                         <MemoizedHighlightsMosaic
                           group={group}
                           headingId={headingId}
                           highlights={highlights}
+                          model={model}
+                          renderRange={renderRange}
+                          entranceRange={entranceRange}
+                          entrancePhase={entrancePhase}
                           isMobile={isMobile}
                           readingTimeMs={
                             readingTimeByBookId.get(group.book.id) ?? 0
