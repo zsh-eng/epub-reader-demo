@@ -118,7 +118,7 @@ export function useReaderCore(
   } = options;
   const { settings, updateSettings } = useReaderSettings();
   const { book, isLoading: isBookLoading } = useBookLoader(bookId);
-  const epubProcessor = useEpubProcessor(bookId, book?.sourceFileId);
+  const epubProcessor = useEpubProcessor(book);
   const epubPreparation = resolveReaderEpubPreparation({
     bookId,
     book,

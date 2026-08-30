@@ -1,15 +1,16 @@
-import { processEpubToBookFiles } from "@/lib/epub-processing";
-import { db, hasBookFiles } from "@/lib/db";
-import { files, type FileId } from "@/lib/files";
+import { bookKeys } from "@/hooks/use-book-loader";
 import {
-  endReaderTraceSpan,
-  startReaderTraceSpan,
-} from "@/lib/reader-performance-trace";
+  prepareBook,
+  type BookPreparationResult,
+} from "@/lib/book-preparation";
+import type { Book } from "@/lib/db";
 import {
   queryOptions,
   useQuery,
+  useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 export interface UseEpubProcessorReturn {
   /** Whether the EPUB is currently being processed */
@@ -21,140 +22,76 @@ export interface UseEpubProcessorReturn {
 }
 
 export const epubPreparationKeys = {
-  book: (bookId: string, sourceFileId: FileId) =>
-    ["epubPreparation", bookId, sourceFileId] as const,
+  book: (book: Pick<Book, "id" | "sourceFileId">) =>
+    ["epubPreparation", book.id, book.sourceFileId] as const,
+  disabled: ["epubPreparation", "disabled"] as const,
 };
 
-async function ensureBookProcessed(
-  bookId: string,
-  sourceFileId: FileId,
-): Promise<true> {
-  const preparationSpan = startReaderTraceSpan(
-    "epub-preparation",
-    "processing",
-  );
-
-  try {
-    const lookupSpan = startReaderTraceSpan(
-      "extracted-book-files-check",
-      "storage",
-    );
-    const hasExistingFiles = await hasBookFiles(bookId);
-    endReaderTraceSpan(lookupSpan, { cacheHit: hasExistingFiles });
-
-    if (hasExistingFiles) {
-      endReaderTraceSpan(preparationSpan, { loadKind: "cache-hit" });
-      return true;
-    }
-
-    console.log("[useEpubProcessor] Fetching EPUB:", sourceFileId);
-
-    const epubReadSpan = startReaderTraceSpan("epub-blob-read", "storage");
-    const blob = await files.get(sourceFileId);
-    endReaderTraceSpan(epubReadSpan, { sizeBytes: blob.size });
-
-    console.log("[useEpubProcessor] Processing EPUB...");
-
-    const extractionSpan = startReaderTraceSpan(
-      "epub-extraction",
-      "processing",
-    );
-    const bookFiles = await processEpubToBookFiles(blob, bookId);
-    endReaderTraceSpan(extractionSpan, { fileCount: bookFiles.length });
-
-    console.log(
-      "[useEpubProcessor] Storing",
-      bookFiles.length,
-      "book files...",
-    );
-
-    const writeSpan = startReaderTraceSpan(
-      "extracted-book-files-write",
-      "storage",
-    );
-    await db.bookFiles.bulkAdd(bookFiles);
-    endReaderTraceSpan(writeSpan, { fileCount: bookFiles.length });
-    endReaderTraceSpan(preparationSpan, {
-      loadKind: "extracted",
-      fileCount: bookFiles.length,
-    });
-
-    console.log("[useEpubProcessor] Book ready!");
-    return true;
-  } catch (error) {
-    endReaderTraceSpan(
-      preparationSpan,
-      { error: error instanceof Error ? error.message : String(error) },
-      "error",
-    );
-    throw error;
-  }
-}
-
-function getEpubPreparationQueryOptions(bookId: string, sourceFileId: FileId) {
+function getEpubPreparationQueryOptions(book: Book) {
   return queryOptions({
-    queryKey: epubPreparationKeys.book(bookId, sourceFileId),
-    queryFn: () => ensureBookProcessed(bookId, sourceFileId),
+    queryKey: epubPreparationKeys.book(book),
+    queryFn: () => prepareBook(book),
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
   });
 }
 
-/**
- * Records the per-device extraction completed by the import transaction. The
- * Reader can then trust local readiness without another IndexedDB round trip.
- */
+function updatePreparedBookQueries(
+  queryClient: QueryClient,
+  result: BookPreparationResult,
+): void {
+  if (!result.bookChanged) return;
+
+  queryClient.setQueryData(bookKeys.detail(result.book.id), result.book);
+  void queryClient.invalidateQueries({ queryKey: bookKeys.list() });
+}
+
+/** Record the materialization completed by the import transaction. */
 export function markEpubPreparationReady(
   queryClient: QueryClient,
-  bookId: string,
-  sourceFileId: FileId,
+  book: Book,
 ): void {
-  queryClient.setQueryData(
-    epubPreparationKeys.book(bookId, sourceFileId),
-    true,
-  );
+  queryClient.setQueryData(epubPreparationKeys.book(book), {
+    book,
+    bookChanged: false,
+    materialized: false,
+  } satisfies BookPreparationResult);
 }
 
-/** Ensures Library prefetches also warm the per-device extraction result. */
+/** Ensure Library prefetches use the same deterministic preparation path. */
 export async function ensureEpubPreparationReady(
   queryClient: QueryClient,
-  bookId: string,
-  sourceFileId: FileId,
-): Promise<void> {
-  await queryClient.ensureQueryData(
-    getEpubPreparationQueryOptions(bookId, sourceFileId),
+  book: Book,
+): Promise<Book> {
+  const result = await queryClient.ensureQueryData(
+    getEpubPreparationQueryOptions(book),
   );
+  updatePreparedBookQueries(queryClient, result);
+  return result.book;
 }
 
-/**
- * Hook to ensure EPUB is processed and bookFiles exist locally.
- *
- * This hook:
- * 1. Checks if bookFiles exist for the book
- * 2. If not, fetches the source EPUB through the files API
- * 3. Processes the EPUB to extract bookFiles
- * 4. Stores bookFiles in IndexedDB
- *
- * @param bookId - The book's unique identifier
- * @param sourceFileId - The source EPUB file reference
- * @returns Processing state and ready status
- */
-export function useEpubProcessor(
-  bookId: string | undefined,
-  sourceFileId: FileId | undefined,
-): UseEpubProcessorReturn {
+/** Ensure the source EPUB has a complete local materialization. */
+export function useEpubProcessor(book: Book | null): UseEpubProcessorReturn {
+  const queryClient = useQueryClient();
   const query = useQuery({
-    ...getEpubPreparationQueryOptions(
-      bookId ?? "",
-      sourceFileId ?? ("" as FileId),
-    ),
-    enabled: !!bookId && !!sourceFileId,
+    queryKey: book
+      ? epubPreparationKeys.book(book)
+      : epubPreparationKeys.disabled,
+    queryFn: () => prepareBook(book!),
+    enabled: book !== null,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
   });
+
+  useEffect(() => {
+    if (query.data) updatePreparedBookQueries(queryClient, query.data);
+  }, [query.data, queryClient]);
 
   return {
     isProcessing: query.isFetching,
-    isReady: query.data === true,
+    isReady: query.data !== undefined,
     error: query.error instanceof Error ? query.error : null,
   };
 }

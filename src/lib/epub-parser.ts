@@ -32,15 +32,18 @@ export interface ParsedEPUBMetadata {
 
 export interface ParseEPUBOptions {
   sourceFileId: FileId;
+  bookId?: string;
+  fileName?: string;
 }
 
 /**
  * Extract and parse an EPUB file
  */
 export async function parseEPUB(
-  file: File,
+  file: Blob,
   options: ParseEPUBOptions,
 ): Promise<ParsedEPUB> {
+  const createBlob = createDerivedBlobFactory(file);
   const arrayBuffer = await file.arrayBuffer();
   const uint8Array = new Uint8Array(arrayBuffer);
 
@@ -70,16 +73,22 @@ export async function parseEPUB(
   // Extract table of contents
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
 
-  const { coverBlob } = await extractCoverInfo(opfDoc, manifest, unzipped);
+  const { coverBlob } = await extractCoverInfo(
+    opfDoc,
+    manifest,
+    unzipped,
+    createBlob,
+  );
 
   // Generate unique ID
-  const bookId = generateId();
+  const bookId = options.bookId ?? generateId();
 
   // Create Book object
   const book: Book = {
     id: bookId,
     sourceFileId: options.sourceFileId,
-    title: metadata.title || file.name.replace(".epub", ""),
+    title:
+      metadata.title || options.fileName?.replace(/\.epub$/i, "") || "Untitled",
     author: metadata.author || "Unknown Author",
     cover: null,
     dateAdded: new Date().getTime(),
@@ -98,16 +107,14 @@ export async function parseEPUB(
 
   // Create BookFile objects for all content files
   const bookFiles: BookFile[] = [];
-  let fileIdCounter = 0;
-
   for (const [path, content] of Object.entries(unzipped)) {
     // Store all files from the EPUB
     const mediaType = getMediaType(path, manifest);
     bookFiles.push({
-      id: `${bookId}-file-${fileIdCounter++}`,
+      id: `${bookId}:${path}`,
       bookId,
       path,
-      content: new Blob([content.buffer as ArrayBuffer], { type: mediaType }),
+      content: createBlob(content, mediaType),
       mediaType,
     });
   }
@@ -117,6 +124,20 @@ export async function parseEPUB(
     files: bookFiles,
     coverBlob,
   };
+}
+
+function createDerivedBlobFactory(
+  source: Blob,
+): (content: Uint8Array, mediaType: string) => Blob {
+  const BlobConstructor =
+    typeof File !== "undefined" && source instanceof File
+      ? Blob
+      : (source.constructor as typeof Blob);
+
+  return (content, mediaType) =>
+    new BlobConstructor([new Uint8Array(content).buffer as ArrayBuffer], {
+      type: mediaType,
+    }) as Blob;
 }
 
 /**
@@ -167,34 +188,28 @@ function extractMetadata(opfDoc: Document): {
   publicationDate?: string;
 } {
   const metadata: Record<string, string | undefined> = {};
+  const metadataElement = findFirstElement(opfDoc, "metadata");
+  if (!metadataElement) return metadata;
 
   // Title
-  const titleEl = opfDoc.querySelector("metadata title, metadata dc\\:title");
+  const titleEl = findFirstElement(metadataElement, "title");
   metadata.title = titleEl?.textContent?.trim();
 
   // Author/Creator
-  const authorEl = opfDoc.querySelector(
-    "metadata creator, metadata dc\\:creator",
-  );
+  const authorEl = findFirstElement(metadataElement, "creator");
   metadata.author = authorEl?.textContent?.trim();
 
   // Publisher
-  const publisherEl = opfDoc.querySelector(
-    "metadata publisher, metadata dc\\:publisher",
-  );
+  const publisherEl = findFirstElement(metadataElement, "publisher");
   metadata.publisher = publisherEl?.textContent?.trim();
 
   // Language
-  const languageEl = opfDoc.querySelector(
-    "metadata language, metadata dc\\:language",
-  );
+  const languageEl = findFirstElement(metadataElement, "language");
   metadata.language = languageEl?.textContent?.trim();
 
   // ISBN (identifier)
-  const identifiers = opfDoc.querySelectorAll(
-    "metadata identifier, metadata dc\\:identifier",
-  );
-  for (const id of Array.from(identifiers)) {
+  const identifiers = findElements(metadataElement, "identifier");
+  for (const id of identifiers) {
     const scheme = id.getAttribute("opf:scheme") || id.getAttribute("scheme");
     if (scheme?.toLowerCase() === "isbn") {
       metadata.isbn = id.textContent?.trim();
@@ -203,16 +218,28 @@ function extractMetadata(opfDoc: Document): {
   }
 
   // Description
-  const descEl = opfDoc.querySelector(
-    "metadata description, metadata dc\\:description",
-  );
+  const descEl = findFirstElement(metadataElement, "description");
   metadata.description = descEl?.textContent?.trim();
 
   // Publication Date
-  const dateEl = opfDoc.querySelector("metadata date, metadata dc\\:date");
+  const dateEl = findFirstElement(metadataElement, "date");
   metadata.publicationDate = dateEl?.textContent?.trim();
 
   return metadata;
+}
+
+function findFirstElement(
+  root: Document | Element,
+  localName: string,
+): Element | undefined {
+  return findElements(root, localName)[0];
+}
+
+function findElements(root: Document | Element, localName: string): Element[] {
+  return Array.from(root.getElementsByTagName("*")).filter((element) => {
+    const name = element.localName || element.tagName.split(":").at(-1);
+    return name?.toLowerCase() === localName;
+  });
 }
 
 /**
@@ -289,7 +316,15 @@ async function extractTOC(
         "text/html",
       );
 
-      const navElement = navDoc.querySelector('nav[*|type="toc"], nav#toc');
+      const navElement = Array.from(navDoc.getElementsByTagName("nav")).find(
+        (element) =>
+          element.id === "toc" ||
+          Array.from(element.attributes).some(
+            (attribute) =>
+              attribute.name.split(":").at(-1) === "type" &&
+              attribute.value.split(/\s+/).includes("toc"),
+          ),
+      );
       if (navElement) {
         return parseTOCFromNav(navElement, opfPath);
       }
@@ -385,6 +420,7 @@ async function extractCoverInfo(
   opfDoc: Document,
   manifest: ManifestItem[],
   files: Record<string, Uint8Array>,
+  createBlob: (content: Uint8Array, mediaType: string) => Blob,
 ): Promise<{
   coverImagePath?: string;
   coverBlob?: Blob;
@@ -399,9 +435,7 @@ async function extractCoverInfo(
         const coverData = files[coverItem.href];
         return {
           coverImagePath: coverItem.href,
-          coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
-            type: coverItem.mediaType,
-          }),
+          coverBlob: createBlob(coverData, coverItem.mediaType),
         };
       }
     }
@@ -415,9 +449,7 @@ async function extractCoverInfo(
     const coverData = files[coverItem.href];
     return {
       coverImagePath: coverItem.href,
-      coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
-        type: coverItem.mediaType,
-      }),
+      coverBlob: createBlob(coverData, coverItem.mediaType),
     };
   }
 
@@ -434,9 +466,7 @@ async function extractCoverInfo(
       const coverData = files[item.href];
       return {
         coverImagePath: item.href,
-        coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
-          type: item.mediaType,
-        }),
+        coverBlob: createBlob(coverData, item.mediaType),
       };
     }
   }
@@ -449,9 +479,7 @@ async function extractCoverInfo(
     const coverData = files[firstImage.href];
     return {
       coverImagePath: firstImage.href,
-      coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
-        type: firstImage.mediaType,
-      }),
+      coverBlob: createBlob(coverData, firstImage.mediaType),
     };
   }
 
@@ -542,7 +570,12 @@ export async function parseEPUBMetadataOnly(
   const manifest = extractManifest(opfDoc, opfPath);
   const spine = extractSpine(opfDoc);
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
-  const { coverImagePath } = await extractCoverInfo(opfDoc, manifest, unzipped);
+  const { coverImagePath } = await extractCoverInfo(
+    opfDoc,
+    manifest,
+    unzipped,
+    createDerivedBlobFactory(blob),
+  );
 
   return {
     title: metadata.title || "Unknown Title",

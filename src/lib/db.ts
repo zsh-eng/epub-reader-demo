@@ -109,11 +109,19 @@ export interface ReadingSettings {
 
 // Local-only tables (no sync)
 export interface BookFile {
-  id: string; // Primary key (matches Book.id)
+  id: string; // Deterministic primary key derived from bookId and path
   bookId: string; // Foreign key to Book
   path: string; // Path within the EPUB (e.g., "OEBPS/chapter1.xhtml")
   content: Blob; // The actual file content
   mediaType: string;
+}
+
+/** Durable proof that the current source EPUB was expanded completely. */
+export interface BookMaterialization {
+  bookId: string;
+  sourceFileId: FileId;
+  recipeVersion: number;
+  completedAt: number;
 }
 
 /**
@@ -315,6 +323,7 @@ export async function deleteBook(id: string): Promise<void> {
       db.readingState,
       db.notes,
       db.bookFiles,
+      db.bookMaterializations,
       db.bookTextCache,
       db.bookChapterSourceCache,
     ],
@@ -326,6 +335,7 @@ export async function deleteBook(id: string): Promise<void> {
       await db.readingState.where("bookId").equals(id).delete();
       await db.notes.where("bookId").equals(id).delete();
       await db.bookFiles.where("bookId").equals(id).delete();
+      await db.bookMaterializations.delete(id);
       await db.bookTextCache.delete(id);
       await db.bookChapterSourceCache.delete(id);
     },
@@ -363,6 +373,55 @@ export async function getBookFiles(bookId: string): Promise<BookFile[]> {
 
 export async function hasBookFiles(bookId: string): Promise<boolean> {
   return (await db.bookFiles.where("bookId").equals(bookId).count()) > 0;
+}
+
+export async function getBookMaterialization(
+  bookId: string,
+): Promise<BookMaterialization | undefined> {
+  return db.bookMaterializations.get(bookId);
+}
+
+/**
+ * Replace all source-derived local rows and write the completion marker last.
+ * The transaction makes partial extraction indistinguishable from no result.
+ */
+export async function replaceBookMaterialization(options: {
+  book: Book;
+  bookFiles: BookFile[];
+  recipeVersion: number;
+  writeBook: boolean;
+}): Promise<void> {
+  const { book, bookFiles, recipeVersion, writeBook } = options;
+
+  await db.transaction(
+    "rw",
+    [
+      db.books,
+      db.bookFiles,
+      db.bookMaterializations,
+      db.bookTextCache,
+      db.bookChapterSourceCache,
+    ],
+    async () => {
+      await db.bookFiles.where("bookId").equals(book.id).delete();
+      await db.bookTextCache.delete(book.id);
+      await db.bookChapterSourceCache.delete(book.id);
+
+      if (bookFiles.length > 0) {
+        await db.bookFiles.bulkPut(bookFiles);
+      }
+      if (writeBook) {
+        await db.books.put({ ...book, isDeleted: false });
+      }
+
+      await db.bookMaterializations.put({
+        bookId: book.id,
+        sourceFileId: book.sourceFileId,
+        recipeVersion,
+        completedAt: Date.now(),
+      });
+    },
+  );
 }
 
 export async function getBookFilesByPaths(

@@ -6,6 +6,7 @@ import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
+import { useLocalBookPreparationRepair } from "@/hooks/use-local-book-preparation-repair";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { useSearchStickyState } from "@/hooks/use-search-sticky-state";
 import { useSync } from "@/hooks/use-sync";
@@ -155,8 +156,11 @@ export function Library() {
     () => [...continueReadingBooks, ...allBooks],
     [allBooks, continueReadingBooks],
   );
-  const { coverUrls, initialCoversReady, requestCover } =
-    useLibraryCoverUrls(displayedBooks);
+  const { coverUrls, initialCoversReady, requestCover } = useLibraryCoverUrls(
+    displayedBooks,
+    { loadRemainingInBackground: true },
+  );
+  useLocalBookPreparationRepair(displayedBooks, initialCoversReady);
   const hasAnyBooks = continueReadingBooks.length > 0 || allBooks.length > 0;
   const booksLoaded = booksData !== undefined;
   const [fontsReady, setFontsReady] = useState(

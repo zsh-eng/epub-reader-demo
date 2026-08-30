@@ -1,10 +1,6 @@
+import { prepareBook, prepareNewBook } from "@/lib/book-preparation";
 import type { Book } from "@/lib/db";
-import {
-  addBookWithFiles,
-  deleteBook,
-  getAllBooks,
-  getBookBySourceFileId,
-} from "@/lib/db";
+import { deleteBook, getAllBooks, getBookBySourceFileId } from "@/lib/db";
 import { parseEPUB } from "@/lib/epub-parser";
 import { files } from "@/lib/files";
 
@@ -34,27 +30,20 @@ export async function addBookFromFile(file: File): Promise<Book> {
     });
     const existingBook = await getBookBySourceFileId(sourceFileId);
     if (existingBook) {
+      const prepared = await prepareBook(existingBook, file);
       throw new DuplicateBookError(
         "A book with this file already exists in your library",
-        existingBook,
+        prepared.book,
       );
     }
 
-    const {
-      book,
-      files: bookFiles,
-      coverBlob,
-    } = await parseEPUB(file, {
+    const parsedEpub = await parseEPUB(file, {
       sourceFileId,
+      fileName: file.name,
     });
 
-    if (coverBlob) {
-      const coverFileId = await files.put(coverBlob);
-      book.cover = { fileId: coverFileId, blurHash: null };
-    }
-
-    await addBookWithFiles(book, bookFiles);
-    return book;
+    const prepared = await prepareNewBook(parsedEpub);
+    return prepared.book;
   } catch (error) {
     // Re-throw DuplicateBookError as-is
     if (error instanceof DuplicateBookError) {

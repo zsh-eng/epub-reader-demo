@@ -7,6 +7,9 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    exclude: ["@jsquash/webp"],
+  },
   plugins: [
     react({
       babel: {
@@ -21,6 +24,11 @@ export default defineConfig({
       },
       workbox: {
         navigateFallbackDenylist: [/^\/api\//],
+        globIgnores: [
+          "**/assets/encode-*.js",
+          "**/assets/webp_enc*.js",
+          "**/assets/webp_enc*.wasm",
+        ],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

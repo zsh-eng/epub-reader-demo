@@ -65,11 +65,7 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
         for (const file of epubFiles) {
           try {
             const importedBook = await addBookFromFile(file);
-            markEpubPreparationReady(
-              queryClient,
-              importedBook.id,
-              importedBook.sourceFileId,
-            );
+            markEpubPreparationReady(queryClient, importedBook);
             successCount += 1;
           } catch (error) {
             console.error("Error adding book:", error);

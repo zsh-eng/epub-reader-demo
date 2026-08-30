@@ -1,6 +1,6 @@
 # New Files Implementation Plan
 
-**Status**: In progress — server, client, and Book reference changes complete
+**Status**: In progress — steps 1 through 4 complete
 
 **Last updated**: 2026-08-30
 
@@ -357,6 +357,8 @@ confirm that a representative Book remains far below the value limit.
 
 ### 4. Update EPUB import, materialization, covers, and loading
 
+**Implementation status**: Complete.
+
 Keep one deterministic application flow. Do not persist a multi-stage status
 machine. Derive the next action from the Book, local file, materialization
 marker, and reader cache that exist.
@@ -373,10 +375,9 @@ files.put(original EPUB)
   -> receive sourceFileId
   -> return the existing Book when sourceFileId already exists
   -> parse and unzip the EPUB
-  -> write the local EPUB materialization
   -> create the 480 px WebP and 4 by 3 BlurHash
   -> files.put(WebP) and receive cover fileId
-  -> write the synchronized Book
+  -> write the synchronized Book, extracted entries, and completion marker
 ```
 
 The cover recipe is fixed:
@@ -406,9 +407,9 @@ Use this derived sequence:
 4. Required local facts present   -> open the Book
 ```
 
-Expose this through one application operation such as `prepareBook(book)`. The
-operation can combine steps 2 and 3 internally. Its caller does not manage
-intermediate states.
+Expose the first two steps through `prepareBook(book)`. The setting-dependent
+Reader source cache remains the separate first-open step. Its caller does not
+manage extraction states.
 
 In the normal import path, write the optimized cover file, BlurHash, and Book
 metadata together before the Book can sync. Older Book values can have a null
@@ -426,10 +427,11 @@ export interface BookMaterialization {
 }
 ```
 
-Write extracted entries and normalized chapter sources deterministically. Write
-the completion marker last, in the same transaction as the final materialized
-data. A failure leaves no valid marker, and the next call replaces partial
-output. Do not infer completion from the presence of one extracted row.
+Write extracted entries deterministically. Write the completion marker last, in
+the same transaction as the final extracted rows. A failure leaves no valid
+marker, and the next call replaces partial output. Do not infer completion from
+the presence of one extracted row. Build the normalized Reader source cache
+separately on first open because its contents depend on Reader settings.
 
 Expanded EPUB entries, normalized HTML, fonts, and reader caches remain local.
 Do not upload them through the files API.

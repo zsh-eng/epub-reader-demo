@@ -1,5 +1,6 @@
 import { BookCardActions } from "@/components/BookCardActions";
 import { READING_STATUS_LABELS } from "@/components/BookStatusSheet";
+import { BlurHashCanvas } from "@/components/BlurHashCanvas";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
 import type { Book, ReadingStatus } from "@/lib/db";
@@ -20,9 +21,11 @@ interface BookCardProps {
 // Extracted visual component for the book cover (used in both normal and preview state)
 function BookCoverVisual({
   coverUrl,
+  blurHash,
   title,
 }: {
   coverUrl: string | undefined;
+  blurHash: string | null;
   title: string;
 }) {
   return (
@@ -43,6 +46,11 @@ function BookCoverVisual({
             draggable={false}
             className="pointer-events-none absolute inset-0 block h-full w-full select-none object-cover"
             loading="eager"
+          />
+        ) : blurHash ? (
+          <BlurHashCanvas
+            blurHash={blurHash}
+            className="absolute inset-0 size-full"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center bg-secondary p-4 text-center">
@@ -170,7 +178,11 @@ export function BookCard({
           className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
         >
           <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02] [@media(hover:hover)_and_(pointer:fine)]:group-data-[popup-open]:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-data-[popup-open]:scale-[1.02]">
-            <BookCoverVisual coverUrl={coverUrl} title={book.title} />
+            <BookCoverVisual
+              coverUrl={coverUrl}
+              blurHash={book.cover?.blurHash ?? null}
+              title={book.title}
+            />
           </div>
         </div>
 

@@ -59,6 +59,68 @@ test.describe("Library", () => {
     await expect(
       page.getByRole("heading", { name: /Alice.*Adventures.*Wonderland/i }),
     ).toBeVisible();
+
+    const artifacts = await page.evaluate(async () => {
+      const readRequest = <T>(request: IDBRequest<T>) =>
+        new Promise<T>((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+      const database = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("epub-reader-db-v2");
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+      const transaction = database.transaction(
+        ["books", "files", "bookFiles", "bookMaterializations"],
+        "readonly",
+      );
+      const [books, localFiles, expandedFiles, materializations] =
+        (await Promise.all([
+          readRequest(transaction.objectStore("books").getAll()),
+          readRequest(transaction.objectStore("files").getAll()),
+          readRequest(transaction.objectStore("bookFiles").getAll()),
+          readRequest(transaction.objectStore("bookMaterializations").getAll()),
+        ])) as Record<string, unknown>[][];
+      database.close();
+
+      const book = books.find((row) => row.isDeleted !== true);
+      if (!book) throw new Error("Imported Book row was not stored");
+      const cover = book.cover as {
+        fileId: string;
+        blurHash: string | null;
+      } | null;
+      if (!cover) throw new Error("Imported Book has no cover reference");
+      const localCover = localFiles.find((row) => row.id === cover.fileId);
+      if (!localCover) throw new Error("Optimized cover file was not stored");
+      const coverBlob = localCover.blob as Blob;
+      const bitmap = await createImageBitmap(coverBlob);
+      const marker = materializations.find((row) => row.bookId === book.id);
+
+      const result = {
+        sourceFileId: book.sourceFileId,
+        blurHash: cover.blurHash,
+        coverType: coverBlob.type,
+        coverSize: coverBlob.size,
+        coverWidth: bitmap.width,
+        coverHeight: bitmap.height,
+        expandedFileCount: expandedFiles.filter((row) => row.bookId === book.id)
+          .length,
+        materializedSourceFileId: marker?.sourceFileId,
+        materializationRecipeVersion: marker?.recipeVersion,
+      };
+      bitmap.close();
+      return result;
+    });
+
+    expect(artifacts.coverType).toBe("image/webp");
+    expect(artifacts.coverSize).toBeGreaterThan(0);
+    expect(artifacts.coverWidth).toBe(480);
+    expect(artifacts.coverHeight).toBeGreaterThan(0);
+    expect(artifacts.blurHash).toHaveLength(28);
+    expect(artifacts.expandedFileCount).toBeGreaterThan(0);
+    expect(artifacts.materializedSourceFileId).toBe(artifacts.sourceFileId);
+    expect(artifacts.materializationRecipeVersion).toBe(1);
   });
 
   test("should search books by title", async ({ page }) => {

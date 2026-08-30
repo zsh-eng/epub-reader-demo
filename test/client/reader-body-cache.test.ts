@@ -264,6 +264,12 @@ describe("reader body cache", () => {
       sourceFileId: SOURCE_FILE_DELETE,
     });
     await addBookWithFiles(book, []);
+    await db.bookMaterializations.put({
+      bookId: book.id,
+      sourceFileId: book.sourceFileId,
+      recipeVersion: 1,
+      completedAt: Date.now(),
+    });
     await putBookChapterSourceCache(
       book.id,
       book.sourceFileId,
@@ -283,5 +289,6 @@ describe("reader body cache", () => {
     await deleteBook(book.id);
 
     expect(await getBookChapterSourceCache(book.id)).toBeUndefined();
+    expect(await db.bookMaterializations.get(book.id)).toBeUndefined();
   });
 });

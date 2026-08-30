@@ -63,7 +63,7 @@ export async function prefetchReaderBook(
 
   if (chapterEntries.length === 0) return;
 
-  await ensureEpubPreparationReady(queryClient, book.id, book.sourceFileId);
+  const preparedBook = await ensureEpubPreparationReady(queryClient, book);
 
   const bodyCacheKey = readerBodyCacheKeys.book(
     book.id,
@@ -74,7 +74,7 @@ export async function prefetchReaderBook(
   const checkpointKey = readerCheckpointKeys.currentDevice(book.id);
   const highlightsKey = highlightKeys.book(book.id);
 
-  queryClient.setQueryData(bookKeys.detail(book.id), book);
+  queryClient.setQueryData(bookKeys.detail(book.id), preparedBook);
 
   await Promise.all([
     queryClient.prefetchQuery({

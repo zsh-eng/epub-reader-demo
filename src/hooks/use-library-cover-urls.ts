@@ -108,12 +108,14 @@ interface UseLibraryCoverUrlsResult {
 
 /**
  * Prepares the first visible cover group as one presentation unit. The first
- * two rows can use local storage or the network. Later covers load when their
- * cards approach the viewport.
+ * two rows can use local storage or the network. Later covers load near the
+ * viewport, or sequentially when the Library enables background loading.
  */
 export function useLibraryCoverUrls(
   books: readonly Book[],
+  options: { loadRemainingInBackground?: boolean } = {},
 ): UseLibraryCoverUrlsResult {
+  const loadRemainingInBackground = options.loadRemainingInBackground ?? false;
   const [initialCoverLimit] = useState(getInitialCoverLimit);
   const initialBooks = useMemo(
     () => books.slice(0, initialCoverLimit),
@@ -162,6 +164,41 @@ export function useLibraryCoverUrls(
       cancelled = true;
     };
   }, [initialBooks, initialKey]);
+
+  useEffect(() => {
+    if (!loadRemainingInBackground) return;
+    if (preparedKey !== initialKey) return;
+
+    let cancelled = false;
+    void (async () => {
+      for (const book of books.slice(initialCoverLimit)) {
+        if (cancelled) return;
+
+        const fileId = getBookCoverFileId(book);
+        if (!fileId) continue;
+
+        const url = await loadDecodedCoverUrl(fileId);
+        if (cancelled || !url) continue;
+
+        setCoverUrls((current) => {
+          if (current.get(book.id) === url) return current;
+          const next = new Map(current);
+          next.set(book.id, url);
+          return next;
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    books,
+    initialCoverLimit,
+    initialKey,
+    loadRemainingInBackground,
+    preparedKey,
+  ]);
 
   const requestCover = useCallback((book: Book) => {
     const fileId = getBookCoverFileId(book);

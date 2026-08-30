@@ -5,6 +5,7 @@ import {
   SYNC_V2_VERSION_1_STORES,
   SYNC_V2_VERSION_2_STORES,
   SYNC_V2_VERSION_3_STORES,
+  SYNC_V2_VERSION_4_STORES,
 } from "@/lib/sync-v2/db";
 import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import { decodeSyncValue, encodeSyncKey } from "@/lib/sync-v2/protocol";
@@ -107,6 +108,23 @@ describe("sync v2 database schema", () => {
       await migratedDb.bookChapterSourceCache.get("book-files"),
     ).toBeUndefined();
     migratedDb.close();
+  });
+
+  it("adds the local materialization marker table in version 5", async () => {
+    resetIndexedDB();
+    const versionFourDb = new Dexie(DATABASE_NAME);
+    versionFourDb.version(4).stores(SYNC_V2_VERSION_4_STORES);
+    await versionFourDb.open();
+    versionFourDb.close();
+
+    const currentDb = new EPUBReaderSyncV2DB(DATABASE_NAME);
+    await currentDb.open();
+
+    expect(currentDb.tables.map((table) => table.name)).toContain(
+      "bookMaterializations",
+    );
+    expect(await currentDb.bookMaterializations.count()).toBe(0);
+    currentDb.close();
   });
 
   it("queues migrated Books so the opaque synchronized value is replaced", async () => {

@@ -8,6 +8,7 @@ import type {
   Book,
   BookChapterSourceCache,
   BookFile,
+  BookMaterialization,
   BookTextCache,
   ReadingCheckpoint,
   ReadingSession,
@@ -84,6 +85,13 @@ const SYNC_V2_CURRENT_SHARED_STORES = {
 } as const;
 
 export const SYNC_V2_STORES = {
+  ...SYNC_V2_CURRENT_SHARED_STORES,
+  files: "id, remotePresent, storedAt",
+  fileUploadOperations: "id, createdAt",
+  bookMaterializations: "bookId, sourceFileId, recipeVersion",
+} as const;
+
+export const SYNC_V2_VERSION_4_STORES = {
   ...SYNC_V2_CURRENT_SHARED_STORES,
   files: "id, remotePresent, storedAt",
   fileUploadOperations: "id, createdAt",
@@ -237,6 +245,7 @@ export class EPUBReaderSyncV2DB extends Dexie {
   notes!: Table<SyncV2Note, string>;
 
   bookFiles!: Table<BookFile, string>;
+  bookMaterializations!: Table<BookMaterialization, string>;
   files!: Table<LocalFile, FileId>;
   fileUploadOperations!: Table<FileUploadOperation, FileId>;
   bookTextCache!: Table<BookTextCache, string>;
@@ -258,6 +267,9 @@ export class EPUBReaderSyncV2DB extends Dexie {
     this.version(4)
       .stores({ books: SYNC_V2_STORES.books })
       .upgrade(migrateBooksV4);
+    this.version(5).stores({
+      bookMaterializations: SYNC_V2_STORES.bookMaterializations,
+    });
   }
 }
 
