@@ -2,6 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   unique,
@@ -46,55 +47,33 @@ export const userDeviceRelations = relations(userDevice, ({ one }) => ({
 }));
 
 /**
- * Generic file storage table for managing uploaded files.
- * Stores metadata and R2 references for any type of file.
+ * User-scoped catalog for opaque files stored in R2.
+ *
+ * Domain roles such as EPUB and cover stay in synchronized application data.
+ * The catalog identifies files only by their content-derived FileId.
  */
 export const fileStorage = sqliteTable(
   "file_storage",
   {
-    id: text("id").primaryKey(), // UUID generated server-side
+    id: text("id").notNull(), // xxh64:<16 lowercase hexadecimal characters>
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-
-    // Content hash - the canonical identifier for the file content
-    contentHash: text("content_hash").notNull(), // xxhash64 hex
-
-    // File type identifier (e.g., 'epub', 'cover', 'pdf', etc.)
-    fileType: text("file_type").notNull(),
-
-    // R2 storage key
     r2Key: text("r2_key").notNull(),
-
-    // File metadata
-    fileName: text("file_name"),
     fileSize: integer("file_size").notNull(),
-    mimeType: text("mime_type").notNull(),
-
-    // Additional metadata (JSON blob for flexibility)
-    metadata: text("metadata", { mode: "json" }).$type<{
-      [key: string]: unknown;
-    }>(),
-
-    // Timestamps
+    mediaType: text("media_type").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
-      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
-      .notNull(),
-    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }), // soft delete
+    deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
   (t) => [
-    // Prevent duplicate files per user and type
-    unique("user_content_hash_type_unique").on(
+    primaryKey({ columns: [t.userId, t.id] }),
+    index("file_storage_user_active_created_idx").on(
       t.userId,
-      t.contentHash,
-      t.fileType,
+      t.deletedAt,
+      t.createdAt,
     ),
-    // Index for efficient queries
-    index("idx_files_user_updated").on(t.userId, t.updatedAt),
-    index("idx_files_user_content_hash").on(t.userId, t.contentHash),
   ],
 );
 

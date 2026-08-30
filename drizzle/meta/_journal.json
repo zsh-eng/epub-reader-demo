@@ -57,6 +57,13 @@
       "when": 1788022118058,
       "tag": "0007_curved_gauntlet",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788056273883,
+      "tag": "0008_new_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }

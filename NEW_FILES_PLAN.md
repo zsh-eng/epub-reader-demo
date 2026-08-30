@@ -1,6 +1,6 @@
 # New Files Implementation Plan
 
-**Status**: Proposed
+**Status**: In progress — server files API complete
 
 **Last updated**: 2026-08-30
 
@@ -155,11 +155,85 @@ These problems require a contract and schema migration, not a second long-lived
 files table. D1 may use a temporary table internally when it changes the
 primary key, but the resulting logical table remains `file_storage`.
 
-## Proposed implementation order
+## System boundary
 
-### 1. Freeze the public files contract
+The generic files system knows only about opaque binary files:
 
-Add an opaque TypeScript ID and one small public service:
+- Calculate and validate `FileId` values.
+- Store bytes locally.
+- Upload and download bytes.
+- List local and remote files.
+- Delete a remote file when explicitly requested.
+- Deduplicate concurrent work for the same `FileId`.
+
+The EPUB application owns all domain behavior:
+
+- Decide that an EPUB and a generated cover are files.
+- Store file references in a Book.
+- Unzip an EPUB and build its local materialization.
+- Generate the 480 px WebP and BlurHash.
+- Decide which covers or EPUBs to fetch first.
+- Build reader caches.
+
+The files system must not know about Books, EPUBs, covers, BlurHash,
+materialization, Continue Reading, or Library visibility.
+
+## Implementation plan
+
+### 1. Add server migrations and generic endpoints
+
+**Implementation status**: Complete.
+
+Migrate the existing D1 `file_storage` table in place. Do not add a long-lived
+`files_v2` table. Remove `fileType` from file identity and use one opaque ID:
+
+```text
+file_storage
+  id           TEXT NOT NULL
+  user_id      TEXT NOT NULL
+  r2_key       TEXT NOT NULL
+  file_size    INTEGER NOT NULL
+  media_type   TEXT NOT NULL
+  created_at   INTEGER NOT NULL
+  deleted_at   INTEGER
+
+  PRIMARY KEY(user_id, id)
+```
+
+Add these generic routes:
+
+```text
+PUT    /api/files/:fileId
+GET    /api/files/:fileId
+GET    /api/files
+DELETE /api/files/:fileId
+```
+
+Keep a thin compatibility bridge for the current client until steps 2 and 3
+move all call sites to opaque `FileId` values. The bridge maps the old digest
+to `xxh64:<digest>` and does not persist `fileType`. Remove it in step 5.
+
+Server requirements:
+
+- Authenticate every request.
+- Recalculate xxHash during upload and require it to match `fileId`.
+- Use user-scoped R2 keys. Do not deduplicate across users.
+- Make repeated uploads of the same file idempotent.
+- Revive a soft-deleted row when the user uploads the file again.
+- List only the current user's active files.
+- Delete a file without inspecting synchronized Book values.
+- Return immutable cache headers for downloaded bytes.
+
+The migration must preserve existing R2 objects. It can rewrite catalog rows
+without copying file bytes. Merge legacy type-specific rows only when their
+bytes have the same xxHash.
+
+Add integration tests for upload, hash rejection, idempotent upload, download,
+inventory, deletion, re-upload, and user isolation.
+
+### 2. Add the client files API and replace the manager
+
+Add one generic client contract:
 
 ```ts
 declare const fileIdBrand: unique symbol;
@@ -179,40 +253,54 @@ export interface Files {
 }
 ```
 
-Contract details:
+`put()` is a local operation. It calculates xxHash, stores the Blob, records
+upload intent, and resolves without waiting for the network. Store the Blob and
+upload intent in one Dexie transaction.
 
-- `put()` calculates xxHash internally and returns the same ID for the same
-  bytes.
-- The server recalculates xxHash for every upload and rejects an ID that does
-  not match the uploaded bytes.
-- `put()` atomically stores the local Blob and records an upload operation.
-- `get()` returns the local Blob or performs one foreground download.
-- Concurrent `get()` or `ensureLocal()` calls for one ID share one promise.
-- A completed download remains local.
-- A remote deletion leaves local bytes untouched.
-- A later explicit `put()` can publish previously deleted bytes again.
-- Callers can run bounded batches, but the service has no domain priority.
+Migrate the existing local `files` table in place. Add only the local state
+that the new implementation needs:
 
-Write focused contract tests before replacing existing call sites.
+```ts
+export interface LocalFile {
+  id: FileId;
+  blob: Blob;
+  mediaType: string;
+  size: number;
+  storedAt: number;
+  remotePresent: boolean;
+}
 
-### 2. Keep binary data out of sync
+export interface FileUploadOperation {
+  id: FileId;
+  createdAt: number;
+  retryCount: number;
+  lastFailure:
+    | { kind: "none" }
+    | { kind: "failed"; message: string; failedAt: number };
+}
+```
 
-Do not change `MAX_SYNC_VALUE_BYTES`, `MAX_SYNC_KEY_BYTES`, or the server sync
-schema for this plan.
+Manager behavior:
 
-Add application serialization tests that require:
+- `get()` returns local bytes or downloads and stores them.
+- `ensureLocal()` uses the same download path as `get()`.
+- Concurrent work for one `FileId` shares one promise.
+- A successful upload sets `remotePresent = true` and removes its upload
+  operation in one transaction.
+- Failed foreground downloads retry when the next caller requests the file.
+- The upload worker resumes after authentication or reconnect.
+- Remote deletion does not delete local bytes.
+- There is no persistent download queue, numeric priority, pinning, eviction,
+  or last-access policy.
+- Callers choose order by awaiting `ensureLocal()` or `get()`.
 
-- No base64 value or data URL appears anywhere in serialized Book data.
-- A representative Book with a file cover stays far below 64 KiB.
-- The existing generic sync size checks continue to reject values above their
-  current limit.
+Write contract tests for local `put()`, deduplication, reload-safe upload
+intent, local-first `get()`, concurrent download sharing, reconnect upload,
+inventory, and remote deletion.
 
-The files plan must not depend on larger sync batches or larger D1 value rows.
-General sync batching work remains part of the sync engine plan.
+### 3. Migrate Book logic to the files API
 
-### 3. Replace Book file fields with explicit references
-
-Use a discriminated cover value so a Book always has an explicit cover state:
+Replace file hashes and download state with opaque references:
 
 ```ts
 export type BookCoverRef =
@@ -243,171 +331,77 @@ coverContentHash -> cover.fileId
 isDownloaded     -> remove
 ```
 
-Do not add a synchronized `bookCovers` table. The Book value contains only the
-small reference, dimensions, recipe version, and BlurHash. It never contains
-the WebP bytes.
+Do not add a synchronized `bookCovers` table. A Book contains the source file
+reference and the small cover description. It never contains EPUB bytes, WebP
+bytes, base64, or a data URL.
 
-### 4. Build the WebP and BlurHash cover pipeline
+Update Book operations to use the new API:
 
-Implement an application-level `createBookCover()` function. It is not part of
-the generic files service.
+- Deduplicate an import by `sourceFileId`.
+- Read cover bytes with `files.get(book.cover.fileId)`.
+- Read source bytes with `files.get(book.sourceFileId)`.
+- Treat a missing file as a file-fetch concern, not as synchronized Book state.
+- Remove all Book and reader knowledge of hashes, file types, upload tasks, and
+  download tasks.
 
-Initial recipe:
+Migrate existing local and synchronized Book rows. Preserve the existing
+xxHash value as the opaque source `FileId`. Generate the new cover reference in
+step 4. Do not change the 64 KiB sync value limit or the 1 KiB key limit.
 
-1. Decode the extracted EPUB cover Blob.
-2. Preserve aspect ratio and resize to a maximum width of 480 px.
-3. Read a small pixel buffer and encode a 4 by 3 component BlurHash.
-4. Encode WebP at quality 0.8.
-5. Confirm that the returned MIME type is `image/webp`.
-6. Use a WebP WASM encoder only when native WebP encoding is unavailable.
-7. Call `files.put(webpBlob)` and receive an opaque `FileId`.
-8. Return the complete `BookCoverRef`.
+Add serialization tests that reject base64 or data URLs in Book values and
+confirm that a representative Book remains far below the value limit.
 
-Use the standard BlurHash encoder and decoder package. Do not implement a
-project-specific BlurHash codec.
+### 4. Update EPUB import, materialization, covers, and loading
 
-Use `OffscreenCanvas` when the runtime supports the complete decode, draw, and
-encode path. Keep an `HTMLCanvasElement` fallback. First profile the native
-path. Move it to a Worker only if import work blocks visible interaction.
+Keep one deterministic application flow. Do not persist a multi-stage status
+machine. Derive the next action from the Book, local file, materialization
+marker, and reader cache that exist.
 
-Add fixtures that cover:
-
-- Large JPEG input.
-- PNG input.
-- Portrait and landscape input.
-- Native WebP success.
-- Native WebP MIME mismatch and WASM fallback.
-- Fixed 480 px and quality 0.8 recipe for an unusually complex image.
-- Deterministic BlurHash shape and successful decode.
-- Image decode failure.
-
-Do not assert byte-for-byte WebP output because browser encoders can differ.
-Assert dimensions, requested quality, MIME type, BlurHash validity, and
-successful image decode.
-
-### 5. Evolve the local files table and replace the transfer queue
-
-Keep the existing `files` object store and migrate its rows in the next Dexie
-schema version. Do not create a parallel file store. Replace `StoredFile`,
-`FileType`, and the priority-based transfer queue with explicit local records:
-
-```ts
-export interface LocalFile {
-  id: FileId;
-  blob: Blob;
-  mediaType: string;
-  size: number;
-  storedAt: number;
-  remotePresent: boolean;
-}
-
-export interface FileUploadOperation {
-  id: FileId;
-  createdAt: number;
-  retryCount: number;
-  lastFailure:
-    | { kind: "none" }
-    | { kind: "failed"; message: string; failedAt: number };
-}
-```
-
-Rules:
-
-- The `files` and `fileUploadOperations` tables are local-only.
-- `put()` writes the file and upload operation in one transaction.
-- If the same ID is already local, retain one Blob.
-- If the existing row is known to be remote, do not enqueue another upload.
-- A successful upload sets `remotePresent = true` and removes its operation in
-  one transaction.
-- `get()` downloads directly when the Blob is absent, stores it with
-  `remotePresent = true`, and returns it.
-- Failed foreground downloads are retried by the next caller. They do not need
-  a persistent download queue.
-- The upload worker resumes after authentication and reconnect.
-- `deleteRemote()` marks a retained local row as not remote and removes any
-  pending upload operation in one local transaction.
-- The service does not scan remote inventory and recreate uploads for local
-  rows after an explicit remote deletion.
-
-Keep local-size and inventory helpers. Remove last-accessed, pinning, eviction,
-and numeric priority concepts.
-
-### 6. Evolve the remote files API and catalog
-
-Migrate the current D1 `file_storage` catalog instead of creating `files_v2`.
-The generic catalog must not contain application roles such as `epub` or
-`cover`.
-
-Suggested catalog:
-
-```text
-file_storage
-  id           TEXT NOT NULL
-  user_id      TEXT NOT NULL
-  r2_key       TEXT NOT NULL
-  file_size    INTEGER NOT NULL
-  media_type   TEXT NOT NULL
-  created_at   INTEGER NOT NULL
-  deleted_at   INTEGER
-
-  PRIMARY KEY(user_id, id)
-```
-
-Suggested endpoints:
-
-```text
-PUT    /api/files/:fileId
-GET    /api/files/:fileId
-GET    /api/files
-DELETE /api/files/:fileId
-```
-
-Server rules:
-
-- Authenticate every request.
-- Recalculate xxHash during upload and require it to match `fileId`.
-- Write the R2 object before inserting the active catalog record.
-- Treat the same user and file ID as an idempotent upload.
-- Revive and update the existing row when the user explicitly uploads a file
-  that they previously deleted remotely.
-- Return immutable cache headers for downloads.
-- List only the current user's active records.
-- Delete without inspecting opaque synchronized Book values.
-- A failed D1 insert can leave an unreferenced R2 object. Inventory repair can
-  remove such objects later.
-
-Use user-scoped R2 keys. Do not add cross-user deduplication.
-
-### 7. Convert EPUB import
-
-Use this import flow:
+#### New EPUB import
 
 ```text
 files.put(original EPUB)
-  -> get opaque sourceFileId
-  -> find active Book by sourceFileId
-  -> return the existing Book when found
-  -> parse EPUB metadata when new
-  -> create 480 px WebP, BlurHash, and cover FileId
-  -> store the Book domain row
-  -> materialize the EPUB locally
+  -> receive sourceFileId
+  -> return the existing Book when sourceFileId already exists
+  -> parse and unzip the EPUB
+  -> write the local EPUB materialization
+  -> create the 480 px WebP and 4 by 3 BlurHash
+  -> files.put(WebP) and receive cover fileId
+  -> write the synchronized Book
 ```
 
-The EPUB import service must not call upload routes, build transfer tasks, or
-handle content hashes. `files.put()` owns those actions.
+The cover recipe is fixed:
 
-Create the Book after parsing and cover processing succeed. Both files are
-already durable locally at that point. A later Book write failure can leave
-unreferenced local files; `listLocal()` makes that state visible.
+1. Decode the EPUB cover.
+2. Preserve aspect ratio and resize to a maximum width of 480 px.
+3. Generate a 4 by 3 component BlurHash from a small pixel buffer.
+4. Encode WebP at quality 0.8.
+5. Require the result MIME type to be `image/webp`.
+6. Use a lazy WebP WASM fallback only when native encoding is unavailable.
 
-Reimporting the same EPUB returns the existing Book before it creates another
-cover derivative. Re-encoding a cover in a future recipe creates a new
-`FileId`, updates the Book reference, and leaves the old file available for
-explicit cleanup.
+`createBookCover()` is application code. It calls `files.put()` for the final
+WebP but the generic files API does not know that the Blob is a cover.
 
-### 8. Add deterministic local EPUB materialization
+Do not require byte-identical WebP output in tests. Test the dimensions,
+quality request, MIME type, BlurHash validity, successful decode, and native
+encoder fallback.
 
-Add a local-only completion table:
+#### Open a Book on any client
+
+Use this derived sequence:
+
+```text
+1. Source file absent locally     -> files.get(sourceFileId)
+2. Materialization marker absent  -> unzip and materialize
+3. Reader cache absent            -> build the first-open cache
+4. Required local facts present   -> open the Book
+```
+
+Expose this through one application operation such as `prepareBook(book)`. The
+operation can combine steps 2 and 3 internally. Its caller does not manage
+intermediate states.
+
+The materialization marker is local-only:
 
 ```ts
 export interface BookMaterialization {
@@ -418,166 +412,76 @@ export interface BookMaterialization {
 }
 ```
 
-Expose one EPUB-specific operation:
+Write extracted entries and normalized chapter sources deterministically. Write
+the completion marker last, in the same transaction as the final materialized
+data. A failure leaves no valid marker, and the next call replaces partial
+output. Do not infer completion from the presence of one extracted row.
 
-```ts
-ensureBookMaterialized(book: Book): Promise<void>;
-```
+Expanded EPUB entries, normalized HTML, fonts, and reader caches remain local.
+Do not upload them through the files API.
 
-Algorithm:
+#### Load the Library
 
-1. Read the marker.
-2. Return when `sourceFileId` and `recipeVersion` match.
-3. Call `files.get(sourceFileId)`.
-4. Extract the EPUB.
-5. Write deterministic per-path entries and normalized chapter-source data.
-6. Write the completion marker last in the same transaction.
+The application controls file request order:
 
-A failure leaves no valid marker. The next call replaces partial data and
-retries. Do not use “at least one `bookFiles` row exists” as the readiness test.
+1. Complete the initial Book metadata sync.
+2. Fetch and decode covers for the initial visible Library group.
+3. Reveal the Library when that group is ready.
+4. Fetch remaining covers in a bounded background loop.
+5. Show the BlurHash only during an unavoidable missing-file or failure
+   interval.
 
-The first implementation can keep separate physical tables for raw expanded
-entries and normalized chapter sources. The caller sees one materialization
-operation. Settings-dependent highlights and pagination artifacts remain
-runtime reader work.
+After the Library is usable, prepare the most recent Continue Reading Book,
+then other Continue Reading Books. The application can then mirror other remote
+files in bounded batches. Do not use numeric download priorities or an
+unbounded `Promise.all()`.
 
-Do not add remote materialization or remotely expanded EPUB entries. Revisit
-random-access ZIP extraction only after measuring the new cold-open path.
+Local files and materializations are durable. Do not evict them automatically.
 
-### 9. Make Library cover startup explicit
+### 5. Cut over and remove old code
 
-The application, not the generic files service, owns cover sequencing.
+Use one coordinated personal-app cutover:
 
-Startup flow:
+1. Back up D1 and record the active file inventory.
+2. Dry-run the server catalog and Book data migrations and inspect their
+   deterministic reports.
+3. Migrate `file_storage` and deploy the new server endpoints.
+4. Deploy the local schema, files API, Book model, and EPUB application flow.
+5. Migrate existing covers to 480 px WebP and generate their BlurHashes.
+6. Bootstrap a clean browser profile and verify local-first and cold-client
+   behavior.
 
-1. Complete the initial key-value bootstrap for Books, statuses, checkpoints,
-   and other domain rows.
-2. Resolve the cover files for the initial visible Library group.
-3. Create object URLs and wait for those WebP images to decode.
-4. Reveal the Library after the visible group is ready.
-5. Start bounded background downloads for the remaining cover files.
-6. Use the BlurHash when a later card becomes visible before its file is ready,
-   or when a file is missing or fails to load.
-7. Replace the BlurHash with the WebP after download and decode complete.
-8. Revoke object URLs when their owning cache entries are released.
+Verify:
 
-On an established client, these operations read small WebP files from
-IndexedDB. On a cold client, the visible cover downloads happen before Library
-reveal. The remaining measured corpus is about 1.68 MB and can download after
-the first group without blocking interaction.
+- The same EPUB imported twice produces one Book and one source file.
+- `files.put()` succeeds offline and uploads after reconnect.
+- A cold client downloads visible covers before Library reveal.
+- A cold Book open follows download, materialization, cache, and open order.
+- An established client opens from its local file and materialization.
+- Cover failure shows BlurHash and later replaces it with the WebP.
+- Remote inventory and explicit deletion work.
+- Offline reading still works after remote deletion.
+- Sync limits remain unchanged.
 
-Use direct call order rather than download priorities. A bounded background
-loop can process the remaining covers. A user-triggered `get()` starts
-immediately and shares any in-flight request for the same ID.
+After verification, remove:
 
-The BlurHash is a fallback for unavoidable missing-file intervals. It does not
-replace the initial visible-cover gate.
+- `FileManager`, `FileStorage`, `FileRemoteAdapter`, and `TransferQueue`.
+- `FileType`, `Priority`, legacy transfer types, and obsolete file hooks.
+- `fileHash`, `coverContentHash`, and `isDownloaded` application use.
+- Type-specific server routes, helpers, columns, and indexes.
+- Legacy cover objects after every new WebP reference is verified.
 
-### 10. Mirror source files in the background
-
-After the Library is usable:
-
-1. Ensure the most recent Continue Reading EPUB is local and materialized.
-2. List remote files.
-3. Ensure other Continue Reading EPUBs are local.
-4. Ensure all remaining remote files are local in bounded batches.
-5. Materialize other EPUBs only when opened or selected by an application
-   background phase.
-
-Replace the current unbounded `Promise.all()` prefetch for every Continue
-Reading Book. Do not let several EPUB downloads and full extractions compete
-with the initial Library reveal.
-
-The steady state is a complete local file mirror. Do not evict completed files
-or materializations automatically.
-
-### 11. Build and dry-run the migration tools
-
-The sync v2 production cutover is complete, so this change needs an explicit
-data migration rather than a fresh database assumption.
-
-Local Dexie migration:
-
-- Convert `Book.fileHash` to an opaque `sourceFileId` while preserving its
-  current xxHash identity.
-- Convert existing local EPUB rows to the new `FileId` shape.
-- Generate or reuse a 480 px WebP for each available cover, store it through
-  `files.put()`, and generate its BlurHash.
-- Replace `coverContentHash` with the complete `BookCoverRef`.
-- Remove `isDownloaded` after the materialization marker replaces it.
-- Replace transfer tasks with upload operations only where remote presence is
-  not known.
-- Create no materialization marker unless all required local outputs are
-  complete and current.
-
-Production migration:
-
-1. Back up D1 and record the active legacy file inventory.
-2. Rewrite existing `file_storage` rows to the opaque `FileId` identity without
-   copying R2 bytes. Merge duplicate type-specific rows only after their bytes
-   produce the same xxHash.
-3. Read each existing cover and encode the 480 px WebP derivative.
-4. Upload each WebP through the new files API and generate its BlurHash.
-5. Rewrite each Book value with `sourceFileId` and `BookCoverRef`; remove
-   `fileHash`, `coverContentHash`, and `isDownloaded`.
-6. Give rewritten rows valid newer HLC versions and fresh server sequences.
-7. Verify every file reference, WebP MIME type, BlurHash decode, row count,
-   tombstone, and Book value size.
-
-Use `cwebp` for the production migration so its output is repeatable. Browser
-imports can use the browser encoder because the compressed bytes remain behind
-the opaque `FileId`.
-
-The migration must produce a deterministic report before it writes production.
-Do not log EPUB contents, image bytes, or user-specific metadata beyond the
-identifiers needed for verification.
-
-### 12. Deploy, verify, and clean up
-
-Use a short personal-app write freeze:
-
-1. Back up D1 and the file catalog.
-2. Migrate `file_storage` and replace the type-specific endpoints during the
-   coordinated write freeze.
-3. Run authenticated file API smoke tests.
-4. Run and verify the production data migration.
-5. Deploy the new client database schema, files service, Book model, WebP cover
-   pipeline, BlurHash rendering, and materialization flow together.
-6. Bootstrap one clean browser profile without changing the sync size limits.
-7. Verify the atomic Library reveal, local and remote cover loading, BlurHash
-   fallback, Continue Reading preparation, offline reading, reconnect upload,
-   and eventual full mirroring.
-8. Import the same EPUB twice and verify that one Book, one source file, and one
-   cover derivative remain.
-9. Verify `listRemote()` and one intentional remote deletion.
-
-Retain the D1 backup, R2 object keys, and production migration report during the
-rollback window. This personal-app cutover does not keep parallel file tables
-or old and new endpoints live at the same time.
-
-After verification:
-
-1. Remove `FileManager`, `FileStorage`, `FileRemoteAdapter`, and
-   `TransferQueue`.
-2. Remove `FileType`, `Priority`, legacy transfer types, and old hooks.
-3. Remove `fileHash`, `coverContentHash`, and `isDownloaded` application use.
-4. Remove the old type-specific file routes and helpers.
-5. Remove obsolete `file_storage` columns and indexes after the migrated
-   inventory is verified.
-6. Delete legacy cover objects only after every new WebP file and Book
-   reference has been verified.
-7. Keep canonical EPUB R2 objects and their existing bytes.
-8. Update `NEW_SYNC_PLAN.md`, `ROADMAP.md`, and architecture documentation to
-   describe EPUBs and WebP covers as opaque files and BlurHash as synchronized
-   metadata.
+Keep the canonical EPUB R2 objects and their bytes. Keep the D1 backup, R2
+object keys, and migration reports through the rollback window. Update
+`NEW_SYNC_PLAN.md`, `ROADMAP.md`, and architecture documentation after the
+cutover.
 
 ## Review units
 
-Use these review units:
+Review the work in this order:
 
-1. Public files contract and unchanged sync limits.
-2. Book file references, WebP encoder, and BlurHash generation.
-3. Local and remote generic files service.
-4. EPUB import and materialization cutover.
-5. Library cover startup and background mirroring.
-6. Migration, production cutover, and cleanup.
+1. Server migration and generic endpoints.
+2. Client files API and local schema migration.
+3. Book model and Book call-site migration.
+4. EPUB import, cover generation, materialization, and loading flow.
+5. Production cutover and legacy cleanup.

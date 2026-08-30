@@ -14,8 +14,14 @@ import {
 } from "@/lib/sync-v2/protocol";
 import { createAuth } from "@server/lib/auth";
 import { getDevices } from "@server/lib/devices";
-import { fileTypeSchema, lookupFileR2Key } from "@server/lib/file-lookup";
-import { uploadFile } from "@server/lib/file-upload";
+import {
+  computeFileId,
+  deleteRemoteFile,
+  fileIdSchema,
+  getRemoteFile,
+  listRemoteFiles,
+  putRemoteFile,
+} from "@server/lib/files";
 import { extractDevice } from "@server/lib/middleware/extract-device";
 import { requireAuth, requireUser } from "@server/lib/middleware/require-auth";
 import { getActiveSessions } from "@server/lib/sessions";
@@ -175,57 +181,89 @@ const route = app
     const devices = await getDevices(c.env.DATABASE, user.id, currentDeviceId);
     return c.json({ devices });
   })
-  // Content-addressed file endpoint: /api/files/{fileType}/{contentHash}
-  // The server looks up the R2 key from the database based on auth + fileType + contentHash
-  .get("/files/:fileType/:contentHash", requireUser, async (c) => {
+  .put("/files/:fileId", requireUser, async (c) => {
     const user = c.get("user")!;
-    const fileTypeParam = c.req.param("fileType");
-    const contentHash = c.req.param("contentHash");
-
-    // Validate file type
-    const fileTypeResult = fileTypeSchema.safeParse(fileTypeParam);
-    if (!fileTypeResult.success) {
-      return c.json({ error: "Invalid file type" }, 400);
-    }
-    const fileType = fileTypeResult.data;
-
-    if (!contentHash) {
-      return c.json({ error: "Content hash is required" }, 400);
+    const fileIdResult = fileIdSchema.safeParse(c.req.param("fileId"));
+    if (!fileIdResult.success) {
+      return c.json({ error: "Invalid file ID" }, 400);
     }
 
     try {
-      // Look up R2 key from database
-      const lookupResult = await lookupFileR2Key(
+      const content = await c.req.arrayBuffer();
+      const result = await putRemoteFile(
         c.env.DATABASE,
+        c.env.BOOK_STORAGE,
         user.id,
-        fileType,
-        contentHash,
+        fileIdResult.data,
+        content,
+        c.req.header("Content-Type") ?? "application/octet-stream",
       );
 
-      if (!lookupResult) {
+      if (!result) {
+        return c.json({ error: "File ID does not match content" }, 400);
+      }
+
+      return c.json({
+        id: result.id,
+        fileSize: result.fileSize,
+        mediaType: result.mediaType,
+        createdAt: result.createdAt.getTime(),
+        alreadyExists: result.alreadyExists,
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      return c.json({ error: "Failed to upload file" }, 500);
+    }
+  })
+  .get("/files", requireUser, async (c) => {
+    const user = c.get("user")!;
+
+    try {
+      const files = await listRemoteFiles(c.env.DATABASE, user.id);
+      return c.json({
+        files: files.map((file) => ({
+          id: file.id,
+          fileSize: file.fileSize,
+          mediaType: file.mediaType,
+          createdAt: file.createdAt.getTime(),
+        })),
+      });
+    } catch (error) {
+      console.error("Error listing files:", error);
+      return c.json({ error: "Failed to list files" }, 500);
+    }
+  })
+  .get("/files/:fileId", requireUser, async (c) => {
+    const user = c.get("user")!;
+    const fileIdResult = fileIdSchema.safeParse(c.req.param("fileId"));
+    if (!fileIdResult.success) {
+      return c.json({ error: "Invalid file ID" }, 400);
+    }
+
+    try {
+      const storedFile = await getRemoteFile(
+        c.env.DATABASE,
+        user.id,
+        fileIdResult.data,
+      );
+
+      if (!storedFile) {
         return c.json({ error: "File not found" }, 404);
       }
 
-      // Fetch from R2
-      const object = await c.env.BOOK_STORAGE.get(lookupResult.r2Key);
+      const object = await c.env.BOOK_STORAGE.get(storedFile.r2Key);
 
       if (!object) {
-        console.error(
-          `R2 key exists in DB but not in R2: ${lookupResult.r2Key}`,
-        );
+        console.error(`R2 key exists in DB but not in R2: ${storedFile.r2Key}`);
         return c.json({ error: "File not found in storage" }, 404);
       }
 
-      // Set cache control headers
-      // Cache-Control: private ensures CDN/proxies don't cache user-specific content
-      // max-age=31536000 (1 year) since files are content-addressed by hash
       const headers = new Headers({
-        "Content-Type": lookupResult.mimeType,
+        "Content-Type": storedFile.mediaType,
         "Cache-Control": "private, max-age=31536000, immutable",
         "Content-Length": object.size.toString(),
       });
 
-      // Add ETag if available
       if (object.httpEtag) {
         headers.set("ETag", object.httpEtag);
       }
@@ -238,53 +276,108 @@ const route = app
       return c.json({ error: "Failed to retrieve file" }, 500);
     }
   })
-  // File upload endpoint
+  .delete("/files/:fileId", requireUser, async (c) => {
+    const user = c.get("user")!;
+    const fileIdResult = fileIdSchema.safeParse(c.req.param("fileId"));
+    if (!fileIdResult.success) {
+      return c.json({ error: "Invalid file ID" }, 400);
+    }
+
+    try {
+      const deleted = await deleteRemoteFile(
+        c.env.DATABASE,
+        c.env.BOOK_STORAGE,
+        user.id,
+        fileIdResult.data,
+      );
+
+      if (!deleted) {
+        return c.json({ error: "File not found" }, 404);
+      }
+
+      return c.body(null, 204);
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      return c.json({ error: "Failed to delete file" }, 500);
+    }
+  })
+  // Temporary compatibility routes keep the current client operational until
+  // it moves to the opaque files API. They do not restore file types in D1.
   .post("/files/upload", requireUser, async (c) => {
     const user = c.get("user")!;
 
     try {
       const body = await c.req.parseBody();
-
-      // Validate that file exists
       const file = body["file"];
       if (!file || typeof file === "string") {
-        return c.json(
-          { error: "No file provided or invalid file format" },
-          400,
-        );
+        return c.json({ error: "No file provided" }, 400);
       }
 
-      // Validate fileType
-      const fileType = body["fileType"];
-      if (!fileType || typeof fileType !== "string" || fileType.trim() === "") {
-        return c.json({ error: "File type is required" }, 400);
-      }
-
-      const fileTypeResult = fileTypeSchema.safeParse(fileType);
-      if (!fileTypeResult.success) {
-        return c.json({ error: "Invalid file type" }, 400);
-      }
-
-      // Upload the file
-      const result = await uploadFile(
+      const content = await file.arrayBuffer();
+      const fileId = await computeFileId(content);
+      const result = await putRemoteFile(
         c.env.DATABASE,
         c.env.BOOK_STORAGE,
         user.id,
-        file,
-        fileTypeResult.data,
+        fileId,
+        content,
+        file.type || "application/octet-stream",
       );
+
+      if (!result) {
+        throw new Error("Computed file ID did not match uploaded content");
+      }
 
       return c.json({
         success: true,
-        contentHash: result.contentHash,
-        fileName: result.fileName,
+        contentHash: fileId.slice("xxh64:".length),
+        fileName: file.name,
         fileSize: result.fileSize,
-        mimeType: result.mimeType,
+        mimeType: result.mediaType,
         alreadyExists: result.alreadyExists,
       });
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("Error uploading file through compatibility route:", error);
       return c.json({ error: "Failed to upload file" }, 500);
+    }
+  })
+  .get("/files/:fileType/:contentHash", requireUser, async (c) => {
+    const user = c.get("user")!;
+    const fileIdResult = fileIdSchema.safeParse(
+      `xxh64:${c.req.param("contentHash")}`,
+    );
+    if (!fileIdResult.success) {
+      return c.json({ error: "Invalid content hash" }, 400);
+    }
+
+    try {
+      const storedFile = await getRemoteFile(
+        c.env.DATABASE,
+        user.id,
+        fileIdResult.data,
+      );
+      if (!storedFile) {
+        return c.json({ error: "File not found" }, 404);
+      }
+
+      const object = await c.env.BOOK_STORAGE.get(storedFile.r2Key);
+      if (!object) {
+        return c.json({ error: "File not found in storage" }, 404);
+      }
+
+      const headers = new Headers({
+        "Content-Type": storedFile.mediaType,
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "Content-Length": object.size.toString(),
+      });
+      if (object.httpEtag) {
+        headers.set("ETag", object.httpEtag);
+      }
+
+      return new Response(object.body, { headers });
+    } catch (error) {
+      console.error("Error fetching file through compatibility route:", error);
+      return c.json({ error: "Failed to retrieve file" }, 500);
     }
   })
   // Generic HLC-based sync endpoints
