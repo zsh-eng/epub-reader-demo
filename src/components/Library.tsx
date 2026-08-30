@@ -1,11 +1,9 @@
 import { useAppShellReady } from "@/components/AppShell";
 import { BookCard } from "@/components/BookCard";
-import { LibraryBookStatusSheet } from "@/components/LibraryBookStatusSheet";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
-import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { useEpubImport } from "@/hooks/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
@@ -16,7 +14,7 @@ import {
   prefetchReaderBook,
   prefetchReaderBooks,
 } from "@/components/Reader/data/reader-cache/prefetch";
-import type { Book, ReadingStatus } from "@/lib/db";
+import type { Book } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { warmPaginationWorker } from "@/lib/pagination-v2/worker/pagination-worker-service";
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -31,23 +29,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
-
-interface MobileBookActionsState {
-  instance: number;
-  book: Book;
-  coverUrl: string | undefined;
-  status: ReadingStatus | null;
-}
 
 export function Library() {
-  const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [mobileBookActions, setMobileBookActions] =
-    useState<MobileBookActionsState | null>(null);
-  const [isMobileBookActionsOpen, setIsMobileBookActionsOpen] = useState(false);
-  const mobileBookActionsInstanceRef = useRef(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const reducedMotion = useReducedMotion() ?? false;
   const { anchorRef: searchAnchorRef, isCompact: isSearchCompact } =
@@ -141,21 +126,6 @@ export function Library() {
       settings.publisherBookStylingEnabled,
     ],
   );
-
-  const handleOpenMobileBookActions = (
-    book: Book,
-    status: ReadingStatus | null,
-    coverUrl: string | undefined,
-  ) => {
-    mobileBookActionsInstanceRef.current += 1;
-    setMobileBookActions({
-      instance: mobileBookActionsInstanceRef.current,
-      book,
-      status,
-      coverUrl,
-    });
-    setIsMobileBookActionsOpen(true);
-  };
 
   const { continueReadingBooks, allBooks } = useMemo(() => {
     if (!booksData) {
@@ -348,13 +318,6 @@ export function Library() {
                         onDelete={handleDeleteBook}
                         onCoverRequest={requestCover}
                         onPrefetch={handlePrefetchBook}
-                        onOpenMobileActions={() =>
-                          handleOpenMobileBookActions(
-                            book,
-                            booksData?.statuses.get(book.id) ?? null,
-                            coverUrls.get(book.id),
-                          )
-                        }
                       />
                     ))}
                   </div>
@@ -384,13 +347,6 @@ export function Library() {
                         onDelete={handleDeleteBook}
                         onCoverRequest={requestCover}
                         onPrefetch={handlePrefetchBook}
-                        onOpenMobileActions={() =>
-                          handleOpenMobileBookActions(
-                            book,
-                            booksData?.statuses.get(book.id) ?? null,
-                            coverUrls.get(book.id),
-                          )
-                        }
                       />
                     ))}
                   </div>
@@ -448,26 +404,6 @@ export function Library() {
           </div>
         ) : null}
       </main>
-
-      {mobileBookActions && (
-        <LibraryBookStatusSheet
-          key={mobileBookActions.instance}
-          open={isMobileBookActionsOpen}
-          onOpenChange={setIsMobileBookActionsOpen}
-          book={mobileBookActions.book}
-          coverUrl={mobileBookActions.coverUrl}
-          initialStatus={mobileBookActions.status}
-          onOpenBook={(bookId) => {
-            beginReaderTrace({
-              bookId,
-              bookTitle: mobileBookActions.book.title,
-              source: "mobile-book-actions",
-            });
-            navigate(`/reader/${bookId}`);
-          }}
-          onDelete={(bookId) => void handleDeleteBook(bookId)}
-        />
-      )}
     </div>
   );
 }

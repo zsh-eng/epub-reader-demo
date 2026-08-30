@@ -15,7 +15,6 @@ interface BookCardProps {
   onDelete: (bookId: string) => void;
   onCoverRequest?: (book: Book) => void;
   onPrefetch?: (book: Book) => void;
-  onOpenMobileActions?: () => void;
 }
 
 // Extracted visual component for the book cover (used in both normal and preview state)
@@ -68,7 +67,6 @@ export function BookCard({
   onDelete,
   onCoverRequest,
   onPrefetch,
-  onOpenMobileActions,
 }: BookCardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -157,7 +155,6 @@ export function BookCard({
       isUpdating={setStatus.isPending}
       onSelectStatus={handleSetStatus}
       onRemove={handleDelete}
-      onOpenMobileActions={() => onOpenMobileActions?.()}
     >
       <div
         ref={setCardElement}
@@ -172,7 +169,7 @@ export function BookCard({
           onClick={handleClick}
           className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
         >
-          <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02] group-data-[popup-open]:-translate-y-2 group-data-[popup-open]:scale-[1.02]">
+          <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02] [@media(hover:hover)_and_(pointer:fine)]:group-data-[popup-open]:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-data-[popup-open]:scale-[1.02]">
             <BookCoverVisual coverUrl={coverUrl} title={book.title} />
           </div>
         </div>

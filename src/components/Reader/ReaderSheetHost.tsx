@@ -1,6 +1,7 @@
-import type { TOCItem } from "@/lib/db";
+import type { Book, TOCItem } from "@/lib/db";
 import type { ReaderSettings } from "@/types/reader.types";
 import { ReaderContentsSheet } from "./ReaderContentsSheet";
+import { ReaderBookActionsSheet } from "./ReaderBookActionsSheet";
 import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import { ReaderToolsLauncherSheet } from "./ReaderToolsLauncherSheet";
 import { ReaderToolsSidebar } from "./ReaderToolsSidebar";
@@ -11,6 +12,7 @@ interface ReaderSheetHostProps {
   activeSheet: ReaderSheetId | null;
   onOpenSheet: (sheet: ReaderSheetId) => void;
   onCloseSheet: () => void;
+  book: Book;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
   toc: TOCItem[];
@@ -32,6 +34,7 @@ export function ReaderSheetHost({
   activeSheet,
   onOpenSheet,
   onCloseSheet,
+  book,
   settings,
   onUpdateSettings,
   toc,
@@ -65,8 +68,16 @@ export function ReaderSheetHost({
         isOpen={activeSheet === "tools"}
         onClose={onCloseSheet}
         onOpenContents={() => onOpenSheet("contents")}
+        onOpenBookActions={() => onOpenSheet("book-actions")}
         onOpenSettings={() => onOpenSheet("settings")}
         onCopyDebugDump={onCopyDebugDump}
+      />
+
+      <ReaderBookActionsSheet
+        isOpen={activeSheet === "book-actions"}
+        onClose={onCloseSheet}
+        onBack={() => onOpenSheet("tools")}
+        book={book}
       />
 
       <ReaderContentsSheet

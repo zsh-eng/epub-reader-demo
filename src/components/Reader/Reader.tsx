@@ -430,6 +430,7 @@ export function Reader() {
                     activeSheet={chromeState.activeReaderSheet}
                     onOpenSheet={chromeActions.openReaderSheet}
                     onCloseSheet={chromeActions.closeReaderSheet}
+                    book={book}
                     settings={sessionState.settings}
                     onUpdateSettings={sessionActions.updateSettings}
                     toc={book.toc}

@@ -5,6 +5,7 @@ interface ReaderToolsLauncherSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenContents: () => void;
+  onOpenBookActions: () => void;
   onOpenSettings: () => void;
   onCopyDebugDump?: () => void;
 }
@@ -19,6 +20,7 @@ export function ReaderToolsLauncherSheet({
   isOpen,
   onClose,
   onOpenContents,
+  onOpenBookActions,
   onOpenSettings,
   onCopyDebugDump,
 }: ReaderToolsLauncherSheetProps) {
@@ -37,6 +39,7 @@ export function ReaderToolsLauncherSheet({
     >
       <ReaderControlMenu
         onOpenContents={onOpenContents}
+        onOpenBookActions={onOpenBookActions}
         onOpenSettings={onOpenSettings}
         onCopyDebugDump={onCopyDebugDump}
       />

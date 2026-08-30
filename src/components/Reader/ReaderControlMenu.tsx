@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import {
+  BookMarked,
   ClipboardCopy,
   List,
   Search,
@@ -11,11 +12,17 @@ import { motion } from "motion/react";
 
 interface ReaderControlMenuProps {
   onOpenContents: () => void;
+  onOpenBookActions: () => void;
   onOpenSettings: () => void;
   onCopyDebugDump?: () => void;
 }
 
-type MenuItemId = "contents" | "search" | "settings" | "debug-dump";
+type MenuItemId =
+  | "contents"
+  | "book-actions"
+  | "search"
+  | "settings"
+  | "debug-dump";
 
 interface MenuItem {
   id: MenuItemId;
@@ -26,6 +33,12 @@ interface MenuItem {
 
 const MENU_ITEMS: MenuItem[] = [
   { id: "contents", label: "Contents", icon: List, isAvailable: true },
+  {
+    id: "book-actions",
+    label: "Book Status",
+    icon: BookMarked,
+    isAvailable: true,
+  },
   { id: "search", label: "Search Book", icon: Search, isAvailable: false },
   {
     id: "settings",
@@ -91,6 +104,7 @@ function ReaderControlMenuItem({
 
 export function ReaderControlMenu({
   onOpenContents,
+  onOpenBookActions,
   onOpenSettings,
   onCopyDebugDump,
 }: ReaderControlMenuProps) {
@@ -102,6 +116,11 @@ export function ReaderControlMenu({
 
     if (id === "settings") {
       onOpenSettings();
+      return;
+    }
+
+    if (id === "book-actions") {
+      onOpenBookActions();
       return;
     }
 

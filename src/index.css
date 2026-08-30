@@ -217,13 +217,6 @@
 }
 
 @layer components {
-  .library-long-press-active,
-  .library-long-press-active * {
-    -webkit-touch-callout: none !important;
-    -webkit-user-select: none !important;
-    user-select: none !important;
-  }
-
   [data-slot="scroll-area-viewport"][data-has-overflow-y] {
     --scroll-area-fade-size: 2rem;
     -webkit-mask-image: linear-gradient(

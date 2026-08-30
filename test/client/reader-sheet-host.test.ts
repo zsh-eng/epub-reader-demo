@@ -1,6 +1,7 @@
 import { ReaderSheetHost } from "@/components/Reader/ReaderSheetHost";
+import type { Book } from "@/lib/db";
 import type { ReaderSettings } from "@/types/reader.types";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -23,6 +24,19 @@ vi.mock("@/components/Reader/ReaderSettingsSheet", () => ({
     isOpen ? "mobile settings sheet" : null,
 }));
 
+vi.mock("@/components/Reader/ReaderBookActionsSheet", () => ({
+  ReaderBookActionsSheet: ({
+    isOpen,
+    onBack,
+  }: {
+    isOpen: boolean;
+    onBack: () => void;
+  }) =>
+    isOpen
+      ? createElement("button", { onClick: onBack }, "Book actions")
+      : null,
+}));
+
 const settings: ReaderSettings = {
   fontSize: 16,
   lineHeight: 1.5,
@@ -34,13 +48,20 @@ const settings: ReaderSettings = {
   matchPublisherBodyTextSize: false,
 };
 
-function renderHost(isMobile: boolean) {
+const book = { id: "book-1" } as Book;
+
+function renderHost(
+  isMobile: boolean,
+  activeSheet: "tools" | "book-actions" = "tools",
+) {
+  const onOpenSheet = vi.fn();
   render(
     createElement(ReaderSheetHost, {
       isMobile,
-      activeSheet: "tools",
-      onOpenSheet: vi.fn(),
+      activeSheet,
+      onOpenSheet,
       onCloseSheet: vi.fn(),
+      book,
       settings,
       onUpdateSettings: vi.fn(),
       toc: [],
@@ -50,6 +71,8 @@ function renderHost(isMobile: boolean) {
       onNavigateToHref: vi.fn(() => true),
     }),
   );
+
+  return { onOpenSheet };
 }
 
 afterEach(cleanup);
@@ -66,6 +89,15 @@ describe("ReaderSheetHost", () => {
     renderHost(false);
 
     expect(screen.getByText("desktop reader sidebar")).toBeTruthy();
+    expect(screen.queryByText("mobile reader launcher")).toBeNull();
+  });
+
+  it("keeps the full book actions sheet in the mobile reader tools", () => {
+    const { onOpenSheet } = renderHost(true, "book-actions");
+
+    fireEvent.click(screen.getByRole("button", { name: "Book actions" }));
+
+    expect(onOpenSheet).toHaveBeenCalledWith("tools");
     expect(screen.queryByText("mobile reader launcher")).toBeNull();
   });
 });

@@ -46,7 +46,7 @@ afterEach(() => {
 });
 
 describe("BookCard cover loading", () => {
-  it("observes the replacement card after the responsive trigger remounts", async () => {
+  it("keeps observing the card when the responsive trigger updates", async () => {
     const observerRecords: ObserverRecord[] = [];
 
     class IntersectionObserverMock {
@@ -88,9 +88,9 @@ describe("BookCard cover loading", () => {
       ),
     );
 
-    await waitFor(() => expect(observerRecords.length).toBeGreaterThan(1));
+    await waitFor(() => expect(observerRecords.length).toBe(1));
 
-    const activeObserver = observerRecords.at(-1)!;
+    const activeObserver = observerRecords[0]!;
     activeObserver.callback(
       [{ isIntersecting: true } as IntersectionObserverEntry],
       {} as IntersectionObserver,

@@ -1,5 +1,6 @@
 import { CircularBookCover } from "@/components/ContinueReadingCard";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
+import { Button } from "@/components/ui/button";
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import type { ReadingStatus } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -8,6 +9,7 @@ import {
   BookOpen,
   Check,
   CheckCircle,
+  ChevronLeft,
   Trash2,
   XCircle,
   type LucideIcon,
@@ -50,7 +52,7 @@ interface BookStatusSheetProps {
   coverUrl: string | undefined;
   status: ReadingStatus | null;
   isUpdating: boolean;
-  onOpenBook: () => void;
+  onBack: () => void;
   onSelectStatus: (status: ReadingStatus) => void;
   onRemove: () => boolean;
 }
@@ -109,18 +111,50 @@ export function BookStatusSheet({
   coverUrl,
   status,
   isUpdating,
-  onOpenBook,
+  onBack,
   onSelectStatus,
   onRemove,
 }: BookStatusSheetProps) {
   const removePress = useSpringPressAnimation();
+  const bookSummary = (
+    <>
+      <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
+      <div className="min-w-0">
+        <p className="truncate font-serif text-xl font-medium tracking-[-0.01em] text-foreground">
+          {bookTitle}
+        </p>
+        <p className="mt-1 truncate text-sm text-muted-foreground">
+          {bookAuthor}
+        </p>
+      </div>
+    </>
+  );
 
   return (
     <BottomSheet
       open={open}
       onOpenChange={onOpenChange}
       title="Reading status"
-      showHeader={false}
+      showHeader
+      header={
+        <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onBack}
+            aria-label="Back to reader tools"
+            className="size-8 rounded-full border border-border/60 bg-secondary/20 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+
+          <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            Reading Status
+          </p>
+
+          <div className="size-8" aria-hidden="true" />
+        </div>
+      }
       panelClassName="max-w-md"
       bodyClassName="overflow-y-auto"
     >
@@ -130,22 +164,9 @@ export function BookStatusSheet({
           paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
         }}
       >
-        <button
-          type="button"
-          aria-label={`Open ${bookTitle}`}
-          onClick={onOpenBook}
-          className="mb-5 flex w-full min-w-0 items-center gap-4 rounded-[1.25rem] px-2 py-1 text-left outline-none transition-[background-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary/35 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-ring/60 motion-reduce:active:scale-100 motion-reduce:active:opacity-80"
-        >
-          <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
-          <div className="min-w-0">
-            <p className="truncate font-serif text-xl font-medium tracking-[-0.01em] text-foreground">
-              {bookTitle}
-            </p>
-            <p className="mt-1 truncate text-sm text-muted-foreground">
-              {bookAuthor}
-            </p>
-          </div>
-        </button>
+        <div className="mb-5 flex min-w-0 items-center gap-4 px-2 py-1">
+          {bookSummary}
+        </div>
 
         <div className="flex flex-col gap-2">
           {READING_STATUS_OPTIONS.map((option) => {

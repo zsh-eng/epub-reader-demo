@@ -8,7 +8,6 @@ afterEach(cleanup);
 describe("BookStatusSheet", () => {
   it("shows the selected status and stays open after another status is chosen", () => {
     const onOpenChange = vi.fn();
-    const onOpenBook = vi.fn();
     const onSelectStatus = vi.fn();
 
     render(
@@ -20,7 +19,7 @@ describe("BookStatusSheet", () => {
         coverUrl: "blob:cover",
         status: "reading",
         isUpdating: false,
-        onOpenBook,
+        onBack: vi.fn(),
         onSelectStatus,
         onRemove: () => false,
       }),
@@ -35,12 +34,39 @@ describe("BookStatusSheet", () => {
     expect(selectedOption.getAttribute("aria-pressed")).toBe("true");
     expect(selectedOption.classList.contains("border-foreground")).toBe(true);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open Book One" }));
-    expect(onOpenBook).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Open Book One" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Finished" }));
 
     expect(onSelectStatus).toHaveBeenCalledWith("finished");
     expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it("shows reader navigation without making the current book interactive", () => {
+    const onBack = vi.fn();
+
+    render(
+      createElement(BookStatusSheet, {
+        open: true,
+        onOpenChange: vi.fn(),
+        bookTitle: "Current Book",
+        bookAuthor: "Current Author",
+        coverUrl: "blob:current-cover",
+        status: "reading",
+        isUpdating: false,
+        onBack,
+        onSelectStatus: vi.fn(),
+        onRemove: () => false,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Open Current Book" }),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Back to reader tools" }),
+    );
+    expect(onBack).toHaveBeenCalledOnce();
   });
 });
