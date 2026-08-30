@@ -123,10 +123,15 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Swipe to change page (carousel style)
 - [x] Perf improvements
 
-- [ ] New simplified sync engine
+- [x] New simplified sync engine
+- [ ] Check code lines saved
+- [ ] Organize doc files
 - [ ] New file storage sync
-- [ ] Decomp note-taking flow
+- [ ] Long press animation improvements
+- [ ] Benchmark highlights page for bottlenecks
 
+- [ ] Use Zod compile https://x.com/colinhacks/status/2093725420462182512
+- [ ] Decomp note-taking flow
 - [ ] Decomp Sync limits
 - [ ] Decomp Sync progress toast
   - [ ] Also handles downloading a new book
