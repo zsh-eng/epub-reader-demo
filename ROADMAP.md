@@ -128,9 +128,10 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Organize doc files
 - [x] Long press animation improvements
 - [x] Benchmark highlights page for bottlenecks
-
 - [x] New local-first file storage and EPUB materialization flow
 
+- [ ] Look through EPUB materialisation flow again
+- [ ] Test updates for handling book with large spine (see conversation)
 - [ ] Add debug flag
 - [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
 - [ ] Bug: Swipe should pass through for no UI chrome
