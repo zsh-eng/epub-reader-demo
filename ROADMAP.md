@@ -124,11 +124,28 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Perf improvements
 
 - [x] New simplified sync engine
-- [ ] Check code lines saved
-- [ ] Organize doc files
+- [x] Check code lines saved
+- [x] Organize doc files
+- [x] Long press animation improvements
+- [x] Benchmark highlights page for bottlenecks
+
 - [ ] New file storage sync
-- [ ] Long press animation improvements
-- [ ] Benchmark highlights page for bottlenecks
+  - Reminder not to over-optimise for migration - assume that we are going to override eventually
+
+- [ ] Add debug flag
+- [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
+- [ ] Bug: Swipe should pass through for no UI chrome
+- [ ] Reading status toast should be at the bottom like the cross device jump (pinned to the bottom chrome)
+- [ ] Look through all toasts and their positioning
+- [ ] Toast roundedness should be similar to the reading status page roundedness
+- [ ] BUG: With reading position being saved. Going back and coming back in - position is not preserved. Same when changing the reader size (e.g. changing to half page for the window position)
+
+- [ ] Testing user flow
+  - Importing a book and trying to open it immediately afterwards
+  - test flow - highlights page "jump to page" behaviour when book is not yet downloaded
+- [ ] Toggle for switching off page animations
+- [ ] Subtle footer animation for showing the next page
+- [ ] Toggle for showing the page numbers (both mobile and desktop design) - must handle the loading and fade-in appropriately
 
 - [ ] Use Zod compile https://x.com/colinhacks/status/2093725420462182512
 - [ ] Decomp note-taking flow
@@ -137,7 +154,6 @@ below contains only work that still has a clear product or reliability reason.
   - [ ] Also handles downloading a new book
 - [ ] Decomp Sync merge behaviour (accidentally or purposefully log into another account)
 
-- [ ] Squircle toast
 - [ ] Fix gradient in themes, reorder for the dark theme, and fix background (not full colour in the theme sheet)
 - [ ] Fix horizontal scroll passthrough
 
