@@ -13,17 +13,17 @@ import { Toaster } from "@/components/ui/sonner";
 import { EpubImportProvider } from "@/hooks/use-epub-import";
 import { ReaderSettingsProvider } from "@/hooks/use-reader-settings";
 import { SyncProvider } from "@/hooks/use-sync";
-import { useTransferQueue } from "@/hooks/use-transfer-queue";
+import { useFileUploads } from "@/hooks/use-file-uploads";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 const queryClient = new QueryClient();
 
 /**
- * Starts the file transfer queue once for the mounted application.
+ * Starts durable file uploads once for the mounted application.
  */
-function TransferQueueInitializer({ children }: { children: React.ReactNode }) {
-  useTransferQueue();
+function FileUploadInitializer({ children }: { children: React.ReactNode }) {
+  useFileUploads();
   return <>{children}</>;
 }
 
@@ -32,7 +32,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ReaderSettingsProvider>
         <SyncProvider>
-          <TransferQueueInitializer>
+          <FileUploadInitializer>
             <BrowserRouter>
               <EpubImportProvider>
                 <Routes>
@@ -74,7 +74,7 @@ function App() {
                 <ReloadPrompt />
               </EpubImportProvider>
             </BrowserRouter>
-          </TransferQueueInitializer>
+          </FileUploadInitializer>
         </SyncProvider>
       </ReaderSettingsProvider>
     </QueryClientProvider>

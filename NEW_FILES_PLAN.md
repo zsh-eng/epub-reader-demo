@@ -1,6 +1,6 @@
 # New Files Implementation Plan
 
-**Status**: In progress — server files API complete
+**Status**: In progress — server and client files APIs complete
 
 **Last updated**: 2026-08-30
 
@@ -232,6 +232,8 @@ Add integration tests for upload, hash rejection, idempotent upload, download,
 inventory, deletion, re-upload, and user isolation.
 
 ### 2. Add the client files API and replace the manager
+
+**Implementation status**: Complete.
 
 Add one generic client contract:
 
