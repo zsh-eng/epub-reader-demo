@@ -95,6 +95,47 @@ describe("sync v2 client", () => {
     });
   });
 
+  it("normalizes an older synchronized Book value during pull", async () => {
+    remote.pullResponses.push({
+      records: [
+        serverRecord(
+          {
+            id: "legacy-book",
+            fileHash: "1111111111111111",
+            title: "Legacy Book",
+            author: "Author",
+            fileSize: 10,
+            dateAdded: 1,
+            metadata: {},
+            manifest: [],
+            spine: [],
+            toc: [],
+            isDownloaded: 0,
+            coverContentHash: "2222222222222222",
+            isDeleted: false,
+          },
+          1,
+          100,
+          "books",
+        ),
+      ],
+      cursor: 1,
+      head: 1,
+      hasMore: false,
+    });
+
+    await client.pull();
+
+    expect(await db.books.get("legacy-book")).toMatchObject({
+      sourceFileId: "xxh64:1111111111111111",
+      cover: {
+        fileId: "xxh64:2222222222222222",
+        blurHash: null,
+      },
+    });
+    expect(await db._sync_outbox.count()).toBe(0);
+  });
+
   it("keeps a local row when its outbox HLC is newer", async () => {
     await db.readingState.add(readingState("local-wins"));
     const localChange = await db._sync_outbox.get(
@@ -296,12 +337,13 @@ function readingState(id: string): SyncV2ReadingState {
 }
 
 function serverRecord(
-  row: SyncV2ReadingState,
+  row: { id: string; isDeleted: boolean },
   serverSeq: number,
   wallTimeMs: number,
+  tableName = "readingState",
 ): SyncRecord {
   return {
-    key: encodeSyncKey("readingState", row.id),
+    key: encodeSyncKey(tableName, row.id),
     value: encodeSyncValue(row),
     schemaVersion: 1,
     hlc: { wallTimeMs, counter: 0 },

@@ -6,6 +6,7 @@ import {
   type BookChapterSourceCacheEntry,
   type BookFile,
 } from "@/lib/db";
+import type { FileId } from "@/lib/files";
 import {
   endReaderTraceSpan,
   startReaderTraceSpan,
@@ -39,7 +40,7 @@ export const READER_CHAPTER_ARTIFACTS_GC_MS = 30 * 60 * 1000;
  * Reader startup has two cache layers:
  * 1. Persistent body cache: one local IndexedDB row per book containing
  *    normalized chapter body HTML plus canonical text. This is invalidated by
- *    file hash or body cache schema version and can always be rebuilt from
+ *    source file reference or body cache schema version and can always be rebuilt from
  *    extracted EPUB files.
  * 2. In-memory chapter artifact cache: one React Query row per decorated
  *    chapter, keyed by the body cache version and that chapter's highlight
@@ -175,18 +176,18 @@ async function buildChapterContentsFromFiles(
 /**
  * Loads normalized chapter body HTML and canonical text from the persistent
  * cache, rebuilding from EPUB chapter files on the first open or after a schema
- * version/file hash change.
+ * version/source file change.
  */
 export async function loadReaderBodyCache(options: {
   bookId: string;
-  fileHash: string;
+  sourceFileId: FileId;
   chapterEntries: ChapterEntry[];
   publisherBookStylingEnabled: boolean;
   matchPublisherBodyTextSize: boolean;
 }): Promise<ReaderBodyCacheData> {
   const {
     bookId,
-    fileHash,
+    sourceFileId,
     chapterEntries,
     publisherBookStylingEnabled,
     matchPublisherBodyTextSize,
@@ -211,7 +212,7 @@ export async function loadReaderBodyCache(options: {
   if (
     cachedChapterSourceRow &&
     cachedChapterSourceRow.cacheVersion === READER_BODY_CACHE_SCHEMA_VERSION &&
-    cachedChapterSourceRow.fileHash === fileHash &&
+    cachedChapterSourceRow.sourceFileId === sourceFileId &&
     (!publisherBookStylingEnabled ||
       cachedChapterSourceRow.publisherResourcesLoaded === true) &&
     (!includePublisherBodyScale ||
@@ -276,7 +277,7 @@ export async function loadReaderBodyCache(options: {
   );
   await putBookChapterSourceCache(
     bookId,
-    fileHash,
+    sourceFileId,
     builtChapterContents.chaptersByPath,
     READER_BODY_CACHE_SCHEMA_VERSION,
     publisherBookStylingEnabled,

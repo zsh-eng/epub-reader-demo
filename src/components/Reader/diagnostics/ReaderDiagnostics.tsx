@@ -1,6 +1,6 @@
-import { hashFileData } from "@/lib/file-hash";
 import { parseEPUB } from "@/lib/epub-parser";
 import type { Book, BookFile } from "@/lib/db";
+import { computeFileId } from "@/lib/files";
 import type { ReaderSettings } from "@/types/reader.types";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SpreadStage } from "../SpreadStage";
@@ -20,7 +20,10 @@ import {
   loadBaseChapterContent,
   type ReaderDecoratedChapterArtifact,
 } from "../data/chapter-content-pipeline";
-import { buildPaginationConfig, buildSpreadConfig } from "../hooks/use-reader-core";
+import {
+  buildPaginationConfig,
+  buildSpreadConfig,
+} from "../hooks/use-reader-core";
 import { usePagination } from "@/lib/pagination-v2";
 import type { SpreadIntent } from "@/lib/pagination-v2";
 import { DeferredEpubImageProvider } from "../shared/DeferredEpubImageProvider";
@@ -119,7 +122,9 @@ function getReaderDiagnosticProfileSettings(
   return profile.settings;
 }
 
-async function resolveEpubBytes(bytes: DiagnosticEpubBytes): Promise<Uint8Array> {
+async function resolveEpubBytes(
+  bytes: DiagnosticEpubBytes,
+): Promise<Uint8Array> {
   if (bytes instanceof Uint8Array) return bytes;
   if (bytes instanceof ArrayBuffer) return new Uint8Array(bytes);
   if (bytes instanceof Blob) return new Uint8Array(await bytes.arrayBuffer());
@@ -132,15 +137,17 @@ async function buildDiagnosticReaderSource(
   input: DiagnosticEpubInput,
 ): Promise<DiagnosticReaderSource> {
   const bytes = await resolveEpubBytes(input.bytes);
-  const fileHash = await hashFileData(bytes);
   const fileBuffer = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(fileBuffer).set(bytes);
   const file = new File([fileBuffer], input.name, {
     type: "application/epub+zip",
   });
-  const { book, files } = await parseEPUB(file, { fileHash });
+  const sourceFileId = await computeFileId(file);
+  const { book, files } = await parseEPUB(file, { sourceFileId });
   const chapterEntries = buildChapterEntries(book);
-  const filesByPath = new Map(files.map((bookFile) => [bookFile.path, bookFile]));
+  const filesByPath = new Map(
+    files.map((bookFile) => [bookFile.path, bookFile]),
+  );
   const artifactsByChapter = new Map<number, ReaderDecoratedChapterArtifact>();
 
   for (const chapter of chapterEntries) {
@@ -173,7 +180,7 @@ async function buildDiagnosticReaderSource(
   }
 
   return {
-    id: `${book.id}:${fileHash}`,
+    id: `${book.id}:${sourceFileId}`,
     book,
     chapterEntries,
     filesByPath,
@@ -215,8 +222,7 @@ export function ReaderDiagnostics() {
     [readerLayout.resolvedSpreadColumns],
   );
   const pagination = usePagination({ paginationConfig, spreadConfig });
-  const { addChapter: addPaginationChapter, init: initPagination } =
-    pagination;
+  const { addChapter: addPaginationChapter, init: initPagination } = pagination;
   const [sourceState, setSourceState] = useState<DiagnosticSourceState>({
     status: "idle",
   });
@@ -359,7 +365,9 @@ export function ReaderDiagnostics() {
     async (resourcePath: string): Promise<Blob | null> => {
       const currentSourceState = sourceStateRef.current;
       if (currentSourceState.status !== "ready") return null;
-      return currentSourceState.source.filesByPath.get(resourcePath)?.content ?? null;
+      return (
+        currentSourceState.source.filesByPath.get(resourcePath)?.content ?? null
+      );
     },
     [],
   );
@@ -418,10 +426,7 @@ export function ReaderDiagnostics() {
         await waitForReady({ timeoutMs: options.timeoutMs });
         const totalPages = paginationRef.current.spread?.totalPages ?? 0;
         const from = Math.max(1, Math.floor(options.from ?? 1));
-        const to = Math.min(
-          totalPages,
-          Math.floor(options.to ?? totalPages),
-        );
+        const to = Math.min(totalPages, Math.floor(options.to ?? totalPages));
         const stopOnFirstFailure = options.stopOnFirstFailure ?? true;
         const failures: ReaderDiagnosticScanFailure[] = [];
         let pagesScanned = 0;
@@ -462,7 +467,8 @@ export function ReaderDiagnostics() {
         }
 
         const chapterPageCount =
-          paginationRef.current.chapterPageCounts.get(options.chapterIndex) ?? 0;
+          paginationRef.current.chapterPageCounts.get(options.chapterIndex) ??
+          0;
         if (chapterPageCount <= 0) {
           throw new Error(
             `Chapter ${options.chapterIndex} has not been paginated.`,

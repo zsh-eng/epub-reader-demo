@@ -4,7 +4,8 @@
  * Local database helpers over the clean sync v2 Dexie schema.
  */
 
-import type { StoredFile, TransferTask } from "@/lib/files/types";
+import type { BookCoverRef } from "@/lib/book-file-references";
+import type { FileId } from "@/lib/files/types";
 import {
   syncV2Db,
   type SyncV2Highlight,
@@ -28,7 +29,7 @@ import { getOrCreateDeviceId } from "./device";
 
 export interface Book {
   id: string;
-  fileHash: string; // Content hash of the EPUB file (also used to fetch via FileManager)
+  sourceFileId: FileId;
   title: string;
   author: string;
   fileSize: number;
@@ -38,8 +39,7 @@ export interface Book {
   spine: SpineItem[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   toc: any[];
-  isDownloaded: number; // Whether book files have been extracted locally
-  coverContentHash?: string; // Content hash of the cover image (used to fetch via FileManager)
+  cover: BookCoverRef | null;
 }
 
 export interface ManifestItem {
@@ -158,7 +158,7 @@ export interface BookChapterSourceCacheEntry {
  */
 export interface BookChapterSourceCache {
   bookId: string;
-  fileHash: string;
+  sourceFileId: FileId;
   cacheVersion: number;
   publisherResourcesLoaded?: boolean;
   publisherBodyScaleLoaded?: boolean;
@@ -180,8 +180,7 @@ type StoredNote = SyncV2Note;
 export type { ReadingState, ReadingStatus } from "@/types/reading-state";
 export type { Highlight, Note };
 
-// Re-export StoredFile type for convenience
-export type { StoredFile, TransferTask };
+export type { BookCoverRef };
 
 type LegacyStoredHighlight = Omit<
   StoredHighlight,
@@ -280,7 +279,7 @@ export async function addBookWithFiles(
   book: Book,
   bookFiles: BookFile[],
 ): Promise<string> {
-  return db.transaction("rw", [db.books, db.bookFiles, db.files], async () => {
+  return db.transaction("rw", [db.books, db.bookFiles], async () => {
     // Add book first
     const bookId = await db.books.add({ ...book, isDeleted: false });
 
@@ -333,10 +332,13 @@ export async function deleteBook(id: string): Promise<void> {
   );
 }
 
-export async function getBookByFileHash(
-  fileHash: string,
+export async function getBookBySourceFileId(
+  sourceFileId: FileId,
 ): Promise<Book | undefined> {
-  const book = await db.books.where("fileHash").equals(fileHash).first();
+  const book = await db.books
+    .where("sourceFileId")
+    .equals(sourceFileId)
+    .first();
   return book && isNotDeleted(book) ? book : undefined;
 }
 
@@ -388,7 +390,7 @@ export async function getBookChapterSourceCache(
 
 export async function putBookChapterSourceCache(
   bookId: string,
-  fileHash: string,
+  sourceFileId: FileId,
   chaptersByPath: Record<string, BookChapterSourceCacheEntry>,
   cacheVersion: number,
   publisherResourcesLoaded: boolean,
@@ -398,7 +400,7 @@ export async function putBookChapterSourceCache(
 ): Promise<string> {
   await db.bookChapterSourceCache.put({
     bookId,
-    fileHash,
+    sourceFileId,
     cacheVersion,
     publisherResourcesLoaded,
     publisherBodyScaleLoaded,
@@ -760,20 +762,4 @@ export async function getReadingHistory(
     .equals(bookId)
     .filter(isNotDeleted)
     .sortBy("timestamp");
-}
-
-// ============================================================================
-// Helper Functions (Book Queries - Compatibility)
-// ============================================================================
-
-export async function getNotDownloadedBooks(): Promise<Book[]> {
-  return db.books
-    .filter((book) => !book.isDownloaded && isNotDeleted(book))
-    .toArray();
-}
-
-export async function markBookAsDownloaded(bookId: string): Promise<void> {
-  await db.books.update(bookId, {
-    isDownloaded: 1,
-  });
 }

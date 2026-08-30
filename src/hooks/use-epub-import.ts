@@ -68,7 +68,7 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
             markEpubPreparationReady(
               queryClient,
               importedBook.id,
-              importedBook.fileHash,
+              importedBook.sourceFileId,
             );
             successCount += 1;
           } catch (error) {

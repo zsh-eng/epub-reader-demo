@@ -13,13 +13,9 @@ import type {
   ReadingSession,
   ReadingSettings,
 } from "@/lib/db";
-import type {
-  FileId,
-  FileUploadOperation,
-  LocalFile,
-  StoredFile,
-  TransferTask,
-} from "@/lib/files/types";
+import { normalizeBookFileReferences } from "@/lib/book-file-references";
+import { fileIdFromContentHash } from "@/lib/files/file-id";
+import type { FileId, FileUploadOperation, LocalFile } from "@/lib/files/types";
 import { getOrCreateDeviceId } from "@/lib/device";
 import {
   getOrCreateSyncClientState,
@@ -60,8 +56,7 @@ export type SyncV2Note = SyncV2DomainRow<Note>;
 /**
  * Domain indexes only. Sync ordering and delivery state live in the outbox.
  */
-const SYNC_V2_SHARED_STORES = {
-  books: "id, dateAdded, &fileHash",
+const SYNC_V2_STORES_WITHOUT_BOOKS = {
   readingCheckpoints:
     "id, bookId, deviceId, lastRead, [bookId+deviceId], [bookId+lastRead]",
   readingSessions:
@@ -78,18 +73,58 @@ const SYNC_V2_SHARED_STORES = {
   _sync_outbox: "key",
 } as const;
 
+const SYNC_V2_LEGACY_SHARED_STORES = {
+  books: "id, dateAdded, &fileHash",
+  ...SYNC_V2_STORES_WITHOUT_BOOKS,
+} as const;
+
+const SYNC_V2_CURRENT_SHARED_STORES = {
+  books: "id, dateAdded, &sourceFileId",
+  ...SYNC_V2_STORES_WITHOUT_BOOKS,
+} as const;
+
 export const SYNC_V2_STORES = {
-  ...SYNC_V2_SHARED_STORES,
+  ...SYNC_V2_CURRENT_SHARED_STORES,
+  files: "id, remotePresent, storedAt",
+  fileUploadOperations: "id, createdAt",
+} as const;
+
+export const SYNC_V2_VERSION_3_STORES = {
+  ...SYNC_V2_LEGACY_SHARED_STORES,
   files: "id, remotePresent, storedAt",
   fileUploadOperations: "id, createdAt",
 } as const;
 
 export const SYNC_V2_VERSION_2_STORES = {
-  ...SYNC_V2_SHARED_STORES,
+  ...SYNC_V2_LEGACY_SHARED_STORES,
   files: "id, contentHash, fileType, [fileType+contentHash]",
   transferQueue:
     "id, status, priority, createdAt, [status+priority], [contentHash+fileType+direction]",
 } as const;
+
+interface LegacyStoredFile {
+  id: string;
+  contentHash: string;
+  fileType: "epub" | "cover";
+  blob: Blob;
+  mediaType: string;
+  size: number;
+  storedAt: number;
+}
+
+interface LegacyTransferTask {
+  id: string;
+  direction: "upload" | "download";
+  contentHash: string;
+  fileType: "epub" | "cover";
+  status: "pending" | "processing" | "completed" | "failed";
+  priority: number;
+  createdAt: number;
+  retryCount: number;
+  maxRetries: number;
+  lastAttempt?: number;
+  error?: string;
+}
 
 export const SYNC_V2_VERSION_1_STORES = {
   ...SYNC_V2_VERSION_2_STORES,
@@ -97,20 +132,16 @@ export const SYNC_V2_VERSION_1_STORES = {
 } as const;
 
 function fileIdFromLegacyHash(contentHash: string): FileId {
-  if (!/^[0-9a-f]{16}$/.test(contentHash)) {
-    throw new Error(`Cannot migrate invalid file hash: ${contentHash}`);
-  }
-
-  return `xxh64:${contentHash}` as FileId;
+  return fileIdFromContentHash(contentHash);
 }
 
 /** Convert type-specific v2 rows into opaque files and upload operations. */
 async function migrateFilesV3(transaction: Transaction): Promise<void> {
   const legacyFiles = await transaction
-    .table<StoredFile, string>("files")
+    .table<LegacyStoredFile, string>("files")
     .toArray();
   const legacyTransfers = await transaction
-    .table<TransferTask, string>("transferQueue")
+    .table<LegacyTransferTask, string>("transferQueue")
     .toArray();
 
   const knownRemoteHashes = new Set(
@@ -118,7 +149,7 @@ async function migrateFilesV3(transaction: Transaction): Promise<void> {
       .filter((task) => task.status === "completed")
       .map((task) => task.contentHash),
   );
-  const pendingUploads = new Map<string, TransferTask>();
+  const pendingUploads = new Map<string, LegacyTransferTask>();
 
   for (const task of legacyTransfers) {
     if (task.direction !== "upload" || task.status === "completed") continue;
@@ -180,6 +211,21 @@ async function migrateFilesV3(transaction: Transaction): Promise<void> {
   await uploadsTable.bulkPut(uploadOperations);
 }
 
+/** Replace synchronized hash fields with opaque file references. */
+async function migrateBooksV4(transaction: Transaction): Promise<void> {
+  await transaction
+    .table<Record<string, unknown>, string>("books")
+    .toCollection()
+    .modify((book) => {
+      const normalized = normalizeBookFileReferences(book);
+      for (const key of Object.keys(book)) delete book[key];
+      Object.assign(book, normalized);
+    });
+
+  // This cache is derived local data. The normal preparation flow rebuilds it.
+  await transaction.table("bookChapterSourceCache").clear();
+}
+
 /** Schema-only connection used by the sync engine for direct remote writes. */
 export class EPUBReaderSyncV2DB extends Dexie {
   books!: Table<SyncV2Book, string>;
@@ -209,6 +255,9 @@ export class EPUBReaderSyncV2DB extends Dexie {
         fileUploadOperations: SYNC_V2_STORES.fileUploadOperations,
       })
       .upgrade(migrateFilesV3);
+    this.version(4)
+      .stores({ books: SYNC_V2_STORES.books })
+      .upgrade(migrateBooksV4);
   }
 }
 

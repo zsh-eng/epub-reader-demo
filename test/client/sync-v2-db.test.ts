@@ -1,9 +1,13 @@
 import {
+  createSyncV2ApplicationDb,
   deleteLegacyClientDatabase,
   EPUBReaderSyncV2DB,
   SYNC_V2_VERSION_1_STORES,
   SYNC_V2_VERSION_2_STORES,
+  SYNC_V2_VERSION_3_STORES,
 } from "@/lib/sync-v2/db";
+import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
+import { decodeSyncValue, encodeSyncKey } from "@/lib/sync-v2/protocol";
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";
@@ -22,7 +26,7 @@ describe("sync v2 database schema", () => {
     await legacyDb.open();
     await legacyDb.table("books").add({
       id: "book-a",
-      fileHash: "hash-a",
+      fileHash: "1111111111111111",
       title: "Book A",
       author: "Author",
       fileSize: 1,
@@ -50,8 +54,99 @@ describe("sync v2 database schema", () => {
     expect(await migratedDb.books.get("book-a")).toMatchObject({
       id: "book-a",
       title: "Book A",
+      sourceFileId: "xxh64:1111111111111111",
+      cover: null,
     });
     migratedDb.close();
+  });
+
+  it("migrates Book references and discards its derived reader cache", async () => {
+    resetIndexedDB();
+    const legacyDb = new Dexie(DATABASE_NAME);
+    legacyDb.version(3).stores(SYNC_V2_VERSION_3_STORES);
+    await legacyDb.open();
+    await legacyDb.table("books").add({
+      id: "book-files",
+      fileHash: "1111111111111111",
+      title: "Migrated Book",
+      author: "Author",
+      fileSize: 10,
+      dateAdded: 1,
+      metadata: {},
+      manifest: [],
+      spine: [],
+      toc: [],
+      isDownloaded: 1,
+      coverContentHash: "2222222222222222",
+      isDeleted: false,
+    });
+    await legacyDb.table("bookChapterSourceCache").add({
+      bookId: "book-files",
+      fileHash: "1111111111111111",
+      cacheVersion: 1,
+      chaptersByPath: {},
+      updatedAt: 1,
+    });
+    legacyDb.close();
+
+    const migratedDb = new EPUBReaderSyncV2DB(DATABASE_NAME);
+    await migratedDb.open();
+
+    const book = await migratedDb.books.get("book-files");
+    expect(book).toMatchObject({
+      sourceFileId: "xxh64:1111111111111111",
+      cover: {
+        fileId: "xxh64:2222222222222222",
+        blurHash: null,
+      },
+    });
+    expect(book).not.toHaveProperty("fileHash");
+    expect(book).not.toHaveProperty("coverContentHash");
+    expect(book).not.toHaveProperty("isDownloaded");
+    expect(
+      await migratedDb.bookChapterSourceCache.get("book-files"),
+    ).toBeUndefined();
+    migratedDb.close();
+  });
+
+  it("queues migrated Books so the opaque synchronized value is replaced", async () => {
+    resetIndexedDB();
+    localStorage.clear();
+    const legacyDb = new Dexie(DATABASE_NAME);
+    legacyDb.version(3).stores(SYNC_V2_VERSION_3_STORES);
+    await legacyDb.open();
+    await legacyDb.table("books").add({
+      id: "book-sync-migration",
+      fileHash: "1111111111111111",
+      title: "Synchronized Book",
+      author: "Author",
+      fileSize: 10,
+      dateAdded: 1,
+      metadata: {},
+      manifest: [],
+      spine: [],
+      toc: [],
+      isDownloaded: 1,
+      isDeleted: false,
+    });
+    legacyDb.close();
+
+    getOrCreateSyncClientState("migration-device");
+    const migratedDb = createSyncV2ApplicationDb(DATABASE_NAME);
+    await migratedDb.open();
+
+    const change = await migratedDb._sync_outbox.get(
+      encodeSyncKey("books", "book-sync-migration"),
+    );
+    expect(
+      decodeSyncValue<Record<string, unknown>>(change!.value),
+    ).toMatchObject({
+      sourceFileId: "xxh64:1111111111111111",
+      cover: null,
+    });
+    expect(change!.value).not.toContain("fileHash");
+    migratedDb.close();
+    localStorage.clear();
   });
 
   it("migrates opaque local files and replaces the transfer queue", async () => {

@@ -50,7 +50,7 @@ export function useReaderChapterContent({
   matchPublisherBodyTextSize,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
-  const fileHash = book?.fileHash;
+  const sourceFileId = book?.sourceFileId;
 
   const checkpointQuery = useReaderCheckpointQuery(bookId);
   const initialLocation = useSessionInitialReaderLocation({
@@ -62,7 +62,7 @@ export function useReaderChapterContent({
 
   const bodyCacheQuery = useReaderBodyCacheQuery({
     bookId,
-    fileHash,
+    sourceFileId,
     chapterEntries,
     publisherBookStylingEnabled,
     matchPublisherBodyTextSize,
@@ -72,7 +72,7 @@ export function useReaderChapterContent({
 
   const artifactsLoader = useReaderChapterArtifactsLoader({
     bookId,
-    fileHash,
+    sourceFileId,
     chapterEntries,
     baseContentByChapter: bodyCacheQuery.data?.baseContentByChapter,
     initialLocation,

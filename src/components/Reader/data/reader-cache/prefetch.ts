@@ -63,11 +63,11 @@ export async function prefetchReaderBook(
 
   if (chapterEntries.length === 0) return;
 
-  await ensureEpubPreparationReady(queryClient, book.id, book.fileHash);
+  await ensureEpubPreparationReady(queryClient, book.id, book.sourceFileId);
 
   const bodyCacheKey = readerBodyCacheKeys.book(
     book.id,
-    book.fileHash,
+    book.sourceFileId,
     publisherBookStylingEnabled,
     matchPublisherBodyTextSize,
   );
@@ -92,7 +92,7 @@ export async function prefetchReaderBook(
       queryFn: () =>
         loadReaderBodyCache({
           bookId: book.id,
-          fileHash: book.fileHash,
+          sourceFileId: book.sourceFileId,
           chapterEntries,
           publisherBookStylingEnabled,
           matchPublisherBodyTextSize,
@@ -148,7 +148,7 @@ export async function prefetchReaderBook(
     await queryClient.prefetchQuery({
       queryKey: readerChapterArtifactKeys.chapter(
         book.id,
-        book.fileHash,
+        book.sourceFileId,
         chapterIndex,
         chapter.spineItemId,
         highlightSignature,

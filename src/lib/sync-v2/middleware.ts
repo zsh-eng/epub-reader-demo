@@ -4,6 +4,7 @@
  */
 
 import { nextSyncHlcBatch } from "@/lib/sync-v2/client-state";
+import { assertBookSyncValue } from "@/lib/book-file-references";
 import {
   encodeSyncKey,
   encodeSyncValue,
@@ -154,6 +155,8 @@ function createOutboxChanges(
   }
 
   return values.map((value, index) => {
+    if (tableName === "books") assertBookSyncValue(value);
+
     const primaryKey =
       table.schema.primaryKey.extractKey?.(value) ?? requestKeys?.[index];
     if (typeof primaryKey !== "string" || primaryKey.length === 0) {

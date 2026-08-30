@@ -3,6 +3,7 @@ import {
   getReadingCheckpointsForBook,
   type ReadingCheckpoint,
 } from "@/lib/db";
+import type { FileId } from "@/lib/files";
 import {
   endReaderTraceSpan,
   markReaderTraceOnce,
@@ -49,7 +50,7 @@ const MAX_RECORDED_CHAPTER_ARTIFACT_YIELDS = 12;
 export const readerBodyCacheKeys = {
   book: (
     bookId: string,
-    fileHash: string,
+    sourceFileId: FileId,
     publisherBookStylingEnabled: boolean,
     matchPublisherBodyTextSize: boolean,
   ) =>
@@ -57,7 +58,7 @@ export const readerBodyCacheKeys = {
       "readerBodyCache",
       READER_BODY_CACHE_SCHEMA_VERSION,
       bookId,
-      fileHash,
+      sourceFileId,
       getPublisherStylingCacheKey(publisherBookStylingEnabled),
       matchPublisherBodyTextSize ? "body-size-match-on" : "body-size-match-off",
     ] as const,
@@ -72,7 +73,7 @@ export const readerCheckpointKeys = {
 export const readerChapterArtifactKeys = {
   chapter: (
     bookId: string,
-    fileHash: string,
+    sourceFileId: FileId,
     chapterIndex: number,
     spineItemId: string,
     highlightSignature: string,
@@ -85,7 +86,7 @@ export const readerChapterArtifactKeys = {
       READER_CHAPTER_ARTIFACTS_SCHEMA_VERSION,
       READER_BODY_CACHE_SCHEMA_VERSION,
       bookId,
-      fileHash,
+      sourceFileId,
       chapterIndex,
       spineItemId,
       highlightSignature,
@@ -175,14 +176,14 @@ export interface ReaderCheckpointsData {
 
 export function useReaderBodyCacheQuery(options: {
   bookId?: string;
-  fileHash?: string;
+  sourceFileId?: FileId;
   chapterEntries: ChapterEntry[];
   publisherBookStylingEnabled: boolean;
   matchPublisherBodyTextSize: boolean;
 }) {
   const {
     bookId,
-    fileHash,
+    sourceFileId,
     chapterEntries,
     publisherBookStylingEnabled,
     matchPublisherBodyTextSize,
@@ -191,19 +192,19 @@ export function useReaderBodyCacheQuery(options: {
   return useQuery({
     queryKey: readerBodyCacheKeys.book(
       bookId ?? "",
-      fileHash ?? "",
+      sourceFileId ?? ("" as FileId),
       publisherBookStylingEnabled,
       matchPublisherBodyTextSize,
     ),
     queryFn: () =>
       loadReaderBodyCache({
         bookId: bookId!,
-        fileHash: fileHash!,
+        sourceFileId: sourceFileId!,
         chapterEntries,
         publisherBookStylingEnabled,
         matchPublisherBodyTextSize,
       }),
-    enabled: !!bookId && !!fileHash && chapterEntries.length > 0,
+    enabled: !!bookId && !!sourceFileId && chapterEntries.length > 0,
     staleTime: Infinity,
     gcTime: Infinity,
   });
@@ -274,7 +275,7 @@ export interface ReaderChapterArtifactsLoader {
  */
 export function useReaderChapterArtifactsLoader(options: {
   bookId?: string;
-  fileHash?: string;
+  sourceFileId?: FileId;
   chapterEntries: ChapterEntry[];
   baseContentByChapter: Map<number, ReaderBaseChapterContent> | undefined;
   initialLocation: ReaderInitialLocation | null;
@@ -285,7 +286,7 @@ export function useReaderChapterArtifactsLoader(options: {
 }): ReaderChapterArtifactsLoader {
   const {
     bookId,
-    fileHash,
+    sourceFileId,
     chapterEntries,
     baseContentByChapter,
     initialLocation,
@@ -340,7 +341,7 @@ export function useReaderChapterArtifactsLoader(options: {
     if (
       !enabled ||
       !bookId ||
-      !fileHash ||
+      !sourceFileId ||
       !baseContentByChapter ||
       !initialLocation
     ) {
@@ -365,7 +366,7 @@ export function useReaderChapterArtifactsLoader(options: {
     });
     const queryKey = readerChapterArtifactKeys.chapter(
       bookId,
-      fileHash,
+      sourceFileId,
       chapterIndex,
       chapter.spineItemId,
       highlightSignature,
@@ -388,7 +389,7 @@ export function useReaderChapterArtifactsLoader(options: {
     bookId,
     chapterEntries,
     enabled,
-    fileHash,
+    sourceFileId,
     highlightsBySpineItemId,
     initialLocation,
     matchPublisherBodyTextSize,
@@ -400,7 +401,7 @@ export function useReaderChapterArtifactsLoader(options: {
     if (
       !enabled ||
       !bookId ||
-      !fileHash ||
+      !sourceFileId ||
       !baseContentByChapter ||
       !initialLocation
     ) {
@@ -408,7 +409,7 @@ export function useReaderChapterArtifactsLoader(options: {
     }
 
     const resolvedBookId = bookId;
-    const resolvedFileHash = fileHash;
+    const resolvedSourceFileId = sourceFileId;
     const resolvedBaseContentByChapter = baseContentByChapter;
     const resolvedInitialLocation = initialLocation;
 
@@ -524,7 +525,7 @@ export function useReaderChapterArtifactsLoader(options: {
 
           const queryKey = readerChapterArtifactKeys.chapter(
             resolvedBookId,
-            resolvedFileHash,
+            resolvedSourceFileId,
             chapterIndex,
             chapter.spineItemId,
             highlightSignature,
@@ -622,7 +623,7 @@ export function useReaderChapterArtifactsLoader(options: {
     bookId,
     chapterEntries,
     enabled,
-    fileHash,
+    sourceFileId,
     highlightsBySpineItemId,
     initialLocation,
     matchPublisherBodyTextSize,

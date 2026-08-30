@@ -1,11 +1,13 @@
 import type { Book } from "@/lib/db";
+import { parseFileId } from "@/lib/files/file-id";
 import { getChapterTitleFromSpine } from "@/lib/toc-utils";
 import { describe, expect, it } from "vitest";
 
 function createBook(overrides?: Partial<Book>): Book {
   return {
     id: "book-1",
-    fileHash: "hash",
+    sourceFileId: parseFileId("xxh64:1111111111111111"),
+    cover: null,
     title: "Book",
     author: "Author",
     fileSize: 1,
@@ -14,7 +16,6 @@ function createBook(overrides?: Partial<Book>): Book {
     manifest: [],
     spine: [],
     toc: [],
-    isDownloaded: 1,
     ...overrides,
   };
 }

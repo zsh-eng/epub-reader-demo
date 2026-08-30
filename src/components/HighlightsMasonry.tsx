@@ -18,6 +18,7 @@ import {
   type BookHighlightGroup,
 } from "@/hooks/use-all-highlights-query";
 import { formatHighlightTime } from "@/lib/date-utils";
+import { getBookCoverFileId } from "@/lib/book-file-references";
 import type { Highlight } from "@/lib/db";
 import {
   COMPACT_HIGHLIGHT_CARD_HEIGHT,
@@ -486,8 +487,9 @@ function BookIndexItem({
   onNavigate: (event: MouseEvent<HTMLAnchorElement>) => void;
   reducedMotion: boolean;
 }) {
-  const { url: coverUrl } = useFileUrl(group.book.coverContentHash, "cover", {
-    skip: !group.book.coverContentHash,
+  const coverFileId = getBookCoverFileId(group.book);
+  const { url: coverUrl } = useFileUrl(coverFileId, {
+    skip: !coverFileId,
   });
   const highlightCount = group.highlights.length;
   const springPress = useSpringPressAnimation();
@@ -869,8 +871,9 @@ function BookCoverTile({
   readingTimeMs: number;
   tooltipHandle: Tooltip.Handle<HighlightsTooltipPayload>;
 }) {
-  const { url: coverUrl } = useFileUrl(group.book.coverContentHash, "cover", {
-    skip: !group.book.coverContentHash,
+  const coverFileId = getBookCoverFileId(group.book);
+  const { url: coverUrl } = useFileUrl(coverFileId, {
+    skip: !coverFileId,
   });
   const cover = (
     <Link

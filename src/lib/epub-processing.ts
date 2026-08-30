@@ -1,6 +1,7 @@
 /** Extract an EPUB blob into local-only BookFile rows. */
 
 import type { BookFile } from "@/lib/db";
+import type { FileId } from "@/lib/files";
 
 export async function extractEpubFiles(
   epubBlob: Blob,
@@ -35,8 +36,8 @@ export function createBookFilesFromExtracted(
   });
 }
 
-export function createEpubFile(blob: Blob, fileHash: string): File {
-  return new File([blob], `${fileHash}.epub`, {
+export function createEpubFile(blob: Blob, sourceFileId: FileId): File {
+  return new File([blob], `${sourceFileId}.epub`, {
     type: "application/epub+zip",
   });
 }

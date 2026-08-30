@@ -1,5 +1,6 @@
 import { AppMobileNavigationSheets } from "@/components/AppMobileNavigationSheets";
 import type { RecentlyReadBook } from "@/lib/library-sort";
+import { parseFileId } from "@/lib/files/file-id";
 import {
   cleanup,
   fireEvent,
@@ -14,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const recentReading: RecentlyReadBook = {
   book: {
     id: "book-1",
-    fileHash: "epub-hash",
+    sourceFileId: parseFileId("xxh64:1111111111111111"),
     title: "Book One",
     author: "Author One",
     fileSize: 100,
@@ -23,12 +24,10 @@ const recentReading: RecentlyReadBook = {
     manifest: [],
     spine: [],
     toc: [],
-    isDownloaded: 1,
-    coverContentHash: "cover-hash",
-    _hlc: "1-0-device",
-    _deviceId: "device",
-    _isDeleted: 0,
-    _serverTimestamp: 1,
+    cover: {
+      fileId: parseFileId("xxh64:2222222222222222"),
+      blurHash: null,
+    },
   },
   lastRead: Date.now(),
 };

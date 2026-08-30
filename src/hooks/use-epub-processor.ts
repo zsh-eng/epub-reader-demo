@@ -1,6 +1,6 @@
-import { fileManager } from "@/lib/files/file-manager";
 import { processEpubToBookFiles } from "@/lib/epub-processing";
 import { db, hasBookFiles } from "@/lib/db";
+import { files, type FileId } from "@/lib/files";
 import {
   endReaderTraceSpan,
   startReaderTraceSpan,
@@ -21,13 +21,13 @@ export interface UseEpubProcessorReturn {
 }
 
 export const epubPreparationKeys = {
-  book: (bookId: string, fileHash: string) =>
-    ["epubPreparation", bookId, fileHash] as const,
+  book: (bookId: string, sourceFileId: FileId) =>
+    ["epubPreparation", bookId, sourceFileId] as const,
 };
 
 async function ensureBookProcessed(
   bookId: string,
-  fileHash: string,
+  sourceFileId: FileId,
 ): Promise<true> {
   const preparationSpan = startReaderTraceSpan(
     "epub-preparation",
@@ -47,10 +47,10 @@ async function ensureBookProcessed(
       return true;
     }
 
-    console.log("[useEpubProcessor] Fetching EPUB:", fileHash);
+    console.log("[useEpubProcessor] Fetching EPUB:", sourceFileId);
 
     const epubReadSpan = startReaderTraceSpan("epub-blob-read", "storage");
-    const { blob } = await fileManager.getFile(fileHash, "epub");
+    const blob = await files.get(sourceFileId);
     endReaderTraceSpan(epubReadSpan, { sizeBytes: blob.size });
 
     console.log("[useEpubProcessor] Processing EPUB...");
@@ -73,7 +73,6 @@ async function ensureBookProcessed(
       "storage",
     );
     await db.bookFiles.bulkAdd(bookFiles);
-    await db.books.update(bookId, { isDownloaded: 1 });
     endReaderTraceSpan(writeSpan, { fileCount: bookFiles.length });
     endReaderTraceSpan(preparationSpan, {
       loadKind: "extracted",
@@ -92,10 +91,10 @@ async function ensureBookProcessed(
   }
 }
 
-function getEpubPreparationQueryOptions(bookId: string, fileHash: string) {
+function getEpubPreparationQueryOptions(bookId: string, sourceFileId: FileId) {
   return queryOptions({
-    queryKey: epubPreparationKeys.book(bookId, fileHash),
-    queryFn: () => ensureBookProcessed(bookId, fileHash),
+    queryKey: epubPreparationKeys.book(bookId, sourceFileId),
+    queryFn: () => ensureBookProcessed(bookId, sourceFileId),
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
@@ -109,19 +108,22 @@ function getEpubPreparationQueryOptions(bookId: string, fileHash: string) {
 export function markEpubPreparationReady(
   queryClient: QueryClient,
   bookId: string,
-  fileHash: string,
+  sourceFileId: FileId,
 ): void {
-  queryClient.setQueryData(epubPreparationKeys.book(bookId, fileHash), true);
+  queryClient.setQueryData(
+    epubPreparationKeys.book(bookId, sourceFileId),
+    true,
+  );
 }
 
 /** Ensures Library prefetches also warm the per-device extraction result. */
 export async function ensureEpubPreparationReady(
   queryClient: QueryClient,
   bookId: string,
-  fileHash: string,
+  sourceFileId: FileId,
 ): Promise<void> {
   await queryClient.ensureQueryData(
-    getEpubPreparationQueryOptions(bookId, fileHash),
+    getEpubPreparationQueryOptions(bookId, sourceFileId),
   );
 }
 
@@ -130,22 +132,24 @@ export async function ensureEpubPreparationReady(
  *
  * This hook:
  * 1. Checks if bookFiles exist for the book
- * 2. If not, fetches the EPUB via fileManager
+ * 2. If not, fetches the source EPUB through the files API
  * 3. Processes the EPUB to extract bookFiles
  * 4. Stores bookFiles in IndexedDB
- * 5. Marks the book as downloaded
  *
  * @param bookId - The book's unique identifier
- * @param fileHash - The content hash of the EPUB file
+ * @param sourceFileId - The source EPUB file reference
  * @returns Processing state and ready status
  */
 export function useEpubProcessor(
   bookId: string | undefined,
-  fileHash: string | undefined,
+  sourceFileId: FileId | undefined,
 ): UseEpubProcessorReturn {
   const query = useQuery({
-    ...getEpubPreparationQueryOptions(bookId ?? "", fileHash ?? ""),
-    enabled: !!bookId && !!fileHash,
+    ...getEpubPreparationQueryOptions(
+      bookId ?? "",
+      sourceFileId ?? ("" as FileId),
+    ),
+    enabled: !!bookId && !!sourceFileId,
   });
 
   return {

@@ -4,6 +4,7 @@ import {
   CarouselItem,
 } from "@/components/ui/carousel";
 import { useFileUrl } from "@/hooks/use-file-url";
+import { getBookCoverFileId } from "@/lib/book-file-references";
 import type { Book } from "@/lib/db";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { cn } from "@/lib/utils";
@@ -31,12 +32,10 @@ function HeroBookCard({ book, lastRead }: { book: Book; lastRead?: number }) {
   const [gradientColor, setGradientColor] = useState<string>("rgba(0,0,0,0.8)");
   const [isDarkMode, setIsDarkMode] = useState<boolean>(true);
 
-  // Get cover URL from content hash
-  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
-    book.coverContentHash,
-    "cover",
-    { skip: !book.coverContentHash },
-  );
+  const coverFileId = getBookCoverFileId(book);
+  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(coverFileId, {
+    skip: !coverFileId,
+  });
 
   // Detect and track dark mode changes
   useEffect(() => {

@@ -5,14 +5,13 @@ import type {
   SpineItem,
   TOCItem,
 } from "@/lib/db";
-import { hashFileData } from "@/lib/file-hash";
+import type { FileId } from "@/lib/files";
 import { unzip } from "fflate";
 
 export interface ParsedEPUB {
   book: Book;
   files: BookFile[];
   coverBlob?: Blob;
-  epubBlob: Blob;
 }
 
 export interface ParsedEPUBMetadata {
@@ -22,7 +21,6 @@ export interface ParsedEPUBMetadata {
   spine: SpineItem[];
   toc: TOCItem[];
   coverImagePath?: string;
-  coverContentHash?: string;
   metadata: {
     publisher?: string;
     language?: string;
@@ -33,7 +31,7 @@ export interface ParsedEPUBMetadata {
 }
 
 export interface ParseEPUBOptions {
-  fileHash: string;
+  sourceFileId: FileId;
 }
 
 /**
@@ -72,12 +70,7 @@ export async function parseEPUB(
   // Extract table of contents
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
 
-  // Extract cover content hash and blob
-  const { coverContentHash, coverBlob } = await extractCoverInfo(
-    opfDoc,
-    manifest,
-    unzipped,
-  );
+  const { coverBlob } = await extractCoverInfo(opfDoc, manifest, unzipped);
 
   // Generate unique ID
   const bookId = generateId();
@@ -85,10 +78,10 @@ export async function parseEPUB(
   // Create Book object
   const book: Book = {
     id: bookId,
-    fileHash: options.fileHash,
+    sourceFileId: options.sourceFileId,
     title: metadata.title || file.name.replace(".epub", ""),
     author: metadata.author || "Unknown Author",
-    coverContentHash,
+    cover: null,
     dateAdded: new Date().getTime(),
     fileSize: file.size,
     manifest,
@@ -101,7 +94,6 @@ export async function parseEPUB(
       description: metadata.description,
       publicationDate: metadata.publicationDate,
     },
-    isDownloaded: 1, // Local file is always downloaded
   };
 
   // Create BookFile objects for all content files
@@ -124,7 +116,6 @@ export async function parseEPUB(
     book,
     files: bookFiles,
     coverBlob,
-    epubBlob: new Blob([arrayBuffer]),
   };
 }
 
@@ -388,9 +379,7 @@ function parseTOCFromNCX(ncxDoc: Document, basePath: string): TOCItem[] {
 }
 
 /**
- * Extract cover image path and compute content hash from EPUB
- * Returns both the path to the cover image file within the EPUB structure,
- * its content hash, and the blob
+ * Extract the cover image and retain its declared media type.
  */
 async function extractCoverInfo(
   opfDoc: Document,
@@ -398,7 +387,6 @@ async function extractCoverInfo(
   files: Record<string, Uint8Array>,
 ): Promise<{
   coverImagePath?: string;
-  coverContentHash?: string;
   coverBlob?: Blob;
 }> {
   // Method 1: Look for cover in metadata
@@ -409,11 +397,11 @@ async function extractCoverInfo(
       const coverItem = manifest.find((item) => item.id === coverId);
       if (coverItem && files[coverItem.href]) {
         const coverData = files[coverItem.href];
-        const contentHash = await hashFileData(coverData);
         return {
           coverImagePath: coverItem.href,
-          coverContentHash: contentHash,
-          coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+          coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
+            type: coverItem.mediaType,
+          }),
         };
       }
     }
@@ -425,11 +413,11 @@ async function extractCoverInfo(
   );
   if (coverItem && files[coverItem.href]) {
     const coverData = files[coverItem.href];
-    const contentHash = await hashFileData(coverData);
     return {
       coverImagePath: coverItem.href,
-      coverContentHash: contentHash,
-      coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+      coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
+        type: coverItem.mediaType,
+      }),
     };
   }
 
@@ -444,11 +432,11 @@ async function extractCoverInfo(
     const fileName = item.href.split("/").pop()?.toLowerCase() || "";
     if (commonCoverNames.includes(fileName) && files[item.href]) {
       const coverData = files[item.href];
-      const contentHash = await hashFileData(coverData);
       return {
         coverImagePath: item.href,
-        coverContentHash: contentHash,
-        coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+        coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
+          type: item.mediaType,
+        }),
       };
     }
   }
@@ -459,11 +447,11 @@ async function extractCoverInfo(
   );
   if (firstImage && files[firstImage.href]) {
     const coverData = files[firstImage.href];
-    const contentHash = await hashFileData(coverData);
     return {
       coverImagePath: firstImage.href,
-      coverContentHash: contentHash,
-      coverBlob: new Blob([coverData.buffer as ArrayBuffer]),
+      coverBlob: new Blob([coverData.buffer as ArrayBuffer], {
+        type: firstImage.mediaType,
+      }),
     };
   }
 
@@ -554,11 +542,7 @@ export async function parseEPUBMetadataOnly(
   const manifest = extractManifest(opfDoc, opfPath);
   const spine = extractSpine(opfDoc);
   const toc = await extractTOC(opfDoc, manifest, unzipped, opfPath);
-  const { coverImagePath, coverContentHash } = await extractCoverInfo(
-    opfDoc,
-    manifest,
-    unzipped,
-  );
+  const { coverImagePath } = await extractCoverInfo(opfDoc, manifest, unzipped);
 
   return {
     title: metadata.title || "Unknown Title",
@@ -567,7 +551,6 @@ export async function parseEPUBMetadataOnly(
     spine,
     toc,
     coverImagePath,
-    coverContentHash,
     metadata: {
       publisher: metadata.publisher,
       language: metadata.language,

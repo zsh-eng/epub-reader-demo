@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import { computeFileId } from "@/lib/files/file-id";
-import { FileManager } from "@/lib/files/file-manager";
 import {
   FileRemoteRequestError,
   type FileRemoteApi,
@@ -232,37 +231,5 @@ describe("FilesManager", () => {
 
     await manager.put(blob);
     expect(await db.fileUploadOperations.get(id)).toBeDefined();
-  });
-
-  it("keeps the legacy Book facade on the new storage path", async () => {
-    const remote = new MockFileRemoteApi();
-    const manager = new FilesManager(remote);
-    const legacyManager = new FileManager(manager);
-    const blob = new Blob(["legacy facade"], { type: "text/plain" });
-    const id = await computeFileId(blob);
-    const contentHash = id.slice("xxh64:".length);
-
-    await legacyManager.queueUpload(contentHash, "epub", blob);
-    const result = await legacyManager.getFile(contentHash, "epub");
-
-    expect(result.fromCache).toBe(true);
-    expect(result.mediaType).toBe("text/plain");
-  });
-
-  it("adds the EPUB media type for legacy untyped Blobs", async () => {
-    const remote = new MockFileRemoteApi();
-    const manager = new FilesManager(remote);
-    const legacyManager = new FileManager(manager);
-    const blob = new Blob(["untyped EPUB"]);
-    const id = await computeFileId(blob);
-    const contentHash = id.slice("xxh64:".length);
-
-    await legacyManager.queueUpload(contentHash, "epub", blob);
-    const result = await legacyManager.getFile(contentHash, "epub");
-
-    expect(result.mediaType).toBe("application/epub+zip");
-    expect(await db.files.get(id)).toMatchObject({
-      mediaType: "application/epub+zip",
-    });
   });
 });

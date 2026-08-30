@@ -36,7 +36,6 @@ export interface ReadingSessionBookRecord {
   id: string;
   title: string;
   author: string;
-  coverContentHash?: string;
 }
 
 export interface ReadingTimeBucket {
@@ -50,7 +49,6 @@ export interface ReadingBookSummary {
   bookId: string;
   title: string;
   author: string;
-  coverContentHash?: string;
   activeMs: number;
   sessionCount: number;
   lastReadAt: number;
@@ -265,7 +263,6 @@ export function buildReadingSessionsOverview({
       bookId: session.bookId,
       title: book?.title ?? "Unavailable book",
       author: book?.author ?? "",
-      coverContentHash: book?.coverContentHash,
       activeMs: session.activeMs,
       sessionCount: 1,
       lastReadAt: session.startedAt,

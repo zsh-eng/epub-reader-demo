@@ -1,6 +1,6 @@
 # New Files Implementation Plan
 
-**Status**: In progress — server and client files APIs complete
+**Status**: In progress — server, client, and Book reference changes complete
 
 **Last updated**: 2026-08-30
 
@@ -73,10 +73,10 @@ The installed encoder is `cwebp 1.6.0`. The following results use quality 80,
 method 6, and preserve aspect ratio:
 
 | Maximum width | Median WebP | p90 WebP | Largest WebP | Total for 40 |
-| --- | ---: | ---: | ---: | ---: |
-| 320 px | 18,483 B | 32,948 B | 50,186 B | 885,588 B |
-| 384 px | 26,613 B | 46,878 B | 71,776 B | 1,196,652 B |
-| 480 px | 35,488 B | 70,876 B | 108,408 B | 1,684,618 B |
+| ------------- | ----------: | -------: | -----------: | -----------: |
+| 320 px        |    18,483 B | 32,948 B |     50,186 B |    885,588 B |
+| 384 px        |    26,613 B | 46,878 B |     71,776 B |  1,196,652 B |
+| 480 px        |    35,488 B | 70,876 B |    108,408 B |  1,684,618 B |
 
 The 480 px result is small enough for cover downloads and startup decoding. It
 also retains more detail than the 320 px and 384 px outputs.
@@ -90,10 +90,10 @@ Base64 would add approximately one third to the image size before the ordinary
 JSON row overhead:
 
 | Maximum width | Median JSON value | Largest JSON value | Fits 64 KiB |
-| --- | ---: | ---: | ---: |
-| 320 px | 24,742 B | 67,012 B | 39 of 40 |
-| 384 px | 35,582 B | 95,800 B | 36 of 40 |
-| 480 px | 47,414 B | 144,640 B | 27 of 40 |
+| ------------- | ----------------: | -----------------: | ----------: |
+| 320 px        |          24,742 B |           67,012 B |    39 of 40 |
+| 384 px        |          35,582 B |           95,800 B |    36 of 40 |
+| 480 px        |          47,414 B |          144,640 B |    27 of 40 |
 
 This confirms that cover bytes do not belong in sync. At 480 px, 13 of the 40
 measured covers exceed the existing value limit after base64 and JSON encoding.
@@ -302,28 +302,27 @@ inventory, and remote deletion.
 
 ### 3. Migrate Book logic to the files API
 
+**Implementation status**: Complete.
+
 Replace file hashes and download state with opaque references:
 
 ```ts
-export type BookCoverRef =
-  | { kind: "none" }
-  | {
-      kind: "file";
-      fileId: FileId;
-      blurHash: string;
-      width: number;
-      height: number;
-      mediaType: "image/webp";
-      recipeVersion: 1;
-    };
+export interface BookCoverRef {
+  fileId: FileId;
+  blurHash: string | null;
+}
 
 export interface Book {
   id: string;
   sourceFileId: FileId;
-  cover: BookCoverRef;
+  cover: BookCoverRef | null;
   // Existing Book metadata and sync fields.
 }
 ```
+
+`cover` is null when the EPUB has no cover. `cover.blurHash` is null when cover
+bytes exist but the current client has not generated the derived placeholder.
+The Book card uses its ordinary placeholder until the BlurHash exists.
 
 Replace the current fields:
 
@@ -346,9 +345,12 @@ Update Book operations to use the new API:
 - Remove all Book and reader knowledge of hashes, file types, upload tasks, and
   download tasks.
 
-Migrate existing local and synchronized Book rows. Preserve the existing
-xxHash value as the opaque source `FileId`. Generate the new cover reference in
-step 4. Do not change the 64 KiB sync value limit or the 1 KiB key limit.
+Convert existing local and synchronized Book file fields to opaque references.
+Preserve each existing xxHash value as a `FileId`, and set the migrated cover's
+BlurHash to null. The ordinary artifact workflow can generate missing derived
+data later. Discard incompatible local reader caches instead of translating
+their old schema. Do not change the 64 KiB sync value limit or the 1 KiB key
+limit.
 
 Add serialization tests that reject base64 or data URLs in Book values and
 confirm that a representative Book remains far below the value limit.
@@ -358,6 +360,11 @@ confirm that a representative Book remains far below the value limit.
 Keep one deterministic application flow. Do not persist a multi-stage status
 machine. Derive the next action from the Book, local file, materialization
 marker, and reader cache that exist.
+
+Do not add a separate migration workflow. On startup, a client can run the same
+operation for a locally present EPUB whose derived data is incomplete. A new
+client runs that operation after it downloads the EPUB. Each operation checks
+its durable outputs and only builds what is absent or uses an older recipe.
 
 #### New EPUB import
 
@@ -402,6 +409,11 @@ Use this derived sequence:
 Expose this through one application operation such as `prepareBook(book)`. The
 operation can combine steps 2 and 3 internally. Its caller does not manage
 intermediate states.
+
+In the normal import path, write the optimized cover file, BlurHash, and Book
+metadata together before the Book can sync. Older Book values can have a null
+BlurHash. Their cards show the ordinary placeholder until `prepareBook()`
+derives the current cover data and updates the Book.
 
 The materialization marker is local-only:
 

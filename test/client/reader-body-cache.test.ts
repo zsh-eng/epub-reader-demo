@@ -11,6 +11,7 @@ import {
   type Book,
   type BookFile,
 } from "@/lib/db";
+import { parseFileId } from "@/lib/files/file-id";
 import { Blob as NodeBlob } from "node:buffer";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -21,10 +22,15 @@ const chapterEntry = {
   title: "Chapter 1",
 };
 
+const SOURCE_FILE_ONE = parseFileId("xxh64:1111111111111111");
+const SOURCE_FILE_TWO = parseFileId("xxh64:2222222222222222");
+const SOURCE_FILE_DELETE = parseFileId("xxh64:3333333333333333");
+
 function createBook(overrides: Partial<Book> = {}): Book {
   return {
     id: "book-1",
-    fileHash: "hash-1",
+    sourceFileId: SOURCE_FILE_ONE,
+    cover: null,
     title: "Cached Book",
     author: "Author",
     fileSize: 123,
@@ -33,7 +39,6 @@ function createBook(overrides: Partial<Book> = {}): Book {
     manifest: [],
     spine: [],
     toc: [],
-    isDownloaded: 1,
     ...overrides,
   };
 }
@@ -81,7 +86,7 @@ describe("reader body cache", () => {
 
     const result = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
@@ -96,7 +101,7 @@ describe("reader body cache", () => {
     const cacheRow = await getBookChapterSourceCache("book-1");
     expect(cacheRow).toMatchObject({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       cacheVersion: READER_BODY_CACHE_SCHEMA_VERSION,
     });
     expect(cacheRow?.chaptersByPath[chapterEntry.href]?.bodyHtml).toContain(
@@ -109,7 +114,7 @@ describe("reader body cache", () => {
 
     await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
@@ -118,7 +123,7 @@ describe("reader body cache", () => {
 
     const result = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
@@ -129,12 +134,12 @@ describe("reader body cache", () => {
     ).toContain("Original");
   });
 
-  it("rebuilds when the file hash changes", async () => {
+  it("rebuilds when the source file changes", async () => {
     await db.bookFiles.add(createChapterFile("book-1", "<p>First file</p>"));
 
     await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
@@ -143,7 +148,7 @@ describe("reader body cache", () => {
 
     const result = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-2",
+      sourceFileId: SOURCE_FILE_TWO,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
@@ -152,8 +157,8 @@ describe("reader body cache", () => {
     expect(
       result.baseContentByChapter.get(0)?.canonicalText.fullText,
     ).toContain("Second file");
-    expect((await getBookChapterSourceCache("book-1"))?.fileHash).toBe(
-      "hash-2",
+    expect((await getBookChapterSourceCache("book-1"))?.sourceFileId).toBe(
+      SOURCE_FILE_TWO,
     );
   });
 
@@ -172,7 +177,7 @@ describe("reader body cache", () => {
 
     const defaultResult = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
@@ -187,7 +192,7 @@ describe("reader body cache", () => {
 
     const publisherResult = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: true,
       matchPublisherBodyTextSize: false,
@@ -221,7 +226,7 @@ describe("reader body cache", () => {
 
     const defaultResult = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: true,
       matchPublisherBodyTextSize: false,
@@ -236,7 +241,7 @@ describe("reader body cache", () => {
 
     const result = await loadReaderBodyCache({
       bookId: "book-1",
-      fileHash: "hash-1",
+      sourceFileId: SOURCE_FILE_ONE,
       chapterEntries: [chapterEntry],
       publisherBookStylingEnabled: true,
       matchPublisherBodyTextSize: true,
@@ -254,11 +259,14 @@ describe("reader body cache", () => {
   });
 
   it("removes the body cache when a book is deleted", async () => {
-    const book = createBook({ id: "book-delete", fileHash: "hash-delete" });
+    const book = createBook({
+      id: "book-delete",
+      sourceFileId: SOURCE_FILE_DELETE,
+    });
     await addBookWithFiles(book, []);
     await putBookChapterSourceCache(
       book.id,
-      book.fileHash,
+      book.sourceFileId,
       {
         [chapterEntry.href]: {
           bodyHtml: "<p>Cached</p>",

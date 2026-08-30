@@ -26,6 +26,7 @@ import {
   type SyncPushResponse,
   type SyncRecord,
 } from "@/lib/sync-v2/protocol";
+import { normalizeBookFileReferences } from "@/lib/book-file-references";
 import type { Table } from "dexie";
 
 const INITIAL_SCHEMA_VERSION = 1;
@@ -347,7 +348,11 @@ function prepareRemoteRecords(
       throw new Error(`Sync value for ${record.key} must be an object`);
     }
 
-    const row = value as Record<string, unknown>;
+    const decodedRow = value as Record<string, unknown>;
+    const row =
+      tableName === "books"
+        ? normalizeBookFileReferences(decodedRow)
+        : decodedRow;
     if (row.id !== rowId) {
       throw new Error(`Sync value ID does not match key ${record.key}`);
     }

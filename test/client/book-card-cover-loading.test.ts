@@ -1,5 +1,6 @@
 import { BookCard } from "@/components/BookCard";
 import type { Book } from "@/lib/db";
+import type { FileId } from "@/lib/files";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -17,7 +18,7 @@ vi.mock("@/hooks/use-toast", () => ({
 
 const book: Book = {
   id: "book-1",
-  fileHash: "epub-hash",
+  sourceFileId: "xxh64:1111111111111111" as FileId,
   title: "Book One",
   author: "Author One",
   fileSize: 100,
@@ -26,8 +27,10 @@ const book: Book = {
   manifest: [],
   spine: [],
   toc: [],
-  isDownloaded: 1,
-  coverContentHash: "cover-hash",
+  cover: {
+    fileId: "xxh64:2222222222222222" as FileId,
+    blurHash: null,
+  },
 };
 
 interface ObserverRecord {

@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useFileUrl } from "@/hooks/use-file-url";
+import { getBookCoverFileId } from "@/lib/book-file-references";
 import type { Book } from "@/lib/db";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { Loader2 } from "lucide-react";
@@ -24,11 +25,10 @@ export function DuplicateBookDialog({
   existingBook,
 }: DuplicateBookDialogProps) {
   const navigate = useNavigate();
-  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(
-    existingBook.coverContentHash,
-    "cover",
-    { skip: !open || !existingBook.coverContentHash },
-  );
+  const coverFileId = getBookCoverFileId(existingBook);
+  const { url: coverUrl, isLoading: isLoadingCover } = useFileUrl(coverFileId, {
+    skip: !open || !coverFileId,
+  });
 
   const handleOpenBook = () => {
     onOpenChange(false);

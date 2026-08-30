@@ -4,12 +4,14 @@ import {
   findMostRecentlyReadBook,
 } from "@/lib/library-sort";
 import type { Book } from "@/lib/db";
+import { parseFileId } from "@/lib/files/file-id";
 import { describe, expect, it } from "vitest";
 
 function makeBook(id: string, dateAdded: number): Book {
   return {
     id,
-    fileHash: `hash-${id}`,
+    sourceFileId: parseFileId("xxh64:1111111111111111"),
+    cover: null,
     title: id,
     author: "Author",
     fileSize: 100,
@@ -18,8 +20,7 @@ function makeBook(id: string, dateAdded: number): Book {
     manifest: [],
     spine: [],
     toc: [],
-    isDownloaded: 1,
-  } as Book;
+  };
 }
 
 describe("compareBooksByDateAddedDesc", () => {

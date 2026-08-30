@@ -1,10 +1,12 @@
 import { resolveReaderEpubPreparation } from "@/components/Reader/hooks/reader-epub-preparation";
 import type { Book } from "@/lib/db";
+import { parseFileId } from "@/lib/files/file-id";
 import { describe, expect, it } from "vitest";
 
 const book = {
   id: "book-1",
-  fileHash: "epub-hash-1",
+  sourceFileId: parseFileId("xxh64:1111111111111111"),
+  cover: null,
   title: "Synced Metadata Only",
   author: "Test Author",
   fileSize: 1234,
@@ -13,7 +15,6 @@ const book = {
   manifest: [],
   spine: [],
   toc: [],
-  isDownloaded: 0,
 } satisfies Book;
 
 describe("resolveReaderEpubPreparation", () => {

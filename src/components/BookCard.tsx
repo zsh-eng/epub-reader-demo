@@ -79,7 +79,7 @@ export function BookCard({
   }, [status]);
 
   useEffect(() => {
-    if (coverUrl || !book.coverContentHash || !onCoverRequest) return;
+    if (coverUrl || !book.cover || !onCoverRequest) return;
     if (!cardElement) return;
 
     if (typeof IntersectionObserver === "undefined") {

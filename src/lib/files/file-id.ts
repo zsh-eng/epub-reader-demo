@@ -12,7 +12,7 @@ export function parseFileId(value: string): FileId {
   return value as FileId;
 }
 
-/** Temporary bridge for Book rows that still expose a raw xxHash digest. */
+/** Migration bridge for legacy rows that stored a raw xxHash digest. */
 export function fileIdFromContentHash(contentHash: string): FileId {
   if (!CONTENT_HASH_PATTERN.test(contentHash)) {
     throw new Error(`Invalid xxHash64 digest: ${contentHash}`);

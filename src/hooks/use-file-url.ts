@@ -1,12 +1,12 @@
 /**
  * useFileUrl Hook
  *
- * React hook for fetching files via FileManager and returning object URLs.
+ * React hook for fetching opaque file references and returning object URLs.
  * Handles automatic cleanup of object URLs when the component unmounts
  * or the file reference changes.
  */
 
-import { fileManager, type FileType } from "@/lib/files";
+import { files, type FileId } from "@/lib/files";
 import { useEffect, useState } from "react";
 
 interface UseFileUrlState {
@@ -30,15 +30,14 @@ interface UseFileUrlOptions {
 /**
  * Hook for fetching a file and returning an object URL.
  *
- * @param contentHash - The content hash of the file (e.g., book's fileHash)
- * @param fileType - The type of file ('epub' or 'cover')
+ * @param fileId - The opaque file reference
  * @param options - Optional settings
  * @returns State object with url, isLoading, error, and fromCache
  *
  * @example
  * ```tsx
- * function BookCover({ fileHash }: { fileHash: string }) {
- *   const { url, isLoading, error } = useFileUrl(fileHash, 'cover');
+ * function BookCover({ fileId }: { fileId: FileId }) {
+ *   const { url, isLoading, error } = useFileUrl(fileId);
  *
  *   if (isLoading) return <Spinner />;
  *   if (error) return <FallbackCover />;
@@ -47,8 +46,7 @@ interface UseFileUrlOptions {
  * ```
  */
 export function useFileUrl(
-  contentHash: string | undefined,
-  fileType: FileType,
+  fileId: FileId | undefined,
   options: UseFileUrlOptions = {},
 ): UseFileUrlState {
   const { skip = false, localOnly = false } = options;
@@ -61,8 +59,7 @@ export function useFileUrl(
   });
 
   useEffect(() => {
-    // Skip if no content hash or explicitly skipped
-    if (!contentHash || skip) {
+    if (!fileId || skip) {
       setState({
         url: undefined,
         isLoading: false,
@@ -74,27 +71,30 @@ export function useFileUrl(
 
     let isMounted = true;
     let objectUrl: string | undefined;
+    const resolvedFileId = fileId;
 
     async function fetchFile() {
       setState((prev) => ({ ...prev, isLoading: true, error: undefined }));
 
       try {
-        const result = await fileManager.getFile(contentHash!, fileType, {
-          localOnly,
-        });
+        const fromCache = await files.hasLocal(resolvedFileId);
+        if (!fromCache && localOnly) {
+          throw new Error(`File not found locally: ${resolvedFileId}`);
+        }
+        const blob = await files.get(resolvedFileId);
 
         if (!isMounted) {
           return;
         }
 
         // Create object URL from blob
-        objectUrl = URL.createObjectURL(result.blob);
+        objectUrl = URL.createObjectURL(blob);
 
         setState({
           url: objectUrl,
           isLoading: false,
           error: undefined,
-          fromCache: result.fromCache,
+          fromCache,
         });
       } catch (err) {
         if (!isMounted) {
@@ -119,7 +119,7 @@ export function useFileUrl(
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [contentHash, fileType, skip, localOnly]);
+  }, [fileId, skip, localOnly]);
 
   return state;
 }
@@ -127,29 +127,29 @@ export function useFileUrl(
 /**
  * Hook for checking if a file exists locally (no network request).
  *
- * @param contentHash - The content hash of the file
- * @param fileType - The type of file
+ * @param fileId - The opaque file reference
  * @returns Object with hasLocal boolean and isChecking state
  */
-export function useHasLocalFile(
-  contentHash: string | undefined,
-  fileType: FileType,
-): { hasLocal: boolean | undefined; isChecking: boolean } {
+export function useHasLocalFile(fileId: FileId | undefined): {
+  hasLocal: boolean | undefined;
+  isChecking: boolean;
+} {
   const [hasLocal, setHasLocal] = useState<boolean | undefined>(undefined);
   const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
-    if (!contentHash) {
+    if (!fileId) {
       setHasLocal(undefined);
       return;
     }
 
     let isMounted = true;
+    const resolvedFileId = fileId;
 
     async function check() {
       setIsChecking(true);
       try {
-        const result = await fileManager.hasLocal(contentHash!, fileType);
+        const result = await files.hasLocal(resolvedFileId);
         if (isMounted) {
           setHasLocal(result);
         }
@@ -169,7 +169,7 @@ export function useHasLocalFile(
     return () => {
       isMounted = false;
     };
-  }, [contentHash, fileType]);
+  }, [fileId]);
 
   return { hasLocal, isChecking };
 }

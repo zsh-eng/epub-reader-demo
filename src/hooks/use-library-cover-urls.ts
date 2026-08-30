@@ -1,11 +1,12 @@
-import { fileManager } from "@/lib/files";
+import { getBookCoverFileId } from "@/lib/book-file-references";
 import type { Book } from "@/lib/db";
+import { files, type FileId } from "@/lib/files";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const INITIAL_COVER_ROWS = 2;
 
-const decodedCoverUrls = new Map<string, string>();
-const pendingCoverLoads = new Map<string, Promise<string | null>>();
+const decodedCoverUrls = new Map<FileId, string>();
+const pendingCoverLoads = new Map<FileId, Promise<string | null>>();
 
 async function decodeImage(url: string): Promise<void> {
   const image = new Image();
@@ -37,19 +38,17 @@ function getInitialCoverLimit(): number {
  * object URL across library mounts prevents a second blank-to-cover swap when
  * the user returns from the reader.
  */
-async function loadDecodedCoverUrl(
-  contentHash: string,
-): Promise<string | null> {
-  const cachedUrl = decodedCoverUrls.get(contentHash);
+async function loadDecodedCoverUrl(fileId: FileId): Promise<string | null> {
+  const cachedUrl = decodedCoverUrls.get(fileId);
   if (cachedUrl) return cachedUrl;
 
-  const pendingLoad = pendingCoverLoads.get(contentHash);
+  const pendingLoad = pendingCoverLoads.get(fileId);
   if (pendingLoad) return pendingLoad;
 
   const loadPromise = (async () => {
     try {
-      const result = await fileManager.getFile(contentHash, "cover");
-      const objectUrl = URL.createObjectURL(result.blob);
+      const blob = await files.get(fileId);
+      const objectUrl = URL.createObjectURL(blob);
 
       try {
         await decodeImage(objectUrl);
@@ -58,51 +57,47 @@ async function loadDecodedCoverUrl(
         return null;
       }
 
-      const existingUrl = decodedCoverUrls.get(contentHash);
+      const existingUrl = decodedCoverUrls.get(fileId);
       if (existingUrl) {
         URL.revokeObjectURL(objectUrl);
         return existingUrl;
       }
 
-      decodedCoverUrls.set(contentHash, objectUrl);
+      decodedCoverUrls.set(fileId, objectUrl);
       return objectUrl;
     } catch {
       return null;
     } finally {
-      pendingCoverLoads.delete(contentHash);
+      pendingCoverLoads.delete(fileId);
     }
   })();
 
-  pendingCoverLoads.set(contentHash, loadPromise);
+  pendingCoverLoads.set(fileId, loadPromise);
   return loadPromise;
-}
-
-function getCoverHash(book: Book): string | null {
-  return book.coverContentHash ?? null;
 }
 
 function getCachedCoverUrls(books: readonly Book[]): Map<string, string> {
   const result = new Map<string, string>();
 
   for (const book of books) {
-    const contentHash = getCoverHash(book);
-    if (!contentHash) continue;
+    const fileId = getBookCoverFileId(book);
+    if (!fileId) continue;
 
-    const url = decodedCoverUrls.get(contentHash);
+    const url = decodedCoverUrls.get(fileId);
     if (url) result.set(book.id, url);
   }
 
   return result;
 }
 
-export function evictLibraryCoverUrl(contentHash: string | undefined): void {
-  if (!contentHash) return;
+export function evictLibraryCoverUrl(fileId: FileId | undefined): void {
+  if (!fileId) return;
 
-  const url = decodedCoverUrls.get(contentHash);
+  const url = decodedCoverUrls.get(fileId);
   if (!url) return;
 
   URL.revokeObjectURL(url);
-  decodedCoverUrls.delete(contentHash);
+  decodedCoverUrls.delete(fileId);
 }
 
 interface UseLibraryCoverUrlsResult {
@@ -125,12 +120,12 @@ export function useLibraryCoverUrls(
     [books, initialCoverLimit],
   );
   const initialKey = initialBooks
-    .map((book) => `${book.id}:${getCoverHash(book) ?? "none"}`)
+    .map((book) => `${book.id}:${getBookCoverFileId(book) ?? "none"}`)
     .join("|");
   const [preparedKey, setPreparedKey] = useState(() =>
     initialBooks.every((book) => {
-      const contentHash = getCoverHash(book);
-      return !contentHash || decodedCoverUrls.has(contentHash);
+      const fileId = getBookCoverFileId(book);
+      return !fileId || decodedCoverUrls.has(fileId);
     })
       ? initialKey
       : "",
@@ -144,10 +139,10 @@ export function useLibraryCoverUrls(
 
     void Promise.all(
       initialBooks.map(async (book) => {
-        const contentHash = getCoverHash(book);
-        if (!contentHash) return null;
+        const fileId = getBookCoverFileId(book);
+        if (!fileId) return null;
 
-        const url = await loadDecodedCoverUrl(contentHash);
+        const url = await loadDecodedCoverUrl(fileId);
         return url ? ([book.id, url] as const) : null;
       }),
     ).then((entries) => {
@@ -169,10 +164,10 @@ export function useLibraryCoverUrls(
   }, [initialBooks, initialKey]);
 
   const requestCover = useCallback((book: Book) => {
-    const contentHash = getCoverHash(book);
-    if (!contentHash) return;
+    const fileId = getBookCoverFileId(book);
+    if (!fileId) return;
 
-    void loadDecodedCoverUrl(contentHash).then((url) => {
+    void loadDecodedCoverUrl(fileId).then((url) => {
       if (!url) return;
       setCoverUrls((current) => {
         if (current.get(book.id) === url) return current;

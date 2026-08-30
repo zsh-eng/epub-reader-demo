@@ -2,12 +2,14 @@ import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import {
   createSyncV2ApplicationDb,
   EPUBReaderSyncV2DB,
+  type SyncV2Book,
   type SyncV2ReadingSettings,
   type SyncV2ReadingState,
 } from "@/lib/sync-v2/db";
 import {
   decodeSyncValue,
   encodeSyncKey,
+  MAX_SYNC_VALUE_BYTES,
   type SyncPushChange,
 } from "@/lib/sync-v2/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -96,6 +98,36 @@ describe("sync v2 mutation middleware", () => {
 
     expect(await db.bookTextCache.get(cache.bookId)).toEqual(cache);
     expect(await db._sync_outbox.count()).toBe(0);
+  });
+
+  it("serializes compact Book references and rejects inline file data", async () => {
+    const validBook = book("book-files", "1111111111111111");
+    await db.books.add(validBook);
+
+    const change = await db._sync_outbox.get(
+      encodeSyncKey("books", validBook.id),
+    );
+    expect(decodeSyncValue(change!.value)).toEqual(validBook);
+    expect(new TextEncoder().encode(change!.value).byteLength).toBeLessThan(
+      MAX_SYNC_VALUE_BYTES / 8,
+    );
+    expect(change!.value).not.toContain("data:");
+
+    await expect(
+      db.books.add({
+        ...book("book-data-url", "2222222222222222"),
+        metadata: { coverDataUrl: "data:image/webp;base64,AAAA" },
+      }),
+    ).rejects.toThrow("contains inline file data");
+    await expect(
+      db.books.add({
+        ...book("book-base64", "3333333333333333"),
+        metadata: { payload: "A".repeat(128) },
+      }),
+    ).rejects.toThrow("contains inline file data");
+
+    expect(await db.books.count()).toBe(1);
+    expect(await db._sync_outbox.count()).toBe(1);
   });
 
   it("converts bulk deletes into retained soft-deleted rows", async () => {
@@ -227,6 +259,32 @@ function readingSettings(id: string): SyncV2ReadingSettings {
     fontSize: 18,
     lineHeight: 1.5,
     mode: "paginated",
+    isDeleted: false,
+  };
+}
+
+function book(id: string, digest: string): SyncV2Book {
+  return {
+    id,
+    sourceFileId: `xxh64:${digest}` as SyncV2Book["sourceFileId"],
+    title: "A representative book",
+    author: "Author",
+    fileSize: 1_024,
+    dateAdded: 1_000,
+    metadata: { language: "en" },
+    manifest: [
+      {
+        id: "chapter-1",
+        href: "Text/chapter-1.xhtml",
+        mediaType: "application/xhtml+xml",
+      },
+    ],
+    spine: [{ idref: "chapter-1" }],
+    toc: [{ label: "Chapter 1", href: "Text/chapter-1.xhtml" }],
+    cover: {
+      fileId: "xxh64:2222222222222222" as SyncV2Book["sourceFileId"],
+      blurHash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj",
+    },
     isDeleted: false,
   };
 }

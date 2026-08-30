@@ -3,13 +3,10 @@ import {
   addBookWithFiles,
   deleteBook,
   getAllBooks,
-  getBookByFileHash,
+  getBookBySourceFileId,
 } from "@/lib/db";
 import { parseEPUB } from "@/lib/epub-parser";
-import { hashFile } from "@/lib/file-hash";
-import { fileManager } from "@/lib/files/file-manager";
-import { createFileId } from "@/lib/files/types";
-import type { StoredFile } from "@/lib/files/types";
+import { files } from "@/lib/files";
 
 export class DuplicateBookError extends Error {
   existingBook: Book;
@@ -23,7 +20,7 @@ export class DuplicateBookError extends Error {
 
 /**
  * Add a book from an EPUB file
- * Throws DuplicateBookError if a book with the same file hash already exists
+ * Throws DuplicateBookError if the source file already exists in the library.
  */
 export async function addBookFromFile(file: File): Promise<Book> {
   // Validate file type
@@ -32,8 +29,10 @@ export async function addBookFromFile(file: File): Promise<Book> {
   }
 
   try {
-    const fileHash = await hashFile(file);
-    const existingBook = await getBookByFileHash(fileHash);
+    const sourceFileId = await files.put(file, {
+      mediaType: "application/epub+zip",
+    });
+    const existingBook = await getBookBySourceFileId(sourceFileId);
     if (existingBook) {
       throw new DuplicateBookError(
         "A book with this file already exists in your library",
@@ -41,49 +40,20 @@ export async function addBookFromFile(file: File): Promise<Book> {
       );
     }
 
-    const { book, files, coverBlob, epubBlob } = await parseEPUB(file, {
-      fileHash,
+    const {
+      book,
+      files: bookFiles,
+      coverBlob,
+    } = await parseEPUB(file, {
+      sourceFileId,
     });
 
-    // Queue the EPUB file for upload via FileManager
-    await fileManager.queueUpload(fileHash, "epub", epubBlob, {
-      priority: "normal",
-    });
-
-    // Queue the cover file for upload (if available)
-    if (coverBlob && book.coverContentHash) {
-      await fileManager.queueUpload(book.coverContentHash, "cover", coverBlob, {
-        priority: "normal",
-      });
+    if (coverBlob) {
+      const coverFileId = await files.put(coverBlob);
+      book.cover = { fileId: coverFileId, blurHash: null };
     }
 
-    // Prepare stored files for local storage
-    const epubFile: StoredFile = {
-      id: createFileId("epub", fileHash),
-      contentHash: fileHash,
-      fileType: "epub",
-      blob: epubBlob,
-      mediaType: "application/epub+zip",
-      size: file.size,
-      storedAt: Date.now(),
-    };
-
-    const filesToStore: StoredFile[] = [epubFile];
-    if (coverBlob && book.coverContentHash) {
-      const coverFile: StoredFile = {
-        id: createFileId("cover", book.coverContentHash),
-        contentHash: book.coverContentHash,
-        fileType: "cover",
-        blob: coverBlob,
-        mediaType: coverBlob.type || "image/jpeg",
-        size: coverBlob.size,
-        storedAt: Date.now(),
-      };
-      filesToStore.push(coverFile);
-    }
-
-    // Add book, bookFiles atomically in a single transaction
-    await addBookWithFiles(book, files);
+    await addBookWithFiles(book, bookFiles);
     return book;
   } catch (error) {
     // Re-throw DuplicateBookError as-is
