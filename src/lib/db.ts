@@ -279,27 +279,6 @@ export async function addBook(book: Book): Promise<string> {
   return db.books.add({ ...book, isDeleted: false });
 }
 
-/**
- * Add a book with its files atomically in a single transaction
- * This ensures all related data is stored together or not at all
- */
-export async function addBookWithFiles(
-  book: Book,
-  bookFiles: BookFile[],
-): Promise<string> {
-  return db.transaction("rw", [db.books, db.bookFiles], async () => {
-    // Add book first
-    const bookId = await db.books.add({ ...book, isDeleted: false });
-
-    // Add book files (extracted EPUB content)
-    if (bookFiles.length > 0) {
-      await db.bookFiles.bulkAdd(bookFiles);
-    }
-
-    return bookId;
-  });
-}
-
 export async function getBook(id: string): Promise<Book | undefined> {
   const book = await db.books.get(id);
   return book && isNotDeleted(book) ? book : undefined;
@@ -356,23 +335,11 @@ export async function getBookBySourceFileId(
 // Helper Functions (Book Files)
 // ============================================================================
 
-export async function addBookFile(bookFile: BookFile): Promise<string> {
-  return db.bookFiles.add(bookFile);
-}
-
 export async function getBookFile(
   bookId: string,
   path: string,
 ): Promise<BookFile | undefined> {
   return db.bookFiles.where("[bookId+path]").equals([bookId, path]).first();
-}
-
-export async function getBookFiles(bookId: string): Promise<BookFile[]> {
-  return db.bookFiles.where("bookId").equals(bookId).toArray();
-}
-
-export async function hasBookFiles(bookId: string): Promise<boolean> {
-  return (await db.bookFiles.where("bookId").equals(bookId).count()) > 0;
 }
 
 export async function getBookMaterialization(

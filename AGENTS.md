@@ -53,158 +53,88 @@ bun run test:e2e:headed # Visible browser
 
 ## Sync Architecture
 
-The app uses a local-first architecture with bidirectional sync. Data is stored locally (IndexedDB via Dexie) and synced with the server (Cloudflare D1).
+The app stores domain rows in IndexedDB and synchronizes them through one
+opaque record log in D1.
 
-### Hybrid Logical Clock (HLC)
+- `src/lib/sync-v2/db.ts` owns the Dexie schema and the list of synchronized
+  domain tables.
+- `src/lib/sync-v2/middleware.ts` converts ordinary local writes into compacted
+  outbox changes in the same transaction.
+- `src/lib/sync-v2/sync.ts` pulls a stable remote page, applies last-write-wins
+  conflict resolution, and then pushes the local outbox.
+- `src/lib/sync-v2/client-state.ts` owns the device ID, pull cursor, and Hybrid
+  Logical Clock state.
+- `src/lib/sync-service.ts` owns periodic sync, online recovery, and TanStack
+  Query invalidation.
 
-**Location**: `src/lib/sync/hlc/hlc.ts`
+Synced domain tables include Books, reading checkpoints, reading sessions,
+highlights, reading settings, reading state, and notes. Application types do
+not contain protocol metadata. Stored rows add only the plain `isDeleted`
+field that the sync middleware needs.
 
-HLC provides ordering for distributed events. Format: `<timestamp>-<counter>-<deviceId>`
+The following data is local-only and regenerable:
 
-- **Monotonically increasing**: Even if system clock goes backwards
-- **Causality tracking**: Ensures events can be totally ordered
-- **Conflict resolution**: Last-Write-Wins using HLC comparison
-
-The HLC service is a singleton (`getHLCService()`) to ensure consistency across the app.
-
-### Sync Tables
-
-**Location**: `src/lib/sync-tables.ts`
-
-Defines which entities are synced vs local-only:
-
-**Synced tables** (metadata synced to server) - non-exhaustive list:
-
-- `books` - Book metadata (title, author, fileHash, etc.)
-- `readingProgress` - Per-book reading position (scoped by bookId)
-- `highlights` - User annotations (scoped by bookId)
-- `readingSettings` - Global user preferences
-
-**Local-only tables** (never synced) - non-exhaustive list:
-
-- `bookFiles` - Extracted EPUB contents for rendering
-- `files` - Generic file storage (content-addressed)
-- `transferQueue` - Upload/download queue management
-- `syncLog` - Debug logging
-
-Each synced table has sync metadata fields: `_hlc`, `_deviceId`, `_isDeleted`, `_serverTimestamp`.
-
-### Adapters
-
-The sync system uses adapters to abstract storage and network operations:
-
-**StorageAdapter** (`src/lib/sync/storage-adapter.ts`):
-
-- Abstracts local IndexedDB operations
-- `getPendingChanges()` - Get items with `_serverTimestamp = UNSYNCED_TIMESTAMP`
-- `applyRemoteChanges()` - Apply server changes with conflict resolution
-- `getSyncCursor()` / `setSyncCursor()` - Track sync progress per table
-
-**RemoteAdapter** (`src/lib/sync/remote-adapter.ts`):
-
-- Abstracts server API calls
-- `pull(table, since, entityId?, limit?)` - Fetch changes since timestamp
-- `push(table, items)` - Send local changes to server
-- `getCurrentTimestamp()` - Get server time for cursor initialization
-
-### Sync Engine
-
-**Location**: `src/lib/sync/sync-engine.ts`
-
-Orchestrates bidirectional sync:
-
-1. **Pull**: Fetch server changes → compare HLCs → apply newer changes locally
-2. **Push**: Get pending local changes → send to server → update `_serverTimestamp`
-3. **Sync**: Pull then push (ensures local changes are persisted before potential overwrites)
-
-Conflict resolution uses **Last-Write-Wins** based on HLC comparison.
-
-### Sync Service
-
-**Location**: `src/lib/sync-service.ts`
-
-High-level lifecycle management:
-
-- **Periodic sync**: Every 30 seconds (configurable)
-- **Online/offline handling**: Auto-syncs when coming online
-- **Throttling**: Min 5 seconds between syncs for same table
-- **Middleware integration**: Triggers sync after local mutations
-- **Query invalidation**: Invalidates TanStack Query caches after sync
+- `bookFiles` contains expanded EPUB entries.
+- `bookMaterializations` proves that expansion completed for one source file
+  and recipe version.
+- `bookTextCache` and `bookChapterSourceCache` contain Reader-derived data.
+- `files` contains local binary bytes.
+- `fileUploadOperations` contains durable upload intent.
 
 ---
 
 ## File Storage System
 
-Files (EPUBs, covers) are stored separately from metadata and use a content-addressed system.
+Files are separate from synchronized values. Books store only opaque references
+to an original EPUB and an optional 480 px WebP cover. A small BlurHash can be
+stored with the cover reference.
 
 ### Architecture
 
-**FileStorage** (`src/lib/files/file-storage.ts`):
+`src/lib/files/files-manager.ts` provides the generic files API:
 
-- Low-level IndexedDB wrapper for blob storage
-- Content-addressed by `fileType:contentHash` (e.g., `epub:abc123`)
-- Stores: blob, mediaType, size, storedAt
+- `put()` calculates an opaque `FileId` and atomically stores the Blob and its
+  upload operation. It does not wait for the network.
+- `get()` returns local bytes or downloads and stores them.
+- `ensureLocal()` uses the same deduplicated download path as `get()`.
+- `listLocal()` and `listRemote()` expose file inventory.
+- `deleteRemote()` deletes only the remote object. It does not remove local
+  bytes or inspect Book references.
 
-**FileManager** (`src/lib/files/file-manager.ts`):
+The application controls request order by awaiting these operations. The files
+manager has no file types, Book behavior, or numeric priority scheduler.
 
-- High-level facade for file access
-- **Cache-first**: Check local IndexedDB before fetching from server
-- **Deduplication**: Prevents duplicate in-flight requests
-- **Auto-caching**: Fetched files are stored locally
-- Server endpoint pattern: `/api/files/{fileType}/{contentHash}`
+The server exposes only the generic routes:
 
-### File Types - non-exhaustive list
-
-- `epub` - The EPUB file itself
-- `cover` - Book cover image
+```text
+PUT    /api/files/:fileId
+GET    /api/files/:fileId
+GET    /api/files
+DELETE /api/files/:fileId
+```
 
 ### Usage Pattern
 
 ```ts
-// Get file (checks local, fetches from server if needed)
-const result = await fileManager.getFile(contentHash, "epub");
+const fileId = await files.put(blob, { mediaType: blob.type });
+const localOrDownloadedBlob = await files.get(fileId);
+const hasLocalBytes = await files.hasLocal(fileId);
 
-// Get object URL for rendering
-const url = await fileManager.getFileUrl(contentHash, "cover");
-// Remember to URL.revokeObjectURL() when done!
-
-// Check if locally available
-const hasLocal = await fileManager.hasLocal(contentHash, "epub");
-
-// Queue for background download
-await fileManager.queueDownload(contentHash, "epub", { priority: "high" });
+// React components can use useFileUrl(fileId) for a managed object URL.
 ```
 
 ---
 
 ## Adding New Synced Entities
 
-To add a new entity type that syncs:
+To add a new synchronized domain entity:
 
-1. **Define table** in `src/lib/sync-tables.ts`:
+1. Add its domain type and Dexie table to `src/lib/sync-v2/db.ts`.
+2. Add the table name to `SYNC_V2_SYNCED_TABLES`.
+3. Use ordinary Dexie `add`, `put`, and `delete` operations. The middleware
+   writes protocol changes to `_sync_outbox`.
+4. Add integration tests for local mutation, pull conflict resolution, push
+   reconciliation, and deletion.
 
-   ```ts
-   newEntity: {
-     primaryKey: 'id',
-     indices: ['someField'],
-     entityKey: 'parentId', // Optional: for scoped sync
-   } satisfies SyncTableDef,
-   ```
-
-2. **Add Dexie schema** in `src/lib/db.ts` using `createSyncTableSchema()`
-
-3. **Add server schema** in `server/db/schema.ts` with matching columns + sync metadata
-
-4. **Implement server sync endpoint** if needed (generic `/api/sync/:table` may suffice)
-
-5. **Add query invalidation** in `SyncService.invalidateQueries()` if using React Query
-
-### Sync Metadata Fields
-
-Every synced record must have:
-
-- `id` - Unique identifier (typically UUID)
-- `_hlc` - Hybrid Logical Clock timestamp
-- `_deviceId` - Device that made the change
-- `_isDeleted` - Soft delete flag (0 or 1)
-- `_serverTimestamp` - Server timestamp when accepted (or `UNSYNCED_TIMESTAMP` if pending)
+Do not add a type-specific server table or route. The generic sync endpoints
+store encoded domain values in `sync_records`.

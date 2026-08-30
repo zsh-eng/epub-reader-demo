@@ -1,6 +1,6 @@
 # New Files Implementation Plan
 
-**Status**: In progress — steps 1 through 4 complete
+**Status**: Implementation complete — production cutover pending
 
 **Last updated**: 2026-08-30
 
@@ -456,6 +456,9 @@ Local files and materializations are durable. Do not evict them automatically.
 
 ### 5. Cut over and remove old code
 
+**Implementation status**: Complete. Production deployment and cold-client
+verification remain operational work after this review unit merges.
+
 Use one coordinated personal-app cutover:
 
 1. Back up D1 and record the active file inventory.
@@ -486,6 +489,11 @@ After verification, remove:
 - `fileHash`, `coverContentHash`, and `isDownloaded` application use.
 - Type-specific server routes, helpers, columns, and indexes.
 - Legacy cover objects after every new WebP reference is verified.
+
+The code cutover removes the temporary type-specific HTTP routes, their tests,
+the unused EPUB-processing wrapper, obsolete database helpers, and stale
+architecture instructions. Keep the Dexie upgrade transforms until installed
+clients have opened a release with the current schema.
 
 Keep the canonical EPUB R2 objects and their bytes. Keep the D1 backup, R2
 object keys, and migration reports through the rollback window. Update

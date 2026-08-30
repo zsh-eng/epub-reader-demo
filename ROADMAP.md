@@ -129,8 +129,7 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Long press animation improvements
 - [x] Benchmark highlights page for bottlenecks
 
-- [ ] New file storage sync
-  - Reminder not to over-optimise for migration - assume that we are going to override eventually
+- [x] New local-first file storage and EPUB materialization flow
 
 - [ ] Add debug flag
 - [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)

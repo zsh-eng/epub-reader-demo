@@ -3,7 +3,7 @@ import {
   READER_BODY_CACHE_SCHEMA_VERSION,
 } from "@/components/Reader/data/reader-cache/cache";
 import {
-  addBookWithFiles,
+  addBook,
   db,
   deleteBook,
   getBookChapterSourceCache,
@@ -263,7 +263,7 @@ describe("reader body cache", () => {
       id: "book-delete",
       sourceFileId: SOURCE_FILE_DELETE,
     });
-    await addBookWithFiles(book, []);
+    await addBook(book);
     await db.bookMaterializations.put({
       bookId: book.id,
       sourceFileId: book.sourceFileId,

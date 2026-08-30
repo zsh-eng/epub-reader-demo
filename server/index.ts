@@ -15,7 +15,6 @@ import {
 import { createAuth } from "@server/lib/auth";
 import { getDevices } from "@server/lib/devices";
 import {
-  computeFileId,
   deleteRemoteFile,
   fileIdSchema,
   getRemoteFile,
@@ -299,85 +298,6 @@ const route = app
     } catch (error) {
       console.error("Error deleting file:", error);
       return c.json({ error: "Failed to delete file" }, 500);
-    }
-  })
-  // Temporary compatibility routes keep the current client operational until
-  // it moves to the opaque files API. They do not restore file types in D1.
-  .post("/files/upload", requireUser, async (c) => {
-    const user = c.get("user")!;
-
-    try {
-      const body = await c.req.parseBody();
-      const file = body["file"];
-      if (!file || typeof file === "string") {
-        return c.json({ error: "No file provided" }, 400);
-      }
-
-      const content = await file.arrayBuffer();
-      const fileId = await computeFileId(content);
-      const result = await putRemoteFile(
-        c.env.DATABASE,
-        c.env.BOOK_STORAGE,
-        user.id,
-        fileId,
-        content,
-        file.type || "application/octet-stream",
-      );
-
-      if (!result) {
-        throw new Error("Computed file ID did not match uploaded content");
-      }
-
-      return c.json({
-        success: true,
-        contentHash: fileId.slice("xxh64:".length),
-        fileName: file.name,
-        fileSize: result.fileSize,
-        mimeType: result.mediaType,
-        alreadyExists: result.alreadyExists,
-      });
-    } catch (error) {
-      console.error("Error uploading file through compatibility route:", error);
-      return c.json({ error: "Failed to upload file" }, 500);
-    }
-  })
-  .get("/files/:fileType/:contentHash", requireUser, async (c) => {
-    const user = c.get("user")!;
-    const fileIdResult = fileIdSchema.safeParse(
-      `xxh64:${c.req.param("contentHash")}`,
-    );
-    if (!fileIdResult.success) {
-      return c.json({ error: "Invalid content hash" }, 400);
-    }
-
-    try {
-      const storedFile = await getRemoteFile(
-        c.env.DATABASE,
-        user.id,
-        fileIdResult.data,
-      );
-      if (!storedFile) {
-        return c.json({ error: "File not found" }, 404);
-      }
-
-      const object = await c.env.BOOK_STORAGE.get(storedFile.r2Key);
-      if (!object) {
-        return c.json({ error: "File not found in storage" }, 404);
-      }
-
-      const headers = new Headers({
-        "Content-Type": storedFile.mediaType,
-        "Cache-Control": "private, max-age=31536000, immutable",
-        "Content-Length": object.size.toString(),
-      });
-      if (object.httpEtag) {
-        headers.set("ETag", object.httpEtag);
-      }
-
-      return new Response(object.body, { headers });
-    } catch (error) {
-      console.error("Error fetching file through compatibility route:", error);
-      return c.json({ error: "Failed to retrieve file" }, 500);
     }
   })
   // Generic HLC-based sync endpoints

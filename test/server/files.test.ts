@@ -362,34 +362,17 @@ describe("generic files API", () => {
     ]);
   });
 
-  it("bridges the legacy routes until the client files API replaces them", async () => {
-    const content = new TextEncoder().encode("legacy-client-file");
-    const formData = new FormData();
-    formData.append(
-      "file",
-      new File([content], "legacy.epub", { type: "application/epub+zip" }),
-    );
-    formData.append("fileType", "epub");
-
-    const uploadResponse = await SELF.fetch(
-      "http://example.com/api/files/upload",
-      {
+  it("does not expose the retired type-specific routes", async () => {
+    const responses = await Promise.all([
+      SELF.fetch("http://example.com/api/files/upload", {
         method: "POST",
         headers: { Cookie: firstUser.sessionCookie },
-        body: formData,
-      },
-    );
-    expect(uploadResponse.status).toBe(200);
-    const uploadData = await uploadResponse.json<{ contentHash: string }>();
+      }),
+      SELF.fetch("http://example.com/api/files/epub/1111111111111111", {
+        headers: { Cookie: firstUser.sessionCookie },
+      }),
+    ]);
 
-    const downloadResponse = await SELF.fetch(
-      `http://example.com/api/files/epub/${uploadData.contentHash}`,
-      { headers: { Cookie: firstUser.sessionCookie } },
-    );
-
-    expect(downloadResponse.status).toBe(200);
-    expect(new Uint8Array(await downloadResponse.arrayBuffer())).toEqual(
-      content,
-    );
+    expect(responses.map((response) => response.status)).toEqual([404, 404]);
   });
 });
