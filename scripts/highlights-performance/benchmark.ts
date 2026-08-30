@@ -5,6 +5,7 @@ import path from "node:path";
 
 const DEFAULT_URL = "http://127.0.0.1:4174";
 const DEFAULT_OUTPUT_DIRECTORY = "diagnostics/highlights-performance";
+const FIXTURE_VITE_CONFIG = "scripts/highlights-performance/vite.config.ts";
 
 interface CliOptions {
   label: string;
@@ -164,6 +165,8 @@ function startPreviewServer(options: CliOptions): Subprocess | null {
       "x",
       "vite",
       "preview",
+      "--config",
+      FIXTURE_VITE_CONFIG,
       "--host",
       url.hostname,
       "--port",
@@ -411,7 +414,7 @@ async function runBenchmark(options: CliOptions): Promise<void> {
         const page = await context.newPage();
         await installObservers(page);
         const query = distribution === "single" ? "?distribution=single" : "";
-        await page.goto(`${options.url}/debug/highlights-performance${query}`, {
+        await page.goto(`${options.url}/${query}`, {
           waitUntil: "load",
         });
         const measurement = await measurePage(page);

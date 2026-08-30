@@ -15,12 +15,9 @@ export interface ReadingSessionsData {
 }
 
 /** Loads the local-first source records used by the product Sessions page. */
-export function useReadingSessionsQuery({
-  enabled = true,
-}: { enabled?: boolean } = {}) {
+export function useReadingSessionsQuery() {
   return useQuery({
     queryKey: readingSessionKeys.overview,
-    enabled,
     queryFn: async (): Promise<ReadingSessionsData> => {
       const [books, sessions] = await Promise.all([
         db.books.filter(isActiveRecord).toArray(),

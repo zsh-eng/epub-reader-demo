@@ -1659,12 +1659,7 @@ function HighlightsSearch({
   );
 }
 
-export function HighlightsMasonry({
-  groupsOverride,
-}: {
-  /** Test-only data seam for deterministic performance fixtures. */
-  groupsOverride?: BookHighlightGroup[];
-} = {}) {
+export function HighlightsMasonry() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const tooltipHandle = useMemo(
@@ -1691,14 +1686,8 @@ export function HighlightsMasonry({
     useSearchStickyState();
   const { displayedProgress, animateAfterInstantNavigation } =
     useBookNavigationProgress(scrollYProgress);
-  const shouldLoadStoredData = groupsOverride === undefined;
-  const { data: storedGroups = [], isLoading: isStoredDataLoading } =
-    useAllHighlightsQuery({ enabled: shouldLoadStoredData });
-  const { data: readingSessionsData } = useReadingSessionsQuery({
-    enabled: shouldLoadStoredData,
-  });
-  const groups = groupsOverride ?? storedGroups;
-  const isLoading = shouldLoadStoredData && isStoredDataLoading;
+  const { data: groups = [], isLoading } = useAllHighlightsQuery();
+  const { data: readingSessionsData } = useReadingSessionsQuery();
   const readingTimeByBookId = useMemo(() => {
     const totals = new Map<string, number>();
     if (!readingSessionsData) return totals;

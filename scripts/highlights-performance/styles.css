@@ -1,0 +1,4 @@
+@import "../../src/index.css";
+
+/* The benchmark has a separate Vite root, so include product UI sources. */
+@source "../../src";

@@ -1,4 +1,4 @@
-# Highlights performance
+# Highlights rendering performance
 
 This document records the current Highlights performance model, measured
 results, implemented optimizations, and possible follow-up work.
@@ -6,8 +6,8 @@ results, implemented optimizations, and possible follow-up work.
 ## User-visible problem
 
 The production Highlights page has a noticeable delay with about 450
-highlights. The deterministic 900-highlight route reproduces the delay at
-`/debug/highlights-performance`.
+highlights. A standalone benchmark harness reproduces the delay with 900
+deterministic highlights. It is not mounted in the production application.
 
 The entrance animation is still active at high counts. The browser does not
 show most of its intermediate frames because long main-thread work blocks
@@ -24,14 +24,20 @@ settled:
 
 ## Current test fixture
 
-`HighlightsPerformanceFixture.tsx` creates 900 unique highlights in memory. It
-uses 20 books with 45 highlights per book by default. Add
-`?distribution=single` to put all 900 highlights in one book. The fixture does
-not write to IndexedDB.
+`scripts/highlights-performance/fixture.ts` creates 900 unique highlights. It
+uses 20 books with 45 highlights per book by default. The single-book benchmark
+puts all 900 highlights in one book. The fixture seeds the standalone harness's
+isolated IndexedDB. It does not add data to the production application.
 
 The fixture repeats sentence structures but appends one unique word to every
 highlight. This exercises Pretext's unique-segment path while keeping the input
 deterministic.
+
+Run the production build and both distributions with:
+
+```sh
+bun run benchmark:highlights
+```
 
 The benchmark now covers:
 
@@ -44,11 +50,15 @@ of the current 450-highlight production collection.
 The single-book case is important. Virtualizing complete book sections can
 improve the first case without improving one very large mosaic.
 
-## Measured production-build result
+## Original measured production-build result
+
+These historical measurements were collected before the benchmark moved to its
+standalone folder. The now-removed application route used the same fixture and
+production component.
 
 Test scope:
 
-- Route: `/debug/highlights-performance`
+- Former route: `/debug/highlights-performance`
 - Fixture: 900 highlights, 20 books
 - Viewport: 1280 x 720
 - Build: Vite production preview

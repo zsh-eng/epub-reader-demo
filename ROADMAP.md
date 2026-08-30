@@ -142,7 +142,7 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] Fix horizontal scroll passthrough
 
 - [x] Optimize Highlights rendering using the measured plan in
-      `src/components/HIGHLIGHTS_PERFORMANCE.md`. Start by bounding React and DOM
+      `docs/0004-highlights-performance.md`. Start by bounding React and DOM
       work; keep worker-based Pretext as a measured follow-up.
 
 - [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,

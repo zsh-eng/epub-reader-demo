@@ -1,7 +1,6 @@
 import "@/App.css";
 import { AppShell } from "@/components/AppShell";
 import { HighlightsMasonry } from "@/components/HighlightsMasonry";
-import { HighlightsPerformanceFixture } from "@/components/HighlightsPerformanceFixture";
 import { Library } from "@/components/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
@@ -41,10 +40,6 @@ function App() {
                     <Route index element={<Library />} />
                     <Route path="/reader/:bookId" element={<Reader />} />
                     <Route path="/highlights" element={<HighlightsMasonry />} />
-                    <Route
-                      path="/debug/highlights-performance"
-                      element={<HighlightsPerformanceFixture />}
-                    />
                     <Route path="/devices" element={<Devices />} />
                     <Route
                       path="/reading-sessions"

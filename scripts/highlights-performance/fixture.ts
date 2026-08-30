@@ -1,10 +1,8 @@
-import { HighlightsMasonry } from "@/components/HighlightsMasonry";
-import type { BookHighlightGroup } from "@/hooks/use-all-highlights-query";
-import type { Book } from "@/lib/db";
+import { db, type Book } from "@/lib/db";
 import { parseFileId } from "@/lib/files/file-id";
+import type { SyncV2Book, SyncV2Highlight } from "@/lib/sync-v2/db";
 import type { AnnotationColor } from "@/lib/highlight-constants";
 import type { Highlight } from "@/types/highlight";
-import { useMemo } from "react";
 
 const HIGHLIGHT_COUNT = 900;
 const MULTI_BOOK_COUNT = 20;
@@ -99,7 +97,7 @@ function createFixtureHighlight(highlightIndex: number, book: Book): Highlight {
   };
 }
 
-function createFixtureGroups(bookCount: number): BookHighlightGroup[] {
+function createFixtureGroups(bookCount: number) {
   const highlightsPerBook = HIGHLIGHT_COUNT / bookCount;
 
   return Array.from({ length: bookCount }, (_, bookIndex) => {
@@ -117,16 +115,28 @@ function createFixtureGroups(bookCount: number): BookHighlightGroup[] {
   });
 }
 
-/** In-memory, deterministic load fixture. It never writes to IndexedDB. */
-export function HighlightsPerformanceFixture() {
-  const groups = useMemo(() => {
-    const distribution = new URLSearchParams(window.location.search).get(
-      "distribution",
-    );
-    return createFixtureGroups(
-      distribution === "single" ? 1 : MULTI_BOOK_COUNT,
-    );
-  }, []);
+/** Seeds the benchmark origin's isolated IndexedDB with deterministic data. */
+export async function seedHighlightsPerformanceFixture() {
+  const distribution = new URLSearchParams(window.location.search).get(
+    "distribution",
+  );
+  const groups = createFixtureGroups(
+    distribution === "single" ? 1 : MULTI_BOOK_COUNT,
+  );
 
-  return <HighlightsMasonry groupsOverride={groups} />;
+  await db.transaction("rw", [db.books, db.highlights], async () => {
+    await db.books.bulkPut(
+      groups.map(({ book }) => ({ ...book, isDeleted: false }) as SyncV2Book),
+    );
+    await db.highlights.bulkPut(
+      groups.flatMap(({ highlights }) =>
+        highlights.map(
+          (highlight) =>
+            ({ ...highlight, isDeleted: false }) as SyncV2Highlight,
+        ),
+      ),
+    );
+  });
+
+  return groups;
 }
