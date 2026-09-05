@@ -40,8 +40,8 @@ export interface CategorizedBooks {
 export function useBooksWithStatuses() {
   return useQuery({
     // Combine query keys since this depends on all three data sources.
-    // The "books" prefix keeps the query invalidated by the sync service,
-    // which refetches checkpoint last-read timestamps alongside the books.
+    // Query invalidation also tracks readingState and readingCheckpoints for
+    // this combined view, so status and last-read changes refresh the list.
     queryKey: [...bookKeys.list(), ...readingStatusKeys.allStatuses()],
     queryFn: async (): Promise<{
       books: Book[];

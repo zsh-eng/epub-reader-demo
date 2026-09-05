@@ -67,8 +67,10 @@ opaque record log in D1.
   conflict resolution, and then pushes the local outbox.
 - `src/lib/sync-v2/client-state.ts` owns the device ID, pull cursor, and Hybrid
   Logical Clock state.
-- `src/lib/sync-service.ts` owns periodic sync, online recovery, and TanStack
-  Query invalidation.
+- `src/lib/sync-service.ts` owns periodic sync and online recovery.
+- `src/lib/query-invalidation.ts` maps committed domain-table writes to
+  TanStack Query prefixes. `SyncProvider` owns its subscription, including
+  offline local writes. Update this map when query dependencies change.
 
 Synced domain tables include Books, reading checkpoints, reading sessions,
 highlights, reading settings, reading state, and notes. Application types do
@@ -138,6 +140,7 @@ To add a new synchronized domain entity:
    writes protocol changes to `_sync_outbox`.
 4. Add integration tests for local mutation, pull conflict resolution, push
    reconciliation, and deletion.
+5. Add the table's dependent query prefixes to `src/lib/query-invalidation.ts`.
 
 Do not add a type-specific server table or route. The generic sync endpoints
 store encoded domain values in `sync_records`.

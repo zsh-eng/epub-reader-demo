@@ -101,7 +101,7 @@ export function Library() {
         title: "Success",
         description: "Book removed from library",
       });
-      // Refetch is handled by query invalidation in sync service
+      // Committed database writes refresh the Library query.
     } catch (error) {
       console.error("Error deleting book:", error);
       toast({

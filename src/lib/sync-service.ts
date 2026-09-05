@@ -4,7 +4,6 @@ import { getOrCreateDeviceId } from "@/lib/device";
 import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import { syncV2SyncDb } from "@/lib/sync-v2/db";
 import { SyncV2Client, type SyncV2RunResult } from "@/lib/sync-v2/sync";
-import type { QueryClient } from "@tanstack/react-query";
 
 const SYNC_INTERVAL_MS = 30_000;
 const EMPTY_SYNC_RESULT: SyncV2RunResult = {
@@ -19,7 +18,6 @@ const EMPTY_SYNC_RESULT: SyncV2RunResult = {
  */
 class SyncService {
   private readonly client: SyncV2Client;
-  private queryClient: QueryClient | null = null;
   private syncInterval: number | null = null;
   private isOnline = typeof navigator === "undefined" || navigator.onLine;
 
@@ -31,10 +29,6 @@ class SyncService {
       window.addEventListener("online", this.handleOnline);
       window.addEventListener("offline", this.handleOffline);
     }
-  }
-
-  setQueryClient(queryClient: QueryClient): void {
-    this.queryClient = queryClient;
   }
 
   startPeriodicSync(intervalMs = SYNC_INTERVAL_MS): void {
@@ -61,11 +55,7 @@ class SyncService {
   async syncAll(): Promise<SyncV2RunResult> {
     if (!this.isOnline) return EMPTY_SYNC_RESULT;
 
-    const result = await this.client.sync();
-    if (result.pulled > 0 || result.pushed > 0) {
-      await this.invalidateQueries();
-    }
-    return result;
+    return this.client.sync();
   }
 
   private handleOnline = (): void => {
@@ -78,12 +68,6 @@ class SyncService {
   private handleOffline = (): void => {
     this.isOnline = false;
   };
-
-  private async invalidateQueries(): Promise<void> {
-    if (this.queryClient === null) return;
-
-    await this.queryClient.invalidateQueries();
-  }
 }
 
 export const syncService = new SyncService();

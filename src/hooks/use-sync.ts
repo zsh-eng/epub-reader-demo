@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { deleteBook as deleteBookFromDb } from "@/lib/db";
 import { syncService } from "@/lib/sync-service";
+import { subscribeToQueryInvalidation } from "@/lib/query-invalidation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
@@ -9,7 +10,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -33,7 +33,7 @@ const SyncContext = createContext<SyncContextValue | null>(null);
  * Owns the synchronization lifecycle and observable UI state once.
  *
  * This hook:
- * - Initializes the sync service with the QueryClient
+ * - Refreshes queries after committed database writes, including offline edits
  * - Starts periodic sync when user is authenticated
  * - Provides manual sync triggers and book operations
  * - Exposes sync state to the UI
@@ -44,15 +44,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<Error | null>(null);
-  const initialized = useRef(false);
-
-  // Initialize sync service with query client
-  useEffect(() => {
-    if (!initialized.current) {
-      syncService.setQueryClient(queryClient);
-      initialized.current = true;
-    }
-  }, [queryClient]);
+  useEffect(() => subscribeToQueryInvalidation(queryClient), [queryClient]);
 
   // Start/stop periodic sync based on auth status
   useEffect(() => {
