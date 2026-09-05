@@ -1,35 +1,40 @@
-import { cleanup, renderHook, act } from "@testing-library/react";
+import {
+  cleanup,
+  renderHook as renderHookBase,
+  act,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKPOINT_FLUSH_INTERVAL_MS,
   createReaderCheckpointSnapshot,
-  ReaderCheckpointSaveCoordinator,
-  type ReaderCheckpointSnapshot,
 } from "@/components/Reader/hooks/reader-checkpoint-controller";
 import { useReaderCheckpointController } from "@/components/Reader/hooks/use-reader-checkpoint-controller";
 import { upsertCurrentDeviceReadingCheckpoint } from "@/lib/db";
 import type { ResolvedSpread, SpreadIntent } from "@/lib/pagination-v2";
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/lib/db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/db")>()),
   upsertCurrentDeviceReadingCheckpoint: vi.fn(() =>
     Promise.resolve("checkpoint-id"),
   ),
 }));
 
-const mockedUpsert = vi.mocked(upsertCurrentDeviceReadingCheckpoint);
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement, type ReactNode } from "react";
 
-function makeSnapshot(
-  overrides: Partial<ReaderCheckpointSnapshot> = {},
-): ReaderCheckpointSnapshot {
-  return {
-    bookId: "book-1",
-    currentSpineIndex: 1,
-    localPageIndex: 0,
-    totalPagesInChapter: 10,
-    scrollProgress: 0,
-    ...overrides,
-  };
+let queryClient: QueryClient;
+function renderHook<Result, Props>(
+  callback: (props: Props) => Result,
+  options?: { initialProps: Props },
+) {
+  return renderHookBase(callback, {
+    ...options,
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children),
+  });
 }
+
+const mockedUpsert = vi.mocked(upsertCurrentDeviceReadingCheckpoint);
 
 function makeSpread(options: {
   intent: SpreadIntent;
@@ -114,85 +119,9 @@ describe("reader checkpoint snapshot derivation", () => {
   });
 });
 
-describe("ReaderCheckpointSaveCoordinator", () => {
-  it("does not persist duplicate snapshots after a successful save", async () => {
-    const persist = vi.fn(() => Promise.resolve());
-    const coordinator = new ReaderCheckpointSaveCoordinator({ persist });
-
-    coordinator.setSnapshot(makeSnapshot());
-    coordinator.flushLatest();
-    await flushPromises();
-
-    coordinator.setSnapshot(makeSnapshot());
-    coordinator.flushLatest();
-    await flushPromises();
-
-    expect(persist).toHaveBeenCalledTimes(1);
-  });
-
-  it("coalesces in-flight writes to the newest requested snapshot", async () => {
-    let resolveFirstSave: (() => void) | undefined;
-    let callCount = 0;
-    const persist = vi.fn(() => {
-      callCount += 1;
-      if (callCount === 1) {
-        return new Promise<void>((resolve) => {
-          resolveFirstSave = resolve;
-        });
-      }
-      return Promise.resolve();
-    });
-    const coordinator = new ReaderCheckpointSaveCoordinator({ persist });
-
-    coordinator.setSnapshot(makeSnapshot({ currentSpineIndex: 1 }));
-    coordinator.flushLatest();
-    coordinator.setSnapshot(makeSnapshot({ currentSpineIndex: 2 }));
-    coordinator.flushLatest();
-
-    expect(persist).toHaveBeenCalledTimes(1);
-
-    resolveFirstSave?.();
-    await flushPromises();
-
-    expect(persist).toHaveBeenCalledTimes(2);
-    expect(persist.mock.calls[1]?.[0]).toMatchObject({
-      currentSpineIndex: 2,
-    });
-  });
-
-  it("saves the reset generation after the previous in-flight save settles", async () => {
-    let resolveFirstSave: (() => void) | undefined;
-    let callCount = 0;
-    const persist = vi.fn(() => {
-      callCount += 1;
-      if (callCount === 1) {
-        return new Promise<void>((resolve) => {
-          resolveFirstSave = resolve;
-        });
-      }
-      return Promise.resolve();
-    });
-    const coordinator = new ReaderCheckpointSaveCoordinator({ persist });
-
-    coordinator.setSnapshot(makeSnapshot({ bookId: "old-book" }));
-    coordinator.flushLatest();
-    coordinator.reset();
-    coordinator.setSnapshot(makeSnapshot({ bookId: "new-book" }));
-    coordinator.flushLatest();
-
-    expect(persist).toHaveBeenCalledTimes(1);
-    expect(persist.mock.calls[0]?.[0]).toMatchObject({ bookId: "old-book" });
-
-    resolveFirstSave?.();
-    await flushPromises();
-
-    expect(persist).toHaveBeenCalledTimes(2);
-    expect(persist.mock.calls[1]?.[0]).toMatchObject({ bookId: "new-book" });
-  });
-});
-
 describe("useReaderCheckpointController", () => {
   beforeEach(() => {
+    queryClient = new QueryClient();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-25T00:00:00.000Z"));
     mockedUpsert.mockReset();
@@ -202,6 +131,7 @@ describe("useReaderCheckpointController", () => {
 
   afterEach(() => {
     cleanup();
+    queryClient.clear();
     vi.useRealTimers();
   });
 
@@ -244,7 +174,7 @@ describe("useReaderCheckpointController", () => {
     await flushReactWork();
 
     expect(mockedUpsert).toHaveBeenCalledTimes(1);
-    expect(mockedUpsert).toHaveBeenLastCalledWith({
+    expect(mockedUpsert.mock.calls.at(-1)?.[0]).toEqual({
       bookId: "book-1",
       currentSpineIndex: 3,
       scrollProgress: 50,
@@ -278,7 +208,7 @@ describe("useReaderCheckpointController", () => {
     await flushReactWork();
 
     expect(mockedUpsert).toHaveBeenCalledTimes(1);
-    expect(mockedUpsert).toHaveBeenLastCalledWith(
+    expect(mockedUpsert.mock.calls.at(-1)?.[0]).toEqual(
       expect.objectContaining({
         bookId: "book-1",
         currentSpineIndex: 4,
