@@ -1,4 +1,8 @@
-import { cleanup, renderHook, act } from "@testing-library/react";
+import {
+  cleanup,
+  renderHook as renderHookBase,
+  act,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKPOINT_FLUSH_INTERVAL_MS,
@@ -10,11 +14,27 @@ import { useReaderCheckpointController } from "@/components/Reader/hooks/use-rea
 import { upsertCurrentDeviceReadingCheckpoint } from "@/lib/db";
 import type { ResolvedSpread, SpreadIntent } from "@/lib/pagination-v2";
 
-vi.mock("@/lib/db", () => ({
+vi.mock("@/lib/db", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/db")>()),
   upsertCurrentDeviceReadingCheckpoint: vi.fn(() =>
     Promise.resolve("checkpoint-id"),
   ),
 }));
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement, type ReactNode } from "react";
+
+let queryClient: QueryClient;
+function renderHook<Result, Props>(
+  callback: (props: Props) => Result,
+  options?: { initialProps: Props },
+) {
+  return renderHookBase(callback, {
+    ...options,
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children),
+  });
+}
 
 const mockedUpsert = vi.mocked(upsertCurrentDeviceReadingCheckpoint);
 
@@ -193,6 +213,7 @@ describe("ReaderCheckpointSaveCoordinator", () => {
 
 describe("useReaderCheckpointController", () => {
   beforeEach(() => {
+    queryClient = new QueryClient();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-25T00:00:00.000Z"));
     mockedUpsert.mockReset();
@@ -202,6 +223,7 @@ describe("useReaderCheckpointController", () => {
 
   afterEach(() => {
     cleanup();
+    queryClient.clear();
     vi.useRealTimers();
   });
 

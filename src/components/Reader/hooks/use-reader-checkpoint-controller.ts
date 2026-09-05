@@ -1,6 +1,15 @@
-import { upsertCurrentDeviceReadingCheckpoint } from "@/lib/db";
+import {
+  createReadingCheckpointId,
+  upsertCurrentDeviceReadingCheckpoint,
+} from "@/lib/db";
+import { getOrCreateDeviceId } from "@/lib/device";
 import type { ResolvedSpread } from "@/lib/pagination-v2";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import {
+  readerCheckpointKeys,
+  type ReaderCheckpointData,
+} from "../data/reader-cache/hooks";
 import {
   CHECKPOINT_FLUSH_INTERVAL_MS,
   createReaderCheckpointSnapshot,
@@ -30,6 +39,7 @@ export function useReaderCheckpointController({
   bookId,
   spread,
 }: UseReaderCheckpointControllerOptions): void {
+  const queryClient = useQueryClient();
   const coordinatorRef = useRef<ReaderCheckpointSaveCoordinator | null>(null);
   if (coordinatorRef.current === null) {
     coordinatorRef.current = new ReaderCheckpointSaveCoordinator({
@@ -59,12 +69,30 @@ export function useReaderCheckpointController({
     }
 
     const checkpoint = createReaderCheckpointSnapshot(bookId, spread);
+    if (!checkpoint) return;
     coordinator.setSnapshot(checkpoint);
+
+    // Resume reads must see the committed spread even while its durable write
+    // is queued. Cancel an older read before publishing; save completions must
+    // never replace this value with an earlier snapshot.
+    const queryKey = readerCheckpointKeys.currentDevice(bookId);
+    const deviceId = getOrCreateDeviceId();
+    void queryClient.cancelQueries({ queryKey, exact: true });
+    queryClient.setQueryData<ReaderCheckpointData>(queryKey, {
+      checkpoint: {
+        id: createReadingCheckpointId(bookId, deviceId),
+        bookId,
+        deviceId,
+        currentSpineIndex: checkpoint.currentSpineIndex,
+        scrollProgress: checkpoint.scrollProgress,
+        lastRead: Date.now(),
+      },
+    });
 
     if (shouldFlushCheckpointImmediately(spread.intent)) {
       coordinator.flushLatest();
     }
-  }, [bookId, spread, coordinator]);
+  }, [bookId, spread, coordinator, queryClient]);
 
   useEffect(() => {
     if (!bookId) return;
