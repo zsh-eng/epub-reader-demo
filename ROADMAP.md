@@ -130,6 +130,7 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Benchmark highlights page for bottlenecks
 - [x] New local-first file storage and EPUB materialization flow
 
+- [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
 - [ ] Look through EPUB materialisation flow again
 - [ ] Test updates for handling book with large spine (see conversation)
 - [ ] Add debug flag
