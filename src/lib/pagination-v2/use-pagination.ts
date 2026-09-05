@@ -111,6 +111,8 @@ function getWorkerTraceDetails(
 // ---------------------------------------------------------------------------
 
 export interface UsePaginationResult {
+  /** Available once this hook owns a worker session; changes on reacquisition. */
+  sessionGeneration: number | null;
   spread: ResolvedSpread | null;
   spreadWindow: ResolvedSpreadWindow | null;
   status: PaginationStatus;
@@ -170,6 +172,9 @@ export function usePagination(
   >(new Map());
 
   const workerSessionRef = useRef<PaginationWorkerSession | null>(null);
+  const [sessionGeneration, setSessionGeneration] = useState<number | null>(
+    null,
+  );
   const currentEpochRef = useRef(0);
   const tracerRef = useRef(new PaginationTracer());
   const pendingChapterPageCountsRef = useRef<Map<number, number>>(new Map());
@@ -415,6 +420,7 @@ export function usePagination(
       },
     });
     workerSessionRef.current = session;
+    setSessionGeneration(session.sessionGeneration);
     workerStartupSpanRef.current = startReaderTraceSpan(
       "pagination-worker-fonts",
       "assets",
@@ -446,6 +452,7 @@ export function usePagination(
       session.release();
       if (workerSessionRef.current === session) {
         workerSessionRef.current = null;
+        setSessionGeneration(null);
       }
     };
   }, []);
@@ -606,6 +613,7 @@ export function usePagination(
   );
 
   return {
+    sessionGeneration,
     spread,
     spreadWindow,
     status,

@@ -1,5 +1,5 @@
 import { usePagination } from "@/lib/pagination-v2";
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type {
   ParsedChapterBlocks,
   ReaderInitialLocation,
@@ -10,7 +10,7 @@ import type { ChapterEntry } from "../types";
 interface UseReaderPaginationFeedOptions {
   pagination: Pick<
     ReturnType<typeof usePagination>,
-    "init" | "addChapter" | "updateChapter" | "status"
+    "init" | "addChapter" | "updateChapter" | "sessionGeneration"
   >;
   bookId?: string;
   chapterEntries: ChapterEntry[];
@@ -38,27 +38,36 @@ export function useReaderPaginationFeed({
   initialLocation,
   enabled = true,
 }: UseReaderPaginationFeedOptions): void {
-  const { addChapter, init, updateChapter } = pagination;
-  const initializedBookIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    initializedBookIdRef.current = null;
-  }, [bookId]);
+  const { addChapter, init, updateChapter, sessionGeneration } = pagination;
+  const initializedSessionRef = useRef<{
+    bookId: string;
+    sessionGeneration: number;
+    totalChapters: number;
+  } | null>(null);
 
   useLayoutEffect(() => {
     if (
       !enabled ||
       !bookId ||
+      sessionGeneration === null ||
       !initialLocation ||
       chapterEntries.length === 0
     ) {
       return;
     }
 
-    let initialized = false;
-
     const initializeIfReady = () => {
-      if (initialized) return true;
+      // A breakpoint change temporarily disables the feed while the stage is
+      // measured again. Reconnect its subscription without replaying startup
+      // restoration. A new book or worker session still needs its own init.
+      const initialized = initializedSessionRef.current;
+      if (
+        initialized?.bookId === bookId &&
+        initialized.sessionGeneration === sessionGeneration &&
+        initialized.totalChapters === chapterEntries.length
+      ) {
+        return true;
+      }
 
       const firstChapterBlocks = getChapterBlocks(initialLocation.chapterIndex);
       if (!firstChapterBlocks) return false;
@@ -73,8 +82,11 @@ export function useReaderPaginationFeed({
         firstChapterBlocks,
       });
 
-      initialized = true;
-      initializedBookIdRef.current = bookId;
+      initializedSessionRef.current = {
+        bookId,
+        sessionGeneration,
+        totalChapters: chapterEntries.length,
+      };
       return true;
     };
 
@@ -100,6 +112,7 @@ export function useReaderPaginationFeed({
     getChapterBlocks,
     initialLocation,
     init,
+    sessionGeneration,
     subscribe,
     updateChapter,
   ]);
