@@ -30,3 +30,7 @@ dist-ssr
 
 diagnostics/*
 !diagnostics/**/*.md
+
+# Browser test output
+playwright-report/
+test-results/

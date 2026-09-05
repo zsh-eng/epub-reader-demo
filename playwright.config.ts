@@ -16,8 +16,8 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
+  /* Reuse prepared data and limit competing Reader workers. */
+  workers: process.env.CI ? 1 : 2,
 
   /* Reporter to use */
   reporter: "html",
@@ -25,10 +25,13 @@ export default defineConfig({
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: "http://localhost:5173",
+    baseURL: "http://127.0.0.1:5190",
 
-    /* Collect trace when retrying the failed test */
-    trace: "on-first-retry",
+    /* Keep API mocks in control; PWA behavior needs a separate test. */
+    serviceWorkers: "block",
+
+    /* Keep evidence from the first failure, including local runs without retries */
+    trace: "retain-on-failure",
 
     /* Take screenshot on failure */
     screenshot: "only-on-failure",
@@ -44,9 +47,10 @@ export default defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: {
-    command: "bun run dev",
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
+    command:
+      "bun run dev --config test/e2e/vite.config.ts --host 127.0.0.1 --port 5190 --strictPort",
+    url: "http://127.0.0.1:5190",
+    reuseExistingServer: false,
     timeout: 120 * 1000,
   },
 });

@@ -42,15 +42,23 @@ changing architecture, data loading, caching, or Reader performance.
 
 ### Testing
 
-- Integration tests preferred (with database)
-- See `test/hello.test.ts` for example
-- Run tests: `bun run test test/me.test.ts`
+Choose checks from the changed behavior before starting validation:
 
-For UI tests:
+| Change                                  | Default checks                                                                                                                          |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Documentation or comments               | Review the diff and links. No build or browser run.                                                                                     |
+| Internal application logic              | Focused unit or integration tests, `bun run build`, and `bun run lint`.                                                                 |
+| Sync, storage, or cache behavior        | Database integration tests, build, and lint. Add one focused browser check when visible behavior changes.                               |
+| Layout, navigation, or Reader lifecycle | Test the exact interaction sequence in a browser, plus relevant tests, build, and lint. Use before/after traces for performance claims. |
+| Tests or test configuration only        | Run the affected tests or check test discovery, plus lint. No application build unless application code or build inputs also change.    |
 
-bun run test:e2e # Run all tests
-bun run test:e2e:ui # Interactive UI mode
-bun run test:e2e:headed # Visible browser
+- Prefer integration tests with the database for persistence behavior. Run focused tests once with `bun run test --run <test-file>`.
+- Run the full client suite (`bun run test:client --run`) for shared application changes or changes across domains. It is inexpensive; do not replace a fast suite with a longer manual check.
+- Run a focused browser test with `bun run test:e2e <spec-file> --grep <test-name>`. Use `test:e2e:ui` or `test:e2e:headed` when visual inspection is needed.
+- Reuse `test/e2e/helpers/fixtures.ts` or the Reader Diagnostic Harness instead of creating temporary browser scripts. For warm Reader checks, use prepared local data and controlled network responses. Keep cold import checks separate; do not clear caches in a warm-cache test.
+- The E2E `localBook` fixture restores imported EPUB rows into each test's isolated database; it does not precompute pagination. `openLocalBook` starts the Reader from those local bytes. The suite uses a dedicated dev server and mocked API, with service workers blocked. Use separate tests for real-server sync and PWA behavior.
+- Wait for observable readiness and completed interactions, not fixed delays. Assert visible results and stored state where relevant; avoid assertions about incidental setup counts. Retain traces and screenshots on failure.
+- Stop when the relevant checks pass. Repeat or broaden checks only after a new change, failure, or unresolved concern. If a failure appears unrelated, reproduce it once on unchanged code, record the evidence, and track it separately. Report any required check that remains blocked; do not silently skip it or increase retries to hide a failure.
 
 ---
 

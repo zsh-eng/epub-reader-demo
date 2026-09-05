@@ -35,7 +35,7 @@ const book: Book = {
 
 interface ObserverRecord {
   callback: IntersectionObserverCallback;
-  target?: Element;
+  target: Element | null;
 }
 
 afterEach(() => {
@@ -59,16 +59,20 @@ describe("BookCard cover loading", () => {
       private readonly record: ObserverRecord;
 
       constructor(callback: IntersectionObserverCallback) {
-        this.record = { callback };
+        this.record = { callback, target: null };
         observerRecords.push(this.record);
       }
 
-      disconnect = vi.fn();
+      disconnect = () => {
+        this.record.target = null;
+      };
       observe = (target: Element) => {
         this.record.target = target;
       };
       takeRecords = () => [];
-      unobserve = vi.fn();
+      unobserve = (target: Element) => {
+        if (this.record.target === target) this.record.target = null;
+      };
     }
 
     vi.stubGlobal("IntersectionObserver", IntersectionObserverMock);
@@ -91,16 +95,29 @@ describe("BookCard cover loading", () => {
       ),
     );
 
-    await waitFor(() => expect(observerRecords.length).toBe(1));
+    // Responsive rendering can replace the card and disconnect its observer.
+    // The current card must still have exactly one active observer.
+    const activeObservers = () =>
+      observerRecords.filter((record) => record.target !== null);
+    await waitFor(() => {
+      expect(activeObservers()).toHaveLength(1);
+      expect(activeObservers()[0]!.target?.isConnected).toBe(true);
+    });
 
-    const activeObserver = observerRecords[0]!;
+    const activeObserver = activeObservers()[0]!;
+    activeObserver.callback(
+      [{ isIntersecting: false } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+    expect(requestCover).not.toHaveBeenCalled();
+
     activeObserver.callback(
       [{ isIntersecting: true } as IntersectionObserverEntry],
       {} as IntersectionObserver,
     );
 
-    expect(activeObserver.target?.isConnected).toBe(true);
     expect(requestCover).toHaveBeenCalledOnce();
     expect(requestCover).toHaveBeenCalledWith(book);
+    expect(activeObservers()).toHaveLength(0);
   });
 });

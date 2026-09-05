@@ -1,108 +1,286 @@
-/**
- * E2E Test Fixtures
- *
- * Provides utilities for setting up and cleaning up test state.
- * Uses Playwright's built-in test fixtures for configuration.
- */
+import {
+  test as base,
+  expect,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
+import { fileURLToPath } from "node:url";
+import type {
+  SyncPushChange,
+  SyncRecord,
+} from "../../../src/lib/sync-v2/protocol";
 
-import { test as base, type Page } from "@playwright/test";
-import path from "path";
-import { fileURLToPath } from "url";
-
-// ES module compatible __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Path to the sample EPUB fixture
-export const SAMPLE_EPUB_PATH = path.join(
-  __dirname,
-  "../../fixtures/sample.epub",
+export const SAMPLE_EPUB_PATH = fileURLToPath(
+  new URL("../../fixtures/sample.epub", import.meta.url),
 );
+export const SAMPLE_BOOK_TITLE = /Alice.*Adventures.*Wonderland/i;
+const DATABASE_MODULE = "/src/lib/sync-v2/db.ts";
+const CURRENT_SPREAD = '[data-reader-spread-layer="current"]';
 
-/**
- * Extended test fixture with commonly used helpers
- */
-export const test = base.extend<{
-  /**
-   * Add a book to the library by uploading via the file picker
-   * Returns the page for chaining
-   */
-  addSampleBook: () => Promise<void>;
-}>({
-  addSampleBook: async ({ page }, use) => {
-    const addBook = async () => {
-      // Create a file input promise before clicking to avoid race conditions
-      const fileChooserPromise = page.waitForEvent("filechooser");
+type PreparedLibrary = Record<string, Record<string, unknown>[]>;
 
-      // Click the add book button - in empty state it's "Import EPUB", otherwise it's the Plus icon
-      const importButton = page.getByRole("button", { name: "Import EPUB" });
-      if (await importButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await importButton.click();
-      } else {
-        // Click the plus button in the header
-        await page
-          .locator("button")
-          .filter({ has: page.locator("svg.lucide-plus") })
-          .click();
+/** A local, deterministic remote for UI tests. Protocol conflicts belong in integration tests. */
+async function mockApi(context: BrowserContext, signedIn = false) {
+  const records: SyncRecord[] = [];
+  const pushed: SyncPushChange[] = [];
+  const unexpected: string[] = [];
+  await context.route("**/api/**", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    if (path === "/api/auth/get-session") {
+      const now = new Date().toISOString();
+      await route.fulfill({
+        json: signedIn
+          ? {
+              user: {
+                id: "test-user",
+                name: "Test Reader",
+                email: "reader@example.test",
+                emailVerified: true,
+                createdAt: now,
+                updatedAt: now,
+              },
+              session: {
+                id: "test-session",
+                userId: "test-user",
+                token: "local-test",
+                expiresAt: new Date(Date.now() + 3600000).toISOString(),
+                createdAt: now,
+                updatedAt: now,
+              },
+            }
+          : null,
+      });
+      return;
+    }
+    if (path === "/api/sync/v2/pull") {
+      const cursor = Number(url.searchParams.get("cursor"));
+      const head = url.searchParams.has("head")
+        ? Number(url.searchParams.get("head"))
+        : records.length;
+      await route.fulfill({
+        json: {
+          records: records.filter(
+            (record) =>
+              record.serverSeq > cursor &&
+              record.serverSeq <= head &&
+              (url.searchParams.get("excludeOwnDevice") !== "true" ||
+                record.deviceId !== request.headers()["x-device-id"]),
+          ),
+          cursor: head,
+          head,
+          hasMore: false,
+        },
+      });
+      return;
+    }
+    if (path === "/api/sync/v2/push") {
+      const { changes } = request.postDataJSON() as {
+        changes: SyncPushChange[];
+      };
+      pushed.push(...changes);
+      await route.fulfill({
+        json: {
+          results: changes.map((change) => {
+            const winner = {
+              ...change,
+              deviceId: request.headers()["x-device-id"],
+              serverSeq: records.length + 1,
+            };
+            records.push(winner);
+            return { accepted: true, winner };
+          }),
+        },
+      });
+      return;
+    }
+    unexpected.push(`${request.method()} ${path}`);
+    await route.fulfill({
+      status: 501,
+      json: { error: "Unexpected test API request" },
+    });
+  });
+  return {
+    pushed,
+    unexpected,
+    enqueue(change: SyncPushChange) {
+      records.push({
+        ...change,
+        deviceId: "remote-test-device",
+        serverSeq: records.length + 1,
+      });
+    },
+  };
+}
+
+/** Each test gets a fresh context. Only immutable imported data is shared between workers' tests. */
+export const test = base.extend<
+  {
+    signedIn: boolean;
+    remote: Awaited<ReturnType<typeof mockApi>>;
+    addSampleBook: () => Promise<void>;
+    localBook: { id: string };
+  },
+  { preparedLibrary: PreparedLibrary }
+>({
+  signedIn: [false, { option: true }],
+  remote: [
+    async ({ context, signedIn }, use) => {
+      const remote = await mockApi(context, signedIn);
+      await use(remote);
+      expect(remote.unexpected, "Unexpected API requests").toEqual([]);
+    },
+    { auto: true },
+  ],
+  addSampleBook: async ({ page }, use) => use(() => importSampleBook(page)),
+  preparedLibrary: [
+    async ({ browser }, use, workerInfo) => {
+      const context = await browser.newContext({ serviceWorkers: "block" });
+      let snapshot: PreparedLibrary;
+      try {
+        const remote = await mockApi(context);
+        const page = await context.newPage();
+        await page.goto(workerInfo.project.use.baseURL!);
+        await importSampleBook(page);
+        // Blobs need an explicit encoding when crossing the Playwright boundary.
+        // Keep the stored rows, including their schema, generated by the real importer.
+        snapshot = await page.evaluate(async (modulePath) => {
+          const { syncV2Db: db } = await import(modulePath);
+          const tables = [
+            "books",
+            "files",
+            "bookFiles",
+            "bookMaterializations",
+          ];
+          return Object.fromEntries(
+            await Promise.all(
+              tables.map(async (table) => {
+                const rows = await db.table(table).toArray();
+                for (const row of rows) {
+                  for (const [key, value] of Object.entries(row)) {
+                    if (!(value instanceof Blob)) continue;
+                    const dataUrl = await new Promise<string>(
+                      (resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result as string);
+                        reader.onerror = () => reject(reader.error);
+                        reader.readAsDataURL(value);
+                      },
+                    );
+                    row[key] = { blobDataUrl: dataUrl };
+                  }
+                }
+                return [table, rows];
+              }),
+            ),
+          );
+        }, DATABASE_MODULE);
+        expect(remote.unexpected).toEqual([]);
+      } finally {
+        await context.close();
       }
-
-      // Wait for and handle the file chooser
-      const fileChooser = await fileChooserPromise;
-      await fileChooser.setFiles(SAMPLE_EPUB_PATH);
-
-      // Wait for book processing - look for toast
-      await page.waitForSelector('text="Import complete"', { timeout: 30000 });
-
-      // Wait for toast to disappear before returning
-      await page.waitForTimeout(2000);
-    };
-
-    await use(addBook);
+      await use(snapshot);
+    },
+    { scope: "worker" },
+  ],
+  localBook: async ({ page, preparedLibrary }, use) => {
+    await page.goto("/");
+    await page.evaluate(
+      async ({ snapshot, modulePath }) => {
+        const { syncV2Db: db } = await import(modulePath);
+        const tables = Object.entries(snapshot);
+        for (const [, rows] of tables) {
+          for (const row of rows) {
+            for (const [key, value] of Object.entries(row)) {
+              if (
+                value &&
+                typeof value === "object" &&
+                "blobDataUrl" in value
+              ) {
+                row[key] = await (
+                  await fetch(value.blobDataUrl as string)
+                ).blob();
+              }
+            }
+          }
+        }
+        await db.transaction(
+          "rw",
+          tables.map(([table]) => db.table(table)),
+          async () => {
+            for (const [table, rows] of tables)
+              await db.table(table).bulkPut(rows);
+          },
+        );
+      },
+      { snapshot: preparedLibrary, modulePath: DATABASE_MODULE },
+    );
+    await expect(
+      page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }),
+    ).toBeVisible();
+    await use({ id: preparedLibrary.books[0].id as string });
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect };
 
-/**
- * Wait for the library page to be fully loaded
- */
-export async function waitForLibraryLoaded(page: Page): Promise<void> {
-  // The library page renders immediately (no loading indicator); its content
-  // appears once the local IndexedDB read settles. Wait for either the books
-  // sections or the empty state to be present.
-  await page.waitForFunction(() => {
-    const text = document.body.textContent ?? "";
+export async function importSampleBook(page: Page): Promise<void> {
+  const importButton = page.getByRole("button", {
+    name: "Import EPUB",
+    exact: true,
+  });
+  await expect(importButton).toBeVisible();
+  const [fileChooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    importButton.click(),
+  ]);
+  await fileChooser.setFiles(SAMPLE_EPUB_PATH);
+  await expect(
+    page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }),
+  ).toBeVisible({ timeout: 30_000 });
+}
+
+/** Wait for the current spread only, including removal of the outgoing animated spread. */
+export async function waitForReaderReady(page: Page): Promise<void> {
+  await expect(
+    page.locator(`${CURRENT_SPREAD} [data-reader-page-content]`).first(),
+  ).toBeVisible();
+  await page.waitForFunction((selector) => {
+    const spread = document.querySelector(selector);
+    if (!spread || spread.children.length !== 1) return false;
+    if (spread.querySelector("[data-reader-image-pending]")) return false;
+    const moving = spread
+      .getAnimations({ subtree: true })
+      .some((animation) => animation.playState === "running");
+    const images = [...spread.querySelectorAll("img")];
     return (
-      text.includes("Your library is empty") ||
-      text.includes("Continue Reading") ||
-      text.includes("All Books")
+      !moving &&
+      document.fonts.status === "loaded" &&
+      images.every((image) => image.complete && image.naturalWidth > 0)
     );
-  });
+  }, CURRENT_SPREAD);
 }
 
-/**
- * Clear all IndexedDB databases
- * Useful for ensuring clean state between tests
- */
-export async function clearIndexedDB(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const databases = await indexedDB.databases();
-    for (const db of databases) {
-      if (db.name) {
-        indexedDB.deleteDatabase(db.name);
-      }
-    }
-  });
+export async function currentPages(page: Page): Promise<string[]> {
+  return page
+    .locator(`${CURRENT_SPREAD} [data-reader-current-page]`)
+    .evaluateAll((elements) =>
+      elements.map(
+        (element) => element.getAttribute("data-reader-current-page")!,
+      ),
+    );
 }
 
-/**
- * Helper to navigate to the reader for the first book in the library
- */
-export async function openFirstBook(page: Page): Promise<void> {
-  // Click on the first book title/cover
-  const bookCard = page.locator(".group.relative").first();
-  await bookCard.click();
+export async function nextSpread(page: Page): Promise<void> {
+  const before = await currentPages(page);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => currentPages(page)).not.toEqual(before);
+  await waitForReaderReady(page);
+}
 
-  // Wait for reader URL
-  await page.waitForURL(/\/reader\/.+/);
+export async function openLocalBook(page: Page, bookId: string): Promise<void> {
+  // Direct entry tests startup from prepared storage without depending on hover prefetch.
+  await page.goto(`/reader/${bookId}`);
+  await waitForReaderReady(page);
 }
