@@ -8,7 +8,11 @@ import { useSessionInitialReaderLocation } from "@/components/Reader/hooks/use-s
 import * as database from "@/lib/db";
 import type { ResolvedSpread } from "@/lib/pagination-v2";
 import { syncV2Db } from "@/lib/sync-v2/db";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  onlineManager,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -84,6 +88,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   cleanup();
+  onlineManager.setOnline(true);
+  await waitFor(() => expect(client.isMutating()).toBe(0));
   vi.restoreAllMocks();
   client.clear();
   await syncV2Db.delete();
@@ -173,4 +179,92 @@ it("reopens at the newest queued position without an older save or read rolling 
       ?.scrollProgress,
   ).toBe(75);
   expect(reopened.result.current?.chapterProgress).toBe(75);
+});
+
+it("serializes durable writes across Reader mounts while every request updates memory immediately", async () => {
+  const persist = database.upsertCurrentDeviceReadingCheckpoint;
+  let finishFirstSave!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    finishFirstSave = resolve;
+  });
+  const saves = vi
+    .spyOn(database, "upsertCurrentDeviceReadingCheckpoint")
+    .mockImplementationOnce(async (checkpoint) => {
+      await gate;
+      return persist(checkpoint);
+    });
+  const first = renderHook(
+    ({ page }) =>
+      useReaderCheckpointController({ bookId, spread: spread(page) }),
+    {
+      wrapper,
+      initialProps: { page: 2 },
+    },
+  );
+  first.rerender({ page: 3 });
+  first.rerender({ page: 4 });
+  first.unmount();
+  renderHook(
+    () => useReaderCheckpointController({ bookId, spread: spread(5) }),
+    { wrapper },
+  );
+  expect(
+    client.getQueryData<ReaderCheckpointData>(queryKey)?.checkpoint
+      ?.scrollProgress,
+  ).toBe(100);
+  await waitFor(() => expect(saves).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    finishFirstSave();
+  });
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(
+    saves.mock.calls.map(([checkpoint]) => checkpoint.scrollProgress),
+  ).toEqual([25, 50, 75, 100]);
+  expect(
+    await database.getCurrentDeviceReadingCheckpoint(bookId),
+  ).toMatchObject({ scrollProgress: 100 });
+});
+
+it("persists optimistically requested checkpoints while offline", async () => {
+  onlineManager.setOnline(false);
+  renderHook(
+    () => useReaderCheckpointController({ bookId, spread: spread(3) }),
+    { wrapper },
+  );
+  expect(
+    client.getQueryData<ReaderCheckpointData>(queryKey)?.checkpoint
+      ?.scrollProgress,
+  ).toBe(50);
+  await waitFor(async () => {
+    expect(
+      await database.getCurrentDeviceReadingCheckpoint(bookId),
+    ).toMatchObject({ scrollProgress: 50 });
+  });
+});
+
+it("retains the in-memory position after a storage failure and retries on the next flush", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  vi.spyOn(
+    database,
+    "upsertCurrentDeviceReadingCheckpoint",
+  ).mockRejectedValueOnce(new Error("storage temporarily unavailable"));
+  const currentSpread = spread(3);
+  renderHook(
+    () => useReaderCheckpointController({ bookId, spread: currentSpread }),
+    { wrapper },
+  );
+  await waitFor(() => expect(client.isMutating()).toBe(0));
+  expect(
+    client.getQueryData<ReaderCheckpointData>(queryKey)?.checkpoint
+      ?.scrollProgress,
+  ).toBe(50);
+  expect(
+    await database.getCurrentDeviceReadingCheckpoint(bookId),
+  ).toMatchObject({ currentSpineIndex: 0 });
+  act(() => window.dispatchEvent(new Event("pagehide")));
+  await waitFor(async () => {
+    expect(
+      await database.getCurrentDeviceReadingCheckpoint(bookId),
+    ).toMatchObject({ currentSpineIndex: 2, scrollProgress: 50 });
+  });
 });
