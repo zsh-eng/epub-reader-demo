@@ -2,12 +2,15 @@
 
 This repository uses **bun** as the package manager and for running scripts.
 
+Read [Architecture and performance principles](docs/ARCHITECTURE.md) before
+changing architecture, data loading, caching, or Reader performance.
+
 ## General Coding Practices
 
 - After you finish editing code, provide a brief summary in the conversation rather than generating a separate document
 - Prefer early returns / guard clauses to avoid nested conditionals
 - Use `bun run build` for type-checking the project. DO NOT run `npx tsc`.
-- There is no need for the agent to do browser testing of new features, the user will manually test them.
+- For interaction or performance changes, use Playwright, computer use, or the Reader Diagnostic Harness to test the relevant user sequence. Check visible behavior and stored state where applicable. User testing complements these checks; report any browser or device verification that remains open.
 - Include comments and documentation for major pieces of code (not every helper function requires it, use your judgement).
   For example, hooks that do a lot of work/handle complex behaviour deserve documentation.
 - Unless explicity stated, you do not need to handle "backwards compatibility".

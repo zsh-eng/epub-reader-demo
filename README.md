@@ -2,6 +2,9 @@
 
 Modern Reader App
 
+See [Architecture and performance principles](docs/ARCHITECTURE.md) for the
+current design decisions and validation approach.
+
 Roadmap (v0.1):
 
 - [x] Read books
