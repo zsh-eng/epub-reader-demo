@@ -565,9 +565,7 @@ function TraceMetadata({
         </p>
       </div>
       <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-xs text-muted-foreground">
-          Visible content settled
-        </p>
+        <p className="text-xs text-muted-foreground">Visible content settled</p>
         <p className="mt-1 text-xl font-semibold tabular-nums">
           {settledContentPaintMs === null
             ? "Pending"
@@ -594,9 +592,7 @@ function TraceMetadata({
       </div>
       <div className="rounded-xl border border-border bg-card p-4">
         <p className="text-xs text-muted-foreground">Chapter source</p>
-        <p className="mt-1 text-xl font-semibold">
-          {getChapterSource(trace)}
-        </p>
+        <p className="mt-1 text-xl font-semibold">{getChapterSource(trace)}</p>
       </div>
     </div>
   );
@@ -668,26 +664,50 @@ function TraceReadinessBreakdown({
   );
 }
 
+/** Copy feedback belongs to one trace; changing selection starts fresh. */
+function CopyTraceButton({ trace }: { trace: ReaderPerformanceTrace }) {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
+  const handleCopyTrace = async () => {
+    try {
+      await navigator.clipboard.writeText(
+        formatTraceDetailsForClipboard(trace),
+      );
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  };
+
+  useEffect(() => {
+    if (copyStatus === "idle") return;
+    const resetTimer = window.setTimeout(() => setCopyStatus("idle"), 2_000);
+    return () => window.clearTimeout(resetTimer);
+  }, [copyStatus]);
+
+  return (
+    <Button variant="outline" onClick={handleCopyTrace} className="sm:w-auto">
+      {copyStatus === "copied" ? (
+        <Check className="size-4" />
+      ) : (
+        <ClipboardCopy className="size-4" />
+      )}
+      {copyStatus === "copied"
+        ? "Copied"
+        : copyStatus === "error"
+          ? "Copy failed"
+          : "Copy trace"}
+    </Button>
+  );
+}
+
 export function ReaderTraceViewer(): React.ReactNode {
   const snapshot = useReaderTraceSnapshot();
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(
     snapshot.traces[0]?.id ?? null,
   );
   const [search, setSearch] = useState("");
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
-    "idle",
-  );
-
-  useEffect(() => {
-    if (snapshot.traces.length === 0) {
-      setSelectedTraceId(null);
-      return;
-    }
-    if (!snapshot.traces.some((trace) => trace.id === selectedTraceId)) {
-      setSelectedTraceId(snapshot.traces[0]!.id);
-    }
-  }, [selectedTraceId, snapshot.traces]);
-
   const selectedTrace = useMemo(
     () =>
       snapshot.traces.find((trace) => trace.id === selectedTraceId) ??
@@ -701,29 +721,6 @@ export function ReaderTraceViewer(): React.ReactNode {
     if (!window.confirm("Clear all saved reader performance traces?")) return;
     clearReaderTraces();
   };
-
-  const handleCopyTrace = async () => {
-    if (!selectedTrace) return;
-
-    try {
-      await navigator.clipboard.writeText(
-        formatTraceDetailsForClipboard(selectedTrace),
-      );
-      setCopyStatus("copied");
-    } catch {
-      setCopyStatus("error");
-    }
-  };
-
-  useEffect(() => {
-    setCopyStatus("idle");
-  }, [selectedTraceId]);
-
-  useEffect(() => {
-    if (copyStatus === "idle") return;
-    const resetTimer = window.setTimeout(() => setCopyStatus("idle"), 2_000);
-    return () => window.clearTimeout(resetTimer);
-  }, [copyStatus]);
 
   return (
     <main className="mx-auto min-h-svh w-full max-w-[96rem] px-4 pb-16 pt-16 md:px-8 md:pt-12">
@@ -827,22 +824,10 @@ export function ReaderTraceViewer(): React.ReactNode {
                     </p>
                   </div>
                   <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                    <Button
-                      variant="outline"
-                      onClick={handleCopyTrace}
-                      className="sm:w-auto"
-                    >
-                      {copyStatus === "copied" ? (
-                        <Check className="size-4" />
-                      ) : (
-                        <ClipboardCopy className="size-4" />
-                      )}
-                      {copyStatus === "copied"
-                        ? "Copied"
-                        : copyStatus === "error"
-                          ? "Copy failed"
-                          : "Copy trace"}
-                    </Button>
+                    <CopyTraceButton
+                      key={selectedTrace.id}
+                      trace={selectedTrace}
+                    />
                     <div className="relative w-full sm:w-64">
                       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                       <Input
