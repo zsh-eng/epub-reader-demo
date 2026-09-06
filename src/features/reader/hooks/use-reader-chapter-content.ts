@@ -18,7 +18,13 @@ import {
 import type { ChapterEntry } from "../types";
 import { useSessionInitialReaderLocation } from "./use-session-initial-reader-location";
 
+export interface ReaderHighlightTarget {
+  spineItemId: string;
+  highlightId: string;
+}
+
 interface UseReaderChapterContentOptions {
+  highlightTarget?: ReaderHighlightTarget;
   bookId?: string;
   book: Book | null;
   publisherBookStylingEnabled: boolean;
@@ -46,18 +52,32 @@ interface UseReaderChapterContentResult {
 export function useReaderChapterContent({
   bookId,
   book,
+  highlightTarget: target,
   publisherBookStylingEnabled,
   matchPublisherBodyTextSize,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
   const chapterEntries = useMemo(() => buildChapterEntries(book), [book]);
   const sourceFileId = book?.sourceFileId;
 
+  const targetChapterIndex = target
+    ? chapterEntries.findIndex(
+        (entry) => entry.spineItemId === target.spineItemId,
+      )
+    : -1;
   const checkpointQuery = useReaderCheckpointQuery(bookId);
   const initialLocation = useSessionInitialReaderLocation({
     bookId,
     totalChapters: chapterEntries.length,
     checkpoint: checkpointQuery.data?.checkpoint,
     checkpointReady: checkpointQuery.isSuccess,
+    requestedLocation:
+      target && targetChapterIndex >= 0
+        ? {
+            chapterIndex: targetChapterIndex,
+            highlightId: target.highlightId,
+            isRestore: false,
+          }
+        : undefined,
   });
 
   const bodyCacheQuery = useReaderBodyCacheQuery({

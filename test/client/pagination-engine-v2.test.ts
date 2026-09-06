@@ -1401,3 +1401,54 @@ describe("updatePaginationConfig no-op", () => {
     expect(countEvents(events, "ready")).toBe(1);
   });
 });
+
+describe("highlight opening location", () => {
+  it("emits its first spread at the highlighted run", () => {
+    const blocks = makeLongTextBlocks("before-highlight");
+    blocks.push({
+      type: "text",
+      id: "highlight-block",
+      tag: "p",
+      runs: [
+        {
+          kind: "text",
+          text: "Target highlight.",
+          bold: false,
+          italic: false,
+          isCode: false,
+          highlightMarks: [{ id: "opening-highlight" }],
+        },
+      ],
+    });
+    const events: EnginePaginationEvent[] = [];
+    const engine = new PaginationEngine((event) => events.push(event));
+    runCommand(engine, {
+      type: "init",
+      totalChapters: 2,
+      initialChapterIndex: 1,
+      initialHighlightId: "opening-highlight",
+      paginationConfig: BASE_PAGINATION_CONFIG,
+      spreadConfig: BASE_SPREAD_CONFIG,
+      firstChapterBlocks: blocks,
+      intent: { kind: "jump", source: "highlight" },
+    });
+    const first = getLastEventOfType(events, "partialReady");
+    expect(first?.spread.chapterIndexStart).toBe(1);
+    expect(
+      first?.spread.slots.flatMap((slot) =>
+        slot.kind === "page"
+          ? slot.page.content.map((slice) => slice.blockId)
+          : [],
+      ),
+    ).toContain("highlight-block");
+    expect(first?.spread.currentPage).toBeGreaterThan(1);
+    addChapter(engine, 0);
+    expect(
+      getReadyEvent(events)?.spread.slots.flatMap((slot) =>
+        slot.kind === "page"
+          ? slot.page.content.map((slice) => slice.blockId)
+          : [],
+      ),
+    ).toContain("highlight-block");
+  });
+});

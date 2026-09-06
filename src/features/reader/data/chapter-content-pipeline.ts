@@ -54,6 +54,7 @@ export interface ReaderDecoratedChapterArtifact {
 }
 
 export interface ReaderInitialLocation {
+  highlightId?: string;
   chapterIndex: number;
   chapterProgress?: number;
   isRestore: boolean;

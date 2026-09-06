@@ -33,6 +33,7 @@ import {
   resolveAnchorToGlobalPage,
   resolveAnchorToPage,
   resolveTargetToAnchor,
+  resolveHighlightToAnchor,
 } from "./anchors";
 import {
   buildResolvedSpreadWindow,
@@ -140,6 +141,7 @@ export class PaginationEngine {
             cmd.initialChapterProgress,
             cmd.initialAnchor,
             cmd.firstChapterBlocks,
+            cmd.initialHighlightId,
           );
         });
       case "addChapter":
@@ -199,6 +201,7 @@ export class PaginationEngine {
     initialChapterProgress: number | undefined,
     initialAnchor: ContentAnchor | undefined,
     firstChapterBlocks: Block[],
+    initialHighlightId?: string,
   ): void {
     this.paginationConfig = paginationConfig;
     this.spreadConfig = spreadConfig;
@@ -228,6 +231,15 @@ export class PaginationEngine {
 
     const diagnostics = this.prepareAndLayoutChapter(this.initialChapterIndex);
 
+    // Resolve explicit opening targets before the first spread is emitted.
+    if (initialHighlightId) {
+      initialAnchor =
+        resolveHighlightToAnchor(
+          this.preparedByChapter[this.initialChapterIndex] ?? [],
+          this.initialChapterIndex,
+          initialHighlightId,
+        ) ?? undefined;
+    }
     if (initialAnchor) {
       const resolved = resolveAnchorToPage(this.pagesByChapter, initialAnchor);
       this.anchor = resolved

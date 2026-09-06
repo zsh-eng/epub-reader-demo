@@ -143,6 +143,7 @@ export interface UsePaginationResult {
     initialChapterIndex: number;
     initialChapterProgress?: number;
     initialAnchor?: ContentAnchor;
+    initialHighlightId?: string;
     intent?: SpreadIntent;
     firstChapterBlocks: Block[];
   }) => void;
@@ -499,6 +500,7 @@ export function usePagination(
       initialChapterIndex: number;
       initialChapterProgress?: number;
       initialAnchor?: ContentAnchor;
+      initialHighlightId?: string;
       intent?: SpreadIntent;
       firstChapterBlocks: Block[];
     }) => {
@@ -549,6 +551,7 @@ export function usePagination(
         initialChapterIndex: opts.initialChapterIndex,
         initialChapterProgress: opts.initialChapterProgress,
         initialAnchor: opts.initialAnchor,
+        initialHighlightId: opts.initialHighlightId,
         firstChapterBlocks: opts.firstChapterBlocks,
       });
     },

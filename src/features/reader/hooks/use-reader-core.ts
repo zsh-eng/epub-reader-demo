@@ -12,7 +12,9 @@ import {
 } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import type { FontFamily, ReaderSettings } from "@/types/reader.types";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import type { ReaderHighlightTarget } from "./use-reader-chapter-content";
 import type { ChapterEntry } from "../types";
 import { resolveReaderEpubPreparation } from "./reader-epub-preparation";
 import { useReaderReadingSession } from "./reading-sessions/use-reader-reading-session";
@@ -141,6 +143,22 @@ export function useReaderCore(
     spreadConfig,
   });
 
+  const route = useLocation();
+  const navigate = useNavigate();
+  const highlightTarget = route.state?.scrollToHighlight as
+    | ReaderHighlightTarget
+    | undefined;
+  // Consume the navigation only after a spread exists. The chapter session has
+  // captured its target by then; revisiting this history entry restores progress.
+  useEffect(() => {
+    if (!pagination.spread || !highlightTarget) return;
+    const { scrollToHighlight: _target, ...state } = route.state;
+    void navigate(
+      { pathname: route.pathname, search: route.search, hash: route.hash },
+      { replace: true, state },
+    );
+  }, [pagination.spread, highlightTarget, route, navigate]);
+
   useReaderCheckpointController({
     bookId,
     spread: pagination.spread,
@@ -167,6 +185,7 @@ export function useReaderCore(
     subscribe: subscribeToChapterArtifacts,
     resumeBackgroundLoad: resumeBackgroundChapterArtifacts,
   } = useReaderChapterContent({
+    highlightTarget,
     bookId: epubPreparation.chapterContentBookId,
     book: epubPreparation.chapterContentBook,
     publisherBookStylingEnabled: settings.publisherBookStylingEnabled,

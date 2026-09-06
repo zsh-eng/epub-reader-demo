@@ -238,3 +238,25 @@ export function resolveTargetToAnchor(
 
   return null;
 }
+
+/** Resolve the first rendered segment of a highlight after text preparation. */
+export function resolveHighlightToAnchor(
+  prepared: PreparedBlock[],
+  chapterIndex: number,
+  highlightId: string,
+): ContentAnchor | null {
+  for (const block of prepared) {
+    if (block.type !== "text") continue;
+    const itemIndex = block.items.findIndex((item) =>
+      item.highlightMarks?.some((mark) => mark.id === highlightId),
+    );
+    if (itemIndex < 0) continue;
+    return {
+      type: "text",
+      chapterIndex,
+      blockId: block.id,
+      offset: { itemIndex, segmentIndex: 0, graphemeIndex: 0 },
+    };
+  }
+  return null;
+}

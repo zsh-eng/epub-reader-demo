@@ -10,6 +10,7 @@ interface UseSessionInitialReaderLocationOptions {
   totalChapters: number;
   checkpoint: ReadingCheckpoint | undefined;
   checkpointReady: boolean;
+  requestedLocation?: ReaderInitialLocation;
 }
 
 interface CapturedInitialLocation {
@@ -19,7 +20,7 @@ interface CapturedInitialLocation {
 }
 
 /**
- * Captures the checkpoint-derived restore location once per opened book.
+ * Captures the explicit opening target or checkpoint once per opened book.
  *
  * Checkpoint writes and sync invalidation can refetch the checkpoint query while
  * the reader is active. Those live updates are current reading state, not a new
@@ -30,6 +31,7 @@ export function useSessionInitialReaderLocation({
   totalChapters,
   checkpoint,
   checkpointReady,
+  requestedLocation,
 }: UseSessionInitialReaderLocationOptions): ReaderInitialLocation | null {
   const capturedLocationRef = useRef<CapturedInitialLocation | null>(null);
   const capturedLocation = capturedLocationRef.current;
@@ -46,7 +48,9 @@ export function useSessionInitialReaderLocation({
   const nextCapturedLocation = {
     bookId,
     totalChapters,
-    location: resolveInitialReaderLocation(checkpoint, totalChapters),
+    location:
+      requestedLocation ??
+      resolveInitialReaderLocation(checkpoint, totalChapters),
   };
   // This immutable per-book capture lets a warm checkpoint feed pagination in
   // the same render. Later checkpoint refetches cannot restart the Reader.

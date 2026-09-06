@@ -24,6 +24,7 @@ export interface InitCommand {
   initialChapterIndex: number;
   initialChapterProgress?: number;
   initialAnchor?: ContentAnchor;
+  initialHighlightId?: string;
   // First chapter's blocks are included so the engine is immediately live.
   firstChapterBlocks: Block[];
 }

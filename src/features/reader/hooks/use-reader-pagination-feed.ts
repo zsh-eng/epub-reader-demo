@@ -76,9 +76,12 @@ export function useReaderPaginationFeed({
         totalChapters: chapterEntries.length,
         initialChapterIndex: initialLocation.chapterIndex,
         initialChapterProgress: initialLocation.chapterProgress,
-        intent: initialLocation.isRestore
-          ? { kind: "restore" }
-          : { kind: "replace" },
+        initialHighlightId: initialLocation.highlightId,
+        intent: initialLocation.highlightId
+          ? { kind: "jump", source: "highlight" }
+          : initialLocation.isRestore
+            ? { kind: "restore" }
+            : { kind: "replace" },
         firstChapterBlocks,
       });
 
