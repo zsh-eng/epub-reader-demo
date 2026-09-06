@@ -1,6 +1,6 @@
 import { prepareBook, prepareNewBook } from "@/lib/book-preparation";
 import type { Book } from "@/lib/db";
-import { deleteBook, getAllBooks, getBookBySourceFileId } from "@/lib/db";
+import { getBookBySourceFileId } from "@/lib/db";
 import { parseEPUB } from "@/lib/epub-parser";
 import { files } from "@/lib/files";
 
@@ -55,18 +55,4 @@ export async function addBookFromFile(file: File): Promise<Book> {
       `Failed to add book: ${error instanceof Error ? error.message : "Unknown error"}`,
     );
   }
-}
-
-/**
- * Get all books from the library
- */
-export async function getLibraryBooks(): Promise<Book[]> {
-  return await getAllBooks();
-}
-
-/**
- * Delete a book from the library
- */
-export async function removeBook(bookId: string): Promise<void> {
-  await deleteBook(bookId);
 }
