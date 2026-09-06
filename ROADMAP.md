@@ -133,7 +133,11 @@ below contains only work that still has a clear product or reliability reason.
 - [x] BUG: With reading position being saved. Going back and coming back in - position is not preserved. Same when changing the reader size (e.g. changing to half page for the window position)
 
 Notetaking flow
-- [ ] We should preserve whatever right sidebar option that we chose
+- [x] We should preserve whatever right sidebar option that we chose
+- [x] Autofocus on the notebook when opening sidebar on desktop
+- [x] Notetaking storage
+- [x] Fix exit animation sidebar state bug
+- [ ] Wire up to the UI
 - [ ] Add editing note UI flow (reference telegram)
 - [ ] Add deleting note UI flow
 
