@@ -2,6 +2,15 @@ import { defineProject } from "vitest/config";
 import path from "path";
 
 export default defineProject({
+  // Let tests mock registration callbacks without starting a service worker.
+  plugins: [
+    {
+      name: "test-pwa-register",
+      resolveId(id) {
+        if (id === "virtual:pwa-register/react") return id;
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

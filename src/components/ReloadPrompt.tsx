@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { toast } from "sonner";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 export function ReloadPrompt() {
+  const [registration, setRegistration] =
+    useState<ServiceWorkerRegistration | null>(null);
   const {
     offlineReady: [offlineReady, setOfflineReady],
     needRefresh: [needRefresh, setNeedRefresh],
@@ -12,17 +14,23 @@ export function ReloadPrompt() {
   } = useRegisterSW({
     onRegistered(registration) {
       console.log("SW Registered:", registration);
-      // Periodically check for updates
-      if (registration) {
-        setInterval(() => {
-          registration.update();
-        }, UPDATE_CHECK_INTERVAL_MS);
-      }
+      setRegistration(registration ?? null);
     },
     onRegisterError(error) {
       console.error("SW registration error:", error);
     },
   });
+
+  // Registration can complete asynchronously; the mounted component owns polling.
+  useEffect(() => {
+    if (!registration) return;
+    const timer = window.setInterval(() => {
+      void registration.update().catch((error) => {
+        console.error("SW update check failed:", error);
+      });
+    }, UPDATE_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [registration]);
 
   useEffect(() => {
     if (offlineReady) {
