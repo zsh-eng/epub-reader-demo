@@ -142,3 +142,94 @@ test("imports then immediately opens a new EPUB", async ({
   await waitForReaderReady(page);
   await nextSpread(page);
 });
+
+test("keeps duplicate and failed imports in the Library", async ({
+  page,
+  localBook,
+}) => {
+  const { SAMPLE_EPUB_PATH } = await import("./helpers/fixtures");
+  const { readFile } = await import("node:fs/promises");
+  const drop = async (name: string, bytes: Buffer) => {
+    const dataTransfer = await page.evaluateHandle(
+      ({ name, bytes }) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(
+          new File([new Uint8Array(bytes)], name, {
+            type: "application/epub+zip",
+          }),
+        );
+        return transfer;
+      },
+      { name, bytes: [...bytes] },
+    );
+    await page.locator("main").last().dispatchEvent("drop", { dataTransfer });
+    await dataTransfer.dispose();
+  };
+  await drop("sample.epub", await readFile(SAMPLE_EPUB_PATH));
+  await expect(
+    page.getByRole("heading", { name: "Duplicate Found" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Open Book", exact: true }).click();
+  await expect(page).toHaveURL(`/reader/${localBook.id}`);
+  await waitForReaderReady(page);
+  await page.goto("/");
+  await drop("broken.epub", Buffer.from("invalid EPUB"));
+  await expect(page.getByText("Import failed", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL("/");
+  await expect(
+    page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }),
+  ).toBeVisible();
+});
+
+test("reports mixed multi-file import outcomes without opening a book", async ({
+  page,
+}) => {
+  const { readFile } = await import("node:fs/promises");
+  const { unzipSync, zipSync, strFromU8, strToU8 } = await import("fflate");
+  const { SAMPLE_EPUB_PATH } = await import("./helpers/fixtures");
+  const original = await readFile(SAMPLE_EPUB_PATH);
+  const entries = unzipSync(original);
+  const opf = Object.keys(entries).find((path) => path.endsWith(".opf"))!;
+  entries[opf] = strToU8(
+    strFromU8(entries[opf]).replaceAll(
+      "Alice's Adventures in Wonderland",
+      "Second fixture book",
+    ),
+  );
+  const second = Buffer.from(zipSync(entries));
+  await page.goto("/");
+  const [chooser] = await Promise.all([
+    page.waitForEvent("filechooser"),
+    page.getByRole("button", { name: "Import EPUB", exact: true }).click(),
+  ]);
+  await chooser.setFiles([
+    { name: "sample.epub", mimeType: "application/epub+zip", buffer: original },
+    { name: "second.epub", mimeType: "application/epub+zip", buffer: second },
+    {
+      name: "duplicate.epub",
+      mimeType: "application/epub+zip",
+      buffer: original,
+    },
+    {
+      name: "broken.epub",
+      mimeType: "application/epub+zip",
+      buffer: Buffer.from("invalid"),
+    },
+    {
+      name: "notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("ignored"),
+    },
+  ]);
+  await expect(
+    page.getByText(
+      "2 books added · 1 skipped (already in library) · 1 failed · 1 non-EPUB file ignored",
+    ),
+  ).toBeVisible();
+  await expect(page).toHaveURL("/");
+  const count = await page.evaluate(async () => {
+    const path = "/src/lib/db.ts";
+    return (await (await import(path)).getAllBooks()).length;
+  });
+  expect(count).toBe(2);
+});
