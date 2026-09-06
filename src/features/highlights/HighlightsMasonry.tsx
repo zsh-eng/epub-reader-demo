@@ -238,11 +238,10 @@ function useInitialTileEntrance(
 }
 
 function useElementWidth() {
-  const elementRef = useRef<HTMLDivElement>(null);
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
 
   useLayoutEffect(() => {
-    const element = elementRef.current;
     if (!element) return;
 
     const updateWidth = (nextWidth: number) => {
@@ -256,9 +255,9 @@ function useElementWidth() {
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, []);
+  }, [element]);
 
-  return { elementRef, width };
+  return { element, elementRef: setElement, width };
 }
 
 /**
@@ -1729,8 +1728,11 @@ export function HighlightsMasonry() {
     () => visibleGroups.flatMap(({ highlights }) => highlights),
     [visibleGroups],
   );
-  const { elementRef: mosaicsElementRef, width: mosaicsWidth } =
-    useElementWidth();
+  const {
+    element: mosaicsElement,
+    elementRef: mosaicsElementRef,
+    width: mosaicsWidth,
+  } = useElementWidth();
   const { fontReady, preparedById } = usePreparedHighlights(visibleHighlights);
   const mosaicModelsByBookId = useMemo(() => {
     return new Map(
@@ -1748,10 +1750,10 @@ export function HighlightsMasonry() {
   }, [fontReady, mosaicsWidth, preparedById, visibleGroups]);
   const [mosaicsScrollMargin, setMosaicsScrollMargin] = useState(0);
   useLayoutEffect(() => {
-    const element = mosaicsElementRef.current;
+    const element = mosaicsElement;
     if (!element) return;
     setMosaicsScrollMargin(element.offsetTop);
-  }, [mosaicsElementRef, mosaicsWidth]);
+  }, [mosaicsElement, mosaicsWidth]);
   const estimateMosaicSectionSize = useCallback(
     (index: number) => {
       const entry = visibleGroups[index];
