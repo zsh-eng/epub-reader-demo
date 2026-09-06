@@ -5,7 +5,7 @@ import { Library } from "@/features/library/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
 import { ReaderDiagnostics } from "@/components/Reader/diagnostics/ReaderDiagnostics";
-import { ReadingSessions } from "@/components/ReadingSessions";
+import { ReadingSessions } from "@/features/reading-sessions/ReadingSessions";
 import { ReaderTraceViewer } from "@/components/ReaderTraceViewer";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Devices } from "@/features/devices/Devices";
