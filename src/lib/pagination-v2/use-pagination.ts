@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 import {
   endReaderTraceSpan,
   markReaderTrace,
@@ -398,16 +404,13 @@ export function usePagination(
     }
   };
 
-  // Keep a ref so the worker's onmessage always calls the latest handler
-  // without the worker effect needing to depend on it (which would terminate
-  // and recreate the worker whenever the handler's identity changed).
-  const handleEventRef = useRef(handleEvent);
-  handleEventRef.current = handleEvent;
+  // Worker events read committed state without reconnecting the worker session.
+  const onWorkerEvent = useEffectEvent(handleEvent);
 
   useEffect(() => {
     const session = acquirePaginationWorkerSession({
       onEvent: (event, mainHandlerEnteredAtEpochMs) => {
-        handleEventRef.current(event, mainHandlerEnteredAtEpochMs);
+        onWorkerEvent(event, mainHandlerEnteredAtEpochMs);
       },
       onError: (event) => {
         endReaderTraceSpan(

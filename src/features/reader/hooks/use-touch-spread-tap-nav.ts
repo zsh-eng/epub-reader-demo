@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import { dispatchReaderTouchTapHandled } from "./reader-interaction-events";
 
 type TapZone = "left" | "center" | "right";
@@ -185,19 +185,36 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     canGoPrev,
   } = options;
 
-  const nextSpreadRef = useRef(onNextSpread);
-  const prevSpreadRef = useRef(onPrevSpread);
-  const showChromeRef = useRef(onShowChrome);
-  const canGoNextRef = useRef(canGoNext);
-  const canGoPrevRef = useRef(canGoPrev);
   const pressRef = useRef<TouchPressState | null>(null);
   const lastHandledTapRef = useRef<{ at: number; x: number } | null>(null);
 
-  nextSpreadRef.current = onNextSpread;
-  prevSpreadRef.current = onPrevSpread;
-  showChromeRef.current = onShowChrome;
-  canGoNextRef.current = canGoNext;
-  canGoPrevRef.current = canGoPrev;
+  // Native listeners keep their lifetime but use committed navigation state.
+  const showChrome = useEffectEvent(() => onShowChrome?.());
+  const navigateForTap = useEffectEvent(
+    (
+      clientX: number,
+      target: EventTarget | null,
+      isDefaultPrevented: boolean,
+      preventDefault: () => void,
+    ) => {
+      const container = containerRef.current;
+      if (!container) return false;
+      const action = resolveTapNavigationAction({
+        clientX,
+        rect: container.getBoundingClientRect(),
+        target,
+        isDefaultPrevented,
+        canGoNext,
+        canGoPrev,
+      });
+      if (!action) return false;
+      preventDefault();
+      if (action === "prev") onPrevSpread();
+      else if (action === "next") onNextSpread();
+      else onShowChrome?.();
+      return true;
+    },
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -214,37 +231,6 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       const withinTimeWindow = Date.now() - last.at < 400;
       const withinDistanceWindow = Math.abs(last.x - x) <= 3;
       return withinTimeWindow && withinDistanceWindow;
-    };
-
-    const navigateForTap = (
-      clientX: number,
-      target: EventTarget | null,
-      isDefaultPrevented: boolean,
-      preventDefault: () => void,
-    ) => {
-      const action = resolveTapNavigationAction({
-        clientX,
-        rect: container.getBoundingClientRect(),
-        target,
-        isDefaultPrevented,
-        canGoNext: canGoNextRef.current,
-        canGoPrev: canGoPrevRef.current,
-      });
-
-      if (!action) return false;
-
-      preventDefault();
-      if (action === "prev") {
-        prevSpreadRef.current();
-        return true;
-      }
-      if (action === "next") {
-        nextSpreadRef.current();
-        return true;
-      }
-
-      showChromeRef.current?.();
-      return true;
     };
 
     const handleHandledTap = (clientX: number) => {
@@ -285,7 +271,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
         }) &&
         !hasActiveTextSelection()
       ) {
-        showChromeRef.current?.();
+        showChrome();
         return;
       }
 

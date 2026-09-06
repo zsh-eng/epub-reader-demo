@@ -366,3 +366,39 @@ describe("spread swipe navigation", () => {
     vi.useRealTimers();
   });
 });
+
+it("keeps an in-progress swipe and uses the newly committed navigation callback", () => {
+  const harness = createHarness();
+  const originalNext = vi.fn();
+  const updatedNext = vi.fn();
+  renderHarness(harness.root, { onNext: originalNext });
+  const stage = prepareStage(harness.container);
+  act(() => {
+    dispatchTouchPointer(stage, "pointerdown", 500);
+    dispatchTouchPointer(stage, "pointermove", 480);
+  });
+  renderHarness(harness.root, { onNext: updatedNext });
+  act(() => {
+    dispatchTouchPointer(stage, "pointermove", 200);
+    dispatchTouchPointer(stage, "pointerup", 200);
+  });
+  expect(originalNext).not.toHaveBeenCalled();
+  expect(updatedNext).toHaveBeenCalledOnce();
+  harness.cleanup();
+});
+
+it("uses current tap permissions and callbacks without replacing the surface", () => {
+  const harness = createHarness();
+  const originalNext = vi.fn();
+  const updatedNext = vi.fn();
+  renderHarness(harness.root, { nextSpreadId: null, onNext: originalNext });
+  const stage = prepareStage(harness.container);
+  renderHarness(harness.root, { nextSpreadId: 2, onNext: updatedNext });
+  act(() => {
+    dispatchTouchPointer(stage, "pointerdown", 550);
+    dispatchTouchPointer(stage, "pointerup", 550);
+  });
+  expect(originalNext).not.toHaveBeenCalled();
+  expect(updatedNext).toHaveBeenCalledOnce();
+  harness.cleanup();
+});

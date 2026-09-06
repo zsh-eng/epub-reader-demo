@@ -2,6 +2,7 @@ import { animate, useMotionValue, useReducedMotion } from "motion/react";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -160,15 +161,11 @@ export function useSpreadSwipeNavigation(
     () => {},
   );
   const lastObservedCurrentSpreadIdRef = useRef(currentSpreadId);
-  const previousSpreadIdRef = useRef(previousSpreadId);
-  const nextSpreadIdRef = useRef(nextSpreadId);
-  const onPreviousRef = useRef(onPrevious);
-  const onNextRef = useRef(onNext);
-
-  previousSpreadIdRef.current = previousSpreadId;
-  nextSpreadIdRef.current = nextSpreadId;
-  onPreviousRef.current = onPrevious;
-  onNextRef.current = onNext;
+  // Gesture subscriptions read adjacent targets from the latest committed render.
+  const adjacentSpreads = useEffectEvent(() => ({
+    previous: previousSpreadId,
+    next: nextSpreadId,
+  }));
 
   const setPhase = useCallback((nextPhase: SwipePhase) => {
     phaseRef.current = nextPhase;
@@ -190,25 +187,22 @@ export function useSpreadSwipeNavigation(
     setPhase("idle");
   }, [dragOffset, setPhase, stopAnimation]);
 
-  const dispatchPendingNavigationIfReady = useCallback(
-    (offset: number) => {
-      const pendingNavigation = pendingNavigationRef.current;
-      if (!pendingNavigation || pendingNavigation.dispatched) return;
+  const dispatchPendingNavigationIfReady = useEffectEvent((offset: number) => {
+    const pendingNavigation = pendingNavigationRef.current;
+    if (!pendingNavigation || pendingNavigation.dispatched) return;
 
-      const reachedCurrentSpread =
-        pendingNavigation.direction === "next" ? offset <= 0 : offset >= 0;
-      if (!reachedCurrentSpread) return;
+    const reachedCurrentSpread =
+      pendingNavigation.direction === "next" ? offset <= 0 : offset >= 0;
+    if (!reachedCurrentSpread) return;
 
-      pendingNavigation.dispatched = true;
-      setPhase("awaiting-navigation");
-      if (pendingNavigation.direction === "next") {
-        onNextRef.current();
-        return;
-      }
-      onPreviousRef.current();
-    },
-    [setPhase],
-  );
+    pendingNavigation.dispatched = true;
+    setPhase("awaiting-navigation");
+    if (pendingNavigation.direction === "next") {
+      onNext();
+      return;
+    }
+    onPrevious();
+  });
 
   useLayoutEffect(() => {
     const previousCurrentSpreadId = lastObservedCurrentSpreadIdRef.current;
@@ -249,7 +243,7 @@ export function useSpreadSwipeNavigation(
       dragOffset.on("change", (offset) => {
         dispatchPendingNavigationIfReady(offset);
       }),
-    [dispatchPendingNavigationIfReady, dragOffset],
+    [dragOffset],
   );
 
   useEffect(() => {
@@ -279,9 +273,9 @@ export function useSpreadSwipeNavigation(
         targetOffset < 0 ? "next" : targetOffset > 0 ? "previous" : null;
       const targetSpreadId =
         direction === "next"
-          ? nextSpreadIdRef.current
+          ? adjacentSpreads().next
           : direction === "previous"
-            ? previousSpreadIdRef.current
+            ? adjacentSpreads().previous
             : null;
 
       if (direction && targetSpreadId !== null) {
@@ -394,9 +388,9 @@ export function useSpreadSwipeNavigation(
       event.preventDefault();
 
       let nextOffset = gesture.startOffset + deltaX;
-      if (nextOffset < 0 && nextSpreadIdRef.current === null) {
+      if (nextOffset < 0 && adjacentSpreads().next === null) {
         nextOffset = rubberBandSwipeOffset(nextOffset, gesture.width);
-      } else if (nextOffset > 0 && previousSpreadIdRef.current === null) {
+      } else if (nextOffset > 0 && adjacentSpreads().previous === null) {
         nextOffset = rubberBandSwipeOffset(nextOffset, gesture.width);
       } else {
         nextOffset = Math.max(
@@ -433,8 +427,8 @@ export function useSpreadSwipeNavigation(
         offset: dragOffset.get(),
         velocity: dragOffset.getVelocity(),
         width: gesture.width,
-        canGoPrevious: previousSpreadIdRef.current !== null,
-        canGoNext: nextSpreadIdRef.current !== null,
+        canGoPrevious: adjacentSpreads().previous !== null,
+        canGoNext: adjacentSpreads().next !== null,
       });
       settle(targetOffset, dragOffset.getVelocity());
     };
@@ -466,7 +460,6 @@ export function useSpreadSwipeNavigation(
   }, [
     containerRef,
     disableMotion,
-    dispatchPendingNavigationIfReady,
     dragOffset,
     enabled,
     prefersReducedMotion,
