@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { NotebookNote } from "./NotebookNote";
 import { ReaderSheet } from "./shared/ReaderSheet";
 import type { NoteTarget } from "@/types/note";
@@ -276,6 +277,29 @@ export function ReaderNotesPrototype({
     [editNote, notebook, onActiveChange],
   );
 
+  const removeNote = notes.remove;
+  const restoreNote = notes.restore;
+  const deleteNote = useCallback(
+    async (id: string) => {
+      if (!(await removeNote(id))) return;
+      const toastId = toast("Note deleted", {
+        duration: 8000,
+        action: {
+          label: "Undo",
+          onClick: (event) => {
+            event.preventDefault();
+            void restoreNote(id)
+              .then(() => toast.dismiss(toastId))
+              .catch(() => {
+                toast.error("Could not restore the note. Try Undo again.");
+              });
+          },
+        },
+      });
+    },
+    [removeNote, restoreNote],
+  );
+
   const iconButton =
     "flex h-8 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
   const latest = entries.at(-1);
@@ -506,9 +530,11 @@ export function ReaderNotesPrototype({
                 </h3>
               )}
               <NotebookNote
-                disabled={!notes.ready || notes.saving || entry.kind !== "note"}
+                disabled={!notes.ready || notes.saving}
+                canEdit={entry.kind === "note"}
                 editing={notes.editingId === entry.id}
                 onEdit={() => void startEdit(entry.id)}
+                onDelete={() => void deleteNote(entry.id)}
               >
                 {entry.quote && (
                   <blockquote
@@ -526,7 +552,7 @@ export function ReaderNotesPrototype({
                 <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
                   {entry.text}
                 </p>
-                <div className="mt-3 flex items-center justify-between gap-3 pr-8 text-[11px] text-muted-foreground">
+                <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
                   <button
                     disabled={!entry.location.page}
                     className="min-w-0 truncate text-left hover:text-foreground"
@@ -561,6 +587,7 @@ export function ReaderNotesPrototype({
       entries,
       orderedEntries,
       startEdit,
+      deleteNote,
       notes.ready,
       notes.saving,
       notes.editingId,

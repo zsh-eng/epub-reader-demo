@@ -7,14 +7,7 @@ import {
   useReducedMotion,
   useTransform,
 } from "motion/react";
-import { Ellipsis, Pencil } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
+import { Pencil, Trash2 } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -30,11 +23,15 @@ const THRESHOLD = 72;
 export function NotebookNote({
   children,
   onEdit,
+  onDelete,
+  canEdit,
   disabled,
   editing,
 }: {
   children: ReactNode;
   onEdit: () => void;
+  onDelete: () => void;
+  canEdit: boolean;
   disabled: boolean;
   editing: boolean;
 }) {
@@ -44,27 +41,30 @@ export function NotebookNote({
     distance,
     (value) => `translateX(${-value}px)`,
   );
-  const progress = useTransform(distance, [0, THRESHOLD], [0, 1]);
-  const opacity = useTransform(distance, [4, 48], [0, 1]);
-  // Approach from the right, then keep a 12 px gap from the moving card.
-  const cueTransform = useTransform(distance, (value) => {
+  const magnitude = useTransform(distance, Math.abs);
+  const progress = useTransform(magnitude, [0, THRESHOLD], [0, 1]);
+  const opacity = useTransform(magnitude, [4, 48], [0, 1]);
+  const [action, setAction] = useState<"edit" | "delete">("edit");
+  // Approach from the outer edge, then keep a 12 px gap from the moving card.
+  const cueTransform = useTransform(magnitude, (value) => {
     const x = value < 60 ? 24 - value * 0.6 : 48 - value;
     const scale = reduceMotion ? 1 : 0.9 + Math.min(value / 60, 1) * 0.1;
-    return `translateX(${x}px) scale(${scale})`;
+    return `translateX(${action === "edit" ? x : -x}px) scale(${scale})`;
   });
   const burst = useMotionValue(1);
   const burstScale = useTransform(burst, [0, 1], [1, 2.3], {
     ease: cubicBezier(0.23, 1, 0.32, 1),
   });
   const burstTransform = useTransform(burstScale, (value) => `scale(${value})`);
-  const ringOpacity = useTransform(burst, [0, 0.3, 1], [0.85, 0.4, 0]);
-  const mistOpacity = useTransform(burst, [0, 0.15, 1], [0.3, 0.45, 0]);
+  const ringOpacity = useTransform(burst, [0, 0.3, 1], [0.55, 0.25, 0]);
+  const mistOpacity = useTransform(burst, [0, 0.15, 1], [0.15, 0.25, 0]);
   const [armed, setArmed] = useState(false);
   const gesture = useRef<{
     id: number;
     x: number;
     y: number;
     dragging: boolean;
+    direction: number;
     armed: boolean;
   } | null>(null);
   const suppressClick = useRef(false);
@@ -79,14 +79,20 @@ export function NotebookNote({
     if (reduceMotion) distance.set(0);
     else
       void animate(distance, 0, { type: "spring", duration: 0.5, bounce: 0.2 });
-    if (!cancelled && active.dragging && active.armed) onEdit();
+    if (!cancelled && active.dragging && active.armed) {
+      if (active.direction === 1) onEdit();
+      else onDelete();
+    }
   }
 
   return (
     <ContextMenu>
       <ContextMenuTrigger
-        className="group relative mb-2 block"
-        data-edit-ready={armed || undefined}
+        tabIndex={0}
+        aria-label="Note; use the context menu to edit or delete"
+        className="group relative mb-2 block overflow-x-clip rounded-2xl focus-visible:outline-2 focus-visible:outline-ring"
+        data-swipe-ready={armed || undefined}
+        data-swipe-action={action}
       >
         {/* Transparent transforms still enlarge scroll bounds. Clip the effect,
             including its resting halo, without clipping the card or its focus ring. */}
@@ -94,10 +100,10 @@ export function NotebookNote({
           <motion.div
             aria-hidden="true"
             style={{ opacity, transform: cueTransform }}
-            className="pointer-events-none absolute inset-y-0 right-0 flex items-center text-muted-foreground"
+            className={`pointer-events-none absolute inset-y-0 flex items-center ${action === "edit" ? "right-0 text-muted-foreground" : "left-0 text-destructive"}`}
           >
             <div className="relative flex size-9 items-center justify-center">
-              <Pencil size={16} className={armed ? "text-foreground" : ""} />
+              {action === "edit" ? <Pencil size={16} /> : <Trash2 size={16} />}
               <svg
                 viewBox="0 0 36 36"
                 className="absolute inset-0 size-9 -rotate-90 fill-none stroke-current"
@@ -116,11 +122,11 @@ export function NotebookNote({
               {!reduceMotion && (
                 <>
                   <motion.span
-                    className="absolute inset-0 rounded-full border border-current"
+                    className="absolute inset-0 rounded-full border border-border"
                     style={{ transform: burstTransform, opacity: ringOpacity }}
                   />
                   <motion.span
-                    className="absolute inset-0 rounded-full border-[3px] border-current blur-[2px]"
+                    className="absolute inset-0 rounded-full border-[3px] border-border blur-[2px]"
                     style={{ transform: burstTransform, opacity: mistOpacity }}
                   />
                 </>
@@ -154,6 +160,7 @@ export function NotebookNote({
               x: event.clientX,
               y: event.clientY,
               dragging: false,
+              direction: 1,
               armed: false,
             };
           }}
@@ -167,24 +174,32 @@ export function NotebookNote({
                 gesture.current = null;
                 return;
               }
-              if (dx < 10 || dx < dy * 1.5) return;
+              if (Math.abs(dx) < 10 || Math.abs(dx) < dy * 1.5) return;
+              if (dx > 0 && !canEdit) {
+                gesture.current = null;
+                return;
+              }
               if (window.getSelection()?.toString()) {
                 gesture.current = null;
                 return;
               }
+              active.direction = Math.sign(dx);
+              setAction(dx > 0 ? "edit" : "delete");
               active.dragging = true;
               suppressClick.current = true;
               event.currentTarget.setPointerCapture(event.pointerId);
             }
             event.preventDefault();
             event.stopPropagation();
+            // Lock the action for this touch; crossing the origin only disarms it.
+            const travel = Math.max(0, dx * active.direction);
             distance.set(
-              Math.max(
-                0,
-                dx > THRESHOLD ? THRESHOLD + (dx - THRESHOLD) * 0.2 : dx,
-              ),
+              active.direction *
+                (travel > THRESHOLD
+                  ? THRESHOLD + (travel - THRESHOLD) * 0.2
+                  : travel),
             );
-            const nextArmed = dx >= THRESHOLD;
+            const nextArmed = travel >= THRESHOLD;
             if (nextArmed !== active.armed) {
               active.armed = nextArmed;
               setArmed(nextArmed);
@@ -214,29 +229,20 @@ export function NotebookNote({
           }}
         >
           {children}
-          <div className="absolute bottom-1 right-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                aria-label="Note actions"
-                disabled={disabled}
-                className="flex h-8 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus-visible:bg-muted data-[popup-open]:bg-muted"
-              >
-                <Ellipsis size={16} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={onEdit}>
-                  <Pencil size={14} />
-                  Edit note
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </motion.article>
       </ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem disabled={disabled} onClick={onEdit}>
+        <ContextMenuItem disabled={disabled || !canEdit} onClick={onEdit}>
           <Pencil size={14} />
           Edit note
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={disabled}
+          variant="destructive"
+          onClick={onDelete}
+        >
+          <Trash2 size={14} />
+          Delete note
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

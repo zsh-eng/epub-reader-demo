@@ -163,3 +163,15 @@ export async function deleteNote(id: string): Promise<void> {
     if (note && isNotDeleted(note)) await db.notes.delete(id);
   });
 }
+
+/** Undo a deletion through the same synced write path. A live row is left intact,
+ * so an already received restore or edit is never replaced by an older snapshot.
+ */
+export async function restoreNote(id: string): Promise<void> {
+  await db.transaction("rw", db.notes, async () => {
+    const note = await db.notes.get(id);
+    if (!note) throw new Error("Deleted note is no longer available");
+    if (isNotDeleted(note)) return;
+    await db.notes.put({ ...note, isDeleted: false, updatedAt: Date.now() });
+  });
+}

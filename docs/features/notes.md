@@ -3,7 +3,7 @@
 ## Capture
 
 A notebook contains the book's saved notes and bookmarks. Notes require
-non-whitespace text. Bookmark and deletion controls are not yet in the Reader;
+non-whitespace text. Bookmark creation controls are not yet in the Reader;
 storage helpers already support them.
 
 The composer has one local draft per book. Text and target are saved together.
@@ -24,7 +24,7 @@ until 72 px of drag. At that point the ring expands and fades. Release starts th
 edit only while the threshold is met. Moving back, a short swipe, or a cancelled
 touch leaves the note unchanged. Vertical scrolling remains native. Reduced
 motion keeps the progress cue and omits the expanding ring and spring return.
-The note menu and long press (right click on desktop) offer the same Edit action.
+Long press or right click offers Edit and Delete without a persistent action button.
 These gestures apply to notebook rows, not book pages or margin comments.
 
 The composer shows Editing note, Cancel, and a checkmark. Save changes text only;
@@ -34,6 +34,20 @@ returns to the compose draft, including its text and target. Closing the UI keep
 the edit draft; after reopening the book, choose Edit on that note to resume it.
 A conflicting edit or received deletion leaves the local edit available to copy,
 and does not overwrite the received change.
+
+## Deletion and Undo
+
+Swipe right to delete, using the same 72 px threshold and release rule as Edit.
+The gesture locks its action when horizontal movement starts; moving back across
+the starting point cancels rather than switching actions. The cue uses the
+existing destructive token; both burst halos use the quieter border token.
+
+Deletion commits immediately, including offline, and offers Undo for eight seconds.
+Undo restores the current tombstone through the ordinary sync write path. It keeps
+the note ID, text, quote, anchor, and creation time, and leaves a row that is already
+live unchanged. Deleting retains the source highlight. Deleting a note with an
+open edit removes that edit draft and returns to the compose draft; Undo restores
+the saved note, not the discarded edit. Other drafts remain intact.
 
 ## Storage and sync
 

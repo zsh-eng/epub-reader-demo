@@ -9,6 +9,7 @@ import {
   saveNoteDraft,
   submitNoteDraft,
 } from "@/data/note-drafts";
+import { deleteNote, restoreNote } from "@/data/notes";
 import type { Note, NoteTarget } from "@/types/note";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -154,6 +155,41 @@ export function useReaderNotes(bookId: string) {
     [flush, query.data],
   );
 
+  const remove = useCallback(
+    async (noteId: string) => {
+      if (submitting.current) return false;
+      submitting.current = true;
+      setSaving(true);
+      setError("");
+      try {
+        await flush();
+        await deleteNote(noteId);
+        if (current.current?.noteId === noteId) {
+          current.current = compose.current;
+          if (mounted.current) setDraft(compose.current);
+        }
+        await client.invalidateQueries({ queryKey: noteKeys.book(bookId) });
+        return true;
+      } catch {
+        if (mounted.current) setError("Could not delete the note. Try again.");
+        return false;
+      } finally {
+        submitting.current = false;
+        if (mounted.current) setSaving(false);
+      }
+    },
+    [flush, client, bookId],
+  );
+
+  // Undo can still complete after the Reader unmounts; it needs no UI draft state.
+  const restore = useCallback(
+    async (noteId: string) => {
+      await restoreNote(noteId);
+      await client.invalidateQueries({ queryKey: noteKeys.book(bookId) });
+    },
+    [client, bookId],
+  );
+
   async function cancelEdit() {
     const active = current.current;
     if (!active?.editId || submitting.current) return;
@@ -220,6 +256,8 @@ export function useReaderNotes(bookId: string) {
     change,
     edit,
     cancelEdit,
+    remove,
+    restore,
     editingId: draft?.noteId,
     send,
     flush: flushWhenIdle,

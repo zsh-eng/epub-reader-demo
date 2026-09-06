@@ -487,7 +487,11 @@ test.describe("Highlight note capture", () => {
     await expect(
       page.getByRole("region", { name: "Book notebook" }).locator("blockquote"),
     ).toHaveText(quotedText!);
-    await page.getByRole("button", { name: "Note actions" }).click();
+    await page
+      .getByRole("region", { name: "Book notebook" })
+      .locator("article")
+      .first()
+      .click({ button: "right" });
     await page.getByRole("menuitem", { name: "Edit note" }).click();
     const editor = page.getByRole("textbox", {
       name: "Edit note",
@@ -578,8 +582,8 @@ test("swipes to edit without losing the compose draft or changing the note ancho
       });
     }
     if (distances.at(-1)! >= 72)
-      await expect(row.locator("[data-edit-ready=true]")).toBeVisible();
-    else await expect(row.locator("[data-edit-ready=true]")).toHaveCount(0);
+      await expect(row.locator("[data-swipe-ready=true]")).toBeVisible();
+    else await expect(row.locator("[data-swipe-ready=true]")).toHaveCount(0);
     await expectNoHorizontalOverflow();
     if (!cancel && distances.at(-1)! >= 72)
       await page.screenshot({ path: "/tmp/reader-note-swipe-cue.png" });
@@ -615,7 +619,7 @@ test("swipes to edit without losing the compose draft or changing the note ancho
     createdAt: original.createdAt,
     content: "The revised thought.",
   });
-  await row.getByRole("button", { name: "Note actions" }).click();
+  await row.locator("article").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Edit note" }).click();
   await expect(editor).toHaveValue("The revised thought.");
   await editor.fill("Discard this edit.");
@@ -684,7 +688,7 @@ test("swipes to edit without losing the compose draft or changing the note ancho
   await trigger.click();
   await expect(compose).toHaveValue("Keep my next thought.");
   await page.getByRole("button", { name: "Open notebook" }).click();
-  await row.getByRole("button", { name: "Note actions" }).click();
+  await row.locator("article").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Edit note" }).click();
   await expect(editor).toHaveValue("Resume this edit.");
   // A received edit must not be overwritten by this stale edit draft.
@@ -751,4 +755,110 @@ test("keeps the mobile draft and its full height when moving between composer an
   await expect
     .poll(async () => (await sheetInput.boundingBox())!.height)
     .toBeLessThan(floatingHeight);
+});
+
+test("swipes right to delete and undo while keeping the compose draft", async ({
+  page,
+  localBook,
+}) => {
+  await openLocalBook(page, localBook.id);
+  await page
+    .getByRole("button", { name: "Start reading", exact: true })
+    .click();
+  for (let i = 0; i < 8; i++) await nextSpread(page);
+  await waitForReaderReady(page);
+  const trigger = page.getByRole("button", { name: "Jot a note" });
+  if (!(await trigger.isVisible())) {
+    const rect = (await page
+      .locator('[data-reader-spread-layer="current"]')
+      .boundingBox())!;
+    await page.touchscreen.tap(
+      rect.x + rect.width / 2,
+      rect.y + rect.height / 2,
+    );
+  }
+  await trigger.click();
+  const compose = page.getByRole("textbox", { name: "Write a note" });
+  await compose.fill("A thought to delete.");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(compose).toHaveValue("");
+  const readNotes = () =>
+    page.evaluate(async (path) => {
+      const { syncV2Db: db } = await import(path);
+      return db.notes.toArray();
+    }, "/src/lib/sync-v2/db.ts");
+  const original = (await readNotes())[0];
+  await compose.fill("Keep this draft.");
+  await page.getByRole("button", { name: "Open notebook" }).click();
+  await expect(page.getByRole("button", { name: "Note actions" })).toHaveCount(
+    0,
+  );
+  const row = page.locator(`[data-note-id="${original.id}"]`);
+  const cdp = await page.context().newCDPSession(page);
+  async function swipe(travel: number[], cancel = false) {
+    const rect = (await row.locator("article").boundingBox())!;
+    const x = rect.x + rect.width * 0.25,
+      y = rect.y + 20;
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+    for (const dx of travel)
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: x + dx, y }],
+      });
+    await expect(row).toContainText("A thought to delete.");
+    expect(
+      await row
+        .locator("..")
+        .evaluate((element) => element.scrollWidth - element.clientWidth),
+    ).toBe(0);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: cancel ? "touchCancel" : "touchEnd",
+      touchPoints: [],
+    });
+  }
+  await swipe([12, 35]);
+  await expect(row).toBeVisible();
+  await swipe([12, 40, 90, 30]);
+  await expect(row).toBeVisible();
+  await swipe([12, 40, 90], true);
+  await expect(row).toBeVisible();
+  await page.context().setOffline(true);
+  await swipe([12, 40, 90]);
+  await expect(row).toHaveCount(0);
+  await expect(compose).toHaveValue("Keep this draft.");
+  expect((await readNotes())[0].isDeleted).toBe(true);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(row).toBeVisible();
+  expect((await readNotes())[0]).toMatchObject({
+    id: original.id,
+    content: original.content,
+    anchor: original.anchor,
+    createdAt: original.createdAt,
+    isDeleted: false,
+  });
+  await row.locator("article").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Edit note" }).click();
+  await page
+    .getByRole("textbox", { name: "Edit note", exact: true })
+    .fill("An unfinished edit.");
+  await swipe([12, 40, 90]);
+  await expect(row).toHaveCount(0);
+  await expect(compose).toHaveValue("Keep this draft.");
+  await expect
+    .poll(() =>
+      page.evaluate(async (path) => {
+        const { syncV2Db: db } = await import(path);
+        return (await db.noteDrafts.toArray()).map(
+          (draft: { purpose: string }) => draft.purpose,
+        );
+      }, "/src/lib/sync-v2/db.ts"),
+    )
+    .toEqual(["create"]);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(row).toContainText("A thought to delete.");
+  await page.context().setOffline(false);
+  await cdp.detach();
 });

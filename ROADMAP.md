@@ -144,13 +144,14 @@ Notetaking flow
 - [x] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
 - [x] Bug: Swipe should pass through for no UI chrome
 - [x] Wire up to the UI
-- [ ] Add editing note UI flow (reference telegram)
-- [ ] Add deleting note UI flow
+- [x] Add editing note UI flow (reference telegram)
+- [x] Add deleting note UI flow
+- [x] Make app feel more native to iOS
 
-- [ ] Make app feel more native to iOS
+- [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
+- [ ] Handle sync states
 
 - [ ] Look through EPUB materialisation flow again
-- [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
 - [ ] Test updates for handling book with large spine (see conversation)
 - [ ] Add debug flag
 - [ ] Reading status toast should be at the bottom like the cross device jump (pinned to the bottom chrome)
@@ -189,7 +190,6 @@ Notetaking flow
 - [ ] "Jump back" ideas for reference (need to start storing jump history though)
 - [ ] History tab for total time read
 
-- [ ] Handle sync states
 - [ ] Proper animations for "downloading" and "processing" of book - popup from below on mobile, when done tap to open
 
 ### Later

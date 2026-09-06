@@ -5,6 +5,7 @@ import {
 } from "@/lib/sync-v2/db";
 import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import { resetIndexedDB } from "../setup/indexeddb";
+import { encodeSyncKey } from "@/lib/sync-v2/protocol";
 import type { NoteAnchor } from "@/types/note";
 
 let db: EPUBReaderSyncV2DB;
@@ -18,6 +19,7 @@ import {
   createNote,
   createBookmark,
   deleteNote,
+  restoreNote,
   getBookNotes,
   getNotesByHighlight,
   updateNote,
@@ -178,6 +180,38 @@ describe("durable notes and local drafts", () => {
       anchor: quoteTarget.anchor,
     });
     expect(await db.highlights.count()).toBe(0);
+  });
+
+  it("syncs deletion and undo without losing the quote or restoring an old edit draft", async () => {
+    const id = await createNote("book", "Keep this", {
+      kind: "selection",
+      anchor,
+      text: "Quoted text",
+    });
+    const before = await db.notes.get(id);
+    await beginNoteEdit(id);
+    const compose = await beginNoteDraft("book", target);
+    await saveNoteDraft(compose.id, "Unsent thought");
+    await deleteNote(id);
+    expect(await getBookNotes("book")).toEqual([]);
+    expect(await getNoteDraft(`edit:${id}`)).toBeUndefined();
+    expect(await db.highlights.count()).toBe(1);
+    expect(await db._sync_outbox.get(encodeSyncKey("notes", id))).toMatchObject(
+      { isDeleted: true },
+    );
+    await restoreNote(id);
+    expect(await db._sync_outbox.get(encodeSyncKey("notes", id))).toMatchObject(
+      { isDeleted: false },
+    );
+    expect(await db.notes.get(id)).toMatchObject({
+      ...before,
+      isDeleted: false,
+      updatedAt: expect.any(Number),
+    });
+    expect((await getNoteDraft(compose.id))?.content).toBe("Unsent thought");
+    await updateNote(id, "Changed after undo");
+    await restoreNote(id);
+    expect((await getBookNotes("book"))[0].content).toBe("Changed after undo");
   });
 
   it("creates bookmarks without text and rejects empty edits without changing anchors", async () => {
