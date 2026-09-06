@@ -1,0 +1,112 @@
+/** Per-device resume locations and Library last-read ordering. */
+import { getOrCreateDeviceId } from "@/lib/device";
+import { db, isNotDeleted } from "./database";
+
+export interface ReadingCheckpoint {
+  id: string; // Stable primary key: `resume:${deviceId}:${bookId}`
+  bookId: string; // Foreign key to Book
+  deviceId: string; // Device that owns this checkpoint
+  currentSpineIndex: number; // Current chapter/spine index
+  scrollProgress: number; // Chapter-local percentage in the range 0-100
+  lastRead: number; // Timestamp when this checkpoint was last updated
+}
+
+export function createReadingCheckpointId(
+  bookId: string,
+  deviceId: string,
+): string {
+  return `resume:${deviceId}:${bookId}`;
+}
+
+function clampPercentage(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function normalizeCheckpointScrollProgress(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+
+  // Accept fractional checkpoint values created by early clients.
+  if (value >= 0 && value <= 1) {
+    return clampPercentage(value * 100);
+  }
+
+  return clampPercentage(value);
+}
+
+export async function getReadingCheckpointForDevice(
+  bookId: string,
+  deviceId: string,
+): Promise<ReadingCheckpoint | undefined> {
+  const checkpoint = await db.readingCheckpoints.get(
+    createReadingCheckpointId(bookId, deviceId),
+  );
+  return checkpoint && isNotDeleted(checkpoint) ? checkpoint : undefined;
+}
+
+export async function getCurrentDeviceReadingCheckpoint(
+  bookId: string,
+): Promise<ReadingCheckpoint | undefined> {
+  return getReadingCheckpointForDevice(bookId, getOrCreateDeviceId());
+}
+
+export async function getReadingCheckpointsForBook(
+  bookId: string,
+): Promise<ReadingCheckpoint[]> {
+  return db.readingCheckpoints
+    .where("bookId")
+    .equals(bookId)
+    .filter(isNotDeleted)
+    .toArray();
+}
+
+/**
+ * Returns the latest "lastRead" timestamp per book across all devices.
+ *
+ * This is the source of truth for "most recently read" ordering in the
+ * library: reading checkpoints are written while reading (page turns,
+ * periodic flushes, and tab hide). Taking the max across devices means a book
+ * read on another device still sorts by its most recent activity.
+ */
+export async function getAllReadingCheckpointLastReads(): Promise<
+  Map<string, number>
+> {
+  const checkpoints = await db.readingCheckpoints
+    .filter(isNotDeleted)
+    .toArray();
+
+  const lastReadByBook = new Map<string, number>();
+  for (const checkpoint of checkpoints) {
+    const existing = lastReadByBook.get(checkpoint.bookId);
+    if (existing === undefined || checkpoint.lastRead > existing) {
+      lastReadByBook.set(checkpoint.bookId, checkpoint.lastRead);
+    }
+  }
+  return lastReadByBook;
+}
+
+export async function upsertReadingCheckpoint(
+  checkpoint: Omit<ReadingCheckpoint, "id">,
+): Promise<string> {
+  const normalizedCheckpoint: ReadingCheckpoint = {
+    ...checkpoint,
+    id: createReadingCheckpointId(checkpoint.bookId, checkpoint.deviceId),
+    scrollProgress: normalizeCheckpointScrollProgress(
+      checkpoint.scrollProgress,
+    ),
+  };
+
+  await db.readingCheckpoints.put({
+    ...normalizedCheckpoint,
+    isDeleted: false,
+  });
+  return normalizedCheckpoint.id;
+}
+
+export async function upsertCurrentDeviceReadingCheckpoint(
+  checkpoint: Omit<ReadingCheckpoint, "id" | "deviceId">,
+): Promise<string> {
+  return upsertReadingCheckpoint({
+    ...checkpoint,
+    deviceId: getOrCreateDeviceId(),
+  });
+}

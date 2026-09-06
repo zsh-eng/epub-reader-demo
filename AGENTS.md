@@ -62,6 +62,24 @@ Choose checks from the changed behavior before starting validation:
 
 ---
 
+## Domain Persistence
+
+`src/data/` owns domain types and persistence functions, grouped into books,
+book content, reading checkpoints, reading sessions, reading settings,
+highlights, notes, and reading state. `src/lib/db.ts` is the application export
+entry point; keep implementation in the domain modules.
+
+- Keep cross-table transactions with the operation that owns them. Book deletion
+  belongs in `books.ts`; EPUB replacement and its completion marker belong in
+  `book-content.ts`.
+- `src/data/database.ts` exposes the shared application connection and the
+  tombstone filter. Schema definitions and migrations remain in
+  `src/lib/sync-v2/db.ts`.
+- Domain modules import their connection and sibling types directly, not through
+  the `src/lib/db.ts` export entry point.
+
+---
+
 ## Sync Architecture
 
 The app stores domain rows in IndexedDB and synchronizes them through one

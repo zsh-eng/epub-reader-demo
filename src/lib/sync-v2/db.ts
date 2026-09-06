@@ -4,16 +4,16 @@
  * This database starts at version 1 and contains no legacy sync metadata.
  */
 
+import type { Book } from "@/data/books";
 import type {
-  Book,
   BookChapterSourceCache,
   BookFile,
   BookMaterialization,
   BookTextCache,
-  ReadingCheckpoint,
-  ReadingSession,
-  ReadingSettings,
-} from "@/lib/db";
+} from "@/data/book-content";
+import type { ReadingCheckpoint } from "@/data/reading-checkpoints";
+import type { ReadingSession } from "@/data/reading-sessions";
+import type { ReadingSettings } from "@/data/reading-settings";
 import { normalizeBookFileReferences } from "@/lib/book-file-references";
 import { fileIdFromContentHash } from "@/lib/files/file-id";
 import type { FileId, FileUploadOperation, LocalFile } from "@/lib/files/types";
