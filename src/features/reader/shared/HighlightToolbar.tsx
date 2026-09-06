@@ -53,8 +53,8 @@ export function HighlightToolbar({
   // Mobile: ~260px width, ~120px height
   const toolbarWidth = isBareDesktopPicker
     ? hasCopyAction
-      ? 228
-      : 172
+      ? 228 + (onAddNote ? 40 : 0)
+      : 172 + (onAddNote ? 40 : 0)
     : isMobile
       ? 260
       : 220;
@@ -268,17 +268,19 @@ export function HighlightToolbar({
             <CopyFeedbackIcon copied={copied} className="size-5" />
           </button>
         )}
+        {onAddNote && (
+          <button
+            type="button"
+            aria-label="Note on highlight"
+            title="Add note"
+            onClick={onAddNote}
+            className="flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <MessageSquarePlus size={19} />
+          </button>
+        )}
       </div>
 
-      {onAddNote && (
-        <button
-          aria-label="Note on highlight"
-          onClick={onAddNote}
-          className="flex h-8 w-full items-center justify-center gap-2 text-xs"
-        >
-          <MessageSquarePlus size={15} /> Add note
-        </button>
-      )}
       {/* Note input row */}
       {onNoteSubmit && (
         <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Book, TOCItem } from "@/lib/db";
 import type { ReaderSettings } from "@/types/reader.types";
 import { ReaderContentsSheet } from "./ReaderContentsSheet";
@@ -20,7 +21,7 @@ interface ReaderSheetHostProps {
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
-  onOpenNotes?: () => void;
+  notesPanel?: ReactNode;
   onCopyDebugDump?: () => void;
 }
 
@@ -44,7 +45,7 @@ export function ReaderSheetHost({
   currentChapterHref,
   onNavigateToHref,
   onCopyDebugDump,
-  onOpenNotes,
+  notesPanel,
 }: ReaderSheetHostProps) {
   if (!isMobile) {
     return (
@@ -59,7 +60,7 @@ export function ReaderSheetHost({
         chapterStartPages={chapterStartPages}
         currentChapterHref={currentChapterHref}
         onNavigateToHref={onNavigateToHref}
-        onOpenNotes={onOpenNotes}
+        notesPanel={notesPanel}
         onCopyDebugDump={onCopyDebugDump}
       />
     );

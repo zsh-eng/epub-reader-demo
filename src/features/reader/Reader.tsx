@@ -75,6 +75,7 @@ export function Reader() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const [notebookOpen, setNotebookOpen] = useState(false);
   const [annotating, setAnnotating] = useState(false);
   const [commentPosition, setCommentPosition] = useState({ top: 112, page: 1 });
   const [noteQuote, setNoteQuote] = useState<Highlight | null>(null);
@@ -503,10 +504,24 @@ export function Reader() {
                 <>
                   <ReaderNotesPrototype
                     key={bookId}
-                    open={noteViewportHeight !== null}
+                    open={
+                      noteViewportHeight !== null ||
+                      (!isMobile && chromeState.activeReaderSheet === "notes")
+                    }
                     location={{
                       page: sessionState.navigation.currentPage,
                       chapter: currentChapterEntry?.title ?? "Current chapter",
+                    }}
+                    notebook={
+                      isMobile
+                        ? notebookOpen
+                        : chromeState.activeReaderSheet === "notes"
+                    }
+                    setNotebook={(nextOpen) => {
+                      if (isMobile) setNotebookOpen(nextOpen);
+                      else if (nextOpen) chromeActions.openReaderSheet("notes");
+                      else if (chromeState.activeReaderSheet === "notes")
+                        chromeActions.closeReaderSheet();
                     }}
                     desktop={!isMobile}
                     annotating={annotating}
@@ -533,28 +548,28 @@ export function Reader() {
                       },
                     }}
                     onVisit={sessionActions.commitPage}
-                  />
-                  <ReaderSheetHost
-                    isMobile={isMobile}
-                    activeSheet={chromeState.activeReaderSheet}
-                    onOpenSheet={chromeActions.openReaderSheet}
-                    onCloseSheet={chromeActions.closeReaderSheet}
-                    book={book}
-                    settings={sessionState.settings}
-                    onUpdateSettings={sessionActions.updateSettings}
-                    toc={book.toc}
-                    chapterEntries={sessionState.chapters.entries}
-                    chapterStartPages={
-                      sessionState.navigation.chapterStartPages
-                    }
-                    currentChapterHref={currentChapterEntry?.href ?? ""}
-                    onNavigateToHref={sessionActions.openInternalHref}
-                    onOpenNotes={() => {
-                      chromeActions.closeReaderSheet();
-                      setAnnotating(true);
-                    }}
-                    onCopyDebugDump={() => void handleCopyDebugDump()}
-                  />
+                  >
+                    {(notesPanel) => (
+                      <ReaderSheetHost
+                        isMobile={isMobile}
+                        activeSheet={chromeState.activeReaderSheet}
+                        onOpenSheet={chromeActions.openReaderSheet}
+                        onCloseSheet={chromeActions.closeReaderSheet}
+                        book={book}
+                        settings={sessionState.settings}
+                        onUpdateSettings={sessionActions.updateSettings}
+                        toc={book.toc}
+                        chapterEntries={sessionState.chapters.entries}
+                        chapterStartPages={
+                          sessionState.navigation.chapterStartPages
+                        }
+                        currentChapterHref={currentChapterEntry?.href ?? ""}
+                        onNavigateToHref={sessionActions.openInternalHref}
+                        notesPanel={notesPanel}
+                        onCopyDebugDump={() => void handleCopyDebugDump()}
+                      />
+                    )}
+                  </ReaderNotesPrototype>
 
                   <HighlightToolbarContainer
                     bookId={bookId}

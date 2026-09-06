@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 interface Location {
   page: number;
@@ -34,6 +34,9 @@ interface Entry {
 /** Temporary, book-scoped notebook. Nothing is written to storage or sync. */
 export function ReaderNotesPrototype({
   location,
+  children,
+  notebook,
+  setNotebook,
   open,
   onActiveChange,
   onVisit,
@@ -45,6 +48,9 @@ export function ReaderNotesPrototype({
   quote,
   onClearQuote,
 }: {
+  children: (panel: ReactNode) => ReactNode;
+  notebook: boolean;
+  setNotebook: (open: boolean) => void;
   annotating: boolean;
   onAnnotatingChange: (active: boolean) => void;
   commentPosition: { top: number; page: number };
@@ -59,7 +65,6 @@ export function ReaderNotesPrototype({
 }) {
   const reduceMotion = useReducedMotion();
   const [animateSend, setAnimateSend] = useState(true);
-  const [notebook, setNotebook] = useState(false);
   const [order, setOrder] = useState<"time" | "book">("time");
   const [draft, setDraft] = useState("");
   const [anchor, setAnchor] = useState(location);
@@ -192,7 +197,7 @@ export function ReaderNotesPrototype({
     marginAnchor.current = null;
     setDraft("");
     setAnchor(location);
-    if (desktop) close();
+    if (desktop && !notebook) close();
     else input.current?.focus();
   }
 
@@ -224,9 +229,19 @@ export function ReaderNotesPrototype({
       entry.location.page >= location.page &&
       entry.location.page <= margin.location.page,
   );
+  // Use one rail geometry for the editor and saved comments. Keep the rail
+  // beside the book text instead of attaching it to the window edge.
+  const commentWidth = Math.min(260, Math.max(180, margin.width - 32));
+  const commentLeft = `calc(100% - ${Math.max(commentWidth + 16, margin.width - 16)}px)`;
+  const commentSurface =
+    "rounded-xl border border-border/80 bg-background/95 p-3 text-sm shadow-sm";
   const noteInput = (
     <div
-      className={`relative z-10 border border-border/80 bg-background/95 p-1 backdrop-blur-xl ${desktop ? "rounded-xl shadow-sm" : "rounded-[2rem] shadow-lg"}`}
+      className={
+        desktop
+          ? `relative z-10 ${commentSurface}`
+          : "relative z-10 rounded-[2rem] border border-border/80 bg-background/95 p-1 shadow-lg backdrop-blur-xl"
+      }
     >
       {quote && (
         <div
@@ -287,7 +302,7 @@ export function ReaderNotesPrototype({
             }
             if (event.key === "Escape") close();
           }}
-          className={`${desktop ? "min-h-20 text-sm" : "min-h-8 text-base"} min-w-0 flex-1 resize-none bg-transparent py-1 leading-6 outline-none placeholder:text-muted-foreground/70`}
+          className={`${desktop ? "min-h-8 text-sm" : "min-h-8 text-base"} min-w-0 flex-1 resize-none bg-transparent py-1 leading-6 outline-none placeholder:text-muted-foreground/70`}
         />
         <button
           aria-label="Save note"
@@ -315,11 +330,7 @@ export function ReaderNotesPrototype({
       }}
       transition={transition}
       aria-label="Book notebook"
-      className={
-        desktop
-          ? "mb-2 overflow-hidden rounded-3xl border border-border bg-background/95 shadow-lg backdrop-blur-xl"
-          : "flex min-h-0 flex-1 flex-col overflow-hidden"
-      }
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
       <header className="flex items-center gap-3 px-4 py-2">
         <h2 className="flex-1 text-sm font-medium">
@@ -356,13 +367,9 @@ export function ReaderNotesPrototype({
       </header>
       <div
         ref={list}
-        className="min-h-0 overflow-y-auto overscroll-contain p-4"
+        className={`min-h-0 overflow-y-auto overscroll-contain p-4 ${desktop ? "flex-1" : ""}`}
         style={{
-          maxHeight: desktop
-            ? "calc(100dvh - 16rem)"
-            : keyboardOpen
-              ? "24dvh"
-              : "48dvh",
+          maxHeight: desktop ? undefined : keyboardOpen ? "24dvh" : "48dvh",
         }}
       >
         {!entries.length && (
@@ -450,11 +457,19 @@ export function ReaderNotesPrototype({
           </div>
         </ReaderSheet>
       )}
+      {children(
+        <div className="flex h-full min-h-0 flex-col">
+          {desktop && notebook && notebookPanel}
+          {desktop && notebook && (
+            <div className="shrink-0 p-2">{noteInput}</div>
+          )}
+        </div>,
+      )}
       {margin.enabled && !open && (
         <aside
           aria-label="Page margin notes"
-          className="fixed right-2 top-28 z-20"
-          style={{ width: Math.max(24, margin.width - 16) }}
+          className="fixed top-0 z-20"
+          style={{ left: commentLeft, width: commentWidth }}
         >
           <button
             aria-label="Add margin note"
@@ -462,19 +477,43 @@ export function ReaderNotesPrototype({
             onClick={() => {
               onAnnotatingChange(!annotating);
             }}
-            className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            className="absolute top-12 flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <MessageSquare size={15} />
           </button>
           {margin.width >= 220
-            ? marginEntries.map((entry) => (
-                <p
+            ? marginEntries.map((entry, index) => (
+                <article
                   key={entry.id}
-                  style={{ marginTop: Math.max(12, entry.top - 112) }}
-                  className="max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-border/50 bg-background/95 p-3 text-sm leading-relaxed"
+                  data-margin-note
+                  style={{
+                    marginTop:
+                      index === 0
+                        ? Math.max(
+                            80,
+                            Math.min(entry.top, window.innerHeight - 220),
+                          )
+                        : 8,
+                  }}
+                  className={commentSurface}
                 >
-                  {entry.text}
-                </p>
+                  {entry.quote && (
+                    <blockquote
+                      className="mb-2 truncate border-l-[3px] pl-2 text-xs text-muted-foreground"
+                      style={{
+                        borderColor:
+                          entry.quote.color === "invisible"
+                            ? "var(--muted-foreground)"
+                            : `var(--${entry.quote.color}-secondary)`,
+                      }}
+                    >
+                      {entry.quote.selectedText}
+                    </blockquote>
+                  )}
+                  <p className="max-h-48 overflow-auto whitespace-pre-wrap break-words leading-6">
+                    {entry.text}
+                  </p>
+                </article>
               ))
             : marginEntries.length > 0 && (
                 <button
@@ -491,7 +530,7 @@ export function ReaderNotesPrototype({
         </aside>
       )}
       <AnimatePresence>
-        {open && (desktop || !notebook) && (
+        {open && !notebook && (
           <motion.div
             ref={composer}
             data-note-composer
@@ -508,7 +547,7 @@ export function ReaderNotesPrototype({
             transition={transition}
             className={
               desktop
-                ? "fixed right-4 z-40 max-h-[calc(100dvh-7rem)] overflow-y-auto"
+                ? "fixed z-40 max-h-[calc(100dvh-7rem)] overflow-y-auto"
                 : "fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[32rem]"
             }
             style={
@@ -518,10 +557,8 @@ export function ReaderNotesPrototype({
                       80,
                       Math.min(commentPosition.top, window.innerHeight - 220),
                     ),
-                    width:
-                      margin.width >= 220
-                        ? Math.min(360, margin.width - 24)
-                        : 320,
+                    left: commentLeft,
+                    width: commentWidth,
                   }
                 : {
                     paddingInline: keyboardOpen
@@ -533,9 +570,6 @@ export function ReaderNotesPrototype({
                   }
             }
           >
-            <AnimatePresence>
-              {notebook && desktop && notebookPanel}
-            </AnimatePresence>
             {!desktop && !notebook && latest && (
               <div
                 className="relative mx-4 -mb-3 h-10 overflow-hidden"

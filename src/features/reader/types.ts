@@ -3,7 +3,8 @@ export type ReaderSheetId =
   | "contents"
   | "book-actions"
   | "search"
-  | "settings";
+  | "settings"
+  | "notes";
 
 /**
  * Reader-facing chapter metadata derived from the EPUB spine.

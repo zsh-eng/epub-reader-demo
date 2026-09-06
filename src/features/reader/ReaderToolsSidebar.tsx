@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { TOCItem } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -16,7 +17,7 @@ import { ReaderContentsPanel } from "./ReaderContentsSheet";
 import { ReaderSettingsList } from "./ReaderSettingsSheet";
 import type { ChapterEntry, ReaderSheetId } from "./types";
 
-type ReaderSidebarPanel = "contents" | "search" | "settings";
+type ReaderSidebarPanel = "contents" | "search" | "settings" | "notes";
 
 interface ReaderToolsSidebarProps {
   activeSheet: ReaderSheetId | null;
@@ -29,7 +30,7 @@ interface ReaderToolsSidebarProps {
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
-  onOpenNotes?: () => void;
+  notesPanel?: ReactNode;
   onCopyDebugDump?: () => void;
 }
 
@@ -41,11 +42,13 @@ const SIDEBAR_TOOLS: {
   { id: "contents", label: "Contents", icon: List },
   { id: "search", label: "Search book", icon: Search },
   { id: "settings", label: "Reading appearance", icon: SlidersHorizontal },
+  { id: "notes", label: "Notes", icon: NotebookPen },
 ];
 
 function resolveActivePanel(
   activeSheet: ReaderSheetId | null,
 ): ReaderSidebarPanel {
+  if (activeSheet === "notes") return "notes";
   if (activeSheet === "search") return "search";
   if (activeSheet === "settings") return "settings";
   return "contents";
@@ -69,7 +72,7 @@ export function ReaderToolsSidebar({
   currentChapterHref,
   onNavigateToHref,
   onCopyDebugDump,
-  onOpenNotes,
+  notesPanel,
 }: ReaderToolsSidebarProps) {
   const activePanel = resolveActivePanel(activeSheet);
   const isOpen = activeSheet !== null;
@@ -165,18 +168,6 @@ export function ReaderToolsSidebar({
               );
             })}
 
-            {onOpenNotes && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onOpenNotes}
-                aria-label="Open notes"
-                title="Notes (N)"
-                className="size-10 shrink-0 rounded-xl text-muted-foreground"
-              >
-                <NotebookPen className="size-[1.15rem]" />
-              </Button>
-            )}
             <div className="min-w-0 flex-1" />
 
             {onCopyDebugDump && (
@@ -200,6 +191,7 @@ export function ReaderToolsSidebar({
           </nav>
 
           <div className="min-h-0 flex-1 overflow-hidden">
+            {activePanel === "notes" && notesPanel}
             {activePanel === "contents" && (
               <ReaderContentsPanel
                 isOpen={isOpen}

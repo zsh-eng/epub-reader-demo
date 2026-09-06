@@ -184,6 +184,8 @@ test.describe("Desktop margin notes", () => {
     await page
       .getByRole("textbox", { name: "Write a note" })
       .fill("A thought from the margin");
+    const editorBounds = (await panel.boundingBox())!;
+    expect(editorBounds.width).toBeLessThanOrEqual(260);
     await page.getByRole("button", { name: "Save note", exact: true }).click();
     await expect(
       page.getByRole("textbox", { name: "Write a note" }),
@@ -191,8 +193,35 @@ test.describe("Desktop margin notes", () => {
     await expect(
       page.getByRole("complementary", { name: "Page margin notes" }),
     ).toContainText("A thought from the margin");
+    const savedNote = page.locator("[data-margin-note]");
+    await expect(savedNote).toBeVisible();
+    const savedBounds = (await savedNote.boundingBox())!;
+    expect(savedBounds.x).toBe(editorBounds.x);
+    expect(savedBounds.width).toBe(editorBounds.width);
+    expect(savedBounds.height).toBeLessThan(160);
+    await page.screenshot({ path: "/tmp/desktop-margin-note.png" });
     expect(await stage.boundingBox()).toEqual(before);
     expect(await currentPages(page)).toEqual(anchorPages);
+    await page.mouse.move(600, 20);
+    await page
+      .getByRole("button", { name: "Open reader tools", exact: true })
+      .click();
+    const tools = page.getByRole("complementary", {
+      name: "Reader tools",
+      exact: true,
+    });
+    await tools.getByRole("button", { name: "Notes", exact: true }).click();
+    await expect(
+      tools.getByRole("button", { name: "Notes", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    const notebook = tools.getByRole("region", { name: "Book notebook" });
+    await expect(notebook).toContainText("A thought from the margin");
+    await tools.getByRole("button", { name: "Contents", exact: true }).click();
+    await expect(notebook).not.toBeVisible();
+    await tools.getByRole("button", { name: "Notes", exact: true }).click();
+    await expect(notebook).toContainText("A thought from the margin");
+    expect(await stage.boundingBox()).toEqual(before);
+    await page.screenshot({ path: "/tmp/reader-notes-tab.png" });
   });
 });
 
@@ -234,6 +263,25 @@ test.describe("Highlight note capture", () => {
       .locator('[data-reader-spread-layer="current"] [data-highlight-id]')
       .first();
     await highlight.click();
+    await expect(page.locator(".highlight-toolbar")).toHaveCount(1);
+    const copyButton = page.getByRole("button", {
+      name: "Copy highlighted text",
+    });
+    const noteButton = page.getByRole("button", { name: "Note on highlight" });
+    await expect(noteButton).toBeVisible();
+    await expect
+      .poll(async () => {
+        const copy = (await copyButton.boundingBox())!;
+        const note = (await noteButton.boundingBox())!;
+        return Math.abs(copy.y - note.y);
+      })
+      .toBeLessThan(1);
+    expect((await noteButton.boundingBox())!.x).toBeGreaterThan(
+      (await copyButton.boundingBox())!.x,
+    );
+    await expect(
+      page.getByRole("button", { name: "Note on highlight" }),
+    ).toHaveCount(1);
     await page.getByRole("button", { name: "Note on highlight" }).click();
     const quote = page.getByTestId("note-quote");
     await expect(quote).toBeVisible();
@@ -244,6 +292,9 @@ test.describe("Highlight note capture", () => {
     await page.getByRole("button", { name: "Save note", exact: true }).click();
     await expect(quote).not.toBeVisible();
     await highlight.click();
+    await expect(
+      page.getByRole("button", { name: "Note on highlight" }),
+    ).toHaveCount(1);
     await page.getByRole("button", { name: "Note on highlight" }).click();
     await page
       .getByRole("button", { name: "Open notebook", exact: true })
