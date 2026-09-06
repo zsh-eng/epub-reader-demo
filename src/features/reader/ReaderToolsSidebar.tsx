@@ -6,6 +6,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   ChevronRight,
   ClipboardCopy,
+  NotebookPen,
   List,
   Search,
   SlidersHorizontal,
@@ -28,6 +29,7 @@ interface ReaderToolsSidebarProps {
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
+  onOpenNotes?: () => void;
   onCopyDebugDump?: () => void;
 }
 
@@ -67,6 +69,7 @@ export function ReaderToolsSidebar({
   currentChapterHref,
   onNavigateToHref,
   onCopyDebugDump,
+  onOpenNotes,
 }: ReaderToolsSidebarProps) {
   const activePanel = resolveActivePanel(activeSheet);
   const isOpen = activeSheet !== null;
@@ -162,6 +165,18 @@ export function ReaderToolsSidebar({
               );
             })}
 
+            {onOpenNotes && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onOpenNotes}
+                aria-label="Open notes"
+                title="Notes (N)"
+                className="size-10 shrink-0 rounded-xl text-muted-foreground"
+              >
+                <NotebookPen className="size-[1.15rem]" />
+              </Button>
+            )}
             <div className="min-w-0 flex-1" />
 
             {onCopyDebugDump && (

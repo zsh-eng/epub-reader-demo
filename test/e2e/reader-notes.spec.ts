@@ -60,8 +60,24 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   await expect
     .poll(async () => (await input.boundingBox())!.width)
     .toBeGreaterThan(closedWidth);
+  await expect(page.locator("[data-note-composer]")).toHaveCSS(
+    "padding-bottom",
+    "0px",
+  );
+  const immediateBottom = await page.evaluate(() => {
+    Object.defineProperty(window.visualViewport!, "offsetTop", {
+      configurable: true,
+      value: 40,
+    });
+    window.visualViewport!.dispatchEvent(new Event("scroll"));
+    return (document.querySelector("[data-note-composer]") as HTMLElement).style
+      .bottom;
+  });
+  expect(immediateBottom).toBe("260px");
   await page.evaluate(() => {
     delete (window.visualViewport as unknown as { height?: number }).height;
+    delete (window.visualViewport as unknown as { offsetTop?: number })
+      .offsetTop;
     window.visualViewport!.dispatchEvent(new Event("resize"));
   });
   await expect
@@ -113,6 +129,26 @@ test("captures thoughts over a stable book and browses both notebook orders", as
     page.getByText("Return to this idea later.", { exact: true }),
   ).toBeVisible();
   await page.screenshot({ path: "/tmp/reader-notebook-journal.png" });
+  const sheet = page.getByRole("dialog", { name: "Notebook", exact: true });
+  await expect(
+    sheet.getByRole("textbox", { name: "Write a note" }),
+  ).toBeVisible();
+  await expect(input).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Book notebook" })).toHaveCSS(
+    "border-top-width",
+    "0px",
+  );
+  await input.fill("A thought from the notebook.");
+  await sheet.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(
+    sheet.getByText("A thought from the notebook.", { exact: true }),
+  ).toBeVisible();
+  await expect(input).toHaveValue("");
+  await input.fill("Keep this draft.");
+  await sheet.getByRole("button", { name: "Close notebook" }).click();
+  await expect(sheet).not.toBeVisible();
+  await expect(input).toHaveValue("Keep this draft.");
+  await expect(input).toHaveCount(1);
 });
 
 test.describe("Desktop margin notes", () => {
@@ -128,20 +164,92 @@ test.describe("Desktop margin notes", () => {
     await openLocalBook(page, localBook.id);
     const stage = page.locator('[data-reader-stage-slot="content"]');
     const before = await stage.boundingBox();
-    const pages = await currentPages(page);
-    await page.getByRole("button", { name: "Add margin note" }).click();
+    for (let index = 0; index < 8; index++) await nextSpread(page);
+    const anchorPages = await currentPages(page);
+    await page.keyboard.press("n");
+    await expect(page.getByRole("status")).toContainText("Click text");
+    const passage = page
+      .locator(
+        '[data-reader-spread-layer="current"] [data-content-anchor-start]',
+      )
+      .filter({ hasText: /[a-z]{4}/i })
+      .first();
+    await passage.click();
+    const panel = page.locator("[data-note-composer]");
+    await expect(panel).toBeVisible();
+    expect((await panel.boundingBox())!.x).toBeGreaterThan(1200);
+    await expect(
+      page.getByRole("region", { name: "Book notebook" }),
+    ).toHaveCount(0);
     await page
       .getByRole("textbox", { name: "Write a note" })
       .fill("A thought from the margin");
     await page.getByRole("button", { name: "Save note", exact: true }).click();
     await expect(
       page.getByRole("textbox", { name: "Write a note" }),
-    ).toHaveValue("");
-    await page.getByRole("button", { name: "Read latest note" }).click();
+    ).not.toBeVisible();
     await expect(
-      page.getByRole("region", { name: "Book notebook" }),
+      page.getByRole("complementary", { name: "Page margin notes" }),
     ).toContainText("A thought from the margin");
     expect(await stage.boundingBox()).toEqual(before);
-    expect(await currentPages(page)).toEqual(pages);
+    expect(await currentPages(page)).toEqual(anchorPages);
+  });
+});
+
+test.describe("Highlight note capture", () => {
+  test.use({
+    viewport: { width: 900, height: 900 },
+    hasTouch: false,
+    isMobile: false,
+  });
+  test("quotes a highlight in the compact composer", async ({
+    page,
+    localBook,
+  }) => {
+    await openLocalBook(page, localBook.id);
+    for (let index = 0; index < 8; index++) await nextSpread(page);
+    await page.evaluate(() => {
+      const root = document.querySelector(
+        '[data-reader-spread-layer="current"]',
+      )!;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      let node = walker.nextNode();
+      while (node && (node.textContent?.trim().length ?? 0) < 30)
+        node = walker.nextNode();
+      if (!node) throw new Error("No passage to select");
+      const range = document.createRange();
+      range.setStart(node, 0);
+      range.setEnd(node, 25);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+    });
+    await expect
+      .poll(() => page.evaluate(() => window.getSelection()?.toString().length))
+      .toBe(25);
+    await page.evaluate(() =>
+      document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })),
+    );
+    await page.getByRole("button", { name: "Highlight with yellow" }).click();
+    const highlight = page
+      .locator('[data-reader-spread-layer="current"] [data-highlight-id]')
+      .first();
+    await highlight.click();
+    await page.getByRole("button", { name: "Note on highlight" }).click();
+    const quote = page.getByTestId("note-quote");
+    await expect(quote).toBeVisible();
+    const quotedText = await quote.locator("span").textContent();
+    await page
+      .getByRole("textbox", { name: "Write a note" })
+      .fill("This passage is worth revisiting.");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect(quote).not.toBeVisible();
+    await highlight.click();
+    await page.getByRole("button", { name: "Note on highlight" }).click();
+    await page
+      .getByRole("button", { name: "Open notebook", exact: true })
+      .click();
+    await expect(
+      page.getByRole("region", { name: "Book notebook" }).locator("blockquote"),
+    ).toHaveText(quotedText!);
   });
 });

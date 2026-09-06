@@ -1,3 +1,4 @@
+import type { Highlight } from "@/types/highlight";
 import { HighlightToolbarContainer } from "@/features/reader/shared/HighlightToolbarContainer";
 import { useInputBehavior } from "@/features/reader/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -74,6 +75,9 @@ export function Reader() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const [annotating, setAnnotating] = useState(false);
+  const [commentPosition, setCommentPosition] = useState({ top: 112, page: 1 });
+  const [noteQuote, setNoteQuote] = useState<Highlight | null>(null);
   const [noteViewportHeight, setNoteViewportHeight] = useState<number | null>(
     null,
   );
@@ -137,6 +141,7 @@ export function Reader() {
     selectColor,
     closeCreation,
     clearActiveHighlight,
+    captureSelectionNote,
   } = useReaderAnnotations({
     bookId,
     spread: sessionState.pagination.spread,
@@ -363,6 +368,35 @@ export function Reader() {
               {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
               <div
                 onClickCapture={(event) => {
+                  if (annotating) {
+                    const target =
+                      event.target instanceof Element ? event.target : null;
+                    const fragment = target?.closest(
+                      "[data-content-anchor-start]",
+                    );
+                    const page = target?.closest<HTMLElement>(
+                      "[data-reader-current-page]",
+                    );
+                    if (!fragment || !page) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const range = document.createRange();
+                    range.selectNodeContents(fragment);
+                    const selection = window.getSelection();
+                    selection?.removeAllRanges();
+                    selection?.addRange(range);
+                    const note = captureSelectionNote();
+                    if (!note) return;
+                    setNoteQuote(note);
+                    setCommentPosition({
+                      top: fragment.getBoundingClientRect().top,
+                      page: Number(page.dataset.readerCurrentPage),
+                    });
+                    closeCreation();
+                    setAnnotating(false);
+                    handleNotesActive(true);
+                    return;
+                  }
                   if (
                     noteViewportHeight === null ||
                     event.defaultPrevented ||
@@ -380,7 +414,7 @@ export function Reader() {
                 }}
                 ref={handleStageSlotRef}
                 data-reader-stage-slot="content"
-                className="absolute inset-x-0 z-10"
+                className={`absolute inset-x-0 z-10 ${annotating ? "cursor-crosshair [&_*]:!cursor-crosshair" : ""}`}
                 style={{
                   top: "env(safe-area-inset-top)",
                   bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
@@ -459,7 +493,9 @@ export function Reader() {
                 isLoading={
                   !displayReady || sessionState.pagination.status !== "ready"
                 }
-                onOpenNote={() => handleNotesActive(true)}
+                onOpenNote={
+                  isMobile ? () => handleNotesActive(true) : undefined
+                }
                 handoffPrompt={handoffPrompt}
               />
 
@@ -472,6 +508,12 @@ export function Reader() {
                       page: sessionState.navigation.currentPage,
                       chapter: currentChapterEntry?.title ?? "Current chapter",
                     }}
+                    desktop={!isMobile}
+                    annotating={annotating}
+                    onAnnotatingChange={setAnnotating}
+                    commentPosition={commentPosition}
+                    quote={noteQuote}
+                    onClearQuote={() => setNoteQuote(null)}
                     onActiveChange={handleNotesActive}
                     margin={{
                       width: stagePadding.paddingX,
@@ -507,6 +549,10 @@ export function Reader() {
                     }
                     currentChapterHref={currentChapterEntry?.href ?? ""}
                     onNavigateToHref={sessionActions.openInternalHref}
+                    onOpenNotes={() => {
+                      chromeActions.closeReaderSheet();
+                      setAnnotating(true);
+                    }}
                     onCopyDebugDump={() => void handleCopyDebugDump()}
                   />
 
@@ -525,6 +571,26 @@ export function Reader() {
                     onEditClose={clearActiveHighlight}
                     isNavVisible={chromeVisible}
                     onCreateNoteSubmit={undefined}
+                    onAddSelectionNote={() => {
+                      const note = captureSelectionNote();
+                      if (!note) return;
+                      setNoteQuote(note);
+                      setCommentPosition({
+                        top: creationPosition.y,
+                        page: sessionState.navigation.currentPage,
+                      });
+                      closeCreation();
+                      handleNotesActive(true);
+                    }}
+                    onAddHighlightNote={(highlight) => {
+                      setCommentPosition({
+                        top: activeHighlight?.position.y ?? 112,
+                        page: sessionState.navigation.currentPage,
+                      });
+                      setNoteQuote({ ...highlight });
+                      clearActiveHighlight();
+                      handleNotesActive(true);
+                    }}
                   />
                 </>
               )}

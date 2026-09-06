@@ -20,6 +20,7 @@ interface ReaderSheetHostProps {
   chapterStartPages: (number | null)[];
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
+  onOpenNotes?: () => void;
   onCopyDebugDump?: () => void;
 }
 
@@ -43,6 +44,7 @@ export function ReaderSheetHost({
   currentChapterHref,
   onNavigateToHref,
   onCopyDebugDump,
+  onOpenNotes,
 }: ReaderSheetHostProps) {
   if (!isMobile) {
     return (
@@ -57,6 +59,7 @@ export function ReaderSheetHost({
         chapterStartPages={chapterStartPages}
         currentChapterHref={currentChapterHref}
         onNavigateToHref={onNavigateToHref}
+        onOpenNotes={onOpenNotes}
         onCopyDebugDump={onCopyDebugDump}
       />
     );

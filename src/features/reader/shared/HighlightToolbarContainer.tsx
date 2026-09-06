@@ -26,6 +26,8 @@ interface HighlightToolbarContainerProps {
   onCreateColorSelect: (color: AnnotationColor) => void;
   onCreateClose: () => void;
   /** Called when user submits a note from the toolbar */
+  onAddSelectionNote?: () => void;
+  onAddHighlightNote?: (highlight: Highlight) => void;
   onCreateNoteSubmit?: (content: string) => void;
 
   // For editing existing highlights
@@ -46,6 +48,8 @@ export function HighlightToolbarContainer({
   onCreateColorSelect,
   onCreateClose,
   onCreateNoteSubmit,
+  onAddHighlightNote,
+  onAddSelectionNote,
   activeHighlight,
   onEditClose,
   isNavVisible = false,
@@ -94,6 +98,11 @@ export function HighlightToolbarContainer({
             isNavVisible={isNavVisible}
             currentColor={activeHighlightData.color}
             onColorSelect={handleEditColorSelect}
+            onAddNote={
+              onAddHighlightNote
+                ? () => onAddHighlightNote(activeHighlightData)
+                : undefined
+            }
             onDelete={handleEditDelete}
             onClose={onEditClose}
           />
@@ -101,6 +110,7 @@ export function HighlightToolbarContainer({
         {isCreatingHighlight && (
           <MobileHighlightBar
             isNavVisible={isNavVisible}
+            onAddNote={onAddSelectionNote}
             onColorSelect={onCreateColorSelect}
             onClose={onCreateClose}
             showBackdrop={false}
@@ -117,6 +127,7 @@ export function HighlightToolbarContainer({
         {isCreatingHighlight && (
           <HighlightToolbar
             position={creationPosition}
+            onAddNote={onAddSelectionNote}
             onColorSelect={onCreateColorSelect}
             onClose={onCreateClose}
             onNoteSubmit={onCreateNoteSubmit}
@@ -131,6 +142,11 @@ export function HighlightToolbarContainer({
             position={activeHighlight!.position}
             currentColor={activeHighlightData.color}
             onColorSelect={handleEditColorSelect}
+            onAddNote={
+              onAddHighlightNote
+                ? () => onAddHighlightNote(activeHighlightData)
+                : undefined
+            }
             onDelete={handleEditDelete}
             onClose={onEditClose}
             textToCopy={activeHighlightData.selectedText}

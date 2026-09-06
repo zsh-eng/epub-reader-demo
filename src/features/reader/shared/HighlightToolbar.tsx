@@ -1,3 +1,4 @@
+import { MessageSquarePlus } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CopyFeedbackIcon } from "@/components/ui/copy-feedback-icon";
 import {
@@ -20,6 +21,7 @@ interface HighlightToolbarProps {
   onClose: () => void;
   currentColor?: AnnotationColor;
   onDelete?: () => void;
+  onAddNote?: () => void;
   textToCopy?: string;
   /** Called when user submits a note (creates invisible annotation + note) */
   onNoteSubmit?: (content: string) => void;
@@ -31,6 +33,7 @@ export function HighlightToolbar({
   onClose,
   currentColor,
   onDelete,
+  onAddNote,
   textToCopy,
   onNoteSubmit,
 }: HighlightToolbarProps) {
@@ -267,6 +270,15 @@ export function HighlightToolbar({
         )}
       </div>
 
+      {onAddNote && (
+        <button
+          aria-label="Note on highlight"
+          onClick={onAddNote}
+          className="flex h-8 w-full items-center justify-center gap-2 text-xs"
+        >
+          <MessageSquarePlus size={15} /> Add note
+        </button>
+      )}
       {/* Note input row */}
       {onNoteSubmit && (
         <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+import { MessageSquarePlus } from "lucide-react";
 import {
   HIGHLIGHT_COLORS,
   type AnnotationColor,
@@ -10,6 +11,7 @@ interface MobileHighlightBarProps {
   onClose: () => void;
   currentColor?: AnnotationColor;
   onDelete?: () => void;
+  onAddNote?: () => void;
   isNavVisible: boolean;
   showBackdrop?: boolean;
 }
@@ -19,6 +21,7 @@ export function MobileHighlightBar({
   onClose,
   currentColor,
   onDelete,
+  onAddNote,
   isNavVisible,
   showBackdrop = true,
 }: MobileHighlightBarProps) {
@@ -57,6 +60,15 @@ export function MobileHighlightBar({
             y: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
           }}
         >
+          {onAddNote && (
+            <button
+              aria-label="Note on highlight"
+              onClick={onAddNote}
+              className="flex h-8 w-9 shrink-0 items-center justify-center rounded-full text-foreground"
+            >
+              <MessageSquarePlus size={17} />
+            </button>
+          )}
           {HIGHLIGHT_COLORS.map((color) => {
             const isCurrentColor = currentColor && color.name === currentColor;
 
@@ -74,7 +86,7 @@ export function MobileHighlightBar({
                 key={color.name}
                 onPointerDown={handlePointerDown}
                 className={cn(
-                  "cursor-pointer w-[16vw] h-8 rounded-full transition-all active:scale-95 focus:outline-none shadow-sm",
+                  "cursor-pointer w-[13vw] h-8 rounded-full transition-all active:scale-95 focus:outline-none shadow-sm",
                   "border border-black/5 active:border-black/10",
                   isCurrentColor && "ring-2 ring-offset-2 ring-foreground/50",
                 )}
