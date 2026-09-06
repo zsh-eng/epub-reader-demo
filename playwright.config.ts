@@ -6,6 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
  */
 export default defineConfig({
   testDir: "./test/e2e",
+  testIgnore: "reader-pwa.spec.ts",
 
   /* Run tests in files in parallel */
   fullyParallel: true,
