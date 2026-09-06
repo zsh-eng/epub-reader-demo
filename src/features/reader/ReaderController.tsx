@@ -25,6 +25,7 @@ interface ReaderControllerProps {
   canGoNext: boolean;
   chromeInteractionMode: ChromeInteractionMode;
   isChromeSuppressed?: boolean;
+  onDismissContentTap?: () => void;
   containerRef: RefObject<HTMLElement | null>;
   topRailHeight: number;
   bottomRailHeight: number;
@@ -56,6 +57,7 @@ export function ReaderController({
   canGoNext,
   chromeInteractionMode,
   isChromeSuppressed = false,
+  onDismissContentTap,
   containerRef,
   topRailHeight,
   bottomRailHeight,
@@ -91,8 +93,8 @@ export function ReaderController({
     onPrevSpread: onPrevPage,
     onNextSpread: onNextPage,
     onShowChrome: showChrome,
-    onHideChrome: hideChrome,
-    chromeVisible,
+    onHideChrome: onDismissContentTap ?? hideChrome,
+    chromeVisible: chromeVisible || Boolean(onDismissContentTap),
     canGoPrev,
     canGoNext,
   });

@@ -1,8 +1,9 @@
 import type { ReaderChromeSurfaceProps } from "@/features/reader/chrome";
 import type {
-    ChapterEntry,
-    ReaderHandoffPrompt,
+  ChapterEntry,
+  ReaderHandoffPrompt,
 } from "@/features/reader/types";
+import { PencilLine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
@@ -44,6 +45,7 @@ export interface ReaderFooterProps {
   onGoToChapter: (chapterIndex: number) => void;
   onPrevChapter: () => void;
   onOpenContents: () => void;
+  onOpenNote?: () => void;
   handoffPrompt?: ReaderHandoffPrompt;
   isLoading?: boolean;
 }
@@ -64,6 +66,7 @@ export function ReaderFooter({
   onGoToChapter,
   onPrevChapter,
   onOpenContents,
+  onOpenNote,
   handoffPrompt,
   isLoading = false,
 }: ReaderFooterProps) {
@@ -243,13 +246,30 @@ export function ReaderFooter({
                 </AnimatePresence>
               </div>
             </div>
-            <FooterPageIndicator
-              currentPage={detailCurrentPage}
-              totalPages={detailTotalPages}
-              isLoading={isLoading}
-              preserveDetailsWhileLoading={preserveDetailsWhileLoading}
-              animateReadyDetails={animateReadyTransition}
-            />
+            <div className="relative">
+              {onOpenNote && (
+                <button
+                  type="button"
+                  aria-label="Jot a note"
+                  title="Jot a note"
+                  disabled={isLoading}
+                  onClick={() => {
+                    interruptScrubberMomentum();
+                    onOpenNote();
+                  }}
+                  className="absolute right-0 top-0 z-10 flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40"
+                >
+                  <PencilLine size={19} />
+                </button>
+              )}
+              <FooterPageIndicator
+                currentPage={detailCurrentPage}
+                totalPages={detailTotalPages}
+                isLoading={isLoading}
+                preserveDetailsWhileLoading={preserveDetailsWhileLoading}
+                animateReadyDetails={animateReadyTransition}
+              />
+            </div>
           </div>
         </motion.div>
       )}

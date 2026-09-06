@@ -11,6 +11,8 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { isInteractiveTapTarget } from "./hooks/use-touch-spread-tap-nav";
+import { ReaderNotesPrototype } from "./ReaderNotesPrototype";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -72,6 +74,17 @@ export function Reader() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { toast } = useToast();
+  const [noteViewportHeight, setNoteViewportHeight] = useState<number | null>(
+    null,
+  );
+  const handleNotesActive = useCallback((active: boolean) => {
+    setNoteViewportHeight(active ? window.innerHeight : null);
+  }, []);
+
+  const closeNotes = useCallback(
+    () => handleNotesActive(false),
+    [handleNotesActive],
+  );
 
   const { state: chromeState, actions: chromeActions } = useReaderChromeState();
   const { chromeInteractionMode } = useInputBehavior();
@@ -292,6 +305,9 @@ export function Reader() {
           canGoNext={sessionState.navigation.canGoNext}
           chromeInteractionMode={chromeInteractionMode}
           isChromeSuppressed={isReaderInteractionSuppressed}
+          onDismissContentTap={
+            noteViewportHeight === null ? undefined : closeNotes
+          }
           containerRef={stageSlotRef}
           topRailHeight={topRailHeight}
           bottomRailHeight={bottomRailHeight}
@@ -304,7 +320,14 @@ export function Reader() {
             chromeSurfaceProps,
             hideChrome,
           }) => (
-            <div className="relative h-dvh overflow-hidden font-sans text-foreground">
+            <div
+              className="relative h-dvh overflow-hidden font-sans text-foreground"
+              style={
+                noteViewportHeight === null
+                  ? undefined
+                  : { height: noteViewportHeight }
+              }
+            >
               <div className="pointer-events-none absolute inset-0">
                 <div className="absolute inset-x-0 top-0 h-40" />
                 <div className="absolute inset-x-6 bottom-0 h-56 rounded-t-[3rem]" />
@@ -339,6 +362,22 @@ export function Reader() {
 
               {/* Reading container — offset by safe-area insets so clientHeight is safe-area-adjusted */}
               <div
+                onClickCapture={(event) => {
+                  if (
+                    noteViewportHeight === null ||
+                    event.defaultPrevented ||
+                    isInteractiveTapTarget(event.target)
+                  )
+                    return;
+                  if (
+                    "pointerType" in event.nativeEvent &&
+                    event.nativeEvent.pointerType === "touch"
+                  )
+                    return;
+                  if (window.getSelection()?.toString()) return;
+                  event.preventDefault();
+                  closeNotes();
+                }}
                 ref={handleStageSlotRef}
                 data-reader-stage-slot="content"
                 className="absolute inset-x-0 z-10"
@@ -373,7 +412,10 @@ export function Reader() {
               </div>
 
               <ReaderHeader
-                chromeVisible={!displayReady || chromeVisible}
+                chromeVisible={
+                  noteViewportHeight === null &&
+                  (!displayReady || chromeVisible)
+                }
                 chromeSurfaceProps={chromeSurfaceProps}
                 bookTitle={book.title}
                 showBackButton={isMobile}
@@ -387,7 +429,10 @@ export function Reader() {
 
               {/* Keep both chrome edges visible while pagination prepares. */}
               <ReaderFooter
-                chromeVisible={!displayReady || chromeVisible}
+                chromeVisible={
+                  noteViewportHeight === null &&
+                  (!displayReady || chromeVisible)
+                }
                 chromeSurfaceProps={chromeSurfaceProps}
                 isContentsOpen={chromeState.activeReaderSheet === "contents"}
                 currentPage={sessionState.navigation.currentPage}
@@ -414,11 +459,39 @@ export function Reader() {
                 isLoading={
                   !displayReady || sessionState.pagination.status !== "ready"
                 }
+                onOpenNote={() => handleNotesActive(true)}
                 handoffPrompt={handoffPrompt}
               />
 
               {displayReady && (
                 <>
+                  <ReaderNotesPrototype
+                    key={bookId}
+                    open={noteViewportHeight !== null}
+                    location={{
+                      page: sessionState.navigation.currentPage,
+                      chapter: currentChapterEntry?.title ?? "Current chapter",
+                    }}
+                    onActiveChange={handleNotesActive}
+                    margin={{
+                      width: stagePadding.paddingX,
+                      enabled: !isMobile && !isReaderInteractionSuppressed,
+                      location: {
+                        page: Math.min(
+                          sessionState.navigation.totalPages,
+                          sessionState.navigation.currentPage +
+                            resolvedSpreadColumns -
+                            1,
+                        ),
+                        chapter:
+                          sessionState.chapters.entries[
+                            sessionState.pagination.spread?.chapterIndexEnd ??
+                              sessionState.navigation.currentChapterIndex
+                          ]?.title ?? "Current chapter",
+                      },
+                    }}
+                    onVisit={sessionActions.commitPage}
+                  />
                   <ReaderSheetHost
                     isMobile={isMobile}
                     activeSheet={chromeState.activeReaderSheet}
