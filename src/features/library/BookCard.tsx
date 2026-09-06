@@ -80,11 +80,8 @@ export function BookCard({
   const { toast } = useToast();
   const setStatus = useSetReadingStatus(book.id);
   const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
-  const [displayStatus, setDisplayStatus] = useState(status);
-
-  useEffect(() => {
-    setDisplayStatus(status);
-  }, [status]);
+  // The mutation owns the optimistic value until refreshed queries take over.
+  const displayStatus = setStatus.isPending ? setStatus.variables! : status;
 
   useEffect(() => {
     if (coverUrl || !book.cover || !onCoverRequest) return;
@@ -137,9 +134,6 @@ export function BookCard({
   const handleSetStatus = (newStatus: ReadingStatus) => {
     if (newStatus === displayStatus || setStatus.isPending) return;
 
-    const previousStatus = displayStatus;
-    setDisplayStatus(newStatus);
-
     setStatus.mutate(newStatus, {
       onSuccess: () => {
         toast({
@@ -147,7 +141,6 @@ export function BookCard({
         });
       },
       onError: () => {
-        setDisplayStatus(previousStatus);
         toast({
           title: "Could not update reading status",
           description: "Please try again.",

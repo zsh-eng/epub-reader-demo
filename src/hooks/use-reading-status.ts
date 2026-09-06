@@ -27,21 +27,22 @@ export function useSetReadingStatus(bookId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
+    networkMode: "always",
     mutationFn: async (status: ReadingStatus) => {
       if (!bookId) throw new Error("No book ID provided");
       return await setReadingStatus(bookId, status);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: readingStatusKeys.book(bookId ?? ""),
-      });
-      queryClient.invalidateQueries({
-        queryKey: readingStatusKeys.allStatuses(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: bookKeys.list(),
-      });
-    },
+    // Keep the optimistic UI pending until its authoritative queries refresh.
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: readingStatusKeys.book(bookId ?? ""),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: readingStatusKeys.allStatuses(),
+        }),
+        queryClient.invalidateQueries({ queryKey: bookKeys.list() }),
+      ]),
   });
 }
 
@@ -50,6 +51,7 @@ export function useSetReadingStatus(bookId: string | undefined) {
  */
 export function useReadingStatus(bookId: string | undefined) {
   const query = useQuery({
+    networkMode: "always",
     queryKey: readingStatusKeys.book(bookId ?? ""),
     queryFn: async () => {
       if (!bookId) return null;

@@ -26,6 +26,7 @@ export const bookKeys = {
  */
 export function useBooks() {
   return useQuery({
+    networkMode: "always",
     queryKey: bookKeys.list(),
     queryFn: async () => {
       return await getAllBooks();

@@ -39,6 +39,7 @@ export interface CategorizedBooks {
  */
 export function useBooksWithStatuses() {
   return useQuery({
+    networkMode: "always",
     // Combine query keys since this depends on all three data sources.
     // Query invalidation also tracks readingState and readingCheckpoints for
     // this combined view, so status and last-read changes refresh the list.

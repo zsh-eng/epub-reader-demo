@@ -98,3 +98,30 @@ test.describe("Library", () => {
     await expect(page).toHaveURL(`/reader/${localBook.id}`);
   });
 });
+
+test("updates reading status and library placement while offline", async ({
+  page,
+  localBook,
+  context,
+}) => {
+  await context.setOffline(true);
+  const book = page.getByRole("heading", { name: SAMPLE_BOOK_TITLE });
+  await book.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Reading", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Continue Reading", exact: true }),
+  ).toBeVisible();
+  await book.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Finished", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Continue Reading", exact: true }),
+  ).not.toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(async (id) => {
+        const modulePath = "/src/lib/db.ts";
+        return (await import(modulePath)).getReadingStatus(id);
+      }, localBook.id),
+    )
+    .toBe("finished");
+});

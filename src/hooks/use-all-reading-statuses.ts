@@ -13,6 +13,7 @@ import { readingStatusKeys } from "./use-reading-status";
  */
 export function useAllReadingStatuses() {
   return useQuery({
+    networkMode: "always",
     queryKey: readingStatusKeys.allStatuses(),
     queryFn: async () => {
       return await getAllReadingStatuses();
