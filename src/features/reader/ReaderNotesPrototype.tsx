@@ -75,6 +75,8 @@ export function ReaderNotesPrototype({
   onVisit: (page: number) => void;
 }) {
   const reduceMotion = useReducedMotion();
+  // Book-scoped history: an exiting row must not clear a pending Undo entrance.
+  const restoredEntries = useRef(new Set<string>());
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "book">("time");
   const notes = useReaderNotes(bookId);
@@ -244,9 +246,20 @@ export function ReaderNotesPrototype({
       sidebarInput.current?.focus({ preventScroll: true });
   }, [desktop, open, notebook]);
 
+  const previousList = useRef({ notebook: false, ids: new Set<string>() });
   useLayoutEffect(() => {
-    if (notebook) list.current?.scrollTo({ top: list.current.scrollHeight });
-  }, [entries.length, notebook]);
+    const previous = previousList.current;
+    const newNote = entries.some(
+      (entry) =>
+        !previous.ids.has(entry.id) && !restoredEntries.current.has(entry.id),
+    );
+    if (notebook && (!previous.notebook || newNote))
+      list.current?.scrollTo({ top: list.current.scrollHeight });
+    previousList.current = {
+      notebook,
+      ids: new Set(entries.map((entry) => entry.id)),
+    };
+  }, [entries, notebook]);
 
   const flush = notes.flush;
   const close = useCallback(() => {
@@ -281,21 +294,24 @@ export function ReaderNotesPrototype({
   const restoreNote = notes.restore;
   const deleteNote = useCallback(
     async (id: string) => {
-      if (!(await removeNote(id))) return;
+      if (!(await removeNote(id))) return false;
       const toastId = toast("Note deleted", {
         duration: 8000,
         action: {
           label: "Undo",
           onClick: (event) => {
             event.preventDefault();
+            restoredEntries.current.add(id);
             void restoreNote(id)
               .then(() => toast.dismiss(toastId))
               .catch(() => {
+                restoredEntries.current.delete(id);
                 toast.error("Could not restore the note. Try Undo again.");
               });
           },
         },
       });
+      return true;
     },
     [removeNote, restoreNote],
   );
@@ -510,76 +526,137 @@ export function ReaderNotesPrototype({
         </header>
         <div
           ref={list}
-          className={`min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-4 ${desktop ? "flex-1" : ""}`}
+          className={`relative min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-4 ${desktop ? "flex-1" : ""}`}
           style={{
+            minHeight: "min(9rem, 24dvh)",
             maxHeight: desktop ? undefined : keyboardOpen ? "24dvh" : "48dvh",
           }}
         >
           {!entries.length && (
-            <p className="px-4 py-10 text-center font-serif text-lg text-muted-foreground">
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ ...transition, delay: reduceMotion ? 0 : 0.16 }}
+              className="absolute inset-x-4 top-4 px-4 py-10 text-center font-serif text-lg text-muted-foreground"
+            >
               A place for what stays with you.
-            </p>
+            </motion.p>
           )}
-          {orderedEntries.map((entry, index) => (
-            <div key={entry.id} data-note-id={entry.id}>
-              {(index === 0 ||
-                groupLabel(orderedEntries[index - 1]) !==
-                  groupLabel(entry)) && (
-                <h3 className="mb-2 mt-4 px-1 text-xs font-medium text-muted-foreground first:mt-0">
-                  {groupLabel(entry)}
-                </h3>
-              )}
-              <NotebookNote
-                disabled={!notes.ready || notes.saving}
-                canEdit={entry.kind === "note"}
-                editing={notes.editingId === entry.id}
-                onEdit={() => void startEdit(entry.id)}
-                onDelete={() => void deleteNote(entry.id)}
+          <AnimatePresence key={order} initial={false}>
+            {orderedEntries.flatMap((entry, index) => [
+              ...(index === 0 ||
+              groupLabel(orderedEntries[index - 1]) !== groupLabel(entry)
+                ? [
+                    <motion.div
+                      key={`heading:${order}:${order === "book" ? entry.chapterIndex : new Date(entry.createdAt).toDateString()}`}
+                      initial={
+                        restoredEntries.current.has(entry.id)
+                          ? { height: reduceMotion ? "auto" : 0, opacity: 0 }
+                          : false
+                      }
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{
+                        height: reduceMotion ? "auto" : 0,
+                        opacity: 0,
+                        transition: {
+                          height: {
+                            duration: reduceMotion ? 0 : 0.18,
+                            delay: reduceMotion ? 0 : 0.16,
+                          },
+                          opacity: { duration: 0.16 },
+                        },
+                      }}
+                      transition={{
+                        duration: reduceMotion ? 0 : 0.18,
+                        ease: transition.ease,
+                      }}
+                      className="overflow-hidden"
+                    >
+                      <h3 className="mb-2 px-1 text-xs font-medium text-muted-foreground">
+                        {groupLabel(entry)}
+                      </h3>
+                    </motion.div>,
+                  ]
+                : []),
+              <motion.div
+                key={entry.id}
+                data-note-id={entry.id}
+                initial={
+                  restoredEntries.current.has(entry.id)
+                    ? { height: reduceMotion ? "auto" : 0, opacity: 0 }
+                    : false
+                }
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{
+                  height: reduceMotion ? "auto" : 0,
+                  opacity: 0,
+                  transition: {
+                    height: {
+                      duration: reduceMotion ? 0 : 0.18,
+                      delay: reduceMotion ? 0 : 0.16,
+                      ease: transition.ease,
+                    },
+                    opacity: { duration: 0.16 },
+                  },
+                }}
+                transition={{
+                  duration: reduceMotion ? 0 : 0.18,
+                  ease: transition.ease,
+                }}
+                className="flow-root overflow-hidden"
               >
-                {entry.quote && (
-                  <blockquote
-                    className="mb-2 truncate border-l-[3px] pl-2 text-xs text-muted-foreground"
-                    style={{
-                      borderColor:
-                        entry.quote.color === "invisible"
-                          ? "var(--muted-foreground)"
-                          : `var(--${entry.quote.color}-secondary)`,
-                    }}
-                  >
-                    {entry.quote.selectedText}
-                  </blockquote>
-                )}
-                <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-                  {entry.text}
-                </p>
-                <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-                  <button
-                    disabled={!entry.location.page}
-                    className="min-w-0 truncate text-left hover:text-foreground"
-                    onClick={() => {
-                      onVisit(entry.location.page);
-                      close();
-                    }}
-                  >
-                    {order === "time" ? `${entry.location.chapter} · ` : ""}
-                    {entry.location.page
-                      ? `p. ${entry.location.page}`
-                      : "Location unavailable"}
-                  </button>
-                  <time
-                    dateTime={new Date(entry.createdAt).toISOString()}
-                    title={new Date(entry.createdAt).toLocaleString()}
-                    className="shrink-0"
-                  >
-                    {new Date(entry.createdAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </time>
-                </div>
-              </NotebookNote>
-            </div>
-          ))}
+                <NotebookNote
+                  disabled={!notes.ready || notes.saving}
+                  canEdit={entry.kind === "note"}
+                  editing={notes.editingId === entry.id}
+                  onEdit={() => void startEdit(entry.id)}
+                  onDelete={() => deleteNote(entry.id)}
+                >
+                  {entry.quote && (
+                    <blockquote
+                      className="mb-2 truncate border-l-[3px] pl-2 text-xs text-muted-foreground"
+                      style={{
+                        borderColor:
+                          entry.quote.color === "invisible"
+                            ? "var(--muted-foreground)"
+                            : `var(--${entry.quote.color}-secondary)`,
+                      }}
+                    >
+                      {entry.quote.selectedText}
+                    </blockquote>
+                  )}
+                  <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                    {entry.text}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+                    <button
+                      disabled={!entry.location.page}
+                      className="min-w-0 truncate text-left hover:text-foreground"
+                      onClick={() => {
+                        onVisit(entry.location.page);
+                        close();
+                      }}
+                    >
+                      {order === "time" ? `${entry.location.chapter} · ` : ""}
+                      {entry.location.page
+                        ? `p. ${entry.location.page}`
+                        : "Location unavailable"}
+                    </button>
+                    <time
+                      dateTime={new Date(entry.createdAt).toISOString()}
+                      title={new Date(entry.createdAt).toLocaleString()}
+                      className="shrink-0"
+                    >
+                      {new Date(entry.createdAt).toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  </div>
+                </NotebookNote>
+              </motion.div>,
+            ])}
+          </AnimatePresence>
         </div>
       </motion.section>
     ),

@@ -1,9 +1,16 @@
-import { useRef, useState, type ReactNode, type PointerEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type PointerEvent,
+} from "react";
 import {
   animate,
   cubicBezier,
   motion,
   useMotionValue,
+  useIsPresent,
   useReducedMotion,
   useTransform,
 } from "motion/react";
@@ -30,12 +37,14 @@ export function NotebookNote({
 }: {
   children: ReactNode;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete: () => Promise<boolean>;
   canEdit: boolean;
   disabled: boolean;
   editing: boolean;
 }) {
   const reduceMotion = useReducedMotion();
+  const present = useIsPresent();
+  const cardOpacity = useMotionValue(1);
   const distance = useMotionValue(0);
   const transform = useTransform(
     distance,
@@ -69,6 +78,42 @@ export function NotebookNote({
   } | null>(null);
   const suppressClick = useRef(false);
 
+  // Persistence removes the row first. Presence keeps only its visual shell
+  // alive long enough to complete the swipe before the list closes its gap.
+  useEffect(() => {
+    if (present) {
+      cardOpacity.set(1);
+      void animate(distance, 0, {
+        duration: reduceMotion ? 0 : 0.18,
+        ease: [0.23, 1, 0.32, 1],
+      });
+      return;
+    }
+    const fade = animate(cardOpacity, 0, {
+      duration: 0.16,
+      ease: [0.23, 1, 0.32, 1],
+    });
+    const slide = reduceMotion
+      ? undefined
+      : animate(distance, Math.min(0, distance.get()) - 12, {
+          duration: 0.16,
+          ease: [0.23, 1, 0.32, 1],
+        });
+    return () => {
+      fade.stop();
+      slide?.stop();
+    };
+  }, [present, reduceMotion, cardOpacity, distance]);
+
+  async function requestDelete() {
+    if (await onDelete()) return;
+    // A failed local write leaves the note available at its original position.
+    void animate(distance, 0, {
+      duration: reduceMotion ? 0 : 0.18,
+      ease: [0.23, 1, 0.32, 1],
+    });
+  }
+
   function finish(event: PointerEvent<HTMLElement>, cancelled = false) {
     const active = gesture.current;
     if (!active || active.id !== event.pointerId) return;
@@ -76,19 +121,29 @@ export function NotebookNote({
     if (event.currentTarget.hasPointerCapture(event.pointerId))
       event.currentTarget.releasePointerCapture(event.pointerId);
     setArmed(false);
+    if (
+      !cancelled &&
+      active.dragging &&
+      active.armed &&
+      active.direction === -1
+    ) {
+      void requestDelete();
+      return;
+    }
     if (reduceMotion) distance.set(0);
     else
       void animate(distance, 0, { type: "spring", duration: 0.5, bounce: 0.2 });
     if (!cancelled && active.dragging && active.armed) {
       if (active.direction === 1) onEdit();
-      else onDelete();
     }
   }
 
   return (
-    <ContextMenu>
+    <ContextMenu disabled={disabled || !present}>
       <ContextMenuTrigger
-        tabIndex={0}
+        tabIndex={present ? 0 : -1}
+        inert={!present}
+        aria-hidden={!present}
         aria-label="Note; use the context menu to edit or delete"
         className="group relative mb-2 block overflow-x-clip rounded-2xl focus-visible:outline-2 focus-visible:outline-ring"
         data-swipe-ready={armed || undefined}
@@ -99,7 +154,7 @@ export function NotebookNote({
         <div className="pointer-events-none absolute inset-0 overflow-x-clip">
           <motion.div
             aria-hidden="true"
-            style={{ opacity, transform: cueTransform }}
+            style={{ opacity: present ? opacity : 0, transform: cueTransform }}
             className={`pointer-events-none absolute inset-y-0 flex items-center ${action === "edit" ? "right-0 text-muted-foreground" : "left-0 text-destructive"}`}
           >
             <div className="relative flex size-9 items-center justify-center">
@@ -135,7 +190,7 @@ export function NotebookNote({
           </motion.div>
         </div>
         <motion.article
-          style={{ transform, touchAction: "pan-y" }}
+          style={{ transform, opacity: cardOpacity, touchAction: "pan-y" }}
           className={`relative rounded-2xl bg-secondary px-4 py-3 group-data-[popup-open]:ring-1 group-data-[popup-open]:ring-ring ${editing ? "ring-1 ring-ring" : ""}`}
           onPointerDown={(event) => {
             suppressClick.current = false;
@@ -239,7 +294,7 @@ export function NotebookNote({
         <ContextMenuItem
           disabled={disabled}
           variant="destructive"
-          onClick={onDelete}
+          onClick={() => void requestDelete()}
         >
           <Trash2 size={14} />
           Delete note

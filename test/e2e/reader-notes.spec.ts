@@ -839,6 +839,12 @@ test("swipes right to delete and undo while keeping the compose draft", async ({
     createdAt: original.createdAt,
     isDeleted: false,
   });
+  await expect(row).toHaveCSS("opacity", "1");
+  await expect(row.locator("article")).toHaveCSS(
+    "transform",
+    "matrix(1, 0, 0, 1, 0, 0)",
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await row.locator("article").click({ button: "right" });
   await page.getByRole("menuitem", { name: "Edit note" }).click();
   await page

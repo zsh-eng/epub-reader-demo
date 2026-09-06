@@ -49,6 +49,12 @@ live unchanged. Deleting retains the source highlight. Deleting a note with an
 open edit removes that edit draft and returns to the compose draft; Undo restores
 the saved note, not the discarded edit. Other drafts remain intact.
 
+Deletion keeps a non-interactive visual row for a 160 ms fade, then closes its
+space over 180 ms. Undo reopens the original space and fades the note back in.
+These transitions do not delay storage. Initial loading, sorting, and text edits
+have no row entrance animation. Deleting or restoring a note does not scroll the
+notebook to the bottom. Reduced motion uses a fade followed by immediate reflow.
+
 ## Storage and sync
 
 `notes` and `highlights` are synced. `noteDrafts` is local-only. Each note owns its
