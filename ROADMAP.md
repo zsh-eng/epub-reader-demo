@@ -130,16 +130,16 @@ below contains only work that still has a clear product or reliability reason.
 - [x] Benchmark highlights page for bottlenecks
 - [x] New local-first file storage and EPUB materialization flow
 
+- [x] BUG: With reading position being saved. Going back and coming back in - position is not preserved. Same when changing the reader size (e.g. changing to half page for the window position)
+- [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
+- [ ] Bug: Swipe should pass through for no UI chrome
 - [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
 - [ ] Look through EPUB materialisation flow again
 - [ ] Test updates for handling book with large spine (see conversation)
 - [ ] Add debug flag
-- [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
-- [ ] Bug: Swipe should pass through for no UI chrome
 - [ ] Reading status toast should be at the bottom like the cross device jump (pinned to the bottom chrome)
 - [ ] Look through all toasts and their positioning
 - [ ] Toast roundedness should be similar to the reading status page roundedness
-- [ ] BUG: With reading position being saved. Going back and coming back in - position is not preserved. Same when changing the reader size (e.g. changing to half page for the window position)
 
 - [ ] Testing user flow
   - Importing a book and trying to open it immediately afterwards
