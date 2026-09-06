@@ -1,6 +1,6 @@
 import "@/App.css";
 import { AppShell } from "@/components/AppShell";
-import { HighlightsMasonry } from "@/components/HighlightsMasonry";
+import { HighlightsMasonry } from "@/features/highlights/HighlightsMasonry";
 import { Library } from "@/features/library/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";

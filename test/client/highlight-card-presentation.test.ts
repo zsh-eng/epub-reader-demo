@@ -2,7 +2,7 @@ import {
   getHighlightCardPresentation,
   getHighlightWordCount,
   usesWordCloudHighlightStyle,
-} from "@/lib/highlight-card-presentation";
+} from "@/features/highlights/highlight-card-presentation";
 import { describe, expect, it } from "vitest";
 
 describe("highlight card presentation", () => {

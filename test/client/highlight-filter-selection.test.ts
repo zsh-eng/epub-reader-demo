@@ -1,7 +1,7 @@
 import {
   ALL_HIGHLIGHT_COLORS,
   toggleHighlightColorSelection,
-} from "@/lib/highlight-filter-selection";
+} from "@/features/highlights/highlight-filter-selection";
 import { describe, expect, it } from "vitest";
 
 describe("toggleHighlightColorSelection", () => {

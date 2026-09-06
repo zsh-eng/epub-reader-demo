@@ -5,7 +5,7 @@ import {
   doesMosaicPlacementIntersectViewport,
   getHighlightsMosaicGeometry,
   type MosaicPlacement,
-} from "@/lib/highlights-masonry-layout";
+} from "@/features/highlights/highlights-masonry-layout";
 import { describe, expect, it } from "vitest";
 
 describe("doesMosaicPlacementIntersectViewport", () => {

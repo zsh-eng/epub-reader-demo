@@ -16,7 +16,7 @@ import { useSearchStickyState } from "@/hooks/use-search-sticky-state";
 import {
   useAllHighlightsQuery,
   type BookHighlightGroup,
-} from "@/hooks/use-all-highlights-query";
+} from "./use-all-highlights-query";
 import { formatHighlightTime } from "@/lib/date-utils";
 import { getBookCoverFileId } from "@/lib/book-file-references";
 import type { Highlight } from "@/lib/db";
@@ -25,11 +25,11 @@ import {
   SHORT_HIGHLIGHT_CARD_HEIGHT,
   getHighlightCardPresentation,
   type HighlightCardPresentation,
-} from "@/lib/highlight-card-presentation";
+} from "./highlight-card-presentation";
 import {
   ALL_HIGHLIGHT_COLORS,
   toggleHighlightColorSelection,
-} from "@/lib/highlight-filter-selection";
+} from "./highlight-filter-selection";
 import {
   BOOK_COVER_TILE_ID,
   BOOK_DETAILS_TILE_ID,
@@ -39,7 +39,7 @@ import {
   type HighlightsMosaicLayout,
   type MosaicPlacement,
   type MosaicViewportRange,
-} from "@/lib/highlights-masonry-layout";
+} from "./highlights-masonry-layout";
 import {
   HIGHLIGHT_COLORS,
   type AnnotationColor,

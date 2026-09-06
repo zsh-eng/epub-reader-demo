@@ -17,8 +17,8 @@ import "@fontsource/lora/600.css";
 import "@/App.css";
 import "./styles.css";
 
-import { HighlightsMasonry } from "@/components/HighlightsMasonry";
-import { allHighlightsKeys } from "@/hooks/use-all-highlights-query";
+import { HighlightsMasonry } from "@/features/highlights/HighlightsMasonry";
+import { allHighlightsKeys } from "@/features/highlights/use-all-highlights-query";
 import { readingSessionKeys } from "@/hooks/use-reading-sessions-query";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
