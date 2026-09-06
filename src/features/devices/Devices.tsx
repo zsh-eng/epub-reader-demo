@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
-import { useSessions } from "@/hooks/use-sessions";
+import { useSessions } from "./use-sessions";
 import type { DeviceType, SessionInfo } from "@/types/session";
 import { formatDistanceToNow } from "date-fns";
 import { Globe, Monitor, Smartphone, Tablet } from "lucide-react";

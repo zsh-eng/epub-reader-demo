@@ -8,7 +8,7 @@ import { ReaderDiagnostics } from "@/components/Reader/diagnostics/ReaderDiagnos
 import { ReadingSessions } from "@/components/ReadingSessions";
 import { ReaderTraceViewer } from "@/components/ReaderTraceViewer";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
-import { Devices } from "@/components/Sessions";
+import { Devices } from "@/features/devices/Devices";
 import { Toaster } from "@/components/ui/sonner";
 import { EpubImportProvider } from "@/features/library/use-epub-import";
 import { ReaderSettingsProvider } from "@/hooks/use-reader-settings";
