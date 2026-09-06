@@ -90,7 +90,8 @@ export function Reader() {
     [handleNotesActive],
   );
 
-  const { state: chromeState, actions: chromeActions } = useReaderChromeState();
+  const { state: chromeState, actions: chromeActions } =
+    useReaderChromeState(isMobile);
   const { chromeInteractionMode } = useInputBehavior();
   useReaderPerformanceTraceRoute(bookId);
 

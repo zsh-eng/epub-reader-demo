@@ -1,6 +1,27 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ReaderSheetId } from "../types";
 
+const SIDEBAR_TAB_KEY = "epub-reader-sidebar-tab";
+type SidebarTab = "contents" | "search" | "settings" | "notes";
+
+function isSidebarTab(value: string | null): value is SidebarTab {
+  return (
+    value === "contents" ||
+    value === "search" ||
+    value === "settings" ||
+    value === "notes"
+  );
+}
+
+function readSidebarTab(): SidebarTab {
+  try {
+    const value = window.localStorage.getItem(SIDEBAR_TAB_KEY);
+    return isSidebarTab(value) ? value : "contents";
+  } catch {
+    return "contents";
+  }
+}
+
 export interface ReaderChromeState {
   isBookmarked: boolean;
   activeReaderSheet: ReaderSheetId | null;
@@ -18,13 +39,16 @@ export interface UseReaderChromeStateResult {
 }
 
 /**
- * Owns ephemeral chrome state for the Reader screen.
+ * Owns Reader chrome state and the device-local desktop sidebar preference.
  *
  * This hook deliberately stays scoped to reader-level chrome concerns like
  * bookmark affordances and the active peer sheet. Chrome visibility itself is
  * owned by ReaderController because hover and touch modes reveal it differently.
  */
-export function useReaderChromeState(): UseReaderChromeStateResult {
+export function useReaderChromeState(
+  isMobile: boolean,
+): UseReaderChromeStateResult {
+  const [lastSidebarTab, setLastSidebarTab] = useState(readSidebarTab);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [activeReaderSheet, setActiveReaderSheet] =
     useState<ReaderSheetId | null>(null);
@@ -33,9 +57,21 @@ export function useReaderChromeState(): UseReaderChromeStateResult {
     setIsBookmarked((bookmarked) => !bookmarked);
   }, []);
 
-  const openReaderSheet = useCallback((sheet: ReaderSheetId) => {
-    setActiveReaderSheet(sheet);
-  }, []);
+  const openReaderSheet = useCallback(
+    (sheet: ReaderSheetId) => {
+      const destination =
+        !isMobile && sheet === "tools" ? lastSidebarTab : sheet;
+      setActiveReaderSheet(destination);
+      if (isMobile || !isSidebarTab(destination)) return;
+      setLastSidebarTab(destination);
+      try {
+        window.localStorage.setItem(SIDEBAR_TAB_KEY, destination);
+      } catch {
+        // Keep the session preference when browser storage is unavailable.
+      }
+    },
+    [isMobile, lastSidebarTab],
+  );
 
   const closeReaderSheet = useCallback(() => {
     setActiveReaderSheet(null);

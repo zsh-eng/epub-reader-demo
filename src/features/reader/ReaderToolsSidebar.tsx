@@ -21,7 +21,7 @@ type ReaderSidebarPanel = "contents" | "search" | "settings" | "notes";
 
 interface ReaderToolsSidebarProps {
   activeSheet: ReaderSheetId | null;
-  onOpenPanel: (panel: ReaderSidebarPanel) => void;
+  onOpenPanel: (panel: ReaderSheetId) => void;
   onClose: () => void;
   settings: ReaderSettings;
   onUpdateSettings: (settings: Partial<ReaderSettings>) => void;
@@ -86,7 +86,7 @@ export function ReaderToolsSidebar({
         return;
       }
 
-      onOpenPanel("contents");
+      onOpenPanel("tools");
     },
     {
       target: window,

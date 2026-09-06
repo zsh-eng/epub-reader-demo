@@ -157,6 +157,41 @@ test.describe("Desktop margin notes", () => {
     hasTouch: false,
     isMobile: false,
   });
+  test("remembers the sidebar tab after close and reload", async ({
+    page,
+    localBook,
+  }) => {
+    await openLocalBook(page, localBook.id);
+    await page.mouse.move(600, 20);
+    await page
+      .getByRole("button", { name: "Open reader tools", exact: true })
+      .click();
+    const tools = page.getByRole("complementary", {
+      name: "Reader tools",
+      exact: true,
+    });
+    await tools.getByRole("button", { name: "Notes", exact: true }).click();
+    await tools
+      .getByRole("button", { name: "Close reader tools", exact: true })
+      .last()
+      .click();
+    await page.mouse.move(600, 20);
+    await page
+      .getByRole("button", { name: "Open reader tools", exact: true })
+      .click();
+    await expect(
+      tools.getByRole("button", { name: "Notes", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.reload();
+    await waitForReaderReady(page);
+    await page.mouse.move(600, 20);
+    await page
+      .getByRole("button", { name: "Open reader tools", exact: true })
+      .click();
+    await expect(
+      tools.getByRole("button", { name: "Notes", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
   test("captures a margin note without resizing the book", async ({
     page,
     localBook,
