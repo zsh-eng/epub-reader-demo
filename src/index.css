@@ -3,6 +3,16 @@
 
 @custom-variant dark (&:is(.dark *, .night *, .flexoki-dark *));
 
+/* Match browser-owned controls and the page canvas to the active reading theme. */
+:root {
+  color-scheme: light;
+  background-color: var(--background);
+}
+
+:root:is(.dark, .night, .flexoki-dark) {
+  color-scheme: dark;
+}
+
 @theme inline {
   /* Font families */
   --font-serif: "EB Garamond", "Garamond", serif;

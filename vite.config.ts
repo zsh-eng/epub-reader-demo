@@ -50,7 +50,7 @@ export default defineConfig({
           },
         ],
       },
-      includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
+      includeAssets: ["favicon.ico", "apple-touch-icon-180x180.png"],
       manifest: {
         name: "Reader",
         short_name: "Reader",

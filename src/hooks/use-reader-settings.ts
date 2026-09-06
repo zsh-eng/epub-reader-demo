@@ -157,28 +157,24 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       // This is combined with the initial setting of the theme in index.html
       if (isInitialMount.current) {
         isInitialMount.current = false;
-        return;
+      } else {
+        root.classList.add(THEME_TRANSITION_CLASS);
+        themeTransitionTimeoutRef.current = window.setTimeout(() => {
+          root.classList.remove(THEME_TRANSITION_CLASS);
+          themeTransitionTimeoutRef.current = null;
+        }, THEME_TRANSITION_DURATION_MS);
       }
-      // Add transitioning class for smooth theme change animation
-      root.classList.add(THEME_TRANSITION_CLASS);
-      // Remove transitioning class after transition completes
-      themeTransitionTimeoutRef.current = window.setTimeout(() => {
-        root.classList.remove(THEME_TRANSITION_CLASS);
-        themeTransitionTimeoutRef.current = null;
-      }, THEME_TRANSITION_DURATION_MS);
 
+      // Read the theme token, not the transitioning body colour. This also runs
+      // on first mount so restored dark themes do not retain a white browser bar.
       root.classList.remove(...THEME_CLASSES);
       root.classList.add(settings.theme);
-
-      const themeColorMeta = window.document.querySelector(
-        'meta[name="theme-color"]',
-      );
-      if (themeColorMeta) {
-        themeColorMeta.setAttribute(
+      window.document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute(
           "content",
-          settings.theme === "night" ? "#000000" : "#ffffff",
+          getComputedStyle(root).getPropertyValue("--background").trim(),
         );
-      }
     } catch (error) {
       console.warn("Error saving settings to localStorage:", error);
     }
