@@ -1,4 +1,10 @@
-import { expect, SAMPLE_BOOK_TITLE, test } from "./helpers/fixtures";
+import {
+  expect,
+  SAMPLE_BOOK_TITLE,
+  test,
+  waitForReaderReady,
+  nextSpread,
+} from "./helpers/fixtures";
 
 test.describe("Library", () => {
   test("should display empty library initially", async ({ page }) => {
@@ -124,4 +130,15 @@ test("updates reading status and library placement while offline", async ({
       }, localBook.id),
     )
     .toBe("finished");
+});
+
+test("imports then immediately opens a new EPUB", async ({
+  page,
+  addSampleBook,
+}) => {
+  await page.goto("/");
+  await addSampleBook();
+  await page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }).click();
+  await waitForReaderReady(page);
+  await nextSpread(page);
 });

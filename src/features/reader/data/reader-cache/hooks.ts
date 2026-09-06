@@ -219,6 +219,9 @@ export function useReaderChapterArtifactsLoader(options: {
 
     artifactsByChapterRef.current.set(chapterIndex, cachedArtifact);
     signaturesByChapterRef.current.set(chapterIndex, artifactSignature);
+    // The feed may already be waiting when a warm artifact enters this loader.
+    // Publish cache hits just like freshly built artifacts so init can proceed.
+    notify({ kind: "loaded", chapterIndex, artifact: cachedArtifact });
     markReaderTraceOnce("initial-artifact-cache-seeded", "processing", {
       chapterIndex,
       cache: "react-query",
@@ -234,6 +237,7 @@ export function useReaderChapterArtifactsLoader(options: {
     matchPublisherBodyTextSize,
     publisherBookStylingEnabled,
     queryClient,
+    notify,
   ]);
 
   useEffect(() => {
