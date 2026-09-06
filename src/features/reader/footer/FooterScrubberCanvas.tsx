@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -327,30 +328,30 @@ export function FooterScrubberCanvas({
     return () => cancelAnimationFrame(rafRef.current);
   }, [currentPage, redraw, totalPages]);
 
+  // Observers keep their lifetime while drawing the latest committed data.
+  const redrawObservedCanvas = useEffectEvent(() => {
+    colorsRef.current = null;
+    redraw();
+  });
+
   // Resize observer
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ro = new ResizeObserver(() => {
-      colorsRef.current = null;
-      redraw();
-    });
+    const ro = new ResizeObserver(redrawObservedCanvas);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [redraw]);
+  }, []);
 
   // Theme observer
   useEffect(() => {
-    const mo = new MutationObserver(() => {
-      colorsRef.current = null;
-      redraw();
-    });
+    const mo = new MutationObserver(redrawObservedCanvas);
     mo.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class", "data-theme"],
     });
     return () => mo.disconnect();
-  }, [redraw]);
+  }, []);
 
   useLayoutEffect(() => {
     cancelAnimationFrame(rafRef.current);
