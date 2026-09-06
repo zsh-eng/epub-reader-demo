@@ -202,7 +202,7 @@ export function Reader() {
     return (
       <ReaderStateScreen
         title="Book file unavailable"
-        message="The book metadata is synced, but the EPUB file is not available on this device yet."
+        message="The EPUB file is not available on this device. Reconnect to download it, or return to the Library and try again."
         titleTone="destructive"
         action={{ label: "Back to Library", onClick: () => navigate("/") }}
       />

@@ -42,6 +42,7 @@ export function useBooks() {
  */
 function useBook(bookId: string | undefined) {
   return useQuery({
+    networkMode: "always", // Metadata lives in IndexedDB.
     queryKey: bookKeys.detail(bookId ?? ""),
     queryFn: async () => {
       if (!bookId) {

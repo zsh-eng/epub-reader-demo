@@ -63,6 +63,19 @@ async function prepareBookOnce(
     return { book, bookChanged: false, materialized: false };
   }
 
+  // A complete materialization above needs no original bytes. Otherwise avoid
+  // starting a remote transfer when the browser already knows it is offline.
+  if (
+    !sourceBlob &&
+    typeof navigator !== "undefined" &&
+    !navigator.onLine &&
+    !(await files.hasLocal(book.sourceFileId))
+  ) {
+    throw new Error(
+      "Connect to the internet to download this book, then try again.",
+    );
+  }
+
   const epubBlob = sourceBlob ?? (await files.get(book.sourceFileId));
   const parsedEpub = await parseEPUB(epubBlob, {
     sourceFileId: book.sourceFileId,

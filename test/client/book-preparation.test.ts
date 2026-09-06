@@ -6,16 +6,37 @@ import { db, type Book, type BookFile } from "@/lib/db";
 import { files, parseFileId, type FileId } from "@/lib/files";
 import { strToU8, zipSync } from "fflate";
 import { Blob as NodeBlob } from "node:buffer";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const COMPLETE_COVER_FILE_ID = parseFileId("xxh64:2222222222222222");
 const BLUR_HASH = "LEHV6nWB2yk8pyo0adR*.7kCMdnj";
 
 describe("prepareBook integration", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   beforeEach(async () => {
     await db.delete();
     await db.open();
     localStorage.clear();
+  });
+
+  it("rejects missing offline bytes without a transfer and recovers from local bytes", async () => {
+    vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+    const get = vi.spyOn(files, "get");
+    const source = createTestEpub();
+    const id = await files.put(source);
+    const book = createBook(id);
+    await db.files.delete(id);
+    await expect(prepareBook(book)).rejects.toThrow("Connect to the internet");
+    expect(get).not.toHaveBeenCalled();
+    await files.put(source);
+    await expect(prepareBook(book)).resolves.toMatchObject({
+      materialized: true,
+    });
+    await db.files.delete(id);
+    await expect(prepareBook(book)).resolves.toMatchObject({
+      materialized: false,
+    });
   });
 
   it("parses a local EPUB, replaces partial rows, and trusts its marker", async () => {

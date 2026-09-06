@@ -67,6 +67,7 @@ export async function prefetchReaderBook(
 
   await Promise.all([
     queryClient.prefetchQuery({
+      networkMode: "always",
       queryKey: bookKeys.detail(book.id),
       queryFn: async () => {
         const latestBook = await getBook(book.id);
@@ -79,6 +80,7 @@ export async function prefetchReaderBook(
     queryClient.prefetchQuery(bodyQuery),
     queryClient.prefetchQuery(checkpointQuery),
     queryClient.prefetchQuery({
+      networkMode: "always",
       queryKey: highlightsKey,
       queryFn: () => getBookHighlights(book.id),
       staleTime: Infinity,

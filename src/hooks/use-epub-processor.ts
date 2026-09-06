@@ -29,6 +29,7 @@ export const epubPreparationKeys = {
 
 function getEpubPreparationQueryOptions(book: Book) {
   return queryOptions({
+    networkMode: "offlineFirst", // Try local materialization before needing a download.
     queryKey: epubPreparationKeys.book(book),
     queryFn: () => prepareBook(book),
     staleTime: Infinity,
@@ -75,6 +76,7 @@ export async function ensureEpubPreparationReady(
 export function useEpubProcessor(book: Book | null): UseEpubProcessorReturn {
   const queryClient = useQueryClient();
   const query = useQuery({
+    networkMode: "offlineFirst", // Failed local preparation retries on reconnect.
     queryKey: book
       ? epubPreparationKeys.book(book)
       : epubPreparationKeys.disabled,

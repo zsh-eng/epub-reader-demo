@@ -26,6 +26,7 @@ export const HIGHLIGHTS_QUERY_GC_TIME_MS = 30 * 60 * 1000;
  */
 export function useBookHighlightsQuery(bookId: string | undefined) {
   return useQuery({
+    networkMode: "always", // Reader artifact preparation depends on this local read.
     queryKey: highlightKeys.book(bookId ?? ""),
     queryFn: () =>
       withReaderTraceSpan("highlights-read", "storage", () =>

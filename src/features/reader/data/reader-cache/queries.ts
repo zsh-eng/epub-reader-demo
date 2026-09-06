@@ -133,6 +133,7 @@ export function readerBodyCacheQueryOptions(options: {
   } = options;
 
   return queryOptions({
+    networkMode: "always", // Local storage and CPU work must not wait for reconnect.
     queryKey: readerBodyCacheKeys.book(
       bookId ?? "",
       sourceFileId ?? ("" as FileId),
@@ -155,6 +156,7 @@ export function readerBodyCacheQueryOptions(options: {
 
 export function readerCheckpointQueryOptions(bookId: string | undefined) {
   return queryOptions({
+    networkMode: "always", // Local storage and CPU work must not wait for reconnect.
     queryKey: readerCheckpointKeys.currentDevice(bookId ?? ""),
     queryFn: async (): Promise<ReaderCheckpointData> => ({
       checkpoint: await withReaderTraceSpan(
@@ -174,6 +176,7 @@ export function readerCheckpointsQueryOptions(
   enabled = true,
 ) {
   return queryOptions({
+    networkMode: "always", // Local storage and CPU work must not wait for reconnect.
     queryKey: readerCheckpointKeys.book(bookId ?? ""),
     queryFn: async (): Promise<ReaderCheckpointsData> => ({
       checkpoints: await withReaderTraceSpan(
@@ -206,6 +209,7 @@ export function readerChapterArtifactQueryOptions(options: {
     matchPublisherBodyTextSize,
   } = options;
   return queryOptions({
+    networkMode: "always", // Local storage and CPU work must not wait for reconnect.
     queryKey: readerChapterArtifactKeys.chapter(
       bookId,
       sourceFileId,
