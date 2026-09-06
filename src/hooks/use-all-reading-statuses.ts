@@ -13,7 +13,7 @@ import { readingStatusKeys } from "./use-reading-status";
  */
 export function useAllReadingStatuses() {
   return useQuery({
-    networkMode: "always",
+    networkMode: "always", // Reading statuses are stored in IndexedDB.
     queryKey: readingStatusKeys.allStatuses(),
     queryFn: async () => {
       return await getAllReadingStatuses();

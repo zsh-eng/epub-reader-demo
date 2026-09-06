@@ -48,9 +48,7 @@ for (const materialized of [true, false]) {
     }
     void localBook;
     await context.setOffline(true);
-    await page
-      .getByRole("heading", { name: SAMPLE_BOOK_TITLE })
-      .click();
+    await page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }).click();
     await waitForReaderReady(page);
     await nextSpread(page);
     await context.setOffline(false);
@@ -88,9 +86,7 @@ test("missing bytes shows a recoverable state and downloads after reconnect", as
     });
   });
   await context.setOffline(true);
-  await page
-    .getByRole("heading", { name: SAMPLE_BOOK_TITLE })
-    .click();
+  await page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }).click();
   await expect(page.getByText("Book file unavailable")).toBeVisible();
   expect(downloads).toBe(0);
   await context.setOffline(false);
@@ -104,4 +100,38 @@ test("missing bytes shows a recoverable state and downloads after reconnect", as
       return !!(await db.bookMaterializations.get(id));
     }, localBook.id),
   ).toBe(true);
+});
+
+test("loads stored reading history offline with the default query policy", async ({
+  page,
+  context,
+  localBook,
+}) => {
+  await page.evaluate(async (bookId) => {
+    const path = "/src/data/reading-sessions.ts";
+    const { createCurrentDeviceReadingSession } = await import(path);
+    const now = Date.now();
+    await createCurrentDeviceReadingSession({
+      id: "offline-history",
+      bookId,
+      readerInstanceId: "offline-history-reader",
+      startedAt: now - 600_000,
+      endedAt: now,
+      lastActiveAt: now,
+      activeMs: 600_000,
+      startSpineIndex: 0,
+      startScrollProgress: 0,
+      endSpineIndex: 1,
+      endScrollProgress: 0,
+    });
+  }, localBook.id);
+  await context.setOffline(true);
+  await page
+    .getByRole("button", { name: "Toggle sidebar", exact: true })
+    .click();
+  await page.getByRole("link", { name: "Sessions", exact: true }).click();
+  await expect(page).toHaveURL(/\/reading-sessions$/);
+  await expect(
+    page.getByRole("link", { name: /Alice.*Wonderland 10 min Lewis Carroll/i }),
+  ).toBeVisible();
 });

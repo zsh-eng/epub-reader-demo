@@ -185,6 +185,7 @@ function getCheckpointVersion(checkpoint: ReadingCheckpoint): string {
 
 function useReaderHandoffDevicesQuery(enabled: boolean) {
   return useQuery({
+    networkMode: "online", // Device names must be fetched from the server.
     queryKey: readerHandoffDeviceKeys.all,
     queryFn: async (): Promise<ReaderHandoffDevicesData> => {
       const response = await honoClient.api.devices.$get();

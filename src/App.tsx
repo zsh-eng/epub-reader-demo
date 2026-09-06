@@ -17,7 +17,14 @@ import { useFileUploads } from "@/hooks/use-file-uploads";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Most queries read local data. Network queries must set their own mode.
+      networkMode: "always",
+    },
+  },
+});
 
 /**
  * Starts durable file uploads once for the mounted application.

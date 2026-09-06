@@ -26,7 +26,7 @@ export const bookKeys = {
  */
 export function useBooks() {
   return useQuery({
-    networkMode: "always",
+    networkMode: "always", // Books are stored in IndexedDB.
     queryKey: bookKeys.list(),
     queryFn: async () => {
       return await getAllBooks();

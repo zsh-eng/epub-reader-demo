@@ -27,7 +27,7 @@ export function useSetReadingStatus(bookId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    networkMode: "always",
+    networkMode: "always", // Reading status uses IndexedDB, including offline writes.
     mutationFn: async (status: ReadingStatus) => {
       if (!bookId) throw new Error("No book ID provided");
       return await setReadingStatus(bookId, status);
@@ -51,7 +51,7 @@ export function useSetReadingStatus(bookId: string | undefined) {
  */
 export function useReadingStatus(bookId: string | undefined) {
   const query = useQuery({
-    networkMode: "always",
+    networkMode: "always", // Reading status uses IndexedDB, including offline writes.
     queryKey: readingStatusKeys.book(bookId ?? ""),
     queryFn: async () => {
       if (!bookId) return null;

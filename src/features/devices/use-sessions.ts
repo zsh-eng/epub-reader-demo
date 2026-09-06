@@ -14,6 +14,7 @@ export const sessionKeys = {
  */
 export function useSessions() {
   return useQuery({
+    networkMode: "online", // Account sessions must be fetched from the server.
     queryKey: sessionKeys.all,
     queryFn: async (): Promise<SessionInfo[]> => {
       const res = await honoClient.api.sessions.$get();
