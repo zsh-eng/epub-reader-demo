@@ -171,6 +171,8 @@ test.describe("Desktop margin notes", () => {
       exact: true,
     });
     await tools.getByRole("button", { name: "Notes", exact: true }).click();
+    const noteInput = tools.getByRole("textbox", { name: "Write a note" });
+    await expect(noteInput).toBeFocused();
     await tools
       .getByRole("button", { name: "Close reader tools", exact: true })
       .last()
@@ -182,6 +184,7 @@ test.describe("Desktop margin notes", () => {
     await expect(
       tools.getByRole("button", { name: "Notes", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
+    await expect(noteInput).toBeFocused();
     await page.reload();
     await waitForReaderReady(page);
     await page.mouse.move(600, 20);
@@ -191,6 +194,7 @@ test.describe("Desktop margin notes", () => {
     await expect(
       tools.getByRole("button", { name: "Notes", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
+    await expect(noteInput).toBeFocused();
   });
   test("captures a margin note without resizing the book", async ({
     page,

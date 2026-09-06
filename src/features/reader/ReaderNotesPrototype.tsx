@@ -252,7 +252,7 @@ export function ReaderNotesPrototype({
         )}
         <textarea
           ref={input}
-          autoFocus={!notebook}
+          autoFocus={desktop || !notebook}
           aria-label="Write a note"
           placeholder="Write a note…"
           value={draft}
