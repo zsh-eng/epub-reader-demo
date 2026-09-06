@@ -3,8 +3,8 @@
 ## Capture
 
 A notebook contains the book's saved notes and bookmarks. Notes require
-non-whitespace text. Bookmark controls, editing, and deletion controls are not
-part of the first Reader integration; storage helpers already support them.
+non-whitespace text. Bookmark and deletion controls are not yet in the Reader;
+storage helpers already support them.
 
 The composer has one local draft per book. Text and target are saved together.
 Typing starts a page note at the first available text on the visible page.
@@ -16,6 +16,24 @@ pages does not move an existing draft's target.
 New-note and edit drafts are separate. Editing never overwrites a compose draft.
 Saving or cancelling an edit removes only that edit draft. A received remote edit
 returns a conflict; a received deletion cannot be undone by ordinary submission.
+
+## Editing
+
+Swipe a notebook note left to edit it. The card follows the finger; the ring fills
+until 72 px of drag. At that point the ring expands and fades. Release starts the
+edit only while the threshold is met. Moving back, a short swipe, or a cancelled
+touch leaves the note unchanged. Vertical scrolling remains native. Reduced
+motion keeps the progress cue and omits the expanding ring and spring return.
+The note menu and long press (right click on desktop) offer the same Edit action.
+These gestures apply to notebook rows, not book pages or margin comments.
+
+The composer shows Editing note, Cancel, and a checkmark. Save changes text only;
+it keeps the quote, anchor, highlight reference, and creation time. Blank edits
+cannot be saved. Cmd/Ctrl+Enter saves; Escape cancels the edit. Saving or cancelling
+returns to the compose draft, including its text and target. Closing the UI keeps
+the edit draft; after reopening the book, choose Edit on that note to resume it.
+A conflicting edit or received deletion leaves the local edit available to copy,
+and does not overwrite the received change.
 
 ## Storage and sync
 
@@ -59,6 +77,8 @@ this release does not promise relocation across different editions of a book.
 
 Test compose/reply/remove-quote, offline send/reopen, unsent-draft recovery, rapid
 Send, navigation, resize, font changes, incoming sync, and highlight deletion.
+For edits, check threshold reversal, touch cancellation, long press, blank text,
+Save/Cancel returning to the compose draft, reload recovery, and conflict feedback.
 Inspect IndexedDB alongside visible results. A draft write must not produce an
 outbox record. A failed selected-text submission must leave neither a partial
 highlight nor a partial note. Check real iOS keyboard and lifecycle behavior on a

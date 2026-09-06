@@ -372,9 +372,9 @@ test.describe("Desktop margin notes", () => {
     const sidebarNote = notebook
       .locator("article")
       .filter({ hasText: "Written directly in the notebook" });
-    await expect(sidebarNote.getByRole("button")).toContainText(
-      `p. ${notebookPages[0]}`,
-    );
+    await expect(
+      sidebarNote.getByRole("button", { name: /p\./ }),
+    ).toContainText(`p. ${notebookPages[0]}`);
 
     await expect(notebook).toContainText("A thought from the margin");
     await expect(
@@ -487,5 +487,268 @@ test.describe("Highlight note capture", () => {
     await expect(
       page.getByRole("region", { name: "Book notebook" }).locator("blockquote"),
     ).toHaveText(quotedText!);
+    await page.getByRole("button", { name: "Note actions" }).click();
+    await page.getByRole("menuitem", { name: "Edit note" }).click();
+    const editor = page.getByRole("textbox", {
+      name: "Edit note",
+      exact: true,
+    });
+    await expect(editor).toHaveValue("This passage is worth revisiting.");
+    await expect(page.getByTestId("note-quote")).toContainText(quotedText!);
+    await expect(
+      page.getByRole("button", { name: "Remove quote" }),
+    ).toHaveCount(0);
+    await editor.fill("A revised reading of this passage.");
+    await editor.press("Control+Enter");
+    await expect(
+      page.getByRole("textbox", { name: "Write a note" }),
+    ).toHaveValue("");
+    await expect(
+      page.getByRole("region", { name: "Book notebook" }),
+    ).toContainText("A revised reading of this passage.");
+    await expect(
+      page.getByRole("region", { name: "Book notebook" }).locator("blockquote"),
+    ).toHaveText(quotedText!);
   });
+});
+
+test("swipes to edit without losing the compose draft or changing the note anchor", async ({
+  page,
+  localBook,
+}) => {
+  await openLocalBook(page, localBook.id);
+  await page
+    .getByRole("button", { name: "Start reading", exact: true })
+    .click();
+  for (let i = 0; i < 8; i++) await nextSpread(page);
+  await waitForReaderReady(page);
+  const spread = page.locator('[data-reader-spread-layer="current"]');
+  const bounds = (await spread.boundingBox())!;
+  const trigger = page.getByRole("button", { name: "Jot a note" });
+  if (!(await trigger.isVisible()))
+    await page.touchscreen.tap(
+      bounds.x + bounds.width / 2,
+      bounds.y + bounds.height / 2,
+    );
+  await trigger.click();
+  const compose = page.getByRole("textbox", { name: "Write a note" });
+  await compose.fill("The original thought.");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(compose).toHaveValue("");
+  const readNotes = () =>
+    page.evaluate(async (path) => {
+      const { syncV2Db: db } = await import(path);
+      return (await db.notes.toArray()).filter(
+        (note: { isDeleted?: boolean }) => !note.isDeleted,
+      );
+    }, "/src/lib/sync-v2/db.ts");
+  const original = (await readNotes())[0];
+  await compose.fill("Keep my next thought.");
+  await page.getByRole("button", { name: "Open notebook" }).click();
+  const row = page.locator(`[data-note-id="${original.id}"]`);
+  const notebookList = row.locator("..");
+  async function expectNoHorizontalOverflow() {
+    expect(
+      await notebookList.evaluate(
+        (element) => element.scrollWidth - element.clientWidth,
+      ),
+    ).toBe(0);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
+  }
+  await expectNoHorizontalOverflow();
+  const cdp = await page.context().newCDPSession(page);
+  async function drag(distances: number[], cancel = false) {
+    const rect = (await row.locator("article").boundingBox())!;
+    const x = rect.x + rect.width * 0.75;
+    const y = rect.y + 20;
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+    for (const distance of distances) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: x - distance, y }],
+      });
+    }
+    if (distances.at(-1)! >= 72)
+      await expect(row.locator("[data-edit-ready=true]")).toBeVisible();
+    else await expect(row.locator("[data-edit-ready=true]")).toHaveCount(0);
+    await expectNoHorizontalOverflow();
+    if (!cancel && distances.at(-1)! >= 72)
+      await page.screenshot({ path: "/tmp/reader-note-swipe-cue.png" });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: cancel ? "touchCancel" : "touchEnd",
+      touchPoints: [],
+    });
+  }
+  await drag([12, 30]);
+  await expect(compose).toHaveValue("Keep my next thought.");
+  await drag([12, 40, 85, 30]);
+  await expect(compose).toHaveValue("Keep my next thought.");
+  await drag([12, 40, 85], true);
+  await expect(compose).toHaveValue("Keep my next thought.");
+  await drag([12, 40, 85]);
+  const editor = page.getByRole("textbox", { name: "Edit note", exact: true });
+  await expect(editor).toHaveValue("The original thought.");
+  await expect(page.getByText("Editing note", { exact: true })).toBeVisible();
+  await editor.fill("   ");
+  await expect(
+    page.getByRole("button", { name: "Save changes" }),
+  ).toBeDisabled();
+  await editor.fill("The revised thought.");
+  await page.screenshot({ path: "/tmp/reader-note-edit.png" });
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(compose).toHaveValue("Keep my next thought.");
+  await expect(row).toContainText("The revised thought.");
+  const saved = await readNotes();
+  expect(saved).toHaveLength(1);
+  expect(saved[0]).toMatchObject({
+    id: original.id,
+    anchor: original.anchor,
+    createdAt: original.createdAt,
+    content: "The revised thought.",
+  });
+  await row.getByRole("button", { name: "Note actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit note" }).click();
+  await expect(editor).toHaveValue("The revised thought.");
+  await editor.fill("Discard this edit.");
+  await page.getByRole("button", { name: "Cancel editing" }).click();
+  await expect(compose).toHaveValue("Keep my next thought.");
+  expect((await readNotes())[0].content).toBe("The revised thought.");
+  await expect
+    .poll(() =>
+      page.evaluate(async (path) => {
+        const { syncV2Db: db } = await import(path);
+        return (await db.noteDrafts.toArray()).map(
+          (draft: { content: string; purpose: string }) => ({
+            content: draft.content,
+            purpose: draft.purpose,
+          }),
+        );
+      }, "/src/lib/sync-v2/db.ts"),
+    )
+    .toEqual([{ content: "Keep my next thought.", purpose: "create" }]);
+  await expect(page.getByRole("menuitem", { name: "Edit note" })).toBeHidden();
+  // Long press provides the same action without requiring a swipe.
+  const rect = (await row.locator("article").boundingBox())!;
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: rect.x + rect.width / 2, y: rect.y + 20 }],
+  });
+  await expect(
+    page
+      .locator('[data-slot="context-menu-content"]')
+      .getByRole("menuitem", { name: "Edit note" }),
+  ).toBeVisible();
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await page
+    .locator('[data-slot="context-menu-content"]')
+    .getByRole("menuitem", { name: "Edit note" })
+    .click();
+  await expect(editor).toHaveValue("The revised thought.");
+  await editor.fill("Resume this edit.");
+  await expect
+    .poll(() =>
+      page.evaluate(async (path) => {
+        const { syncV2Db: db } = await import(path);
+        return (await db.noteDrafts.toArray()).find(
+          (draft: { purpose: string }) => draft.purpose === "edit",
+        )?.content;
+      }, "/src/lib/sync-v2/db.ts"),
+    )
+    .toBe("Resume this edit.");
+  await page.reload();
+  await waitForReaderReady(page);
+  // The first spread can be ready before loading chrome finishes its exit.
+  // Wait before deciding whether the footer needs to be revealed by a tap.
+  await expect(
+    page.locator('button[aria-label="Jot a note"]:disabled'),
+  ).toHaveCount(0);
+  if (!(await trigger.isVisible())) {
+    const current = (await spread.boundingBox())!;
+    await page.touchscreen.tap(
+      current.x + current.width / 2,
+      current.y + current.height / 2,
+    );
+  }
+  await trigger.click();
+  await expect(compose).toHaveValue("Keep my next thought.");
+  await page.getByRole("button", { name: "Open notebook" }).click();
+  await row.getByRole("button", { name: "Note actions" }).click();
+  await page.getByRole("menuitem", { name: "Edit note" }).click();
+  await expect(editor).toHaveValue("Resume this edit.");
+  // A received edit must not be overwritten by this stale edit draft.
+  await page.evaluate(
+    async ({ path, id }) => {
+      const { updateNote } = await import(path);
+      await updateNote(id, "Changed elsewhere.");
+    },
+    { path: "/src/data/notes.ts", id: original.id },
+  );
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "changed on another device",
+  );
+  await expect(editor).toHaveValue("Resume this edit.");
+  expect((await readNotes())[0].content).toBe("Changed elsewhere.");
+  await page.getByRole("button", { name: "Cancel editing" }).click();
+  await expect(compose).toHaveValue("Keep my next thought.");
+  await cdp.detach();
+});
+
+test("keeps the mobile draft and its full height when moving between composer and notebook", async ({
+  page,
+  localBook,
+}) => {
+  await openLocalBook(page, localBook.id);
+  await page
+    .getByRole("button", { name: "Start reading", exact: true })
+    .click();
+  for (let i = 0; i < 8; i++) await nextSpread(page);
+  await waitForReaderReady(page);
+  const spread = page.locator('[data-reader-spread-layer="current"]');
+  const trigger = page.getByRole("button", { name: "Jot a note" });
+  if (!(await trigger.isVisible())) {
+    const bounds = (await spread.boundingBox())!;
+    await page.touchscreen.tap(
+      bounds.x + bounds.width / 2,
+      bounds.y + bounds.height / 2,
+    );
+  }
+  await trigger.click();
+  const text =
+    "First line of my thought.\nThe next part is here.\nA third line to remember.";
+  const input = page.getByRole("textbox", { name: "Write a note" });
+  await input.fill(text);
+  const floatingHeight = (await input.boundingBox())!.height;
+  await page.getByRole("button", { name: "Open notebook" }).click();
+  const sheet = page.getByRole("dialog", { name: "Notebook", exact: true });
+  const sheetInput = sheet.getByRole("textbox", { name: "Write a note" });
+  await expect(sheetInput).toHaveValue(text);
+  await expect
+    .poll(async () => (await sheetInput.boundingBox())!.height)
+    .toBe(floatingHeight);
+  await sheetInput.fill(`${text}\nWritten in the notebook.`);
+  await expect
+    .poll(async () => (await sheetInput.boundingBox())!.height)
+    .toBeGreaterThan(floatingHeight);
+  await sheet.getByRole("button", { name: "Close notebook" }).click();
+  await expect(sheet).not.toBeVisible();
+  await expect(input).toHaveValue(`${text}\nWritten in the notebook.`);
+  await input.fill("Now a shorter thought.");
+  await page.getByRole("button", { name: "Open notebook" }).click();
+  await expect(sheetInput).toHaveValue("Now a shorter thought.");
+  await expect
+    .poll(async () => (await sheetInput.boundingBox())!.height)
+    .toBeLessThan(floatingHeight);
 });

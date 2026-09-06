@@ -2,6 +2,8 @@ import { useBookNotesQuery, noteKeys } from "@/hooks/use-notes-query";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   beginNoteDraft,
+  beginNoteEdit,
+  discardNoteDraft,
   createNoteDraftId,
   getNoteDraft,
   saveNoteDraft,
@@ -10,20 +12,26 @@ import {
 import type { Note, NoteTarget } from "@/types/note";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+type ReaderDraft = {
+  content: string;
+  target: NoteTarget;
+  editId?: string;
+  noteId?: string;
+};
+
 /** Book-scoped draft writer. Calls are serialized; typing never updates the book query.
  * The Reader mounts this below its pagination owner, so keystrokes do not render Reader.
+ * Compose and edit drafts have independent storage identities. Switching flushes first.
  */
 export function useReaderNotes(bookId: string) {
   const query = useBookNotesQuery(bookId);
   const client = useQueryClient();
-  const [draft, setDraft] = useState<{
-    content: string;
-    target: NoteTarget;
-  } | null>(null);
+  const [draft, setDraft] = useState<ReaderDraft | null>(null);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const current = useRef(draft);
+  const compose = useRef<ReaderDraft | null>(null);
   const writing = useRef(Promise.resolve());
   const submitting = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -37,8 +45,12 @@ export function useReaderNotes(bookId: string) {
     const work = writing.current
       .catch(() => {})
       .then(async () => {
-        await beginNoteDraft(bookId, snapshot.target);
-        await saveNoteDraft(id, snapshot.content, snapshot.target);
+        if (!snapshot.editId) await beginNoteDraft(bookId, snapshot.target);
+        await saveNoteDraft(
+          snapshot.editId ?? id,
+          snapshot.content,
+          snapshot.target,
+        );
       });
     writing.current = work;
     void work.catch(() => {
@@ -49,6 +61,11 @@ export function useReaderNotes(bookId: string) {
     });
     return work;
   }, [bookId, id]);
+  // Closing during Save/Cancel must not queue a write behind draft deletion.
+  const flushWhenIdle = useCallback(
+    () => (submitting.current ? writing.current : flush()),
+    [flush],
+  );
   const flushRef = useRef(flush);
   flushRef.current = flush;
   useEffect(() => {
@@ -85,7 +102,9 @@ export function useReaderNotes(bookId: string) {
 
   function change(content: string, target: NoteTarget) {
     if (!ready || submitting.current) return;
-    const value = { content, target };
+    const value = current.current?.editId
+      ? { ...current.current, content }
+      : { content, target };
     current.current = value;
     setDraft(value);
     setError("");
@@ -93,6 +112,68 @@ export function useReaderNotes(bookId: string) {
     timer.current = setTimeout(() => {
       void flushRef.current().catch(() => {});
     }, 150);
+  }
+
+  // Finish the active write before changing draft identity. Compose text stays intact
+  // while one of the independently stored edit drafts is open.
+  const edit = useCallback(
+    async (noteId: string) => {
+      if (submitting.current) return false;
+      const note = query.data?.find((item) => item.id === noteId);
+      if (!note || note.kind !== "note") return false;
+      submitting.current = true;
+      setSaving(true);
+      setError("");
+      try {
+        await flush();
+        const saved = await beginNoteEdit(noteId);
+        if (!current.current?.editId) compose.current = current.current;
+        const target: NoteTarget = note.quote
+          ? { kind: "selection", anchor: note.anchor, text: note.quote.text }
+          : { kind: "page", anchor: note.anchor };
+        const value = {
+          content: saved.content,
+          target,
+          editId: saved.id,
+          noteId,
+        };
+        current.current = value;
+        if (mounted.current) setDraft(value);
+        return true;
+      } catch {
+        if (mounted.current)
+          setError(
+            "Could not open this note for editing. Your draft is still here.",
+          );
+        return false;
+      } finally {
+        submitting.current = false;
+        if (mounted.current) setSaving(false);
+      }
+    },
+    [flush, query.data],
+  );
+
+  async function cancelEdit() {
+    const active = current.current;
+    if (!active?.editId || submitting.current) return;
+    submitting.current = true;
+    setSaving(true);
+    try {
+      clearTimeout(timer.current);
+      await writing.current.catch(() => {});
+      await discardNoteDraft(active.editId);
+      current.current = compose.current;
+      if (mounted.current) {
+        setDraft(compose.current);
+        setError("");
+      }
+    } catch {
+      if (mounted.current) setError("Could not cancel the edit. Try again.");
+    } finally {
+      submitting.current = false;
+      if (mounted.current) setSaving(false);
+    }
   }
 
   async function send() {
@@ -103,10 +184,20 @@ export function useReaderNotes(bookId: string) {
     setError("");
     try {
       await flush();
-      const result = await submitNoteDraft(id);
+      const active = current.current!;
+      const result = await submitNoteDraft(active.editId ?? id);
+      if (result.status === "conflict" || result.status === "deleted-note") {
+        if (mounted.current)
+          setError(
+            result.status === "conflict"
+              ? "This note changed on another device. Your edit is kept. Copy your text before cancelling and reopening the note."
+              : "This note was deleted. Your edit is kept so you can copy the text.",
+          );
+        return false;
+      }
       if (result.status !== "saved") throw new Error(result.status);
-      current.current = null;
-      setDraft(null);
+      current.current = active.editId ? compose.current : null;
+      if (mounted.current) setDraft(current.current);
       await client.invalidateQueries({ queryKey: noteKeys.book(bookId) });
       return true;
     } catch {
@@ -127,8 +218,11 @@ export function useReaderNotes(bookId: string) {
     saving,
     error: error || (query.isError ? "Could not load notes." : ""),
     change,
+    edit,
+    cancelEdit,
+    editingId: draft?.noteId,
     send,
-    flush,
+    flush: flushWhenIdle,
   };
 }
 const EMPTY_NOTES: Note[] = [];
