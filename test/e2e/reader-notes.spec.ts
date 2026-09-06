@@ -167,14 +167,39 @@ test.describe("Desktop margin notes", () => {
     for (let index = 0; index < 8; index++) await nextSpread(page);
     const anchorPages = await currentPages(page);
     await page.keyboard.press("n");
-    await expect(page.getByRole("status")).toContainText("Click text");
-    const passage = page
-      .locator(
-        '[data-reader-spread-layer="current"] [data-content-anchor-start]',
-      )
-      .filter({ hasText: /[a-z]{4}/i })
-      .first();
-    await passage.click();
+    await expect(
+      page.getByRole("textbox", { name: "Write a note" }),
+    ).not.toBeVisible();
+    async function openSelectionNote() {
+      await page.evaluate(() => {
+        const root = document.querySelector(
+          '[data-reader-spread-layer="current"]',
+        )!;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+        while (node && (node.textContent?.trim().length ?? 0) < 30)
+          node = walker.nextNode();
+        if (!node) throw new Error("No passage to select");
+        const range = document.createRange();
+        range.setStart(node, 0);
+        range.setEnd(node, 25);
+        window.getSelection()!.removeAllRanges();
+        window.getSelection()!.addRange(range);
+      });
+      await expect
+        .poll(() =>
+          page.evaluate(() => window.getSelection()?.toString().length),
+        )
+        .toBe(25);
+      await page.evaluate(() =>
+        document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })),
+      );
+      await expect(
+        page.getByRole("button", { name: "Note on highlight" }),
+      ).toHaveCount(1);
+      await page.getByRole("button", { name: "Note on highlight" }).click();
+    }
+    await openSelectionNote();
     const panel = page.locator("[data-note-composer]");
     await expect(panel).toBeVisible();
     expect((await panel.boundingBox())!.x).toBeGreaterThan(1200);
@@ -199,6 +224,20 @@ test.describe("Desktop margin notes", () => {
     expect(savedBounds.x).toBe(editorBounds.x);
     expect(savedBounds.width).toBe(editorBounds.width);
     expect(savedBounds.height).toBeLessThan(160);
+    await openSelectionNote();
+    await expect(savedNote).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Open notebook", exact: true }),
+    ).toHaveCount(0);
+    expect((await panel.boundingBox())!.y).toBeGreaterThanOrEqual(
+      savedBounds.y + savedBounds.height,
+    );
+    await page
+      .getByRole("textbox", { name: "Write a note" })
+      .fill("A second thought");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect(savedNote).toHaveCount(2);
+
     await page.screenshot({ path: "/tmp/desktop-margin-note.png" });
     expect(await stage.boundingBox()).toEqual(before);
     expect(await currentPages(page)).toEqual(anchorPages);
@@ -216,10 +255,16 @@ test.describe("Desktop margin notes", () => {
     ).toHaveAttribute("aria-pressed", "true");
     const notebook = tools.getByRole("region", { name: "Book notebook" });
     await expect(notebook).toContainText("A thought from the margin");
+    await expect(
+      tools.getByRole("button", { name: "Open notebook", exact: true }),
+    ).toHaveCount(0);
     await tools.getByRole("button", { name: "Contents", exact: true }).click();
     await expect(notebook).not.toBeVisible();
     await tools.getByRole("button", { name: "Notes", exact: true }).click();
     await expect(notebook).toContainText("A thought from the margin");
+    await expect(
+      tools.getByRole("button", { name: "Open notebook", exact: true }),
+    ).toHaveCount(0);
     expect(await stage.boundingBox()).toEqual(before);
     await page.screenshot({ path: "/tmp/reader-notes-tab.png" });
   });
@@ -296,9 +341,12 @@ test.describe("Highlight note capture", () => {
       page.getByRole("button", { name: "Note on highlight" }),
     ).toHaveCount(1);
     await page.getByRole("button", { name: "Note on highlight" }).click();
+    await page.getByRole("textbox", { name: "Write a note" }).press("Escape");
+    await page.mouse.move(600, 20);
     await page
-      .getByRole("button", { name: "Open notebook", exact: true })
+      .getByRole("button", { name: "Open reader tools", exact: true })
       .click();
+    await page.getByRole("button", { name: "Notes", exact: true }).click();
     await expect(
       page.getByRole("region", { name: "Book notebook" }).locator("blockquote"),
     ).toHaveText(quotedText!);

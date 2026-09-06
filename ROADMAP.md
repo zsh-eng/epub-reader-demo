@@ -131,6 +131,12 @@ below contains only work that still has a clear product or reliability reason.
 - [x] New local-first file storage and EPUB materialization flow
 
 - [x] BUG: With reading position being saved. Going back and coming back in - position is not preserved. Same when changing the reader size (e.g. changing to half page for the window position)
+
+Notetaking flow
+- [ ] We should preserve whatever right sidebar option that we chose
+- [ ] Add editing note UI flow (reference telegram)
+- [ ] Add deleting note UI flow
+
 - [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
 - [ ] Bug: Swipe should pass through for no UI chrome
 - [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
@@ -204,6 +210,10 @@ below contains only work that still has a clear product or reliability reason.
 - [ ] Add jump-back history for meaningful reader navigation points.
 - [ ] Add a visible anchor cue after navigation, resize, or typography reflow
       when users need help finding their place.
+
+- [ ] Explore a desktop point-to-annotate mode and keyboard shortcut, with
+      content anchors and margin comments. For now, create notes by selecting
+      text and choosing the note action.
 
 ## Reader Engine And Reliability
 

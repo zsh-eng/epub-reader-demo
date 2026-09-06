@@ -1,5 +1,4 @@
 import { ReaderSheet } from "./shared/ReaderSheet";
-import { useHotkey } from "@tanstack/react-hotkeys";
 import type { Highlight } from "@/types/highlight";
 import {
   DropdownMenu,
@@ -8,13 +7,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import {
-  ArrowUp,
-  BookOpen,
-  SlidersHorizontal,
-  MessageSquare,
-  X,
-} from "lucide-react";
+import { ArrowUp, BookOpen, SlidersHorizontal, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
@@ -42,8 +35,6 @@ export function ReaderNotesPrototype({
   onVisit,
   margin,
   desktop,
-  annotating,
-  onAnnotatingChange,
   commentPosition,
   quote,
   onClearQuote,
@@ -51,8 +42,6 @@ export function ReaderNotesPrototype({
   children: (panel: ReactNode) => ReactNode;
   notebook: boolean;
   setNotebook: (open: boolean) => void;
-  annotating: boolean;
-  onAnnotatingChange: (active: boolean) => void;
   commentPosition: { top: number; page: number };
   desktop: boolean;
   quote: Highlight | null;
@@ -111,27 +100,6 @@ export function ReaderNotesPrototype({
         retained.offset;
     retainedEntry.current = null;
   }, [order]);
-
-  useHotkey(
-    "N",
-    () => {
-      if (window.getSelection()?.toString()) return;
-      if (open) close();
-      else onAnnotatingChange(!annotating);
-    },
-    {
-      target: window,
-      enabled: desktop && (margin.enabled || open),
-      ignoreInputs: true,
-      requireReset: false,
-    },
-  );
-
-  useHotkey("Escape", () => onAnnotatingChange(false), {
-    target: window,
-    enabled: annotating,
-    ignoreInputs: true,
-  });
 
   // Position updates bypass React and Motion: scrolling must not wait for a
   // render or an animation. React only owns the keyboard-open layout variant.
@@ -269,17 +237,19 @@ export function ReaderNotesPrototype({
         </div>
       )}
       <div className="flex items-end gap-1">
-        <button
-          aria-label="Open notebook"
-          aria-expanded={notebook}
-          onClick={() => {
-            input.current?.blur();
-            setNotebook(!notebook);
-          }}
-          className={iconButton}
-        >
-          <BookOpen size={19} />
-        </button>
+        {!desktop && (
+          <button
+            aria-label="Open notebook"
+            aria-expanded={notebook}
+            onClick={() => {
+              input.current?.blur();
+              setNotebook(!notebook);
+            }}
+            className={iconButton}
+          >
+            <BookOpen size={19} />
+          </button>
+        )}
         <textarea
           ref={input}
           autoFocus={!notebook}
@@ -435,14 +405,6 @@ export function ReaderNotesPrototype({
   );
   return (
     <>
-      {annotating && (
-        <div
-          role="status"
-          className="fixed right-6 top-20 z-30 rounded-full border border-border bg-background px-3 py-2 text-xs text-muted-foreground"
-        >
-          Click text to add a comment · Esc to cancel
-        </div>
-      )}
       {!desktop && (
         <ReaderSheet
           open={notebook && open}
@@ -465,36 +427,28 @@ export function ReaderNotesPrototype({
           )}
         </div>,
       )}
-      {margin.enabled && !open && (
+      {margin.enabled && !notebook && (
         <aside
           aria-label="Page margin notes"
-          className="fixed top-0 z-20"
-          style={{ left: commentLeft, width: commentWidth }}
+          className="fixed z-40 max-h-[calc(100dvh-6rem)] overflow-y-auto"
+          style={{
+            left: commentLeft,
+            width: commentWidth,
+            top: Math.max(
+              80,
+              Math.min(
+                marginEntries[0]?.top ?? commentPosition.top,
+                window.innerHeight - 220,
+              ),
+            ),
+          }}
         >
-          <button
-            aria-label="Add margin note"
-            title={`Note on page ${margin.location.page} (N)`}
-            onClick={() => {
-              onAnnotatingChange(!annotating);
-            }}
-            className="absolute top-12 flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-          >
-            <MessageSquare size={15} />
-          </button>
           {margin.width >= 220
             ? marginEntries.map((entry, index) => (
                 <article
                   key={entry.id}
                   data-margin-note
-                  style={{
-                    marginTop:
-                      index === 0
-                        ? Math.max(
-                            80,
-                            Math.min(entry.top, window.innerHeight - 220),
-                          )
-                        : 8,
-                  }}
+                  style={{ marginTop: index === 0 ? 0 : 8 }}
                   className={commentSurface}
                 >
                   {entry.quote && (
@@ -527,10 +481,19 @@ export function ReaderNotesPrototype({
                   {marginEntries.length}
                 </button>
               )}
+          {desktop && open && margin.width >= 220 && (
+            <div
+              ref={composer}
+              data-note-composer
+              className={marginEntries.length ? "mt-2" : ""}
+            >
+              {noteInput}
+            </div>
+          )}
         </aside>
       )}
       <AnimatePresence>
-        {open && !notebook && (
+        {open && !notebook && (!desktop || margin.width < 220) && (
           <motion.div
             ref={composer}
             data-note-composer

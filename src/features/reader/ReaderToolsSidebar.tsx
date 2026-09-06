@@ -10,7 +10,7 @@ import {
   NotebookPen,
   List,
   Search,
-  SlidersHorizontal,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 import { ReaderContentsPanel } from "./ReaderContentsSheet";
@@ -41,7 +41,7 @@ const SIDEBAR_TOOLS: {
 }[] = [
   { id: "contents", label: "Contents", icon: List },
   { id: "search", label: "Search book", icon: Search },
-  { id: "settings", label: "Reading appearance", icon: SlidersHorizontal },
+  { id: "settings", label: "Reading appearance", icon: Palette },
   { id: "notes", label: "Notes", icon: NotebookPen },
 ];
 
