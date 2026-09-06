@@ -1,4 +1,4 @@
-import { BookCardActions } from "@/components/BookCardActions";
+import { BookCardActions } from "@/features/library/BookCardActions";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";

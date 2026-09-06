@@ -66,6 +66,13 @@ persistence, and layout rules in modules with explicit inputs and outputs.
 Split modules by responsibility when that makes ownership easier to follow.
 Avoid extra abstraction layers that only forward calls or move complexity.
 
+Group feature-owned UI and orchestration under `src/features/<feature>`, with
+flat folders and direct imports until a larger structure earns its place.
+Library owns its page, grid cards, and import flow in `src/features/library`;
+the app shell can use that flow through its provider and hook. Keep shared book
+queries, cover loading, sorting, and reusable book UI outside the feature, and
+keep persistence in `src/data`. Move other features incrementally.
+
 ## PWA performance
 
 Optimize repeat use as well as first installation. Cached assets avoid repeat

@@ -1,4 +1,4 @@
-import { BookCardActions } from "@/components/BookCardActions";
+import { BookCardActions } from "./BookCardActions";
 import { READING_STATUS_LABELS } from "@/components/BookStatusSheet";
 import { BlurHashCanvas } from "@/components/BlurHashCanvas";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";

@@ -1,4 +1,4 @@
-import { Library } from "@/components/Library";
+import { Library } from "@/features/library/Library";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -10,7 +10,7 @@ vi.mock("@/components/AppShell", () => ({
   useAppShellReady: vi.fn(),
 }));
 
-vi.mock("@/components/BookCard", () => ({
+vi.mock("@/features/library/BookCard", () => ({
   BookCard: () => null,
 }));
 
@@ -32,7 +32,7 @@ vi.mock("@/hooks/use-books-with-statuses", () => ({
   }),
 }));
 
-vi.mock("@/hooks/use-epub-import", () => ({
+vi.mock("@/features/library/use-epub-import", () => ({
   useEpubImport: () => ({
     importFiles: vi.fn(),
     isProcessing: false,

@@ -1,4 +1,4 @@
-import { DuplicateBookDialog } from "@/components/DuplicateBookDialog";
+import { DuplicateBookDialog } from "./DuplicateBookDialog";
 import { useToast } from "@/hooks/use-toast";
 import { markEpubPreparationReady } from "@/hooks/use-epub-processor";
 import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";

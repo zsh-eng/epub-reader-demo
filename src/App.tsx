@@ -1,7 +1,7 @@
 import "@/App.css";
 import { AppShell } from "@/components/AppShell";
 import { HighlightsMasonry } from "@/components/HighlightsMasonry";
-import { Library } from "@/components/Library";
+import { Library } from "@/features/library/Library";
 import { Reader } from "@/components/Reader";
 import { ReaderDebug } from "@/components/Reader/debug";
 import { ReaderDiagnostics } from "@/components/Reader/diagnostics/ReaderDiagnostics";
@@ -10,7 +10,7 @@ import { ReaderTraceViewer } from "@/components/ReaderTraceViewer";
 import { ReloadPrompt } from "@/components/ReloadPrompt";
 import { Devices } from "@/components/Sessions";
 import { Toaster } from "@/components/ui/sonner";
-import { EpubImportProvider } from "@/hooks/use-epub-import";
+import { EpubImportProvider } from "@/features/library/use-epub-import";
 import { ReaderSettingsProvider } from "@/hooks/use-reader-settings";
 import { SyncProvider } from "@/hooks/use-sync";
 import { useFileUploads } from "@/hooks/use-file-uploads";

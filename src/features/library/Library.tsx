@@ -1,10 +1,10 @@
 import { useAppShellReady } from "@/components/AppShell";
-import { BookCard } from "@/components/BookCard";
+import { BookCard } from "./BookCard";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { SmoothCaretInput } from "@/components/ui/smooth-caret-input";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
-import { useEpubImport } from "@/hooks/use-epub-import";
+import { useEpubImport } from "./use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useLocalBookPreparationRepair } from "@/hooks/use-local-book-preparation-repair";
 import { useReaderSettings } from "@/hooks/use-reader-settings";

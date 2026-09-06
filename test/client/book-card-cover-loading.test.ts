@@ -1,4 +1,4 @@
-import { BookCard } from "@/components/BookCard";
+import { BookCard } from "@/features/library/BookCard";
 import type { Book } from "@/lib/db";
 import type { FileId } from "@/lib/files";
 import { cleanup, render, waitFor } from "@testing-library/react";
