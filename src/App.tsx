@@ -1,3 +1,5 @@
+import { Settings } from "@/features/settings/Settings";
+import { DebugGate } from "@/features/settings/DebugGate";
 import "@/App.css";
 import { AppShell } from "@/components/AppShell";
 import { HighlightsMasonry } from "@/features/highlights/HighlightsMasonry";
@@ -48,13 +50,18 @@ function App() {
                     <Route path="/reader/:bookId" element={<Reader />} />
                     <Route path="/highlights" element={<HighlightsMasonry />} />
                     <Route path="/devices" element={<Devices />} />
+                    <Route path="/settings" element={<Settings />} />
                     <Route
                       path="/reading-sessions"
                       element={<ReadingSessions />}
                     />
                     <Route
                       path="/reader-traces"
-                      element={<ReaderTraceViewer />}
+                      element={
+                        <DebugGate>
+                          <ReaderTraceViewer />
+                        </DebugGate>
+                      }
                     />
                     <Route
                       path="/sessions"
@@ -63,11 +70,19 @@ function App() {
                   </Route>
                   <Route
                     path="/debug/reader/:bookId"
-                    element={<ReaderDebug />}
+                    element={
+                      <DebugGate>
+                        <ReaderDebug />
+                      </DebugGate>
+                    }
                   />
                   <Route
                     path="/diagnostics/reader"
-                    element={<ReaderDiagnostics />}
+                    element={
+                      <DebugGate>
+                        <ReaderDiagnostics />
+                      </DebugGate>
+                    }
                   />
                 </Routes>
                 <Toaster

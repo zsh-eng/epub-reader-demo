@@ -2,6 +2,7 @@ import type { Book } from "@/lib/db";
 import type { PaginationStatus } from "@/lib/pagination-v2";
 import {
   completeReaderTrace,
+  useReaderTraceRecordingActive,
   endReaderTraceSpan,
   ensureReaderTrace,
   markReaderTrace,
@@ -18,20 +19,21 @@ import type { ReaderSessionStatus } from "./use-reader-session";
 export function useReaderPerformanceTraceRoute(
   bookId: string | undefined,
 ): void {
+  const recordingActive = useReaderTraceRecordingActive();
   const deferredInterruptRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
-    if (!bookId) return;
+    if (!bookId || !recordingActive) return;
 
     ensureReaderTrace({ bookId });
     markReaderTraceOnce("reader-route-dom-committed", "navigation", {
       visibilityState: document.visibilityState,
       documentHasFocus: document.hasFocus(),
     });
-  }, [bookId]);
+  }, [bookId, recordingActive]);
 
   useEffect(() => {
-    if (!bookId) return;
+    if (!bookId || !recordingActive) return;
     if (deferredInterruptRef.current !== null) {
       window.clearTimeout(deferredInterruptRef.current);
       deferredInterruptRef.current = null;
@@ -90,7 +92,7 @@ export function useReaderPerformanceTraceRoute(
         deferredInterruptRef.current = null;
       }, 0);
     };
-  }, [bookId]);
+  }, [bookId, recordingActive]);
 }
 
 /**

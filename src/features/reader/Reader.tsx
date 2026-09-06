@@ -1,3 +1,4 @@
+import { useDebugEnabled } from "@/lib/debug-preference";
 import { HighlightToolbarContainer } from "@/features/reader/shared/HighlightToolbarContainer";
 import { useInputBehavior } from "@/features/reader/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -71,6 +72,7 @@ function DisplayReadyCommitProbe({
 }
 
 export function Reader() {
+  const debugEnabled = useDebugEnabled();
   const { open: isSidebarOpen, openMobile: isMobileSidebarOpen } = useSidebar();
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -541,7 +543,16 @@ export function Reader() {
                         currentChapterHref={currentChapterEntry?.href ?? ""}
                         onNavigateToHref={sessionActions.openInternalHref}
                         notesPanel={notesPanel}
-                        onCopyDebugDump={() => void handleCopyDebugDump()}
+                        onOpenNotes={() => {
+                          chromeActions.closeReaderSheet();
+                          handleNotesActive(true);
+                          setNotebookOpen(true);
+                        }}
+                        onCopyDebugDump={
+                          debugEnabled
+                            ? () => void handleCopyDebugDump()
+                            : undefined
+                        }
                       />
                     )}
                   </ReaderNotesPrototype>

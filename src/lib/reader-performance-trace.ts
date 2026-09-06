@@ -1,3 +1,4 @@
+import { getDebugEnabled, subscribeDebugPreference } from "./debug-preference";
 import { useSyncExternalStore } from "react";
 
 export const READER_TRACE_STORAGE_KEY = "reader-performance-traces-v1";
@@ -248,7 +249,7 @@ export function beginReaderTrace(options: {
   bookTitle?: string;
   source: string;
 }): string | null {
-  if (!snapshot.recordingEnabled) return null;
+  if (!getDebugEnabled() || !snapshot.recordingEnabled) return null;
 
   const activeTrace = getActiveTrace();
   if (activeTrace?.bookId === options.bookId) return activeTrace.id;
@@ -534,3 +535,25 @@ export async function withReaderTraceSpan<T>(
     throw error;
   }
 }
+
+/** Debug mode is the master gate; the saved recording choice remains independent. */
+function getRecordingActive(): boolean {
+  return getDebugEnabled() && snapshot.recordingEnabled;
+}
+
+export function useReaderTraceRecordingActive(): boolean {
+  return useSyncExternalStore(
+    subscribeReaderTraces,
+    getRecordingActive,
+    getRecordingActive,
+  );
+}
+
+const unsubscribeDebug = subscribeDebugPreference(() => {
+  if (!getDebugEnabled() && activeRuntime) {
+    completeReaderTrace("interrupted", { reason: "debug-disabled" });
+  }
+  emitChange();
+});
+
+if (import.meta.hot) import.meta.hot.dispose(unsubscribeDebug);

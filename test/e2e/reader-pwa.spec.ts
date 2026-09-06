@@ -10,9 +10,10 @@ test("cached production PWA opens in a fresh page offline and reconnects", async
   page,
   context,
 }) => {
-  await context.addInitScript(() =>
-    localStorage.setItem("reader-performance-tracing-enabled-v1", "true"),
-  );
+  await context.addInitScript(() => {
+    localStorage.setItem("reader-debug-enabled-v1", "true");
+    localStorage.setItem("reader-performance-tracing-enabled-v1", "true");
+  });
   await page.goto("/");
   await importSampleBook(page);
   await page.evaluate(async () => {
@@ -68,4 +69,36 @@ test("cached production PWA opens in a fresh page offline and reconnects", async
   await nextSpread(fresh);
   await context.setOffline(false);
   await nextSpread(fresh);
+});
+
+test("production debug mode defaults off and keeps an explicit override", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/get-session", (route) =>
+    route.fulfill({ json: null }),
+  );
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Toggle sidebar", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "Performance", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  const toggle = page.getByRole("switch", { name: "Debug mode" });
+  await expect(toggle).not.toBeChecked();
+  await page
+    .getByRole("button", { name: "Toggle sidebar", exact: true })
+    .click();
+  await toggle.check();
+  // The static PWA test server serves the root document; enter Settings through navigation.
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Toggle sidebar", exact: true })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "Performance", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(toggle).toBeChecked();
 });

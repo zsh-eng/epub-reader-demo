@@ -4,6 +4,7 @@ import {
   BookMarked,
   ClipboardCopy,
   List,
+  NotebookPen,
   Search,
   Settings,
   type LucideIcon,
@@ -14,10 +15,12 @@ interface ReaderControlMenuProps {
   onOpenContents: () => void;
   onOpenBookActions: () => void;
   onOpenSettings: () => void;
+  onOpenNotes?: () => void;
   onCopyDebugDump?: () => void;
 }
 
 type MenuItemId =
+  | "notes"
   | "contents"
   | "book-actions"
   | "search"
@@ -32,6 +35,7 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
+  { id: "notes", label: "Notes", icon: NotebookPen, isAvailable: true },
   { id: "contents", label: "Contents", icon: List, isAvailable: true },
   {
     id: "book-actions",
@@ -106,9 +110,14 @@ export function ReaderControlMenu({
   onOpenContents,
   onOpenBookActions,
   onOpenSettings,
+  onOpenNotes,
   onCopyDebugDump,
 }: ReaderControlMenuProps) {
   const handleRowClick = (id: MenuItemId) => {
+    if (id === "notes") {
+      onOpenNotes?.();
+      return;
+    }
     if (id === "contents") {
       onOpenContents();
       return;
@@ -137,9 +146,13 @@ export function ReaderControlMenu({
       }}
     >
       <div className="flex flex-col gap-2">
-        {MENU_ITEMS.map((item, index) => {
+        {MENU_ITEMS.filter(
+          (item) => item.id !== "debug-dump" || onCopyDebugDump,
+        ).map((item, index) => {
           const isDisabled =
-            !item.isAvailable || (item.id === "debug-dump" && !onCopyDebugDump);
+            !item.isAvailable ||
+            (item.id === "notes" && !onOpenNotes) ||
+            (item.id === "debug-dump" && !onCopyDebugDump);
 
           return (
             <ReaderControlMenuItem

@@ -298,6 +298,7 @@ async function runBenchmark(
   });
   await context.addInitScript(
     ({ recordingKey, settingsKey, rate, publisherBookStylingEnabled }) => {
+      localStorage.setItem("reader-debug-enabled-v1", "true");
       localStorage.setItem(recordingKey, "true");
       localStorage.setItem(
         settingsKey,

@@ -131,20 +131,26 @@ below contains only work that still has a clear product or reliability reason.
 - [x] New local-first file storage and EPUB materialization flow
 
 - [x] BUG: With reading position being saved. Going back and coming back in - position is not preserved. Same when changing the reader size (e.g. changing to half page for the window position)
+- [x] Optimize Highlights rendering using the measured plan in
+      `docs/0004-highlights-performance.md`. Start by bounding React and DOM
+      work; keep worker-based Pretext as a measured follow-up.
 
 Notetaking flow
+- [x] Decomp note-taking flow
 - [x] We should preserve whatever right sidebar option that we chose
 - [x] Autofocus on the notebook when opening sidebar on desktop
 - [x] Notetaking storage
 - [x] Fix exit animation sidebar state bug
-- [ ] Wire up to the UI
+- [x] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
+- [x] Bug: Swipe should pass through for no UI chrome
+- [x] Wire up to the UI
 - [ ] Add editing note UI flow (reference telegram)
 - [ ] Add deleting note UI flow
 
-- [ ] Bug: Frozen no internet for the bottom loading bar and the whole reader as well (blocking loading bug)
-- [ ] Bug: Swipe should pass through for no UI chrome
-- [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
+- [ ] Make app feel more native to iOS
+
 - [ ] Look through EPUB materialisation flow again
+- [ ] gRPC style - send schema as binary encoding (1, 2, 3 instead of table names - the client resolves it when it comes back)
 - [ ] Test updates for handling book with large spine (see conversation)
 - [ ] Add debug flag
 - [ ] Reading status toast should be at the bottom like the cross device jump (pinned to the bottom chrome)
@@ -159,7 +165,6 @@ Notetaking flow
 - [ ] Toggle for showing the page numbers (both mobile and desktop design) - must handle the loading and fade-in appropriately
 
 - [ ] Use Zod compile https://x.com/colinhacks/status/2093725420462182512
-- [ ] Decomp note-taking flow
 - [ ] Decomp Sync limits
 - [ ] Decomp Sync progress toast
   - [ ] Also handles downloading a new book
@@ -168,9 +173,6 @@ Notetaking flow
 - [ ] Fix gradient in themes, reorder for the dark theme, and fix background (not full colour in the theme sheet)
 - [ ] Fix horizontal scroll passthrough
 
-- [x] Optimize Highlights rendering using the measured plan in
-      `docs/0004-highlights-performance.md`. Start by bounding React and DOM
-      work; keep worker-based Pretext as a measured follow-up.
 
 - [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,
       then verify that the hover state does not create a duplicate visual layer.

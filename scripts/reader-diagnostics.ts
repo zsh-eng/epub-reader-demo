@@ -332,6 +332,9 @@ async function main() {
 
     const browser = await chromium.launch({ headless: !options.headed });
     const page = await browser.newPage();
+    await page.addInitScript(() =>
+      localStorage.setItem("reader-debug-enabled-v1", "true"),
+    );
 
     try {
       const epubBytes = await readFile(options.epub);

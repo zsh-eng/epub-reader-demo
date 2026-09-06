@@ -1,3 +1,4 @@
+import { useDebugEnabled } from "@/lib/debug-preference";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
@@ -9,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import {
   Activity,
+  Settings,
   ChevronLeft,
   BookPlus,
   Clock3,
@@ -298,6 +300,7 @@ export function AppMobileNavigationSheets({
   onSignIn,
   onSignOut,
 }: AppMobileNavigationSheetsProps) {
+  const debugEnabled = useDebugEnabled();
   const [activeSheet, setActiveSheet] =
     useState<MobileNavigationSheet>("navigation");
   const AppearanceIcon =
@@ -373,13 +376,24 @@ export function AppMobileNavigationSheets({
             />
             <MobileSheetRow
               index="04"
-              label="Performance"
-              icon={Activity}
-              to="/reader-traces"
-              isActive={activePath === "/reader-traces"}
+              label="Settings"
+              icon={Settings}
+              to="/settings"
+              isActive={activePath === "/settings"}
               onClick={onClose}
               delay={0.16}
             />
+            {debugEnabled && (
+              <MobileSheetRow
+                index="05"
+                label="Performance"
+                icon={Activity}
+                to="/reader-traces"
+                isActive={activePath === "/reader-traces"}
+                onClick={onClose}
+                delay={0.2}
+              />
+            )}
           </div>
 
           <motion.div

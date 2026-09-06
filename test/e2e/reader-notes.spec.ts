@@ -39,6 +39,8 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   expect(triggerBounds.x).toBeGreaterThan(
     scrubberBounds.x + scrubberBounds.width * 0.8,
   );
+  expect(triggerBounds.y + triggerBounds.height).toBeLessThan(scrubberBounds.y);
+  await expect(trigger).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   expect(
     Math.abs(scrubberBounds.x + scrubberBounds.width / 2 - 195),
   ).toBeLessThan(3);
@@ -170,7 +172,11 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   );
   await page.getByRole("button", { name: "Jot a note" }).click();
   await expect(input).toHaveValue("Keep this draft.");
-  await page.getByRole("button", { name: "Read latest note" }).click();
+  await input.press("Escape");
+  await page
+    .getByRole("button", { name: "Open reader tools", exact: true })
+    .click();
+  await page.getByRole("button", { name: /Notes/ }).click();
   await expect(
     page.getByRole("region", { name: "Book notebook" }),
   ).toContainText("A thought from the notebook.");

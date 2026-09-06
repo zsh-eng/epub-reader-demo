@@ -100,3 +100,35 @@ describe("reader performance trace storage", () => {
     });
   });
 });
+
+it("debug mode stops recording without deleting traces or the recording preference", async () => {
+  vi.resetModules();
+  localStorage.clear();
+  const debug = await import("@/lib/debug-preference");
+  const traces = await import("@/lib/reader-performance-trace");
+  debug.setDebugEnabled(false);
+  traces.setReaderTraceRecordingEnabled(true);
+  expect(
+    traces.beginReaderTrace({ bookId: "book-1", source: "test" }),
+  ).toBeNull();
+  debug.setDebugEnabled(true);
+  expect(
+    traces.beginReaderTrace({ bookId: "book-1", source: "test" }),
+  ).not.toBeNull();
+  const span = traces.startReaderTraceSpan("pending", "storage");
+  debug.setDebugEnabled(false);
+  expect(traces.getReaderTraceSnapshot()).toMatchObject({
+    recordingEnabled: true,
+    activeTraceId: null,
+    traces: [{ status: "interrupted", metadata: { reason: "debug-disabled" } }],
+  });
+  const saved = JSON.stringify(traces.getReaderTraceSnapshot().traces);
+  traces.endReaderTraceSpan(span);
+  expect(JSON.stringify(traces.getReaderTraceSnapshot().traces)).toBe(saved);
+  expect(localStorage.getItem(traces.READER_TRACE_RECORDING_KEY)).toBe("true");
+  debug.setDebugEnabled(true);
+  expect(
+    traces.beginReaderTrace({ bookId: "book-2", source: "test" }),
+  ).not.toBeNull();
+  traces.completeReaderTrace("completed");
+});

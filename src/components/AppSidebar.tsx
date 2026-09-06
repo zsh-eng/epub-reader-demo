@@ -1,3 +1,4 @@
+import { useDebugEnabled } from "@/lib/debug-preference";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AppMobileNavigationSheets } from "@/components/AppMobileNavigationSheets";
 import {
@@ -34,6 +35,7 @@ import { findMostRecentlyReadBook } from "@/lib/library-sort";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import {
   Activity,
+  Settings,
   BookOpenText,
   Clock3,
   Cloud,
@@ -149,6 +151,7 @@ function ContinueReadingCard({
 }
 
 export function AppSidebar() {
+  const debugEnabled = useDebugEnabled();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -350,15 +353,17 @@ export function AppSidebar() {
                 <span>Sessions</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                isActive={location.pathname === "/reader-traces"}
-                render={<Link to="/reader-traces" />}
-              >
-                <Activity />
-                <span>Performance</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {debugEnabled && (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location.pathname === "/reader-traces"}
+                  render={<Link to="/reader-traces" />}
+                >
+                  <Activity />
+                  <span>Performance</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
           </SidebarMenu>
 
           {continueReadingBooks.length > 0 && (
@@ -388,6 +393,15 @@ export function AppSidebar() {
       <SidebarFooter className="gap-2 px-3 pt-2 pb-3">
         <SidebarSeparator className="mb-1" />
         <SidebarMenu className="pt-1">
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={location.pathname === "/settings"}
+              render={<Link to="/settings" />}
+            >
+              <Settings />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton
               onClick={handleThemeToggle}

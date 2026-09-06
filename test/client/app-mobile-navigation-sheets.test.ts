@@ -94,8 +94,8 @@ describe("AppMobileNavigationSheets", () => {
     expect(libraryLink).toBeTruthy();
     expect(screen.getByRole("link", { name: /02 Highlights/ })).toBeTruthy();
     expect(screen.getByRole("link", { name: /03 Sessions/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /04 Performance/ })).toBeTruthy();
-    expect(screen.queryByText("05")).toBeNull();
+    expect(screen.getByRole("link", { name: /04 Settings/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /05 Performance/ })).toBeTruthy();
 
     const appearanceButton = screen.getByRole("button", {
       name: "Switch appearance. Current setting: System",

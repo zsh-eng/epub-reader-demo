@@ -22,6 +22,7 @@ interface ReaderSheetHostProps {
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
   notesPanel?: ReactNode;
+  onOpenNotes?: () => void;
   onCopyDebugDump?: () => void;
 }
 
@@ -44,6 +45,7 @@ export function ReaderSheetHost({
   chapterStartPages,
   currentChapterHref,
   onNavigateToHref,
+  onOpenNotes,
   onCopyDebugDump,
   notesPanel,
 }: ReaderSheetHostProps) {
@@ -74,6 +76,7 @@ export function ReaderSheetHost({
         onOpenContents={() => onOpenSheet("contents")}
         onOpenBookActions={() => onOpenSheet("book-actions")}
         onOpenSettings={() => onOpenSheet("settings")}
+        onOpenNotes={onOpenNotes}
         onCopyDebugDump={onCopyDebugDump}
       />
 

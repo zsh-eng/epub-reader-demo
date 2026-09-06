@@ -127,13 +127,30 @@ export function ReaderFooter({
             paddingBottom: "max(env(safe-area-inset-bottom), 0.75rem)",
           }}
         >
+          {onOpenNote && chromeVisible && (
+            <button
+              type="button"
+              aria-label="Jot a note"
+              title="Jot a note"
+              disabled={isLoading}
+              onClick={() => {
+                interruptScrubberMomentum();
+                onOpenNote();
+              }}
+              className="absolute right-3 bottom-[calc(100%+0.5rem)] flex size-11 items-center justify-center rounded-full border border-border/80 bg-background text-foreground shadow-lg hover:bg-secondary focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40 sm:right-4"
+            >
+              <PencilLine size={20} />
+            </button>
+          )}
           <AnimatePresence initial={false}>
             {handoffPrompt && (
               <div
                 key="handoff-prompt"
                 className={
                   chromeVisible
-                    ? "absolute inset-x-0 bottom-[calc(100%+0.25rem)] transition-[bottom] duration-200 ease-out"
+                    ? onOpenNote
+                      ? "absolute inset-x-0 bottom-[calc(100%+3.75rem)] transition-[bottom] duration-200 ease-out"
+                      : "absolute inset-x-0 bottom-[calc(100%+0.25rem)] transition-[bottom] duration-200 ease-out"
                     : "absolute inset-x-0 bottom-[calc(100%+0.75rem)] transition-[bottom] duration-200 ease-out"
                 }
               >
@@ -247,21 +264,6 @@ export function ReaderFooter({
               </div>
             </div>
             <div className="relative">
-              {onOpenNote && (
-                <button
-                  type="button"
-                  aria-label="Jot a note"
-                  title="Jot a note"
-                  disabled={isLoading}
-                  onClick={() => {
-                    interruptScrubberMomentum();
-                    onOpenNote();
-                  }}
-                  className="absolute right-0 top-0 z-10 flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40"
-                >
-                  <PencilLine size={19} />
-                </button>
-              )}
               <FooterPageIndicator
                 currentPage={detailCurrentPage}
                 totalPages={detailTotalPages}
