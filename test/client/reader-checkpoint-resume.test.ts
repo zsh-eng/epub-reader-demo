@@ -1,8 +1,8 @@
+import { useReaderCheckpointQuery } from "@/components/Reader/data/reader-cache/hooks";
 import {
   readerCheckpointKeys,
-  useReaderCheckpointQuery,
   type ReaderCheckpointData,
-} from "@/components/Reader/data/reader-cache/hooks";
+} from "@/components/Reader/data/reader-cache/queries";
 import { useReaderCheckpointController } from "@/components/Reader/hooks/use-reader-checkpoint-controller";
 import { useSessionInitialReaderLocation } from "@/components/Reader/hooks/use-session-initial-reader-location";
 import * as database from "@/lib/db";

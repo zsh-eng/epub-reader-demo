@@ -1,14 +1,8 @@
-import {
-  getCurrentDeviceReadingCheckpoint,
-  getReadingCheckpointsForBook,
-  type ReadingCheckpoint,
-} from "@/lib/db";
 import type { FileId } from "@/lib/files";
 import {
   endReaderTraceSpan,
   markReaderTraceOnce,
   startReaderTraceSpan,
-  withReaderTraceSpan,
 } from "@/lib/reader-performance-trace";
 import { ensurePublisherFontsReadyFromBlocks } from "@/lib/pagination-v2/shared/publisher-fonts";
 import type { Highlight } from "@/types/highlight";
@@ -33,110 +27,19 @@ import {
   type ReaderDecoratedChapterArtifact,
   type ReaderInitialLocation,
 } from "../chapter-content-pipeline";
+import type { ReaderBodyCacheLoadKind } from "./cache";
 import {
-  buildReaderChapterArtifact,
-  loadReaderBodyCache,
-  READER_BODY_CACHE_SCHEMA_VERSION,
-  READER_CHAPTER_ARTIFACTS_GC_MS,
-  READER_CHAPTER_ARTIFACTS_SCHEMA_VERSION,
-  type ReaderBodyCacheLoadKind,
-} from "./cache";
+  getReaderChapterArtifactSignature,
+  readerBodyCacheQueryOptions,
+  readerChapterArtifactQueryOptions,
+  readerCheckpointQueryOptions,
+  readerCheckpointsQueryOptions,
+} from "./queries";
 
 export type { ReaderBodyCacheLoadKind };
 
 const CHAPTER_ARTIFACT_TASK_BUDGET_MS = 8;
 const MAX_RECORDED_CHAPTER_ARTIFACT_YIELDS = 12;
-
-export const readerBodyCacheKeys = {
-  book: (
-    bookId: string,
-    sourceFileId: FileId,
-    publisherBookStylingEnabled: boolean,
-    matchPublisherBodyTextSize: boolean,
-  ) =>
-    [
-      "readerBodyCache",
-      READER_BODY_CACHE_SCHEMA_VERSION,
-      bookId,
-      sourceFileId,
-      getPublisherStylingCacheKey(publisherBookStylingEnabled),
-      matchPublisherBodyTextSize ? "body-size-match-on" : "body-size-match-off",
-    ] as const,
-};
-
-export const readerCheckpointKeys = {
-  currentDevice: (bookId: string) =>
-    ["readingCheckpoint", "currentDevice", bookId] as const,
-  book: (bookId: string) => ["readingCheckpoints", "book", bookId] as const,
-};
-
-export const readerChapterArtifactKeys = {
-  chapter: (
-    bookId: string,
-    sourceFileId: FileId,
-    chapterIndex: number,
-    spineItemId: string,
-    highlightSignature: string,
-    publisherBookStylingEnabled: boolean,
-    matchPublisherBodyTextSize: boolean,
-    publisherBodyFontScale: number | undefined,
-  ) =>
-    [
-      "readerChapterArtifact",
-      READER_CHAPTER_ARTIFACTS_SCHEMA_VERSION,
-      READER_BODY_CACHE_SCHEMA_VERSION,
-      bookId,
-      sourceFileId,
-      chapterIndex,
-      spineItemId,
-      highlightSignature,
-      getPublisherStylingCacheKey(publisherBookStylingEnabled),
-      getPublisherBodySizeCacheKey(
-        publisherBookStylingEnabled,
-        matchPublisherBodyTextSize,
-        publisherBodyFontScale,
-      ),
-    ] as const,
-};
-
-function getPublisherStylingCacheKey(enabled: boolean): string {
-  return enabled ? "publisher-styling-on" : "publisher-styling-off";
-}
-
-function getPublisherBodySizeCacheKey(
-  publisherBookStylingEnabled: boolean,
-  matchPublisherBodyTextSize: boolean,
-  publisherBodyFontScale: number | undefined,
-): string {
-  if (!publisherBookStylingEnabled || !matchPublisherBodyTextSize) {
-    return "body-size-literal";
-  }
-
-  return publisherBodyFontScale
-    ? `body-size-matched:${publisherBodyFontScale}`
-    : "body-size-matched:none";
-}
-
-function getReaderChapterArtifactSignature(options: {
-  highlightSignature: string;
-  publisherBookStylingEnabled: boolean;
-  matchPublisherBodyTextSize: boolean;
-  publisherBodyFontScale: number | undefined;
-}): string {
-  const {
-    highlightSignature,
-    publisherBookStylingEnabled,
-    matchPublisherBodyTextSize,
-    publisherBodyFontScale,
-  } = options;
-  return `${getPublisherStylingCacheKey(
-    publisherBookStylingEnabled,
-  )}:${getPublisherBodySizeCacheKey(
-    publisherBookStylingEnabled,
-    matchPublisherBodyTextSize,
-    publisherBodyFontScale,
-  )}:${highlightSignature}`;
-}
 
 function scheduleArtifactTaskProbe(initialChapterIndex: number): void {
   const scheduledAtMs = performance.now();
@@ -166,83 +69,21 @@ async function yieldToMainThreadTask(): Promise<void> {
   await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 }
 
-export interface ReaderCheckpointData {
-  checkpoint: ReadingCheckpoint | undefined;
-}
-
-export interface ReaderCheckpointsData {
-  checkpoints: ReadingCheckpoint[];
-}
-
-export function useReaderBodyCacheQuery(options: {
-  bookId?: string;
-  sourceFileId?: FileId;
-  chapterEntries: ChapterEntry[];
-  publisherBookStylingEnabled: boolean;
-  matchPublisherBodyTextSize: boolean;
-}) {
-  const {
-    bookId,
-    sourceFileId,
-    chapterEntries,
-    publisherBookStylingEnabled,
-    matchPublisherBodyTextSize,
-  } = options;
-
-  return useQuery({
-    queryKey: readerBodyCacheKeys.book(
-      bookId ?? "",
-      sourceFileId ?? ("" as FileId),
-      publisherBookStylingEnabled,
-      matchPublisherBodyTextSize,
-    ),
-    queryFn: () =>
-      loadReaderBodyCache({
-        bookId: bookId!,
-        sourceFileId: sourceFileId!,
-        chapterEntries,
-        publisherBookStylingEnabled,
-        matchPublisherBodyTextSize,
-      }),
-    enabled: !!bookId && !!sourceFileId && chapterEntries.length > 0,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+export function useReaderBodyCacheQuery(
+  options: Parameters<typeof readerBodyCacheQueryOptions>[0],
+) {
+  return useQuery(readerBodyCacheQueryOptions(options));
 }
 
 export function useReaderCheckpointQuery(bookId: string | undefined) {
-  return useQuery({
-    queryKey: readerCheckpointKeys.currentDevice(bookId ?? ""),
-    queryFn: async (): Promise<ReaderCheckpointData> => ({
-      checkpoint: await withReaderTraceSpan(
-        "reading-checkpoint-read",
-        "storage",
-        () => getCurrentDeviceReadingCheckpoint(bookId!),
-      ),
-    }),
-    enabled: !!bookId,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+  return useQuery(readerCheckpointQueryOptions(bookId));
 }
 
 export function useReaderCheckpointsQuery(
   bookId: string | undefined,
   enabled = true,
 ) {
-  return useQuery({
-    queryKey: readerCheckpointKeys.book(bookId ?? ""),
-    queryFn: async (): Promise<ReaderCheckpointsData> => ({
-      checkpoints: await withReaderTraceSpan(
-        "reading-checkpoints-read",
-        "storage",
-        () => getReadingCheckpointsForBook(bookId!),
-      ),
-    }),
-    enabled: !!bookId && enabled,
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+  return useQuery(readerCheckpointsQueryOptions(bookId, enabled));
 }
 
 export type ReaderChapterArtifactEvent =
@@ -364,18 +205,16 @@ export function useReaderChapterArtifactsLoader(options: {
       matchPublisherBodyTextSize,
       publisherBodyFontScale: baseContent.publisherBodyFontScale,
     });
-    const queryKey = readerChapterArtifactKeys.chapter(
+    const query = readerChapterArtifactQueryOptions({
       bookId,
       sourceFileId,
-      chapterIndex,
-      chapter.spineItemId,
+      baseContent,
+      highlights: chapterHighlights,
       highlightSignature,
       publisherBookStylingEnabled,
       matchPublisherBodyTextSize,
-      baseContent.publisherBodyFontScale,
-    );
-    const cachedArtifact =
-      queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
+    });
+    const cachedArtifact = queryClient.getQueryData(query.queryKey);
     if (!cachedArtifact) return;
 
     artifactsByChapterRef.current.set(chapterIndex, cachedArtifact);
@@ -523,32 +362,18 @@ export function useReaderChapterArtifactsLoader(options: {
             continue;
           }
 
-          const queryKey = readerChapterArtifactKeys.chapter(
-            resolvedBookId,
-            resolvedSourceFileId,
-            chapterIndex,
-            chapter.spineItemId,
+          const query = readerChapterArtifactQueryOptions({
+            bookId: resolvedBookId,
+            sourceFileId: resolvedSourceFileId,
+            baseContent,
+            highlights: chapterHighlights,
             highlightSignature,
             publisherBookStylingEnabled,
             matchPublisherBodyTextSize,
-            baseContent.publisherBodyFontScale,
-          );
-          const cachedArtifact =
-            queryClient.getQueryData<ReaderDecoratedChapterArtifact>(queryKey);
+          });
+          const cachedArtifact = queryClient.getQueryData(query.queryKey);
           const artifact =
-            cachedArtifact ??
-            (await queryClient.ensureQueryData({
-              queryKey,
-              queryFn: () =>
-                buildReaderChapterArtifact({
-                  baseContent,
-                  highlights: chapterHighlights,
-                  publisherBookStylingEnabled,
-                  matchPublisherBodyTextSize,
-                }),
-              staleTime: Infinity,
-              gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,
-            }))!;
+            cachedArtifact ?? (await queryClient.ensureQueryData(query));
 
           if (cachedArtifact) cachedArtifactCount += 1;
           else builtArtifactCount += 1;

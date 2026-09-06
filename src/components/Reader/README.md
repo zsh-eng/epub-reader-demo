@@ -49,6 +49,15 @@ Epochs keep events from old layout work from overwriting newer results on the ma
 5. `Pagination commands -> scheduled worker jobs`
    We enqueue init, chapter updates, config updates, background chapter additions, and navigation commands into the worker scheduler. The scheduler steps the highest-priority available job and yields back to the event loop between chunks of work.
 
+## Cache ownership
+
+The Reader cache has four owners under `data/reader-cache/`:
+
+- `cache.ts` loads normalized content and builds decorated artifacts.
+- `queries.ts` defines cache keys, reads, and retention settings shared by prefetch and active reading.
+- `hooks.ts` connects those queries to React and schedules chapter artifact loading.
+- `prefetch.ts` warms the same queries from Library interactions.
+
 ## Invalidation rules
 
 - `bookId` or `book` change:
@@ -178,15 +187,15 @@ The larger goal is to hide latency in layers: cache EPUB-derived HTML durably, k
 
 ## Firefox Pagination Performance Notes
 
-Firefox has a specific slow path in full-book pagination that is much more visible with web fonts than with system fonts. The clearest example so far is *The Way of Kings* with EB Garamond enabled. Chrome completed the prepare stage in about 940ms, while Firefox took about 13.9s on the same book. The source load, visible-first-page time, cache behavior, and layout time were not the bottleneck.
+Firefox has a specific slow path in full-book pagination that is much more visible with web fonts than with system fonts. The clearest example so far is _The Way of Kings_ with EB Garamond enabled. Chrome completed the prepare stage in about 940ms, while Firefox took about 13.9s on the same book. The source load, visible-first-page time, cache behavior, and layout time were not the bottleneck.
 
 Representative measurements:
 
-| Browser/font | Prepare total | Pretext time | Other prepare time | Prepare calls | Cache misses | Layout total | Pagination total |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Chrome / Garamond | 940.1ms | 847.6ms | 81.7ms | 16,873 | 15,492 | 565.9ms | 1506.0ms |
-| Firefox / Garamond | 13,916.0ms | 13,776.0ms | 134.0ms | 16,873 | 15,484 | 55.0ms | 13,971.0ms |
-| Firefox / Iowan | 1909.0ms | 1769.0ms | 133.0ms | 16,873 | 15,484 | 72.0ms | 1981.0ms |
+| Browser/font       | Prepare total | Pretext time | Other prepare time | Prepare calls | Cache misses | Layout total | Pagination total |
+| ------------------ | ------------: | -----------: | -----------------: | ------------: | -----------: | -----------: | ---------------: |
+| Chrome / Garamond  |       940.1ms |      847.6ms |             81.7ms |        16,873 |       15,492 |      565.9ms |         1506.0ms |
+| Firefox / Garamond |    13,916.0ms |   13,776.0ms |            134.0ms |        16,873 |       15,484 |       55.0ms |       13,971.0ms |
+| Firefox / Iowan    |      1909.0ms |     1769.0ms |            133.0ms |        16,873 |       15,484 |       72.0ms |         1981.0ms |
 
 The cache numbers are nearly identical between Chrome and Firefox, so this is not primarily a prepared-text cache hit/miss problem. The workload is also not dominated by one bad paragraph: the slowest individual `prepareWithSegments` run was only tens of milliseconds, and many slow runs were short strings. The cost is distributed across thousands of ordinary prepare calls.
 
@@ -196,10 +205,10 @@ A stripped-down Playwright repro narrowed the browser behavior further. Measurin
 
 On one local run, the default repro measured 1000 calls with the app-like font set:
 
-| Case | Time |
-| --- | ---: |
-| Chromium worker `OffscreenCanvas` + EB Garamond | 7.0ms |
-| Firefox worker `OffscreenCanvas` + EB Garamond | 49.0ms |
-| Firefox page canvas + EB Garamond | 2.0ms |
+| Case                                            |   Time |
+| ----------------------------------------------- | -----: |
+| Chromium worker `OffscreenCanvas` + EB Garamond |  7.0ms |
+| Firefox worker `OffscreenCanvas` + EB Garamond  | 49.0ms |
+| Firefox page canvas + EB Garamond               |  2.0ms |
 
 The practical takeaway is that Firefox is paying an unusually high per-prepare measurement cost for web fonts in the pagination worker. Registering fewer worker font faces changes the repro cost, but that is only an observation so far, not a chosen product fix. Any mitigation has to preserve measurement/rendering agreement; measuring with one font and rendering with another would make page counts and line breaks drift.

@@ -9,7 +9,7 @@ import {
 import {
   readerCheckpointKeys,
   type ReaderCheckpointsData,
-} from "@/components/Reader/data/reader-cache/hooks";
+} from "@/components/Reader/data/reader-cache/queries";
 import type { ReadingCheckpoint } from "@/lib/db";
 import {
   QueryClient,

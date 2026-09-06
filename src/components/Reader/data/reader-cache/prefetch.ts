@@ -4,12 +4,7 @@ import {
 } from "@/hooks/use-highlights-query";
 import { bookKeys } from "@/hooks/use-book-loader";
 import { ensureEpubPreparationReady } from "@/hooks/use-epub-processor";
-import {
-  getBook,
-  getBookHighlights,
-  getCurrentDeviceReadingCheckpoint,
-  type Book,
-} from "@/lib/db";
+import { getBook, getBookHighlights, type Book } from "@/lib/db";
 import type { Highlight } from "@/types/highlight";
 import type { QueryClient } from "@tanstack/react-query";
 import {
@@ -22,17 +17,10 @@ import {
   buildHighlightsBySpineItemId,
 } from "../../highlight-virtualization";
 import {
-  buildReaderChapterArtifact,
-  loadReaderBodyCache,
-  READER_CHAPTER_ARTIFACTS_GC_MS,
-  type ReaderBodyCacheData,
-} from "./cache";
-import {
-  readerBodyCacheKeys,
-  readerChapterArtifactKeys,
-  readerCheckpointKeys,
-  type ReaderCheckpointData,
-} from "./hooks";
+  readerBodyCacheQueryOptions,
+  readerChapterArtifactQueryOptions,
+  readerCheckpointQueryOptions,
+} from "./queries";
 
 const BOOK_DETAIL_STALE_TIME_MS = 10 * 60 * 1000;
 const BOOK_DETAIL_GC_TIME_MS = 30 * 60 * 1000;
@@ -65,13 +53,14 @@ export async function prefetchReaderBook(
 
   const preparedBook = await ensureEpubPreparationReady(queryClient, book);
 
-  const bodyCacheKey = readerBodyCacheKeys.book(
-    book.id,
-    book.sourceFileId,
+  const bodyQuery = readerBodyCacheQueryOptions({
+    bookId: book.id,
+    sourceFileId: book.sourceFileId,
+    chapterEntries,
     publisherBookStylingEnabled,
     matchPublisherBodyTextSize,
-  );
-  const checkpointKey = readerCheckpointKeys.currentDevice(book.id);
+  });
+  const checkpointQuery = readerCheckpointQueryOptions(book.id);
   const highlightsKey = highlightKeys.book(book.id);
 
   queryClient.setQueryData(bookKeys.detail(book.id), preparedBook);
@@ -87,27 +76,8 @@ export async function prefetchReaderBook(
       staleTime: BOOK_DETAIL_STALE_TIME_MS,
       gcTime: BOOK_DETAIL_GC_TIME_MS,
     }),
-    queryClient.prefetchQuery({
-      queryKey: bodyCacheKey,
-      queryFn: () =>
-        loadReaderBodyCache({
-          bookId: book.id,
-          sourceFileId: book.sourceFileId,
-          chapterEntries,
-          publisherBookStylingEnabled,
-          matchPublisherBodyTextSize,
-        }),
-      staleTime: Infinity,
-      gcTime: Infinity,
-    }),
-    queryClient.prefetchQuery({
-      queryKey: checkpointKey,
-      queryFn: async () => ({
-        checkpoint: await getCurrentDeviceReadingCheckpoint(book.id),
-      }),
-      staleTime: Infinity,
-      gcTime: Infinity,
-    }),
+    queryClient.prefetchQuery(bodyQuery),
+    queryClient.prefetchQuery(checkpointQuery),
     queryClient.prefetchQuery({
       queryKey: highlightsKey,
       queryFn: () => getBookHighlights(book.id),
@@ -118,11 +88,10 @@ export async function prefetchReaderBook(
 
   if (!includeArtifacts) return;
 
-  const bodyCache = queryClient.getQueryData<ReaderBodyCacheData>(bodyCacheKey);
+  const bodyCache = queryClient.getQueryData(bodyQuery.queryKey);
   if (!bodyCache) return;
 
-  const checkpointData =
-    queryClient.getQueryData<ReaderCheckpointData>(checkpointKey);
+  const checkpointData = queryClient.getQueryData(checkpointQuery.queryKey);
   const highlights = queryClient.getQueryData<Highlight[]>(highlightsKey) ?? [];
   const initialLocation = resolveInitialReaderLocation(
     checkpointData?.checkpoint,
@@ -145,27 +114,17 @@ export async function prefetchReaderBook(
       highlightsBySpineItemId.get(chapter.spineItemId) ?? [];
     const highlightSignature = buildHighlightSignature(chapterHighlights);
 
-    await queryClient.prefetchQuery({
-      queryKey: readerChapterArtifactKeys.chapter(
-        book.id,
-        book.sourceFileId,
-        chapterIndex,
-        chapter.spineItemId,
+    await queryClient.prefetchQuery(
+      readerChapterArtifactQueryOptions({
+        bookId: book.id,
+        sourceFileId: book.sourceFileId,
+        baseContent,
+        highlights: chapterHighlights,
         highlightSignature,
         publisherBookStylingEnabled,
         matchPublisherBodyTextSize,
-        baseContent.publisherBodyFontScale,
-      ),
-      queryFn: () =>
-        buildReaderChapterArtifact({
-          baseContent,
-          highlights: chapterHighlights,
-          publisherBookStylingEnabled,
-          matchPublisherBodyTextSize,
-        }),
-      staleTime: Infinity,
-      gcTime: READER_CHAPTER_ARTIFACTS_GC_MS,
-    });
+      }),
+    );
   }
 }
 

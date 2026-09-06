@@ -10,7 +10,7 @@ import { useCallback, useEffect, useRef } from "react";
 import {
   readerCheckpointKeys,
   type ReaderCheckpointData,
-} from "../data/reader-cache/hooks";
+} from "../data/reader-cache/queries";
 import {
   CHECKPOINT_FLUSH_INTERVAL_MS,
   createReaderCheckpointSnapshot,
