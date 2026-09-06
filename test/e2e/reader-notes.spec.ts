@@ -91,9 +91,11 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   expect(await currentPages(page)).toEqual(before);
   expect(await stage.boundingBox()).toEqual(stageBefore);
   await page.screenshot({ path: "/tmp/reader-note-composer.png" });
+  await page.context().setOffline(true);
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(input).toHaveValue("");
   await expect(input).toBeFocused();
+  await page.context().setOffline(false);
   await expect(
     page.getByRole("button", { name: "Read latest note" }),
   ).toContainText("How easily curiosity");
@@ -149,6 +151,56 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   await expect(sheet).not.toBeVisible();
   await expect(input).toHaveValue("Keep this draft.");
   await expect(input).toHaveCount(1);
+  await expect
+    .poll(() =>
+      page.evaluate(async (path) => {
+        const { syncV2Db: db } = await import(path);
+        return (await db.noteDrafts.toArray())[0]?.content;
+      }, "/src/lib/sync-v2/db.ts"),
+    )
+    .toBe("Keep this draft.");
+  await page.reload();
+  await waitForReaderReady(page);
+  const reloadedSpread = await page
+    .locator('[data-reader-spread-layer="current"]')
+    .boundingBox();
+  await page.touchscreen.tap(
+    reloadedSpread!.x + reloadedSpread!.width / 2,
+    reloadedSpread!.y + reloadedSpread!.height / 2,
+  );
+  await page.getByRole("button", { name: "Jot a note" }).click();
+  await expect(input).toHaveValue("Keep this draft.");
+  await page.getByRole("button", { name: "Read latest note" }).click();
+  await expect(
+    page.getByRole("region", { name: "Book notebook" }),
+  ).toContainText("A thought from the notebook.");
+  await expect
+    .poll(() =>
+      page.evaluate(async (path) => {
+        const { syncV2Db: db } = await import(path);
+        return (await db.notes.toArray()).filter(
+          (note: { isDeleted: boolean }) => !note.isDeleted,
+        ).length;
+      }, "/src/lib/sync-v2/db.ts"),
+    )
+    .toBe(3);
+  await page.setViewportSize({ width: 430, height: 844 });
+  await waitForReaderReady(page);
+  const firstLocation = page
+    .getByRole("region", { name: "Book notebook" })
+    .getByRole("button", { name: /p\. \d+/ })
+    .first();
+  await expect(firstLocation).toBeEnabled();
+  await firstLocation.click();
+  await waitForReaderReady(page);
+  const expectedPassage = await page.evaluate(async (path) => {
+    const { syncV2Db: db } = await import(path);
+    const notes = await db.notes.orderBy("createdAt").toArray();
+    return notes[0].anchor.textAfter.trim().replace(/\s+/g, " ");
+  }, "/src/lib/sync-v2/db.ts");
+  await expect(
+    page.locator('[data-reader-spread-layer="current"]'),
+  ).toContainText(expectedPassage);
 });
 
 test.describe("Desktop margin notes", () => {
@@ -398,6 +450,21 @@ test.describe("Highlight note capture", () => {
     await page
       .getByRole("textbox", { name: "Write a note" })
       .fill("This passage is worth revisiting.");
+    await page.getByRole("button", { name: "Remove quote" }).click();
+    await expect(quote).not.toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "Write a note" }),
+    ).toHaveValue("This passage is worth revisiting.");
+    await highlight.click();
+    await expect(
+      page.getByRole("button", { name: "Note on highlight" }),
+    ).toHaveCount(1);
+    await page.getByRole("button", { name: "Note on highlight" }).click();
+    await expect(quote).toBeVisible();
+    await expect(
+      page.getByRole("textbox", { name: "Write a note" }),
+    ).toHaveValue("This passage is worth revisiting.");
+
     await page.getByRole("button", { name: "Save note", exact: true }).click();
     await expect(quote).not.toBeVisible();
     await highlight.click();

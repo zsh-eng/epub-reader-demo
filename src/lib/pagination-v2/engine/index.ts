@@ -43,6 +43,11 @@ import {
 } from "./spreads";
 
 export type EnginePaginationEvent =
+  | {
+      type: "anchorsLocated";
+      requestId: number;
+      pages: Record<string, number | null>;
+    }
   | Omit<PartialReadyEvent, "epoch">
   | Omit<ReadyEvent, "epoch">
   | Omit<ProgressEvent, "epoch">
@@ -87,6 +92,7 @@ function resolveIntent(command: PaginationCommand): SpreadIntent {
     case "goToChapter":
     case "goToTarget":
       return command.intent;
+    case "locateAnchors":
     case "addChapter":
     case "updateChapter":
     case "updatePaginationConfig":
@@ -171,6 +177,24 @@ export class PaginationEngine {
       case "goToChapter":
         return this.runOneStepWork(intent, () => {
           this.goToChapter(intent, cmd.chapterIndex);
+        });
+      case "locateAnchors":
+        return this.runOneStepWork(intent, () => {
+          const pages = Object.fromEntries(
+            cmd.anchors.map(({ id, anchor }) => [
+              id,
+              resolveAnchorToGlobalPage(
+                this.pagesByChapter,
+                this.chapterPageOffsets,
+                anchor,
+              ),
+            ]),
+          );
+          this.emit({
+            type: "anchorsLocated",
+            requestId: cmd.requestId,
+            pages,
+          });
         });
       case "goToTarget":
         return this.runOneStepWork(intent, () => {

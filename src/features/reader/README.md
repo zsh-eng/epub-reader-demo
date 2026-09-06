@@ -212,3 +212,8 @@ On one local run, the default repro measured 1000 calls with the app-like font s
 | Firefox page canvas + EB Garamond               |  2.0ms |
 
 The practical takeaway is that Firefox is paying an unusually high per-prepare measurement cost for web fonts in the pagination worker. Registering fewer worker font faces changes the repro cost, but that is only an observation so far, not a chosen product fix. Any mitigation has to preserve measurement/rendering agreement; measuring with one font and rendering with another would make page counts and line breaks drift.
+
+## Notes
+
+See [Reader notes](../../../docs/features/notes.md) for capture, draft, storage,
+and location rules.

@@ -1,3 +1,7 @@
+import {
+  canonicalOffsetToContentAnchor,
+  resolveTextAnchorToCanonicalOffset,
+} from "@/lib/pagination-v2/engine/highlight-selection";
 import { applyHighlightsToChapterHtml } from "@/features/reader/highlight-virtualization";
 import {
   parseChapterHtmlWithCanonicalText,
@@ -315,4 +319,25 @@ describe("resolveContentAnchorRangeToHighlight", () => {
     expect(canonicalHtml).toContain('data-highlight-id="canonical"');
     expect(projectedHtml).toContain('data-highlight-id="projected"');
   });
+});
+
+it("round trips a stored note offset through prepared text with whitespace and emoji", () => {
+  const { blocks, canonicalText, prepared } = buildChapter(
+    "<p>Before   <em>words 👋🏽</em> and after.</p><p>Second paragraph.</p>",
+  );
+  for (const word of ["Before", "words", "👋🏽", "after", "Second"]) {
+    const offset = canonicalText.fullText.indexOf(word);
+    const options = {
+      chapterIndex: 0,
+      offset,
+      chapterBlocks: blocks,
+      chapterCanonicalText: canonicalText,
+      preparedChapter: prepared,
+    };
+    const anchor = canonicalOffsetToContentAnchor(options);
+    expect(anchor).not.toBeNull();
+    expect(
+      resolveTextAnchorToCanonicalOffset({ ...options, anchor: anchor! }),
+    ).toBe(offset);
+  }
 });

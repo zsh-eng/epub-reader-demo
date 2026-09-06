@@ -156,6 +156,30 @@ describe("durable notes and local drafts", () => {
     expect(await getNoteDraft(edit.id)).toBeUndefined();
   });
 
+  it("replaces and removes a reply target without losing draft text", async () => {
+    const draft = await beginNoteDraft("book", target);
+    const quoteTarget = {
+      kind: "selection" as const,
+      anchor: { ...anchor, startOffset: 12 },
+      text: "quote",
+    };
+    await saveNoteDraft(draft.id, "My thought", quoteTarget);
+    expect(await getNoteDraft(draft.id)).toMatchObject({
+      content: "My thought",
+      target: quoteTarget,
+    });
+    await saveNoteDraft(draft.id, "My thought", {
+      kind: "page",
+      anchor: quoteTarget.anchor,
+    });
+    expect(await submitNoteDraft(draft.id)).toMatchObject({ status: "saved" });
+    expect((await getBookNotes("book"))[0]).toMatchObject({
+      content: "My thought",
+      anchor: quoteTarget.anchor,
+    });
+    expect(await db.highlights.count()).toBe(0);
+  });
+
   it("creates bookmarks without text and rejects empty edits without changing anchors", async () => {
     const bookmark = await createBookmark("book", anchor);
     expect(await db.notes.get(bookmark)).toMatchObject({

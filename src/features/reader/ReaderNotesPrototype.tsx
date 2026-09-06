@@ -1,5 +1,12 @@
 import { ReaderSheet } from "./shared/ReaderSheet";
-import type { Highlight } from "@/types/highlight";
+import type { NoteTarget } from "@/types/note";
+import { useReaderNotes } from "./hooks/use-reader-notes";
+import { createNoteLocationResolver, noteMarginTop } from "./note-locations";
+import type {
+  ReaderSessionState,
+  ReaderSessionResources,
+} from "./hooks/use-reader-session";
+import type { ChapterEntry } from "./types";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -9,23 +16,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ArrowUp, BookOpen, SlidersHorizontal, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+
+const transition = { duration: 0.18, ease: [0.23, 1, 0.32, 1] as const };
 
 interface Location {
   page: number;
   chapter: string;
 }
-interface Entry {
-  id: number;
-  text: string;
-  location: Location;
-  createdAt: number;
-  quote?: Highlight;
-  top: number;
-}
-
-/** Temporary, book-scoped notebook. Nothing is written to storage or sync. */
+/** Book-scoped notebook UI; durable capture is owned by useReaderNotes. */
 export function ReaderNotesPrototype({
+  bookId,
+  chapters,
+  chapterAccess,
+  pagination,
+  locateAnchors,
   location,
   children,
   notebook,
@@ -36,15 +49,20 @@ export function ReaderNotesPrototype({
   margin,
   desktop,
   commentPosition,
-  quote,
+  quote: incomingTarget,
   onClearQuote,
 }: {
+  bookId: string;
+  chapters: ChapterEntry[];
+  chapterAccess: ReaderSessionResources["chapterAccess"];
+  pagination: ReaderSessionState["pagination"];
+  locateAnchors: ReaderSessionResources["locateAnchors"];
   children: (panel: ReactNode) => ReactNode;
   notebook: boolean;
   setNotebook: (open: boolean) => void;
   commentPosition: { top: number; page: number };
   desktop: boolean;
-  quote: Highlight | null;
+  quote: NoteTarget | null;
   onClearQuote: () => void;
   margin: { width: number; location: Location; enabled: boolean };
   location: Location;
@@ -55,16 +73,90 @@ export function ReaderNotesPrototype({
   const reduceMotion = useReducedMotion();
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "book">("time");
-  const [draft, setDraft] = useState("");
-  const [anchor, setAnchor] = useState(location);
-  const [entries, setEntries] = useState<Entry[]>([]);
+  const notes = useReaderNotes(bookId);
+  const draft = notes.draft?.content ?? "";
+  const target = notes.draft?.target;
+  const quote =
+    target?.kind === "highlight"
+      ? { selectedText: target.quote.text, color: target.quote.color }
+      : target?.kind === "selection"
+        ? { selectedText: target.text, color: "invisible" }
+        : null;
+  const resolver = useMemo(
+    () =>
+      createNoteLocationResolver(
+        chapters,
+        chapterAccess,
+        pagination.paginationConfig,
+      ),
+    [chapters, chapterAccess, pagination.paginationConfig],
+  );
+  const resolved = useMemo(
+    () =>
+      (!pagination.spread || pagination.status === "idle"
+        ? []
+        : notes.notes
+      ).map((note) => ({
+        note,
+        anchor: resolver.resolve(note.anchor),
+      })),
+    [notes.notes, resolver, pagination.status, pagination.spread],
+  );
+  useEffect(() => {
+    if (!resolved.length) return;
+    locateAnchors(
+      resolved.flatMap(({ note, anchor }) =>
+        anchor ? [{ id: note.id, anchor }] : [],
+      ),
+    );
+  }, [resolved, locateAnchors]);
+  const handledTarget = useRef<NoteTarget | null>(null);
+  useEffect(() => {
+    if (
+      !notes.ready ||
+      notes.saving ||
+      !incomingTarget ||
+      handledTarget.current === incomingTarget
+    )
+      return;
+    handledTarget.current = incomingTarget;
+    notes.change(draft, incomingTarget);
+    onClearQuote();
+  }, [incomingTarget, notes.ready, draft, notes, onClearQuote]);
+  const entries = useMemo(
+    () =>
+      resolved.map(({ note, anchor }) => ({
+        id: note.id,
+        text: note.kind === "note" ? note.content : "Bookmark",
+        location: {
+          page:
+            anchor && pagination.status !== "recalculating"
+              ? (pagination.anchorPages[note.id] ?? 0)
+              : 0,
+          chapter:
+            chapters.find(
+              (chapter) => chapter.spineItemId === note.anchor.spineItemId,
+            )?.title ?? "Unknown chapter",
+        },
+        chapterIndex: chapters.findIndex(
+          (chapter) => chapter.spineItemId === note.anchor.spineItemId,
+        ),
+        offset: note.anchor.startOffset,
+        createdAt: note.createdAt,
+        quote:
+          note.kind === "note" && note.quote
+            ? { selectedText: note.quote.text, color: note.quote.color }
+            : undefined,
+        top: noteMarginTop(anchor),
+      })),
+    [resolved, pagination.anchorPages, pagination.status, chapters],
+  );
+
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const composer = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const sidebarInput = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLDivElement>(null);
-  const nextId = useRef(0);
-  const marginAnchor = useRef<Location | null>(null);
   const retainedEntry = useRef<{ id: string; offset: number } | null>(null);
 
   function changeOrder(value: string) {
@@ -150,31 +242,19 @@ export function ReaderNotesPrototype({
     if (notebook) list.current?.scrollTo({ top: list.current.scrollHeight });
   }, [entries.length, notebook]);
 
-  function close() {
+  const flush = notes.flush;
+  const close = useCallback(() => {
+    void flush().catch(() => {});
     sidebarInput.current?.blur();
     input.current?.blur();
     setNotebook(false);
     onActiveChange(false);
     setKeyboardOpen(false);
-  }
-  function send(animate = true) {
+  }, [flush, setNotebook, onActiveChange]);
+  async function send(animate = true) {
     setAnimateSend(animate);
-    if (!draft.trim()) return;
-    setEntries((previous) => [
-      ...previous,
-      {
-        id: nextId.current++,
-        text: draft.trim(),
-        location: anchor,
-        top: commentPosition.top,
-        createdAt: Date.now(),
-        ...(quote ? { quote: { ...quote } } : {}),
-      },
-    ]);
+    if (!(await notes.send())) return;
     onClearQuote();
-    marginAnchor.current = null;
-    setDraft("");
-    setAnchor(location);
     if (desktop && !notebook) close();
     else (desktop && notebook ? sidebarInput : input).current?.focus();
   }
@@ -182,26 +262,32 @@ export function ReaderNotesPrototype({
   const iconButton =
     "flex h-8 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
   const latest = entries.at(-1);
-  const orderedEntries =
-    order === "time"
-      ? entries
-      : [...entries].sort(
-          (a, b) =>
-            a.location.page - b.location.page ||
-            a.createdAt - b.createdAt ||
-            a.id - b.id,
-        );
-  const groupLabel = (entry: Entry) => {
-    if (order === "book") return entry.location.chapter;
-    const date = new Date(entry.createdAt);
-    if (date.toDateString() === new Date().toDateString()) return "Today";
-    return date.toLocaleDateString([], {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-  const transition = { duration: 0.18, ease: [0.23, 1, 0.32, 1] as const };
+  const orderedEntries = useMemo(
+    () =>
+      order === "time"
+        ? entries
+        : [...entries].sort(
+            (a, b) =>
+              a.chapterIndex - b.chapterIndex ||
+              a.offset - b.offset ||
+              a.createdAt - b.createdAt ||
+              a.id.localeCompare(b.id),
+          ),
+    [order, entries],
+  );
+  const groupLabel = useCallback(
+    (entry: (typeof entries)[number]) => {
+      if (order === "book") return entry.location.chapter;
+      const date = new Date(entry.createdAt);
+      if (date.toDateString() === new Date().toDateString()) return "Today";
+      return date.toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    },
+    [order],
+  );
   const marginEntries = entries.filter(
     (entry) =>
       entry.location.page >= location.page &&
@@ -240,7 +326,11 @@ export function ReaderNotesPrototype({
             </span>
             <button
               aria-label="Remove quote"
-              onClick={onClearQuote}
+              onClick={() => {
+                if (target)
+                  notes.change(draft, { kind: "page", anchor: target.anchor });
+                onClearQuote();
+              }}
               className="flex size-7 items-center justify-center text-muted-foreground"
             >
               <X size={13} />
@@ -267,10 +357,12 @@ export function ReaderNotesPrototype({
             aria-label="Write a note"
             placeholder="Write a note…"
             value={draft}
+            disabled={!notes.ready}
+            readOnly={notes.saving}
             rows={1}
             onChange={(event) => {
-              if (!draft) setAnchor(marginAnchor.current ?? location);
-              setDraft(event.target.value);
+              const nextTarget = target ?? resolver.capture(pagination.spread);
+              if (nextTarget) notes.change(event.target.value, nextTarget);
             }}
             onKeyDown={(event) => {
               if (
@@ -287,7 +379,7 @@ export function ReaderNotesPrototype({
           />
           <button
             aria-label="Save note"
-            disabled={!draft.trim()}
+            disabled={!notes.ready || notes.saving || !draft.trim()}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() => send()}
             className="mb-0.5 flex h-7 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
@@ -298,125 +390,148 @@ export function ReaderNotesPrototype({
       </div>
     );
   }
-  const notebookPanel = (
-    <motion.section
-      key="notebook"
-      initial={{
-        opacity: 0,
-        transform: reduceMotion ? "none" : "translateY(12px)",
-      }}
-      animate={{ opacity: 1, transform: "none" }}
-      exit={{
-        opacity: 0,
-        transform: reduceMotion ? "none" : "translateY(12px)",
-      }}
-      transition={transition}
-      aria-label="Book notebook"
-      className="flex min-h-0 flex-1 flex-col overflow-hidden"
-    >
-      <header className="flex items-center gap-3 px-4 py-2">
-        <h2 className="flex-1 text-sm font-medium">
-          Notebook{" "}
-          <span className="ml-1 text-xs font-normal text-muted-foreground">
-            {entries.length}
-          </span>
-        </h2>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label="Notebook order"
+  const notebookPanel = useMemo(
+    () => (
+      <motion.section
+        key="notebook"
+        initial={{
+          opacity: 0,
+          transform: reduceMotion ? "none" : "translateY(12px)",
+        }}
+        animate={{ opacity: 1, transform: "none" }}
+        exit={{
+          opacity: 0,
+          transform: reduceMotion ? "none" : "translateY(12px)",
+        }}
+        transition={transition}
+        aria-label="Book notebook"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
+        <header className="flex items-center gap-3 px-4 py-2">
+          <h2 className="flex-1 text-sm font-medium">
+            Notebook{" "}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">
+              {entries.length}
+            </span>
+          </h2>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Notebook order"
+              className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            >
+              <SlidersHorizontal size={15} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuRadioGroup value={order} onValueChange={changeOrder}>
+                <DropdownMenuRadioItem value="time">
+                  By time
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="book">
+                  By book
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            aria-label="Close notebook"
+            onClick={() => (desktop ? close() : setNotebook(false))}
             className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
           >
-            <SlidersHorizontal size={15} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuRadioGroup value={order} onValueChange={changeOrder}>
-              <DropdownMenuRadioItem value="time">
-                By time
-              </DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="book">
-                By book
-              </DropdownMenuRadioItem>
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <button
-          aria-label="Close notebook"
-          onClick={() => (desktop ? close() : setNotebook(false))}
-          className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            <X size={15} />
+          </button>
+        </header>
+        <div
+          ref={list}
+          className={`min-h-0 overflow-y-auto overscroll-contain p-4 ${desktop ? "flex-1" : ""}`}
+          style={{
+            maxHeight: desktop ? undefined : keyboardOpen ? "24dvh" : "48dvh",
+          }}
         >
-          <X size={15} />
-        </button>
-      </header>
-      <div
-        ref={list}
-        className={`min-h-0 overflow-y-auto overscroll-contain p-4 ${desktop ? "flex-1" : ""}`}
-        style={{
-          maxHeight: desktop ? undefined : keyboardOpen ? "24dvh" : "48dvh",
-        }}
-      >
-        {!entries.length && (
-          <p className="px-4 py-10 text-center font-serif text-lg text-muted-foreground">
-            A place for what stays with you.
-          </p>
-        )}
-        {orderedEntries.map((entry, index) => (
-          <div key={entry.id} data-note-id={entry.id}>
-            {(index === 0 ||
-              groupLabel(orderedEntries[index - 1]) !== groupLabel(entry)) && (
-              <h3 className="mb-2 mt-4 px-1 text-xs font-medium text-muted-foreground first:mt-0">
-                {groupLabel(entry)}
-              </h3>
-            )}
-            <article className="mb-2 rounded-2xl bg-secondary/45 px-4 py-3">
-              {entry.quote && (
-                <blockquote
-                  className="mb-2 truncate border-l-[3px] pl-2 text-xs text-muted-foreground"
-                  style={{
-                    borderColor:
-                      entry.quote.color === "invisible"
-                        ? "var(--muted-foreground)"
-                        : `var(--${entry.quote.color}-secondary)`,
-                  }}
-                >
-                  {entry.quote.selectedText}
-                </blockquote>
+          {!entries.length && (
+            <p className="px-4 py-10 text-center font-serif text-lg text-muted-foreground">
+              A place for what stays with you.
+            </p>
+          )}
+          {orderedEntries.map((entry, index) => (
+            <div key={entry.id} data-note-id={entry.id}>
+              {(index === 0 ||
+                groupLabel(orderedEntries[index - 1]) !==
+                  groupLabel(entry)) && (
+                <h3 className="mb-2 mt-4 px-1 text-xs font-medium text-muted-foreground first:mt-0">
+                  {groupLabel(entry)}
+                </h3>
               )}
-              <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-                {entry.text}
-              </p>
-              <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-                <button
-                  className="min-w-0 truncate text-left hover:text-foreground"
-                  onClick={() => {
-                    onVisit(entry.location.page);
-                    close();
-                  }}
-                >
-                  {order === "time" ? `${entry.location.chapter} · ` : ""}
-                  p. {entry.location.page}
-                </button>
-                <time
-                  dateTime={new Date(entry.createdAt).toISOString()}
-                  title={new Date(entry.createdAt).toLocaleString()}
-                  className="shrink-0"
-                >
-                  {new Date(entry.createdAt).toLocaleTimeString([], {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </time>
-              </div>
-            </article>
-          </div>
-        ))}
-      </div>
-      <p className="px-4 pb-2 text-[10px] text-muted-foreground">
-        Prototype · notes stay here until you leave this book.
-      </p>
-    </motion.section>
+              <article className="mb-2 rounded-2xl bg-secondary/45 px-4 py-3">
+                {entry.quote && (
+                  <blockquote
+                    className="mb-2 truncate border-l-[3px] pl-2 text-xs text-muted-foreground"
+                    style={{
+                      borderColor:
+                        entry.quote.color === "invisible"
+                          ? "var(--muted-foreground)"
+                          : `var(--${entry.quote.color}-secondary)`,
+                    }}
+                  >
+                    {entry.quote.selectedText}
+                  </blockquote>
+                )}
+                <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                  {entry.text}
+                </p>
+                <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+                  <button
+                    disabled={!entry.location.page}
+                    className="min-w-0 truncate text-left hover:text-foreground"
+                    onClick={() => {
+                      onVisit(entry.location.page);
+                      close();
+                    }}
+                  >
+                    {order === "time" ? `${entry.location.chapter} · ` : ""}
+                    {entry.location.page
+                      ? `p. ${entry.location.page}`
+                      : "Location unavailable"}
+                  </button>
+                  <time
+                    dateTime={new Date(entry.createdAt).toISOString()}
+                    title={new Date(entry.createdAt).toLocaleString()}
+                    className="shrink-0"
+                  >
+                    {new Date(entry.createdAt).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </time>
+                </div>
+              </article>
+            </div>
+          ))}
+        </div>
+      </motion.section>
+    ),
+    [
+      entries,
+      orderedEntries,
+      order,
+      desktop,
+      keyboardOpen,
+      close,
+      onVisit,
+      reduceMotion,
+      groupLabel,
+      setNotebook,
+    ],
   );
   return (
     <>
+      {notes.error && (
+        <p
+          role="alert"
+          className="fixed inset-x-4 top-16 z-50 rounded-xl bg-background p-3 text-sm"
+        >
+          {notes.error}
+        </p>
+      )}
       {!desktop && (
         <ReaderSheet
           open={notebook && open}

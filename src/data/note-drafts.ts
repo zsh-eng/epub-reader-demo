@@ -63,11 +63,18 @@ export async function beginNoteEdit(noteId: string): Promise<NoteDraft> {
 export async function saveNoteDraft(
   id: string,
   content: string,
+  target?: NoteTarget,
 ): Promise<void> {
   await db.transaction("rw", db.noteDrafts, async () => {
     const draft = await db.noteDrafts.get(id);
     if (!draft) throw new Error("Draft no longer exists");
-    await db.noteDrafts.put({ ...draft, content, updatedAt: Date.now() });
+    if (target) validateNoteAnchor(target.anchor);
+    await db.noteDrafts.put({
+      ...draft,
+      content,
+      ...(draft.purpose === "create" && target ? { target } : {}),
+      updatedAt: Date.now(),
+    });
   });
 }
 

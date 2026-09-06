@@ -1452,3 +1452,25 @@ describe("highlight opening location", () => {
     ).toContain("highlight-block");
   });
 });
+
+it("locates a batch of notebook anchors without navigating the reader", () => {
+  const { engine, events } = createEngine();
+  events.length = 0;
+  runCommand(engine, {
+    type: "locateAnchors",
+    requestId: 7,
+    anchors: [
+      {
+        id: "note",
+        anchor: { type: "block", chapterIndex: 0, blockId: "spacer-0" },
+      },
+      {
+        id: "missing",
+        anchor: { type: "block", chapterIndex: 4, blockId: "missing" },
+      },
+    ],
+  });
+  expect(events).toEqual([
+    { type: "anchorsLocated", requestId: 7, pages: { note: 1, missing: null } },
+  ]);
+});

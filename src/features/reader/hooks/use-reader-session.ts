@@ -60,6 +60,7 @@ export interface ReaderSessionNavigationState {
 }
 
 export interface ReaderSessionPaginationState {
+  anchorPages: Record<string, number | null>;
   spread: ResolvedSpread | null;
   spreadWindow: ResolvedSpreadWindow | null;
   status: PaginationStatus;
@@ -78,6 +79,9 @@ export interface ReaderSessionState {
 }
 
 export interface ReaderSessionResources {
+  locateAnchors: ReturnType<
+    typeof useReaderCore
+  >["pagination"]["locateAnchors"];
   chapterAccess: ReaderSessionChapterAccess;
 }
 
@@ -160,6 +164,7 @@ export function useReaderSession(
         entries: core.chapterEntries,
       },
       pagination: {
+        anchorPages: core.pagination.anchorPages,
         spread: core.pagination.spread,
         spreadWindow: core.pagination.spreadWindow,
         status: core.pagination.status,
@@ -190,6 +195,7 @@ export function useReaderSession(
     core.displayChapterIndex,
     core.epubProcessError,
     core.isBookLoading,
+    core.pagination.anchorPages,
     core.pagination.spread,
     core.pagination.spreadWindow,
     core.pagination.status,
@@ -204,8 +210,9 @@ export function useReaderSession(
   const resources = useMemo<ReaderSessionResources>(
     () => ({
       chapterAccess,
+      locateAnchors: core.pagination.locateAnchors,
     }),
-    [chapterAccess],
+    [chapterAccess, core.pagination.locateAnchors],
   );
 
   const actions = useMemo<ReaderSessionActions>(

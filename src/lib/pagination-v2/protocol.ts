@@ -80,7 +80,14 @@ export interface GoToTargetCommand {
   intent: SpreadIntent;
 }
 
+export interface LocateAnchorsCommand {
+  type: "locateAnchors";
+  anchors: { id: string; anchor: ContentAnchor }[];
+  requestId: number;
+}
+
 export type PaginationCommand =
+  | LocateAnchorsCommand
   | InitCommand
   | AddChapterCommand
   | UpdateChapterCommand
@@ -175,6 +182,11 @@ export interface TraceEvent {
 }
 
 export type PaginationEvent =
+  | {
+      type: "anchorsLocated";
+      requestId: number;
+      pages: Record<string, number | null>;
+    }
   | PartialReadyEvent
   | ReadyEvent
   | ProgressEvent

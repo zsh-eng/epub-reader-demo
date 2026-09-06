@@ -233,7 +233,7 @@ function resolveAnchorToBlockOffset(
 // Projects the content anchor into a canonical offset based on the original HTML
 // This ensures that we can handle inter-block whitespace consistently
 // See the test in pagination-highlight-selection
-function resolveTextAnchorToCanonicalOffset(options: {
+export function resolveTextAnchorToCanonicalOffset(options: {
   anchor: ContentAnchor;
   chapterBlocks: Block[];
   preparedChapter: PreparedBlock[];
@@ -328,4 +328,62 @@ export function resolveContentAnchorRangeToHighlight(options: {
       Math.min(fullText.length, rangeEnd + contextLength),
     ),
   };
+}
+
+/** Resolve persisted chapter text coordinates without depending on page layout. */
+export function canonicalOffsetToContentAnchor(options: {
+  chapterIndex: number;
+  offset: number;
+  chapterBlocks: Block[];
+  preparedChapter: PreparedBlock[];
+  chapterCanonicalText: ChapterCanonicalText;
+}): ContentAnchor | null {
+  const {
+    chapterIndex,
+    offset,
+    chapterBlocks,
+    preparedChapter,
+    chapterCanonicalText,
+  } = options;
+  const candidates = chapterBlocks.filter(
+    (block) =>
+      block.type === "text" &&
+      (chapterCanonicalText.blockStarts.get(block.id) ?? Infinity) <= offset,
+  );
+  const block = candidates.at(-1);
+  if (!block) return null;
+  const prepared = findPreparedTextBlock(preparedChapter, block.id);
+  if (!prepared) return null;
+  const boundaries: TextCursorOffset[] = [];
+  prepared.items.forEach((item, itemIndex) => {
+    item.prepared.segments.forEach((segment, segmentIndex) => {
+      const count = getSegmentGraphemes(segment).length;
+      for (let graphemeIndex = 0; graphemeIndex <= count; graphemeIndex++)
+        boundaries.push({ itemIndex, segmentIndex, graphemeIndex });
+    });
+  });
+  let low = 0,
+    high = boundaries.length - 1;
+  let result: ContentAnchor | null = null;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const anchor: ContentAnchor = {
+      type: "text",
+      chapterIndex,
+      blockId: block.id,
+      offset: boundaries[middle],
+    };
+    const position = resolveTextAnchorToCanonicalOffset({
+      anchor,
+      chapterBlocks,
+      preparedChapter,
+      chapterCanonicalText,
+    });
+    if (position === null) return null;
+    if (position <= offset) {
+      result = anchor;
+      low = middle + 1;
+    } else high = middle - 1;
+  }
+  return result;
 }

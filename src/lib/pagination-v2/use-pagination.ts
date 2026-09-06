@@ -117,6 +117,8 @@ function getWorkerTraceDetails(
 // ---------------------------------------------------------------------------
 
 export interface UsePaginationResult {
+  locateAnchors: (anchors: { id: string; anchor: ContentAnchor }[]) => void;
+  anchorPages: Record<string, number | null>;
   /** Available once this hook owns a worker session; changes on reacquisition. */
   sessionGeneration: number | null;
   spread: ResolvedSpread | null;
@@ -167,6 +169,10 @@ export interface UsePaginationOptions {
 export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
+  const [anchorPages, setAnchorPages] = useState<Record<string, number | null>>(
+    {},
+  );
+  const anchorRequest = useRef(0);
   const { paginationConfig, spreadConfig = DEFAULT_SPREAD_CONFIG } = options;
 
   const [spreadWindow, setSpreadWindow] = useState<ResolvedSpreadWindow | null>(
@@ -259,6 +265,10 @@ export function usePagination(
     if ("epoch" in event) currentEpochRef.current = event.epoch;
 
     switch (event.type) {
+      case "anchorsLocated":
+        if (event.requestId === anchorRequest.current)
+          setAnchorPages(event.pages);
+        return;
       case "trace":
         if (event.name === "worker-fonts-ready") {
           endReaderTraceSpan(workerStartupSpanRef.current, {
@@ -507,6 +517,8 @@ export function usePagination(
       const currentPaginationConfig = paginationConfigRef.current;
       const currentSpreadConfig = spreadConfigRef.current;
       currentEpochRef.current = 0;
+      setAnchorPages({});
+      anchorRequest.current++;
       expectedChapterCountRef.current = opts.totalChapters;
       prevPaginationConfigRef.current = currentPaginationConfig;
       prevSpreadConfigRef.current = currentSpreadConfig;
@@ -618,6 +630,17 @@ export function usePagination(
     [postCommand],
   );
 
+  const locateAnchors = useCallback(
+    (anchors: { id: string; anchor: ContentAnchor }[]) => {
+      workerSessionRef.current?.postCommand({
+        type: "locateAnchors",
+        anchors,
+        requestId: ++anchorRequest.current,
+      });
+    },
+    [],
+  );
+
   return {
     sessionGeneration,
     spread,
@@ -629,6 +652,8 @@ export function usePagination(
     goToPage,
     goToChapter,
     goToTarget,
+    locateAnchors,
+    anchorPages,
     init,
     addChapter,
     updateChapter,

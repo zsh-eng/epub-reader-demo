@@ -1,4 +1,3 @@
-import type { Highlight } from "@/types/highlight";
 import { HighlightToolbarContainer } from "@/features/reader/shared/HighlightToolbarContainer";
 import { useInputBehavior } from "@/features/reader/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -13,6 +12,8 @@ import {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { isInteractiveTapTarget } from "./hooks/use-touch-spread-tap-nav";
+import { highlightNoteTarget } from "./note-locations";
+import type { NoteTarget } from "@/types/note";
 import { ReaderNotesPrototype } from "./ReaderNotesPrototype";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
@@ -77,7 +78,7 @@ export function Reader() {
   const { toast } = useToast();
   const [notebookOpen, setNotebookOpen] = useState(false);
   const [commentPosition, setCommentPosition] = useState({ top: 112, page: 1 });
-  const [noteQuote, setNoteQuote] = useState<Highlight | null>(null);
+  const [noteQuote, setNoteQuote] = useState<NoteTarget | null>(null);
   const [noteViewportHeight, setNoteViewportHeight] = useState<number | null>(
     null,
   );
@@ -475,6 +476,11 @@ export function Reader() {
                 <>
                   <ReaderNotesPrototype
                     key={bookId}
+                    bookId={bookId}
+                    chapters={sessionState.chapters.entries}
+                    chapterAccess={sessionResources.chapterAccess}
+                    pagination={sessionState.pagination}
+                    locateAnchors={sessionResources.locateAnchors}
                     open={
                       noteViewportHeight !== null ||
                       (!isMobile && chromeState.activeReaderSheet === "notes")
@@ -558,7 +564,7 @@ export function Reader() {
                     onAddSelectionNote={() => {
                       const note = captureSelectionNote();
                       if (!note) return;
-                      setNoteQuote(note);
+                      setNoteQuote(highlightNoteTarget(note, false));
                       setCommentPosition({
                         top: creationPosition.y,
                         page: sessionState.navigation.currentPage,
@@ -571,7 +577,7 @@ export function Reader() {
                         top: activeHighlight?.position.y ?? 112,
                         page: sessionState.navigation.currentPage,
                       });
-                      setNoteQuote({ ...highlight });
+                      setNoteQuote(highlightNoteTarget(highlight, true));
                       clearActiveHighlight();
                       handleNotesActive(true);
                     }}
