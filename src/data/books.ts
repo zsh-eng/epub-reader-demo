@@ -65,6 +65,7 @@ export async function deleteBook(id: string): Promise<void> {
       db.highlights,
       db.readingState,
       db.notes,
+      db.noteDrafts,
       db.bookFiles,
       db.bookMaterializations,
       db.bookTextCache,
@@ -76,6 +77,7 @@ export async function deleteBook(id: string): Promise<void> {
       await db.readingSessions.where("bookId").equals(id).delete();
       await db.highlights.where("bookId").equals(id).delete();
       await db.readingState.where("bookId").equals(id).delete();
+      await db.noteDrafts.where("bookId").equals(id).delete();
       await db.notes.where("bookId").equals(id).delete();
       await db.bookFiles.where("bookId").equals(id).delete();
       await db.bookMaterializations.delete(id);

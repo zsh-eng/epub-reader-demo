@@ -25,7 +25,7 @@ import {
 import { installSync } from "@/lib/sync-v2/middleware";
 import type { SyncPushChange } from "@/lib/sync-v2/protocol";
 import type { Highlight } from "@/types/highlight";
-import type { Note } from "@/types/note";
+import type { NoteDraft, Note } from "@/types/note";
 import type { ReadingState } from "@/types/reading-state";
 import Dexie, { type Table, type Transaction } from "dexie";
 
@@ -86,6 +86,8 @@ const SYNC_V2_CURRENT_SHARED_STORES = {
 
 export const SYNC_V2_STORES = {
   ...SYNC_V2_CURRENT_SHARED_STORES,
+  notes: "id, bookId, highlightId, createdAt",
+  noteDrafts: "id, bookId",
   files: "id, remotePresent, storedAt",
   fileUploadOperations: "id, createdAt",
   bookMaterializations: "bookId, sourceFileId, recipeVersion",
@@ -243,6 +245,7 @@ export class EPUBReaderSyncV2DB extends Dexie {
   readingSettings!: Table<SyncV2ReadingSettings, string>;
   readingState!: Table<SyncV2ReadingState, string>;
   notes!: Table<SyncV2Note, string>;
+  noteDrafts!: Table<NoteDraft, string>;
 
   bookFiles!: Table<BookFile, string>;
   bookMaterializations!: Table<BookMaterialization, string>;
@@ -269,6 +272,10 @@ export class EPUBReaderSyncV2DB extends Dexie {
       .upgrade(migrateBooksV4);
     this.version(5).stores({
       bookMaterializations: SYNC_V2_STORES.bookMaterializations,
+    });
+    this.version(6).stores({
+      notes: SYNC_V2_STORES.notes,
+      noteDrafts: SYNC_V2_STORES.noteDrafts,
     });
   }
 }

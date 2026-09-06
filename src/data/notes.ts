@@ -1,87 +1,165 @@
-/** Annotation notes, with normalized timestamps and stable display order. */
-import type { SyncV2Note as StoredNote } from "@/lib/sync-v2/db";
-import {
-  optionalTimestampMs,
-  toTimestampMs,
-  type TimestampInput,
-} from "@/lib/timestamps";
-import type { Note } from "@/types/note";
+/** Durable notebook entries. Each mutation uses the ordinary sync outbox path. */
+import type { Highlight } from "@/types/highlight";
+import type { Note, NoteAnchor, NoteTarget } from "@/types/note";
+import { MAX_SYNC_VALUE_BYTES } from "@/lib/sync-v2/protocol";
 import { db, isNotDeleted } from "./database";
 
-export type { Note };
+export type { Note, NoteAnchor, NoteTarget } from "@/types/note";
 
-type LegacyStoredNote = Omit<StoredNote, "createdAt" | "updatedAt"> & {
-  createdAt: TimestampInput;
-  updatedAt?: TimestampInput;
-};
-
-function normalizeNoteTimestamps(note: StoredNote): StoredNote {
-  const legacyNote = note as LegacyStoredNote;
-  const updatedAt = optionalTimestampMs(legacyNote.updatedAt);
-
-  return {
-    ...note,
-    createdAt: toTimestampMs(legacyNote.createdAt),
-    ...(updatedAt === undefined ? {} : { updatedAt }),
-  };
+function validateRecord(value: object) {
+  if (
+    new TextEncoder().encode(JSON.stringify(value)).byteLength >
+    MAX_SYNC_VALUE_BYTES
+  )
+    throw new Error("Note exceeds the sync record size limit");
 }
 
-function compareCreatedAtAscending(
-  a: { id: string; createdAt: number },
-  b: { id: string; createdAt: number },
-): number {
-  if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
-  return a.id.localeCompare(b.id);
+export function validateNoteContent(content: string): string {
+  const trimmed = content.trim();
+  if (!trimmed) throw new Error("A note must contain text");
+  return trimmed;
+}
+
+export function validateNoteAnchor(anchor: NoteAnchor) {
+  if (
+    !anchor.spineItemId ||
+    !Number.isInteger(anchor.startOffset) ||
+    !Number.isInteger(anchor.endOffset) ||
+    anchor.startOffset < 0 ||
+    anchor.endOffset < anchor.startOffset
+  )
+    throw new Error("Invalid note anchor");
 }
 
 export async function addNote(note: Note): Promise<string> {
-  return db.notes.add({ ...note, isDeleted: false });
+  validateNoteAnchor(note.anchor);
+  const row = {
+    ...note,
+    ...(note.kind === "note"
+      ? { content: validateNoteContent(note.content) }
+      : {}),
+    isDeleted: false,
+  };
+  validateRecord(row);
+  return db.notes.add(row);
 }
 
-export async function getNotesByAnnotation(
-  annotationId: string,
-): Promise<Note[]> {
-  const notes = await db.notes
-    .where("annotationId")
-    .equals(annotationId)
-    .filter(isNotDeleted)
-    .toArray();
+/** A selected range and its note become durable together; drafts create no highlights. */
+export async function createNote(
+  bookId: string,
+  content: string,
+  target: NoteTarget,
+): Promise<string> {
+  const now = Date.now();
+  const note: Note = {
+    id: crypto.randomUUID(),
+    bookId,
+    kind: "note",
+    content: validateNoteContent(content),
+    anchor: target.anchor,
+    createdAt: now,
+    updatedAt: now,
+  };
+  return db.transaction("rw", [db.notes, db.highlights], async () => {
+    if (target.kind === "highlight") {
+      note.highlightId = target.highlightId;
+      note.quote = { ...target.quote };
+    }
+    if (target.kind === "selection") {
+      if (!target.text.trim())
+        throw new Error("A selected range must contain text");
+      const highlight: Highlight = {
+        id: crypto.randomUUID(),
+        bookId,
+        ...target.anchor,
+        selectedText: target.text,
+        color: "invisible",
+        createdAt: now,
+        updatedAt: now,
+      };
+      validateRecord({ ...highlight, isDeleted: false });
+      await db.highlights.add({ ...highlight, isDeleted: false });
+      note.highlightId = highlight.id;
+      note.quote = { text: target.text, color: "invisible" };
+    }
+    return addNote(note);
+  });
+}
 
-  return notes.map(normalizeNoteTimestamps).sort(compareCreatedAtAscending);
+export async function createBookmark(
+  bookId: string,
+  anchor: NoteAnchor,
+): Promise<string> {
+  const now = Date.now();
+  return addNote({
+    id: crypto.randomUUID(),
+    bookId,
+    kind: "bookmark",
+    anchor,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+function ordered(notes: Note[]): Note[] {
+  return notes.sort(
+    (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+  );
+}
+
+export async function getBookNotes(bookId: string): Promise<Note[]> {
+  return ordered(
+    await db.notes
+      .where("bookId")
+      .equals(bookId)
+      .filter(isNotDeleted)
+      .toArray(),
+  );
+}
+
+export async function getNotesByHighlight(
+  highlightId: string,
+): Promise<Note[]> {
+  return ordered(
+    await db.notes
+      .where("highlightId")
+      .equals(highlightId)
+      .filter(isNotDeleted)
+      .toArray(),
+  );
 }
 
 export async function getChapterNotes(
   bookId: string,
   spineItemId: string,
 ): Promise<Note[]> {
-  const notes = await db.notes
-    .where("[bookId+spineItemId]")
-    .equals([bookId, spineItemId])
-    .filter((n) => n.annotationType === "chapter" && isNotDeleted(n))
-    .toArray();
-
-  return notes.map(normalizeNoteTimestamps).sort(compareCreatedAtAscending);
-}
-
-export async function updateNote(id: string, content: string): Promise<void> {
-  const note = await db.notes.get(id);
-  if (!note || !isNotDeleted(note)) return;
-
-  await db.notes.put({
-    ...normalizeNoteTimestamps(note),
-    content,
-    updatedAt: Date.now(),
-  });
-}
-
-export async function deleteNote(id: string): Promise<void> {
-  const note = await db.notes.get(id);
-  if (!note || note.isDeleted) return;
-
-  await db.notes.delete(id);
+  return (await getBookNotes(bookId)).filter(
+    (note) => note.anchor.spineItemId === spineItemId,
+  );
 }
 
 export async function getAllNotes(): Promise<Note[]> {
-  const notes = await db.notes.filter(isNotDeleted).toArray();
-  return notes.map(normalizeNoteTimestamps);
+  return ordered(await db.notes.filter(isNotDeleted).toArray());
+}
+
+export async function updateNote(id: string, content: string): Promise<void> {
+  const text = validateNoteContent(content);
+  await db.transaction("rw", db.notes, async () => {
+    const note = await db.notes.get(id);
+    if (!note || !isNotDeleted(note)) throw new Error("Note no longer exists");
+    if (note.kind !== "note")
+      throw new Error("Bookmarks do not contain note text");
+    const updated = { ...note, content: text, updatedAt: Date.now() };
+    validateRecord(updated);
+    await db.notes.put(updated);
+  });
+}
+
+/** Deleting a note retains its highlight; a local unfinished edit is removed. */
+export async function deleteNote(id: string): Promise<void> {
+  await db.transaction("rw", [db.notes, db.noteDrafts], async () => {
+    await db.noteDrafts.delete(`edit:${id}`);
+    const note = await db.notes.get(id);
+    if (note && isNotDeleted(note)) await db.notes.delete(id);
+  });
 }

@@ -11,3 +11,5 @@ export * from "@/data/reading-settings";
 export * from "@/data/highlights";
 export * from "@/data/notes";
 export * from "@/data/reading-state";
+
+export * from "@/data/note-drafts";

@@ -1,7 +1,8 @@
 import {
   deleteNote as deleteNoteFromDb,
+  getBookNotes,
   getChapterNotes,
-  getNotesByAnnotation,
+  getNotesByHighlight,
   updateNote as updateNoteInDb,
   type Note,
 } from "@/lib/db";
@@ -12,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
  */
 export const noteKeys = {
   all: ["notes"] as const,
+  book: (bookId: string) => [...noteKeys.all, "book", bookId] as const,
   annotation: (annotationId: string) =>
     [...noteKeys.all, "annotation", annotationId] as const,
   chapter: (bookId: string, spineItemId: string) =>
@@ -24,7 +26,7 @@ export const noteKeys = {
 export function useNotesQuery(annotationId: string | undefined) {
   return useQuery({
     queryKey: noteKeys.annotation(annotationId ?? ""),
-    queryFn: () => getNotesByAnnotation(annotationId!),
+    queryFn: () => getNotesByHighlight(annotationId!),
     enabled: !!annotationId,
   });
 }
@@ -59,7 +61,9 @@ export function useUpdateNoteMutation(annotationId: string | undefined) {
       await queryClient.cancelQueries({ queryKey });
       const previousNotes = queryClient.getQueryData<Note[]>(queryKey);
       queryClient.setQueryData<Note[]>(queryKey, (old = []) =>
-        old.map((n) => (n.id === id ? { ...n, content } : n)),
+        old.map((n) =>
+          n.id === id && n.kind === "note" ? { ...n, content } : n,
+        ),
       );
       return { previousNotes };
     },
@@ -104,5 +108,13 @@ export function useDeleteNoteMutation(annotationId: string | undefined) {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
     },
+  });
+}
+
+/** One cached read serves both notebook ordering and margin notes. */
+export function useBookNotesQuery(bookId: string) {
+  return useQuery({
+    queryKey: noteKeys.book(bookId),
+    queryFn: () => getBookNotes(bookId),
   });
 }

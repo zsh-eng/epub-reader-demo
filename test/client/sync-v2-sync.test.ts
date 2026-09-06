@@ -46,6 +46,66 @@ describe("sync v2 client", () => {
     localStorage.clear();
   });
 
+  it("syncs notebook entries, resolves remote edits, and reconciles deletions without syncing drafts", async () => {
+    const row = {
+      id: "note-a",
+      bookId: "book-a",
+      kind: "note" as const,
+      content: "Local",
+      anchor: {
+        spineItemId: "chapter",
+        startOffset: 0,
+        endOffset: 0,
+        textBefore: "",
+        textAfter: "",
+      },
+      createdAt: 1000,
+      updatedAt: 1000,
+      isDeleted: false,
+    };
+    await db.notes.add(row);
+    await db.noteDrafts.add({
+      id: "create:book-a",
+      bookId: "book-a",
+      purpose: "create",
+      content: "Unsent",
+      target: { kind: "page", anchor: row.anchor },
+      updatedAt: 1000,
+    });
+    await client.push();
+    expect(remote.pushRequests[0]).toHaveLength(1);
+    expect(remote.pushRequests[0][0].key).toBe(encodeSyncKey("notes", row.id));
+    expect(await db._sync_outbox.count()).toBe(0);
+
+    await db.notes.put({ ...row, content: "Pending local edit" });
+    const pending = (await db._sync_outbox.toArray())[0];
+    remote.pullResponses.push({
+      records: [
+        serverRecord(
+          { ...row, content: "Remote edit" },
+          2,
+          pending.hlc.wallTimeMs + 1,
+          "notes",
+        ),
+      ],
+      cursor: 2,
+      head: 2,
+      hasMore: false,
+    });
+    await client.pull();
+    expect(await db.notes.get(row.id)).toMatchObject({
+      content: "Remote edit",
+    });
+    // Pull applies the remote winner; push later reconciles pending outbox work.
+    expect(await db._sync_outbox.count()).toBe(1);
+    expect((await db.noteDrafts.get("create:book-a"))?.content).toBe("Unsent");
+    await db.notes.delete(row.id);
+    await client.push();
+    expect(remote.pushRequests.at(-1)?.[0].isDeleted).toBe(true);
+    expect(await db._sync_outbox.count()).toBe(0);
+    expect((await db.notes.get(row.id))?.isDeleted).toBe(true);
+  });
+
   it("decodes fixed-head bootstrap pages and then excludes its device", async () => {
     remote.pullResponses.push(
       {
