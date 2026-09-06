@@ -2,7 +2,12 @@ import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
 import { dispatchReaderTouchTapHandled } from "./reader-interaction-events";
 
 type TapZone = "left" | "center" | "right";
-type TapNavigationAction = "prev" | "next" | "toggleChrome" | null;
+type TapNavigationAction =
+  | "prev"
+  | "next"
+  | "toggleChrome"
+  | "hideChrome"
+  | null;
 type TouchPressSource = "pointer" | "touch";
 
 interface UseTouchSpreadTapNavOptions {
@@ -11,6 +16,8 @@ interface UseTouchSpreadTapNavOptions {
   onNextSpread: () => void;
   onPrevSpread: () => void;
   onShowChrome?: () => void;
+  onHideChrome?: () => void;
+  chromeVisible?: boolean;
   canGoNext: boolean;
   canGoPrev: boolean;
 }
@@ -36,6 +43,7 @@ interface TouchTapCandidate {
 }
 
 interface ResolveTapNavigationActionOptions {
+  chromeVisible?: boolean;
   clientX: number;
   rect: Pick<DOMRectReadOnly, "left" | "width">;
   target: EventTarget | null;
@@ -158,6 +166,7 @@ export function resolveTapNavigationAction(
 
   if (isDefaultPrevented) return null;
   if (isInteractiveTapTarget(target)) return null;
+  if (options.chromeVisible) return "hideChrome";
 
   const zone = getHorizontalTapZone(clientX, rect);
 
@@ -169,10 +178,8 @@ export function resolveTapNavigationAction(
 /**
  * Handles the exposed touch reading surface only.
  *
- * Chrome-visible taps are intercepted by ReaderController's dismiss layer, so
- * this hook does not need to know about chrome state. It simply turns clean,
- * short touch taps into reading intents and leaves long press/drag gestures to
- * the browser's native text-selection behavior.
+ * A clean tap dismisses visible chrome before any page navigation. Swipes and
+ * long presses remain available to the swipe recognizer and native selection.
  */
 export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
   const {
@@ -181,6 +188,8 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     onNextSpread,
     onPrevSpread,
     onShowChrome,
+    onHideChrome,
+    chromeVisible = false,
     canGoNext,
     canGoPrev,
   } = options;
@@ -204,6 +213,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
         rect: container.getBoundingClientRect(),
         target,
         isDefaultPrevented,
+        chromeVisible,
         canGoNext,
         canGoPrev,
       });
@@ -211,6 +221,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       preventDefault();
       if (action === "prev") onPrevSpread();
       else if (action === "next") onNextSpread();
+      else if (action === "hideChrome") onHideChrome?.();
       else onShowChrome?.();
       return true;
     },
@@ -418,6 +429,15 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       }
     };
 
+    // A handled touch can still produce a compatibility click on Android.
+    const onClick = (event: MouseEvent) => {
+      if (event.detail === 0 || isInteractiveTapTarget(event.target)) return;
+      if (!wasRecentlyHandled(event.clientX)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    container.addEventListener("click", onClick, true);
     container.addEventListener("pointerdown", onPointerDown);
     container.addEventListener("pointermove", onPointerMove);
     container.addEventListener("pointerup", onPointerUp);
@@ -428,6 +448,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     container.addEventListener("touchcancel", onTouchCancel);
 
     return () => {
+      container.removeEventListener("click", onClick, true);
       container.removeEventListener("pointerdown", onPointerDown);
       container.removeEventListener("pointermove", onPointerMove);
       container.removeEventListener("pointerup", onPointerUp);

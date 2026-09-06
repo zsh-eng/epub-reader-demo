@@ -122,7 +122,7 @@ test.describe("Reader touch subscriptions", () => {
     isMobile: true,
   });
 
-  test("turns pages with a tap followed by a swipe after rerender", async ({
+  test("dismisses chrome with a tap and swipes through visible chrome", async ({
     page,
     localBook,
   }) => {
@@ -140,6 +140,23 @@ test.describe("Reader touch subscriptions", () => {
     const beforeSwipe = await currentPages(page);
     bounds = await current.boundingBox();
     if (!bounds) throw new Error("Reader has no visible spread after tapping");
+    const scrubber = page.locator("canvas.cursor-ew-resize");
+    await page.touchscreen.tap(
+      bounds.x + bounds.width * 0.5,
+      bounds.y + bounds.height * 0.5,
+    );
+    await expect(scrubber).toBeVisible();
+    await page.touchscreen.tap(
+      bounds.x + bounds.width * 0.9,
+      bounds.y + bounds.height * 0.5,
+    );
+    await expect(scrubber).not.toBeVisible();
+    expect(await currentPages(page)).toEqual(beforeSwipe);
+    await page.touchscreen.tap(
+      bounds.x + bounds.width * 0.5,
+      bounds.y + bounds.height * 0.5,
+    );
+    await expect(scrubber).toBeVisible();
     const cdp = await page.context().newCDPSession(page);
     const y = bounds.y + bounds.height * 0.5;
     await cdp.send("Input.dispatchTouchEvent", {
@@ -152,6 +169,7 @@ test.describe("Reader touch subscriptions", () => {
         touchPoints: [{ x: bounds.x + bounds.width * fraction, y }],
       });
     }
+    await expect(scrubber).not.toBeVisible();
     await cdp.send("Input.dispatchTouchEvent", {
       type: "touchEnd",
       touchPoints: [],

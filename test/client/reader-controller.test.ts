@@ -1,6 +1,6 @@
 import {
-    CHROME_HIDE_DELAY_MS,
-    ReaderController,
+  CHROME_HIDE_DELAY_MS,
+  ReaderController,
 } from "@/features/reader/ReaderController";
 import type { ChromeInteractionMode } from "@/features/reader/hooks/use-input-behavior";
 import { act, createElement, useRef } from "react";
@@ -41,7 +41,6 @@ function ControllerHarness({
       topRailProps,
       bottomRailProps,
       chromeSurfaceProps,
-      chromeDismissLayerProps,
     }) =>
       createElement(
         "div",
@@ -52,12 +51,6 @@ function ControllerHarness({
           String(chromeVisible),
         ),
         createElement("div", { ref: containerRef, "data-testid": "stage" }),
-        chromeDismissLayerProps
-          ? createElement("div", {
-              ...chromeDismissLayerProps,
-              "data-testid": "dismiss-layer",
-            })
-          : null,
         showHoverRails
           ? createElement("div", {
               ...topRailProps,
@@ -187,6 +180,7 @@ function dispatchClick(element: HTMLElement, clientX = 150) {
   act(() => {
     element.dispatchEvent(
       new MouseEvent("click", {
+        detail: 1,
         bubbles: true,
         cancelable: true,
         button: 0,
@@ -339,10 +333,10 @@ describe("ReaderController", () => {
     dispatchPointerTap(stage, 150);
     expect(isChromeVisible(harness.container)).toBe(true);
 
-    const dismissLayer = getByTestId(harness.container, "dismiss-layer");
-    dispatchPointerTap(dismissLayer, 150);
+    dispatchPointerTap(stage, 260);
     expect(isChromeVisible(harness.container)).toBe(false);
 
+    expect(onNextPage).not.toHaveBeenCalled();
     dispatchPointerTap(stage, 40);
     dispatchPointerTap(stage, 260);
 
@@ -362,11 +356,15 @@ describe("ReaderController", () => {
     dispatchPointerTap(stage, 150);
     expect(isChromeVisible(harness.container)).toBe(true);
 
-    const dismissLayer = getByTestId(harness.container, "dismiss-layer");
-    dispatchClick(dismissLayer);
+    const onClick = vi.fn();
+    stage.addEventListener("click", onClick);
+    dispatchClick(stage);
+    expect(onClick).not.toHaveBeenCalled();
     expect(isChromeVisible(harness.container)).toBe(true);
 
-    dispatchPointerTap(dismissLayer, 150);
+    dispatchPointerTap(stage, 260);
+    dispatchClick(stage, 260);
+    expect(onClick).not.toHaveBeenCalled();
     expect(isChromeVisible(harness.container)).toBe(false);
 
     harness.cleanup();
@@ -395,4 +393,32 @@ describe("ReaderController", () => {
 
     harness.cleanup();
   });
+});
+
+it("leaves selected text and interactive content alone while chrome is visible", () => {
+  const harness = createHarness();
+  const onNextPage = vi.fn();
+  renderHarness(harness.root, { chromeInteractionMode: "touch", onNextPage });
+  const stage = getByTestId(harness.container, "stage");
+  setStageBounds(stage);
+  dispatchPointerTap(stage, 150);
+  act(() => vi.runAllTimers());
+  const link = document.createElement("a");
+  link.href = "#chapter";
+  link.textContent = "Chapter link";
+  stage.append(link);
+  dispatchPointerTap(link, 260);
+  expect(isChromeVisible(harness.container)).toBe(true);
+  const text = document.createElement("p");
+  text.textContent = "Selected reading text";
+  stage.append(text);
+  const range = document.createRange();
+  range.selectNodeContents(text);
+  window.getSelection()?.addRange(range);
+  dispatchPointerTap(text, 260);
+  expect(isChromeVisible(harness.container)).toBe(true);
+  expect(window.getSelection()?.toString()).toBe("Selected reading text");
+  expect(onNextPage).not.toHaveBeenCalled();
+  window.getSelection()?.removeAllRanges();
+  harness.cleanup();
 });

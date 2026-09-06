@@ -279,3 +279,28 @@ describe("Reader tap navigation", () => {
     });
   });
 });
+
+it.each([40, 150, 260])(
+  "dismisses visible chrome at x=%i even at a book boundary",
+  (clientX) => {
+    const options = {
+      clientX,
+      rect: { left: 0, width: 300 },
+      target: document.createElement("p"),
+      isDefaultPrevented: false,
+      canGoNext: false,
+      canGoPrev: false,
+      chromeVisible: true,
+    };
+    expect(resolveTapNavigationAction(options)).toBe("hideChrome");
+    expect(
+      resolveTapNavigationAction({ ...options, isDefaultPrevented: true }),
+    ).toBeNull();
+    expect(
+      resolveTapNavigationAction({
+        ...options,
+        target: document.createElement("button"),
+      }),
+    ).toBeNull();
+  },
+);

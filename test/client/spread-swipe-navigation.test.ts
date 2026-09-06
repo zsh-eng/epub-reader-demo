@@ -16,6 +16,7 @@ interface SwipeHarnessProps {
   nextSpreadId?: number | null;
   onPrevious?: () => void;
   onNext?: () => void;
+  onSwipeStart?: () => void;
   onShowChrome?: () => void;
   disableMotion?: boolean;
 }
@@ -26,6 +27,7 @@ function SwipeHarness({
   nextSpreadId = 2,
   onPrevious = () => {},
   onNext = () => {},
+  onSwipeStart,
   onShowChrome = () => {},
   disableMotion = true,
 }: SwipeHarnessProps) {
@@ -39,6 +41,7 @@ function SwipeHarness({
     nextSpreadId,
     onPrevious,
     onNext,
+    onSwipeStart,
     disableMotion,
   });
   useTouchSpreadTapNav({
@@ -400,5 +403,29 @@ it("uses current tap permissions and callbacks without replacing the surface", (
   });
   expect(originalNext).not.toHaveBeenCalled();
   expect(updatedNext).toHaveBeenCalledOnce();
+  harness.cleanup();
+});
+
+it("claims horizontal intent once and keeps cancellation from navigating", () => {
+  const harness = createHarness();
+  const onSwipeStart = vi.fn();
+  const onNext = vi.fn();
+  renderHarness(harness.root, { onSwipeStart, onNext });
+  const stage = prepareStage(harness.container);
+  act(() => {
+    dispatchTouchPointer(stage, "pointerdown", 500);
+    dispatchTouchPointer(stage, "pointermove", 495);
+  });
+  expect(onSwipeStart).not.toHaveBeenCalled();
+  act(() => {
+    dispatchTouchPointer(stage, "pointermove", 480);
+    dispatchTouchPointer(stage, "pointermove", 400);
+  });
+  expect(onSwipeStart).toHaveBeenCalledOnce();
+  act(() => {
+    dispatchTouchPointer(stage, "pointercancel", 400);
+  });
+  expect(onNext).not.toHaveBeenCalled();
+  expect(stage.dataset.phase).toBe("idle");
   harness.cleanup();
 });

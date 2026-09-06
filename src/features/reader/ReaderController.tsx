@@ -1,15 +1,10 @@
 import type { ChromeInteractionMode } from "@/features/reader/hooks/use-input-behavior";
 import { useCallback, useState, type ReactNode, type RefObject } from "react";
-import type {
-  ReaderChromeDismissLayerProps,
-  ReaderChromeRailProps,
-  ReaderChromeSurfaceProps,
-} from "./chrome";
+import type { ReaderChromeRailProps, ReaderChromeSurfaceProps } from "./chrome";
 import {
   CHROME_HIDE_DELAY_MS,
   useHoverChromeBehavior,
 } from "./hooks/use-hover-chrome-behavior";
-import { useTouchChromeLayer } from "./hooks/use-touch-chrome-layer";
 import { useTouchSpreadTapNav } from "./hooks/use-touch-spread-tap-nav";
 
 export { CHROME_HIDE_DELAY_MS };
@@ -20,7 +15,7 @@ interface ReaderControllerChildrenState {
   topRailProps: ReaderChromeRailProps;
   bottomRailProps: ReaderChromeRailProps;
   chromeSurfaceProps: ReaderChromeSurfaceProps;
-  chromeDismissLayerProps: ReaderChromeDismissLayerProps | null;
+  hideChrome: () => void;
 }
 
 interface ReaderControllerProps {
@@ -42,7 +37,7 @@ interface ReaderControllerProps {
  * Responsibilities:
  * - switches between touch and hover chrome behavior
  * - keeps tap-zone navigation active only in touch mode
- * - exposes a transparent touch dismiss layer when chrome is visible
+ * - dismisses chrome through the existing reading gestures
  * - manages hover enter/leave timing for auto-hidden chrome
  * - suppresses chrome while peer overlays like sheets are open
  *
@@ -96,6 +91,8 @@ export function ReaderController({
     onPrevSpread: onPrevPage,
     onNextSpread: onNextPage,
     onShowChrome: showChrome,
+    onHideChrome: hideChrome,
+    chromeVisible,
     canGoPrev,
     canGoNext,
   });
@@ -109,19 +106,12 @@ export function ReaderController({
     hideChrome,
   });
 
-  const chromeDismissLayerProps = useTouchChromeLayer({
-    enabled: isTouchMode,
-    chromeVisible,
-    isChromeSuppressed,
-    hideChrome,
-  });
-
   return (
     <>
       {children({
         chromeVisible,
         showHoverRails: hoverChrome.showHoverRails,
-        chromeDismissLayerProps,
+        hideChrome,
         topRailProps: hoverChrome.topRailProps,
         bottomRailProps: hoverChrome.bottomRailProps,
         chromeSurfaceProps: hoverChrome.chromeSurfaceProps,

@@ -302,7 +302,7 @@ export function Reader() {
             topRailProps,
             bottomRailProps,
             chromeSurfaceProps,
-            chromeDismissLayerProps,
+            hideChrome,
           }) => (
             <div className="relative h-dvh overflow-hidden font-sans text-foreground">
               <div className="pointer-events-none absolute inset-0">
@@ -361,6 +361,7 @@ export function Reader() {
                     onLinkActivate={sessionActions.openInternalHref}
                     renderAdjacentSpreads={shouldPrepareSwipePages}
                     swipeEnabled={swipeNavigationEnabled}
+                    onSwipeStart={hideChrome}
                     onSwipeNext={sessionActions.nextSpread}
                     onSwipePrevious={sessionActions.prevSpread}
                     paddingTopPx={stagePadding.paddingTop}
@@ -418,13 +419,6 @@ export function Reader() {
 
               {displayReady && (
                 <>
-                  {chromeDismissLayerProps && (
-                    <div
-                      {...chromeDismissLayerProps}
-                      className="absolute inset-0 z-[16] bg-transparent"
-                    />
-                  )}
-
                   <ReaderSheetHost
                     isMobile={isMobile}
                     activeSheet={chromeState.activeReaderSheet}

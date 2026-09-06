@@ -34,6 +34,7 @@ interface SpreadStageProps {
   disableAnimations?: boolean;
   renderAdjacentSpreads?: boolean;
   swipeEnabled?: boolean;
+  onSwipeStart?: () => void;
   onSwipeNext?: () => void;
   onSwipePrevious?: () => void;
   paddingTopPx: number;
@@ -67,6 +68,7 @@ export function SpreadStage({
   disableAnimations = false,
   renderAdjacentSpreads = false,
   swipeEnabled = false,
+  onSwipeStart,
   onSwipeNext = () => {},
   onSwipePrevious = () => {},
   paddingTopPx,
@@ -93,6 +95,7 @@ export function SpreadStage({
     nextSpreadId: nextSpread?.currentSpread ?? null,
     onPrevious: onSwipePrevious,
     onNext: onSwipeNext,
+    onSwipeStart,
     disableMotion: disableAnimations,
   });
 

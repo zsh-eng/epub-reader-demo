@@ -48,6 +48,7 @@ interface UseSpreadSwipeNavigationOptions {
   nextSpreadId: number | null;
   onPrevious: () => void;
   onNext: () => void;
+  onSwipeStart?: () => void;
   disableMotion?: boolean;
 }
 
@@ -144,6 +145,7 @@ export function useSpreadSwipeNavigation(
     nextSpreadId,
     onPrevious,
     onNext,
+    onSwipeStart,
     disableMotion = false,
   } = options;
   const prefersReducedMotion = useReducedMotion();
@@ -162,6 +164,7 @@ export function useSpreadSwipeNavigation(
   );
   const lastObservedCurrentSpreadIdRef = useRef(currentSpreadId);
   // Gesture subscriptions read adjacent targets from the latest committed render.
+  const notifySwipeStart = useEffectEvent(() => onSwipeStart?.());
   const adjacentSpreads = useEffectEvent(() => ({
     previous: previousSpreadId,
     next: nextSpreadId,
@@ -383,6 +386,7 @@ export function useSpreadSwipeNavigation(
         container.setPointerCapture(event.pointerId);
         window.getSelection()?.removeAllRanges();
         setPhase("dragging");
+        notifySwipeStart();
       }
 
       event.preventDefault();
