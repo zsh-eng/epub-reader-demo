@@ -241,6 +241,8 @@ test.describe("Desktop margin notes", () => {
     await page.screenshot({ path: "/tmp/desktop-margin-note.png" });
     expect(await stage.boundingBox()).toEqual(before);
     expect(await currentPages(page)).toEqual(anchorPages);
+    await nextSpread(page);
+    const notebookPages = await currentPages(page);
     await page.mouse.move(600, 20);
     await page
       .getByRole("button", { name: "Open reader tools", exact: true })
@@ -254,6 +256,17 @@ test.describe("Desktop margin notes", () => {
       tools.getByRole("button", { name: "Notes", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     const notebook = tools.getByRole("region", { name: "Book notebook" });
+    await tools
+      .getByRole("textbox", { name: "Write a note" })
+      .fill("Written directly in the notebook");
+    await tools.getByRole("button", { name: "Save note", exact: true }).click();
+    const sidebarNote = notebook
+      .locator("article")
+      .filter({ hasText: "Written directly in the notebook" });
+    await expect(sidebarNote.getByRole("button")).toContainText(
+      `p. ${notebookPages[0]}`,
+    );
+
     await expect(notebook).toContainText("A thought from the margin");
     await expect(
       tools.getByRole("button", { name: "Open notebook", exact: true }),

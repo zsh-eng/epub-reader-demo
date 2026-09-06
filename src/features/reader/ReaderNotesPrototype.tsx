@@ -155,7 +155,7 @@ export function ReaderNotesPrototype({
       {
         id: nextId.current++,
         text: draft.trim(),
-        location: desktop ? { ...anchor, page: commentPosition.page } : anchor,
+        location: anchor,
         top: commentPosition.top,
         createdAt: Date.now(),
         ...(quote ? { quote: { ...quote } } : {}),
