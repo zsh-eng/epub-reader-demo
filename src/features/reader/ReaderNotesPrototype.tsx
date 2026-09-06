@@ -61,6 +61,7 @@ export function ReaderNotesPrototype({
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const composer = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const sidebarInput = useRef<HTMLTextAreaElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const nextId = useRef(0);
   const marginAnchor = useRef<Location | null>(null);
@@ -131,17 +132,26 @@ export function ReaderNotesPrototype({
   }, [open, desktop, notebook]);
 
   useLayoutEffect(() => {
-    const element = input.current;
-    if (!element) return;
-    element.style.height = "0px";
-    element.style.height = `${Math.min(element.scrollHeight, 144)}px`;
+    for (const element of [input.current, sidebarInput.current]) {
+      if (!element) continue;
+      element.style.height = "0px";
+      element.style.height = `${Math.min(element.scrollHeight, 144)}px`;
+    }
   }, [draft, open, notebook]);
+
+  // Desktop keeps its panel mounted for the sidebar exit. Focus only when
+  // the notebook opens; ordinary edits and the exit must not move focus.
+  useLayoutEffect(() => {
+    if (desktop && open && notebook)
+      sidebarInput.current?.focus({ preventScroll: true });
+  }, [desktop, open, notebook]);
 
   useLayoutEffect(() => {
     if (notebook) list.current?.scrollTo({ top: list.current.scrollHeight });
   }, [entries.length, notebook]);
 
   function close() {
+    sidebarInput.current?.blur();
     input.current?.blur();
     setNotebook(false);
     onActiveChange(false);
@@ -166,7 +176,7 @@ export function ReaderNotesPrototype({
     setDraft("");
     setAnchor(location);
     if (desktop && !notebook) close();
-    else input.current?.focus();
+    else (desktop && notebook ? sidebarInput : input).current?.focus();
   }
 
   const iconButton =
@@ -203,89 +213,91 @@ export function ReaderNotesPrototype({
   const commentLeft = `calc(100% - ${Math.max(commentWidth + 16, margin.width - 16)}px)`;
   const commentSurface =
     "rounded-xl border border-border/80 bg-background/95 p-3 text-sm shadow-sm";
-  const noteInput = (
-    <div
-      className={
-        desktop
-          ? `relative z-10 ${commentSurface}`
-          : "relative z-10 rounded-[2rem] border border-border/80 bg-background/95 p-1 shadow-lg backdrop-blur-xl"
-      }
-    >
-      {quote && (
-        <div
-          className="mx-3 mt-1 flex items-center gap-2"
-          data-testid="note-quote"
-        >
-          <span
-            className="min-w-0 flex-1 truncate border-l-[3px] py-1 pl-2 text-xs text-muted-foreground"
-            style={{
-              borderColor:
-                quote.color === "invisible"
-                  ? "var(--muted-foreground)"
-                  : `var(--${quote.color}-secondary)`,
+  function renderNoteInput(inSidebar = false) {
+    return (
+      <div
+        className={
+          desktop
+            ? `relative z-10 ${commentSurface}`
+            : "relative z-10 rounded-[2rem] border border-border/80 bg-background/95 p-1 shadow-lg backdrop-blur-xl"
+        }
+      >
+        {quote && (
+          <div
+            className="mx-3 mt-1 flex items-center gap-2"
+            data-testid="note-quote"
+          >
+            <span
+              className="min-w-0 flex-1 truncate border-l-[3px] py-1 pl-2 text-xs text-muted-foreground"
+              style={{
+                borderColor:
+                  quote.color === "invisible"
+                    ? "var(--muted-foreground)"
+                    : `var(--${quote.color}-secondary)`,
+              }}
+            >
+              {quote.selectedText}
+            </span>
+            <button
+              aria-label="Remove quote"
+              onClick={onClearQuote}
+              className="flex size-7 items-center justify-center text-muted-foreground"
+            >
+              <X size={13} />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-1">
+          {!desktop && (
+            <button
+              aria-label="Open notebook"
+              aria-expanded={notebook}
+              onClick={() => {
+                input.current?.blur();
+                setNotebook(!notebook);
+              }}
+              className={iconButton}
+            >
+              <BookOpen size={19} />
+            </button>
+          )}
+          <textarea
+            ref={inSidebar ? sidebarInput : input}
+            autoFocus={desktop ? open : !notebook}
+            aria-label="Write a note"
+            placeholder="Write a note…"
+            value={draft}
+            rows={1}
+            onChange={(event) => {
+              if (!draft) setAnchor(marginAnchor.current ?? location);
+              setDraft(event.target.value);
             }}
-          >
-            {quote.selectedText}
-          </span>
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                (event.metaKey || event.ctrlKey) &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                send(false);
+              }
+              if (event.key === "Escape") close();
+            }}
+            className={`${desktop ? "min-h-8 text-sm" : "min-h-8 text-base"} min-w-0 flex-1 resize-none bg-transparent py-1 leading-6 outline-none placeholder:text-muted-foreground/70`}
+          />
           <button
-            aria-label="Remove quote"
-            onClick={onClearQuote}
-            className="flex size-7 items-center justify-center text-muted-foreground"
+            aria-label="Save note"
+            disabled={!draft.trim()}
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => send()}
+            className="mb-0.5 flex h-7 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
           >
-            <X size={13} />
+            <ArrowUp size={20} />
           </button>
         </div>
-      )}
-      <div className="flex items-end gap-1">
-        {!desktop && (
-          <button
-            aria-label="Open notebook"
-            aria-expanded={notebook}
-            onClick={() => {
-              input.current?.blur();
-              setNotebook(!notebook);
-            }}
-            className={iconButton}
-          >
-            <BookOpen size={19} />
-          </button>
-        )}
-        <textarea
-          ref={input}
-          autoFocus={desktop || !notebook}
-          aria-label="Write a note"
-          placeholder="Write a note…"
-          value={draft}
-          rows={1}
-          onChange={(event) => {
-            if (!draft) setAnchor(marginAnchor.current ?? location);
-            setDraft(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              (event.metaKey || event.ctrlKey) &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault();
-              send(false);
-            }
-            if (event.key === "Escape") close();
-          }}
-          className={`${desktop ? "min-h-8 text-sm" : "min-h-8 text-base"} min-w-0 flex-1 resize-none bg-transparent py-1 leading-6 outline-none placeholder:text-muted-foreground/70`}
-        />
-        <button
-          aria-label="Save note"
-          disabled={!draft.trim()}
-          onPointerDown={(event) => event.preventDefault()}
-          onClick={() => send()}
-          className="mb-0.5 flex h-7 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
-        >
-          <ArrowUp size={20} />
-        </button>
       </div>
-    </div>
-  );
+    );
+  }
   const notebookPanel = (
     <motion.section
       key="notebook"
@@ -415,15 +427,15 @@ export function ReaderNotesPrototype({
         >
           {notebookPanel}
           <div className="shrink-0 px-2 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
-            {noteInput}
+            {renderNoteInput()}
           </div>
         </ReaderSheet>
       )}
       {children(
         <div className="flex h-full min-h-0 flex-col">
-          {desktop && notebook && notebookPanel}
-          {desktop && notebook && (
-            <div className="shrink-0 p-2">{noteInput}</div>
+          {desktop && notebookPanel}
+          {desktop && (
+            <div className="shrink-0 p-2">{renderNoteInput(true)}</div>
           )}
         </div>,
       )}
@@ -487,7 +499,7 @@ export function ReaderNotesPrototype({
               data-note-composer
               className={marginEntries.length ? "mt-2" : ""}
             >
-              {noteInput}
+              {renderNoteInput()}
             </div>
           )}
         </aside>
@@ -599,7 +611,7 @@ export function ReaderNotesPrototype({
                 </motion.button>
               </div>
             )}
-            {noteInput}
+            {renderNoteInput()}
           </motion.div>
         )}
       </AnimatePresence>

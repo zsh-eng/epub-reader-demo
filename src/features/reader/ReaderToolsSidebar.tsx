@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import type { TOCItem } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -74,7 +74,13 @@ export function ReaderToolsSidebar({
   onCopyDebugDump,
   notesPanel,
 }: ReaderToolsSidebarProps) {
-  const activePanel = resolveActivePanel(activeSheet);
+  // Closing changes visibility, not the content shown during the exit.
+  const [retainedPanel, setRetainedPanel] = useState(() =>
+    resolveActivePanel(activeSheet),
+  );
+  const activePanel =
+    activeSheet === null ? retainedPanel : resolveActivePanel(activeSheet);
+  if (activePanel !== retainedPanel) setRetainedPanel(activePanel);
   const isOpen = activeSheet !== null;
 
   useHotkey(

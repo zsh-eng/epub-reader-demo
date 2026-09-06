@@ -177,6 +177,18 @@ test.describe("Desktop margin notes", () => {
       .getByRole("button", { name: "Close reader tools", exact: true })
       .last()
       .click();
+    const closingSidebar = page.locator('aside[aria-label="Reader tools"]');
+    await expect(closingSidebar).toHaveAttribute("aria-hidden", "true");
+    await expect(
+      closingSidebar.locator('button[aria-label="Notes"]'),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      closingSidebar.locator('[aria-label="Book notebook"]'),
+    ).toHaveCount(1);
+    await expect(
+      closingSidebar.locator('[aria-label="Write a note"]'),
+    ).toHaveCount(1);
+
     await page.mouse.move(600, 20);
     await page
       .getByRole("button", { name: "Open reader tools", exact: true })
