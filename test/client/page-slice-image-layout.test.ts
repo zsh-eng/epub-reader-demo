@@ -1,4 +1,4 @@
-import { PageSliceView } from "@/components/Reader/PageSliceView";
+import { PageSliceView } from "@/features/reader/PageSliceView";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";

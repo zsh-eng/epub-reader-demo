@@ -1,4 +1,4 @@
-import { resolveReaderEpubPreparation } from "@/components/Reader/hooks/reader-epub-preparation";
+import { resolveReaderEpubPreparation } from "@/features/reader/hooks/reader-epub-preparation";
 import type { Book } from "@/lib/db";
 import { parseFileId } from "@/lib/files/file-id";
 import { describe, expect, it } from "vitest";

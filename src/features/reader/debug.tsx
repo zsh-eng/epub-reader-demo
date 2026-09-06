@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft, SlidersHorizontal } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightToolbarContainer";
+import { HighlightToolbarContainer } from "@/features/reader/shared/HighlightToolbarContainer";
 import { PAGE_PADDING_X, PAGE_PADDING_Y } from "./AnimatedSpread";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";

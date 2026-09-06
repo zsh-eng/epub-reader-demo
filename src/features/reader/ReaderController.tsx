@@ -1,4 +1,4 @@
-import type { ChromeInteractionMode } from "@/hooks/use-input-behavior";
+import type { ChromeInteractionMode } from "@/features/reader/hooks/use-input-behavior";
 import { useCallback, useState, type ReactNode, type RefObject } from "react";
 import type {
   ReaderChromeDismissLayerProps,

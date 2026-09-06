@@ -1,5 +1,5 @@
-import { useReaderPaginationFeed } from "@/components/Reader/hooks/use-reader-pagination-feed";
-import type { ReaderChapterArtifactSubscriber } from "@/components/Reader/data/reader-cache/hooks";
+import { useReaderPaginationFeed } from "@/features/reader/hooks/use-reader-pagination-feed";
+import type { ReaderChapterArtifactSubscriber } from "@/features/reader/data/reader-cache/hooks";
 import { PaginationEngine } from "@/lib/pagination-v2/engine";
 import { usePagination } from "@/lib/pagination-v2/use-pagination";
 import type { Block, PaginationConfig } from "@/lib/pagination-v2/types";

@@ -1,30 +1,30 @@
-import { ReaderSheetHost } from "@/components/Reader/ReaderSheetHost";
+import { ReaderSheetHost } from "@/features/reader/ReaderSheetHost";
 import type { Book } from "@/lib/db";
 import type { ReaderSettings } from "@/types/reader.types";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/components/Reader/ReaderToolsSidebar", () => ({
+vi.mock("@/features/reader/ReaderToolsSidebar", () => ({
   ReaderToolsSidebar: () => "desktop reader sidebar",
 }));
 
-vi.mock("@/components/Reader/ReaderToolsLauncherSheet", () => ({
+vi.mock("@/features/reader/ReaderToolsLauncherSheet", () => ({
   ReaderToolsLauncherSheet: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? "mobile reader launcher" : null,
 }));
 
-vi.mock("@/components/Reader/ReaderContentsSheet", () => ({
+vi.mock("@/features/reader/ReaderContentsSheet", () => ({
   ReaderContentsSheet: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? "mobile contents sheet" : null,
 }));
 
-vi.mock("@/components/Reader/ReaderSettingsSheet", () => ({
+vi.mock("@/features/reader/ReaderSettingsSheet", () => ({
   ReaderSettingsSheet: ({ isOpen }: { isOpen: boolean }) =>
     isOpen ? "mobile settings sheet" : null,
 }));
 
-vi.mock("@/components/Reader/ReaderBookActionsSheet", () => ({
+vi.mock("@/features/reader/ReaderBookActionsSheet", () => ({
   ReaderBookActionsSheet: ({
     isOpen,
     onBack,

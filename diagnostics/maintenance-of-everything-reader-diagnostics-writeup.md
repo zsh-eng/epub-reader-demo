@@ -23,7 +23,7 @@ A small `2px` native inline width reserve is kept because several Chromium line 
 
 ### Render modeled line boundaries
 
-File: `src/components/Reader/PageSliceView.tsx`
+File: `src/features/reader/PageSliceView.tsx`
 
 Native text slices now emit `<br />` between modeled `PageLine`s. This keeps Chromium from reflowing the already-paginated slice as one continuous paragraph. Leading gaps are rendered as real breakable spaces rather than `margin-left`, so the browser can still wrap at collapsed whitespace boundaries.
 
@@ -32,7 +32,7 @@ Native text slices now emit `<br />` between modeled `PageLine`s. This keeps Chr
 Files:
 
 - `src/lib/pagination-v2/shared/spacing.ts`
-- `src/components/Reader/debug/page-debug-validation.ts`
+- `src/features/reader/debug/page-debug-validation.ts`
 
 The diagnostics line probe showed `h2` rendered as `25px / 28px` with `3px` vertical overflow. The h2 line-height factor was increased so the rendered h2 line box has enough room.
 

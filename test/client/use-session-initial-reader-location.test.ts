@@ -1,4 +1,4 @@
-import { useSessionInitialReaderLocation } from "@/components/Reader/hooks/use-session-initial-reader-location";
+import { useSessionInitialReaderLocation } from "@/features/reader/hooks/use-session-initial-reader-location";
 import type { ReadingCheckpoint } from "@/lib/db";
 import { cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";

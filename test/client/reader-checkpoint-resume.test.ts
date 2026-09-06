@@ -1,10 +1,10 @@
-import { useReaderCheckpointQuery } from "@/components/Reader/data/reader-cache/hooks";
+import { useReaderCheckpointQuery } from "@/features/reader/data/reader-cache/hooks";
 import {
   readerCheckpointKeys,
   type ReaderCheckpointData,
-} from "@/components/Reader/data/reader-cache/queries";
-import { useReaderCheckpointController } from "@/components/Reader/hooks/use-reader-checkpoint-controller";
-import { useSessionInitialReaderLocation } from "@/components/Reader/hooks/use-session-initial-reader-location";
+} from "@/features/reader/data/reader-cache/queries";
+import { useReaderCheckpointController } from "@/features/reader/hooks/use-reader-checkpoint-controller";
+import { useSessionInitialReaderLocation } from "@/features/reader/hooks/use-session-initial-reader-location";
 import * as database from "@/lib/db";
 import type { ResolvedSpread } from "@/lib/pagination-v2";
 import { syncV2Db } from "@/lib/sync-v2/db";

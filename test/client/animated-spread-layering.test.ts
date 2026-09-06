@@ -1,4 +1,4 @@
-import { AnimatedSpread } from "@/components/Reader/AnimatedSpread";
+import { AnimatedSpread } from "@/features/reader/AnimatedSpread";
 import type {
   PaginationConfig,
   ResolvedSpread,

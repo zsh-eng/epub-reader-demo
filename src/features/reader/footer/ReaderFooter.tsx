@@ -1,8 +1,8 @@
-import type { ReaderChromeSurfaceProps } from "@/components/Reader/chrome";
+import type { ReaderChromeSurfaceProps } from "@/features/reader/chrome";
 import type {
     ChapterEntry,
     ReaderHandoffPrompt,
-} from "@/components/Reader/types";
+} from "@/features/reader/types";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useState } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";

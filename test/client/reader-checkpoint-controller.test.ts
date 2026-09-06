@@ -7,8 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CHECKPOINT_FLUSH_INTERVAL_MS,
   createReaderCheckpointSnapshot,
-} from "@/components/Reader/hooks/reader-checkpoint-controller";
-import { useReaderCheckpointController } from "@/components/Reader/hooks/use-reader-checkpoint-controller";
+} from "@/features/reader/hooks/reader-checkpoint-controller";
+import { useReaderCheckpointController } from "@/features/reader/hooks/use-reader-checkpoint-controller";
 import { upsertCurrentDeviceReadingCheckpoint } from "@/lib/db";
 import type { ResolvedSpread, SpreadIntent } from "@/lib/pagination-v2";
 

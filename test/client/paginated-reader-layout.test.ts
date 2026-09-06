@@ -1,7 +1,7 @@
 import {
   getDefaultPaginatedReaderLayout,
   resolvePaginatedReaderLayout,
-} from "@/components/Reader/hooks/use-paginated-reader-layout";
+} from "@/features/reader/hooks/use-paginated-reader-layout";
 import { describe, expect, it } from "vitest";
 
 describe("resolvePaginatedReaderLayout", () => {

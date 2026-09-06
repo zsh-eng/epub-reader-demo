@@ -71,7 +71,11 @@ flat folders and direct imports until a larger structure earns its place.
 Library owns its page, grid cards, and import flow in `src/features/library`;
 the app shell can use that flow through its provider and hook. Keep shared book
 queries, cover loading, sorting, and reusable book UI outside the feature, and
-keep persistence in `src/data`. Move other features incrementally.
+keep persistence in `src/data`. Highlights owns its grouped view, filtering,
+and mosaic layout; Devices owns signed-in device management; Reading Sessions
+owns the reading-history page. Reader keeps its existing content pipeline,
+hooks, controls, and diagnostics together under `src/features/reader`, including
+the toolbar and settings panels shared by its reading and debug views.
 
 ## PWA performance
 
@@ -105,8 +109,8 @@ hypotheses.
 
 ## Further detail
 
-- [Reader pipeline and diagnostic tools](../src/components/Reader/README.md)
-- [Performance metrics and benchmark evidence](../src/components/Reader/PERFORMANCE.md)
+- [Reader pipeline and diagnostic tools](../src/features/reader/README.md)
+- [Performance metrics and benchmark evidence](../src/features/reader/PERFORMANCE.md)
 - [Reader terminology and rendering invariants](CONTEXT.md)
 - [Agent workflow and current storage contracts](../AGENTS.md)
 - [Product and platform roadmap](../ROADMAP.md)

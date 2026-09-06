@@ -1,4 +1,4 @@
-import { createVisualLineGroups } from "@/components/Reader/debug/page-debug-dump";
+import { createVisualLineGroups } from "@/features/reader/debug/page-debug-dump";
 import { describe, expect, it } from "vitest";
 
 function rect(top: number, bottom: number, left = 24, right = 300): DOMRect {

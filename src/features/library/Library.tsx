@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   prefetchReaderBook,
   prefetchReaderBooks,
-} from "@/components/Reader/data/reader-cache/prefetch";
+} from "@/features/reader/data/reader-cache/prefetch";
 import type { Book } from "@/lib/db";
 import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
 import { warmPaginationWorker } from "@/lib/pagination-v2/worker/pagination-worker-service";

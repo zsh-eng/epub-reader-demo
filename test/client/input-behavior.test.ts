@@ -1,7 +1,7 @@
 import {
   INPUT_BEHAVIOR_MEDIA_QUERIES,
   useInputBehavior,
-} from "@/hooks/use-input-behavior";
+} from "@/features/reader/hooks/use-input-behavior";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";

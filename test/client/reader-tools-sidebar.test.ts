@@ -1,4 +1,4 @@
-import { ReaderToolsSidebar } from "@/components/Reader/ReaderToolsSidebar";
+import { ReaderToolsSidebar } from "@/features/reader/ReaderToolsSidebar";
 import type { ReaderSettings } from "@/types/reader.types";
 import { cleanup, render } from "@testing-library/react";
 import { createElement } from "react";
@@ -21,11 +21,11 @@ vi.mock("@tanstack/react-hotkeys", () => ({
   },
 }));
 
-vi.mock("@/components/Reader/ReaderContentsSheet", () => ({
+vi.mock("@/features/reader/ReaderContentsSheet", () => ({
   ReaderContentsPanel: () => "reader contents",
 }));
 
-vi.mock("@/components/Reader/ReaderSettingsSheet", () => ({
+vi.mock("@/features/reader/ReaderSettingsSheet", () => ({
   ReaderSettingsList: () => "reader settings",
 }));
 

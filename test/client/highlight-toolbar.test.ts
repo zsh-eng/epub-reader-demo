@@ -1,4 +1,4 @@
-import { HighlightToolbar } from "@/components/HighlightToolbar";
+import { HighlightToolbar } from "@/features/reader/shared/HighlightToolbar";
 import {
   cleanup,
   fireEvent,

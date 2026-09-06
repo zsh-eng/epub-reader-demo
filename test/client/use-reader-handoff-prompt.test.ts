@@ -5,11 +5,11 @@ import {
   readerHandoffDeviceKeys,
   resolveHandoffCheckpointPage,
   useReaderHandoffPrompt,
-} from "@/components/Reader/hooks/use-reader-handoff-prompt";
+} from "@/features/reader/hooks/use-reader-handoff-prompt";
 import {
   readerCheckpointKeys,
   type ReaderCheckpointsData,
-} from "@/components/Reader/data/reader-cache/queries";
+} from "@/features/reader/data/reader-cache/queries";
 import type { ReadingCheckpoint } from "@/lib/db";
 import {
   QueryClient,

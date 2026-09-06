@@ -1,7 +1,7 @@
 import {
   buildReaderChapterCachedContent,
   buildReaderChapterLoadOrder,
-} from "@/components/Reader/data/chapter-content-pipeline";
+} from "@/features/reader/data/chapter-content-pipeline";
 import { describe, expect, it } from "vitest";
 
 describe("reader chapter content pipeline", () => {

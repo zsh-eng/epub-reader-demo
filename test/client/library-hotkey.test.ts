@@ -14,7 +14,7 @@ vi.mock("@/features/library/BookCard", () => ({
   BookCard: () => null,
 }));
 
-vi.mock("@/components/Reader/data/reader-cache/prefetch", () => ({
+vi.mock("@/features/reader/data/reader-cache/prefetch", () => ({
   prefetchReaderBook: vi.fn(),
   prefetchReaderBooks: vi.fn(),
 }));

@@ -2,7 +2,7 @@ import {
   ReaderSettingsList,
   ReaderSettingsPanel,
   type ReaderSettingsPanelTab,
-} from "@/components/Reader/ReaderSettingsSheet";
+} from "@/features/reader/ReaderSettingsSheet";
 import type { ReaderSettings } from "@/types/reader.types";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement, useState } from "react";

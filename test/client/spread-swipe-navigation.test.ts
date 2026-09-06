@@ -7,8 +7,8 @@ import {
   resolveSwipeTarget,
   rubberBandSwipeOffset,
   useSpreadSwipeNavigation,
-} from "@/components/Reader/hooks/use-spread-swipe-navigation";
-import { useTouchSpreadTapNav } from "@/components/Reader/hooks/use-touch-spread-tap-nav";
+} from "@/features/reader/hooks/use-spread-swipe-navigation";
+import { useTouchSpreadTapNav } from "@/features/reader/hooks/use-touch-spread-tap-nav";
 
 interface SwipeHarnessProps {
   currentSpreadId?: number;

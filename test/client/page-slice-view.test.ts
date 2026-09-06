@@ -3,7 +3,7 @@ import {
   CONTENT_ANCHOR_END_ATTR,
   CONTENT_ANCHOR_START_ATTR,
 } from "@/lib/pagination-v2/content-anchor-dom";
-import { PageSliceView } from "@/components/Reader/PageSliceView";
+import { PageSliceView } from "@/features/reader/PageSliceView";
 import type { TextSlice } from "@/lib/pagination-v2";
 import {
   EPUB_HIGHLIGHT_END_ATTRIBUTE,

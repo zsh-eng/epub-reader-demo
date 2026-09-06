@@ -1,4 +1,4 @@
-import { resolvePaginatedLinkTarget } from "@/components/Reader/link-navigation";
+import { resolvePaginatedLinkTarget } from "@/features/reader/link-navigation";
 import { describe, expect, it } from "vitest";
 
 describe("Reader link navigation", () => {

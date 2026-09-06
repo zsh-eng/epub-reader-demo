@@ -52,7 +52,7 @@ lines even though Chromium had not produced extra rows.
 
 Fix:
 
-- `src/components/Reader/debug/page-debug-dump.ts`
+- `src/features/reader/debug/page-debug-dump.ts`
 - `test/client/page-debug-dump.test.ts`
 
 `createVisualLineGroups` now accepts the slice line height and groups rect tops
@@ -81,7 +81,7 @@ Examples:
 
 Fix:
 
-- `src/components/Reader/PageSliceView.tsx`
+- `src/features/reader/PageSliceView.tsx`
 - `test/client/page-slice-view.test.ts`
 
 Native text rendering now wraps each modeled line in a `white-space: nowrap`

@@ -1,7 +1,7 @@
-import * as cache from "@/components/Reader/data/reader-cache/cache";
-import { prefetchReaderBook } from "@/components/Reader/data/reader-cache/prefetch";
-import type { ReaderDecoratedChapterArtifact } from "@/components/Reader/data/chapter-content-pipeline";
-import { useReaderChapterContent } from "@/components/Reader/hooks/use-reader-chapter-content";
+import * as cache from "@/features/reader/data/reader-cache/cache";
+import { prefetchReaderBook } from "@/features/reader/data/reader-cache/prefetch";
+import type { ReaderDecoratedChapterArtifact } from "@/features/reader/data/chapter-content-pipeline";
+import { useReaderChapterContent } from "@/features/reader/hooks/use-reader-chapter-content";
 import { db, replaceBookMaterialization, type Book } from "@/lib/db";
 import { parseFileId } from "@/lib/files/file-id";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

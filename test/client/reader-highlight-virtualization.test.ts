@@ -8,7 +8,7 @@ import {
   applyHighlightsToChapterHtml,
   buildHighlightSignature,
   buildHighlightsBySpineItemId,
-} from "@/components/Reader/highlight-virtualization";
+} from "@/features/reader/highlight-virtualization";
 import { describe, expect, it } from "vitest";
 
 function makeHighlight(

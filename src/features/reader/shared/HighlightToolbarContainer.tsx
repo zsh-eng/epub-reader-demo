@@ -1,5 +1,5 @@
-import { HighlightToolbar } from "@/components/HighlightToolbar";
-import { MobileHighlightBar } from "@/components/ReaderShared/MobileHighlightBar";
+import { HighlightToolbar } from "./HighlightToolbar";
+import { MobileHighlightBar } from "./MobileHighlightBar";
 import {
   useDeleteHighlightMutation,
   useUpdateHighlightMutation,

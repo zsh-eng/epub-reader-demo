@@ -1,7 +1,7 @@
 import {
   getReaderStatusPrompt,
   useReaderStatusPrompt,
-} from "@/components/Reader/hooks/use-reader-status-prompt";
+} from "@/features/reader/hooks/use-reader-status-prompt";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

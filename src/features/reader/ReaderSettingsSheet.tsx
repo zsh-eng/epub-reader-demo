@@ -1,5 +1,5 @@
-import { ThemePanel } from "@/components/ReaderShared/ReaderSettings/ThemePanel";
-import { TypographyPanel } from "@/components/ReaderShared/ReaderSettings/TypographyPanel";
+import { ThemePanel } from "@/features/reader/shared/ReaderSettings/ThemePanel";
+import { TypographyPanel } from "@/features/reader/shared/ReaderSettings/TypographyPanel";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {

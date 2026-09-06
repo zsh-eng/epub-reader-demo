@@ -3,8 +3,8 @@ import {
   ReaderReadingSessionController,
   READING_SESSION_FLUSH_INTERVAL_MS,
   type ReaderReadingSessionPosition,
-} from "@/components/Reader/hooks/reading-sessions/reader-reading-session-controller";
-import { useReaderReadingSession } from "@/components/Reader/hooks/reading-sessions/use-reader-reading-session";
+} from "@/features/reader/hooks/reading-sessions/reader-reading-session-controller";
+import { useReaderReadingSession } from "@/features/reader/hooks/reading-sessions/use-reader-reading-session";
 import { updateCurrentDeviceReadingSession } from "@/lib/db";
 import type { ResolvedSpread, SpreadIntent } from "@/lib/pagination-v2";
 import { act, cleanup, renderHook } from "@testing-library/react";

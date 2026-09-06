@@ -1,7 +1,7 @@
 import {
   loadReaderBodyCache,
   READER_BODY_CACHE_SCHEMA_VERSION,
-} from "@/components/Reader/data/reader-cache/cache";
+} from "@/features/reader/data/reader-cache/cache";
 import {
   addBook,
   db,

@@ -1,4 +1,4 @@
-import { ReaderControlMenu } from "@/components/Reader/ReaderControlMenu";
+import { ReaderControlMenu } from "@/features/reader/ReaderControlMenu";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";

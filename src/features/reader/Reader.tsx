@@ -1,5 +1,5 @@
-import { HighlightToolbarContainer } from "@/components/ReaderShared/HighlightToolbarContainer";
-import { useInputBehavior } from "@/hooks/use-input-behavior";
+import { HighlightToolbarContainer } from "@/features/reader/shared/HighlightToolbarContainer";
+import { useInputBehavior } from "@/features/reader/hooks/use-input-behavior";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { recordReaderTraceSpan } from "@/lib/reader-performance-trace";
