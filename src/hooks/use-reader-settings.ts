@@ -17,6 +17,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { toast } from "sonner";
+
 const STORAGE_KEY = "epub-reader-settings";
 const APPEARANCE_STORAGE_KEY = "epub-reader-appearance";
 const THEME_TRANSITION_CLASS = "theme-transitioning";
@@ -109,6 +111,22 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   // Track if this is the initial mount - skip transitions on first load
   const isInitialMount = useRef(true);
 
+  const storageErrorReported = useRef(false);
+  // Do not overwrite saved preferences with fallback values after a failed read.
+  const settingsChanged = useRef(false);
+  const settingsReadFailed = useRef(false);
+  const appearanceChanged = useRef(false);
+
+  const reportStorageError = useCallback(() => {
+    if (storageErrorReported.current) return;
+    storageErrorReported.current = true;
+    toast.error("Could not save appearance preferences", {
+      description:
+        "Changes work in this session but may be lost when you reload.",
+      id: "reader-settings-storage-error",
+    });
+  }, []);
+
   // Initialize state from localStorage or defaults
   const [settings, setSettings] = useState<ReaderSettings>(() => {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
@@ -124,6 +142,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
         ...JSON.parse(item),
       });
     } catch (error) {
+      settingsReadFailed.current = true;
       console.warn("Error reading settings from localStorage:", error);
       return DEFAULT_SETTINGS;
     }
@@ -132,52 +151,58 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     () => {
       if (typeof window === "undefined") return "light";
 
-      const storedAppearance = window.localStorage.getItem(
-        APPEARANCE_STORAGE_KEY,
-      );
-      if (isAppearanceMode(storedAppearance)) return storedAppearance;
+      try {
+        const storedAppearance = window.localStorage.getItem(
+          APPEARANCE_STORAGE_KEY,
+        );
+        if (isAppearanceMode(storedAppearance)) return storedAppearance;
+      } catch (error) {
+        console.warn("Error reading appearance from localStorage:", error);
+      }
       return isDarkReaderTheme(settings.theme) ? "dark" : "light";
     },
   );
 
   // Update localStorage when settings change
   useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-
-      // Manually handle theme switching since we removed next-themes
-      const root = window.document.documentElement;
-
-      // Clear any existing timeout to ensure only the latest transition completes
-      if (themeTransitionTimeoutRef.current !== null) {
-        clearTimeout(themeTransitionTimeoutRef.current);
+    if (settingsChanged.current) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      } catch {
+        reportStorageError();
       }
-
-      // Only add transition class after initial mount to avoid flash/stagger on page load
-      // This is combined with the initial setting of the theme in index.html
-      if (isInitialMount.current) {
-        isInitialMount.current = false;
-      } else {
-        root.classList.add(THEME_TRANSITION_CLASS);
-        themeTransitionTimeoutRef.current = window.setTimeout(() => {
-          root.classList.remove(THEME_TRANSITION_CLASS);
-          themeTransitionTimeoutRef.current = null;
-        }, THEME_TRANSITION_DURATION_MS);
-      }
-
-      // Read the theme token, not the transitioning body colour. This also runs
-      // on first mount so restored dark themes do not retain a white browser bar.
-      root.classList.remove(...THEME_CLASSES);
-      root.classList.add(settings.theme);
-      window.document
-        .querySelector('meta[name="theme-color"]')
-        ?.setAttribute(
-          "content",
-          getComputedStyle(root).getPropertyValue("--background").trim(),
-        );
-    } catch (error) {
-      console.warn("Error saving settings to localStorage:", error);
     }
+
+    // Manually handle theme switching since we removed next-themes
+    const root = window.document.documentElement;
+
+    // Clear any existing timeout to ensure only the latest transition completes
+    if (themeTransitionTimeoutRef.current !== null) {
+      clearTimeout(themeTransitionTimeoutRef.current);
+    }
+
+    // Only add transition class after initial mount to avoid flash/stagger on page load
+    // This is combined with the initial setting of the theme in index.html
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    } else {
+      root.classList.add(THEME_TRANSITION_CLASS);
+      themeTransitionTimeoutRef.current = window.setTimeout(() => {
+        root.classList.remove(THEME_TRANSITION_CLASS);
+        themeTransitionTimeoutRef.current = null;
+      }, THEME_TRANSITION_DURATION_MS);
+    }
+
+    // Read the theme token, not the transitioning body colour. This also runs
+    // on first mount so restored dark themes do not retain a white browser bar.
+    root.classList.remove(...THEME_CLASSES);
+    root.classList.add(settings.theme);
+    window.document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute(
+        "content",
+        getComputedStyle(root).getPropertyValue("--background").trim(),
+      );
 
     // Cleanup: clear timeout if component unmounts
     return () => {
@@ -185,17 +210,23 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
         clearTimeout(themeTransitionTimeoutRef.current);
       }
     };
-  }, [settings]);
+  }, [settings, reportStorageError]);
 
   useEffect(() => {
-    window.localStorage.setItem(APPEARANCE_STORAGE_KEY, appearanceMode);
-  }, [appearanceMode]);
+    if (!appearanceChanged.current) return;
+    try {
+      window.localStorage.setItem(APPEARANCE_STORAGE_KEY, appearanceMode);
+    } catch {
+      reportStorageError();
+    }
+  }, [appearanceMode, reportStorageError]);
 
   useEffect(() => {
     if (appearanceMode !== "system") return;
 
     const systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
     const applySystemTheme = (useDarkTheme: boolean) => {
+      if (!settingsReadFailed.current) settingsChanged.current = true;
       setSettings((previousSettings) => ({
         ...previousSettings,
         theme: resolveAppearanceTheme(previousSettings.theme, useDarkTheme),
@@ -213,9 +244,11 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   }, [appearanceMode]);
 
   const updateSettings = useCallback((newSettings: Partial<ReaderSettings>) => {
+    settingsChanged.current = true;
     setSettings((prev) => normalizeReaderSettings({ ...prev, ...newSettings }));
 
     if (newSettings.theme) {
+      appearanceChanged.current = true;
       setAppearanceModeState(
         isDarkReaderTheme(newSettings.theme) ? "dark" : "light",
       );
@@ -223,6 +256,8 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setAppearanceMode = useCallback((nextAppearance: AppearanceMode) => {
+    settingsChanged.current = true;
+    appearanceChanged.current = true;
     const useDarkTheme =
       nextAppearance === "system"
         ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -236,6 +271,8 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetSettings = useCallback(() => {
+    settingsChanged.current = true;
+    appearanceChanged.current = true;
     setSettings(DEFAULT_SETTINGS);
     setAppearanceModeState("light");
   }, []);

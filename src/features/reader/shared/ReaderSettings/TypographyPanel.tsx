@@ -111,6 +111,8 @@ export function TypographyPanel({
               return (
                 <button
                   key={font.value}
+                  aria-label={font.label}
+                  aria-pressed={isSelected}
                   data-state={isSelected ? "on" : "off"}
                   onClick={() => onUpdateSettings({ fontFamily: font.value })}
                   className={cn(
@@ -207,6 +209,7 @@ export function TypographyPanel({
             className={segmentedGroupClassName}
           >
             <SegmentedToggleGroupItem
+              aria-label="Left"
               value="left"
               className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
             >
@@ -214,6 +217,7 @@ export function TypographyPanel({
               <span className="hidden sm:inline">Left</span>
             </SegmentedToggleGroupItem>
             <SegmentedToggleGroupItem
+              aria-label="Center"
               value="center"
               className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
             >
@@ -221,6 +225,7 @@ export function TypographyPanel({
               <span className="hidden sm:inline">Center</span>
             </SegmentedToggleGroupItem>
             <SegmentedToggleGroupItem
+              aria-label="Right"
               value="right"
               className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
             >
@@ -228,6 +233,7 @@ export function TypographyPanel({
               <span className="hidden sm:inline">Right</span>
             </SegmentedToggleGroupItem>
             <SegmentedToggleGroupItem
+              aria-label="Justify"
               value="justify"
               className={cn("flex-1 gap-1 text-[10px]", segmentedItemClassName)}
             >

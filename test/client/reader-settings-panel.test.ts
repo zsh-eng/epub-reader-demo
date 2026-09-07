@@ -21,11 +21,13 @@ const settings: ReaderSettings = {
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 
 function SettingsPanelHarness() {
+  const [currentSettings, updateSettings] = useState(settings);
   const [activeTab, setActiveTab] = useState<ReaderSettingsPanelTab>("type");
 
   return createElement(ReaderSettingsPanel, {
-    settings,
-    onUpdateSettings: vi.fn(),
+    settings: currentSettings,
+    onUpdateSettings: (changes) =>
+      updateSettings((previous) => ({ ...previous, ...changes })),
     activeTab,
     onActiveTabChange: setActiveTab,
   });
@@ -87,4 +89,44 @@ describe("ReaderSettingsPanel", () => {
       publisherBookStylingEnabled: true,
     });
   });
+});
+
+it("exposes names and current choices through the composed mobile controls", () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  render(createElement(SettingsPanelHarness));
+  expect(
+    screen.getByRole("button", { name: "Lora", pressed: true }),
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Inter", pressed: false }),
+  );
+  expect(
+    screen.getByRole("button", { name: "Inter", pressed: true }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Lora", pressed: false }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Layout" }));
+  for (const name of ["Left", "Center", "Right", "Justify"]) {
+    expect(
+      screen.getByRole("button", { name }).getAttribute("aria-label"),
+    ).toBe(name);
+  }
+  fireEvent.click(screen.getByRole("button", { name: "Center" }));
+  expect(
+    screen.getByRole("button", { name: "Center", pressed: true }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Theme" }));
+  expect(
+    screen.getByRole("button", { name: "Light", pressed: true }),
+  ).toBeTruthy();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Night", pressed: false }),
+  );
+  expect(
+    screen.getByRole("button", { name: "Night", pressed: true }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Light", pressed: false }),
+  ).toBeTruthy();
 });

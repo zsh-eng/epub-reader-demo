@@ -61,6 +61,8 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
           return (
             <button
               key={theme.value}
+              aria-label={theme.label}
+              aria-pressed={isSelected}
               onClick={() => onUpdateSettings({ theme: theme.value })}
               className={cn(
                 "relative h-36 overflow-hidden rounded-[1.25rem] border text-left transition-[background-color,border-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
