@@ -2,6 +2,7 @@ import {
   test as base,
   expect,
   type BrowserContext,
+  type Frame,
   type Page,
 } from "@playwright/test";
 import { fileURLToPath } from "node:url";
@@ -242,7 +243,7 @@ export async function importSampleBook(page: Page): Promise<void> {
 }
 
 /** Wait for the current spread only, including removal of the outgoing animated spread. */
-export async function waitForReaderReady(page: Page): Promise<void> {
+export async function waitForReaderReady(page: Page | Frame): Promise<void> {
   await expect(
     page.locator(`${CURRENT_SPREAD} [data-reader-page-content]`).first(),
   ).toBeVisible();

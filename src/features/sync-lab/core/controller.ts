@@ -58,7 +58,7 @@ export interface LabSnapshot {
   }[];
 }
 export interface LabView {
-  clients: LabClient[];
+  clients: (LabClient & { networkState: ClientNetworkState })[];
   events: LabEvent[];
   mode: LabMode;
   server: MemoryServerSnapshot;
@@ -107,7 +107,11 @@ export class SyncLabController implements LabHost {
   getSnapshot = () => this.view;
   private publish() {
     this.view = {
-      clients: [...this.clients],
+      // React Compiler caches props by identity. Publish values, not live clients.
+      clients: this.clients.map((client) => ({
+        ...client,
+        networkState: client.network.snapshot(),
+      })),
       events: [...this.events],
       mode: this.mode,
       server: this.server.snapshot(),

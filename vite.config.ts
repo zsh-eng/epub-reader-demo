@@ -19,10 +19,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      // App owns registration. Isolated debug frames must never register a worker.
+      injectRegister: false,
       devOptions: {
         enabled: true,
       },
       workbox: {
+        // Explicit registration must retain the existing auto-update lifecycle.
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallbackDenylist: [/^\/api\//],
         globIgnores: [
           "**/assets/encode-*.js",

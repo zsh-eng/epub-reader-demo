@@ -23,15 +23,58 @@ import "@fontsource/lora/400-italic.css";
 import "@fontsource/jetbrains-mono/400.css";
 
 import "./index.css";
-import App from "./App.tsx";
-import { deleteLegacyClientDatabase } from "./lib/sync-v2/db.ts";
-
-void deleteLegacyClientDatabase().catch((error: unknown) => {
-  console.error("Could not delete the legacy client database:", error);
+/** Configure isolated clients before app modules create their singleton services. */
+async function bootstrap() {
+  const root = createRoot(document.getElementById("root")!);
+  const id = new URLSearchParams(location.search).get("labClient");
+  if (id) {
+    if (window.parent === window || !window.parent.__syncLabHost)
+      throw new Error("Open this client from Sync Lab.");
+    const { configureLabRuntime } = await import("./features/sync-lab/runtime");
+    const runtime = window.parent.__syncLabHost.connect(id);
+    configureLabRuntime(runtime);
+    const { onlineManager } = await import("@tanstack/react-query");
+    // Query recovery must follow this client, even while the host is online.
+    onlineManager.setOnline(runtime.isOnline());
+    onlineManager.setEventListener((setOnline) =>
+      runtime.subscribeOnline(() => setOnline(runtime.isOnline())),
+    );
+    const { startLabClient } = await import("./features/sync-lab/client");
+    let stopped = false;
+    await startLabClient(id, () => {
+      stopped = true;
+      root.unmount();
+      // Headless clients have no QueryClientProvider to release this listener.
+      onlineManager.setEventListener(() => () => {});
+    });
+    if (new URLSearchParams(location.search).get("labMode") === "app") {
+      const { default: App } = await import("./App");
+      if (!stopped) root.render(<App />);
+    }
+    return;
+  }
+  if (location.pathname === "/debug/sync") {
+    const { default: SyncLab } = await import("./features/sync-lab/SyncLab");
+    root.render(<SyncLab />);
+    return;
+  }
+  const [{ default: App }, { deleteLegacyClientDatabase }] = await Promise.all([
+    import("./App"),
+    import("./lib/sync-v2/db"),
+  ]);
+  void deleteLegacyClientDatabase().catch((error: unknown) =>
+    console.error("Could not delete the legacy client database:", error),
+  );
+  root.render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+void bootstrap().catch((error) => {
+  console.error("Application startup failed", error);
+  const element = document.getElementById("root");
+  if (element)
+    element.textContent =
+      error instanceof Error ? error.message : String(error);
 });
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);

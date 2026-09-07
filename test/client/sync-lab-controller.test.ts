@@ -16,6 +16,17 @@ import Dexie from "dexie";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const labs: SyncLabController[] = [];
+it("publishes changed connectivity without mutating the previous client view", async () => {
+  const lab = await setup();
+  const id = await lab.spawn("metadata");
+  const before = lab.getSnapshot().clients[0]!;
+  lab.setOnline(id, false);
+  await Promise.resolve();
+  const after = lab.getSnapshot().clients[0]!;
+  expect(after).not.toBe(before);
+  expect(before.networkState.online).toBe(true);
+  expect(after.networkState.online).toBe(false);
+});
 afterEach(async () => {
   for (const lab of labs.splice(0)) await lab.dispose();
 });

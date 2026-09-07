@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { Switch } from "@/components/ui/switch";
 import { setDebugEnabled, useDebugEnabled } from "@/lib/debug-preference";
+import { getLabRuntime } from "@/features/sync-lab/runtime";
 import { Bug } from "lucide-react";
 
 /** Application preferences use the same compact page layout as Devices. */
@@ -56,6 +57,17 @@ export function Settings() {
               />
             </div>
           </Card>
+          {debugEnabled && !getLabRuntime() && (
+            <a
+              href="/debug/sync"
+              className="mt-4 block rounded-2xl border border-border p-5 text-sm hover:bg-muted"
+            >
+              <strong>Sync Lab →</strong>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Spawn isolated clients, inspect sync, and test offline changes.
+              </p>
+            </a>
+          )}
         </section>
       </div>
     </div>

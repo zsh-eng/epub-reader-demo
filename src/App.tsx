@@ -1,3 +1,4 @@
+import { AppRouter } from "@/features/sync-lab/AppLocation";
 import { Settings } from "@/features/settings/Settings";
 import { DebugGate } from "@/features/settings/DebugGate";
 import "@/App.css";
@@ -17,7 +18,9 @@ import { ReaderSettingsProvider } from "@/hooks/use-reader-settings";
 import { SyncProvider } from "@/hooks/use-sync";
 import { useFileUploads } from "@/hooks/use-file-uploads";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import { getLabRuntime, registerLabDrain } from "@/features/sync-lab/runtime";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +30,24 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// A snapshot waits for final checkpoint mutations issued during Reader unmount.
+registerLabDrain(
+  () =>
+    new Promise<void>((resolve) => {
+      const check = () => {
+        if (queryClient.isMutating() || queryClient.isFetching()) return;
+        unsubscribeMutations();
+        unsubscribeQueries();
+        resolve();
+      };
+      const unsubscribeMutations = queryClient
+        .getMutationCache()
+        .subscribe(check);
+      const unsubscribeQueries = queryClient.getQueryCache().subscribe(check);
+      check();
+    }),
+);
 
 /**
  * Starts durable file uploads once for the mounted application.
@@ -42,7 +63,7 @@ function App() {
       <ReaderSettingsProvider>
         <SyncProvider>
           <FileUploadInitializer>
-            <BrowserRouter>
+            <AppRouter>
               <EpubImportProvider>
                 <Routes>
                   <Route element={<AppShell />}>
@@ -93,9 +114,9 @@ function App() {
                     },
                   }}
                 />
-                <ReloadPrompt />
+                {!getLabRuntime() && <ReloadPrompt />}
               </EpubImportProvider>
-            </BrowserRouter>
+            </AppRouter>
           </FileUploadInitializer>
         </SyncProvider>
       </ReaderSettingsProvider>
