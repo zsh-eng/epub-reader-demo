@@ -113,6 +113,14 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        if (duplicateCount > 0 && errorCount === 0) {
+          toast({
+            title: "Already in library",
+            description: summary.join(" · "),
+          });
+          return;
+        }
+
         toast({
           title: "Import failed",
           description: summary.join(" · "),
