@@ -67,14 +67,15 @@ afterEach(() => {
 });
 
 describe("ReaderToolsSidebar", () => {
-  it("opens and closes with Command or Control + Shift + Backslash", () => {
+  // The chrome-state tests verify that "tools" restores the stored desktop tab.
+  it("opens the remembered panel and closes with Command or Control + Shift + Backslash", () => {
     const onOpenPanel = vi.fn();
     renderSidebar(null, onOpenPanel);
 
     const preventDefault = vi.fn();
     hotkeyHandlers.get("Mod+Shift+\\")?.({ preventDefault } as never);
     expect(preventDefault).toHaveBeenCalledOnce();
-    expect(onOpenPanel).toHaveBeenCalledWith("contents");
+    expect(onOpenPanel).toHaveBeenCalledWith("tools");
 
     cleanup();
     hotkeyHandlers.clear();
