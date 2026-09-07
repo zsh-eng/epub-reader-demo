@@ -281,6 +281,11 @@ export class ReaderReadingSessionController {
         this.lastPersistedSnapshotKey = snapshotKey;
       })
       .catch((error) => {
+        // A failed write must not suppress the next ordinary flush.
+        // Keep a newer queued snapshot protected while this write settles.
+        if (this.lastEnqueuedSnapshotKey === snapshotKey) {
+          this.lastEnqueuedSnapshotKey = null;
+        }
         this.onError(error);
       });
   }

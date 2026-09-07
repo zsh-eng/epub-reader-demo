@@ -6,11 +6,9 @@ import { syncV2SyncDb } from "@/lib/sync-v2/db";
 import { SyncV2Client, type SyncV2RunResult } from "@/lib/sync-v2/sync";
 
 const SYNC_INTERVAL_MS = 30_000;
-const EMPTY_SYNC_RESULT: SyncV2RunResult = {
-  pulled: 0,
-  skipped: 0,
-  pushed: 0,
-};
+export type SyncServiceResult =
+  | { status: "offline" }
+  | ({ status: "completed" } & SyncV2RunResult);
 
 /**
  * Owns browser lifecycle concerns only. Protocol and persistence logic remain
@@ -52,14 +50,15 @@ class SyncService {
     this.syncInterval = null;
   }
 
-  async syncAll(): Promise<SyncV2RunResult> {
-    if (!this.isOnline) return EMPTY_SYNC_RESULT;
+  async syncAll(): Promise<SyncServiceResult> {
+    if (!this.isOnline) return { status: "offline" };
 
-    return this.client.sync();
+    return { status: "completed", ...(await this.client.sync()) };
   }
 
   private handleOnline = (): void => {
     this.isOnline = true;
+    if (this.syncInterval === null) return;
     void this.syncAll().catch((error) => {
       console.error("Online sync failed:", error);
     });

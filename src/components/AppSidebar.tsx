@@ -27,7 +27,7 @@ import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/features/library/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
-import { useSync } from "@/hooks/use-sync";
+import { SyncUnavailableError, useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
 import type { Book } from "@/lib/db";
@@ -234,7 +234,10 @@ export function AppSidebar() {
       console.error("Error syncing:", error);
       toast({
         title: "Sync failed",
-        description: "Failed to synchronize library",
+        description:
+          error instanceof SyncUnavailableError
+            ? error.message
+            : "Failed to synchronize library",
         variant: "destructive",
       });
     }

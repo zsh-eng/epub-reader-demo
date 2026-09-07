@@ -14,6 +14,9 @@ import type {
   RemoteFile,
 } from "@/lib/files/types";
 
+const UPLOAD_RETRY_INITIAL_MS = 1_000;
+const UPLOAD_RETRY_MAX_MS = 30_000;
+
 const DEFAULT_MEDIA_TYPE = "application/octet-stream";
 
 /**
@@ -29,6 +32,8 @@ export class FilesManager implements Files {
   private uploadsEnabled = false;
   private uploadLoop: Promise<void> | null = null;
   private uploadWakeRequested = false;
+  private uploadRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private uploadRetryDelayMs = UPLOAD_RETRY_INITIAL_MS;
 
   constructor(remote: FileRemoteApi) {
     this.remote = remote;
@@ -147,6 +152,11 @@ export class FilesManager implements Files {
 
   pauseUploads(): void {
     this.uploadsEnabled = false;
+    this.uploadWakeRequested = false;
+    if (this.uploadRetryTimer !== null) {
+      clearTimeout(this.uploadRetryTimer);
+      this.uploadRetryTimer = null;
+    }
   }
 
   private async downloadAndStore(id: FileId): Promise<Blob> {
@@ -173,17 +183,35 @@ export class FilesManager implements Files {
   }
 
   private startUploadLoop(): void {
-    if (!this.uploadsEnabled) return;
+    if (!this.uploadsEnabled || this.uploadRetryTimer !== null) return;
     if (this.uploadLoop) {
       this.uploadWakeRequested = true;
       return;
     }
 
     this.uploadWakeRequested = false;
-    this.uploadLoop = this.processUploads().finally(() => {
-      this.uploadLoop = null;
-      if (this.uploadWakeRequested) this.startUploadLoop();
-    });
+    this.uploadLoop = this.processUploads()
+      .catch((error) => {
+        console.error("File upload processing failed:", error);
+        this.scheduleUploadRetry();
+      })
+      .finally(() => {
+        this.uploadLoop = null;
+        if (this.uploadWakeRequested) this.startUploadLoop();
+      });
+  }
+
+  /** Keep one bounded retry timer; new puts cannot bypass the backoff. */
+  private scheduleUploadRetry(): void {
+    if (!this.uploadsEnabled || this.uploadRetryTimer !== null) return;
+    this.uploadRetryTimer = setTimeout(() => {
+      this.uploadRetryTimer = null;
+      this.startUploadLoop();
+    }, this.uploadRetryDelayMs);
+    this.uploadRetryDelayMs = Math.min(
+      this.uploadRetryDelayMs * 2,
+      UPLOAD_RETRY_MAX_MS,
+    );
   }
 
   private async processUploads(): Promise<void> {
@@ -194,7 +222,11 @@ export class FilesManager implements Files {
       if (!operation) return;
 
       const succeeded = await this.processUpload(operation);
-      if (!succeeded) return;
+      if (!succeeded) {
+        this.scheduleUploadRetry();
+        return;
+      }
+      this.uploadRetryDelayMs = UPLOAD_RETRY_INITIAL_MS;
     }
   }
 
@@ -206,6 +238,8 @@ export class FilesManager implements Files {
       await db.fileUploadOperations.delete(operation.id);
       return true;
     }
+
+    if (!this.uploadsEnabled) return false;
 
     try {
       await this.remote.put(operation.id, localFile.blob, localFile.mediaType);
