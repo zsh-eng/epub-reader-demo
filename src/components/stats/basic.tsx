@@ -1,3 +1,4 @@
+import { useStatisticsClock } from "@/components/hooks/use-clock";
 import { Card, CardContent } from "@/components/ui/card";
 import * as React from "react";
 import { ReviewLog } from "ts-fsrs";
@@ -7,6 +8,7 @@ interface BasicStatsProps {
 }
 
 export function BasicStats({ reviewLogs }: BasicStatsProps) {
+  const clock = useStatisticsClock();
   const stats = React.useMemo(() => {
     // Get unique days of learning
     const uniqueDays = new Set(
@@ -41,7 +43,7 @@ export function BasicStats({ reviewLogs }: BasicStatsProps) {
       longestStreak = Math.max(longestStreak, streak);
 
       // Check if streak is current (includes today)
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date(clock).toISOString().split("T")[0];
       if (sortedDays[i] === today) {
         currentStreak = streak;
       }
@@ -54,7 +56,7 @@ export function BasicStats({ reviewLogs }: BasicStatsProps) {
       currentStreak,
       longestStreak,
     };
-  }, [reviewLogs]);
+  }, [reviewLogs, clock]);
 
   return (
     <Card>

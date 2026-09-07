@@ -1,3 +1,4 @@
+import { useStatisticsClock } from "@/components/hooks/use-clock";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Tooltip,
@@ -14,15 +15,16 @@ interface HeatmapProps {
 }
 
 export function Heatmap({ reviewLogs }: HeatmapProps) {
+  const clock = useStatisticsClock();
   const heatmapData = React.useMemo(() => {
-    const now = new Date();
+    const now = new Date(clock);
     const yearAgo = new Date(now.setFullYear(now.getFullYear() - 1));
 
     // Create array of all dates in the last year
     const dates: Date[] = [];
     for (
       let d = new Date(yearAgo);
-      d <= new Date();
+      d <= new Date(clock);
       d.setDate(d.getDate() + 1)
     ) {
       dates.push(new Date(d));
@@ -45,7 +47,7 @@ export function Heatmap({ reviewLogs }: HeatmapProps) {
         count: dailyCounts[dateStr] || 0,
       };
     });
-  }, [reviewLogs]);
+  }, [reviewLogs, clock]);
 
   const getColorClass = (count: number) => {
     if (count === 0) return "bg-muted";
@@ -83,7 +85,7 @@ export function Heatmap({ reviewLogs }: HeatmapProps) {
               {week.map(({ date, count }) => (
                 <TooltipProvider key={date} delayDuration={50}>
                   <Tooltip>
-                    <TooltipTrigger>
+                    <TooltipTrigger aria-label={`${count} reviews on ${date}`}>
                       <div
                         className={cn(
                           "h-3 w-3 rounded-sm",

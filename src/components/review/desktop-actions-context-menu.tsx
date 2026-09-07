@@ -13,6 +13,7 @@ import { Ban, BookmarkIcon, ChevronsRight, Pencil, Trash } from "lucide-react";
 
 type DesktopActionsContextMenuProps = {
   children: React.ReactNode;
+  onOpenChange?: (open: boolean) => void;
   bookmarked: boolean;
   handleBookmark: (bookmarked: boolean) => void;
   handleDelete: () => void;
@@ -22,6 +23,7 @@ type DesktopActionsContextMenuProps = {
 };
 
 export default function DesktopActionsContextMenu({
+  onOpenChange,
   bookmarked,
   handleBookmark,
   handleDelete,
@@ -32,7 +34,7 @@ export default function DesktopActionsContextMenu({
 }: DesktopActionsContextMenuProps) {
   const isMobile = useMediaQuery("(max-width: 640px)");
   return (
-    <ContextMenu modal={false}>
+    <ContextMenu modal={false} onOpenChange={onOpenChange}>
       <ContextMenuTrigger
         onContextMenu={(e) => {
           if (isMobile) {

@@ -1,5 +1,6 @@
+import { useReviewActionTarget } from "@/components/hooks/use-review-action-target";
 import EditFlashcardResponsive from "@/components/card-actions/edit-flashcard-responsive";
-import { useDecks, useReviewCards } from "@/components/hooks/query";
+import { useCards, useDecks, useReviewCards } from "@/components/hooks/query";
 import {
   CommandDialog,
   CommandEmpty,
@@ -142,16 +143,25 @@ export default function CommandBar() {
   const reviewCards = useReviewCards();
   const nextReviewCard = reviewCards?.[0];
 
+  const { target, capture, getTarget } = useReviewActionTarget(
+    useCards(),
+    nextReviewCard,
+  );
+  const changeOpen = (value: boolean) => {
+    if (value) capture();
+    setOpen(value);
+  };
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((open) => !open);
+        changeOpen(!open);
       }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, []);
+  });
 
   function handleDeckSelect(deckId: string) {
     navigate(`/decks/${deckId}`);
@@ -159,41 +169,41 @@ export default function CommandBar() {
   }
 
   async function handleDelete() {
-    await handleCardDelete(nextReviewCard);
+    await handleCardDelete(getTarget());
     setOpen(false);
   }
 
   async function handleSuspend() {
-    await handleCardSuspend(nextReviewCard);
+    await handleCardSuspend(getTarget());
     setOpen(false);
   }
 
   async function handleBury() {
-    await handleCardBury(nextReviewCard);
+    await handleCardBury(getTarget());
     setOpen(false);
   }
 
   async function handleSave(bookmarked: boolean) {
-    await handleCardSave(bookmarked, nextReviewCard);
+    await handleCardSave(bookmarked, getTarget());
     setOpen(false);
   }
 
   async function handleEdit(values: CardContentFormValues) {
-    await handleCardEdit(values, nextReviewCard);
+    await handleCardEdit(values, getTarget(true));
     setIsEditing(false);
   }
 
   return (
     <>
       {/* Cannot nest in the dialog, must be separate such that we can open and close individually */}
-      {isReviewPath && nextReviewCard && (
+      {isReviewPath && target && (
         <EditFlashcardResponsive
-          card={nextReviewCard}
+          card={target}
           open={isEditing}
           onOpenChange={setIsEditing}
           onEdit={handleEdit}
           actions={{
-            bookmarked: nextReviewCard.bookmarked,
+            bookmarked: target.bookmarked,
             onBookmark: handleSave,
             onDelete: handleDelete,
             onBury: handleBury,
@@ -201,14 +211,14 @@ export default function CommandBar() {
         />
       )}
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
+      <CommandDialog open={open} onOpenChange={changeOpen}>
         <CommandInput placeholder="Type a command or search..." />
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
-          {isReviewPath && nextReviewCard && (
+          {isReviewPath && target && (
             <CommandGroup heading="Actions">
               <CommandBarActions
-                bookmarked={nextReviewCard.bookmarked}
+                bookmarked={target.bookmarked}
                 handleBookmark={handleSave}
                 handleDelete={handleDelete}
                 handleSkip={handleSuspend}

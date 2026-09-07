@@ -1,3 +1,4 @@
+import { useClock } from "@/components/hooks/use-clock";
 import CardsTable from "@/components/cards-table";
 import { useCards } from "@/components/hooks/query";
 import ReturnToTop from "@/components/return-to-top";
@@ -7,10 +8,11 @@ import { useState } from "react";
 
 export default function SuspendedCardsRoute() {
   const cards = useCards();
+  const now = useClock(cards.map((card) => card.suspended?.getTime() ?? 0));
   const [search, setSearch] = useState("");
 
   const suspendedCards = cards.filter(
-    (card) => card.suspended && card.suspended > new Date(),
+    (card) => card.suspended && card.suspended.getTime() > now,
   );
   const filteredCards = suspendedCards.filter((card) =>
     (card.front.toLowerCase() + card.back.toLowerCase()).includes(
