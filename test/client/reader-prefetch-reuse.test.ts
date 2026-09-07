@@ -1,4 +1,5 @@
 import * as cache from "@/features/reader/data/reader-cache/cache";
+import { epubPreparationKeys } from "@/hooks/use-epub-processor";
 import { prefetchReaderBook } from "@/features/reader/data/reader-cache/prefetch";
 import type { ReaderDecoratedChapterArtifact } from "@/features/reader/data/chapter-content-pipeline";
 import { useReaderChapterContent } from "@/features/reader/hooks/use-reader-chapter-content";
@@ -60,6 +61,18 @@ afterEach(async () => {
   client.clear();
   vi.restoreAllMocks();
   await db.delete();
+});
+
+it("keeps an offline preparation error in the query without rejecting hover prefetch", async () => {
+  await db.bookMaterializations.delete(book.id);
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  await expect(prefetchReaderBook(client, book)).resolves.toBeUndefined();
+  expect(client.getQueryState(epubPreparationKeys.book(book))?.status).toBe(
+    "error",
+  );
+  expect(
+    client.getQueriesData({ queryKey: ["readerChapterArtifact"] }),
+  ).toHaveLength(0);
 });
 
 it.each([

@@ -51,7 +51,13 @@ export async function prefetchReaderBook(
 
   if (chapterEntries.length === 0) return;
 
-  const preparedBook = await ensureEpubPreparationReady(queryClient, book);
+  let preparedBook: Book;
+  try {
+    preparedBook = await ensureEpubPreparationReady(queryClient, book);
+  } catch {
+    // Hover prefetch is optional. The Reader query owns errors and reconnect recovery.
+    return;
+  }
 
   const bodyQuery = readerBodyCacheQueryOptions({
     bookId: book.id,
