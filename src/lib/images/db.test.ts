@@ -1,3 +1,4 @@
+import { Dexie } from "dexie";
 import { afterEach, expect, spyOn, test } from "bun:test";
 import {
   createImageDatabase,
@@ -195,4 +196,37 @@ test("failed cache deletion can retry without enabling future cache writes", asy
   await cache.clear();
   await db.open();
   expect(await db.images.count()).toBe(0);
+});
+
+test("sign-out waits for already-started writes before deleting the cache", async () => {
+  const db = database();
+  const writeStarted = deferred<void>();
+  const releaseWrite = deferred<void>();
+  db.imageBlobs.hook("creating", function () {
+    this.onsuccess = () => {
+      void Dexie.waitFor(releaseWrite.promise);
+      writeStarted.resolve();
+    };
+  });
+  const cache = new ImageCacheStore(
+    db,
+    async () => blob(),
+    async () => blob(),
+  );
+  const download = cache
+    .download("writing", "alt")
+    .catch((error: Error) => error);
+  await writeStarted.promise;
+  let cleared = false;
+  const clearing = cache.clear().then(() => {
+    cleared = true;
+  });
+  await Promise.resolve();
+  expect(cleared).toBe(false);
+  releaseWrite.resolve();
+  await clearing;
+  expect(await download).toBeInstanceOf(Error);
+  await db.open();
+  expect(await db.images.count()).toBe(0);
+  expect(await db.imageBlobs.count()).toBe(0);
 });

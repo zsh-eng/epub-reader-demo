@@ -4,11 +4,17 @@ import { downloadImageLocally } from "@/lib/images/db";
 import { searchForLinks } from "@/lib/images/download-all";
 import { PromiseRateLimiterQueue } from "@/lib/images/promise-limiter";
 import { CheckCircle, CircleX, DownloadIcon, Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const BATCH_SIZE = 5;
 
-export default function DownloadAllImages() {
+export default function DownloadAllImages({
+  download = downloadImageLocally,
+  findLinks = searchForLinks,
+}: {
+  download?: typeof downloadImageLocally;
+  findLinks?: typeof searchForLinks;
+} = {}) {
   const [downloadState, setDownloadState] = useState<
     "idle" | "searching-links" | "downloading" | "finished" | "cancelled"
   >("idle");
@@ -18,10 +24,26 @@ export default function DownloadAllImages() {
   const [totalDownloaded, setTotalDownloaded] = useState<number>(0);
 
   const cancelledRef = useRef(false);
+  const busy = useRef(false);
+  const mounted = useRef(true);
+  const [failedImages, setFailedImages] = useState(0);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancelledRef.current = true;
+    };
+  }, []);
 
   const handleDownload = async () => {
+    if (busy.current) return;
+    busy.current = true;
+    cancelledRef.current = false;
+    setDownloadProgress(0);
+    setTotalDownloaded(0);
+    setFailedImages(0);
     setDownloadState("searching-links");
-    const links = searchForLinks();
+    const links = findLinks();
 
     setDownloadState("downloading");
     const linkCount = links.size;
@@ -30,29 +52,33 @@ export default function DownloadAllImages() {
     const entries = Array.from(links.entries());
     const limiter = new PromiseRateLimiterQueue(BATCH_SIZE);
 
-    let lastPromise: Promise<void> | undefined;
+    const tasks: Promise<void>[] = [];
     for (let i = 0; i < linkCount; i += 1) {
       const [url, altText] = entries[i];
       const promise = limiter.add(async () => {
         if (cancelledRef.current) {
-          setDownloadState("cancelled");
           return;
         }
 
-        const { newlyDownloaded } = await downloadImageLocally(url, altText);
-        if (newlyDownloaded) {
-          setTotalDownloaded((total) => total + 1);
+        try {
+          const { newlyDownloaded } = await download(url, altText);
+          if (mounted.current && newlyDownloaded)
+            setTotalDownloaded((total) => total + 1);
+        } catch (error) {
+          console.error(error);
+          if (mounted.current) setFailedImages((total) => total + 1);
+        } finally {
+          if (mounted.current) setDownloadProgress((progress) => progress + 1);
         }
-        setDownloadProgress((progress) => progress + 1);
       });
 
-      if (i === linkCount - 1) {
-        lastPromise = promise;
-      }
+      tasks.push(promise);
     }
 
-    await lastPromise;
-    setDownloadState("finished");
+    await Promise.allSettled(tasks);
+    busy.current = false;
+    if (mounted.current)
+      setDownloadState(cancelledRef.current ? "cancelled" : "finished");
   };
 
   return (
@@ -87,16 +113,19 @@ export default function DownloadAllImages() {
             <Progress
               key={"progress"}
               className="mt-1"
-              value={(downloadProgress / totalImages) * 100}
+              value={(downloadProgress / (totalImages || 1)) * 100}
             />
           </div>
-          <CircleX
-            className="w-5 h-5 text-muted-foreground mr-2"
+          <button
+            type="button"
+            aria-label="Cancel image downloads"
             onClick={() => {
               cancelledRef.current = true;
               setDownloadState("cancelled");
             }}
-          />
+          >
+            <CircleX className="w-5 h-5 text-muted-foreground mr-2" />
+          </button>
         </>
       )}
 
@@ -104,6 +133,7 @@ export default function DownloadAllImages() {
         <>
           <div className="text-sm ml-2 animate-fade-in">
             Downloaded {totalDownloaded} new images
+            {failedImages > 0 ? `; ${failedImages} failed` : ""}
           </div>
           <CheckCircle className="w-5 h-5 text-primary mr-4 cursor-pointer" />
         </>
@@ -117,7 +147,7 @@ export default function DownloadAllImages() {
               key={"progress"}
               className="mt-1"
               progressColour="bg-muted-foreground/50"
-              value={(downloadProgress / totalImages) * 100}
+              value={(downloadProgress / (totalImages || 1)) * 100}
             />
           </div>
         </>

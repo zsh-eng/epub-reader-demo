@@ -7,11 +7,10 @@
  */
 export class PromiseRateLimiterQueue {
   private queue: (() => Promise<unknown>)[] = [];
-  private index = 0;
   private limit: number;
 
   constructor(limit: number) {
-    if (limit <= 0) {
+    if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error("Limit must be positive");
     }
 
@@ -50,8 +49,8 @@ export class PromiseRateLimiterQueue {
       return;
     }
 
-    const task = this.queue[this.index];
-    this.index++;
+    const task = this.queue.shift();
+    if (!task) return;
     // Limit should be decremented before starting the task
     // If we do it in the task, there is a chance that multiple tasks
     // will get started before the limit is decremented

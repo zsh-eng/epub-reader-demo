@@ -33,6 +33,8 @@ export function isCachedImage(
     "cachedAt" in image &&
     Number.isFinite(image.cachedAt) &&
     typeof image.altText === "string" &&
+    Number.isFinite(image.size) &&
+    image.size > 0 &&
     image.thumbnail instanceof Blob &&
     image.thumbnail.size > 0
   );
