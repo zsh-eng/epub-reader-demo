@@ -17,6 +17,10 @@ const params = generatorParameters({
 });
 const f = fsrs(params);
 
+export function previewGradeSchedule(card: Card, now = new Date()) {
+  return f.repeat(card, now);
+}
+
 export function gradeCard(
   card: Card,
   grade: Grade,
@@ -88,7 +92,7 @@ export function processReviewLogOperations(
   );
 
   reviewLogOperations.forEach((op) => {
-    reviewLogMap[op._id] = reviewLogOperationToReviewLog(op);
+    reviewLogMap[op.payload.id] = reviewLogOperationToReviewLog(op);
   });
 
   const reviewLogDeletedOperations = operations.filter(

@@ -33,53 +33,66 @@ export function usePressableAction({
 }: UsePressableActionOptions): UsePressableActionReturn {
   const elementRef = useRef<HTMLElement>(null);
   const [pressed, setPressed] = useState<boolean | undefined>(undefined);
-  const timePressedRef = useRef(0);
+  const timePressedRef = useRef<number | null>(null);
+  const actionRef = useRef(onAction);
+  actionRef.current = onAction;
 
-  // Handle keyboard press
   useEffect(() => {
-    if (!enabled) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEventTargetInput(e)) return;
-      if (e.repeat) return;
-      if (e.key === key) {
-        setPressed(true);
-        timePressedRef.current = Date.now();
-        e.preventDefault();
-      }
+    const cancel = () => {
+      timePressedRef.current = null;
+      setPressed(false);
     };
-
+    if (!enabled) {
+      cancel();
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        isEventTargetInput(event) ||
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      )
+        return;
+      if (event.key !== key) return;
+      timePressedRef.current = Date.now();
+      setPressed(true);
+      event.preventDefault();
+    };
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.key !== key) return;
+      const started = timePressedRef.current;
+      cancel();
+      if (started === null || isEventTargetInput(event)) return;
+      if (Date.now() - started < holdToCancelThreshold) actionRef.current();
+    };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [key, enabled]);
-
-  // Handle keyboard release
-  useEffect(() => {
-    if (!enabled) return;
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (isEventTargetInput(e)) return;
-      if (e.key === key) {
-        const pressDuration = Date.now() - timePressedRef.current;
-
-        if (pressDuration < holdToCancelThreshold) {
-          onAction();
-        }
-
-        setPressed(false);
-      }
-    };
-
     window.addEventListener("keyup", handleKeyUp);
-    return () => window.removeEventListener("keyup", handleKeyUp);
-  }, [key, onAction, holdToCancelThreshold, enabled]);
+    window.addEventListener("blur", cancel);
+    document.addEventListener("focusin", cancel);
+    document.addEventListener("visibilitychange", cancel);
+    return () => {
+      timePressedRef.current = null;
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", cancel);
+      document.removeEventListener("focusin", cancel);
+      document.removeEventListener("visibilitychange", cancel);
+    };
+  }, [key, enabled, holdToCancelThreshold]);
 
   return {
     pressed,
     elementRef,
     pressableProps: {
-      onMouseDown: () => setPressed(undefined),
-      onClick: onAction,
+      onMouseDown: () => {
+        timePressedRef.current = null;
+        setPressed(undefined);
+      },
+      onClick: () => {
+        if (enabled) onAction();
+      },
     },
   };
 }

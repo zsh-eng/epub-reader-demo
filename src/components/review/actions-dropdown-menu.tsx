@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 
 type ActionsDropdownMenuProps = {
+  onOpenChange?: (open: boolean) => void;
   bookmarked: boolean;
   handleBookmark: (bookmarked: boolean) => void;
   handleDelete: () => void;
@@ -28,6 +29,7 @@ type ActionsDropdownMenuProps = {
 };
 
 export default function ActionsDropdownMenu({
+  onOpenChange,
   bookmarked,
   handleBookmark,
   handleDelete,
@@ -38,11 +40,15 @@ export default function ActionsDropdownMenu({
   return (
     <>
       {/* Without this, when we close the "handle delete" alert dialog, pointer events is still set to none. */}
-      <DropdownMenu modal={false}>
+      <DropdownMenu modal={false} onOpenChange={onOpenChange}>
         <DropdownMenuTrigger asChild>
-          <div className="px-2 py-3 cursor-pointer text-muted-foreground/50 active:text-muted-foreground transition-all">
+          <button
+            type="button"
+            aria-label="Card actions"
+            className="px-2 py-3 cursor-pointer text-muted-foreground/50 active:text-muted-foreground transition-all"
+          >
             <Ellipsis className="size-6" />
-          </div>
+          </button>
         </DropdownMenuTrigger>
 
         <DropdownMenuContent

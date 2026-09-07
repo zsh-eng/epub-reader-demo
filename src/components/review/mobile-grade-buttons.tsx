@@ -12,10 +12,10 @@ type MobileGradeButtonsProps = {
 export default function MobileGradeButtons({
   onGrade,
 }: MobileGradeButtonsProps) {
-  const hardButtonRef = useRef<HTMLDivElement>(null);
+  const hardButtonRef = useRef<HTMLButtonElement>(null);
   const againButtonRef = useRef<HTMLButtonElement>(null);
   const goodButtonRef = useRef<HTMLButtonElement>(null);
-  const easyButtonRef = useRef<HTMLDivElement>(null);
+  const easyButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleHard = () => {
     navigator?.vibrate?.(VibrationPattern.successConfirm);
@@ -63,7 +63,9 @@ export default function MobileGradeButtons({
 
   return (
     <div className="w-full flex justify-center items-stretch gap-1 bg-muted-foreground/10 backdrop-blur-lg rounded-b-2xl p-2">
-      <div
+      <button
+        type="button"
+        aria-label="Hard"
         ref={hardButtonRef}
         className={`bg-muted rounded-bl-xl h-28 w-16 flex items-center justify-center active:scale-95 transition-all duration-100 ${
           hardPressed ? "scale-95" : ""
@@ -71,7 +73,7 @@ export default function MobileGradeButtons({
         {...hardProps}
       >
         <X className="size-6 text-primary" />
-      </div>
+      </button>
 
       <div className="flex flex-col gap-0.5 justify-end flex-1 h-28 bg-transparent">
         <button
@@ -94,7 +96,9 @@ export default function MobileGradeButtons({
         </button>
       </div>
 
-      <div
+      <button
+        type="button"
+        aria-label="Easy"
         ref={easyButtonRef}
         className={`bg-muted rounded-br-xl h-28 w-16 flex items-center justify-center active:scale-95 transition-all duration-100 ${
           easyPressed ? "scale-95" : ""
@@ -102,7 +106,7 @@ export default function MobileGradeButtons({
         {...easyProps}
       >
         <Check className="size-6 text-primary" />
-      </div>
+      </button>
     </div>
   );
 }

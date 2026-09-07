@@ -25,10 +25,10 @@ export const RATING_NAME_TO_NUMBER = {
 
 export const RATING_NUMBER_TO_NAME = {
   0: "Manual",
-  1: "Easy",
-  2: "Good",
-  3: "Hard",
-  4: "Again",
+  1: "Again",
+  2: "Hard",
+  3: "Good",
+  4: "Easy",
 } satisfies Record<Rating, (typeof ratings)[number]>;
 
 // For keyboard shortcuts

@@ -1,6 +1,7 @@
+import { useStatisticsClock } from "@/components/hooks/use-clock";
 import * as React from "react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-import { ReviewLog } from "ts-fsrs";
+import { ReviewLog, State } from "ts-fsrs";
 
 import {
   Card,
@@ -24,6 +25,7 @@ const chartConfig = {
   reviews: {
     label: "Reviews",
   },
+  new: { label: "New", color: "hsl(var(--chart-4))" },
   learning: {
     label: "Learning",
     color: "hsl(var(--chart-1))",
@@ -39,12 +41,13 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export function ReviewChart({ reviewLogs }: ReviewChartProps) {
+  const clock = useStatisticsClock();
   const [activeChart, setActiveChart] =
     React.useState<keyof typeof chartConfig>("learning");
 
   // Process review logs into daily counts for last 3 months
   const chartData = React.useMemo(() => {
-    const now = new Date();
+    const now = new Date(clock);
     const threeMonthsAgo = new Date(now.setMonth(now.getMonth() - 3));
 
     const dailyCounts = reviewLogs
@@ -55,6 +58,7 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
             string,
             {
               date: string;
+              new: number;
               learning: number;
               relearning: number;
               review: number;
@@ -66,15 +70,17 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
           if (!acc[date]) {
             acc[date] = {
               date,
+              new: 0,
               learning: 0,
               relearning: 0,
               review: 0,
             };
           }
 
-          if (log.state === 0) acc[date].learning++;
-          else if (log.state === 1) acc[date].relearning++;
-          else if (log.state === 2) acc[date].review++;
+          if (log.state === State.New) acc[date].new++;
+          else if (log.state === State.Learning) acc[date].learning++;
+          else if (log.state === State.Review) acc[date].review++;
+          else if (log.state === State.Relearning) acc[date].relearning++;
 
           return acc;
         },
@@ -84,10 +90,11 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
     return Object.values(dailyCounts).sort((a, b) =>
       a.date.localeCompare(b.date),
     );
-  }, [reviewLogs]);
+  }, [reviewLogs, clock]);
 
   const total = React.useMemo(
     () => ({
+      new: chartData.reduce((acc, curr) => acc + curr.new, 0),
       learning: chartData.reduce((acc, curr) => acc + curr.learning, 0),
       relearning: chartData.reduce((acc, curr) => acc + curr.relearning, 0),
       review: chartData.reduce((acc, curr) => acc + curr.review, 0),
@@ -104,24 +111,26 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
             Showing review activity for the last 3 months
           </CardDescription>
         </div>
-        <div className="flex">
-          {(["learning", "relearning", "review"] as const).map((chart) => {
-            return (
-              <button
-                key={chart}
-                data-active={activeChart === chart}
-                className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l data-[active=true]:bg-muted/50 sm:border-l sm:border-t-0 sm:px-8 sm:py-6"
-                onClick={() => setActiveChart(chart)}
-              >
-                <span className="text-xs text-muted-foreground">
-                  {chartConfig[chart].label}
-                </span>
-                <span className="text-lg font-bold leading-none sm:text-3xl">
-                  {total[chart].toLocaleString()}
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex flex-wrap">
+          {(["new", "learning", "review", "relearning"] as const).map(
+            (chart) => {
+              return (
+                <button
+                  key={chart}
+                  data-active={activeChart === chart}
+                  className="relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l data-[active=true]:bg-muted/50 sm:border-l sm:border-t-0 sm:px-8 sm:py-6"
+                  onClick={() => setActiveChart(chart)}
+                >
+                  <span className="text-xs text-muted-foreground">
+                    {chartConfig[chart].label}
+                  </span>
+                  <span className="text-lg font-bold leading-none sm:text-3xl">
+                    {total[chart].toLocaleString()}
+                  </span>
+                </button>
+              );
+            },
+          )}
         </div>
       </CardHeader>
       <CardContent className="px-2 sm:p-6">
@@ -155,7 +164,7 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
               content={
                 <ChartTooltipContent
                   className="w-[150px]"
-                  nameKey="review"
+                  nameKey={activeChart}
                   labelFormatter={(value) => {
                     return new Date(value).toLocaleDateString("en-US", {
                       month: "short",

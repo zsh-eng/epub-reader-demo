@@ -1,3 +1,4 @@
+import { useReviewActionTarget } from "@/components/hooks/use-review-action-target";
 import EditFlashcardResponsive from "@/components/card-actions/edit-flashcard-responsive";
 import CardCountBadges from "@/components/card-count-badges";
 import CurrentCardBadge from "@/components/current-card-badge";
@@ -34,6 +35,11 @@ export default function ReviewRoute() {
   const reviewCards = useReviewCards();
   const nextReviewCard = reviewCards?.[0];
 
+  const { target, capture, getTarget } = useReviewActionTarget(
+    allCards,
+    nextReviewCard,
+  );
+
   const start = useActiveStartTime({ id: nextReviewCard?.id });
   const isMobile = useMediaQuery("(max-width: 640px)");
 
@@ -41,7 +47,7 @@ export default function ReviewRoute() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   async function handleEdit(values: CardContentFormValues) {
-    await handleCardEdit(values, nextReviewCard);
+    await handleCardEdit(values, getTarget(true));
     setIsEditing(false);
   }
 
@@ -51,20 +57,20 @@ export default function ReviewRoute() {
   }
 
   async function handleDelete() {
-    await handleCardDelete(nextReviewCard);
+    await handleCardDelete(getTarget());
     setIsDeleteDialogOpen(false);
   }
 
   async function handleSuspend() {
-    await handleCardSuspend(nextReviewCard);
+    await handleCardSuspend(getTarget());
   }
 
   async function handleBury() {
-    await handleCardBury(nextReviewCard);
+    await handleCardBury(getTarget());
   }
 
   async function handleSave(bookmarked: boolean) {
-    await handleCardSave(bookmarked, nextReviewCard);
+    await handleCardSave(bookmarked, getTarget());
   }
 
   return (
@@ -82,14 +88,14 @@ export default function ReviewRoute() {
         onDelete={handleDelete}
       />
 
-      {nextReviewCard && (
+      {target && (
         <EditFlashcardResponsive
-          card={nextReviewCard}
+          card={target}
           open={isEditing}
           onOpenChange={setIsEditing}
           onEdit={handleEdit}
           actions={{
-            bookmarked: nextReviewCard.bookmarked,
+            bookmarked: target.bookmarked,
             onBookmark: handleSave,
             onDelete: handleDelete,
             onBury: handleBury,
@@ -97,7 +103,11 @@ export default function ReviewRoute() {
         />
       )}
       <DesktopActionsContextMenu
-        bookmarked={nextReviewCard?.bookmarked}
+        key={nextReviewCard?.id ?? "empty"}
+        onOpenChange={(open) => {
+          if (open) capture();
+        }}
+        bookmarked={target?.bookmarked ?? nextReviewCard?.bookmarked}
         handleBookmark={handleSave}
         handleDelete={() => setIsDeleteDialogOpen(true)}
         handleSkip={handleSuspend}
@@ -112,23 +122,27 @@ export default function ReviewRoute() {
           )}
         >
           {/* Actions dropdown menu */}
-          {nextReviewCard && (
-            <div className="absolute top-1 sm:-top-1 right-2 flex z-20">
-              {/* <div className='px-2 py-3'>
+          <div className="absolute top-1 sm:-top-1 right-2 flex z-20">
+            {/* <div className='px-2 py-3'>
                 <Redo2 className='size-6 text-muted-foreground/50 hover:text-muted-foreground transition-all rotate-180' />
               </div> */}
-              <UndoGradeButton />
+            <UndoGradeButton />
 
+            {nextReviewCard && (
               <ActionsDropdownMenu
-                bookmarked={nextReviewCard?.bookmarked}
+                key={nextReviewCard.id}
+                onOpenChange={(open) => {
+                  if (open) capture();
+                }}
+                bookmarked={target?.bookmarked ?? nextReviewCard?.bookmarked}
                 handleBookmark={handleSave}
                 handleDelete={() => setIsDeleteDialogOpen(true)}
                 handleSkip={handleSuspend}
                 handleBury={handleBury}
                 handleEdit={() => setIsEditing(true)}
               />
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="w-full flex flex-col-reverse sm:flex-row justify-between items-center gap-4 px-2">
             <div className="flex gap-2 items-center ml-2">
@@ -164,12 +178,16 @@ export default function ReviewRoute() {
 
       <div className="col-span-12 w-full hidden sm:block sm:mx-auto sm:w-max mb-4 px-4 pb-2">
         {nextReviewCard && !isMobile && (
-          <DesktopGradeButtons onGrade={handleGrade} card={nextReviewCard} />
+          <DesktopGradeButtons
+            key={nextReviewCard.id}
+            onGrade={handleGrade}
+            card={nextReviewCard}
+          />
         )}
       </div>
       <div className="col-span-12 mt-0">
         {nextReviewCard && isMobile && (
-          <MobileGradeButtons onGrade={handleGrade} />
+          <MobileGradeButtons key={nextReviewCard.id} onGrade={handleGrade} />
         )}
       </div>
     </div>

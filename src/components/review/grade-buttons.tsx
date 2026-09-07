@@ -10,7 +10,9 @@ import {
 import { RATING_TO_KEY, RATING_TO_NAME } from "@/lib/card-mapping";
 import { cn } from "@/lib/utils";
 import { intlFormatDistance } from "date-fns";
-import { Card, FSRS, Grade, Rating } from "ts-fsrs";
+import { useMemo } from "react";
+import { previewGradeSchedule } from "@/lib/review/review";
+import { Card, Grade, Rating } from "ts-fsrs";
 
 type GradeButtonsProps = {
   onGrade: (grade: Grade) => void;
@@ -56,7 +58,7 @@ function GradeButton({
         </TooltipTrigger>
         <TooltipContent className="flex items-center" sideOffset={8}>
           <Kbd className="text-md mr-2 text-background">{key}</Kbd>
-          <p>{dateString}</p>
+          <p>Estimated: {dateString}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
@@ -70,8 +72,10 @@ export default function DesktopGradeButtons({
   onGrade,
   card,
 }: GradeButtonsProps) {
-  const f = new FSRS({});
-  const schedulingCards = f.repeat(card, new Date());
+  const { schedulingCards, now } = useMemo(() => {
+    const now = new Date();
+    return { schedulingCards: previewGradeSchedule(card, now), now };
+  }, [card]);
 
   return (
     <div
@@ -88,7 +92,7 @@ export default function DesktopGradeButtons({
         onGrade={() => onGrade(Rating.Again)}
         dateString={intlFormatDistance(
           schedulingCards[Rating.Again].card.due,
-          new Date(),
+          now,
         )}
       />
 
@@ -98,7 +102,7 @@ export default function DesktopGradeButtons({
         onGrade={() => onGrade(Rating.Hard)}
         dateString={intlFormatDistance(
           schedulingCards[Rating.Hard].card.due,
-          new Date(),
+          now,
         )}
       />
 
@@ -108,7 +112,7 @@ export default function DesktopGradeButtons({
         onGrade={() => onGrade(Rating.Good)}
         dateString={intlFormatDistance(
           schedulingCards[Rating.Good].card.due,
-          new Date(),
+          now,
         )}
       />
 
@@ -118,7 +122,7 @@ export default function DesktopGradeButtons({
         onGrade={() => onGrade(Rating.Easy)}
         dateString={intlFormatDistance(
           schedulingCards[Rating.Easy].card.due,
-          new Date(),
+          now,
         )}
       />
     </div>
