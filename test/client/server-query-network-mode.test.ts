@@ -8,6 +8,14 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
+vi.mock("@/hooks/use-auth", () => ({
+  useAuth: () => ({
+    user: { id: "test-user" },
+    isLoading: false,
+    isAuthenticated: true,
+  }),
+}));
+
 const client = new QueryClient({
   // Match the app default to verify the server query override.
   defaultOptions: { queries: { networkMode: "always", retry: false } },
