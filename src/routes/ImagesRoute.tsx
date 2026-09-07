@@ -1,18 +1,19 @@
+import BlobImage from "@/components/images/blob-image";
 import DownloadAllImages from "@/components/images/download-all-images";
 import SelectedImageDialog from "@/components/images/selected-image-dialog";
 import ReturnToTop from "@/components/return-to-top";
 import SearchBar from "@/components/search-bar";
-import { CachedImage, imagePersistedDb, isCachedImage } from "@/lib/images/db";
+import { CachedImage, listUsableCachedImages } from "@/lib/images/db";
 import EmptyImages from "@/lib/images/empty";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Database, ImageIcon } from "lucide-react";
 import { useState } from "react";
 
 export default function ImagesRoute() {
-  const images = useLiveQuery(() => imagePersistedDb.images.toArray(), [], []);
+  const images = useLiveQuery(() => listUsableCachedImages(), [], []);
   const totalImages = images.length;
 
-  const cachedImages = images.filter(isCachedImage) as CachedImage[];
+  const cachedImages = images;
   const totalImageSize = cachedImages.reduce(
     (acc, image) => acc + image.size,
     0,
@@ -62,15 +63,19 @@ export default function ImagesRoute() {
         <div className="grid grid-cols-3 gap-2 w-full rounded-xl">
           {filteredImages.length === 0 && <EmptyImages />}
           {filteredImages.map((image) => {
-            const url = URL.createObjectURL(image.thumbnail);
             return (
-              <img
+              <button
                 key={image.url}
-                src={url}
-                alt="cached image"
-                className="rounded-lg shadow-sm w-full sm:w-full sm:h-full hover:scale-105 transition-all duration-300 hover:shadow-lg cursor-pointer"
+                type="button"
+                aria-label={`View image: ${image.altText || "cached image"}`}
                 onClick={() => setSelectedImage(image)}
-              />
+              >
+                <BlobImage
+                  blob={image.thumbnail}
+                  alt={image.altText || "cached image"}
+                  className="rounded-lg shadow-sm w-full sm:w-full sm:h-full hover:scale-105 transition-all duration-300 hover:shadow-lg cursor-pointer"
+                />
+              </button>
             );
           })}
         </div>

@@ -1,4 +1,5 @@
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import BlobImage from "./blob-image";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { CachedImage, imagePersistedDb } from "@/lib/images/db";
 import { cn } from "@/lib/utils";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -16,7 +17,7 @@ export default function SelectedImageDialog({
     () => (image?.url ? imagePersistedDb.imageBlobs.get(image.url) : undefined),
     [image?.url],
   );
-  const url = imageBlob?.content && URL.createObjectURL(imageBlob.content);
+  const blob = imageBlob?.url === image?.url ? imageBlob?.content : undefined;
 
   return (
     <Dialog
@@ -33,8 +34,9 @@ export default function SelectedImageDialog({
         )}
         hideClose
       >
-        <img
-          src={url}
+        <DialogTitle className="sr-only">Image preview</DialogTitle>
+        <BlobImage
+          blob={blob}
           id="image-dialog"
           alt={image?.altText ?? "cached image"}
           className={cn("shadow-sm w-full")}

@@ -1,3 +1,4 @@
+import BlobImage from "./blob-image";
 import {
   Dialog,
   DialogContent,
@@ -6,7 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { constructImageMarkdownLink } from "@/lib/files/upload";
-import { CachedImage, imagePersistedDb, isCachedImage } from "@/lib/images/db";
+import { CachedImage, listUsableCachedImages } from "@/lib/images/db";
 import { useMediaQuery } from "@uidotdev/usehooks";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Image } from "lucide-react";
@@ -22,15 +23,14 @@ function ImageGrid({
 }: {
   onImageSelect: (image: CachedImage) => void;
 }) {
-  const images = useLiveQuery(
-    () =>
-      imagePersistedDb.images.orderBy("cachedAt").reverse().limit(20).toArray(),
+  const recentImages = useLiveQuery(
+    async () =>
+      (await listUsableCachedImages())
+        .sort((a, b) => b.cachedAt - a.cachedAt)
+        .slice(0, 20),
     [],
     [],
   );
-
-  // Filter for cached images only
-  const recentImages = (images || []).filter(isCachedImage) as CachedImage[];
   if (recentImages.length === 0) {
     return (
       <div className="flex items-center justify-center h-40 text-muted-foreground">
@@ -42,15 +42,19 @@ function ImageGrid({
   return (
     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[60vh] overflow-y-auto p-0.5">
       {recentImages.map((image) => {
-        const url = URL.createObjectURL(image.thumbnail);
         return (
-          <img
+          <button
             key={image.url}
-            src={url}
-            alt={image.altText || "cached image"}
-            className="rounded-sm shadow-sm w-full h-full object-cover hover:outline hover:outline-ring transition-all duration-150 cursor-pointer aspect-square"
+            type="button"
+            aria-label={`Copy image link: ${image.altText || "cached image"}`}
             onClick={() => onImageSelect(image)}
-          />
+          >
+            <BlobImage
+              blob={image.thumbnail}
+              alt={image.altText || "cached image"}
+              className="rounded-sm shadow-sm w-full h-full object-cover hover:outline hover:outline-ring transition-all duration-150 cursor-pointer aspect-square"
+            />
+          </button>
         );
       })}
     </div>
@@ -75,7 +79,13 @@ export default function ImagePickerResponsive({
     }
 
     const imageMarkdown = constructImageMarkdownLink(fileKey, image.altText);
-    await navigator.clipboard.writeText(imageMarkdown);
+    try {
+      await navigator.clipboard.writeText(imageMarkdown);
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not copy the image link. Try again.");
+      return;
+    }
 
     toast("Image URL copied to clipboard!", {
       icon: <Image className="w-4 h-4" />,
