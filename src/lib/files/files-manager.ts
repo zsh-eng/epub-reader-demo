@@ -1,3 +1,4 @@
+import { getLabRuntime } from "@/features/sync-lab/runtime";
 import { db } from "@/lib/db";
 import { computeFileId } from "@/lib/files/file-id";
 import {
@@ -28,8 +29,10 @@ const DEFAULT_MEDIA_TYPE = "application/octet-stream";
  */
 export class FilesManager implements Files {
   private readonly remote: FileRemoteApi;
+  private readonly pendingOperations = new Set<Promise<unknown>>();
   private readonly downloads = new Map<FileId, Promise<Blob>>();
   private uploadsEnabled = false;
+  private uploadLifecycleVersion = 0;
   private uploadLoop: Promise<void> | null = null;
   private uploadWakeRequested = false;
   private uploadRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -39,7 +42,11 @@ export class FilesManager implements Files {
     this.remote = remote;
   }
 
-  async put(blob: Blob, metadata: FileMetadata = {}): Promise<FileId> {
+  put(blob: Blob, metadata: FileMetadata = {}): Promise<FileId> {
+    return this.track(this.putFile(blob, metadata));
+  }
+
+  private async putFile(blob: Blob, metadata: FileMetadata): Promise<FileId> {
     const id = await computeFileId(blob);
     const mediaType = metadata.mediaType || blob.type || DEFAULT_MEDIA_TYPE;
     const storedBlob =
@@ -79,7 +86,11 @@ export class FilesManager implements Files {
     return id;
   }
 
-  async get(id: FileId): Promise<Blob> {
+  get(id: FileId): Promise<Blob> {
+    return this.track(this.getFile(id));
+  }
+
+  private async getFile(id: FileId): Promise<Blob> {
     const localFile = await db.files.get(id);
     if (localFile) return localFile.blob;
 
@@ -112,9 +123,14 @@ export class FilesManager implements Files {
     return this.remote.list();
   }
 
-  async deleteRemote(id: FileId): Promise<void> {
+  deleteRemote(id: FileId): Promise<void> {
+    return this.track(this.deleteRemoteFile(id));
+  }
+
+  private async deleteRemoteFile(id: FileId): Promise<void> {
     const resumeUploads = this.uploadsEnabled;
     this.pauseUploads();
+    const lifecycleVersion = this.uploadLifecycleVersion;
     await this.uploadLoop;
 
     try {
@@ -141,22 +157,43 @@ export class FilesManager implements Files {
         },
       );
     } finally {
-      if (resumeUploads) this.resumeUploads();
+      if (resumeUploads && lifecycleVersion === this.uploadLifecycleVersion)
+        this.resumeUploads();
     }
   }
 
   resumeUploads(): void {
+    this.uploadLifecycleVersion++;
     this.uploadsEnabled = true;
     this.startUploadLoop();
   }
 
   pauseUploads(): void {
+    this.uploadLifecycleVersion++;
     this.uploadsEnabled = false;
     this.uploadWakeRequested = false;
     if (this.uploadRetryTimer !== null) {
       clearTimeout(this.uploadRetryTimer);
       this.uploadRetryTimer = null;
     }
+  }
+
+  /** Wait for issued file operations after the caller has stopped new work. */
+  async drain(): Promise<void> {
+    while (this.pendingOperations.size > 0 || this.uploadLoop !== null) {
+      await Promise.allSettled([
+        ...this.pendingOperations,
+        ...(this.uploadLoop ? [this.uploadLoop] : []),
+      ]);
+    }
+  }
+
+  private track<T>(operation: Promise<T>): Promise<T> {
+    const tracked = operation.finally(() =>
+      this.pendingOperations.delete(tracked),
+    );
+    this.pendingOperations.add(tracked);
+    return tracked;
   }
 
   private async downloadAndStore(id: FileId): Promise<Blob> {
@@ -266,4 +303,6 @@ export class FilesManager implements Files {
   }
 }
 
-export const files = new FilesManager(new FetchFileRemoteApi());
+export const files = new FilesManager(
+  getLabRuntime()?.fileRemote ?? new FetchFileRemoteApi(),
+);

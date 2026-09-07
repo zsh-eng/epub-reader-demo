@@ -332,3 +332,31 @@ it("does not schedule a retry when an in-flight upload fails after pause", async
   expect(put).toHaveBeenCalledOnce();
   vi.restoreAllMocks();
 });
+
+it("drains an issued download before its owner closes the database", async () => {
+  const remote = new MockFileRemoteApi();
+  const manager = createManager(remote);
+  const blob = new Blob(["drain-download"], { type: "text/plain" });
+  const id = await computeFileId(blob);
+  await db.files.delete(id);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const get = vi.spyOn(remote, "get").mockImplementation(async () => {
+    await gate;
+    return blob;
+  });
+  const download = manager.get(id);
+  await waitForCondition(() => get.mock.calls.length === 1);
+  manager.pauseUploads();
+  let drained = false;
+  const drain = manager.drain().then(() => {
+    drained = true;
+  });
+  await Promise.resolve();
+  expect(drained).toBe(false);
+  release();
+  await Promise.all([download, drain]);
+  expect(await db.files.get(id)).toMatchObject({ remotePresent: true });
+});

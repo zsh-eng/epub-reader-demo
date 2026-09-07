@@ -1,3 +1,4 @@
+import { registerLabDrain } from "@/features/sync-lab/runtime";
 import { updateCurrentDeviceReadingSession } from "@/lib/db";
 import type { ResolvedSpread } from "@/lib/pagination-v2";
 import { useEffect, useRef } from "react";
@@ -109,4 +110,7 @@ export function useReaderReadingSession({
       controller.endSession(Date.now());
     };
   }, [bookId, controller]);
+
+  // Register last so unmount first queues the final session snapshot.
+  useEffect(() => registerLabDrain(() => controller.whenIdle()), [controller]);
 }

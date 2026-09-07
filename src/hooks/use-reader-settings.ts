@@ -1,3 +1,4 @@
+import { getRuntimeStorage } from "@/features/sync-lab/runtime";
 import {
   READER_FONT_SIZE_DEFAULT_PX,
   READER_FONT_SIZE_MAX_PX,
@@ -132,7 +133,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return DEFAULT_SETTINGS;
 
     try {
-      const item = window.localStorage.getItem(STORAGE_KEY);
+      const item = getRuntimeStorage().getItem(STORAGE_KEY);
       if (!item) {
         return DEFAULT_SETTINGS;
       }
@@ -152,7 +153,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       if (typeof window === "undefined") return "light";
 
       try {
-        const storedAppearance = window.localStorage.getItem(
+        const storedAppearance = getRuntimeStorage().getItem(
           APPEARANCE_STORAGE_KEY,
         );
         if (isAppearanceMode(storedAppearance)) return storedAppearance;
@@ -167,7 +168,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (settingsChanged.current) {
       try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        getRuntimeStorage().setItem(STORAGE_KEY, JSON.stringify(settings));
       } catch {
         reportStorageError();
       }
@@ -215,7 +216,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!appearanceChanged.current) return;
     try {
-      window.localStorage.setItem(APPEARANCE_STORAGE_KEY, appearanceMode);
+      getRuntimeStorage().setItem(APPEARANCE_STORAGE_KEY, appearanceMode);
     } catch {
       reportStorageError();
     }

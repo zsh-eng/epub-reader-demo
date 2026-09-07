@@ -1,3 +1,4 @@
+import { getRuntimeStorage } from "@/features/sync-lab/runtime";
 import { useCallback, useMemo, useState } from "react";
 import type { ReaderSheetId } from "../types";
 
@@ -15,7 +16,7 @@ function isSidebarTab(value: string | null): value is SidebarTab {
 
 function readSidebarTab(): SidebarTab {
   try {
-    const value = window.localStorage.getItem(SIDEBAR_TAB_KEY);
+    const value = getRuntimeStorage().getItem(SIDEBAR_TAB_KEY);
     return isSidebarTab(value) ? value : "contents";
   } catch {
     return "contents";
@@ -65,7 +66,7 @@ export function useReaderChromeState(
       if (isMobile || !isSidebarTab(destination)) return;
       setLastSidebarTab(destination);
       try {
-        window.localStorage.setItem(SIDEBAR_TAB_KEY, destination);
+        getRuntimeStorage().setItem(SIDEBAR_TAB_KEY, destination);
       } catch {
         // Keep the session preference when browser storage is unavailable.
       }

@@ -1,3 +1,4 @@
+import { getRuntimeOnline } from "@/features/sync-lab/runtime";
 import { BookCoverDecodeError, createBookCover } from "@/lib/book-cover";
 import {
   getBookMaterialization,
@@ -68,7 +69,7 @@ async function prepareBookOnce(
   if (
     !sourceBlob &&
     typeof navigator !== "undefined" &&
-    !navigator.onLine &&
+    !getRuntimeOnline() &&
     !(await files.hasLocal(book.sourceFileId))
   ) {
     throw new Error(

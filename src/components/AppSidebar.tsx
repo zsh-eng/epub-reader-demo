@@ -1,3 +1,8 @@
+import {
+  getLabRuntime,
+  getRuntimeOnline,
+  subscribeRuntimeOnline,
+} from "@/features/sync-lab/runtime";
 import { useDebugEnabled } from "@/lib/debug-preference";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AppMobileNavigationSheets } from "@/components/AppMobileNavigationSheets";
@@ -161,7 +166,7 @@ export function AppSidebar() {
   const { data: booksData, refetch: refetchBooks } = useBooksWithStatuses();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
   const { toast } = useToast();
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [isOnline, setIsOnline] = useState(getRuntimeOnline);
 
   const recentReading = useMemo(() => {
     if (!booksData) return null;
@@ -198,14 +203,7 @@ export function AppSidebar() {
     settings.theme === "flexoki-dark";
 
   useEffect(() => {
-    const markOnline = () => setIsOnline(true);
-    const markOffline = () => setIsOnline(false);
-    window.addEventListener("online", markOnline);
-    window.addEventListener("offline", markOffline);
-    return () => {
-      window.removeEventListener("online", markOnline);
-      window.removeEventListener("offline", markOffline);
-    };
+    return subscribeRuntimeOnline(() => setIsOnline(getRuntimeOnline()));
   }, []);
 
   useEffect(() => {
@@ -245,6 +243,7 @@ export function AppSidebar() {
 
   const handleGoogleSignIn = async () => {
     try {
+      if (getLabRuntime()) return;
       await authClient.signIn.social({
         provider: "google",
         callbackURL: window.location.origin,
@@ -261,6 +260,7 @@ export function AppSidebar() {
 
   const handleSignOut = async () => {
     try {
+      if (getLabRuntime()) return;
       await authClient.signOut();
       closeSidebar();
       navigate("/");

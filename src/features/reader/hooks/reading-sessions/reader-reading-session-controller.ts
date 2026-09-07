@@ -260,6 +260,11 @@ export class ReaderReadingSessionController {
     }
   }
 
+  /** Resolve when all snapshots issued before this call have been saved. */
+  whenIdle(): Promise<void> {
+    return this.saveChain;
+  }
+
   private enqueuePersist(
     snapshot: ReaderReadingSessionSnapshot,
     options: { force?: boolean } = {},

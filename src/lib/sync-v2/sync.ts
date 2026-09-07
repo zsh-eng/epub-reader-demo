@@ -1,3 +1,4 @@
+import { getLabRuntime, getRuntimeStorage } from "@/features/sync-lab/runtime";
 /** Pull, conflict resolution, push, and reconciliation for sync v2. */
 
 import { honoClient } from "@/lib/api";
@@ -45,12 +46,20 @@ export interface SyncV2RunResult {
   pushed: number;
 }
 
+/** Optional diagnostic events, emitted after storage changes commit. */
+export interface SyncV2Event {
+  phase: "pull" | "push";
+  outcome: "applied" | "kept-local" | "acknowledged" | "replaced" | "edited-in-flight";
+  key: string;
+}
+
 export interface SyncV2ClientOptions {
   /** Raw connection without local-mutation interception. */
   syncDb: EPUBReaderSyncV2DB;
   remote?: SyncV2Remote;
   stateStorage?: SyncClientStateStorage;
   syncedTables?: readonly string[];
+  onEvent?: (event: SyncV2Event) => void;
 }
 
 interface PreparedRemoteRecord {
@@ -69,12 +78,14 @@ export class SyncV2Client {
   private readonly stateStorage: SyncClientStateStorage;
   private readonly syncedTables: ReadonlySet<string>;
   private activeSync: Promise<SyncV2RunResult> | null = null;
+  private readonly onEvent: (event: SyncV2Event) => void;
 
   constructor(options: SyncV2ClientOptions) {
     this.syncDb = options.syncDb;
-    this.remote = options.remote ?? new HonoSyncV2Remote();
-    this.stateStorage = options.stateStorage ?? localStorage;
+    this.remote = options.remote ?? getLabRuntime()?.syncRemote ?? new HonoSyncV2Remote();
+    this.stateStorage = options.stateStorage ?? getRuntimeStorage();
     this.syncedTables = new Set(options.syncedTables ?? SYNC_V2_SYNCED_TABLES);
+    this.onEvent = options.onEvent ?? (() => {});
   }
 
   sync(): Promise<SyncV2RunResult> {
@@ -120,6 +131,7 @@ export class SyncV2Client {
         this.syncDb,
         preparedRecords,
         state.deviceId,
+        this.onEvent,
       );
       pulled += result.applied;
       skipped += result.skipped;
@@ -171,6 +183,7 @@ export class SyncV2Client {
         this.syncDb,
         changes,
         preparedWinners,
+        this.onEvent,
       );
     }
 
@@ -236,6 +249,7 @@ async function applyPreparedRemoteRecords(
   db: EPUBReaderSyncV2DB,
   prepared: readonly PreparedRemoteRecord[],
   localDeviceId: string,
+  onEvent: (event: SyncV2Event) => void,
 ): Promise<{ applied: number; skipped: number }> {
   if (prepared.length === 0) {
     return { applied: 0, skipped: 0 };
@@ -244,6 +258,7 @@ async function applyPreparedRemoteRecords(
   const tables = getDomainTables(db, prepared);
   let applied = 0;
   let skipped = 0;
+  const events: SyncV2Event[] = [];
 
   await db.transaction("rw", [db._sync_outbox, ...tables], async () => {
     const localChanges = await db._sync_outbox.bulkGet(
@@ -261,6 +276,7 @@ async function applyPreparedRemoteRecords(
         ) > 0
       ) {
         skipped += 1;
+        events.push({ phase: "pull", outcome: "kept-local", key: record.source.key });
         return;
       }
 
@@ -268,11 +284,13 @@ async function applyPreparedRemoteRecords(
       rows.push(record.row);
       rowsByTable.set(record.tableName, rows);
       applied += 1;
+      events.push({ phase: "pull", outcome: "applied", key: record.source.key });
     });
 
     await putRemoteRows(db, rowsByTable);
   });
 
+  events.forEach(onEvent);
   return { applied, skipped };
 }
 
@@ -284,9 +302,11 @@ async function reconcilePushResults(
   db: EPUBReaderSyncV2DB,
   sentChanges: readonly SyncPushChange[],
   preparedWinners: readonly PreparedRemoteRecord[],
+  onEvent: (event: SyncV2Event) => void,
 ): Promise<number> {
   const tables = getDomainTables(db, preparedWinners);
   let reconciled = 0;
+  const events: SyncV2Event[] = [];
 
   await db.transaction("rw", [db._sync_outbox, ...tables], async () => {
     const currentChanges = await db._sync_outbox.bulkGet(
@@ -301,10 +321,12 @@ async function reconcilePushResults(
         currentChange === undefined ||
         !sameSyncChange(currentChange, sentChange)
       ) {
+        events.push({ phase: "push", outcome: "edited-in-flight", key: sentChange.key });
         return;
       }
 
       const winner = preparedWinners[index]!;
+      events.push({ phase: "push", outcome: winnerMatchesChange(winner.source, sentChange) ? "acknowledged" : "replaced", key: sentChange.key });
       if (!winnerMatchesChange(winner.source, sentChange)) {
         const rows = rowsByTable.get(winner.tableName) ?? [];
         rows.push(winner.row);
@@ -318,6 +340,7 @@ async function reconcilePushResults(
     await db._sync_outbox.bulkDelete(resolvedKeys);
   });
 
+  events.forEach(onEvent);
   return reconciled;
 }
 

@@ -1,3 +1,4 @@
+import { getRuntimeStorage } from "@/features/sync-lab/runtime";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { CopyFeedbackIcon } from "@/components/ui/copy-feedback-icon";
 import {
@@ -1675,7 +1676,7 @@ export function HighlightsMasonry() {
   const copiedHighlightTimerRef = useRef(0);
   const [isMobileBookIndexOpen, setIsMobileBookIndexOpen] = useState(false);
   const [isBookIndexPinned, setIsBookIndexPinned] = useState(
-    () => localStorage.getItem(BOOK_INDEX_PIN_STORAGE_KEY) !== "false",
+    () => getRuntimeStorage().getItem(BOOK_INDEX_PIN_STORAGE_KEY) !== "false",
   );
   const [selectedColors, setSelectedColors] = useState<HighlightColor[]>(() => [
     ...ALL_HIGHLIGHT_COLORS,
@@ -1848,7 +1849,7 @@ export function HighlightsMasonry() {
     !isLoading && groups.length > 0 && visibleGroups.length === 0;
 
   useEffect(() => {
-    localStorage.setItem(
+    getRuntimeStorage().setItem(
       BOOK_INDEX_PIN_STORAGE_KEY,
       isBookIndexPinned ? "true" : "false",
     );

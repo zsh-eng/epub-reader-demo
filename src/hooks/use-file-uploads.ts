@@ -1,3 +1,7 @@
+import {
+  getRuntimeOnline,
+  subscribeRuntimeOnline,
+} from "@/features/sync-lab/runtime";
 import { useAuth } from "@/hooks/use-auth";
 import { files } from "@/lib/files";
 import { useEffect } from "react";
@@ -13,7 +17,7 @@ export function useFileUploads(): void {
     }
 
     const updateUploadState = () => {
-      if (isAuthenticated && navigator.onLine) {
+      if (isAuthenticated && getRuntimeOnline()) {
         files.resumeUploads();
       } else {
         files.pauseUploads();
@@ -21,12 +25,10 @@ export function useFileUploads(): void {
     };
 
     updateUploadState();
-    window.addEventListener("online", updateUploadState);
-    window.addEventListener("offline", updateUploadState);
+    const unsubscribe = subscribeRuntimeOnline(updateUploadState);
 
     return () => {
-      window.removeEventListener("online", updateUploadState);
-      window.removeEventListener("offline", updateUploadState);
+      unsubscribe();
       files.pauseUploads();
     };
   }, [isAuthenticated, isAuthLoading]);

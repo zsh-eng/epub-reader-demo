@@ -1,3 +1,4 @@
+import { getRuntimeStorage } from "@/features/sync-lab/runtime";
 import { useSyncExternalStore } from "react";
 
 export const DEBUG_ENABLED_STORAGE_KEY = "reader-debug-enabled-v1";
@@ -5,7 +6,7 @@ export const DEBUG_ENABLED_STORAGE_KEY = "reader-debug-enabled-v1";
 /** Only an explicit choice overrides the build default. This preference is local to this site. */
 function readDebugEnabled(): boolean {
   try {
-    const saved = localStorage.getItem(DEBUG_ENABLED_STORAGE_KEY);
+    const saved = getRuntimeStorage().getItem(DEBUG_ENABLED_STORAGE_KEY);
     if (saved === "true") return true;
     if (saved === "false") return false;
   } catch {
@@ -45,7 +46,7 @@ export function subscribeDebugPreference(listener: () => void): () => void {
 
 export function setDebugEnabled(enabled: boolean): void {
   try {
-    localStorage.setItem(DEBUG_ENABLED_STORAGE_KEY, String(enabled));
+    getRuntimeStorage().setItem(DEBUG_ENABLED_STORAGE_KEY, String(enabled));
   } catch {
     // Keep the in-memory preference usable when storage is unavailable.
   }

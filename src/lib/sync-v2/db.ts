@@ -1,3 +1,5 @@
+import { getLabRuntime, getRuntimeStorage } from "@/features/sync-lab/runtime";
+import type { SyncClientStateStorage } from "@/lib/sync-v2/client-state";
 /**
  * Fresh client database for sync v2.
  *
@@ -282,17 +284,29 @@ export class EPUBReaderSyncV2DB extends Dexie {
 
 /** Remove the pre-v2 database after the completed production cutover. */
 export async function deleteLegacyClientDatabase(): Promise<void> {
+  if (getLabRuntime()) return;
   await Dexie.delete(LEGACY_DATABASE_NAME);
 }
 
 /** Create the application-facing connection that captures local mutations. */
 export function createSyncV2ApplicationDb(
-  databaseName = SYNC_V2_DATABASE_NAME,
+  databaseName = getLabRuntime()?.databaseName ?? SYNC_V2_DATABASE_NAME,
+  state:
+    | { deviceId: string; storage: SyncClientStateStorage; now: () => number }
+    | undefined = undefined,
 ): EPUBReaderSyncV2DB {
   const db = new EPUBReaderSyncV2DB(databaseName);
   installSync(db, SYNC_V2_SYNCED_TABLES, (count) => {
-    getOrCreateSyncClientState(getOrCreateDeviceId());
-    return nextSyncHlcBatch(count);
+    const storage = state?.storage ?? getRuntimeStorage();
+    getOrCreateSyncClientState(
+      state?.deviceId ?? getOrCreateDeviceId(),
+      storage,
+    );
+    return nextSyncHlcBatch(
+      count,
+      storage,
+      state?.now() ?? getLabRuntime()?.now() ?? Date.now(),
+    );
   });
   return db;
 }
@@ -300,4 +314,4 @@ export function createSyncV2ApplicationDb(
 export const syncV2Db = createSyncV2ApplicationDb();
 
 /** The sync engine uses this raw connection to avoid producing new changes. */
-export const syncV2SyncDb = new EPUBReaderSyncV2DB();
+export const syncV2SyncDb = new EPUBReaderSyncV2DB(syncV2Db.name);

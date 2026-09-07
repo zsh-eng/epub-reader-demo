@@ -1,3 +1,4 @@
+import { getRuntimeStorage } from "@/features/sync-lab/runtime";
 import {
   SYNC_CLIENT_STATE_STORAGE_KEY,
   type SyncClientState,
@@ -18,7 +19,7 @@ export function createSyncClientState(deviceId: string): SyncClientState {
 }
 
 export function readSyncClientState(
-  storage: SyncClientStateStorage = localStorage,
+  storage: SyncClientStateStorage = getRuntimeStorage(),
 ): SyncClientState | null {
   const encoded = storage.getItem(SYNC_CLIENT_STATE_STORAGE_KEY);
   if (encoded === null) {
@@ -30,7 +31,7 @@ export function readSyncClientState(
 
 export function writeSyncClientState(
   state: SyncClientState,
-  storage: SyncClientStateStorage = localStorage,
+  storage: SyncClientStateStorage = getRuntimeStorage(),
 ): void {
   const validState = syncClientStateSchema.parse(state);
   storage.setItem(SYNC_CLIENT_STATE_STORAGE_KEY, JSON.stringify(validState));
@@ -39,7 +40,7 @@ export function writeSyncClientState(
 /** Seed the v2 envelope with the app's current device ID on first use. */
 export function getOrCreateSyncClientState(
   deviceId: string,
-  storage: SyncClientStateStorage = localStorage,
+  storage: SyncClientStateStorage = getRuntimeStorage(),
 ): SyncClientState {
   const state = readSyncClientState(storage);
   if (state !== null) {
@@ -54,7 +55,7 @@ export function getOrCreateSyncClientState(
 /** Reserve a monotonic HLC range and persist the last value in one write. */
 export function nextSyncHlcBatch(
   count: number,
-  storage: SyncClientStateStorage = localStorage,
+  storage: SyncClientStateStorage = getRuntimeStorage(),
   now = Date.now(),
 ): SyncHlc[] {
   if (!Number.isSafeInteger(count) || count < 0) {
@@ -92,7 +93,7 @@ export function nextSyncHlcBatch(
 /** Observe remote clocks outside IndexedDB; harmless gaps are preferable. */
 export function observeSyncHlcBatch(
   timestamps: readonly SyncHlc[],
-  storage: SyncClientStateStorage = localStorage,
+  storage: SyncClientStateStorage = getRuntimeStorage(),
 ): void {
   if (timestamps.length === 0) {
     return;

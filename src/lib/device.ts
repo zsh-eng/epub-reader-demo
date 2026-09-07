@@ -1,3 +1,4 @@
+import { getLabRuntime, getRuntimeStorage } from "@/features/sync-lab/runtime";
 /**
  * Key for storing the device ID in localStorage.
  * The device ID is a UUID that uniquely identifies this browser instance.
@@ -23,10 +24,12 @@ const DEVICE_ID_KEY = "epub-reader-device-id";
  * @returns A UUID string that uniquely identifies this browser instance
  */
 export function getOrCreateDeviceId(): string {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+  const lab = getLabRuntime();
+  if (lab) return lab.deviceId;
+  let deviceId = getRuntimeStorage().getItem(DEVICE_ID_KEY);
   if (!deviceId) {
     deviceId = crypto.randomUUID();
-    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    getRuntimeStorage().setItem(DEVICE_ID_KEY, deviceId);
   }
   return deviceId;
 }
@@ -94,5 +97,7 @@ export function getDeviceInfo() {
  * @returns The device ID string or null
  */
 export function getDeviceId(): string | null {
-  return localStorage.getItem(DEVICE_ID_KEY);
+  return (
+    getLabRuntime()?.deviceId ?? getRuntimeStorage().getItem(DEVICE_ID_KEY)
+  );
 }

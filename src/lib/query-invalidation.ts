@@ -1,7 +1,4 @@
-import {
-  SYNC_V2_DATABASE_NAME,
-  type SYNC_V2_SYNCED_TABLES,
-} from "@/lib/sync-v2/db";
+import { syncV2Db, type SYNC_V2_SYNCED_TABLES } from "@/lib/sync-v2/db";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import Dexie, { type ObservabilitySet } from "dexie";
 
@@ -31,7 +28,7 @@ const TABLE_QUERY_KEYS = {
  */
 export function subscribeToQueryInvalidation(
   queryClient: QueryClient,
-  databaseName = SYNC_V2_DATABASE_NAME,
+  databaseName = syncV2Db.name,
 ): () => void {
   const onStorageMutated = (parts: ObservabilitySet) => {
     // Dexie documents each part as idb://database/table/index.

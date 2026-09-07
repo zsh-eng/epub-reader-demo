@@ -1,3 +1,4 @@
+import { getRuntimeStorage } from "@/features/sync-lab/runtime";
 import { getDebugEnabled, subscribeDebugPreference } from "./debug-preference";
 import { useSyncExternalStore } from "react";
 
@@ -81,7 +82,7 @@ function getStorage(): Storage | null {
   if (typeof window === "undefined") return null;
 
   try {
-    return window.localStorage;
+    return getRuntimeStorage();
   } catch {
     return null;
   }
