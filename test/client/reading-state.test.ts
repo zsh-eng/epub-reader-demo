@@ -11,7 +11,7 @@ import {
   getReadingStatus,
   setReadingStatus,
 } from "@/lib/db";
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 
 // Use fake IndexedDB for tests
 import "fake-indexeddb/auto";
@@ -34,9 +34,15 @@ describe("Reading State", () => {
 
     it("should allow setting different statuses for the same book", async () => {
       const bookId = "test-book-123";
-
-      await setReadingStatus(bookId, "reading");
-      await setReadingStatus(bookId, "finished");
+      // This checks chronological history, not ordering within one millisecond.
+      const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+      try {
+        await setReadingStatus(bookId, "reading");
+        clock.mockReturnValue(2000);
+        await setReadingStatus(bookId, "finished");
+      } finally {
+        clock.mockRestore();
+      }
 
       const history = await getReadingHistory(bookId);
       expect(history.length).toBe(2);
