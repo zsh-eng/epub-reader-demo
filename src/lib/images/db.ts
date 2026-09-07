@@ -1,9 +1,6 @@
 import { Dexie, type EntityTable } from "dexie";
 
-export type UncachedImage = {
-  url: string;
-};
-
+export type UncachedImage = { url: string };
 export type CachedImage = {
   url: string;
   altText: string;
@@ -11,210 +8,234 @@ export type CachedImage = {
   thumbnail: Blob;
   size: number;
 };
-
-export type ImageBlob = {
-  url: string;
-  content: Blob;
-};
-
-// Image blobs are stored separately from the images so that we can select
-// the images without bringing all the Blobs into memory.
-export const imagePersistedDb = new Dexie("ImageCache") as Dexie & {
+export type ImageBlob = { url: string; content: Blob };
+export type ImageCacheDatabase = Dexie & {
   images: EntityTable<CachedImage | UncachedImage, "url">;
   imageBlobs: EntityTable<ImageBlob, "url">;
 };
 
-imagePersistedDb.version(1).stores({
-  images: "url, altText, cachedAt, thumbnail, size",
-  imageBlobs: "url, content",
-});
+export function createImageDatabase(name: string): ImageCacheDatabase {
+  const database = new Dexie(name) as ImageCacheDatabase;
+  database.version(1).stores({
+    images: "url, altText, cachedAt, thumbnail, size",
+    imageBlobs: "url, content",
+  });
+  return database;
+}
 
-export const ImageMemoryDB = new Map<
-  string,
-  {
-    objectURL: string;
-    referenceCount: number;
-  }
->();
-
-/** Used to dedupe the fetching requests for the same image. */
-const currentlyFetchingImages = new Map<string, Promise<string>>();
+// Keep metadata separate so consumers can read it without loading full images.
+export const imagePersistedDb = createImageDatabase("ImageCache");
 
 export function isCachedImage(
   image: CachedImage | UncachedImage,
 ): image is CachedImage {
-  return "cachedAt" in image;
+  return (
+    "cachedAt" in image &&
+    Number.isFinite(image.cachedAt) &&
+    typeof image.altText === "string" &&
+    image.thumbnail instanceof Blob &&
+    image.thumbnail.size > 0
+  );
 }
 
 async function fetchImage(url: string): Promise<Blob> {
-  const requestOptions = url.startsWith(import.meta.env.VITE_BACKEND_URL)
-    ? ({ credentials: "include" } as const)
-    : undefined;
-
-  const image = await fetch(url, requestOptions);
-  return image.blob();
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  const response = await fetch(
+    url,
+    backendUrl && url.startsWith(backendUrl)
+      ? { credentials: "include" }
+      : undefined,
+  );
+  if (!response.ok)
+    throw new Error(`Image download failed (${response.status})`);
+  const blob = await response.blob();
+  if (blob.size === 0) throw new Error("The downloaded image is empty");
+  return blob;
 }
 
-/**
- * Generates a thumbnail from an image blob.
- *
- * @param original - The original image blob.
- * @returns A promise that resolves to the thumbnail blob.
- */
 async function generateThumbnail(original: Blob): Promise<Blob> {
   const canvas = document.createElement("canvas");
-  canvas.width = 200;
-  canvas.height = 200;
-
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Failed to create canvas context");
-
-  // Create an image element from the blob
-  const img = new Image();
-  const blobUrl = URL.createObjectURL(original);
-  // Wait for the image to load before drawing
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = reject;
-    img.src = blobUrl;
-  });
-
-  // NOTE: the following is AI generated to crop the image
-  // such that our thumbnails are always squares
-  // Calculate source region to crop a centered square
-  const minSize = Math.min(img.width, img.height);
-  const sourceX = (img.width - minSize) / 2;
-  const sourceY = (img.height - minSize) / 2;
-
-  // Draw cropped and scaled image to canvas
-  ctx.drawImage(
-    img,
-    sourceX, // Source X (start point)
-    sourceY, // Source Y
-    minSize, // Source width (square size)
-    minSize, // Source height
-    0, // Destination X
-    0, // Destination Y
-    canvas.width, // Destination width (200)
-    canvas.height, // Destination height (200)
-  );
-
-  URL.revokeObjectURL(blobUrl);
-
-  return new Promise((resolve) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) throw new Error("Failed to create thumbnail blob");
-        resolve(blob);
-      },
-      "image/jpeg",
-      0.8,
+  canvas.width = canvas.height = 200;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Failed to create canvas context");
+  const image = new Image();
+  const url = URL.createObjectURL(original);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Failed to load image"));
+      image.src = url;
+    });
+    const size = Math.min(image.width, image.height);
+    context.drawImage(
+      image,
+      (image.width - size) / 2,
+      (image.height - size) / 2,
+      size,
+      size,
+      0,
+      0,
+      canvas.width,
+      canvas.height,
     );
-  });
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (blob) =>
+          blob
+            ? resolve(blob)
+            : reject(new Error("Failed to create thumbnail blob")),
+        "image/jpeg",
+        0.8,
+      );
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
-async function databaseAddImage(url: string, image: Blob, altText: string) {
-  const thumbnail = await generateThumbnail(image);
-  await Promise.all([
-    imagePersistedDb.images.add({
-      url,
-      altText,
-      cachedAt: Date.now(),
-      thumbnail,
-      size: image.size + thumbnail.size,
-    } as CachedImage),
-    imagePersistedDb.imageBlobs.add({
-      url,
-      content: image,
-    } as ImageBlob),
-  ]);
-}
+export class ImageCacheStore {
+  readonly memory = new Map<
+    string,
+    { objectURL: string; referenceCount: number }
+  >();
+  private enabled = true;
+  private downloads = new Map<
+    string,
+    Promise<{ blob: Blob; newlyDownloaded: boolean }>
+  >();
+  private writes = new Set<Promise<unknown>>();
+  private clearing?: Promise<void>;
 
-export async function downloadImageLocally(
-  url: string,
-  altText: string,
-): Promise<{
-  newlyDownloaded: boolean;
-}> {
-  const exists = await imagePersistedDb.images.get(url);
-  if (exists) {
-    return { newlyDownloaded: false };
+  constructor(
+    private database = imagePersistedDb,
+    private fetchBlob = fetchImage,
+    private thumbnail = generateThumbnail,
+  ) {}
+
+  private checkEnabled() {
+    if (!this.enabled) throw new Error("Image cache was cleared for sign-out");
   }
 
-  const image = await fetchImage(url);
-  await databaseAddImage(url, image, altText);
-  return { newlyDownloaded: true };
-}
-
-async function databaseUpdateImage(url: string, image: Blob, altText: string) {
-  const thumbnail = await generateThumbnail(image);
-  await Promise.all([
-    imagePersistedDb.images.update(url, {
-      thumbnail,
-      size: image.size + thumbnail.size,
-      altText,
-    } as CachedImage),
-    imagePersistedDb.imageBlobs.update(url, {
-      content: image,
-    } as ImageBlob),
-  ]);
-}
-
-async function getCachedImagePromised(
-  url: string,
-  altText: string,
-): Promise<string> {
-  const inMemoryImage = ImageMemoryDB.get(url);
-  if (inMemoryImage) {
-    inMemoryImage.referenceCount++;
-    return inMemoryImage.objectURL;
+  private ensureImage(url: string, altText: string) {
+    this.checkEnabled();
+    const existing = this.downloads.get(url);
+    if (existing) return existing;
+    const task = this.loadOrRepair(url, altText);
+    this.downloads.set(url, task);
+    const remove = () => {
+      if (this.downloads.get(url) === task) this.downloads.delete(url);
+    };
+    void task.then(remove, remove);
+    return task;
   }
 
-  const image = await imagePersistedDb.images.get(url);
-  let blob: Blob;
-  if (!image) {
-    blob = await fetchImage(url);
-    await databaseAddImage(url, blob, altText);
-  } else if (isCachedImage(image)) {
-    const imageBlob = await imagePersistedDb.imageBlobs.get(url);
-    if (!imageBlob) throw new Error("Should not happen, image is cached");
-    blob = imageBlob.content;
-  } else {
-    blob = await fetchImage(image.url);
-    await databaseUpdateImage(url, blob, altText);
+  private async loadOrRepair(url: string, altText: string) {
+    const [metadata, stored] = await Promise.all([
+      this.database.images.get(url),
+      this.database.imageBlobs.get(url),
+    ]);
+    this.checkEnabled();
+    const hasBlob = stored?.content instanceof Blob && stored.content.size > 0;
+    if (metadata && isCachedImage(metadata) && hasBlob) {
+      return { blob: stored.content, newlyDownloaded: false };
+    }
+    const blob = hasBlob ? stored.content : await this.fetchBlob(url);
+    this.checkEnabled();
+    const thumbnail =
+      metadata && isCachedImage(metadata)
+        ? metadata.thumbnail
+        : await this.thumbnail(blob);
+    this.checkEnabled();
+    const write = this.database.transaction(
+      "rw",
+      this.database.images,
+      this.database.imageBlobs,
+      async () => {
+        await this.database.images.put({
+          url,
+          altText,
+          cachedAt: Date.now(),
+          thumbnail,
+          size: blob.size + thumbnail.size,
+        });
+        await this.database.imageBlobs.put({ url, content: blob });
+      },
+    );
+    this.writes.add(write);
+    try {
+      await write;
+    } finally {
+      this.writes.delete(write);
+    }
+    this.checkEnabled();
+    return { blob, newlyDownloaded: !hasBlob };
   }
 
-  const objectURL = URL.createObjectURL(blob);
-  ImageMemoryDB.set(url, {
-    objectURL,
-    referenceCount: 1,
-  });
-  return objectURL;
+  async download(url: string, altText: string) {
+    const { newlyDownloaded } = await this.ensureImage(url, altText);
+    return { newlyDownloaded };
+  }
+
+  async acquire(url: string, altText: string): Promise<string> {
+    this.checkEnabled();
+    let entry = this.memory.get(url);
+    if (!entry) {
+      const { blob } = await this.ensureImage(url, altText);
+      this.checkEnabled();
+      entry = this.memory.get(url);
+      if (!entry) {
+        entry = { objectURL: URL.createObjectURL(blob), referenceCount: 0 };
+        this.memory.set(url, entry);
+      }
+    }
+    entry.referenceCount++;
+    return entry.objectURL;
+  }
+
+  release(url: string) {
+    const entry = this.memory.get(url);
+    if (!entry) return;
+    if (--entry.referenceCount <= 0) {
+      URL.revokeObjectURL(entry.objectURL);
+      this.memory.delete(url);
+    }
+  }
+
+  clear(): Promise<void> {
+    if (this.clearing) return this.clearing;
+    this.enabled = false;
+    for (const entry of this.memory.values())
+      URL.revokeObjectURL(entry.objectURL);
+    this.memory.clear();
+    this.downloads.clear();
+    this.clearing = (async () => {
+      await Promise.allSettled([...this.writes]);
+      await this.database.delete();
+    })();
+    return this.clearing;
+  }
 }
 
-export async function getCachedImage(
-  url: string,
-  altText: string,
-): Promise<string> {
-  if (currentlyFetchingImages.has(url)) {
-    return currentlyFetchingImages.get(url)!;
-  }
+const cache = new ImageCacheStore();
+export const ImageMemoryDB = cache.memory;
+export const getCachedImage = (url: string, altText: string) =>
+  cache.acquire(url, altText);
+export const downloadImageLocally = (url: string, altText: string) =>
+  cache.download(url, altText);
+export const revokeImage = (url: string) => cache.release(url);
 
-  const promise = getCachedImagePromised(url, altText);
-  currentlyFetchingImages.set(url, promise);
-  promise.finally(() => {
-    currentlyFetchingImages.delete(url);
-  });
-  return promise;
-}
+// This is a terminal operation. Reload after sign-out to start a new cache.
+export const clearImageCache = (): Promise<void> => cache.clear();
 
-export function revokeImage(url: string) {
-  const inMemoryImage = ImageMemoryDB.get(url);
-  if (!inMemoryImage) return;
-
-  inMemoryImage.referenceCount--;
-  if (inMemoryImage.referenceCount <= 0) {
-    URL.revokeObjectURL(inMemoryImage.objectURL);
-    ImageMemoryDB.delete(url);
-  }
+export async function listUsableCachedImages(
+  database = imagePersistedDb,
+): Promise<CachedImage[]> {
+  const images = (await database.images.toArray()).filter(isCachedImage);
+  const blobs = await database.imageBlobs.bulkGet(
+    images.map((image) => image.url),
+  );
+  return images.filter(
+    (_image, index) =>
+      blobs[index]?.content instanceof Blob && blobs[index]!.content.size > 0,
+  );
 }
