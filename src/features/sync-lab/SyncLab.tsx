@@ -1,6 +1,7 @@
 import { SourcePicker } from "./SourcePicker";
 import { ExperimentTools } from "./ExperimentTools";
-import { runLabScenario } from "./core/scenarios";
+import { LabPlayback, type PlaybackPlan } from "./core/playback";
+import { PlaybackControls, ScenarioControls } from "./PlaybackControls";
 import { RecordingControls } from "./RecordingControls";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { ArrowLeft, Plus, RotateCcw } from "lucide-react";
@@ -23,6 +24,12 @@ export default function SyncLab() {
     controller.subscribe,
     controller.getSnapshot,
   );
+  const [player] = useState(() => new LabPlayback());
+  const playback = useSyncExternalStore(player.subscribe, player.getSnapshot);
+  const hasPlayback = playback.phase !== "idle";
+  const playbackBusy = ["preparing", "running", "pausing", "stopping"].includes(
+    playback.phase,
+  );
   const [sourceBooks, setSourceBooks] = useState<SourceBook[]>();
   const [preset, setPreset] = useState<ClientPreset>("metadata");
   const [bookId, setBookId] = useState("");
@@ -36,10 +43,11 @@ export default function SyncLab() {
   useEffect(() => {
     window.__syncLabHost = controller;
     return () => {
+      player.dispose();
       delete window.__syncLabHost;
       void controller.dispose();
     };
-  }, [controller]);
+  }, [controller, player]);
   const books = view.server.records.flatMap((record) => {
     if (JSON.parse(record.key)[0] !== "books") return [];
     const row = JSON.parse(record.value) as {
@@ -64,6 +72,9 @@ export default function SyncLab() {
         setError(reason instanceof Error ? reason.message : String(reason)),
       )
       .finally(() => setWorking((count) => count - 1));
+  };
+  const load = (plan: PlaybackPlan, play: boolean) => {
+    void player.load(plan, play).catch((reason) => setError(String(reason)));
   };
   const start = async (source: "demo" | "local", selectedIds?: string[]) => {
     const seed =
@@ -112,14 +123,14 @@ export default function SyncLab() {
           aria-label="Presentation mode"
         >
           <button
-            disabled={locked || recording}
+            disabled={locked || recording || playbackBusy}
             aria-pressed={view.mode === "inspector"}
             onClick={() => run(() => controller.setMode("inspector"))}
           >
             Inspector
           </button>
           <button
-            disabled={locked || recording}
+            disabled={locked || recording || playbackBusy}
             aria-pressed={view.mode === "app"}
             onClick={() => run(() => controller.setMode("app"))}
           >
@@ -147,6 +158,13 @@ export default function SyncLab() {
           </button>
         </div>
       )}
+      <PlaybackControls
+        player={player}
+        view={playback}
+        locked={locked}
+        ready={ready}
+        run={run}
+      />
       <div className="lab-workbench">
         <section className="lab-client-pane" aria-label="Clients">
           <div className="lab-client-toolbar">
@@ -154,6 +172,7 @@ export default function SyncLab() {
               <>
                 <select
                   aria-label="Active book"
+                  disabled={hasPlayback}
                   value={selectedBook}
                   onChange={(event) => setBookId(event.target.value)}
                 >
@@ -177,7 +196,12 @@ export default function SyncLab() {
                 </select>
                 <button
                   className="lab-button"
-                  disabled={locked || recording || view.clients.length >= 4}
+                  disabled={
+                    locked ||
+                    recording ||
+                    hasPlayback ||
+                    view.clients.length >= 4
+                  }
                   onClick={() => run(() => controller.spawn(preset))}
                 >
                   <Plus size={13} />
@@ -187,7 +211,7 @@ export default function SyncLab() {
                   className="lab-icon"
                   aria-label="Reset experiment"
                   title="Reset experiment"
-                  disabled={locked || recording}
+                  disabled={locked || recording || hasPlayback}
                   onClick={() => run(() => controller.reset())}
                 >
                   <RotateCcw size={14} />
@@ -231,7 +255,10 @@ export default function SyncLab() {
               </>
             )}
           </div>
-          <div className={`lab-clients lab-clients-${view.mode}`}>
+          <div
+            className={`lab-clients lab-clients-${view.mode}`}
+            inert={playbackBusy}
+          >
             {view.clients.map((client) => (
               <ClientCard
                 key={client.id}
@@ -240,7 +267,7 @@ export default function SyncLab() {
                 mode={view.mode}
                 bookId={selectedBook}
                 run={run}
-                lockLifecycle={recording || locked}
+                lockLifecycle={recording || locked || hasPlayback}
               />
             ))}
             {!view.clients.length && (
@@ -330,35 +357,22 @@ export default function SyncLab() {
               aria-labelledby="lab-tab-Tools"
               hidden={panel !== "Tools"}
             >
-              <section className="lab-scenarios">
-                <h2>Scenarios</h2>
-                <div className="lab-row lab-wrap">
-                  {(
-                    [
-                      ["conflict", "Offline note conflict"],
-                      ["lost-response", "Lost write response"],
-                      ["deletion", "Delete across devices"],
-                    ] as const
-                  ).map(([kind, label]) => (
-                    <button
-                      key={kind}
-                      className="lab-button"
-                      disabled={locked || !ready || view.clients.length < 2}
-                      onClick={() =>
-                        run(async () => {
-                          await runLabScenario(controller, selectedBook, kind);
-                          setPanel("Events");
-                        })
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </section>
+              <ScenarioControls
+                controller={controller}
+                bookId={selectedBook}
+                disabled={
+                  locked ||
+                  recording ||
+                  hasPlayback ||
+                  !ready ||
+                  view.clients.length < 2
+                }
+                load={load}
+              />
               <RecordingControls
                 controller={controller}
-                locked={locked}
+                locked={locked || hasPlayback}
+                load={load}
                 run={run}
                 onRecordingChange={setRecording}
               />
@@ -366,7 +380,7 @@ export default function SyncLab() {
                 controller={controller}
                 view={view}
                 locked={locked}
-                recording={recording}
+                recording={recording || hasPlayback}
                 ready={ready}
                 run={run}
                 upload={upload}

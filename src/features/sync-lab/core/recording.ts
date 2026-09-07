@@ -1,3 +1,5 @@
+import { waitForLabClients } from "./client-readiness";
+import type { PlaybackPlan } from "./playback";
 import type { ClientCommand } from "../types";
 import type { LabSnapshot, SyncLabController } from "./controller";
 import { validateLabSnapshot } from "./snapshot-file";
@@ -127,7 +129,7 @@ export class LabRecorder {
     };
   }
 
-  async replay(recording: LabRecording): Promise<void> {
+  createPlayback(recording: LabRecording): PlaybackPlan {
     this.requireIdle();
     if (recording.version !== 1 || recording.steps.length > MAX_STEPS)
       throw new Error("Invalid recording version or step count");
@@ -137,24 +139,44 @@ export class LabRecorder {
       if (action.type !== "clock" && !ids.has(action.id))
         throw new Error("Recording references a client outside its baseline");
     }
+    const clientNames = new Map(
+      recording.baseline.clients.map((client) => [client.id, client.name]),
+    );
+    return {
+      name: recording.name,
+      prepare: async () => {
+        await this.controller.restore(recording.baseline);
+        await this.waitForClients([...ids]);
+      },
+      steps: recording.steps.map((step, index) => ({
+        label:
+          step.action.type === "clock"
+            ? "Advance sync clock"
+            : `${clientNames.get(step.action.id) ?? step.action.id} · ${step.action.type === "command" ? step.action.command.type : step.action.type}`,
+        run: async () => {
+          if (this.disposed) throw new Error("Recorder was disposed");
+          let error: string | undefined;
+          try {
+            await this.execute(step.action);
+          } catch (failure) {
+            error =
+              failure instanceof Error ? failure.message : String(failure);
+          }
+          if (error !== step.expectedError)
+            throw new Error(
+              `Replay step ${index + 1} (${step.action.type}) differed: expected ${step.expectedError ? `error “${step.expectedError}”` : "success"}; received ${error ? `error “${error}”` : "success"}`,
+            );
+        },
+      })),
+    };
+  }
+
+  async replay(recording: LabRecording): Promise<void> {
+    const plan = this.createPlayback(recording);
     this.running = true;
     try {
-      await this.controller.restore(recording.baseline);
-      await this.waitForClients([...ids]);
-      for (let index = 0; index < recording.steps.length; index++) {
-        if (this.disposed) throw new Error("Recorder was disposed");
-        const step = recording.steps[index]!;
-        let error: string | undefined;
-        try {
-          await this.execute(step.action);
-        } catch (failure) {
-          error = failure instanceof Error ? failure.message : String(failure);
-        }
-        if (error !== step.expectedError)
-          throw new Error(
-            `Replay step ${index + 1} (${step.action.type}) differed: expected ${step.expectedError ? `error “${step.expectedError}”` : "success"}; received ${error ? `error “${error}”` : "success"}`,
-          );
-      }
+      await plan.prepare();
+      for (const step of plan.steps) await step.run();
     } finally {
       this.running = false;
     }
@@ -193,40 +215,11 @@ export class LabRecorder {
     }
   }
   private waitForClients(ids: string[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let unsubscribe = () => {};
-      const finish = (error?: Error) => {
-        clearTimeout(timer);
-        unsubscribe();
-        this.abort.signal.removeEventListener("abort", cancel);
-        if (error) reject(error);
-        else resolve();
-      };
-      const cancel = () => finish(new Error("Recorder was disposed"));
-      const timer = setTimeout(
-        () =>
-          finish(
-            new Error(
-              "Clients did not become ready for replay within the time limit",
-            ),
-          ),
-        this.readyTimeoutMs,
-      );
-      const check = () => {
-        const clients = this.controller.getSnapshot().clients;
-        if (
-          ids.every((id) =>
-            clients.some(
-              (client) => client.id === id && client.endpoint && !client.busy,
-            ),
-          )
-        )
-          finish();
-      };
-      unsubscribe = this.controller.subscribe(check);
-      this.abort.signal.addEventListener("abort", cancel, { once: true });
-      if (this.abort.signal.aborted) cancel();
-      else check();
-    });
+    return waitForLabClients(
+      this.controller,
+      ids,
+      this.abort.signal,
+      this.readyTimeoutMs,
+    );
   }
 }

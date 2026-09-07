@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Circle, Play, Square } from "lucide-react";
+import type { PlaybackPlan } from "./core/playback";
 import { LabRecorder, type LabRecording } from "./core/recording";
 import type { SyncLabController } from "./core/controller";
 
@@ -9,11 +10,13 @@ export function RecordingControls({
   locked,
   run,
   onRecordingChange,
+  load,
 }: {
   controller: SyncLabController;
   locked: boolean;
   run: (action: () => Promise<unknown>) => void;
   onRecordingChange: (recording: boolean) => void;
+  load: (plan: PlaybackPlan, play: boolean) => void;
 }) {
   const view = useSyncExternalStore(
     controller.subscribe,
@@ -93,16 +96,16 @@ export function RecordingControls({
             <button
               className="lab-button"
               disabled={locked || recording || view.mode !== "inspector"}
-              onClick={() =>
-                run(async () => {
-                  await recorder.replay(item);
+              onClick={() => {
+                const plan = recorder.createPlayback(item);
+                plan.complete = () =>
                   controller.log(
                     "Lab",
                     "replay",
                     `Replayed “${item.name}”: all ${item.steps.length} steps matched`,
                   );
-                })
-              }
+                load(plan, true);
+              }}
             >
               <Play size={13} /> Replay
             </button>

@@ -53,6 +53,7 @@ test("sync lab boots empty and position presets and supports keyboard inspection
 test("sync lab runs isolated conflicts, restores snapshots, and upgrades databases", async ({
   page,
 }) => {
+  test.setTimeout(45000);
   const apiRequests: string[] = [];
   page.on("request", (request) => {
     if (new URL(request.url()).pathname.startsWith("/api/"))
@@ -61,15 +62,23 @@ test("sync lab runs isolated conflicts, restores snapshots, and upgrades databas
   await page.setViewportSize({ width: 1440, height: 1000 });
   await startDemo(page);
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
+  await page.getByLabel("Scenario preset").selectOption("conflict");
   await page
-    .getByRole("button", { name: "Offline note conflict", exact: true })
+    .getByRole("button", { name: "Play scenario", exact: true })
     .click();
+  await expect(
+    page.getByRole("region", { name: "Scenario playback" }).getByRole("status"),
+  ).toHaveText("complete", { timeout: 15000 });
+  await page.getByRole("tab", { name: /^Events/ }).click();
   await expect(
     page.getByText("conflict: both clients agree", { exact: true }),
   ).toBeVisible();
   await expect(page.getByText("Matches server", { exact: true })).toHaveCount(
     2,
   );
+  await page
+    .getByRole("button", { name: "Stop playback", exact: true })
+    .click();
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
   await page
     .getByRole("button", { name: "Save checkpoint", exact: true })
@@ -92,12 +101,23 @@ test("sync lab runs isolated conflicts, restores snapshots, and upgrades databas
   const exportPath = await exported.path();
   expect(exportPath).toBeTruthy();
   await page.getByRole("tab", { name: "Tools", exact: true }).click();
+  await page.getByLabel("Scenario preset").selectOption("lost-response");
   await page
-    .getByRole("button", { name: "Lost write response", exact: true })
+    .getByRole("button", { name: "Play scenario", exact: true })
     .click();
+  const playback = page.getByRole("region", { name: "Scenario playback" });
+  await expect(playback.getByRole("status")).toHaveText("paused");
+  await playback.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(playback.getByRole("status")).toHaveText("complete", {
+    timeout: 15000,
+  });
+  await page.getByRole("tab", { name: /^Events/ }).click();
   await expect(
     page.getByText("lost-response: both clients agree", { exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop playback", exact: true })
+    .click();
   await page.locator("input[type=file]").setInputFiles(exportPath!);
   await expect(
     page
@@ -138,10 +158,10 @@ test("sync lab app views open the real Reader and retain local data across modes
   const b = page.frameLocator('iframe[title="Client B app"]');
   await expect(
     a.getByRole("heading", { name: "The Shared Bookmark", exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await expect(
     b.getByRole("heading", { name: "The Shared Bookmark", exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 15000 });
   await a
     .getByRole("heading", { name: "The Shared Bookmark", exact: true })
     .click();
@@ -307,4 +327,72 @@ test("sync lab records inspector actions and replays their outcomes", async ({
   await expect(
     page.getByRole("region", { name: "Record inspector" }),
   ).toContainText("A recorded edit");
+});
+
+test("scenario playback pauses for inspection, preserves manual edits, and restarts its baseline", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await startDemo(page);
+  await page.getByRole("tab", { name: "Tools", exact: true }).click();
+  await page.getByLabel("Scenario preset").selectOption("offline-edit");
+  await page.getByRole("button", { name: "Set up", exact: true }).click();
+  const playback = page.getByRole("region", { name: "Scenario playback" });
+  await expect(playback.getByRole("status")).toHaveText("paused");
+  const a = page.getByRole("article", { name: "Client A", exact: true });
+  const b = page.getByRole("article", { name: "Client B", exact: true });
+  await expect(
+    a.getByRole("button", { name: "Offline", exact: true }),
+  ).toBeVisible();
+  await playback.getByRole("button", { name: "Step", exact: true }).click();
+  await expect(playback.getByRole("status")).toHaveText("paused");
+  await expect(
+    a.getByRole("button", { name: "Online", exact: true }),
+  ).toBeVisible();
+  await a.locator("summary").filter({ hasText: "Network & clock" }).click();
+  await a.getByLabel("Latency (ms)").fill("800");
+  await playback.getByRole("button", { name: "Play", exact: true }).click();
+  await playback.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(playback.getByRole("status")).toHaveText("paused");
+  await expect(playback).toContainText("2/7");
+  await page.getByRole("tab", { name: "Records", exact: true }).click();
+  await b
+    .getByLabel("Client B shared note", { exact: true })
+    .fill("Manual intervention");
+  await b.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "Record inspector" }),
+  ).toContainText("Manual intervention");
+  await page.screenshot({
+    path: "test-results/sync-lab-playback-paused.png",
+    fullPage: true,
+  });
+  await playback.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(playback.getByRole("status")).toHaveText("failed", {
+    timeout: 15000,
+  });
+  await expect(playback.getByRole("alert")).toContainText(
+    "paused edits may change the outcome",
+  );
+  await expect(
+    page.getByRole("region", { name: "Record inspector" }),
+  ).toContainText("Manual intervention");
+  await playback
+    .getByRole("button", { name: "Restart playback", exact: true })
+    .click();
+  await expect(playback.getByRole("status")).toHaveText("paused");
+  await expect(playback).toContainText("0/7");
+  await expect(
+    a.getByRole("button", { name: "Offline", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Record inspector" }),
+  ).not.toContainText("Manual intervention");
+  await playback
+    .getByRole("button", { name: "Stop playback", exact: true })
+    .click();
+  await expect(playback).toHaveCount(0);
+  await expect(
+    a.getByRole("button", { name: "Offline", exact: true }),
+  ).toBeVisible();
 });

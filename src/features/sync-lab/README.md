@@ -56,12 +56,26 @@ and pending outbox values. The event timeline records committed client decisions
 as well as transport requests, results, and failures. It retains 2,000 events;
 full payloads are shown only when an event is expanded.
 
-Built-in sequences cover offline conflicting notes, deletion, and a lost write
-response. Inspector recording captures settled actions and expected errors,
-with a 200-step limit. Replay restores its starting checkpoint, waits for new
-clients, and verifies each step's success or error. It does not record Reader
-DOM gestures or reproduce concurrent race timing. Recordings last for this page
-session.
+Scenarios support **Set up** and **Play**. Set up prepares the first two clients
+and selected book, pauses automatic sync, and saves a starting checkpoint.
+Presets cover an offline note, competing offline edits, deletion, a lost write
+response, a newer reading position, and a future-clock rejection. The handoff
+preset requires opening Reader A after setup so the prompt can be inspected.
+
+Playback controls remain visible above all inspector tabs. **Pause** lets the
+active step settle, then stops before the next step. **Step** runs one action.
+Clients remain live while paused: you can edit data or use the Reader, then
+continue from that changed state. Background transfers and browser timers are
+not frozen. Lost-response, clock-rejection, and handoff steps pause automatically
+at their inspection points. An outcome mismatch stops playback and leaves the
+state available for inspection. **Restart** restores the prepared checkpoint;
+**Stop** keeps the current data and releases the sequence.
+
+Inspector recording captures settled actions and expected errors, with a
+200-step limit. Recorded sequences use the same playback controls. Replay
+restores its starting checkpoint, waits for new clients, and verifies each
+step's success or error. It does not record Reader DOM gestures or reproduce
+concurrent race timing. Recordings last for this page session.
 
 Checkpoints include all client tables, file bytes, preferences, device/clock
 state, cursors, pending changes, network controls, remaining timed-offline delay,
@@ -111,3 +125,17 @@ available, cleanup does not delete anything.
 Further extensions can add held/reordered responses, controlled browser timers,
 and clients loaded from different application builds. Those require separate
 verification of scheduling, protocol compatibility, and migration boundaries.
+
+## Next scenario coverage
+
+Keep five concerns separate when designing Reader status: connection, record
+sync, book-file availability, local save, and reading-position handoff. A local
+save can succeed while offline; synchronized records do not prove that the EPUB
+has uploaded. Routine transport activity should not move or interrupt the page.
+
+Next presets should cover slow first-open, a metadata-only client offline,
+records arriving before an EPUB upload, a remote edit while the composer has a
+local draft, and remote deletion while that draft is open. Each needs a concrete
+visible result: stable loading, a recoverable file error, an accurate file state,
+or an inline conflict that retains the draft. These require file-transfer and
+real-composer actions beyond the current note-record commands.
