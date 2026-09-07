@@ -19,11 +19,13 @@ export default function EditFlashcardFooterActions({
     onClose();
   };
 
-  const isSuspended =
-    actions.suspended && actions.suspended > new Date();
+  const isSuspended = actions.suspended && actions.suspended > new Date();
 
   return (
-    <fieldset disabled={disabled} className="flex items-center gap-2 px-4 py-3 border-t border-border/50 disabled:opacity-50">
+    <fieldset
+      disabled={disabled}
+      className="flex items-center gap-2 px-4 py-3 border-t border-border/50 disabled:opacity-50"
+    >
       <button
         type="button"
         onClick={() =>

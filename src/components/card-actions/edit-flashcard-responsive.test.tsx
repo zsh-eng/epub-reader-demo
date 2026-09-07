@@ -75,7 +75,9 @@ test("editor keeps draft across responsive remounts and discards it on cancel", 
 
 test("editor footer cannot mutate a card while its text save is pending", async () => {
   let finish!: () => void;
-  const save = new Promise<void>((resolve) => { finish = resolve; });
+  const save = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
   let mutations = 0;
   const view = await render(
     <EditFlashcardResponsive
@@ -85,21 +87,36 @@ test("editor footer cannot mutate a card while its text save is pending", async 
       onOpenChange={() => {}}
       actions={{
         bookmarked: false,
-        onBookmark: () => { mutations++; },
-        onBury: () => { mutations++; },
-        onDelete: () => { mutations++; },
+        onBookmark: () => {
+          mutations++;
+        },
+        onBury: () => {
+          mutations++;
+        },
+        onDelete: () => {
+          mutations++;
+        },
       }}
     />,
   );
   try {
     await act(async () => {
-      document.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      document
+        .querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        );
     });
-    const footer = document.querySelector("fieldset.border-t") as HTMLFieldSetElement;
+    const footer = document.querySelector(
+      "fieldset.border-t",
+    ) as HTMLFieldSetElement;
     expect(footer.disabled).toBe(true);
     for (const button of footer.querySelectorAll("button")) await click(button);
     expect(mutations).toBe(0);
-    await act(async () => { finish(); await save; });
+    await act(async () => {
+      finish();
+      await save;
+    });
     expect(footer.disabled).toBe(false);
     await click(footer.querySelector("button")!);
     expect(mutations).toBe(1);
