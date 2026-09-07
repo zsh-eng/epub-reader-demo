@@ -360,3 +360,32 @@ it("drains an issued download before its owner closes the database", async () =>
   await Promise.all([download, drain]);
   expect(await db.files.get(id)).toMatchObject({ remotePresent: true });
 });
+
+it("keeps uploads paused when deletion settles after its owner pauses", async () => {
+  await db.fileUploadOperations.clear();
+  await db.files.clear();
+  const remote = new MockFileRemoteApi();
+  const deletion = Promise.withResolvers<void>();
+  const remove = vi
+    .spyOn(remote, "delete")
+    .mockImplementation(() => deletion.promise);
+  const manager = createManager(remote);
+  const removedId = await computeFileId(new Blob(["remove this remote file"]));
+  manager.resumeUploads();
+  const pendingDelete = manager.deleteRemote(removedId);
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce());
+  manager.pauseUploads();
+  const pendingId = await manager.put(
+    new Blob(["keep queued after owner pause"]),
+  );
+  deletion.resolve();
+  await pendingDelete;
+  await manager.drain();
+  expect(remote.putCalls).toBe(0);
+  expect(await db.fileUploadOperations.get(pendingId)).toMatchObject({
+    id: pendingId,
+    retryCount: 0,
+    lastFailure: { kind: "none" },
+  });
+  expect(await db.files.get(pendingId)).toMatchObject({ remotePresent: false });
+});

@@ -1,3 +1,4 @@
+import { getLabRuntime } from "@/features/sync-lab/runtime";
 import { useAuth } from "@/hooks/use-auth";
 import { honoClient } from "@/lib/api";
 import type { SessionInfo } from "@/types/session";
@@ -22,6 +23,19 @@ export function useSessions() {
     queryKey: sessionKeys.forUser(userId),
     enabled: !!userId,
     queryFn: async (): Promise<SessionInfo[]> => {
+      const lab = getLabRuntime();
+      if (lab)
+        return [
+          {
+            id: lab.deviceId,
+            browser: { name: "Sync Lab", version: "" },
+            os: { name: "Simulated client", version: "" },
+            deviceType: "mobile",
+            createdAt: new Date(0).toISOString(),
+            updatedAt: new Date(lab.now()).toISOString(),
+            isCurrent: true,
+          },
+        ];
       const res = await honoClient.api.sessions.$get();
 
       if (!res.ok) {
