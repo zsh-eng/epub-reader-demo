@@ -5,13 +5,16 @@ import { Ban, BookmarkIcon, Eye, Trash } from "lucide-react";
 type EditFlashcardFooterActionsProps = {
   actions: EditFlashcardActions;
   onClose: () => void;
+  disabled?: boolean;
 };
 
 export default function EditFlashcardFooterActions({
   actions,
   onClose,
+  disabled = false,
 }: EditFlashcardFooterActionsProps) {
   const handleAction = (fn: () => void) => {
+    if (disabled) return;
     fn();
     onClose();
   };
@@ -20,7 +23,7 @@ export default function EditFlashcardFooterActions({
     actions.suspended && actions.suspended > new Date();
 
   return (
-    <div className="flex items-center gap-2 px-4 py-3 border-t border-border/50">
+    <fieldset disabled={disabled} className="flex items-center gap-2 px-4 py-3 border-t border-border/50 disabled:opacity-50">
       <button
         type="button"
         onClick={() =>
@@ -70,6 +73,6 @@ export default function EditFlashcardFooterActions({
           Delete
         </button>
       </div>
-    </div>
+    </fieldset>
   );
 }

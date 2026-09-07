@@ -50,6 +50,7 @@ export default function EditFlashcardDialog({
 
         {actions && (
           <EditFlashcardFooterActions
+            disabled={form.formState.isSubmitting}
             actions={actions}
             onClose={() => onOpenChange(false)}
           />

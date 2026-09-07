@@ -48,6 +48,7 @@ export default function EditFlashcardDrawer({
 
         {actions && (
           <EditFlashcardFooterActions
+            disabled={form.formState.isSubmitting}
             actions={actions}
             onClose={() => onOpenChange(false)}
           />
