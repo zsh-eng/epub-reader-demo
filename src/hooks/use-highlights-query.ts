@@ -8,6 +8,7 @@ import {
 import { withReaderTraceSpan } from "@/lib/reader-performance-trace";
 import type { Highlight } from "@/types/highlight";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 /**
  * Query keys for highlights
@@ -65,6 +66,7 @@ export function useAddHighlightMutation(
   const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
+    networkMode: "always", // Commit local data and the sync outbox while offline.
     mutationFn: async (highlight: Highlight) => {
       await addHighlightToDb(highlight);
       return highlight;
@@ -114,6 +116,9 @@ export function useAddHighlightMutation(
       }
       queryClient.setQueryData(bookQueryKey, context?.previousBookHighlights);
       console.error("Failed to add highlight:", err);
+      toast.error("Could not save highlight", {
+        description: "Select the passage and try again.",
+      });
     },
     onSettled: (_data, _error, newHighlight) => {
       // Refetch after error or success to ensure consistency
@@ -140,6 +145,7 @@ export function useDeleteHighlightMutation(
   const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
+    networkMode: "always", // Commit local data and the sync outbox while offline.
     mutationFn: async (highlightId: string) => {
       await deleteHighlightFromDb(highlightId);
       return highlightId;
@@ -165,6 +171,9 @@ export function useDeleteHighlightMutation(
         queryClient.setQueryData(queryKey, context.previousHighlights);
       }
       console.error("Failed to delete highlight:", err);
+      toast.error("Could not delete highlight", {
+        description: "Your highlight is still saved. Try again.",
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
@@ -185,6 +194,7 @@ export function useUpdateHighlightMutation(
   const bookQueryKey = highlightKeys.book(bookId ?? "");
 
   return useMutation({
+    networkMode: "always", // Commit local data and the sync outbox while offline.
     mutationFn: async ({
       id,
       changes,
@@ -216,6 +226,9 @@ export function useUpdateHighlightMutation(
         queryClient.setQueryData(queryKey, context.previousHighlights);
       }
       console.error("Failed to update highlight:", err);
+      toast.error("Could not change highlight color", {
+        description: "Your previous color is still saved. Try again.",
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });

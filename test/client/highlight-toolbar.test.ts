@@ -75,3 +75,44 @@ describe("HighlightToolbar", () => {
     );
   });
 });
+
+it.each(["denied", "unavailable"])(
+  "shows a copy error when clipboard access is %s",
+  async (condition) => {
+    const { Toaster, toast } = await import("sonner");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value:
+        condition === "denied"
+          ? {
+              writeText: vi
+                .fn()
+                .mockRejectedValue(new Error("Permission denied")),
+            }
+          : undefined,
+    });
+    render(createElement(Toaster));
+    render(
+      createElement(HighlightToolbar, {
+        position: { x: 200, y: 200 },
+        onColorSelect: vi.fn(),
+        onClose: vi.fn(),
+        textToCopy: "A selected passage",
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Copy highlighted text" }),
+    );
+    await screen.findByText("Could not copy highlight");
+    expect(
+      screen
+        .getByRole("button", { name: "Copy highlighted text" })
+        .querySelector(".lucide-check"),
+    ).toBeNull();
+    toast.dismiss();
+    consoleError.mockRestore();
+  },
+);
