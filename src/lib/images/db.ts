@@ -1,4 +1,4 @@
-import { Dexie, type EntityTable } from "dexie";
+import { Dexie, type EntityTable, type Table } from "dexie";
 
 export type UncachedImage = { url: string };
 export type CachedImage = {
@@ -10,7 +10,7 @@ export type CachedImage = {
 };
 export type ImageBlob = { url: string; content: Blob };
 export type ImageCacheDatabase = Dexie & {
-  images: EntityTable<CachedImage | UncachedImage, "url">;
+  images: Table<CachedImage | UncachedImage, string>;
   imageBlobs: EntityTable<ImageBlob, "url">;
 };
 
