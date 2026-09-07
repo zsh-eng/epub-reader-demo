@@ -6,7 +6,17 @@ import {
 } from "@/lib/files/file-remote-api";
 import { FilesManager } from "@/lib/files/files-manager";
 import type { FileId, RemoteFile } from "@/lib/files/types";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const managers: FilesManager[] = [];
+function createManager(remote: FileRemoteApi): FilesManager {
+  const manager = new FilesManager(remote);
+  managers.push(manager);
+  return manager;
+}
+afterEach(() => {
+  for (const manager of managers.splice(0)) manager.pauseUploads();
+});
 
 async function waitForCondition(
   condition: () => boolean | Promise<boolean>,
@@ -88,7 +98,7 @@ describe("FilesManager", () => {
 
   it("stores bytes and upload intent before put resolves", async () => {
     const remote = new MockFileRemoteApi();
-    const manager = new FilesManager(remote);
+    const manager = createManager(remote);
     const blob = new Blob(["local first"], { type: "text/plain" });
 
     const id = await manager.put(blob);
@@ -116,7 +126,7 @@ describe("FilesManager", () => {
 
   it("uploads durable operations when processing resumes", async () => {
     const remote = new MockFileRemoteApi();
-    const manager = new FilesManager(remote);
+    const manager = createManager(remote);
     const blob = new Blob(["upload later"], { type: "text/plain" });
     const id = await manager.put(blob);
 
@@ -131,11 +141,11 @@ describe("FilesManager", () => {
 
   it("resumes an upload operation after a new manager starts", async () => {
     const remote = new MockFileRemoteApi();
-    const firstManager = new FilesManager(remote);
+    const firstManager = createManager(remote);
     const blob = new Blob(["persisted operation"]);
     const id = await firstManager.put(blob);
 
-    const restoredManager = new FilesManager(remote);
+    const restoredManager = createManager(remote);
     restoredManager.resumeUploads();
     await waitForCondition(() => remote.files.has(id));
 
@@ -143,10 +153,10 @@ describe("FilesManager", () => {
     restoredManager.pauseUploads();
   });
 
-  it("retains a failed operation and retries on the next resume", async () => {
+  it("retains a failed operation and retries after remote recovery without reconnect", async () => {
     const remote = new MockFileRemoteApi();
     remote.failPuts = true;
-    const manager = new FilesManager(remote);
+    const manager = createManager(remote);
     manager.resumeUploads();
 
     const id = await manager.put(new Blob(["retry upload"]));
@@ -161,9 +171,9 @@ describe("FilesManager", () => {
     });
 
     remote.failPuts = false;
-    manager.resumeUploads();
     await waitForCondition(
       async () => (await db.fileUploadOperations.get(id)) === undefined,
+      2500,
     );
     expect(remote.files.has(id)).toBe(true);
     manager.pauseUploads();
@@ -171,7 +181,7 @@ describe("FilesManager", () => {
 
   it("returns local bytes without a remote request", async () => {
     const remote = new MockFileRemoteApi();
-    const manager = new FilesManager(remote);
+    const manager = createManager(remote);
     const blob = new Blob(["local bytes"], { type: "text/plain" });
     const id = await manager.put(blob);
 
@@ -183,7 +193,7 @@ describe("FilesManager", () => {
   it("shares a foreground download and stores it as remote", async () => {
     const remote = new MockFileRemoteApi();
     remote.getDelayMs = 30;
-    const manager = new FilesManager(remote);
+    const manager = createManager(remote);
     const blob = new Blob(["remote bytes"], { type: "text/plain" });
     const id = await computeFileId(blob);
     remote.files.set(id, blob);
@@ -205,7 +215,7 @@ describe("FilesManager", () => {
 
   it("lists files and keeps local bytes after remote deletion", async () => {
     const remote = new MockFileRemoteApi();
-    const manager = new FilesManager(remote);
+    const manager = createManager(remote);
     const blob = new Blob(["retained bytes"], { type: "text/plain" });
     const id = await computeFileId(blob);
     remote.files.set(id, blob);
@@ -232,4 +242,93 @@ describe("FilesManager", () => {
     await manager.put(blob);
     expect(await db.fileUploadOperations.get(id)).toBeDefined();
   });
+});
+
+describe("upload retry lifetime", () => {
+  let manager: FilesManager;
+  afterEach(() => {
+    manager.pauseUploads();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+  it("backs off, caps the delay, and cancels the timer on pause", async () => {
+    await db.fileUploadOperations.clear();
+    await db.files.clear();
+    const remote = new MockFileRemoteApi();
+    remote.failPuts = true;
+    manager = createManager(remote);
+    await manager.put(new Blob(["backoff"]));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const timers = vi.spyOn(globalThis, "setTimeout");
+    manager.resumeUploads();
+    await vi.waitFor(() => expect(remote.putCalls).toBe(1));
+    for (const delay of [1000, 2000, 4000, 8000, 16000, 30000, 30000]) {
+      const calls = remote.putCalls;
+      await vi.waitFor(() =>
+        expect(
+          timers.mock.calls
+            .filter((call) => Number(call[1]) >= 1000)
+            .at(-1)?.[1],
+        ).toBe(delay),
+      );
+      await vi.advanceTimersToNextTimerAsync();
+      await vi.waitFor(() => expect(remote.putCalls).toBe(calls + 1));
+    }
+    manager.pauseUploads();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(await db.fileUploadOperations.count()).toBe(1);
+  });
+  it("does not overlap uploads or bypass backoff when work is added", async () => {
+    await db.fileUploadOperations.clear();
+    await db.files.clear();
+    const remote = new MockFileRemoteApi();
+    const pending = Promise.withResolvers<RemoteFile>();
+    const put = vi
+      .spyOn(remote, "put")
+      .mockImplementationOnce(() => pending.promise);
+    manager = createManager(remote);
+    await manager.put(new Blob(["first"]));
+    manager.resumeUploads();
+    await vi.waitFor(() => expect(put).toHaveBeenCalledOnce());
+    await manager.put(new Blob(["second"]));
+    manager.resumeUploads();
+    expect(put).toHaveBeenCalledOnce();
+    pending.reject(new Error("Temporary failure"));
+    await vi.waitFor(async () =>
+      expect(
+        (await db.fileUploadOperations.toArray()).some(
+          (op) => op.retryCount === 1,
+        ),
+      ).toBe(true),
+    );
+    expect(put).toHaveBeenCalledOnce();
+    await waitForCondition(
+      async () => (await db.fileUploadOperations.count()) === 0,
+      2500,
+    );
+    expect(put).toHaveBeenCalledTimes(3);
+  });
+});
+
+it("does not schedule a retry when an in-flight upload fails after pause", async () => {
+  await db.fileUploadOperations.clear();
+  await db.files.clear();
+  const remote = new MockFileRemoteApi();
+  const pending = Promise.withResolvers<RemoteFile>();
+  const put = vi.spyOn(remote, "put").mockImplementation(() => pending.promise);
+  const manager = createManager(remote);
+  const id = await manager.put(new Blob(["pause during request"]));
+  manager.resumeUploads();
+  await vi.waitFor(() => expect(put).toHaveBeenCalledOnce());
+  manager.pauseUploads();
+  pending.reject(new Error("Late failure"));
+  await vi.waitFor(async () =>
+    expect(await db.fileUploadOperations.get(id)).toMatchObject({
+      retryCount: 1,
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  expect(put).toHaveBeenCalledOnce();
+  vi.restoreAllMocks();
 });

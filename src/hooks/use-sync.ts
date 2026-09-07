@@ -14,6 +14,8 @@ import {
   type ReactNode,
 } from "react";
 
+export class SyncUnavailableError extends Error {}
+
 interface SyncContextValue {
   /** Whether a sync is currently in progress */
   isSyncing: boolean;
@@ -67,13 +69,19 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   // Manual sync trigger
   const triggerSync = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated)
+      throw new SyncUnavailableError("Sign in to synchronize your library.");
 
     setIsSyncing(true);
     setSyncError(null);
 
     try {
-      await syncService.syncAll();
+      const result = await syncService.syncAll();
+      if (result.status === "offline") {
+        throw new SyncUnavailableError(
+          "You are offline. Connect to the internet and try again.",
+        );
+      }
       setLastSyncedAt(new Date());
     } catch (error) {
       console.error("[useSync] Sync failed:", error);
