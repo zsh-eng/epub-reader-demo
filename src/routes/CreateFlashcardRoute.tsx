@@ -102,33 +102,47 @@ export default function CreateFlashcardRoute() {
   const [imagePickerOpen, setImagePickerOpen] = useState(false);
 
   const onImageUpload = async (altText?: string) => {
-    if (!imageFile || !uploadPromise) {
-      return;
-    }
-
+    if (!imageFile) return;
     const trimmedAltText = altText?.trim();
     setImageUploading(true);
-    const result = await uploadPromise;
-    setImageUploadDialogOpen(false);
-
-    if (!result.success) {
-      toast.error(result.error);
-      setImageUploading(false);
+    const promise =
+      uploadPromise ??
+      uploadImage(imageFile, trimmedAltText).catch(
+        (error): UploadResponse => ({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Image upload failed. Try again.",
+        }),
+      );
+    setUploadPromise(promise);
+    try {
+      const result = await promise;
+      if (!result.success) {
+        setUploadPromise(null);
+        throw new Error(result.error);
+      }
+      const imageUrl = constructImageMarkdownLink(
+        result.fileKey,
+        trimmedAltText,
+      );
+      try {
+        await navigator.clipboard.writeText(imageUrl);
+      } catch {
+        throw new Error(
+          "Image uploaded, but the link could not be copied. Try again to copy it.",
+        );
+      }
+      toast("Image URL copied to clipboard!", {
+        icon: <Image className="w-4 h-4" />,
+      });
+      setImageUploadDialogOpen(false);
+      setImageFile(null);
       setUploadPromise(null);
-      return;
+    } finally {
+      setImageUploading(false);
     }
-
-    const imageUrl = constructImageMarkdownLink(result.fileKey, trimmedAltText);
-    await navigator.clipboard.writeText(imageUrl);
-    toast("Image URL copied to clipboard!", {
-      icon: <Image className="w-4 h-4" />,
-    });
-
-    // Avoid the flash in the icon change
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    setImageUploading(false);
-    setUploadPromise(null);
-    return;
   };
 
   const onImageUpoadDialogOpenChange = (open: boolean) => {
@@ -252,7 +266,15 @@ export default function CreateFlashcardRoute() {
             // As long as we have the ability to manage images and remove the ones that are unused
             // (we can do this be fetching the links to all images from the backend and comparing)
             // to what we see locally, it's ok to optimistically upload.
-            const promise = uploadImage(image, undefined);
+            const promise = uploadImage(image, undefined).catch(
+              (error): UploadResponse => ({
+                success: false,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "Image upload failed. Try again.",
+              }),
+            );
             setUploadPromise(promise);
           }}
         />
