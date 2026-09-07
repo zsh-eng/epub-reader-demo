@@ -20,10 +20,22 @@ const MAX_OPERATIONS = 2500;
 const SYNC_TO_SERVER_INTERVAL = 10000;
 const SYNC_FROM_SERVER_INTERVAL = 30 * 1000 * 5; // Sync from server interval can be long
 let started = false;
+let stopped = false;
+const localWork = new Set<Promise<unknown>>();
+
+// A privacy wipe waits for local writes, but need not wait for a network response.
+function trackLocal<T>(work: Promise<T>): Promise<T> {
+  localWork.add(work);
+  void work.then(
+    () => localWork.delete(work),
+    () => localWork.delete(work),
+  );
+  return work;
+}
 
 let syncToServerInProgress = false;
 async function syncToServer() {
-  if (syncToServerInProgress) {
+  if (stopped || syncToServerInProgress) {
     return;
   }
 
@@ -34,30 +46,34 @@ async function syncToServer() {
       return;
     }
 
-    const clientId = await getClientId();
-    if (!clientId) {
+    const clientId = await trackLocal(getClientId());
+    if (stopped || !clientId) {
       return;
     }
 
-    const pendingOperations = await db.pendingOperations.toArray();
-    if (pendingOperations.length === 0) {
+    const pendingOperations = await trackLocal(db.pendingOperations.toArray());
+    if (stopped || pendingOperations.length === 0) {
       return;
     }
 
     // Process operations in chunks
     for (let i = 0; i < pendingOperations.length; i += MAX_OPERATIONS) {
+      if (stopped) return;
       const chunk = pendingOperations.slice(i, i + MAX_OPERATIONS);
 
       console.log("Pushing", chunk.length, "operations");
       const { success } = await pushToServer(clientId, chunk);
 
+      if (stopped) return;
       if (!success) {
         console.error("Failed to push operations to server");
         break;
       }
 
       // Delete the successfully sent chunk
-      await db.pendingOperations.bulkDelete(chunk.map((op) => op._id));
+      await trackLocal(
+        db.pendingOperations.bulkDelete(chunk.map((op) => op._id)),
+      );
       console.log(
         "Synced",
         Math.min(i + MAX_OPERATIONS, pendingOperations.length),
@@ -76,74 +92,81 @@ let promise: Promise<void> | null = null;
 
 async function syncFromServer() {
   try {
-    const clientId = await getClientId();
-    if (!clientId) {
+    const clientId = await trackLocal(getClientId());
+    if (stopped || !clientId) {
       return;
     }
 
-    const seqNo = await getSeqNo();
+    const seqNo = await trackLocal(getSeqNo());
+    if (stopped) return;
 
     const operations = await pullFromServer(clientId, seqNo);
-    if (operations.length === 0) {
+    if (stopped || operations.length === 0) {
       return;
     }
 
-    await applyServerOperations(operations);
+    await trackLocal(applyServerOperations(operations));
   } finally {
     syncFromServerInProgress = false;
   }
 }
 
 // We sync from server more infrequently as we don't want to overload the server
-function syncFromServerCached() {
+function syncFromServerCached(): Promise<void> {
+  if (stopped) return Promise.resolve();
   if (syncFromServerInProgress) {
-    return promise;
+    return promise!;
   }
 
   syncFromServerInProgress = true;
   promise = syncFromServer();
+  return promise;
 }
 
 function start() {
-  if (started) {
+  if (started || stopped) {
     return;
   }
 
   started = true;
 
-  syncToServer();
-  syncFromServerCached();
+  void syncToServer().catch(console.error);
+  void syncFromServerCached().catch(console.error);
 
   // Sync to server
-  setInterval(syncToServer, SYNC_TO_SERVER_INTERVAL);
+  setInterval(
+    () => void syncToServer().catch(console.error),
+    SYNC_TO_SERVER_INTERVAL,
+  );
   document.addEventListener("visibilitychange", () => {
     // Sync when the user switches away
     if (document.visibilityState === "hidden") {
-      syncToServer();
+      void syncToServer().catch(console.error);
     }
   });
   document.addEventListener("online", () => {
-    syncToServer();
+    void syncToServer().catch(console.error);
   });
 
   // Sync from server
-  setInterval(syncFromServerCached, SYNC_FROM_SERVER_INTERVAL);
+  setInterval(
+    () => void syncFromServerCached().catch(console.error),
+    SYNC_FROM_SERVER_INTERVAL,
+  );
   document.addEventListener("online", () => {
-    syncFromServerCached();
+    void syncFromServerCached().catch(console.error);
   });
   // Grab from serve whenever the user comes back
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
-      syncFromServerCached();
+      void syncFromServerCached().catch(console.error);
     }
   });
 }
 
 async function wipeDatabase() {
-  syncToServerInProgress = false;
-  syncFromServerInProgress = false;
-  promise = null;
-
+  stopped = true;
+  await Promise.allSettled([...localWork]);
   await db.delete();
 }
 

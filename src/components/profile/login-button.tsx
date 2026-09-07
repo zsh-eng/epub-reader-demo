@@ -156,7 +156,7 @@ export function LoginButton() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <button>
+        <button type="button" disabled={!online}>
           <BouncyButton
             variant="large"
             className={cn(

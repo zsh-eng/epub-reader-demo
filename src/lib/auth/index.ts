@@ -144,6 +144,8 @@ export async function verifyOtp(
     };
   }
 
+  await setSessionExpiry(new Date(Date.now() + SESSION_DURATION_MS));
+
   return {
     success: data.success,
   };
@@ -172,7 +174,7 @@ export async function registerClient(): Promise<RegisterClientResponse> {
   }
 
   const data: { clientId: string } = await response.json();
-  setClientId(data.clientId);
+  await setClientId(data.clientId);
 
   return {
     success: true,
@@ -182,7 +184,7 @@ export async function registerClient(): Promise<RegisterClientResponse> {
 export async function registerAndSync(clientId?: string): Promise<void> {
   if (clientId) {
     await setClientId(clientId);
-    return SyncEngine.syncFromServer() || Promise.resolve();
+    return SyncEngine.syncFromServer();
   }
 
   const clientIdResponse = await registerClient();
@@ -190,7 +192,7 @@ export async function registerAndSync(clientId?: string): Promise<void> {
     throw new Error(clientIdResponse.message);
   }
 
-  return SyncEngine.syncFromServer() || Promise.resolve();
+  return SyncEngine.syncFromServer();
 }
 
 type LogoutResponse = {

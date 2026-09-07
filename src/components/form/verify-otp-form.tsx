@@ -1,3 +1,5 @@
+import { Button } from "@/components/ui/button";
+import { useAccountSubmit } from "./use-account-submit";
 import {
   Form,
   FormControl,
@@ -15,7 +17,7 @@ import {
 } from "@/components/ui/input-otp";
 import { verifyOtpFormSchema, VerifyOtpFormValues } from "@/lib/form-schema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 
 type VerifyOtpProps = {
@@ -30,18 +32,24 @@ export default function VerifyOtpForm({ onSubmit }: VerifyOtpProps) {
     },
   });
 
+  const { submit, pending, error } = useAccountSubmit(onSubmit);
+  const attemptedPin = useRef<string>();
   const pinWatch = form.watch("pin");
 
-  // Auto submit when the user has entered the 8 digits
+  // A complete code is tried once. A failed code can be retried with the button.
   useEffect(() => {
-    if (pinWatch.length === 8) {
-      form.handleSubmit(onSubmit)();
+    if (pinWatch.length !== 8) {
+      attemptedPin.current = undefined;
+      return;
     }
-  }, [pinWatch, form, onSubmit]);
+    if (pending || attemptedPin.current === pinWatch) return;
+    attemptedPin.current = pinWatch;
+    void form.handleSubmit(submit)();
+  }, [pinWatch, pending, form, submit]);
 
   return (
     <Form {...form}>
-      <form className="w-full space-y-6" onSubmit={form.handleSubmit(onSubmit)}>
+      <form className="w-full space-y-6" onSubmit={form.handleSubmit(submit)}>
         <FormField
           control={form.control}
           name="pin"
@@ -51,6 +59,7 @@ export default function VerifyOtpForm({ onSubmit }: VerifyOtpProps) {
               <FormControl>
                 <InputOTP
                   maxLength={8}
+                  disabled={pending}
                   {...field}
                   onChange={(value) => onChange(value.toUpperCase())}
                 >
@@ -76,6 +85,14 @@ export default function VerifyOtpForm({ onSubmit }: VerifyOtpProps) {
             </FormItem>
           )}
         />
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <Button type="submit" disabled={pending}>
+          {pending ? "Verifying..." : "Verify code"}
+        </Button>
       </form>
     </Form>
   );

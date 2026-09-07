@@ -26,25 +26,27 @@ export default function LoginSuccessRoute() {
       <div className="flex flex-col items-center justify-center h-[70dvh] gap-4 py-12">
         {clientId ? (
           <>
-            <BouncyButton
-              className="flex items-center gap-2 text-xl"
-              variant="large"
-              asButton
+            <button
+              type="button"
+              aria-label="Sync account data"
+              onClick={() => {
+                toast.promise(delayAfter(registerAndSync(clientId), 1000), {
+                  loading: "Syncing...",
+                  success: () => {
+                    navigate("/");
+                    return "Synced successfully!";
+                  },
+                  error: "Error syncing",
+                });
+              }}
             >
-              <RefreshCcw
-                className="size-24 text-primary"
-                onClick={() => {
-                  toast.promise(delayAfter(registerAndSync(clientId), 1000), {
-                    loading: "Syncing...",
-                    success: () => {
-                      navigate("/");
-                      return "Synced successfully!";
-                    },
-                    error: "Error syncing",
-                  });
-                }}
-              />
-            </BouncyButton>
+              <BouncyButton
+                className="flex items-center gap-2 text-xl"
+                variant="large"
+              >
+                <RefreshCcw className="size-24 text-primary" />
+              </BouncyButton>
+            </button>
             <div className="text-center">
               <h3 className="text-lg font-medium">Login Successful!</h3>
               <p className="text-sm text-muted-foreground">

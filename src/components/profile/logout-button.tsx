@@ -11,39 +11,42 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { logout } from "@/lib/auth";
-import SyncEngine from "@/lib/sync/engine";
+import {
+  logoutAndClearLocalData,
+  needsLocalAccountCleanup,
+} from "@/lib/auth/privacy";
 import { cn } from "@/lib/utils";
 import { LogOut } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 export function LogoutButton() {
   const online = useOnlineStatus();
+  const [retryCleanup, setRetryCleanup] = useState(needsLocalAccountCleanup);
+  const disabled = !online && !retryCleanup;
   const handleLogout = async () => {
-    const logoutResponse = await logout();
-
-    if (!logoutResponse.success) {
-      console.error("Failed to logout", logoutResponse.message);
-      throw new Error(logoutResponse.message);
+    try {
+      await logoutAndClearLocalData();
+      location.reload();
+    } catch (error) {
+      setRetryCleanup(needsLocalAccountCleanup());
+      throw error;
     }
-
-    await SyncEngine.wipeDatabase();
-    location.reload();
   };
 
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <button>
+        <button type="button" disabled={disabled}>
           <BouncyButton
             variant="large"
             className={cn(
               "bg-background dark:bg-muted/50 w-full rounded-xl py-4 px-6  cursor-pointer transition-all duration-100 ease-out",
-              !online && "cursor-not-allowed text-muted-foreground",
+              disabled && "cursor-not-allowed text-muted-foreground",
             )}
           >
             <div className="flex justify-between">
-              <span>Sign out</span>
+              <span>{retryCleanup ? "Retry local cleanup" : "Sign out"}</span>
               <LogOut className="w-6 h-6 text-muted-foreground" />
             </div>
           </BouncyButton>
@@ -51,10 +54,14 @@ export function LogoutButton() {
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Sign out of your account?</AlertDialogTitle>
+          <AlertDialogTitle>
+            {retryCleanup
+              ? "Clear local account data?"
+              : "Sign out of your account?"}
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Your local data will be cleared for privacy. You can always sync
-            your data again by signing back in with your account.
+            Your local cards, review history, saved card draft, and cached
+            images will be cleared from this browser for privacy.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -64,11 +71,14 @@ export function LogoutButton() {
               toast.promise(handleLogout, {
                 loading: "Signing out...",
                 success: "Signed out successfully",
-                error: "Failed to sign out",
+                error: () =>
+                  needsLocalAccountCleanup()
+                    ? "Signed out. Local cleanup failed. Use Retry local cleanup."
+                    : "Failed to sign out",
               });
             }}
           >
-            Sign out
+            {retryCleanup ? "Retry cleanup" : "Sign out"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

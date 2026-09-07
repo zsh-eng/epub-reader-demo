@@ -1,3 +1,4 @@
+import { useAccountSubmit } from "./use-account-submit";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -31,9 +32,11 @@ export function RegisterForm({ onSubmit }: RegisterFormProps) {
     },
   });
 
+  const { submit, pending, error } = useAccountSubmit(onSubmit);
+
   const handleSubmit = async (data: RegisterFormValues) => {
     navigator?.vibrate?.(VibrationPattern.successConfirm);
-    await onSubmit(data);
+    await submit(data);
   };
 
   return (
@@ -93,17 +96,18 @@ export function RegisterForm({ onSubmit }: RegisterFormProps) {
           )}
         />
 
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <Button
           type="submit"
           className="w-full active:scale-95 transition-all duration-100 ease-out mt-4"
           size={"lg"}
-          disabled={form.formState.isSubmitting}
+          disabled={pending}
         >
-          {form.formState.isSubmitting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            "Sign up"
-          )}
+          {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign up"}
         </Button>
       </form>
     </Form>
