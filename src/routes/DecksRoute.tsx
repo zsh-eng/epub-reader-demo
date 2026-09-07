@@ -1,3 +1,4 @@
+import { deckMatchesSearch } from "@/lib/deck-search";
 import AllDecksCardContainer from "@/components/deck/all-decks-card-container";
 import DeckCardContainer from "@/components/deck/deck-card-container";
 import SuspendedDecksCardContainer from "@/components/deck/suspended-decks-card-container";
@@ -10,11 +11,7 @@ import { useState } from "react";
 export default function DecksRoute() {
   const decks = useDecks();
   const [search, setSearch] = useState("");
-  const filteredDecks = decks.filter((deck) =>
-    (
-      deck.name.toLowerCase().replace(/-/g, "") + deck.description.toLowerCase()
-    ).includes(search.toLowerCase()),
-  );
+  const filteredDecks = decks.filter((deck) => deckMatchesSearch(deck, search));
 
   return (
     <div

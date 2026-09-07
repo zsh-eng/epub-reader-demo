@@ -19,7 +19,11 @@ export default function EditFlashcardAction() {
     const hasChanged =
       currentCard.front !== values.front || currentCard.back !== values.back;
     if (hasChanged) {
-      updateCardContentOperation(currentCard.id, values.front, values.back);
+      await updateCardContentOperation(
+        currentCard.id,
+        values.front,
+        values.back,
+      );
     }
     setOpen(false);
   };

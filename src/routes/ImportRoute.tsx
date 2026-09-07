@@ -1,7 +1,11 @@
 import { useCards, useDecks } from "@/components/hooks/query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { constructImageMarkdownLink, uploadImage } from "@/lib/files/upload";
+import {
+  availableDeckIds,
+  createAssetLinkResolver,
+  undoImportedCards,
+} from "@/lib/import/session";
 import {
   createFileFromBundleAsset,
   parseBundleFile,
@@ -40,7 +44,17 @@ function persistSelectedDecks(deckIds: string[]) {
   }
 }
 
-export default function ImportRoute() {
+type ImportRouteProps = {
+  parseFile?: typeof parseBundleFile;
+  fingerprintCard?: typeof createCardFingerprint;
+  persistCard?: typeof createNewCard;
+};
+
+export default function ImportRoute({
+  parseFile = parseBundleFile,
+  fingerprintCard = createCardFingerprint,
+  persistCard = createNewCard,
+}: ImportRouteProps = {}) {
   const cards = useCards();
   const decks = useDecks().sort((a, b) => b.lastModified - a.lastModified);
 
@@ -66,6 +80,10 @@ export default function ImportRoute() {
   const [lastImportedCardIds, setLastImportedCardIds] = useState<string[]>([]);
   const [isUndoingImport, setIsUndoingImport] = useState(false);
 
+  const importLock = useRef(false);
+  const undoLock = useRef(false);
+  const parseGeneration = useRef(0);
+  const validSelectedDecks = availableDeckIds(selectedDecks, decks);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -83,14 +101,12 @@ export default function ImportRoute() {
 
       const existingFingerprints = new Set<string>();
       for (const card of cards) {
-        existingFingerprints.add(
-          await createCardFingerprint(card.front, card.back),
-        );
+        existingFingerprints.add(await fingerprintCard(card.front, card.back));
       }
 
       let duplicates = 0;
       for (const card of bundle.manifest.cards) {
-        const fingerprint = await createCardFingerprint(card.front, card.back);
+        const fingerprint = await fingerprintCard(card.front, card.back);
         if (existingFingerprints.has(fingerprint)) {
           duplicates++;
         }
@@ -106,7 +122,7 @@ export default function ImportRoute() {
     return () => {
       cancelled = true;
     };
-  }, [bundle, cards]);
+  }, [bundle, cards, fingerprintCard]);
 
   const bundleStats = useMemo(() => {
     if (!bundle) {
@@ -126,14 +142,20 @@ export default function ImportRoute() {
   }, [bundle]);
 
   const handleFile = async (file: File) => {
+    if (importLock.current) return;
+    const generation = ++parseGeneration.current;
+    setBundle(null);
+    setBundleName(null);
     try {
       setIsParsing(true);
-      const parsed = await parseBundleFile(file);
+      const parsed = await parseFile(file);
+      if (generation !== parseGeneration.current) return;
       setBundle(parsed);
       setBundleName(file.name);
       setImportSummary(null);
       toast.success(`Loaded bundle with ${parsed.manifest.cards.length} cards`);
     } catch (error) {
+      if (generation !== parseGeneration.current) return;
       console.error(error);
       const message = error instanceof Error ? error.message : "Invalid bundle";
       toast.error("Failed to parse bundle", {
@@ -142,7 +164,7 @@ export default function ImportRoute() {
       setBundle(null);
       setBundleName(null);
     } finally {
-      setIsParsing(false);
+      if (generation === parseGeneration.current) setIsParsing(false);
     }
   };
 
@@ -195,41 +217,36 @@ export default function ImportRoute() {
 
   const canImport =
     Boolean(bundle) &&
-    (selectedDecks.length > 0 || allowImportWithoutDeck) &&
+    (validSelectedDecks.length > 0 || allowImportWithoutDeck) &&
     !isParsing;
 
   const handleImport = async () => {
-    if (!bundle) {
+    if (!bundle || isParsing || importLock.current || undoLock.current) {
       return;
     }
 
-    if (selectedDecks.length === 0 && !allowImportWithoutDeck) {
+    if (validSelectedDecks.length === 0 && !allowImportWithoutDeck) {
       toast.error("Select at least one deck or allow deck-less import");
       return;
     }
 
+    importLock.current = true;
+    setIsImporting(true);
+    const resolveAssetLink = createAssetLinkResolver();
     const existingFingerprints = new Set<string>();
-    for (const card of cards) {
-      existingFingerprints.add(
-        await createCardFingerprint(card.front, card.back),
-      );
-    }
-
-    const uploadCache = new Map<string, Promise<string>>();
     let imported = 0;
     let skipped = 0;
     let failed = 0;
     const importedCardIds: string[] = [];
 
     try {
-      setIsImporting(true);
+      for (const card of cards) {
+        existingFingerprints.add(await fingerprintCard(card.front, card.back));
+      }
 
       for (const card of bundle.manifest.cards) {
         try {
-          const fingerprint = await createCardFingerprint(
-            card.front,
-            card.back,
-          );
+          const fingerprint = await fingerprintCard(card.front, card.back);
           if (
             duplicatePolicy === "skip" &&
             existingFingerprints.has(fingerprint)
@@ -240,31 +257,22 @@ export default function ImportRoute() {
 
           const replacementMap = new Map<string, string>();
           for (const asset of card.assets) {
-            let urlPromise = uploadCache.get(asset.file);
-            if (!urlPromise) {
-              const file = createFileFromBundleAsset(
-                card,
+            replacementMap.set(
+              asset.placeholder,
+              await resolveAssetLink(
                 asset.file,
-                bundle.entries,
-              );
-              urlPromise = uploadImage(file, asset.alt).then((response) => {
-                if (!response.success) {
-                  throw new Error(response.error);
-                }
-
-                return constructImageMarkdownLink(response.fileKey, asset.alt);
-              });
-              uploadCache.set(asset.file, urlPromise);
-            }
-
-            replacementMap.set(asset.placeholder, await urlPromise);
+                () =>
+                  createFileFromBundleAsset(card, asset.file, bundle.entries),
+                asset.alt,
+              ),
+            );
           }
 
           const content = replacePlaceholderLinks(card, replacementMap);
-          const cardId = await createNewCard(
+          const cardId = await persistCard(
             content.front,
             content.back,
-            selectedDecks,
+            validSelectedDecks,
             card.origin
               ? {
                   noteId: card.origin.noteId,
@@ -287,34 +295,34 @@ export default function ImportRoute() {
       toast.success("Bundle import finished", {
         description: `${imported} imported, ${skipped} skipped, ${failed} failed`,
       });
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not start the import. Try again.");
     } finally {
+      importLock.current = false;
       setIsImporting(false);
     }
   };
 
   const handleUndoLastImport = async () => {
-    if (lastImportedCardIds.length === 0) {
+    if (
+      lastImportedCardIds.length === 0 ||
+      undoLock.current ||
+      importLock.current
+    ) {
       return;
     }
 
+    undoLock.current = true;
     setIsUndoingImport(true);
-    let undone = 0;
-    let failed = 0;
 
     try {
-      for (const cardId of lastImportedCardIds) {
-        try {
-          await updateDeletedClientSide(cardId, true);
-          undone++;
-        } catch (error) {
-          failed++;
-          console.error(error);
-        }
-      }
-
-      if (undone > 0) {
-        setLastImportedCardIds([]);
-      }
+      const { failedIds, undone } = await undoImportedCards(
+        lastImportedCardIds,
+        (id) => updateDeletedClientSide(id, true),
+      );
+      setLastImportedCardIds(failedIds);
+      const failed = failedIds.length;
 
       if (failed > 0) {
         toast.error("Undo import partially failed", {
@@ -327,6 +335,7 @@ export default function ImportRoute() {
         description: `${undone} imported cards marked as deleted`,
       });
     } finally {
+      undoLock.current = false;
       setIsUndoingImport(false);
     }
   };
@@ -347,13 +356,30 @@ export default function ImportRoute() {
         </div>
 
         <div
+          role="button"
+          tabIndex={isImporting ? -1 : 0}
+          aria-label="Select a bundle zip file"
+          aria-disabled={isImporting}
+          onKeyDown={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              !importLock.current &&
+              (event.key === "Enter" || event.key === " ")
+            ) {
+              event.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           onDragOver={(event) => {
             event.preventDefault();
             setIsDragging(true);
           }}
           onDragLeave={() => setIsDragging(false)}
           onDrop={onDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={(event) => {
+            if (event.target !== fileInputRef.current && !importLock.current)
+              fileInputRef.current?.click();
+          }}
           className={cn(
             "border-2 border-dashed rounded-xl p-10 w-full max-w-2xl cursor-pointer transition-colors text-center",
             isDragging ? "border-primary" : "hover:border-primary",
@@ -362,6 +388,7 @@ export default function ImportRoute() {
           <input
             ref={fileInputRef}
             type="file"
+            disabled={isImporting}
             accept=".zip"
             onChange={onFileInput}
             className="hidden"
@@ -396,7 +423,7 @@ export default function ImportRoute() {
                 size="sm"
                 variant="outline"
                 onClick={handleUndoLastImport}
-                disabled={isUndoingImport}
+                disabled={isUndoingImport || isImporting}
               >
                 {isUndoingImport ? (
                   <>
@@ -451,6 +478,7 @@ export default function ImportRoute() {
               <Button
                 variant={duplicatePolicy === "create" ? "default" : "outline"}
                 size="sm"
+                disabled={isImporting}
                 onClick={() => setDuplicatePolicy("create")}
               >
                 Create duplicates
@@ -458,6 +486,7 @@ export default function ImportRoute() {
               <Button
                 variant={duplicatePolicy === "skip" ? "default" : "outline"}
                 size="sm"
+                disabled={isImporting}
                 onClick={() => setDuplicatePolicy("skip")}
               >
                 Skip probable duplicates
@@ -482,6 +511,7 @@ export default function ImportRoute() {
                     key={deck.id}
                     variant={selected ? "default" : "outline"}
                     size="sm"
+                    disabled={isImporting}
                     onClick={() => toggleDeckSelection(deck.id)}
                   >
                     {deck.name}
@@ -496,6 +526,7 @@ export default function ImportRoute() {
             <Button
               size="sm"
               variant={allowImportWithoutDeck ? "default" : "outline"}
+              disabled={isImporting}
               onClick={() => setAllowImportWithoutDeck((value) => !value)}
             >
               {allowImportWithoutDeck
@@ -534,7 +565,7 @@ export default function ImportRoute() {
           <div className="flex items-center gap-2">
             <Button
               onClick={handleImport}
-              disabled={!canImport || isImporting}
+              disabled={!canImport || isImporting || isUndoingImport}
               className="min-w-44"
             >
               {isImporting ? (
@@ -547,8 +578,8 @@ export default function ImportRoute() {
               )}
             </Button>
             <p className="text-xs text-muted-foreground">
-              {selectedDecks.length} deck{selectedDecks.length === 1 ? "" : "s"}{" "}
-              selected
+              {validSelectedDecks.length} deck
+              {validSelectedDecks.length === 1 ? "" : "s"} selected
             </p>
           </div>
         </div>

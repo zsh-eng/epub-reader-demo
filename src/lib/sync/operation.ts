@@ -303,19 +303,7 @@ export async function createNewCard(
     operations.push(metadataOp);
   }
 
-  for (const operation of operations) {
-    const result = handleClientOperation(operation);
-    if (!result.applied) {
-      throw new Error(
-        "SHOULD NOT HAPPEN - there should not be conflict when creating new cards",
-      );
-    }
-  }
-
-  const operationsCopy = operations.map((op) => structuredClone(op));
-  await db.operations.bulkAdd(operations);
-  await db.pendingOperations.bulkAdd(operationsCopy);
-  MemoryDB.notify();
+  await persistFormOperations(operations);
 
   return card.id;
 }
@@ -335,7 +323,7 @@ export async function updateCardContentOperation(
     timestamp: Date.now(),
   };
 
-  await handleClientOperationWithPersistence(cardOperation);
+  await persistFormOperations([cardOperation]);
 }
 
 const MAX_DURATION_PER_CARD_MS = 2 * 60 * 1000; // 2 minutes
@@ -508,7 +496,22 @@ export async function createNewDeck(name: string, description: string) {
     timestamp: Date.now(),
   };
 
-  await handleClientOperationWithPersistence(deckOperation);
+  await persistFormOperations([deckOperation]);
+}
+
+// Commit the durable operation and sync queue together before publishing form
+// changes. A storage failure must leave both the database and the UI unchanged.
+async function persistFormOperations(operations: Operation[]) {
+  await db.transaction("rw", db.operations, db.pendingOperations, async () => {
+    await db.operations.bulkAdd(
+      operations.map((operation) => structuredClone(operation)),
+    );
+    await db.pendingOperations.bulkAdd(
+      operations.map((operation) => structuredClone(operation)),
+    );
+  });
+  for (const operation of operations) handleClientOperation(operation);
+  MemoryDB.notify();
 }
 
 type OperationResult = {
