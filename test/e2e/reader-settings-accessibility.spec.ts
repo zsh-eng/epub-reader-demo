@@ -1,0 +1,61 @@
+import { test, expect, openLocalBook } from "./helpers/fixtures";
+
+test.use({
+  viewport: { width: 390, height: 844 },
+  isMobile: true,
+  hasTouch: true,
+});
+
+test("mobile settings expose choices and apply themes when preference storage is denied", async ({
+  page,
+  localBook,
+}) => {
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem;
+    const set = Storage.prototype.setItem;
+    const preference = (key: string) =>
+      key === "epub-reader-settings" || key === "epub-reader-appearance";
+    Storage.prototype.getItem = function (key) {
+      if (preference(key)) throw new DOMException("Denied", "SecurityError");
+      return get.call(this, key);
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (preference(key)) throw new DOMException("Denied", "SecurityError");
+      return set.call(this, key, value);
+    };
+  });
+  await openLocalBook(page, localBook.id);
+  await page.touchscreen.tap(195, 422);
+  await page
+    .getByRole("button", { name: "Open reader tools", exact: true })
+    .click();
+  await page.getByRole("button", { name: /Themes & Settings$/ }).click();
+  await expect(
+    page.getByRole("button", { name: "Lora", pressed: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Inter", exact: true }).click();
+  await expect(
+    page.getByText("Could not save appearance preferences", { exact: true }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByRole("button", { name: "Inter", pressed: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Layout" }).click();
+  for (const name of ["Left", "Center", "Right", "Justify"]) {
+    await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "Center", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Center", pressed: true }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Theme" }).click();
+  await page.getByRole("button", { name: "Night", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Night", pressed: true }),
+  ).toBeVisible();
+  await expect(page.locator("html")).toHaveClass(/night/);
+  await expect(page.locator("html")).toHaveCSS("color-scheme", "dark");
+  await page.screenshot({
+    path: test.info().outputPath("settings-denied-storage.png"),
+  });
+});
