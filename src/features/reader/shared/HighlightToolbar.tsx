@@ -14,6 +14,7 @@ import { useHotkey } from "@tanstack/react-hotkeys";
 import { Send } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 interface HighlightToolbarProps {
   position: { x: number; y: number };
@@ -84,7 +85,14 @@ export function HighlightToolbar({
   const opensBelowSelection = y > position.y;
 
   const handleCopy = useCallback(async () => {
-    if (!textToCopy || !navigator.clipboard) return;
+    if (!textToCopy) return;
+    if (!navigator.clipboard) {
+      toast.error("Could not copy highlight", {
+        description:
+          "Clipboard access is unavailable. Try copying the selected text manually.",
+      });
+      return;
+    }
 
     try {
       await navigator.clipboard.writeText(textToCopy);
@@ -98,6 +106,9 @@ export function HighlightToolbar({
       }, 1500);
     } catch (error) {
       console.error("Failed to copy highlighted text:", error);
+      toast.error("Could not copy highlight", {
+        description: "Check clipboard permissions and try again.",
+      });
     }
   }, [textToCopy]);
 

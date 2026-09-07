@@ -72,8 +72,7 @@ export function MobileHighlightBar({
           {HIGHLIGHT_COLORS.map((color) => {
             const isCurrentColor = currentColor && color.name === currentColor;
 
-            const handlePointerDown = (e: React.PointerEvent) => {
-              e.stopPropagation();
+            const handleClick = () => {
               if (isCurrentColor && onDelete) {
                 onDelete();
                 return;
@@ -84,9 +83,15 @@ export function MobileHighlightBar({
             return (
               <button
                 key={color.name}
-                onPointerDown={handlePointerDown}
+                type="button"
+                onPointerDown={(event) => {
+                  // Keep the native text selection until click commits the action.
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={handleClick}
                 className={cn(
-                  "cursor-pointer w-[13vw] h-8 rounded-full transition-all active:scale-95 focus:outline-none shadow-sm",
+                  "cursor-pointer w-[13vw] h-8 rounded-full transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 shadow-sm",
                   "border border-black/5 active:border-black/10",
                   isCurrentColor && "ring-2 ring-offset-2 ring-foreground/50",
                 )}
