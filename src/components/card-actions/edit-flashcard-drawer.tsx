@@ -7,11 +7,15 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import { type MutableRefObject } from "react";
+import { type UseFormReturn } from "react-hook-form";
 import { CardContentFormValues } from "@/lib/form-schema";
 import { CardWithMetadata } from "@/lib/types";
 
 type EditFlashcardDrawerProps = {
-  onEdit: (values: CardContentFormValues) => void;
+  onEdit: (values: CardContentFormValues) => void | Promise<void>;
+  form: UseFormReturn<CardContentFormValues>;
+  submitLock: MutableRefObject<boolean>;
   card: CardWithMetadata;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,6 +28,8 @@ export default function EditFlashcardDrawer({
   onOpenChange,
   onEdit,
   actions,
+  form,
+  submitLock,
 }: EditFlashcardDrawerProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -33,6 +39,8 @@ export default function EditFlashcardDrawer({
         </DrawerHeader>
 
         <CreateUpdateFlashcardForm
+          form={form}
+          submitLock={submitLock}
           onSubmit={onEdit}
           initialFront={card.front}
           initialBack={card.back}

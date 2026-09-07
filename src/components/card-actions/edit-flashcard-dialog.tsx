@@ -7,11 +7,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { type MutableRefObject } from "react";
+import { type UseFormReturn } from "react-hook-form";
 import { CardContentFormValues } from "@/lib/form-schema";
 import { CardWithMetadata } from "@/lib/types";
 
 type EditFlashcardDialogProps = {
-  onEdit: (values: CardContentFormValues) => void;
+  onEdit: (values: CardContentFormValues) => void | Promise<void>;
+  form: UseFormReturn<CardContentFormValues>;
+  submitLock: MutableRefObject<boolean>;
   card: CardWithMetadata;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -24,6 +28,8 @@ export default function EditFlashcardDialog({
   onOpenChange,
   onEdit,
   actions,
+  form,
+  submitLock,
 }: EditFlashcardDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -35,6 +41,8 @@ export default function EditFlashcardDialog({
         </DialogHeader>
 
         <CreateUpdateFlashcardForm
+          form={form}
+          submitLock={submitLock}
           onSubmit={onEdit}
           initialFront={card.front}
           initialBack={card.back}

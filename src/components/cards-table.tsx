@@ -41,14 +41,18 @@ const FlashcardTable = ({
   );
   const [open, setOpen] = useState(false);
 
-  const handleEdit = (values: CardContentFormValues) => {
+  const handleEdit = async (values: CardContentFormValues) => {
     if (!selectedCard) {
       return;
     }
     const hasChanged =
       selectedCard.front !== values.front || selectedCard.back !== values.back;
     if (hasChanged) {
-      updateCardContentOperation(selectedCard.id, values.front, values.back);
+      await updateCardContentOperation(
+        selectedCard.id,
+        values.front,
+        values.back,
+      );
     }
     setSelectedCard(null);
     setOpen(false);
@@ -104,7 +108,20 @@ const FlashcardTable = ({
                 setOpen(true);
               }}
             >
-              <TableCell className="font-medium">{card.front}</TableCell>
+              <TableCell className="font-medium">
+                <button
+                  type="button"
+                  className="text-left w-full"
+                  aria-label={`Edit flashcard: ${card.front}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedCard(card);
+                    setOpen(true);
+                  }}
+                >
+                  {card.front}
+                </button>
+              </TableCell>
               <TableCell>{card.back}</TableCell>
               {showSuspendedColumn && (
                 <TableCell className="text-muted-foreground">

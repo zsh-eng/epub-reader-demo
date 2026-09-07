@@ -81,7 +81,6 @@ export const deckFormSchema = z.object({
     .max(30, { message: "Name must be less than 30 characters." }),
   description: z
     .string()
-    .min(1, { message: "Description is required." })
     .max(300, { message: "Description is too long." })
     .optional(),
 });

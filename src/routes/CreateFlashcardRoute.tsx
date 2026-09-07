@@ -1,3 +1,4 @@
+import { deckMatchesSearch } from "@/lib/deck-search";
 import BouncyButton from "@/components/bouncy-button";
 import CreateDeckForm from "@/components/create-deck-form";
 import { CreateUpdateFlashcardForm } from "@/components/create-flashcard";
@@ -90,11 +91,7 @@ export default function CreateFlashcardRoute() {
   const [search, setSearch] = useState("");
 
   const decks = useDecks().sort((a, b) => b.lastModified - a.lastModified);
-  const shownDecks = decks.filter((deck) =>
-    (deck.name.toLowerCase() + deck.description.toLowerCase()).includes(
-      search.trim().toLowerCase(),
-    ),
-  );
+  const shownDecks = decks.filter((deck) => deckMatchesSearch(deck, search));
   const [selectedDecks, setSelectedDecks] = useState<string[]>([]);
   const [createDeckDialogOpen, setCreateDeckDialogOpen] = useState(false);
   const [imageUploadDialogOpen, setImageUploadDialogOpen] = useState(false);
