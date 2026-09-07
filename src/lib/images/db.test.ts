@@ -175,3 +175,24 @@ test("sign-out invalidates a delayed thumbnail before persistence", async () => 
   await db.open();
   expect(await db.images.count()).toBe(0);
 });
+
+test("failed cache deletion can retry without enabling future cache writes", async () => {
+  const db = database();
+  await db.images.put(metadata("private"));
+  const cache = new ImageCacheStore(
+    db,
+    async () => blob(),
+    async () => blob(),
+  );
+  const remove = spyOn(db, "delete").mockRejectedValueOnce(
+    new Error("Delete blocked"),
+  );
+  await expect(cache.clear()).rejects.toThrow("Delete blocked");
+  remove.mockRestore();
+  await expect(cache.download("new", "alt")).rejects.toThrow(
+    "cleared for sign-out",
+  );
+  await cache.clear();
+  await db.open();
+  expect(await db.images.count()).toBe(0);
+});

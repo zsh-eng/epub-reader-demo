@@ -210,7 +210,12 @@ export class ImageCacheStore {
     this.downloads.clear();
     this.clearing = (async () => {
       await Promise.allSettled([...this.writes]);
-      await this.database.delete();
+      try {
+        await this.database.delete();
+      } catch (error) {
+        this.clearing = undefined;
+        throw error;
+      }
     })();
     return this.clearing;
   }
