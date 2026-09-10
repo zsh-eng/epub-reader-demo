@@ -216,3 +216,67 @@ test("native background saves the reading position and note draft before reopen"
     "A draft saved when the native app goes to sleep.",
   );
 });
+
+test("a highlight saved in native mode remains visible after reopening", async ({
+  page,
+}) => {
+  const { bookId } = await importBook(page);
+  await openLocalBook(page, bookId!);
+  await page
+    .getByRole("button", { name: "Start reading", exact: true })
+    .click();
+  for (let index = 0; index < 8; index++) await nextSpread(page);
+  // Set a DOM selection as in the shared highlight test. This checks the
+  // Reader's selection/save path; it does not simulate an iOS long press.
+  const selected = await page.evaluate(() => {
+    const root = document.querySelector(
+      '[data-reader-spread-layer="current"]',
+    )!;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node = walker.nextNode();
+    while (node && (node.textContent?.trim().length ?? 0) < 30)
+      node = walker.nextNode();
+    if (!node) throw new Error("No passage to select");
+    const range = document.createRange();
+    range.setStart(node, 0);
+    range.setEnd(node, 25);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return selection.toString();
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.getSelection()?.toString()))
+    .toBe(selected);
+  await page.evaluate(() =>
+    document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })),
+  );
+  await page.getByRole("button", { name: "Highlight with yellow" }).tap();
+  await expect
+    .poll(() =>
+      page.evaluate(async (path) => {
+        const { syncV2Db: db } = await import(path);
+        return (await db.highlights.toArray()).map(
+          (row: { selectedText: string }) =>
+            row.selectedText.replace(/\s+/g, " ").trim(),
+        );
+      }, DB_MODULE),
+    )
+    .toEqual([selected.replace(/\s+/g, " ").trim()]);
+  await page.reload();
+  await expect(
+    page
+      .locator('[data-reader-spread-layer="current"] [data-highlight-id]')
+      .first(),
+  ).toBeVisible();
+  await page.goto("/highlights");
+  await expect(
+    page.getByText(selected, { exact: false }).first(),
+  ).toBeVisible();
+  await send(page, { type: "search", query: "no matching passage exists" });
+  await expect(page.getByText(selected, { exact: false }).first()).toBeHidden();
+  await send(page, { type: "search", query: "" });
+  await expect(
+    page.getByText(selected, { exact: false }).first(),
+  ).toBeVisible();
+});
