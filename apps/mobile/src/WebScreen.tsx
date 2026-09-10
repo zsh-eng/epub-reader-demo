@@ -6,6 +6,7 @@ import {
   Button,
   Linking,
   PlatformColor,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -45,6 +46,14 @@ export function WebScreen({
   const inFlight = useRef("");
   const focused = useIsFocused();
   const pending = importsEnabled ? imports[0] : undefined;
+  // Route state can also arrive from an external deep link. Keep it as data
+  // and let invalid JSON fall back to an ordinary book open.
+  let navigationState = null;
+  try {
+    navigationState = JSON.parse(initialState);
+  } catch {
+    // No saved navigation state is needed to open a book.
+  }
   const send = useCallback((message: Record<string, unknown>) => {
     const json = JSON.stringify({ version: 1, ...message });
     web.current?.injectJavaScript(
@@ -182,6 +191,14 @@ export function WebScreen({
                 title="Open"
                 onPress={() => openReader(lastImport!.bookId)}
               />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss import status"
+                onPress={() => setLastImport(undefined)}
+                style={styles.dismiss}
+              >
+                <Text style={styles.dismissText}>×</Text>
+              </Pressable>
             </>
           )}
         </View>
@@ -196,12 +213,14 @@ export function WebScreen({
         domStorageEnabled
         sharedCookiesEnabled={false}
         incognito={false}
-        contentInsetAdjustmentBehavior="never"
-        automaticallyAdjustContentInsets={false}
+        contentInsetAdjustmentBehavior={
+          path.startsWith("/reader/") ? "never" : "automatic"
+        }
+        automaticallyAdjustContentInsets={!path.startsWith("/reader/")}
         allowsBackForwardNavigationGestures={false}
         allowsLinkPreview={false}
         bounces={!path.startsWith("/reader/")}
-        injectedJavaScriptBeforeContentLoaded={`window.__readerInitialState = ${JSON.stringify(JSON.parse(initialState))}; true;`}
+        injectedJavaScriptBeforeContentLoaded={`window.__readerInitialState = ${JSON.stringify(navigationState)}; true;`}
         onMessage={receive}
         onShouldStartLoadWithRequest={({ url }) => {
           if (url.startsWith(`${origin}/`) || url === "about:blank")
@@ -252,6 +271,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   importRow: {
+    position: "absolute",
+    bottom: 96,
+    left: 12,
+    right: 12,
+    zIndex: 1,
+    borderRadius: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -259,4 +284,11 @@ const styles = StyleSheet.create({
     backgroundColor: PlatformColor("secondarySystemBackground"),
   },
   importText: { flex: 1, fontSize: 14, color: PlatformColor("label") },
+  dismiss: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dismissText: { fontSize: 24, color: PlatformColor("secondaryLabel") },
 });

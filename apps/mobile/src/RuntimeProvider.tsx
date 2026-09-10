@@ -19,7 +19,6 @@ import {
   View,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { File, Paths } from "expo-file-system";
 import ReaderRuntime, { type StagedImport } from "../modules/reader-runtime";
 
 interface RuntimeContextValue {
@@ -31,8 +30,6 @@ interface RuntimeContextValue {
   setKeepAwake(value: boolean): void;
 }
 const RuntimeContext = createContext<RuntimeContextValue | null>(null);
-const preferencesFile = () =>
-  new File(Paths.document, "reader-preferences.json");
 
 /** Starts one local runtime and owns durable pending imports. Staged files stay
  * on disk until the web importer acknowledges a completed transaction.
@@ -42,16 +39,9 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const [imports, setImports] = useState<StagedImport[]>([]);
   const picking = useRef(false);
-  const [keepAwake, updateKeepAwake] = useState(() => {
-    try {
-      const file = preferencesFile();
-      return file.exists
-        ? JSON.parse(file.textSync()).keepAwake !== false
-        : true;
-    } catch {
-      return true;
-    }
-  });
+  const [keepAwake, updateKeepAwake] = useState(() =>
+    ReaderRuntime.getKeepAwake(),
+  );
 
   const start = useCallback(async () => {
     setError("");
@@ -138,7 +128,7 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
   }, []);
   const setKeepAwake = useCallback((value: boolean) => {
     try {
-      preferencesFile().write(JSON.stringify({ keepAwake: value }));
+      ReaderRuntime.setKeepAwake(value);
       updateKeepAwake(value);
     } catch {
       Alert.alert("Could not save preference", "Please try again.");

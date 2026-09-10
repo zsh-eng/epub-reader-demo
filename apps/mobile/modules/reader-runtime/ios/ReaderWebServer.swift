@@ -7,7 +7,7 @@ import Network
 final class ReaderWebServer {
   static let port: UInt16 = 18765
   let origin = "http://127.0.0.1:\(ReaderWebServer.port)"
-  let inbox = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+  let inbox = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     .appendingPathComponent("Reader Imports", isDirectory: true)
   private let queue = DispatchQueue(label: "app.reader.web-server")
   private var listener: NWListener?

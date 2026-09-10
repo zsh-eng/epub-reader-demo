@@ -9,10 +9,12 @@ export default function HighlightsScreen() {
       <Stack.Screen
         options={{
           title: "Highlights",
+          headerTransparent: false,
           headerShadowVisible: false,
           headerSearchBarOptions: {
             placeholder: "Search highlights",
             hideWhenScrolling: false,
+            obscureBackground: false,
             onChangeText: ({ nativeEvent }) => setQuery(nativeEvent.text),
             onCancelButtonPress: () => setQuery(""),
           },

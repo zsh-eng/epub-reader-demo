@@ -12,6 +12,7 @@ export default function LibraryScreen() {
       <Stack.Screen
         options={{
           title: "Library",
+          headerTransparent: false,
           headerShadowVisible: false,
           headerRight: () => (
             <Button title="Add books" onPress={() => void pickBooks()} />
@@ -19,6 +20,7 @@ export default function LibraryScreen() {
           headerSearchBarOptions: {
             placeholder: "Search books or authors",
             hideWhenScrolling: false,
+            obscureBackground: false,
             onChangeText: ({ nativeEvent }) => setQuery(nativeEvent.text),
             onCancelButtonPress: () => setQuery(""),
           },

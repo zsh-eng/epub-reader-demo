@@ -404,7 +404,9 @@ export function Library() {
             <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl 2xl:text-3xl text-muted-foreground max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl mx-auto mb-6 sm:mb-8 md:mb-10 lg:mb-12">
               {searchQuery
                 ? `No results for "${searchQuery}"`
-                : "Drag and drop an EPUB file here, or click the button below to add your first book."}
+                : isNativeApp
+                  ? "Tap Add books to choose an EPUB from Files."
+                  : "Drag and drop an EPUB file here, or click the button below to add your first book."}
             </p>
             {!searchQuery && (
               <Button

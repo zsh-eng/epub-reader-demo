@@ -1,4 +1,4 @@
-import { requireNativeModule } from "expo-modules-core";
+import { requireNativeModule } from "expo";
 
 export interface StagedImport {
   id: string;
@@ -7,6 +7,8 @@ export interface StagedImport {
 }
 
 export default requireNativeModule<{
+  getKeepAwake(): boolean;
+  setKeepAwake(value: boolean): void;
   start(): Promise<string>;
   stageImport(uri: string, name: string): Promise<StagedImport>;
   finishImport(id: string): Promise<void>;

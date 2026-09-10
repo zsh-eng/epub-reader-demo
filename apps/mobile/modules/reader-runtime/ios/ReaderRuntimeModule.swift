@@ -9,6 +9,14 @@ public final class ReaderRuntimeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ReaderRuntime")
 
+    Function("getKeepAwake") {
+      UserDefaults.standard.object(forKey: "reader.keepAwake") as? Bool ?? true
+    }
+
+    Function("setKeepAwake") { (value: Bool) in
+      UserDefaults.standard.set(value, forKey: "reader.keepAwake")
+    }
+
     AsyncFunction("start") { (promise: Promise) in
       self.server.start { result in
         switch result {
