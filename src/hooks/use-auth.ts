@@ -1,5 +1,6 @@
 import { getLabRuntime } from "@/features/sync-lab/runtime";
 import { useSession } from "@/lib/auth-client";
+import { isNativeApp } from "@/features/native/runtime";
 
 function useRealAuth() {
   const { data: session, isPending, error } = useSession();
@@ -33,4 +34,18 @@ function useLabAuth(): ReturnType<typeof useRealAuth> {
 }
 
 // Runtime selection is fixed before React mounts this application.
-export const useAuth = getLabRuntime() ? useLabAuth : useRealAuth;
+function useLocalAuth(): ReturnType<typeof useRealAuth> {
+  return {
+    user: undefined,
+    session: undefined,
+    isLoading: false,
+    isAuthenticated: false,
+    error: null,
+  };
+}
+
+export const useAuth = isNativeApp
+  ? useLocalAuth
+  : getLabRuntime()
+    ? useLabAuth
+    : useRealAuth;

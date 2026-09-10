@@ -1,4 +1,5 @@
 import { ContinueReadingCard } from "@/components/ContinueReadingCard";
+import { isNativeApp } from "@/features/native/runtime";
 import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
@@ -322,6 +323,7 @@ function getReadingInvitation(
 }
 
 function SessionsHeader() {
+  if (isNativeApp) return <div className="h-6" />;
   return (
     <header className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
       <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">

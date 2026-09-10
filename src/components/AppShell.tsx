@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/AppSidebar";
+import { isNativeApp } from "@/features/native/runtime";
 import {
   SidebarFloatingTrigger,
   SidebarInset,
@@ -135,8 +136,8 @@ export function AppShell() {
         className={cn("bg-background", !hasRevealed && "invisible")}
         aria-hidden={!hasRevealed}
       >
-        <AppSidebar />
-        <SidebarFloatingTrigger className="max-md:hidden" />
+        {!isNativeApp && <AppSidebar />}
+        {!isNativeApp && <SidebarFloatingTrigger className="max-md:hidden" />}
         <SidebarInset
           className={cn(
             isReaderRoute

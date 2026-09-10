@@ -1,4 +1,8 @@
 import { useBookNotesQuery, noteKeys } from "@/hooks/use-notes-query";
+import {
+  isReaderVisible,
+  subscribeReaderVisibility,
+} from "@/features/native/lifecycle";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   beginNoteDraft,
@@ -89,14 +93,14 @@ export function useReaderNotes(bookId: string) {
           );
       });
     const flushOnHide = () => {
-      if (document.visibilityState === "hidden" && !submitting.current)
+      if (!isReaderVisible() && !submitting.current)
         void flushRef.current().catch(() => {});
     };
-    document.addEventListener("visibilitychange", flushOnHide);
+    const unsubscribeVisibility = subscribeReaderVisibility(flushOnHide);
     return () => {
       active = false;
       mounted.current = false;
-      document.removeEventListener("visibilitychange", flushOnHide);
+      unsubscribeVisibility();
       if (!submitting.current) void flushRef.current().catch(() => {});
     };
   }, [id]);

@@ -1,4 +1,6 @@
 import { AppRouter } from "@/features/sync-lab/AppLocation";
+import { isNativeApp } from "@/features/native/runtime";
+import { NativeBridge } from "@/features/native/NativeBridge";
 import { Settings } from "@/features/settings/Settings";
 import { DebugGate } from "@/features/settings/DebugGate";
 import "@/App.css";
@@ -65,6 +67,7 @@ function App() {
           <FileUploadInitializer>
             <AppRouter>
               <EpubImportProvider>
+                {isNativeApp && <NativeBridge />}
                 <Routes>
                   <Route element={<AppShell />}>
                     <Route index element={<Library />} />
@@ -114,7 +117,7 @@ function App() {
                     },
                   }}
                 />
-                {!getLabRuntime() && <ReloadPrompt />}
+                {!isNativeApp && !getLabRuntime() && <ReloadPrompt />}
               </EpubImportProvider>
             </AppRouter>
           </FileUploadInitializer>

@@ -1,4 +1,8 @@
 import { registerLabDrain } from "@/features/sync-lab/runtime";
+import {
+  isReaderVisible,
+  subscribeReaderVisibility,
+} from "@/features/native/lifecycle";
 import { updateCurrentDeviceReadingSession } from "@/lib/db";
 import type { ResolvedSpread } from "@/lib/pagination-v2";
 import { useEffect, useRef } from "react";
@@ -91,8 +95,8 @@ export function useReaderReadingSession({
 
     const handleVisibilityChange = () => {
       const now = Date.now();
-      controller.setVisible(document.visibilityState === "visible", now);
-      if (document.visibilityState === "hidden") {
+      controller.setVisible(isReaderVisible(), now);
+      if (!isReaderVisible()) {
         controller.flushLatest({ force: true });
       }
     };
@@ -101,11 +105,13 @@ export function useReaderReadingSession({
       controller.endSession(Date.now());
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const unsubscribeVisibility = subscribeReaderVisibility(
+      handleVisibilityChange,
+    );
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeVisibility();
       window.removeEventListener("pagehide", handlePageHide);
       controller.endSession(Date.now());
     };

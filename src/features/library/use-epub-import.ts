@@ -1,4 +1,5 @@
 import { DuplicateBookDialog } from "./DuplicateBookDialog";
+import { isNativeApp, postNative } from "@/features/native/runtime";
 import { useToast } from "@/hooks/use-toast";
 import { markEpubPreparationReady } from "@/hooks/use-epub-processor";
 import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
@@ -150,6 +151,10 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
 
   const openFilePicker = useCallback(() => {
     if (isProcessing) return;
+    if (isNativeApp) {
+      postNative({ type: "pick-books" });
+      return;
+    }
 
     const input = document.createElement("input");
     input.type = "file";

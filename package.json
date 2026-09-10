@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "type": "module",
   "scripts": {
@@ -30,7 +31,10 @@
     "benchmark:reader-startup": "bun run build && bun scripts/benchmark-reader-startup.ts",
     "db:backup-remote": "bun scripts/backup-remote-d1.ts",
     "format": "oxfmt",
-    "format:check": "oxfmt --check"
+    "format:check": "oxfmt --check",
+    "build:mobile:web": "vite build --config vite.mobile.config.ts",
+    "mobile:ios": "bun run build:mobile:web && cd apps/mobile && bun run ios",
+    "mobile:ios:release": "bun run build:mobile:web && cd apps/mobile && bun run ios:release"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

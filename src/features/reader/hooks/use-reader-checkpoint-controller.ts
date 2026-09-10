@@ -3,6 +3,10 @@ import {
   type ReadingCheckpoint,
   upsertCurrentDeviceReadingCheckpoint,
 } from "@/lib/db";
+import {
+  isReaderVisible,
+  subscribeReaderVisibility,
+} from "@/features/native/lifecycle";
 import { getOrCreateDeviceId } from "@/lib/device";
 import type { ResolvedSpread } from "@/lib/pagination-v2";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -148,7 +152,7 @@ export function useReaderCheckpointController({
     if (!bookId) return;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "hidden") {
+      if (!isReaderVisible()) {
         flushLatest({ force: true });
       }
     };
@@ -157,11 +161,13 @@ export function useReaderCheckpointController({
       flushLatest({ force: true });
     };
 
-    document.addEventListener("visibilitychange", handleVisibilityChange);
+    const unsubscribeVisibility = subscribeReaderVisibility(
+      handleVisibilityChange,
+    );
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      unsubscribeVisibility();
       window.removeEventListener("pagehide", handlePageHide);
       flushLatest({ force: true });
     };

@@ -1,4 +1,6 @@
 import { useAppShellReady } from "@/components/AppShell";
+import { isNativeApp } from "@/features/native/runtime";
+import { useNativeSearch } from "@/features/native/use-native-search";
 import { BookCard } from "./BookCard";
 import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -33,7 +35,7 @@ import {
 
 export function Library() {
   const [isDragging, setIsDragging] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useNativeSearch();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const reducedMotion = useReducedMotion() ?? false;
   const { anchorRef: searchAnchorRef, isCompact: isSearchCompact } =
@@ -250,13 +252,22 @@ export function Library() {
       )}
 
       {/* Main Content */}
-      <main className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
+      <main
+        className={
+          isNativeApp
+            ? "px-5 pt-6 pb-6"
+            : "px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10"
+        }
+      >
         <div
           ref={searchAnchorRef}
           className="h-px shrink-0"
           aria-hidden="true"
         />
-        <div className="sticky top-0 z-30 isolate mb-10 pt-3 md:mb-16">
+        <div
+          className="sticky top-0 z-30 isolate mb-10 pt-3 md:mb-16"
+          hidden={isNativeApp}
+        >
           <motion.div
             className="mx-auto flex w-full max-w-3xl origin-top items-center gap-3"
             initial={false}

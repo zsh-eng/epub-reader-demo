@@ -1,4 +1,6 @@
 import { getRuntimeStorage } from "@/features/sync-lab/runtime";
+import { isNativeApp } from "@/features/native/runtime";
+import { useNativeSearch } from "@/features/native/use-native-search";
 import { BottomSheet } from "@/components/ui/bottom-sheet";
 import { CopyFeedbackIcon } from "@/components/ui/copy-feedback-icon";
 import {
@@ -1666,7 +1668,7 @@ export function HighlightsMasonry() {
     () => Tooltip.createHandle<HighlightsTooltipPayload>(),
     [],
   );
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useNativeSearch();
   const [selectedHighlight, setSelectedHighlight] = useState<Highlight | null>(
     null,
   );
@@ -1949,7 +1951,10 @@ export function HighlightsMasonry() {
           hasNoMatches && "h-svh overflow-hidden",
         )}
       >
-        <section className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
+        <section
+          className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7"
+          hidden={isNativeApp}
+        >
           <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
             <MobileBackToLibrary />
             <h1 className="font-serif text-2xl font-medium leading-none tracking-tight md:text-6xl">
@@ -1972,13 +1977,22 @@ export function HighlightsMasonry() {
         />
         <div className="sticky top-0 z-30 isolate w-full pt-3">
           <div className="mx-auto w-full max-w-2xl px-4">
-            <HighlightsSearch
-              value={searchQuery}
-              onChange={setSearchQuery}
-              isCompact={isSearchCompact}
-              selectedColors={selectedColors}
-              onToggleColor={handleToggleColor}
-            />
+            {isNativeApp ? (
+              <div className="flex justify-end py-2">
+                <ColorFilters
+                  selectedColors={selectedColors}
+                  onToggle={handleToggleColor}
+                />
+              </div>
+            ) : (
+              <HighlightsSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                isCompact={isSearchCompact}
+                selectedColors={selectedColors}
+                onToggleColor={handleToggleColor}
+              />
+            )}
           </div>
         </div>
         <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
