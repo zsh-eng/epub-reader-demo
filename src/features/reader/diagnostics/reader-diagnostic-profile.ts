@@ -23,6 +23,8 @@ export const DEFAULT_READER_DIAGNOSTIC_PROFILE: ReaderDiagnosticProfile = {
     contentWidth: "medium",
     publisherBookStylingEnabled: false,
     matchPublisherBodyTextSize: false,
+    pageAnimationsEnabled: true,
+    showPageNumbers: true,
   },
   paragraphSpacingFactor: DEFAULT_PARAGRAPH_SPACING,
 };

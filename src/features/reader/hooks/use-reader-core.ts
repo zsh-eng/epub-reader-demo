@@ -78,7 +78,14 @@ function getNamedBodyFont(fontFamily: FontFamily): string {
 }
 
 export function buildPaginationConfig(
-  settings: ReaderSettings,
+  settings: Pick<
+    ReaderSettings,
+    | "fontFamily"
+    | "fontSize"
+    | "lineHeight"
+    | "textAlign"
+    | "publisherBookStylingEnabled"
+  >,
   paragraphSpacingFactor: number,
   viewport: { width: number; height: number },
 ): PaginationConfig {
@@ -128,9 +135,37 @@ export function useReaderCore(
     epubProcessor,
   });
 
+  const {
+    fontFamily,
+    fontSize,
+    lineHeight,
+    textAlign,
+    publisherBookStylingEnabled,
+  } = settings;
+  // Only layout settings can invalidate pagination. Appearance controls must
+  // not hide a ready spread or move its saved reading anchor.
   const paginationConfig = useMemo(
-    () => buildPaginationConfig(settings, paragraphSpacingFactor, viewport),
-    [settings, paragraphSpacingFactor, viewport],
+    () =>
+      buildPaginationConfig(
+        {
+          fontFamily,
+          fontSize,
+          lineHeight,
+          textAlign,
+          publisherBookStylingEnabled,
+        },
+        paragraphSpacingFactor,
+        viewport,
+      ),
+    [
+      fontFamily,
+      fontSize,
+      lineHeight,
+      textAlign,
+      publisherBookStylingEnabled,
+      paragraphSpacingFactor,
+      viewport,
+    ],
   );
 
   const spreadConfig = useMemo(

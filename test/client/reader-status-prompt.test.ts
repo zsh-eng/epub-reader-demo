@@ -62,35 +62,46 @@ describe("getReaderStatusPrompt", () => {
     },
   );
 
-  it("waits for reader readiness and offers the reading action once", async () => {
-    const { rerender } = renderHook(
+  it("waits for readiness, saves, and dismisses the local prompt", async () => {
+    const { result, rerender } = renderHook(
       ({ isReady }) => useReaderStatusPrompt({ bookId: "book-1", isReady }),
       { initialProps: { isReady: false } },
     );
-
+    expect(result.current).toBeUndefined();
+    rerender({ isReady: true });
+    expect(result.current?.actionLabel).toBe("Start reading");
+    act(() => result.current?.onConfirm());
+    await waitFor(() => expect(result.current).toBeUndefined());
+    expect(mocks.setStatusAsync).toHaveBeenCalledWith("reading");
     expect(mocks.prompt).not.toHaveBeenCalled();
-    rerender({ isReady: true });
+  });
 
-    await waitFor(() => expect(mocks.prompt).toHaveBeenCalledOnce());
-    expect(mocks.prompt).toHaveBeenCalledWith("Ready to start reading?", {
-      duration: 8000,
-      classNames: {
-        actionButton: "!h-8 !rounded-full !px-3",
-      },
-      action: expect.objectContaining({ label: "Start reading" }),
-    });
-    rerender({ isReady: false });
-    rerender({ isReady: true });
-    expect(mocks.prompt).toHaveBeenCalledOnce();
-
-    const options = mocks.prompt.mock.calls[0]?.[1] as {
-      action: { onClick: () => void };
-    };
-    act(() => options.action.onClick());
-
-    await waitFor(() =>
-      expect(mocks.setStatusAsync).toHaveBeenCalledWith("reading"),
+  it("keeps a failed save available to retry without a global toast", async () => {
+    mocks.setStatusAsync.mockRejectedValueOnce(new Error("full"));
+    const { result } = renderHook(() =>
+      useReaderStatusPrompt({ bookId: "book-1", isReady: true }),
     );
-    await waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+    act(() => result.current?.onConfirm());
+    await waitFor(() =>
+      expect(result.current?.error).toContain("Please try again"),
+    );
+    expect(result.current?.isPending).toBe(false);
+    act(() => result.current?.onConfirm());
+    await waitFor(() => expect(result.current).toBeUndefined());
+    expect(mocks.error).not.toHaveBeenCalled();
+  });
+
+  it("dismisses per book and does not show while status loads", () => {
+    const { result, rerender } = renderHook(
+      ({ bookId }) => useReaderStatusPrompt({ bookId, isReady: true }),
+      { initialProps: { bookId: "a" } },
+    );
+    act(() => result.current?.onDismiss());
+    expect(result.current).toBeUndefined();
+    rerender({ bookId: "b" });
+    expect(result.current?.title).toBe("Ready to start reading?");
+    mocks.useReadingStatus.mockReturnValue({ status: null, isLoading: true });
+    rerender({ bookId: "c" });
+    expect(result.current).toBeUndefined();
   });
 });

@@ -46,6 +46,8 @@ const settings: ReaderSettings = {
   contentWidth: "narrow",
   publisherBookStylingEnabled: false,
   matchPublisherBodyTextSize: false,
+  pageAnimationsEnabled: true,
+  showPageNumbers: true,
 };
 
 const book = { id: "book-1" } as Book;

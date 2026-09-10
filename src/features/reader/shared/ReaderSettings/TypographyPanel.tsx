@@ -82,6 +82,8 @@ export function TypographyPanel({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const publisherStylingSwitchId = useId();
   const publisherBodySizeSwitchId = useId();
+  const pageAnimationsSwitchId = useId();
+  const pageNumbersSwitchId = useId();
 
   useEffect(() => {
     if (scrollContainerRef.current) {
@@ -99,6 +101,42 @@ export function TypographyPanel({
 
   return (
     <div className="space-y-5 pb-2">
+      {section === "layout" && (
+        <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
+          <h4 className={sectionLabelClassName}>Reading</h4>
+          <div className="flex items-center justify-between gap-4">
+            <label
+              htmlFor={pageAnimationsSwitchId}
+              className="cursor-pointer text-sm font-medium text-foreground"
+            >
+              Page animations
+            </label>
+            <Switch
+              id={pageAnimationsSwitchId}
+              checked={settings.pageAnimationsEnabled}
+              onCheckedChange={(pageAnimationsEnabled) =>
+                onUpdateSettings({ pageAnimationsEnabled })
+              }
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <label
+              htmlFor={pageNumbersSwitchId}
+              className="cursor-pointer text-sm font-medium text-foreground"
+            >
+              Page numbers
+            </label>
+            <Switch
+              id={pageNumbersSwitchId}
+              checked={settings.showPageNumbers}
+              onCheckedChange={(showPageNumbers) =>
+                onUpdateSettings({ showPageNumbers })
+              }
+            />
+          </div>
+        </div>
+      )}
+
       {section === "type" && (
         <div className="space-y-2.5">
           <h4 className={sectionLabelClassName}>Font Family</h4>

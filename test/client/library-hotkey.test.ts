@@ -53,6 +53,8 @@ vi.mock("@/hooks/use-reader-settings", () => ({
     settings: {
       publisherBookStylingEnabled: false,
       matchPublisherBodyTextSize: false,
+      pageAnimationsEnabled: true,
+      showPageNumbers: true,
     },
   }),
 }));

@@ -3,6 +3,8 @@ import type {
   ChapterEntry,
   ReaderHandoffPrompt,
 } from "@/features/reader/types";
+import type { ReaderStatusAction } from "../hooks/use-reader-status-prompt";
+import { FooterStatusPrompt } from "./FooterStatusPrompt";
 import { PencilLine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useState } from "react";
@@ -47,7 +49,9 @@ export interface ReaderFooterProps {
   onOpenContents: () => void;
   onOpenNote?: () => void;
   handoffPrompt?: ReaderHandoffPrompt;
+  statusPrompt?: ReaderStatusAction;
   isLoading?: boolean;
+  showPageNumbers?: boolean;
 }
 
 export function ReaderFooter({
@@ -68,7 +72,9 @@ export function ReaderFooter({
   onOpenContents,
   onOpenNote,
   handoffPrompt,
+  statusPrompt,
   isLoading = false,
+  showPageNumbers = true,
 }: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
   const animateReadyTransition = false;
@@ -97,7 +103,8 @@ export function ReaderFooter({
   const detailCurrentChapterIndex = currentChapterIndex;
   const detailCurrentChapterEndIndex = currentChapterEndIndex;
   const detailChapterStartPages = chapterStartPages;
-  const shouldRenderChromeShell = chromeVisible || handoffPrompt !== undefined;
+  const shouldRenderChromeShell =
+    chromeVisible || handoffPrompt !== undefined || statusPrompt !== undefined;
 
   return (
     <AnimatePresence>
@@ -150,6 +157,9 @@ export function ReaderFooter({
               </button>
             )}
             <AnimatePresence initial={false}>
+              {!handoffPrompt && statusPrompt && (
+                <FooterStatusPrompt key="status-prompt" prompt={statusPrompt} />
+              )}
               {handoffPrompt && (
                 <FooterHandoffPrompt
                   key="handoff-prompt"
@@ -168,6 +178,7 @@ export function ReaderFooter({
               currentChapterEndIndex={currentChapterEndIndex}
               detailCurrentChapterEndIndex={detailCurrentChapterEndIndex}
               chapterStartPages={detailChapterStartPages}
+              showPageNumbers={showPageNumbers}
               currentPage={detailCurrentPage}
               totalPages={detailTotalPages}
               onGoToChapter={handleGoToChapter}
@@ -265,6 +276,7 @@ export function ReaderFooter({
             </div>
             <div className="relative">
               <FooterPageIndicator
+                showPageNumbers={showPageNumbers}
                 currentPage={detailCurrentPage}
                 totalPages={detailTotalPages}
                 isLoading={isLoading}

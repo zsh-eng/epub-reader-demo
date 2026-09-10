@@ -17,6 +17,8 @@ const settings: ReaderSettings = {
   contentWidth: "narrow",
   publisherBookStylingEnabled: false,
   matchPublisherBodyTextSize: false,
+  pageAnimationsEnabled: true,
+  showPageNumbers: true,
 };
 const originalScrollIntoView = Element.prototype.scrollIntoView;
 
@@ -129,4 +131,16 @@ it("exposes names and current choices through the composed mobile controls", () 
   expect(
     screen.getByRole("button", { name: "Light", pressed: false }),
   ).toBeTruthy();
+});
+
+it("exposes page preferences in the mobile Layout panel", () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  render(createElement(SettingsPanelHarness));
+  fireEvent.click(screen.getByRole("tab", { name: "Layout" }));
+  for (const name of ["Page animations", "Page numbers"]) {
+    const toggle = screen.getByRole("switch", { name });
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  }
 });

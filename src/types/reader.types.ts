@@ -126,6 +126,8 @@ export interface ReaderSettings {
   contentWidth: ContentWidth; // width of the reading area in scroll layouts
   publisherBookStylingEnabled: boolean;
   matchPublisherBodyTextSize: boolean;
+  pageAnimationsEnabled: boolean;
+  showPageNumbers: boolean;
 }
 
 export const EPUB_HIGHLIGHT_CLASS = "epub-highlight";

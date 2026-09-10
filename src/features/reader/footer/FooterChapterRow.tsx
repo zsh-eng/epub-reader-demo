@@ -19,6 +19,7 @@ interface FooterChapterRowProps {
   onOpenContents: () => void;
   isContentsOpen: boolean;
   isLoading?: boolean;
+  showPageNumbers?: boolean;
   preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
 }
@@ -38,6 +39,7 @@ export function FooterChapterRow({
   onOpenContents,
   isContentsOpen,
   isLoading = false,
+  showPageNumbers = true,
   preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
 }: FooterChapterRowProps) {
@@ -135,7 +137,7 @@ export function FooterChapterRow({
             }
           >
             <ChevronLeft className="size-3.5 flex-shrink-0" />
-            {pagesBack !== null && pagesBack > 0 && (
+            {showPageNumbers && pagesBack !== null && pagesBack > 0 && (
               <span className="leading-none">{pagesBack}p</span>
             )}
           </motion.button>
@@ -214,7 +216,7 @@ export function FooterChapterRow({
                 : undefined
             }
           >
-            {pagesForward !== null && pagesForward > 0 && (
+            {showPageNumbers && pagesForward !== null && pagesForward > 0 && (
               <span className="leading-none">{pagesForward}p</span>
             )}
             <ChevronRight className="size-3.5 flex-shrink-0" />

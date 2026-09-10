@@ -1,7 +1,6 @@
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import type { ReadingStatus } from "@/lib/db";
-import { useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 
 interface ReaderStatusPrompt {
   title: string;
@@ -33,41 +32,50 @@ interface UseReaderStatusPromptOptions {
   isReady: boolean;
 }
 
-/** Shows one contextual reading-status action after the opened book is ready. */
+export interface ReaderStatusAction extends ReaderStatusPrompt {
+  isPending: boolean;
+  error: string;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}
+
+/** Keeps reading-status feedback with the opened Reader, including save errors. */
 export function useReaderStatusPrompt({
   bookId,
   isReady,
-}: UseReaderStatusPromptOptions) {
+}: UseReaderStatusPromptOptions): ReaderStatusAction | undefined {
   const { status, isLoading, setStatusAsync } = useReadingStatus(bookId);
-  const promptedBookIdRef = useRef<string | null>(null);
+  const [dismissedBookId, setDismissedBookId] = useState("");
+  const [operation, setOperation] = useState({
+    bookId: "",
+    pending: false,
+    error: "",
+  });
+  const prompt = getReaderStatusPrompt(status);
+  if (!bookId || !isReady || isLoading || dismissedBookId === bookId || !prompt)
+    return;
 
-  useEffect(() => {
-    if (!bookId || !isReady || isLoading) return;
-    if (promptedBookIdRef.current === bookId) return;
-
-    promptedBookIdRef.current = bookId;
-    const prompt = getReaderStatusPrompt(status);
-    if (!prompt) return;
-
-    toast(prompt.title, {
-      duration: 8000,
-      classNames: {
-        actionButton: "!h-8 !rounded-full !px-3",
-      },
-      action: {
-        label: prompt.actionLabel,
-        onClick: () => {
-          void setStatusAsync("reading")
-            .then(() => {
-              toast.success("Marked as Reading");
-            })
-            .catch(() => {
-              toast.error("Could not update reading status", {
-                description: "Please try again.",
-              });
-            });
-        },
-      },
-    });
-  }, [bookId, isLoading, isReady, setStatusAsync, status]);
+  const isPending = operation.bookId === bookId && operation.pending;
+  return {
+    ...prompt,
+    isPending,
+    error: operation.bookId === bookId ? operation.error : "",
+    onDismiss: () => setDismissedBookId(bookId),
+    onConfirm: () => {
+      if (isPending) return;
+      setOperation({ bookId, pending: true, error: "" });
+      void setStatusAsync("reading")
+        .then(() => {
+          setDismissedBookId(bookId);
+          setOperation({ bookId, pending: false, error: "" });
+        })
+        .catch(() => {
+          setOperation({
+            bookId,
+            pending: false,
+            error: "Could not update reading status. Please try again.",
+          });
+        });
+    },
+  };
 }

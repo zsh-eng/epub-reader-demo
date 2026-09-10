@@ -190,7 +190,7 @@ export function Reader() {
     if (!settledPaintReady) return;
     resumeBackgroundLoad();
   }, [resumeBackgroundLoad, settledPaintReady]);
-  useReaderStatusPrompt({ bookId, isReady: displayReady });
+  const statusPrompt = useReaderStatusPrompt({ bookId, isReady: displayReady });
 
   if (sessionState.status === "not-found" || !bookId) {
     return (
@@ -407,6 +407,9 @@ export function Reader() {
                     paginationConfig={sessionState.pagination.paginationConfig}
                     stageContentRef={stageContentRef}
                     onLinkActivate={sessionActions.openInternalHref}
+                    disableAnimations={
+                      !sessionState.settings.pageAnimationsEnabled
+                    }
                     renderAdjacentSpreads={shouldPrepareSwipePages}
                     swipeEnabled={swipeNavigationEnabled}
                     onSwipeStart={hideChrome}
@@ -471,6 +474,8 @@ export function Reader() {
                 onOpenNote={
                   isMobile ? () => handleNotesActive(true) : undefined
                 }
+                showPageNumbers={sessionState.settings.showPageNumbers}
+                statusPrompt={statusPrompt}
                 handoffPrompt={handoffPrompt}
               />
 

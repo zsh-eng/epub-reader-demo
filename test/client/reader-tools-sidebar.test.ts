@@ -38,6 +38,8 @@ const settings: ReaderSettings = {
   contentWidth: "narrow",
   publisherBookStylingEnabled: false,
   matchPublisherBodyTextSize: false,
+  pageAnimationsEnabled: true,
+  showPageNumbers: true,
 };
 
 function renderSidebar(

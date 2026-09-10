@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
   contentWidth: "narrow",
   publisherBookStylingEnabled: false,
   matchPublisherBodyTextSize: false,
+  pageAnimationsEnabled: true,
+  showPageNumbers: true,
 } satisfies ReaderSettings;
 
 const THEME_TRANSITION_DURATION_MS = 300;

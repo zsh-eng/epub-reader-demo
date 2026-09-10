@@ -6,6 +6,7 @@ interface FooterPageIndicatorProps {
   currentPage: number;
   totalPages: number;
   isLoading?: boolean;
+  showPageNumbers?: boolean;
   preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
 }
@@ -14,21 +15,21 @@ export function FooterPageIndicator({
   currentPage,
   totalPages,
   isLoading = false,
+  showPageNumbers = true,
   preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
 }: FooterPageIndicatorProps) {
   const showBlurredLoadingDetails = isLoading && preserveDetailsWhileLoading;
 
-  if (isLoading && !showBlurredLoadingDetails) {
+  if (!showPageNumbers || (isLoading && !showBlurredLoadingDetails)) {
     return <div aria-hidden="true" className="h-[18px] pb-1 pt-0.5" />;
   }
 
   return (
     <motion.div
+      data-testid="reader-page-indicator"
       className="flex items-center justify-center pb-1 pt-0.5"
-      initial={
-        animateReadyDetails ? { opacity: 0, filter: "blur(8px)" } : false
-      }
+      initial={{ opacity: 0 }}
       animate={{
         opacity: showBlurredLoadingDetails ? 0.78 : 1,
         filter: showBlurredLoadingDetails ? "blur(6px)" : "blur(0px)",
@@ -40,7 +41,7 @@ export function FooterPageIndicator({
               delay: FOOTER_READY_DETAIL_DELAY,
               ease: [0.22, 1, 0.36, 1],
             }
-          : undefined
+          : { duration: 0.15 }
       }
     >
       {/* Sadly we can't use DM Sans here as it doesn't support tabular-nums
