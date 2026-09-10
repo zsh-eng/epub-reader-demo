@@ -107,8 +107,33 @@ export function NativeBridge() {
       void receive(event);
     };
     window.addEventListener("reader-native", handleMessage);
+    const reportTheme = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue("--background")
+        .trim();
+      context.fillRect(0, 0, 1, 1);
+      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+      const background = `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+      postNative({
+        type: "appearance",
+        background,
+        dark: r * 0.2126 + g * 0.7152 + b * 0.0722 < 128,
+      });
+    };
+    const observer = new MutationObserver(reportTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    reportTheme();
     postNative({ type: "ready" });
-    return () => window.removeEventListener("reader-native", handleMessage);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("reader-native", handleMessage);
+    };
   }, [queryClient]);
   return null;
 }

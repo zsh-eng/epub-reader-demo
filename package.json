@@ -24,6 +24,7 @@
     "test:server": "NODE_OPTIONS=\"--no-webstorage\" vitest test/server/**",
     "test:watch": "vitest --watch",
     "test:e2e": "playwright test",
+    "test:e2e:mobile": "playwright test --config playwright.mobile.config.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "diagnostics:reader": "bun scripts/reader-diagnostics.ts",

@@ -20,6 +20,7 @@ interface WebScreenProps {
   search?: string;
   initialState?: string;
   importsEnabled?: boolean;
+  onAppearance?: (background: string, dark: boolean) => void;
 }
 
 /** A WebView keeps the existing Reader and its database together. Native
@@ -30,6 +31,7 @@ export function WebScreen({
   search = "",
   initialState = "null",
   importsEnabled = false,
+  onAppearance,
 }: WebScreenProps) {
   const { origin, imports, pickBooks, finishImport } = useRuntime();
   const web = useRef<WebView>(null);
@@ -89,6 +91,14 @@ export function WebScreen({
     }
     if (message?.version !== 1) return;
     switch (message.type) {
+      case "appearance":
+        if (
+          typeof message.background === "string" &&
+          /^#[0-9a-f]{6}$/i.test(message.background) &&
+          typeof message.dark === "boolean"
+        )
+          onAppearance?.(message.background, message.dark);
+        break;
       case "ready":
         setError("");
         setReady(true);

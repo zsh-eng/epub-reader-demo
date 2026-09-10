@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Reader",
+    "icon": "../../public/pwa-512x512.png",
     "slug": "reader-mobile",
     "scheme": "reader",
     "version": "0.1.0",

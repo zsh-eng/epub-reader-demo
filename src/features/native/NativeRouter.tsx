@@ -13,7 +13,11 @@ import { postNative } from "./runtime";
  */
 export function NativeRouter({ children }: { children: ReactNode }) {
   const [location, setLocation] = useState<{
-    pathname: string; search: string; hash: string; state: unknown; key: string;
+    pathname: string;
+    search: string;
+    hash: string;
+    state: unknown;
+    key: string;
   }>(() => ({
     pathname: window.location.pathname,
     search: window.location.search,

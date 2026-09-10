@@ -58,7 +58,12 @@ export function RuntimeProvider({ children }: { children: ReactNode }) {
     try {
       const url = await ReaderRuntime.start();
       setOrigin(url);
-      setImports(await ReaderRuntime.pendingImports());
+      const pending = await ReaderRuntime.pendingImports();
+      setImports((current) => [
+        ...new Map(
+          [...pending, ...current].map((file) => [file.id, file]),
+        ).values(),
+      ]);
     } catch (failure) {
       setError(
         failure instanceof Error ? failure.message : "Could not start Reader.",
