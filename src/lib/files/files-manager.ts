@@ -27,7 +27,31 @@ const DEFAULT_MEDIA_TYPE = "application/octet-stream";
  * foreground operations shared by FileId. Uploads run only while the app has
  * enabled them for an authenticated, online session.
  */
+export interface FileTransferState {
+  uploading: FileId | null;
+  downloading: readonly FileId[];
+  authRequired: boolean;
+}
+
 export class FilesManager implements Files {
+  private sessionId: string | undefined;
+  private state: FileTransferState = {
+    uploading: null,
+    downloading: [],
+    authRequired: false,
+  };
+  private readonly listeners = new Set<() => void>();
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+  getSnapshot = () => this.state;
+  private publish(change: Partial<FileTransferState>) {
+    this.state = { ...this.state, ...change };
+    this.listeners.forEach((listener) => listener());
+  }
   private readonly remote: FileRemoteApi;
   private readonly pendingOperations = new Set<Promise<unknown>>();
   private readonly downloads = new Map<FileId, Promise<Blob>>();
@@ -99,11 +123,13 @@ export class FilesManager implements Files {
 
     const download = this.downloadAndStore(id);
     this.downloads.set(id, download);
+    this.publish({ downloading: [...this.downloads.keys()] });
 
     try {
       return await download;
     } finally {
       this.downloads.delete(id);
+      this.publish({ downloading: [...this.downloads.keys()] });
     }
   }
 
@@ -162,7 +188,30 @@ export class FilesManager implements Files {
     }
   }
 
+  /** Remember confirmed sessions across hook remounts without starting offline work. */
+  setSessionIdentity(sessionId: string | undefined): void {
+    if (sessionId === undefined || sessionId === this.sessionId) return;
+    this.sessionId = sessionId;
+    this.resetUploadRetry();
+  }
+
+  private resetUploadRetry(): void {
+    this.publish({ authRequired: false });
+    if (this.uploadRetryTimer !== null) {
+      clearTimeout(this.uploadRetryTimer);
+      this.uploadRetryTimer = null;
+    }
+    this.uploadRetryDelayMs = UPLOAD_RETRY_INITIAL_MS;
+  }
+
+  /** Explicit retry after user request; reconnect alone cannot loop on 401. */
+  retryUploads(): void {
+    this.resetUploadRetry();
+    this.resumeUploads();
+  }
+
   resumeUploads(): void {
+    if (this.state.authRequired) return;
     this.uploadLifecycleVersion++;
     this.uploadsEnabled = true;
     this.startUploadLoop();
@@ -278,6 +327,8 @@ export class FilesManager implements Files {
 
     if (!this.uploadsEnabled) return false;
 
+    this.publish({ uploading: operation.id });
+    const sessionId = this.sessionId;
     try {
       await this.remote.put(operation.id, localFile.blob, localFile.mediaType);
       await db.transaction(
@@ -290,6 +341,14 @@ export class FilesManager implements Files {
       );
       return true;
     } catch (error) {
+      if (
+        sessionId === this.sessionId &&
+        error instanceof FileRemoteRequestError &&
+        error.status === 401
+      ) {
+        this.pauseUploads();
+        this.publish({ authRequired: true });
+      }
       await db.fileUploadOperations.update(operation.id, {
         retryCount: operation.retryCount + 1,
         lastFailure: {
@@ -299,6 +358,8 @@ export class FilesManager implements Files {
         },
       });
       return false;
+    } finally {
+      this.publish({ uploading: null });
     }
   }
 }

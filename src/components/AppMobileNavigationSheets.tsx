@@ -53,6 +53,9 @@ interface AppMobileNavigationSheetsProps {
   onAddBook: () => void;
   isOnline: boolean;
   isSyncing: boolean;
+  syncLabel?: string;
+  syncDetail?: string;
+  syncBusyVisible?: boolean;
   onSync: () => Promise<void>;
   isAuthenticated: boolean;
   isAuthLoading: boolean;
@@ -293,6 +296,9 @@ export function AppMobileNavigationSheets({
   onAddBook,
   isOnline,
   isSyncing,
+  syncLabel,
+  syncDetail,
+  syncBusyVisible = isSyncing,
   onSync,
   isAuthenticated,
   isAuthLoading,
@@ -522,11 +528,13 @@ export function AppMobileNavigationSheets({
               <MobileSheetRow
                 index="02"
                 label={
-                  isSyncing ? "Syncing…" : isOnline ? "Sync now" : "Offline"
+                  syncLabel ??
+                  (isSyncing ? "Syncing…" : isOnline ? "Sync now" : "Offline")
                 }
-                icon={isSyncing ? Loader2 : isOnline ? Cloud : CloudOff}
+                description={syncDetail}
+                icon={syncBusyVisible ? Loader2 : isOnline ? Cloud : CloudOff}
                 trailing={
-                  isSyncing ? (
+                  syncBusyVisible ? (
                     <Loader2 className="size-4 animate-spin text-muted-foreground" />
                   ) : undefined
                 }

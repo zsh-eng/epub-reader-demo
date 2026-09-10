@@ -28,7 +28,7 @@ test("should display committed remote book changes", async ({
   await page
     .getByRole("button", { name: "Toggle sidebar", exact: true })
     .click();
-  await page.getByRole("button", { name: "Sync now", exact: true }).click();
+  await page.getByRole("button", { name: /^Sync now:/ }).click();
   await expect(
     page.getByRole("heading", {
       name: "Updated on another device",
@@ -53,7 +53,7 @@ test("should preserve a warm Reader when sync acknowledges local writes", async 
   await page
     .getByRole("button", { name: "Toggle sidebar", exact: true })
     .click();
-  const sync = page.getByRole("button", { name: "Sync now", exact: true });
+  const sync = page.getByRole("button", { name: /^Sync now:/ });
   await expect(sync).toBeVisible();
   const reads = await page.evaluateHandle(async () => {
     const modulePath = "/src/lib/sync-v2/db.ts";

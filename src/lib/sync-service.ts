@@ -8,16 +8,47 @@ import {
 import { getOrCreateDeviceId } from "@/lib/device";
 import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import { syncV2SyncDb } from "@/lib/sync-v2/db";
-import { SyncV2Client, type SyncV2RunResult } from "@/lib/sync-v2/sync";
+import {
+  SyncV2Client,
+  type SyncV2RunResult,
+  SyncRemoteRequestError,
+} from "@/lib/sync-v2/sync";
 
 const SYNC_INTERVAL_MS = 30_000;
 export type SyncServiceResult =
   | { status: "offline" }
   | ({ status: "completed" } & SyncV2RunResult);
 
+export interface SyncServiceState {
+  isSyncing: boolean;
+  lastSyncedAt: Date | null;
+  error: Error | null;
+  authRequired: boolean;
+}
+
 /** Owns automatic sync and its subscriptions for one application lifetime. */
 class SyncService {
   private readonly client: SyncV2Client;
+  private state: SyncServiceState = {
+    isSyncing: false,
+    lastSyncedAt: null,
+    error: null,
+    authRequired: false,
+  };
+  private readonly listeners = new Set<() => void>();
+  private activeRun: Promise<SyncServiceResult> | null = null;
+  private sessionId: string | undefined;
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+  getSnapshot = () => this.state;
+  private publish(update: Partial<SyncServiceState>) {
+    this.state = { ...this.state, ...update };
+    this.listeners.forEach((listener) => listener());
+  }
   private readonly pendingRuns = new Set<Promise<SyncServiceResult>>();
   private isOnline = getRuntimeOnline();
   private syncInterval: number | null = null;
@@ -42,6 +73,13 @@ class SyncService {
     this.updatePeriodicSync();
   }
 
+  /** A confirmed new session can recover 401 failures, including while offline. */
+  setSessionIdentity(sessionId: string | undefined): void {
+    if (sessionId === undefined || sessionId === this.sessionId) return;
+    this.sessionId = sessionId;
+    this.publish({ authRequired: false, error: null });
+  }
+
   stopPeriodicSync(): void {
     this.requestedInterval = null;
     this.clearInterval();
@@ -54,17 +92,43 @@ class SyncService {
 
   syncAll(): Promise<SyncServiceResult> {
     if (!this.isOnline) return Promise.resolve({ status: "offline" });
+    if (this.activeRun) return this.activeRun;
+    const sessionId = this.sessionId;
+    this.publish({ isSyncing: true, error: null, authRequired: false });
     const run: Promise<SyncServiceResult> = this.client
       .sync()
-      .then((result) => ({ status: "completed" as const, ...result }))
-      .finally(() => this.pendingRuns.delete(run));
+      .then((result) => {
+        this.publish({ lastSyncedAt: new Date(), error: null });
+        return { status: "completed" as const, ...result };
+      })
+      .catch((failure) => {
+        const error =
+          failure instanceof Error ? failure : new Error(String(failure));
+        if (sessionId === this.sessionId)
+          this.publish({
+            error,
+            authRequired:
+              error instanceof SyncRemoteRequestError && error.status === 401,
+          });
+        throw error;
+      })
+      .finally(() => {
+        this.pendingRuns.delete(run);
+        this.activeRun = null;
+        this.publish({ isSyncing: false });
+        // A session change can join an exchange issued with the old credentials.
+        if (sessionId !== this.sessionId && this.syncInterval !== null)
+          this.runAutomaticSync();
+      });
+    this.activeRun = run;
     this.pendingRuns.add(run);
     return run;
   }
 
   /** Call after stopping the scheduler to wait for issued sync exchanges. */
   async drain(): Promise<void> {
-    await Promise.allSettled(this.pendingRuns);
+    while (this.pendingRuns.size > 0)
+      await Promise.allSettled(this.pendingRuns);
   }
 
   private clearInterval(): void {
@@ -88,6 +152,7 @@ class SyncService {
   };
 
   private runAutomaticSync = (): void => {
+    if (this.state.authRequired) return;
     void this.syncAll().catch((error) =>
       console.error("Automatic sync failed:", error),
     );

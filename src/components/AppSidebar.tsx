@@ -32,6 +32,8 @@ import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
 import { useEpubImport } from "@/features/library/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
+import { useSyncStatus } from "@/features/sync-status/use-sync-status";
+import { files } from "@/lib/files";
 import { SyncUnavailableError, useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
 import { authClient } from "@/lib/auth-client";
@@ -163,6 +165,7 @@ export function AppSidebar() {
   const { settings, appearanceMode, setAppearanceMode } = useReaderSettings();
   const { isProcessing: isImporting, openFilePicker } = useEpubImport();
   const { isSyncing, triggerSync } = useSync();
+  const syncStatus = useSyncStatus();
   const { data: booksData, refetch: refetchBooks } = useBooksWithStatuses();
   const { isMobile, open, openMobile, setOpen, setOpenMobile } = useSidebar();
   const { toast } = useToast();
@@ -226,8 +229,8 @@ export function AppSidebar() {
 
   const handleSync = async () => {
     try {
+      files.retryUploads();
       await triggerSync();
-      toast({ title: "Library synced" });
     } catch (error) {
       console.error("Error syncing:", error);
       toast({
@@ -295,7 +298,10 @@ export function AppSidebar() {
         }}
         isOnline={isOnline}
         isSyncing={isSyncing}
-        onSync={handleSync}
+        syncLabel={syncStatus.label}
+        syncDetail={syncStatus.detail}
+        syncBusyVisible={syncStatus.busyVisible}
+        onSync={syncStatus.authRequired ? handleGoogleSignIn : handleSync}
         isAuthenticated={isAuthenticated}
         isAuthLoading={isAuthLoading}
         user={user ?? null}
@@ -419,19 +425,27 @@ export function AppSidebar() {
           {isAuthenticated && (
             <SidebarMenuItem>
               <SidebarMenuButton
-                onClick={() => void handleSync()}
+                onClick={() =>
+                  void (syncStatus.authRequired
+                    ? handleGoogleSignIn()
+                    : handleSync())
+                }
                 disabled={isSyncing || !isOnline}
+                aria-label={
+                  syncStatus.authRequired
+                    ? "Sign in again"
+                    : `Sync now: ${syncStatus.label}`
+                }
+                title={syncStatus.detail}
               >
-                {isSyncing ? (
+                {syncStatus.busyVisible ? (
                   <Loader2 className="animate-spin" />
                 ) : isOnline ? (
                   <Cloud />
                 ) : (
                   <CloudOff />
                 )}
-                <span>
-                  {isSyncing ? "Syncing…" : isOnline ? "Sync now" : "Offline"}
-                </span>
+                <span>{syncStatus.label}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}

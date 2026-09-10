@@ -8,7 +8,7 @@ test("shows offline feedback when connectivity changes during manual sync", asyn
   await page
     .getByRole("button", { name: "Toggle sidebar", exact: true })
     .click();
-  const sync = page.getByRole("button", { name: "Sync now", exact: true });
+  const sync = page.getByRole("button", { name: /^Sync now:/ });
   await expect(sync).toBeVisible();
   // Change connectivity at the service boundary, after the enabled UI action.
   await page.evaluate(async () => {

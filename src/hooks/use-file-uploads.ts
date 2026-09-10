@@ -8,7 +8,8 @@ import { useEffect } from "react";
 
 /** Run durable file uploads only for an authenticated, online application. */
 export function useFileUploads(): void {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, session } = useAuth();
+  const sessionId = session?.id;
 
   useEffect(() => {
     if (isAuthLoading) {
@@ -24,6 +25,7 @@ export function useFileUploads(): void {
       }
     };
 
+    if (isAuthenticated) files.setSessionIdentity(sessionId);
     updateUploadState();
     const unsubscribe = subscribeRuntimeOnline(updateUploadState);
 
@@ -31,5 +33,5 @@ export function useFileUploads(): void {
       unsubscribe();
       files.pauseUploads();
     };
-  }, [isAuthenticated, isAuthLoading]);
+  }, [isAuthenticated, isAuthLoading, sessionId]);
 }

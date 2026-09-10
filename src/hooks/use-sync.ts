@@ -11,6 +11,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
@@ -42,11 +43,21 @@ const SyncContext = createContext<SyncContextValue | null>(null);
  */
 export function SyncProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
-  const [syncError, setSyncError] = useState<Error | null>(null);
+  const { isAuthenticated, isLoading: isAuthLoading, session } = useAuth();
+  const sessionId = session?.id;
+  const serviceState = useSyncExternalStore(
+    syncService.subscribe,
+    syncService.getSnapshot,
+  );
+  const [manualError, setManualError] = useState<Error | null>(null);
+  const isSyncing = serviceState.isSyncing;
+  const lastSyncedAt = isAuthenticated ? serviceState.lastSyncedAt : null;
+  const syncError = manualError ?? serviceState.error;
   useEffect(() => subscribeToQueryInvalidation(queryClient), [queryClient]);
+
+  useEffect(() => {
+    if (serviceState.lastSyncedAt) setManualError(null);
+  }, [serviceState.lastSyncedAt]);
 
   // Start/stop periodic sync based on auth status
   useEffect(() => {
@@ -55,6 +66,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     }
 
     if (isAuthenticated) {
+      syncService.setSessionIdentity(sessionId);
       // Start periodic sync (every 30 seconds)
       syncService.startPeriodicSync(30000);
     } else {
@@ -65,15 +77,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     return () => {
       syncService.stopPeriodicSync();
     };
-  }, [isAuthenticated, isAuthLoading]);
+  }, [isAuthenticated, isAuthLoading, sessionId]);
 
   // Manual sync trigger
   const triggerSync = useCallback(async () => {
     if (!isAuthenticated)
       throw new SyncUnavailableError("Sign in to synchronize your library.");
 
-    setIsSyncing(true);
-    setSyncError(null);
+    setManualError(null);
 
     try {
       const result = await syncService.syncAll();
@@ -82,15 +93,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           "You are offline. Connect to the internet and try again.",
         );
       }
-      setLastSyncedAt(new Date());
     } catch (error) {
       console.error("[useSync] Sync failed:", error);
       const syncFailure =
         error instanceof Error ? error : new Error("Sync failed");
-      setSyncError(syncFailure);
+      setManualError(syncFailure);
       throw syncFailure;
-    } finally {
-      setIsSyncing(false);
     }
   }, [isAuthenticated]);
 
@@ -106,7 +114,10 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       await deleteBookFromDb(bookId);
 
       // Then run the normal pull-push flow.
-      await syncService.syncAll();
+      void syncService.syncAll().catch((error) => {
+        // Deletion already committed. The shared sync row reports transport failure.
+        console.error("Book deletion sync is pending:", error);
+      });
     },
     [isAuthenticated],
   );

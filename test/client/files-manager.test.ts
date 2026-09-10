@@ -389,3 +389,76 @@ it("keeps uploads paused when deletion settles after its owner pauses", async ()
   });
   expect(await db.files.get(pendingId)).toMatchObject({ remotePresent: false });
 });
+
+it("publishes active transfer and pauses unauthorized uploads until explicit retry", async () => {
+  await db.open();
+  await Promise.all([db.fileUploadOperations.clear(), db.files.clear()]);
+  const remote = new MockFileRemoteApi();
+  const manager = createManager(remote);
+  const put = vi
+    .spyOn(remote, "put")
+    .mockRejectedValueOnce(new FileRemoteRequestError("Session expired", 401));
+  const states: string[] = [];
+  const unsubscribe = manager.subscribe(() =>
+    states.push(JSON.stringify(manager.getSnapshot())),
+  );
+  try {
+    const id = await manager.put(new Blob(["authenticated retry"]));
+    manager.resumeUploads();
+    await manager.drain();
+    expect(manager.getSnapshot()).toMatchObject({
+      uploading: null,
+      authRequired: true,
+    });
+    expect(await db.fileUploadOperations.get(id)).toMatchObject({
+      retryCount: 1,
+    });
+    manager.resumeUploads();
+    await manager.drain();
+    expect(put).toHaveBeenCalledOnce();
+    manager.retryUploads();
+    await manager.drain();
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(await db.fileUploadOperations.get(id)).toBeUndefined();
+    expect(manager.getSnapshot().authRequired).toBe(false);
+    expect(states.some((state) => state.includes(`"uploading":"${id}"`))).toBe(
+      true,
+    );
+  } finally {
+    unsubscribe();
+    await db.delete();
+  }
+});
+
+it("keeps the 401 block for the same session and clears it for a new session without starting uploads", async () => {
+  await db.open();
+  await Promise.all([db.fileUploadOperations.clear(), db.files.clear()]);
+  const remote = new MockFileRemoteApi();
+  const manager = createManager(remote);
+  const put = vi
+    .spyOn(remote, "put")
+    .mockRejectedValueOnce(new FileRemoteRequestError("Session expired", 401));
+  try {
+    manager.setSessionIdentity("expired");
+    const id = await manager.put(new Blob(["new session recovery"]));
+    manager.resumeUploads();
+    await manager.drain();
+    manager.setSessionIdentity("expired");
+    manager.setSessionIdentity(undefined);
+    manager.resumeUploads();
+    await manager.drain();
+    expect(manager.getSnapshot().authRequired).toBe(true);
+    expect(put).toHaveBeenCalledOnce();
+    manager.setSessionIdentity("restored");
+    await manager.drain();
+    expect(manager.getSnapshot().authRequired).toBe(false);
+    expect(put).toHaveBeenCalledOnce();
+    expect(await db.fileUploadOperations.get(id)).toBeDefined();
+    manager.resumeUploads();
+    await manager.drain();
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(await db.fileUploadOperations.get(id)).toBeUndefined();
+  } finally {
+    await db.delete();
+  }
+});

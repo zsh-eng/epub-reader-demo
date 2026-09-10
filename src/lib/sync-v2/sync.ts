@@ -51,7 +51,12 @@ export interface SyncV2RunResult {
 /** Optional diagnostic events, emitted after storage changes commit. */
 export interface SyncV2Event {
   phase: "pull" | "push";
-  outcome: "applied" | "kept-local" | "acknowledged" | "replaced" | "edited-in-flight";
+  outcome:
+    | "applied"
+    | "kept-local"
+    | "acknowledged"
+    | "replaced"
+    | "edited-in-flight";
   key: string;
 }
 
@@ -84,7 +89,8 @@ export class SyncV2Client {
 
   constructor(options: SyncV2ClientOptions) {
     this.syncDb = options.syncDb;
-    this.remote = options.remote ?? getLabRuntime()?.syncRemote ?? new HonoSyncV2Remote();
+    this.remote =
+      options.remote ?? getLabRuntime()?.syncRemote ?? new HonoSyncV2Remote();
     this.stateStorage = options.stateStorage ?? getRuntimeStorage();
     this.syncedTables = new Set(options.syncedTables ?? SYNC_V2_SYNCED_TABLES);
     this.onEvent = options.onEvent ?? (() => {});
@@ -235,6 +241,15 @@ function* createPushBatches(changes: readonly SyncPushChange[]) {
   if (batch.length > 0) yield batch;
 }
 
+export class SyncRemoteRequestError extends Error {
+  readonly status: number;
+  constructor(operation: string, status: number) {
+    super(`Sync ${operation} failed with status ${status}`);
+    this.name = "SyncRemoteRequestError";
+    this.status = status;
+  }
+}
+
 export class HonoSyncV2Remote implements SyncV2Remote {
   async pull(
     deviceId: string,
@@ -254,7 +269,7 @@ export class HonoSyncV2Remote implements SyncV2Remote {
       { headers: { [SYNC_DEVICE_ID_HEADER]: deviceId } },
     );
     if (!response.ok) {
-      throw new Error(`Sync pull failed with status ${response.status}`);
+      throw new SyncRemoteRequestError("pull", response.status);
     }
     return syncPullResponseSchema.parse(await response.json());
   }
@@ -268,7 +283,7 @@ export class HonoSyncV2Remote implements SyncV2Remote {
       { headers: { [SYNC_DEVICE_ID_HEADER]: deviceId } },
     );
     if (!response.ok) {
-      throw new Error(`Sync push failed with status ${response.status}`);
+      throw new SyncRemoteRequestError("push", response.status);
     }
     return syncPushResponseSchema.parse(await response.json());
   }
@@ -306,7 +321,11 @@ async function applyPreparedRemoteRecords(
         ) > 0
       ) {
         skipped += 1;
-        events.push({ phase: "pull", outcome: "kept-local", key: record.source.key });
+        events.push({
+          phase: "pull",
+          outcome: "kept-local",
+          key: record.source.key,
+        });
         return;
       }
 
@@ -314,7 +333,11 @@ async function applyPreparedRemoteRecords(
       rows.push(record.row);
       rowsByTable.set(record.tableName, rows);
       applied += 1;
-      events.push({ phase: "pull", outcome: "applied", key: record.source.key });
+      events.push({
+        phase: "pull",
+        outcome: "applied",
+        key: record.source.key,
+      });
     });
 
     await putRemoteRows(db, rowsByTable);
@@ -351,12 +374,22 @@ async function reconcilePushResults(
         currentChange === undefined ||
         !sameSyncChange(currentChange, sentChange)
       ) {
-        events.push({ phase: "push", outcome: "edited-in-flight", key: sentChange.key });
+        events.push({
+          phase: "push",
+          outcome: "edited-in-flight",
+          key: sentChange.key,
+        });
         return;
       }
 
       const winner = preparedWinners[index]!;
-      events.push({ phase: "push", outcome: winnerMatchesChange(winner.source, sentChange) ? "acknowledged" : "replaced", key: sentChange.key });
+      events.push({
+        phase: "push",
+        outcome: winnerMatchesChange(winner.source, sentChange)
+          ? "acknowledged"
+          : "replaced",
+        key: sentChange.key,
+      });
       if (!winnerMatchesChange(winner.source, sentChange)) {
         const rows = rowsByTable.get(winner.tableName) ?? [];
         rows.push(winner.row);
