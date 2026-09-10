@@ -57,6 +57,7 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
       setIsProcessing(true);
 
       let successCount = 0;
+      let lastImportedBook: Book | null = null;
       let duplicateCount = 0;
       let errorCount = 0;
       let lastDuplicateBook: Book | null = null;
@@ -67,6 +68,7 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
             const importedBook = await addBookFromFile(file);
             markEpubPreparationReady(queryClient, importedBook);
             successCount += 1;
+            lastImportedBook = importedBook;
           } catch (error) {
             console.error("Error adding book:", error);
             if (error instanceof DuplicateBookError) {
@@ -99,7 +101,20 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
         if (successCount > 0) {
           await queryClient.invalidateQueries({ queryKey: ["books"] });
           navigate("/");
-          toast({ title: "Import complete", description: summary.join(" · ") });
+          const bookToOpen = successCount === 1 ? lastImportedBook : null;
+          toast({
+            title: "Import complete",
+            description: summary.join(" · "),
+            ...(bookToOpen
+              ? {
+                  duration: 10000,
+                  action: {
+                    label: "Open book",
+                    onClick: () => navigate(`/reader/${bookToOpen.id}`),
+                  },
+                }
+              : {}),
+          });
           return;
         }
 

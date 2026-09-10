@@ -89,3 +89,39 @@ it("reports real errors in a mixed duplicate and malformed batch", async () => {
     variant: "destructive",
   });
 });
+
+it("offers the one newly imported book while preserving mixed batch outcomes", async () => {
+  mocks.add
+    .mockResolvedValueOnce({ id: "new-book" } as Book)
+    .mockRejectedValueOnce(duplicate())
+    .mockRejectedValueOnce(new Error("Malformed EPUB"));
+  const { result } = setup();
+  await act(() =>
+    result.current.importFiles([
+      ...files,
+      new File(["bad"], "broken.epub"),
+      new File(["ignored"], "notes.txt"),
+    ]),
+  );
+  const notification = mocks.toast.mock.calls[0][0];
+  expect(notification.description).toBe(
+    "1 book added · 1 skipped (already in library) · 1 failed · 1 non-EPUB file ignored",
+  );
+  expect(notification.action.label).toBe("Open book");
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/");
+  notification.action.onClick();
+  expect(mocks.navigate).toHaveBeenLastCalledWith("/reader/new-book");
+});
+
+it("keeps multiple successful imports in the Library without selecting a book", async () => {
+  mocks.add
+    .mockResolvedValueOnce({ id: "one" } as Book)
+    .mockResolvedValueOnce({ id: "two" } as Book);
+  const { result } = setup();
+  await act(() => result.current.importFiles(files));
+  expect(mocks.toast).toHaveBeenCalledWith({
+    title: "Import complete",
+    description: "2 books added",
+  });
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/");
+});
