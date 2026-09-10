@@ -15,6 +15,8 @@ import {
 import {
   DEFAULT_SYNC_PULL_LIMIT,
   MAX_SYNC_PUSH_CHANGES,
+  MAX_SYNC_PUSH_BODY_BYTES,
+  syncPushChangeSchema,
   SYNC_DEVICE_ID_HEADER,
   compareSyncVersions,
   decodeSyncKey,
@@ -158,15 +160,7 @@ export class SyncV2Client {
     const pendingSnapshot = await this.syncDb._sync_outbox.toArray();
     let pushed = 0;
 
-    for (
-      let offset = 0;
-      offset < pendingSnapshot.length;
-      offset += MAX_SYNC_PUSH_CHANGES
-    ) {
-      const changes = pendingSnapshot.slice(
-        offset,
-        offset + MAX_SYNC_PUSH_CHANGES,
-      );
+    for (const changes of createPushBatches(pendingSnapshot)) {
       const response = syncPushResponseSchema.parse(
         await this.remote.push(state.deviceId, changes),
       );
@@ -203,6 +197,42 @@ export class SyncV2Client {
     }
     return state;
   }
+}
+
+/** Count the actual JSON envelope, escaped values, commas, and UTF-8 bytes. */
+function* createPushBatches(changes: readonly SyncPushChange[]) {
+  const encoder = new TextEncoder();
+  const envelopeBytes = encoder.encode(
+    JSON.stringify({ changes: [] }),
+  ).byteLength;
+  let batch: SyncPushChange[] = [];
+  let bodyBytes = envelopeBytes;
+  for (const change of changes) {
+    const validation = syncPushChangeSchema.safeParse(change);
+    if (!validation.success) {
+      throw new Error(
+        `Cannot synchronize record ${change.key}: ${validation.error.message}`,
+      );
+    }
+    const changeBytes = encoder.encode(JSON.stringify(change)).byteLength;
+    if (envelopeBytes + changeBytes > MAX_SYNC_PUSH_BODY_BYTES) {
+      throw new Error(
+        `Cannot synchronize record ${change.key}: encoded mutation exceeds the push body limit`,
+      );
+    }
+    const commaBytes = batch.length === 0 ? 0 : 1;
+    if (
+      batch.length === MAX_SYNC_PUSH_CHANGES ||
+      bodyBytes + commaBytes + changeBytes > MAX_SYNC_PUSH_BODY_BYTES
+    ) {
+      yield batch;
+      batch = [];
+      bodyBytes = envelopeBytes;
+    }
+    bodyBytes += (batch.length === 0 ? 0 : 1) + changeBytes;
+    batch.push(change);
+  }
+  if (batch.length > 0) yield batch;
 }
 
 export class HonoSyncV2Remote implements SyncV2Remote {

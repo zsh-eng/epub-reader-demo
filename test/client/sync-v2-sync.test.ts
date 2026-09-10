@@ -11,6 +11,9 @@ import { SyncV2Client, type SyncV2Remote } from "@/lib/sync-v2/sync";
 import {
   encodeSyncKey,
   encodeSyncValue,
+  MAX_SYNC_VALUE_BYTES,
+  MAX_SYNC_PUSH_BODY_BYTES,
+  syncPushBodySchema,
   type SyncPullBody,
   type SyncPullResponse,
   type SyncPushChange,
@@ -44,6 +47,62 @@ describe("sync v2 client", () => {
     await db.delete();
     db.close();
     localStorage.clear();
+  });
+
+  it("splits valid large escaped UTF-8 notes by encoded body bytes and reconciles every row", async () => {
+    const rows = Array.from({ length: 40 }, (_, index) => ({
+      id: `large-note-${index}`,
+      bookId: "book-a",
+      kind: "note" as const,
+      content: '"\\漢'.repeat(8500),
+      anchor: {
+        spineItemId: "chapter",
+        startOffset: 0,
+        endOffset: 0,
+        textBefore: "",
+        textAfter: "",
+      },
+      createdAt: 1000,
+      updatedAt: 1000,
+      isDeleted: false,
+    }));
+    await db.notes.bulkAdd(rows);
+    const pending = await db._sync_outbox.toArray();
+    expect(
+      new TextEncoder().encode(JSON.stringify({ changes: pending })).byteLength,
+    ).toBeGreaterThan(MAX_SYNC_PUSH_BODY_BYTES);
+    remote.pushImplementation = async (changes) => {
+      syncPushBodySchema.parse({ changes });
+      return {
+        results: changes.map((change, index) => ({
+          accepted: true,
+          winner: winnerFromChange(change, "device-a", index + 1),
+        })),
+      };
+    };
+    expect(await client.push()).toBe(rows.length);
+    expect(remote.pushRequests.length).toBeGreaterThan(1);
+    expect(remote.pushRequests.flat()).toHaveLength(rows.length);
+    expect(await db._sync_outbox.count()).toBe(0);
+    expect(await db.notes.toArray()).toEqual(
+      rows.sort((a, b) => a.id.localeCompare(b.id)),
+    );
+  });
+
+  it("keeps an oversized restored mutation in the outbox with a record-specific error", async () => {
+    const key = encodeSyncKey("notes", "oversized");
+    await syncDb._sync_outbox.put({
+      key,
+      value: "x".repeat(MAX_SYNC_VALUE_BYTES + 1),
+      isDeleted: false,
+      schemaVersion: 1,
+      hlc: { wallTimeMs: 1000, counter: 0 },
+    });
+    await expect(client.push()).rejects.toThrow(
+      `Cannot synchronize record ${key}`,
+    );
+    expect(remote.pushRequests).toHaveLength(0);
+    expect(await db._sync_outbox.get(key)).toBeDefined();
   });
 
   it("syncs notebook entries, resolves remote edits, and reconciles deletions without syncing drafts", async () => {
