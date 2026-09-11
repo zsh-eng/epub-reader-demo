@@ -16,7 +16,16 @@ type NativeMessage = {
   path?: string;
   duplicate?: boolean;
   error?: string;
+  state?: NativeReaderState;
 };
+interface NativeReaderState {
+  session: string;
+  bookId: string;
+  acknowledged: number;
+  draft: { content: string; editingId: string; ready: boolean };
+  notes: { id: string; text: string }[];
+  settings: { theme: string; fontSize: number };
+}
 interface TestWindow extends Window {
   nativeMessages: NativeMessage[];
 }
@@ -34,6 +43,30 @@ async function send(page: Page, command: Record<string, unknown>) {
 
 async function messages(page: Page) {
   return page.evaluate(() => (window as unknown as TestWindow).nativeMessages);
+}
+
+async function readerState(page: Page) {
+  return (await messages(page))
+    .filter((message) => message.type === "reader-state")
+    .at(-1)?.state;
+}
+
+async function readerCommand(page: Page, command: Record<string, unknown>) {
+  await expect
+    .poll(async () => (await readerState(page))?.draft.ready)
+    .toBe(true);
+  const state = (await readerState(page))!;
+  const sequence = state.acknowledged + 1;
+  await send(page, {
+    type: "reader-command",
+    bookId: state.bookId,
+    session: state.session,
+    sequence,
+    command,
+  });
+  await expect
+    .poll(async () => (await readerState(page))?.acknowledged)
+    .toBe(sequence);
 }
 
 async function importBook(page: Page, id = crypto.randomUUID()) {
@@ -61,8 +94,8 @@ async function importBook(page: Page, id = crypto.randomUUID()) {
   )!;
 }
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
+test.beforeEach(async ({ page, context }) => {
+  await context.addInitScript(() => {
     const target = window as unknown as TestWindow;
     target.nativeMessages = [];
     window.ReactNativeWebView = {
@@ -75,6 +108,20 @@ test.beforeEach(async ({ page }) => {
       (await messages(page)).some(({ type }) => type === "ready"),
     )
     .toBe(true);
+});
+
+test("a warm Library adopts Reader appearance when its native tab becomes active", async ({ page, context }) => {
+  const { bookId } = await importBook(page);
+  await send(page, { type: "lifecycle", active: false });
+  const reader = await context.newPage();
+  await openLocalBook(reader, bookId!);
+  await readerCommand(reader, { action: "settings", patch: { theme: "flexoki-dark" } });
+  await expect(reader.locator("html")).toHaveClass(/flexoki-dark/);
+  await send(page, { type: "lifecycle", active: true });
+  await expect(page.locator("html")).toHaveClass(/flexoki-dark/);
+  const readBackground = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  expect(await readBackground(page)).toBe(await readBackground(reader));
+  await reader.close();
 });
 
 test("imports locally, filters with native search, and delegates navigation", async ({
@@ -166,25 +213,13 @@ test("native background saves the reading position and note draft before reopen"
 }) => {
   const { bookId } = await importBook(page);
   await openLocalBook(page, bookId!);
-  await page
-    .getByRole("button", { name: "Start reading", exact: true })
-    .click();
+  await readerCommand(page, { action: "start-reading" });
   for (let i = 0; i < 8; i++) await nextSpread(page);
   const before = await currentPages(page);
-  const note = page.getByRole("button", { name: "Jot a note" });
-  if (!(await note.isVisible())) {
-    const bounds = await page
-      .locator('[data-reader-spread-layer="current"]')
-      .boundingBox();
-    await page.touchscreen.tap(
-      bounds!.x + bounds!.width / 2,
-      bounds!.y + bounds!.height / 2,
-    );
-  }
-  await note.click();
-  await page
-    .getByRole("textbox", { name: "Write a note" })
-    .fill("A draft saved when the native app goes to sleep.");
+  await readerCommand(page, {
+    action: "draft",
+    content: "A draft saved when the native app goes to sleep.",
+  });
   await send(page, { type: "lifecycle", active: false });
   await expect
     .poll(() =>
@@ -204,17 +239,9 @@ test("native background saves the reading position and note draft before reopen"
     .toBeGreaterThan(0);
   await page.reload();
   await expect.poll(() => currentPages(page)).toEqual(before);
-  const reopened = await page
-    .locator('[data-reader-spread-layer="current"]')
-    .boundingBox();
-  await page.touchscreen.tap(
-    reopened!.x + reopened!.width / 2,
-    reopened!.y + reopened!.height / 2,
-  );
-  await page.getByRole("button", { name: "Jot a note" }).click();
-  await expect(page.getByRole("textbox", { name: "Write a note" })).toHaveValue(
-    "A draft saved when the native app goes to sleep.",
-  );
+  await expect
+    .poll(async () => (await readerState(page))?.draft.content)
+    .toBe("A draft saved when the native app goes to sleep.");
 });
 
 test("a highlight saved in native mode remains visible after reopening", async ({
@@ -222,9 +249,7 @@ test("a highlight saved in native mode remains visible after reopening", async (
 }) => {
   const { bookId } = await importBook(page);
   await openLocalBook(page, bookId!);
-  await page
-    .getByRole("button", { name: "Start reading", exact: true })
-    .click();
+  await readerCommand(page, { action: "start-reading" });
   for (let index = 0; index < 8; index++) await nextSpread(page);
   // Set a DOM selection as in the shared highlight test. This checks the
   // Reader's selection/save path; it does not simulate an iOS long press.
@@ -279,4 +304,115 @@ test("a highlight saved in native mode remains visible after reopening", async (
   await expect(
     page.getByText(selected, { exact: false }).first(),
   ).toBeVisible();
+});
+
+test("native notebook saves, edits, restores a compose draft, deletes and undoes locally", async ({
+  page,
+}) => {
+  const { bookId } = await importBook(page);
+  await openLocalBook(page, bookId!);
+  await readerCommand(page, { action: "start-reading" });
+  for (let index = 0; index < 8; index++) await nextSpread(page);
+  const before = await currentPages(page);
+  const geometry = await page
+    .locator('[data-reader-spread-layer="current"]')
+    .boundingBox();
+  await readerCommand(page, { action: "draft", content: "A native note." });
+  await readerCommand(page, { action: "save" });
+  await expect
+    .poll(async () => (await readerState(page))?.notes.map((note) => note.text))
+    .toEqual(["A native note."]);
+  const id = (await readerState(page))!.notes[0].id;
+  await readerCommand(page, {
+    action: "draft",
+    content: "Keep this unfinished thought.",
+  });
+  await readerCommand(page, { action: "edit", id });
+  await expect
+    .poll(async () => (await readerState(page))?.draft.content)
+    .toBe("A native note.");
+  await readerCommand(page, {
+    action: "draft",
+    content: "An edited native note.",
+  });
+  await readerCommand(page, { action: "save" });
+  await expect
+    .poll(async () => (await readerState(page))?.draft.content)
+    .toBe("Keep this unfinished thought.");
+  await readerCommand(page, { action: "delete", id });
+  await expect
+    .poll(async () => (await readerState(page))?.notes.length)
+    .toBe(0);
+  await readerCommand(page, { action: "undo", id });
+  await expect
+    .poll(async () => (await readerState(page))?.notes[0]?.text)
+    .toBe("An edited native note.");
+  await readerCommand(page, { action: "close" });
+  expect(await currentPages(page)).toEqual(before);
+  expect(
+    await page.locator('[data-reader-spread-layer="current"]').boundingBox(),
+  ).toEqual(geometry);
+  await page.reload();
+  await expect
+    .poll(async () => (await readerState(page))?.draft.content)
+    .toBe("Keep this unfinished thought.");
+  await expect
+    .poll(async () => (await readerState(page))?.notes[0]?.text)
+    .toBe("An edited native note.");
+});
+
+test("native commands reject stale sessions and invalid settings, and commit ordered draft input", async ({
+  page,
+}) => {
+  const { bookId } = await importBook(page);
+  await openLocalBook(page, bookId!);
+  await readerCommand(page, { action: "draft", content: "First" });
+  const state = (await readerState(page))!;
+  const envelope = {
+    type: "reader-command",
+    bookId,
+    session: state.session,
+    sequence: state.acknowledged + 1,
+  };
+  await send(page, {
+    ...envelope,
+    session: "old-session",
+    command: { action: "draft", content: "Wrong session" },
+  });
+  await send(page, {
+    ...envelope,
+    bookId: "other-book",
+    command: { action: "draft", content: "Wrong book" },
+  });
+  await send(page, {
+    ...envelope,
+    command: { action: "settings", patch: { fontSize: -12 } },
+  });
+  await send(page, {
+    ...envelope,
+    command: { action: "draft", content: "Second" },
+  });
+  await send(page, {
+    ...envelope,
+    sequence: envelope.sequence + 1,
+    command: { action: "draft", content: "Latest" },
+  });
+  await expect
+    .poll(async () => (await readerState(page))?.acknowledged)
+    .toBe(envelope.sequence + 1);
+  await expect
+    .poll(async () => (await readerState(page))?.draft.content)
+    .toBe("Latest");
+  await readerCommand(page, { action: "save" });
+  await expect
+    .poll(async () => (await readerState(page))?.notes[0]?.text)
+    .toBe("Latest");
+  expect((await readerState(page))!.settings.fontSize).toBe(
+    state.settings.fontSize,
+  );
+  await readerCommand(page, {
+    action: "settings",
+    patch: { theme: "flexoki-light" },
+  });
+  await expect(page.locator("html")).toHaveClass(/flexoki-light/);
 });

@@ -116,7 +116,7 @@ function formatPageRange(items: FlattenedTocItem[]): string | null {
   return firstPage === lastPage ? `${firstPage}` : `${firstPage}-${lastPage}`;
 }
 
-function buildContentsModel(
+export function buildContentsModel(
   toc: TOCItem[],
   chapterEntries: ChapterEntry[],
   chapterStartPages: (number | null)[],

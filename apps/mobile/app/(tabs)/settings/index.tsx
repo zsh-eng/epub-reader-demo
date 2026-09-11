@@ -6,41 +6,55 @@ import {
   Text,
   View,
 } from "react-native";
+import { useNativeTheme } from "../../../src/NativeTheme";
 import { useRuntime } from "../../../src/RuntimeProvider";
 
 export default function SettingsScreen() {
   const { keepAwake, setKeepAwake } = useRuntime();
+  const { palette } = useNativeTheme();
+  const canvas = palette ? { backgroundColor: palette.background } : undefined;
+  const surface = palette ? { backgroundColor: palette.secondary } : undefined;
+  const ink = palette ? { color: palette.foreground } : undefined;
+  const detail = palette ? { color: palette.muted } : undefined;
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text style={styles.section}>READING</Text>
-      <View style={styles.row}>
+    <ScrollView
+      style={[styles.page, canvas]}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={[styles.section, detail]}>READING</Text>
+      <View style={[styles.row, surface]}>
         <View style={styles.description}>
-          <Text style={styles.label}>Keep screen awake</Text>
-          <Text style={styles.detail}>While a book is open.</Text>
+          <Text style={[styles.label, ink]}>Keep screen awake</Text>
+          <Text style={[styles.detail, detail]}>While a book is open.</Text>
         </View>
         <Switch
           accessibilityLabel="Keep screen awake"
+          trackColor={
+            palette
+              ? { true: palette.primary, false: palette.border }
+              : undefined
+          }
           value={keepAwake}
           onValueChange={setKeepAwake}
         />
       </View>
-      <Text style={styles.note}>
+      <Text style={[styles.note, detail]}>
         Change fonts, page layout, and reading theme from the controls inside a
         book.
       </Text>
-      <Text style={styles.section}>YOUR LIBRARY</Text>
-      <View style={styles.card}>
-        <Text style={styles.label}>Read anywhere</Text>
-        <Text style={styles.detail}>
+      <Text style={[styles.section, detail]}>YOUR LIBRARY</Text>
+      <View style={[styles.card, surface]}>
+        <Text style={[styles.label, ink]}>Read anywhere</Text>
+        <Text style={[styles.detail, detail]}>
           Imported books, highlights, and notes stay on this device and work
           offline.
         </Text>
       </View>
-      <Text style={styles.note}>
+      <Text style={[styles.note, detail]}>
         Keep a copy of your original EPUB files. Removing the app also removes
         its library. Account access and sync are not available in this version.
       </Text>
-      <Text style={styles.version}>Reader · 0.1.0</Text>
+      <Text style={[styles.version, detail]}>Reader · 0.1.0</Text>
     </ScrollView>
   );
 }

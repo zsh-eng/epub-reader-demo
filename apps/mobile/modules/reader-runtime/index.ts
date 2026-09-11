@@ -7,6 +7,8 @@ export interface StagedImport {
 }
 
 export default requireNativeModule<{
+  getAppearance(): string;
+  setAppearance(value: string): void;
   getKeepAwake(): boolean;
   setKeepAwake(value: boolean): void;
   start(): Promise<string>;

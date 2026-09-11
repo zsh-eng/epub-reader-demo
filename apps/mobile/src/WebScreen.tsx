@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type Ref,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,26 +22,37 @@ import { useIsFocused } from "@react-navigation/native";
 import { router } from "expo-router";
 import WebView, { type WebViewMessageEvent } from "react-native-webview";
 import { useRuntime } from "./RuntimeProvider";
+import { useNativeTheme } from "./NativeTheme";
 
 interface WebScreenProps {
+  ref?: Ref<WebScreenHandle>;
   path: string;
   search?: string;
   initialState?: string;
   importsEnabled?: boolean;
   onAppearance?: (background: string, dark: boolean) => void;
+  onReaderState?: (snapshot: string) => void;
+}
+
+export interface WebScreenHandle {
+  send(message: Record<string, unknown>): void;
 }
 
 /** A WebView keeps the existing Reader and its database together. Native
  * navigation owns screen transitions; this bridge only carries small commands.
  */
 export function WebScreen({
+  ref,
   path,
   search = "",
   initialState = "null",
   importsEnabled = false,
   onAppearance,
+  onReaderState,
 }: WebScreenProps) {
   const { origin, imports, pickBooks, finishImport } = useRuntime();
+  const { palette, updateAppearance } = useNativeTheme();
+  const canvas = palette ? { backgroundColor: palette.background } : undefined;
   const web = useRef<WebView>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState("");
@@ -60,6 +78,7 @@ export function WebScreen({
       `window.dispatchEvent(new MessageEvent('reader-native', {data: ${json}})); true;`,
     );
   }, []);
+  useImperativeHandle(ref, () => ({ send }), [send]);
 
   useEffect(() => {
     if (ready) send({ type: "search", query: search });
@@ -100,7 +119,12 @@ export function WebScreen({
     }
     if (message?.version !== 1) return;
     switch (message.type) {
+      case "reader-state":
+        if (message.state && typeof message.state === "object")
+          onReaderState?.(JSON.stringify(message.state));
+        break;
       case "appearance":
+        if (focused) updateAppearance(message);
         if (
           typeof message.background === "string" &&
           /^#[0-9a-f]{6}$/i.test(message.background) &&
@@ -171,7 +195,7 @@ export function WebScreen({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, canvas]}>
       {importsEnabled && (pending || lastImport) && (
         <View style={styles.importRow}>
           {pending ? (
@@ -206,7 +230,7 @@ export function WebScreen({
       <WebView
         ref={web}
         source={{ uri: `${origin}${path}` }}
-        style={styles.web}
+        style={[styles.web, canvas]}
         webviewDebuggingEnabled={__DEV__}
         originWhitelist={[origin]}
         javaScriptEnabled
@@ -236,7 +260,7 @@ export function WebScreen({
         onContentProcessDidTerminate={reload}
       />
       {(!ready || error) && (
-        <View style={styles.cover}>
+        <View style={[styles.cover, canvas]}>
           {error ? (
             <>
               <Text style={styles.message}>{error}</Text>

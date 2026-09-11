@@ -9,6 +9,14 @@ public final class ReaderRuntimeModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ReaderRuntime")
 
+    View(ReaderControlsView.self) {
+      Events("onCommand")
+      Prop("snapshot") { (view: ReaderControlsView, json: String) in view.update(json: json) }
+    }
+
+    Function("getAppearance") { UserDefaults.standard.string(forKey: "reader.appearance") ?? "null" }
+    Function("setAppearance") { (value: String) in UserDefaults.standard.set(value, forKey: "reader.appearance") }
+
     Function("getKeepAwake") {
       UserDefaults.standard.object(forKey: "reader.keepAwake") as? Bool ?? true
     }

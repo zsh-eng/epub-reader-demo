@@ -1,4 +1,9 @@
 import { getRuntimeStorage } from "@/features/sync-lab/runtime";
+import { isNativeApp } from "@/features/native/runtime";
+import {
+  isReaderVisible,
+  subscribeReaderVisibility,
+} from "@/features/native/lifecycle";
 import {
   READER_FONT_SIZE_DEFAULT_PX,
   READER_FONT_SIZE_MAX_PX,
@@ -31,7 +36,7 @@ const DEFAULT_SETTINGS = {
   fontSize: READER_FONT_SIZE_DEFAULT_PX,
   lineHeight: 1.5,
   fontFamily: "lora",
-  theme: "light",
+  theme: isNativeApp ? "flexoki-light" : "light",
   textAlign: "left",
   contentWidth: "narrow",
   publisherBookStylingEnabled: false,
@@ -165,6 +170,40 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
       return isDarkReaderTheme(settings.theme) ? "dark" : "light";
     },
   );
+
+  // Each native tab has its own WebView and React provider. Re-read shared
+  // preferences on activation so a warm Library cannot retain an old palette.
+  useEffect(() => {
+    if (!isNativeApp) return;
+    const refresh = () => {
+      if (!isReaderVisible()) return;
+      try {
+        const storage = getRuntimeStorage();
+        const saved = storage.getItem(STORAGE_KEY);
+        if (saved)
+          setSettings(
+            normalizeReaderSettings({
+              ...DEFAULT_SETTINGS,
+              ...JSON.parse(saved),
+            }),
+          );
+        const mode = storage.getItem(APPEARANCE_STORAGE_KEY);
+        if (isAppearanceMode(mode)) setAppearanceModeState(mode);
+      } catch {
+        reportStorageError();
+      }
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY || event.key === APPEARANCE_STORAGE_KEY)
+        refresh();
+    };
+    const unsubscribe = subscribeReaderVisibility(refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("storage", onStorage);
+    };
+  }, [reportStorageError]);
 
   // Update localStorage when settings change
   useEffect(() => {

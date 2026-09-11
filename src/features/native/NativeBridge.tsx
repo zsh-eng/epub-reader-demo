@@ -4,6 +4,7 @@ import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
 import { markEpubPreparationReady } from "@/hooks/use-epub-processor";
 import { setNativeActive } from "./lifecycle";
 import { isNativeApp, postNative } from "./runtime";
+import { readNativeAppearance } from "./appearance";
 
 /** Only small commands cross the bridge. EPUB bytes are fetched from the
  * app's private loopback origin and use the existing transactional import path.
@@ -41,6 +42,7 @@ export function NativeBridge() {
       ) {
         setNativeActive(message.active);
         focusManager.setFocused(message.active);
+        if (message.active) requestAnimationFrame(reportTheme);
         return;
       }
       if (
@@ -108,19 +110,9 @@ export function NativeBridge() {
     };
     window.addEventListener("reader-native", handleMessage);
     const reportTheme = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 1;
-      const context = canvas.getContext("2d")!;
-      context.fillStyle = getComputedStyle(document.documentElement)
-        .getPropertyValue("--background")
-        .trim();
-      context.fillRect(0, 0, 1, 1);
-      const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
-      const background = `#${[r, g, b].map((value) => value.toString(16).padStart(2, "0")).join("")}`;
       postNative({
         type: "appearance",
-        background,
-        dark: r * 0.2126 + g * 0.7152 + b * 0.0722 < 128,
+        ...readNativeAppearance(),
       });
     };
     const observer = new MutationObserver(reportTheme);
