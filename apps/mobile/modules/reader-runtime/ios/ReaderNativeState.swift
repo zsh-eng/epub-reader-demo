@@ -20,7 +20,7 @@ struct ReaderNativeDraft: Decodable {
 
 struct ReaderNativeNote: Decodable, Equatable {
   let id, text, kind, quote, chapter: String
-  let page: Int
+  let page, chapterIndex, offset: Int
   let createdAt: Double
 }
 

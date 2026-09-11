@@ -22,7 +22,10 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   private var rows: [ReaderNativeNote] = []
   private var lastInputSequence = 0
   private var pendingSaveSequence = 0
+  private var pendingUndoSequence = 0
   private var deletedID = ""
+  private var orderByBook = false
+  private var headerKey = ""
   private var compactHeight: CGFloat = 84
   private var keyboardObserver: NSObjectProtocol?
   private let compact = UISheetPresentationController.Detent.Identifier("composer")
@@ -67,7 +70,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     input.backgroundColor = .clear
     input.font = .preferredFont(forTextStyle: .body)
     input.adjustsFontForContentSizeCategory = true
-    input.textContainerInset = UIEdgeInsets(top: 12, left: 8, bottom: 12, right: 4)
+    input.textContainerInset = UIEdgeInsets(top: 16, left: 8, bottom: 16, right: 4)
     input.accessibilityLabel = "Write a note"
     input.accessibilityIdentifier = "reader-note-input"
     input.isScrollEnabled = false
@@ -79,7 +82,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     placeholder.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
       placeholder.leadingAnchor.constraint(equalTo: input.leadingAnchor, constant: 13),
-      placeholder.topAnchor.constraint(equalTo: input.topAnchor, constant: 12),
+      placeholder.topAnchor.constraint(equalTo: input.topAnchor, constant: 16),
     ])
     let keyboardBar = UIToolbar()
     keyboardBar.sizeToFit()
@@ -91,20 +94,20 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     sendButton.configuration = .filled()
     sendButton.configuration?.cornerStyle = .capsule
 
-    composer.layer.cornerRadius = 26
+    composer.layer.cornerRadius = 28
     composer.layer.cornerCurve = .continuous
     composer.addSubview(input)
     composer.addSubview(sendButton)
     for item in [input, sendButton] { item.translatesAutoresizingMaskIntoConstraints = false }
-    inputHeight = input.heightAnchor.constraint(equalToConstant: 48)
+    inputHeight = input.heightAnchor.constraint(equalToConstant: 56)
     NSLayoutConstraint.activate([
       input.leadingAnchor.constraint(equalTo: composer.leadingAnchor),
       input.topAnchor.constraint(equalTo: composer.topAnchor),
       input.bottomAnchor.constraint(equalTo: composer.bottomAnchor), inputHeight,
       input.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -4),
       sendButton.trailingAnchor.constraint(equalTo: composer.trailingAnchor, constant: -8),
-      sendButton.bottomAnchor.constraint(equalTo: composer.bottomAnchor, constant: -8),
-      sendButton.widthAnchor.constraint(equalToConstant: 36), sendButton.heightAnchor.constraint(equalToConstant: 36),
+      sendButton.bottomAnchor.constraint(equalTo: composer.bottomAnchor, constant: -6),
+      sendButton.widthAnchor.constraint(equalToConstant: 44), sendButton.heightAnchor.constraint(equalToConstant: 44),
     ])
 
     contextLabel.font = .preferredFont(forTextStyle: .caption1)
@@ -131,6 +134,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
       view.addSubview(item)
     }
     footer.translatesAutoresizingMaskIntoConstraints = false
+    view.keyboardLayoutGuide.followsUndockedKeyboard = true
     leading = footer.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 18)
     trailing = footer.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -18)
     NSLayoutConstraint.activate([
@@ -187,15 +191,23 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     contextButton.accessibilityLabel = next.draft.editingId.isEmpty ? "Remove quote" : "Cancel edit"
     errorLabel.text = next.error
     errorLabel.isHidden = next.error.isEmpty
+    if pendingUndoSequence > 0 && next.acknowledged >= pendingUndoSequence {
+      if next.notes.contains(where: { $0.id == deletedID }) { deletedID = "" }
+      pendingUndoSequence = 0
+    }
     undoButton.isHidden = deletedID.isEmpty || next.notes.contains(where: { $0.id == deletedID })
-    let sorted = next.notes.sorted { $0.createdAt > $1.createdAt }
+    undoButton.isEnabled = pendingUndoSequence == 0
+    let sorted = next.notes.sorted {
+      if !orderByBook { return $0.createdAt > $1.createdAt }
+      if $0.chapterIndex != $1.chapterIndex { return $0.chapterIndex < $1.chapterIndex }
+      if $0.offset != $1.offset { return $0.offset < $1.offset }
+      return $0.createdAt > $1.createdAt
+    }
     if rows != sorted {
       rows = sorted
       table.reloadData()
     }
-    let title = UIBarButtonItem(title: "Notebook · \(rows.count)", style: .plain, target: nil, action: nil)
-    title.isEnabled = false
-    header.items = [title, .flexibleSpace(), UIBarButtonItem(title: "Close", primaryAction: UIAction { [weak self] _ in self?.dismissNotebook() })]
+    updateHeader()
     let empty = UILabel()
     empty.text = "A place for what stays with you."
     empty.font = UIFont(descriptor: UIFont.preferredFont(forTextStyle: .body).fontDescriptor.withDesign(.serif)!, size: 0)
@@ -210,11 +222,11 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   private func resizeInput() {
     guard input.bounds.width > 0 else { return }
     let measured = input.sizeThatFits(CGSize(width: input.bounds.width, height: .greatestFiniteMagnitude)).height
-    let height = min(160, max(48, measured))
+    let height = min(160, max(56, measured))
     if inputHeight.constant != height { inputHeight.constant = height }
     input.isScrollEnabled = measured > 160
     placeholder.isHidden = !input.text.isEmpty
-    let desired = height + 36 + (contextLabel.superview?.isHidden == false ? 50 : 0) + (errorLabel.isHidden ? 0 : 48) + (undoButton.isHidden ? 0 : 38)
+    let desired = footer.systemLayoutSizeFitting(CGSize(width: max(1, view.bounds.width - 36), height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height + 28
     if compactHeight != desired {
       compactHeight = desired
       if #available(iOS 16.0, *) { sheetPresentationController?.invalidateDetents() }
@@ -244,9 +256,45 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   @objc private func clearContext() {
     lastInputSequence = command(["action": state?.draft.editingId.isEmpty == false ? "cancel-edit" : "remove-quote"])
   }
-  @objc private func undo() { _ = command(["action": "undo", "id": deletedID]); deletedID = ""; undoButton.isHidden = true }
+  @objc private func undo() {
+    pendingUndoSequence = command(["action": "undo", "id": deletedID])
+    undoButton.isEnabled = false
+  }
   private func dismissNotebook() { input.resignFirstResponder(); _ = command(["action": "close"]); dismiss(animated: true) }
   func presentationControllerDidDismiss(_ presentationController: UIPresentationController) { _ = command(["action": "close"]) }
+
+  private func updateHeader() {
+    let key = "\(rows.count)|\(orderByBook)"
+    guard headerKey != key else { return }
+    headerKey = key
+    let title = UIBarButtonItem(title: "Notebook · \(rows.count)", style: .plain, target: nil, action: nil)
+    title.isEnabled = false
+    let order = UIBarButtonItem(image: UIImage(systemName: "arrow.up.arrow.down"), menu: UIMenu(children: [
+      UIAction(title: "By time", state: orderByBook ? .off : .on) { [weak self] _ in self?.changeOrder(false) },
+      UIAction(title: "By book", state: orderByBook ? .on : .off) { [weak self] _ in self?.changeOrder(true) },
+    ]))
+    order.accessibilityLabel = "Notebook order"
+    header.items = [title, .flexibleSpace(), order, UIBarButtonItem(title: "Close", primaryAction: UIAction { [weak self] _ in self?.dismissNotebook() })]
+  }
+  private func changeOrder(_ byBook: Bool) {
+    let first = table.indexPathsForVisibleRows?.first
+    let id = first.map { rows[$0.row].id }
+    let offset = first.map { table.rectForRow(at: $0).minY - table.contentOffset.y } ?? 0
+    orderByBook = byBook
+    if let state { update(state) }
+    if let id, let index = rows.firstIndex(where: { $0.id == id }) {
+      table.layoutIfNeeded()
+      table.setContentOffset(CGPoint(x: 0, y: table.rectForRow(at: IndexPath(row: index, section: 0)).minY - offset), animated: false)
+    }
+  }
+  private func edit(_ note: ReaderNativeNote) {
+    lastInputSequence = command(["action": "edit", "id": note.id])
+    focusComposer()
+  }
+  private func delete(_ note: ReaderNativeNote) {
+    deletedID = note.id
+    lastInputSequence = command(["action": "delete", "id": note.id])
+  }
 
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -278,8 +326,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     guard note.kind == "note" else { return nil }
     let edit = UIContextualAction(style: .normal, title: "Edit") { [weak self] _, _, done in
       guard let self else { return }
-      self.lastInputSequence = self.command(["action": "edit", "id": note.id])
-      self.focusComposer()
+      self.edit(note)
       done(true)
     }
     edit.backgroundColor = state?.colors.accent
@@ -288,10 +335,20 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   func tableView(_ tableView: UITableView, leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
     let note = rows[indexPath.row]
     let delete = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, done in
-      self?.deletedID = note.id
-      self?.lastInputSequence = self?.command(["action": "delete", "id": note.id]) ?? 0
+      self?.delete(note)
       done(true)
     }
     return UISwipeActionsConfiguration(actions: [delete])
+  }
+  func tableView(_ tableView: UITableView, contextMenuConfigurationForRowAt indexPath: IndexPath, point: CGPoint) -> UIContextMenuConfiguration? {
+    let note = rows[indexPath.row]
+    return UIContextMenuConfiguration(identifier: note.id as NSString, previewProvider: nil) { [weak self] _ in
+      var actions: [UIMenuElement] = [UIAction(title: "Copy", image: UIImage(systemName: "doc.on.doc")) { _ in UIPasteboard.general.string = note.text }]
+      if note.kind == "note" {
+        actions.append(UIAction(title: "Edit", image: UIImage(systemName: "pencil")) { _ in self?.edit(note) })
+      }
+      actions.append(UIAction(title: "Delete", image: UIImage(systemName: "trash"), attributes: .destructive) { _ in self?.delete(note) })
+      return UIMenu(children: actions)
+    }
   }
 }

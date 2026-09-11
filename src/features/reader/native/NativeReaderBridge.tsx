@@ -288,6 +288,10 @@ export function NativeReaderBridge({
         chapters.entries.find(
           (chapter) => chapter.spineItemId === note.anchor.spineItemId,
         )?.title ?? "Unknown chapter",
+      chapterIndex: chapters.entries.findIndex(
+        (chapter) => chapter.spineItemId === note.anchor.spineItemId,
+      ),
+      offset: note.anchor.startOffset,
       page:
         anchor && pagination.status === "ready"
           ? (pagination.anchorPages[note.id] ?? 0)

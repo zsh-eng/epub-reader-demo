@@ -110,16 +110,23 @@ test.beforeEach(async ({ page, context }) => {
     .toBe(true);
 });
 
-test("a warm Library adopts Reader appearance when its native tab becomes active", async ({ page, context }) => {
+test("a warm Library adopts Reader appearance when its native tab becomes active", async ({
+  page,
+  context,
+}) => {
   const { bookId } = await importBook(page);
   await send(page, { type: "lifecycle", active: false });
   const reader = await context.newPage();
   await openLocalBook(reader, bookId!);
-  await readerCommand(reader, { action: "settings", patch: { theme: "flexoki-dark" } });
+  await readerCommand(reader, {
+    action: "settings",
+    patch: { theme: "flexoki-dark" },
+  });
   await expect(reader.locator("html")).toHaveClass(/flexoki-dark/);
   await send(page, { type: "lifecycle", active: true });
   await expect(page.locator("html")).toHaveClass(/flexoki-dark/);
-  const readBackground = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const readBackground = (page: Page) =>
+    page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   expect(await readBackground(page)).toBe(await readBackground(reader));
   await reader.close();
 });
