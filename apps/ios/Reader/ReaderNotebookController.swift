@@ -15,7 +15,8 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   private let footer = UIStackView()
   private let composer = UIView()
   private let table = UITableView(frame: .zero, style: .plain)
-  private let header = UIToolbar()
+  private lazy var header = ReaderSheetHeader(title: "Notebook") { [weak self] in self?.dismissNotebook() }
+  private lazy var orderButton = readerButton("Notebook order", symbol: "slider.horizontal.3") {}
   private var inputHeight: NSLayoutConstraint!
   private var leading: NSLayoutConstraint!
   private var trailing: NSLayoutConstraint!
@@ -26,7 +27,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   private var deletedID = ""
   private var orderByBook = false
   private var headerKey = ""
-  private var compactHeight: CGFloat = 84
+  private var compactHeight: CGFloat = 132
   private var keyboardObserver: NSObjectProtocol?
   private let compact = UISheetPresentationController.Detent.Identifier("composer")
 
@@ -40,7 +41,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   func configureSheet() {
     guard let sheet = sheetPresentationController else { return }
     if #available(iOS 16.0, *) {
-      sheet.detents = [.custom(identifier: compact) { [weak self] _ in self?.compactHeight ?? 84 }, .large()]
+      sheet.detents = [.custom(identifier: compact) { [weak self] _ in self?.compactHeight ?? 132 }, .large()]
       sheet.selectedDetentIdentifier = compact
       sheet.largestUndimmedDetentIdentifier = compact
     } else {
@@ -48,6 +49,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
       sheet.largestUndimmedDetentIdentifier = .medium
     }
     sheet.prefersGrabberVisible = true
+    sheet.preferredCornerRadius = 28
     sheet.prefersScrollingExpandsWhenScrolledToEdge = false
     sheet.prefersEdgeAttachedInCompactHeight = true
     sheet.delegate = self
@@ -55,27 +57,27 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    view.backgroundColor = .clear
+    view.backgroundColor = state?.colors.canvas ?? ReaderNativeColors.paper.canvas
     table.dataSource = self
     table.delegate = self
     table.keyboardDismissMode = .interactive
     table.separatorStyle = .none
     table.backgroundColor = .clear
-    table.register(UITableViewCell.self, forCellReuseIdentifier: "note")
+    table.register(ReaderNoteCell.self, forCellReuseIdentifier: "note")
     table.estimatedRowHeight = 100
     table.rowHeight = UITableView.automaticDimension
     table.accessibilityIdentifier = "reader-notebook-list"
 
     input.delegate = self
     input.backgroundColor = .clear
-    input.font = .preferredFont(forTextStyle: .body)
+    input.font = ReaderFont.body()
     input.adjustsFontForContentSizeCategory = true
     input.textContainerInset = UIEdgeInsets(top: 16, left: 8, bottom: 16, right: 4)
     input.accessibilityLabel = "Write a note"
     input.accessibilityIdentifier = "reader-note-input"
     input.isScrollEnabled = false
     placeholder.text = "Write a note…"
-    placeholder.font = .preferredFont(forTextStyle: .body)
+    placeholder.font = ReaderFont.body()
     placeholder.adjustsFontForContentSizeCategory = true
     placeholder.isUserInteractionEnabled = false
     input.addSubview(placeholder)
@@ -84,10 +86,8 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
       placeholder.leadingAnchor.constraint(equalTo: input.leadingAnchor, constant: 13),
       placeholder.topAnchor.constraint(equalTo: input.topAnchor, constant: 16),
     ])
-    let keyboardBar = UIToolbar()
-    keyboardBar.sizeToFit()
-    keyboardBar.items = [.flexibleSpace(), UIBarButtonItem(title: "Done", primaryAction: UIAction { [weak self] _ in self?.input.resignFirstResponder() })]
-    input.inputAccessoryView = keyboardBar
+    // The sheet has its own keyboard-dismiss action. An input accessory toolbar
+    // would add another material and consume the compact composer's height.
     sendButton.setImage(UIImage(systemName: "arrow.up"), for: .normal)
     sendButton.accessibilityLabel = "Save note"
     sendButton.addTarget(self, action: #selector(save), for: .touchUpInside)
@@ -96,6 +96,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
 
     composer.layer.cornerRadius = 28
     composer.layer.cornerCurve = .continuous
+    composer.layer.borderWidth = 0.5
     composer.addSubview(input)
     composer.addSubview(sendButton)
     for item in [input, sendButton] { item.translatesAutoresizingMaskIntoConstraints = false }
@@ -110,7 +111,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
       sendButton.widthAnchor.constraint(equalToConstant: 44), sendButton.heightAnchor.constraint(equalToConstant: 44),
     ])
 
-    contextLabel.font = .preferredFont(forTextStyle: .caption1)
+    contextLabel.font = ReaderFont.body(12)
     contextLabel.adjustsFontForContentSizeCategory = true
     contextLabel.numberOfLines = 2
     contextButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
@@ -122,7 +123,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     contextButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     contextButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
     errorLabel.numberOfLines = 0
-    errorLabel.font = .preferredFont(forTextStyle: .caption1)
+    errorLabel.font = ReaderFont.body(12)
     errorLabel.adjustsFontForContentSizeCategory = true
     undoButton.setTitle("Note deleted · Undo", for: .normal)
     undoButton.addTarget(self, action: #selector(undo), for: .touchUpInside)
@@ -133,6 +134,9 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     for item in [header, table, footer] {
       view.addSubview(item)
     }
+    header.insertAction(orderButton)
+    let keyboardButton = readerButton("Dismiss keyboard", symbol: "keyboard.chevron.compact.down") { [weak self] in self?.input.resignFirstResponder() }
+    header.insertAction(keyboardButton)
     footer.translatesAutoresizingMaskIntoConstraints = false
     view.keyboardLayoutGuide.followsUndockedKeyboard = true
     leading = footer.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 18)
@@ -153,10 +157,11 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
+    footer.layoutIfNeeded()
     resizeInput()
     let expanded = footer.frame.minY > 125
-    header.frame = CGRect(x: 12, y: 20, width: max(0, view.bounds.width - 24), height: 44)
-    table.frame = CGRect(x: 0, y: 64, width: view.bounds.width, height: max(0, footer.frame.minY - 70))
+    header.frame = CGRect(x: 24, y: 20, width: max(0, view.bounds.width - 48), height: 44)
+    table.frame = CGRect(x: 0, y: 76, width: view.bounds.width, height: max(0, footer.frame.minY - 84))
     table.isHidden = !expanded
     header.isHidden = !expanded
   }
@@ -170,8 +175,11 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     state = next
     guard isViewLoaded else { return }
     overrideUserInterfaceStyle = next.colors.dark ? .dark : .light
+    view.backgroundColor = next.colors.canvas
     view.tintColor = next.colors.accent
     composer.backgroundColor = next.colors.soft
+    composer.layer.borderColor = next.colors.rule.cgColor
+    header.apply(next.colors)
     input.textColor = next.colors.ink
     placeholder.textColor = next.colors.detail
     contextLabel.textColor = next.colors.detail
@@ -203,14 +211,20 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
       if $0.offset != $1.offset { return $0.offset < $1.offset }
       return $0.createdAt > $1.createdAt
     }
-    if rows != sorted {
+    let changed = rows != sorted
+    if changed {
       rows = sorted
       table.reloadData()
+    }
+    if !changed {
+      for case let cell as ReaderNoteCell in table.visibleCells {
+        if let index = table.indexPath(for: cell) { cell.configure(rows[index.row], colors: next.colors, editing: rows[index.row].id == next.draft.editingId) }
+      }
     }
     updateHeader()
     let empty = UILabel()
     empty.text = "A place for what stays with you."
-    empty.font = UIFont(descriptor: UIFont.preferredFont(forTextStyle: .body).fontDescriptor.withDesign(.serif)!, size: 0)
+    empty.font = ReaderFont.literary(22)
     empty.textColor = next.colors.detail
     empty.textAlignment = .center
     empty.numberOfLines = 0
@@ -220,13 +234,18 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   }
 
   private func resizeInput() {
-    guard input.bounds.width > 0 else { return }
-    let measured = input.sizeThatFits(CGSize(width: input.bounds.width, height: .greatestFiniteMagnitude)).height
+    placeholder.isHidden = !input.text.isEmpty
+    // A restored draft arrives before the input's first layout. Measure against
+    // its available width, not the still-zero bounds of that nested text view.
+    let width = view.bounds.width - view.safeAreaInsets.left - view.safeAreaInsets.right - leading.constant * 2 - 56
+    guard width > 0 else { return }
+    let measured = input.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
     let height = min(160, max(56, measured))
     if inputHeight.constant != height { inputHeight.constant = height }
     input.isScrollEnabled = measured > 160
-    placeholder.isHidden = !input.text.isEmpty
-    let desired = footer.systemLayoutSizeFitting(CGSize(width: max(1, view.bounds.width - 36), height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height + 28
+    // Detent heights exclude the bottom safe area; UIKit adds it. Counting it
+    // here would leave a second empty strip above the compact composer.
+    let desired = footer.systemLayoutSizeFitting(CGSize(width: max(1, view.bounds.width - 36), height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height + 32
     if compactHeight != desired {
       compactHeight = desired
       if #available(iOS 16.0, *) { sheetPresentationController?.invalidateDetents() }
@@ -238,6 +257,9 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   }
 
   func focusComposer() { loadViewIfNeeded(); input.becomeFirstResponder() }
+  func textViewDidBeginEditing(_ textView: UITextView) {
+    sheetPresentationController?.animateChanges { self.sheetPresentationController?.selectedDetentIdentifier = .large }
+  }
   func textViewDidChange(_ textView: UITextView) {
     lastInputSequence = command(["action": "draft", "content": textView.text ?? ""])
     resizeInput()
@@ -267,14 +289,12 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     let key = "\(rows.count)|\(orderByBook)"
     guard headerKey != key else { return }
     headerKey = key
-    let title = UIBarButtonItem(title: "Notebook · \(rows.count)", style: .plain, target: nil, action: nil)
-    title.isEnabled = false
-    let order = UIBarButtonItem(image: UIImage(systemName: "arrow.up.arrow.down"), menu: UIMenu(children: [
+    header.setTitle("Notebook · \(rows.count)")
+    orderButton.menu = UIMenu(children: [
       UIAction(title: "By time", state: orderByBook ? .off : .on) { [weak self] _ in self?.changeOrder(false) },
       UIAction(title: "By book", state: orderByBook ? .on : .off) { [weak self] _ in self?.changeOrder(true) },
-    ]))
-    order.accessibilityLabel = "Notebook order"
-    header.items = [title, .flexibleSpace(), order, UIBarButtonItem(title: "Close", primaryAction: UIAction { [weak self] _ in self?.dismissNotebook() })]
+    ])
+    orderButton.showsMenuAsPrimaryAction = true
   }
   private func changeOrder(_ byBook: Bool) {
     let first = table.indexPathsForVisibleRows?.first
@@ -299,18 +319,8 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
   func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
     let note = rows[indexPath.row]
-    let cell = tableView.dequeueReusableCell(withIdentifier: "note", for: indexPath)
-    var content = cell.defaultContentConfiguration()
-    content.text = note.text
-    content.textProperties.numberOfLines = 0
-    content.textProperties.color = state?.colors.ink ?? .label
-    content.secondaryText = [note.quote.isEmpty ? nil : "“\(note.quote)”", note.chapter, note.page > 0 ? "Page \(note.page)" : "Location unavailable"].compactMap { $0 }.joined(separator: "\n")
-    content.secondaryTextProperties.numberOfLines = 4
-    content.secondaryTextProperties.color = state?.colors.detail ?? .secondaryLabel
-    content.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 14, leading: 24, bottom: 14, trailing: 24)
-    cell.contentConfiguration = content
-    cell.backgroundColor = state?.colors.canvas
-    cell.accessoryType = note.page > 0 ? .disclosureIndicator : .none
+    let cell = tableView.dequeueReusableCell(withIdentifier: "note", for: indexPath) as! ReaderNoteCell
+    cell.configure(note, colors: state?.colors ?? .paper, editing: note.id == state?.draft.editingId)
     return cell
   }
   func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {

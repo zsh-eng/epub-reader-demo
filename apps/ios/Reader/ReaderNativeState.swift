@@ -11,6 +11,12 @@ struct ReaderNativeState: Decodable {
   let draft: ReaderNativeDraft
   let notes: [ReaderNativeNote]
   let contents: [ReaderNativeChapter]
+  let themes: [ReaderNativeTheme]
+}
+
+struct ReaderNativeTheme: Decodable {
+  let id, title: String
+  let colors: ReaderNativeColors
 }
 
 struct ReaderNativeDraft: Decodable {

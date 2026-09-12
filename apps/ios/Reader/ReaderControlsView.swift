@@ -4,8 +4,8 @@ import UIKit
 /// space passes touches to the book WebView without resizing its viewport.
 final class ReaderControlsView: UIView {
   var onCommand: (([String: Any]) -> Void)?
-  private let topBar = UIToolbar()
-  private let bottomBar = UIToolbar()
+  private let topBar = UIStackView()
+  private let bottomBar = UIStackView()
   private var state: ReaderNativeState?
   private var sequence = 0
   private var openRequest = 0
@@ -19,10 +19,13 @@ final class ReaderControlsView: UIView {
     super.init(frame: .zero)
     backgroundColor = .clear
     for bar in [topBar, bottomBar] {
-      bar.isTranslucent = true
+      bar.axis = .horizontal
+      bar.alignment = .center
+      bar.spacing = 4
       addSubview(bar)
     }
-    topBar.items = [item("Back to Library", symbol: "chevron.left") { [weak self] in self?.send(["action": "back"]) }]
+    topBar.addArrangedSubview(item("Back to Library", symbol: "chevron.left") { [weak self] in self?.send(["action": "back"]) })
+    topBar.addArrangedSubview(UIView())
     bottomBar.isHidden = true
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -57,6 +60,15 @@ final class ReaderControlsView: UIView {
     topBar.tintColor = next.colors.ink
     bottomBar.tintColor = next.colors.ink
     updateBars(next)
+    for bar in [topBar, bottomBar] {
+      for case let button as UIButton in bar.arrangedSubviews {
+        button.backgroundColor = next.colors.canvas
+        button.layer.cornerRadius = 22
+        button.layer.cornerCurve = .continuous
+        button.layer.borderWidth = 0.5
+        button.layer.borderColor = next.colors.rule.cgColor
+      }
+    }
     notebook?.update(next)
     tools?.update(next)
     if next.error != reportedError {
@@ -84,10 +96,20 @@ final class ReaderControlsView: UIView {
     return sequence
   }
 
-  private func item(_ title: String, symbol: String, action: @escaping () -> Void) -> UIBarButtonItem {
-    let item = UIBarButtonItem(title: title, image: UIImage(systemName: symbol), primaryAction: UIAction { _ in action() })
-    item.accessibilityLabel = title
-    return item
+  private func item(_ title: String, symbol: String, action: @escaping () -> Void) -> UIButton {
+    readerButton(title, symbol: symbol, action: action)
+  }
+
+  private func fill(_ bar: UIStackView, _ views: [UIView]) {
+    for item in bar.arrangedSubviews { bar.removeArrangedSubview(item); item.removeFromSuperview() }
+    for item in views {
+      if item is UIButton { item.setContentHuggingPriority(.required, for: .horizontal) }
+      bar.addArrangedSubview(item)
+    }
+    let spaces = views.filter { !($0 is UIButton) }
+    if let first = spaces.first {
+      for space in spaces.dropFirst() { space.widthAnchor.constraint(equalTo: first.widthAnchor).isActive = true }
+    }
   }
 
   private func updateBars(_ state: ReaderNativeState) {
@@ -105,24 +127,24 @@ final class ReaderControlsView: UIView {
       UIAction(title: title, attributes: state.statusPending ? .disabled : [], state: state.readingStatus == value ? .on : .off) { [weak self] _ in self?.send(["action": "reading-status", "status": value]) }
     }
     let remove = UIAction(title: "Remove from Library", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.confirmRemove() }
-    let more = UIBarButtonItem(image: UIImage(systemName: "ellipsis"), menu: UIMenu(children: [info, UIMenu(title: "Reading status", children: statuses), remove]))
-    more.accessibilityLabel = "Book actions"
-    topBar.items = [back, .flexibleSpace(), contents, appearance, more]
+    let more = item("Book actions", symbol: "ellipsis") {}
+    more.menu = UIMenu(children: [info, UIMenu(title: "Reading status", children: statuses), remove])
+    more.showsMenuAsPrimaryAction = true
+    fill(topBar, [back, UIView(), contents, appearance, more])
     topBar.accessibilityLabel = state.title
     let previous = item("Previous page", symbol: "chevron.left") { [weak self] in self?.send(["action": "previous"]) }
     previous.isEnabled = state.canGoPrevious
     let next = item("Next page", symbol: "chevron.right") { [weak self] in self?.send(["action": "next"]) }
     next.isEnabled = state.canGoNext
     let pageTitle = state.settings.showPageNumbers ? "\(state.page) / \(state.totalPages)" : "Reading position"
-    let page = UIBarButtonItem(title: state.startLabel.isEmpty ? pageTitle : state.startLabel,
-                              primaryAction: UIAction { [weak self] _ in
+    let page = readerButton(state.startLabel.isEmpty ? pageTitle : state.startLabel) { [weak self] in
       if state.startLabel.isEmpty { self?.showTools(.contents) }
       else { self?.send(["action": "start-reading"]) }
-    })
+    }
     page.isEnabled = !state.startPending
     page.accessibilityLabel = state.startLabel.isEmpty ? "Page \(state.page) of \(state.totalPages). Contents" : state.startLabel
     let note = item("Write a note", symbol: "square.and.pencil") { [weak self] in self?.showNotebook(focus: false) }
-    bottomBar.items = [previous, next, .flexibleSpace(), page, .flexibleSpace(), note]
+    fill(bottomBar, [previous, next, UIView(), page, UIView(), note])
   }
 
   private func confirmRemove() {
@@ -170,11 +192,11 @@ final class ReaderControlsView: UIView {
     guard presenter.presentedViewController == nil else { return }
     let controller = ReaderToolsController(mode: mode, state: state, command: { [weak self] in self?.send($0) ?? 0 })
     tools = controller
-    let navigation = UINavigationController(rootViewController: controller)
-    navigation.modalPresentationStyle = .pageSheet
-    navigation.sheetPresentationController?.detents = [.medium(), .large()]
-    navigation.sheetPresentationController?.prefersGrabberVisible = true
-    presentedSheet = navigation
-    presenter.present(navigation, animated: true)
+    controller.modalPresentationStyle = .pageSheet
+    controller.sheetPresentationController?.detents = [.medium(), .large()]
+    controller.sheetPresentationController?.prefersGrabberVisible = true
+    controller.sheetPresentationController?.preferredCornerRadius = 28
+    presentedSheet = controller
+    presenter.present(controller, animated: true)
   }
 }

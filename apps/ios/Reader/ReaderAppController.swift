@@ -26,6 +26,7 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
   private var selected = 0
   private var active = true
   private var started = false
+  private var starting = false
   private var pendingURLs: [URL] = []
   private var inFlight = ""
   private var importedBook = ""
@@ -95,8 +96,11 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
   }
 
   private func start() {
+    guard !started, !starting else { return }
+    starting = true
     runtime.start { [weak self] result in
       guard let self else { return }
+      self.starting = false
       switch result {
       case .success:
         guard !self.started else { return }
@@ -212,9 +216,7 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
       guard screen === screens[0], let id = message["id"] as? String, id == inFlight else { return }
       if message["type"] as? String == "import-error" {
         status.isHidden = true
-        alert("Could not import book", message["error"] as? String ?? "Select the EPUB again.", retry: { [weak self] in
-          self?.inFlight = ""; self?.deliverImport()
-        })
+        importFailed(id, reason: message["error"] as? String ?? "Select the EPUB again.")
         return
       }
       do { try runtime.finishImport(id) }
@@ -257,7 +259,9 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     picker.delegate = self
     present(picker, animated: true)
   }
-  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { stage(urls) }
+  func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+    controller.dismiss(animated: true) { [weak self] in self?.stage(urls) }
+  }
 
   func open(_ url: URL) {
     guard started else { pendingURLs.append(url); return }
@@ -272,7 +276,10 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     showStatus("Adding books…", canOpen: false)
     runtime.stage(urls) { [weak self] result in
       guard let self else { return }
-      if case .failure(let error) = result { self.alert("Could not add books", error.localizedDescription) }
+      if case .failure(let error) = result {
+        self.status.isHidden = true
+        self.alert("Could not add books", error.localizedDescription)
+      }
       self.deliverImport()
     }
   }
@@ -284,6 +291,22 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
       showStatus("Importing \(next.name)…", canOpen: false)
       library.send(next.message)
     } catch { alert("Could not read imports", error.localizedDescription) }
+  }
+  private func importFailed(_ id: String, reason: String) {
+    let alert = UIAlertController(title: "Could not import book", message: reason, preferredStyle: .alert)
+    alert.addAction(UIAlertAction(title: "Try again", style: .default) { [weak self] _ in
+      self?.inFlight = ""; self?.deliverImport()
+    })
+    alert.addAction(UIAlertAction(title: "Skip this file", style: .cancel) { [weak self] _ in
+      guard let self else { return }
+      do {
+        // Only the private staged copy is removed; the selected original stays.
+        try self.runtime.finishImport(id)
+        self.inFlight = ""
+        self.deliverImport()
+      } catch { self.alert("Could not finish import", error.localizedDescription) }
+    })
+    present(alert, animated: true)
   }
   private func showStatus(_ text: String, canOpen: Bool) {
     statusLabel.text = text

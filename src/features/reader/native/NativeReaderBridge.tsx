@@ -56,6 +56,17 @@ export function NativeReaderBridge({
     () => readNativeAppearance(state.settings.theme),
     [state.settings.theme],
   );
+  const themes = useMemo(
+    () =>
+      [
+        ["flexoki-light", "Flexoki Light"],
+        ["flexoki-dark", "Flexoki Dark"],
+        ["light", "Light"],
+        ["dark", "Dark"],
+        ["night", "Night"],
+      ].map(([id, title]) => ({ id, title, colors: readNativeAppearance(id) })),
+    [],
+  );
   const resolver = useMemo(
     () =>
       createNoteLocationResolver(
@@ -266,6 +277,7 @@ export function NativeReaderBridge({
     chapter: chapters.entries[navigation.currentChapterIndex]?.title ?? "",
     settings: state.settings,
     colors,
+    themes,
     contents,
     startLabel: statusPrompt?.actionLabel ?? "",
     startPending: statusPrompt?.isPending ?? false,

@@ -35,7 +35,9 @@ final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKS
     handler.target = self
     configuration.userContentController.add(handler, name: "reader")
     web.navigationDelegate = self
+    #if DEBUG
     web.isInspectable = true
+    #endif
     web.allowsLinkPreview = false
     web.scrollView.contentInsetAdjustmentBehavior = .never
     web.scrollView.bounces = controls == nil
