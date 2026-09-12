@@ -1,7 +1,7 @@
 import UIKit
 
 /// CSS is authoritative. This cache preserves the first frame before WebKit is
-/// ready, including across the Expo-to-Swift app upgrade.
+/// ready, including across app upgrades.
 final class ReaderAppearance {
   private(set) var colors: ReaderNativeColors
   init() {

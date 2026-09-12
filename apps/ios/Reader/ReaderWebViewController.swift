@@ -24,7 +24,7 @@ final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKS
     self.origin = origin
     self.colors = colors
     let configuration = WKWebViewConfiguration()
-    // Preserve the Expo WKWebView's persistent store and exact HTTP origin.
+    // Preserve the installed library's persistent store and exact HTTP origin.
     configuration.websiteDataStore = .default()
     let data = (try? JSONSerialization.data(withJSONObject: initialState, options: [.fragmentsAllowed])) ?? Data("null".utf8)
     let script = "window.__readerInitialState = \(String(decoding: data, as: UTF8.self));"
