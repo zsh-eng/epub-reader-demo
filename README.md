@@ -5,6 +5,10 @@ Modern Reader App
 See [Architecture and performance principles](docs/ARCHITECTURE.md) for the
 current design decisions and validation approach.
 
+The iOS app is a Swift/UIKit host for the shared web Reader. See
+[iOS setup](apps/ios/README.md) and the [iOS handover](docs/IOS_HANDOVER.md).
+Run `bun run mobile:ios --device <simulator-UUID>` from this directory.
+
 Roadmap (v0.1):
 
 - [x] Read books

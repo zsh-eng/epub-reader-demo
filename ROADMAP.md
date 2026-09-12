@@ -5,47 +5,22 @@ meant to be a working roadmap, not a promise that every idea below should ship.
 
 ## Current Direction
 
-The near-term mobile strategy should be:
+As of 12 September 2026, the iOS app is a Swift/UIKit host in `apps/ios`, with
+WKWebView for the existing Reader, Library, Highlights, and Activity. It replaces
+the initial Expo shell. See [iOS handover](docs/IOS_HANDOVER.md).
 
-1. Make the current PWA feel better on phones.
-2. Extract the sync and storage contracts that a native client would need.
-3. Create an Expo app as a native shell around the current web reader.
-4. Replace shell screens with native screens gradually.
-5. Decide later whether the reader itself remains WebView-based or becomes a
-   native reader surface.
-
-Slapping the current PWA into an Expo app is a good first mobile spike because
-it proves packaging, auth, routing, safe areas, file import, and store-style
-constraints quickly. It should not be treated as the final architecture. The
-reader depends heavily on browser APIs, DOM layout, CSS, selection behavior,
-IndexedDB, and web workers, so a full native reader is a larger project.
+Keep domain storage and EPUB rendering in the web app. Use native presentation
+and text input where they improve sheet movement, keyboard behavior, and file
+access. Native sheet content keeps Reader's web colors, typography, and cards.
+Account access and sync follow the local reading experience. Android is a
+separate future platform decision.
 
 ## Should Sync Come Before Mobile?
 
-Build the new sync data model/package before serious native app work, but do
-not let it block a small Expo WebView spike.
-
-Recommended sequencing:
-
-1. **Expo shell spike**
-   Prove that the existing app can run inside an Expo wrapper, authenticate,
-   open the library, open a book, and survive basic app background/foreground
-   transitions.
-
-2. **Sync package and platform contracts**
-   Extract the reusable sync model, HLC handling, remote adapter, storage
-   adapter interfaces, file storage interfaces, and device/session identity
-   seams. This should happen before implementing native Library, Highlights,
-   Sessions, or Settings screens.
-
-3. **Native shell screens**
-   Build native Library, Continue Reading, Highlights, Sessions, Settings, and
-   file import around the shared sync/domain layer.
-
-4. **Reader decision**
-   Keep the web reader in a WebView if the goal is a reliable mobile app soon.
-   Rebuild the reader natively only if the project is ready to spend real time
-   on native text layout, EPUB rendering, highlight selection, and pagination.
+Sync does not block the current Swift host. Its controls call the existing web
+domain operations through a versioned message bridge. Native persistence and
+account contracts below remain future work; moving the host does not require
+moving IndexedDB or implementing a second domain model.
 
 ## Platform Architecture Work
 
@@ -93,10 +68,11 @@ boundary and a completion gate; it does not authorize an unmeasured rewrite.
 
 ## Mobile App Work
 
-These milestones require one iOS and one Android device for acceptance. The
-WebView shell can start before the native storage adapter is complete.
+The local iOS foundation is implemented; remaining acceptance work below also
+covers future account, storage, and Android capabilities. Do not treat the
+combined milestones as proof that those later features have shipped.
 
-- [ ] Build an Expo WebView shell: authenticate, open Library/book, route a deep
+- [ ] Complete the native WebView shell: authenticate, open Library/book, route a deep
       link and handle Android back. Decide remote versus bundled web content and
       the development origin. Gate: relaunch and cached offline book reopen.
 - [ ] Add safe-area top/bottom chrome. Gate: no clipped controls in portrait,
@@ -118,7 +94,7 @@ WebView shell can start before the native storage adapter is complete.
       behavior without copying secrets through general WebView messages.
 - [ ] Add best-effort background transfer with foreground recovery. Gate: OS
       deferral/termination leaves resumable intent; UI never promises immediate
-      background completion. Expo BackgroundTask scheduling is OS controlled.
+      background completion. iOS background-task scheduling is OS controlled.
 - [ ] Add optional haptics for page turns and explicit controls. Gate: one event
       per completed action; disabled preference and unsupported device are quiet.
 - [ ] Add orientation, keep-awake and brightness controls owned by the Reader
@@ -188,6 +164,11 @@ Notetaking flow
 - [x] Make app feel more native to iOS
 - [x] Sync lab
 
+- [ ] Review what's the policy for figuring out the reading usage (what are the thresholds
+      we set, etc.)
+- [ ] Nice, more beautiful sync states - persistent UI for showing the syncing of books, etc.
+- [ ] Add time read for the day / for the book more prominently somewhere?
+- [ ] BUG: Still have bug for freezing when network connection is bad (but not nothing)
 - [ ] Benchmark binary encoding/table IDs against current JSON using representative
       Book/note/highlight data. Gate: compressed bytes, codec time and bundle size
       justify a change; define immutable IDs, schema versions and unknown-ID
@@ -403,15 +384,15 @@ that an unprovided problem EPUB is fixed.
 Research must produce a fixture, comparison or runnable proof that informs a
 specific implementation decision. These groups cover the original topic list.
 
-- [ ] **Expo/React Native, Router, native SDKs and WebView bridge:** deliver the
-      first mobile shell above and a versioned request/reply bridge for auth,
+- [ ] **Swift/UIKit, native SDKs and WebView bridge:** extend the
+      mobile shell above and its versioned request/reply bridge for auth,
       file references, deep links and Reader commands. Include picker/sharing,
       secure store, lifecycle/background tasks, haptics, orientation, brightness
       and safe-area device checks. Notifications require a defined user-facing
       event before implementation. Gate: cold/warm launch and import on iOS and
       Android with no binary payload or secret in general bridge messages.
-      References: [Expo WebView](https://docs.expo.dev/versions/latest/sdk/webview/),
-      [BackgroundTask](https://docs.expo.dev/versions/latest/sdk/background-task/).
+      References: [WKWebView](https://developer.apple.com/documentation/webkit/wkwebview),
+      [BackgroundTasks](https://developer.apple.com/documentation/backgroundtasks).
       Background execution is deferred by the OS and can stop after user exit;
       foreground recovery is a requirement, not a fallback promise.
 - [ ] **RxDB replication, Merkle trees, HLC, Loro/Yjs/Automerge and CRDT papers:**
