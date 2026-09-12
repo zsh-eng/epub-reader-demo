@@ -146,6 +146,7 @@ final class ReaderNotebookSurface: UIView, UIGestureRecognizerDelegate {
   @objc private func drag(_ pan: UIPanGestureRecognizer) {
     switch pan.state {
     case .began:
+      ReaderHaptics.prepare()
       stopAnimation(); dragHeight = sheet.bounds.height
     case .changed:
       let proposed = dragHeight - pan.translation(in: self).y

@@ -26,5 +26,13 @@ input. Small versioned commands cross the `reader` WebKit message handler;
 EPUB bytes are read from the app's private import directory through loopback.
 Account access and sync remain out of scope for this build.
 
-Native DM Sans and EB Garamond fonts come from the same Fontsource packages as
-the web app. Their OFL licenses are included in `Resources/Fonts`.
+Native controls use the web app's CSS palette, Lucide artwork, DM Sans, and
+reader font previews (Lora, EB Garamond, Inter, and the system Iowan/Mono fonts).
+Licenses are included in `Resources/Fonts`. Run `bun scripts/ios-assets.ts` to
+regenerate the checked-in icon assets from the installed Lucide package.
+
+Swift recreates the web header, page ruler, navigation, notes, and settings
+content. UIKit supplies text editing, keyboard layout, scrolling, context menus,
+and file pickers. The notebook is an embedded panel with compact, half, and full
+positions; it does not resize the book's WebView. Only settled ruler changes
+cross the bridge. Haptic feedback can be disabled in Settings.

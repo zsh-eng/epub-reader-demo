@@ -23,6 +23,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   private var inputHeight: NSLayoutConstraint!
   private var rows: [ReaderNativeNote] = []
   private var lastInputSequence = 0
+  private var submittedInput = ""
   private var pendingSaveSequence = 0
   private var pendingUndoSequence = 0
   private var deletedID = ""
@@ -155,8 +156,9 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     sendButton.configuration?.background.cornerRadius = 14
     sendButton.configuration?.background.backgroundInsets = NSDirectionalEdgeInsets(top: 8, leading: 4, bottom: 8, trailing: 4)
     sendButton.configuration?.baseForegroundColor = next.colors.canvas
-    if next.acknowledged >= lastInputSequence && input.markedTextRange == nil && input.text != next.draft.content {
-      input.text = next.draft.content
+    if next.acknowledged >= lastInputSequence && input.markedTextRange == nil {
+      if input.text != next.draft.content { input.text = next.draft.content }
+      submittedInput = next.draft.content
     }
     if next.acknowledged >= pendingSaveSequence { pendingSaveSequence = 0 }
     input.isEditable = next.draft.ready
@@ -227,7 +229,7 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   func endEditing() { input.resignFirstResponder() }
   func close() { input.resignFirstResponder(); _ = command(["action": "close"]); surface.close(); onVisibilityChange?(false) }
   func textViewDidChange(_ textView: UITextView) {
-    if textView.markedTextRange == nil { lastInputSequence = command(["action": "draft", "content": textView.text ?? ""]) }
+    if textView.markedTextRange == nil { submitInput() }
     resizeInput()
     refreshSendButton()
   }
@@ -235,8 +237,14 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
     surface.isTyping = false
     // Commit the final IME composition before the ordered persistence barrier.
     textView.unmarkText()
-    lastInputSequence = command(["action": "draft", "content": textView.text ?? ""])
+    submitInput()
     _ = command(["action": "close"])
+  }
+  private func submitInput() {
+    let text = input.text ?? ""
+    guard pendingSaveSequence == 0, text != submittedInput else { return }
+    submittedInput = text
+    lastInputSequence = command(["action": "draft", "content": text])
   }
   func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
     state?.draft.saving == false && pendingSaveSequence == 0
@@ -248,6 +256,8 @@ final class ReaderNotebookController: UIViewController, UITextViewDelegate, UITa
   @objc private func escape() { if input.isFirstResponder { input.resignFirstResponder() } else { close() } }
   @objc private func save() {
     guard sendButton.isEnabled else { return }
+    input.unmarkText()
+    submitInput()
     pendingSaveSequence = command(["action": "save"])
     lastInputSequence = pendingSaveSequence
     refreshSendButton()

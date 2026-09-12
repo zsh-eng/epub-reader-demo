@@ -88,11 +88,13 @@ final class ReaderNoteCell: UITableViewCell {
     let translation = pan.translation(in: contentView).x
     switch pan.state {
     case .began:
+      ReaderHaptics.prepare()
       let current = card.layer.presentation()?.affineTransform().tx ?? card.transform.tx
       animator?.stopAnimation(true); animator = nil; armed = false
       card.transform = CGAffineTransform(translationX: current, y: 0)
-      pan.setTranslation(CGPoint(x: current, y: 0), in: contentView)
+      pan.setTranslation(CGPoint(x: current + translation, y: 0), in: contentView)
     case .changed:
+      if translation < 0 && !editable { card.transform = .identity; cue.alpha = 0; armed = false; return }
       let magnitude = abs(translation)
       let distance = min(magnitude, 120) + max(0, magnitude - 120) * 0.15
       card.transform = CGAffineTransform(translationX: translation < 0 ? -distance : distance, y: 0)
@@ -107,7 +109,7 @@ final class ReaderNoteCell: UITableViewCell {
       if ready && !armed { ReaderHaptics.selection() }
       armed = ready
     case .ended:
-      let action = armed ? (translation < 0 ? onEdit : onDelete) : nil
+      let action = abs(translation) >= 72 ? (translation < 0 ? (editable ? onEdit : nil) : onDelete) : nil
       reset(velocity: pan.velocity(in: contentView).x)
       action?()
     case .cancelled, .failed: reset(velocity: 0)

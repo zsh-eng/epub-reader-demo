@@ -17,6 +17,7 @@ type NativeMessage = {
   duplicate?: boolean;
   error?: string;
   state?: NativeReaderState;
+  recent?: { id: string; title: string; activity: string; cover: string };
 };
 interface NativeReaderState {
   session: string;
@@ -258,6 +259,15 @@ test("native background saves the reading position and note draft before reopen"
   await expect
     .poll(async () => (await readerState(page))?.draft.content)
     .toBe("A draft saved when the native app goes to sleep.");
+  await page.goto("/");
+  await expect
+    .poll(
+      async () =>
+        (await messages(page))
+          .filter((message) => message.type === "library-state")
+          .at(-1)?.recent,
+    )
+    .toMatchObject({ id: bookId, title: SAMPLE_BOOK_TITLE });
 });
 
 test("a highlight saved in native mode remains visible after reopening", async ({

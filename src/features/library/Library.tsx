@@ -52,7 +52,7 @@ export function Library() {
   const { data: booksData } = useBooksWithStatuses();
   const recentReading = useMemo(
     () =>
-      booksData
+      isNativeApp && booksData
         ? findMostRecentlyReadBook(booksData.books, booksData.lastReadByBook)
         : null,
     [booksData],

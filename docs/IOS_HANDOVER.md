@@ -2,59 +2,64 @@
 
 12 September 2026 · branch `codex/expo-reader`.
 
-## Decisions and implementation
+## Decisions and changes
 
-- Replaced Expo/React Native with a regular Xcode app in `apps/ios`. The native
-  target uses Swift, UIKit, WebKit, and Network, with no third-party native
-  dependencies. Bun still builds the shared web assets and invokes Xcode.
-- Kept EPUB rendering, pagination, selection, Library, Highlights, Activity,
-  and domain storage in the existing web app. Swift owns navigation, search,
-  file import, app/scene lifecycle, settings, and Reader controls.
-- Kept `app.zsheng.reader.mobile`, `http://127.0.0.1:18765`, and WebKit's default
-  persistent data store. The installed app was upgraded in place.
-- Native sheets own detents and keyboard behavior. Their content uses Reader's
-  CSS colors, DM Sans / EB Garamond, inset note cards, and Type / Layout / Theme
-  controls. Theme previews also get their colors from CSS. Plain themed buttons
-  replace the glass Reader toolbars; system file pickers and context menus keep
-  their standard iOS presentation.
-- The notebook has a compact input detent and a large notes detent. One native
-  input stays mounted. Focusing expands the sheet; its composer follows the
-  keyboard and widens. Compact mode leaves the book interactive. Native note
-  actions use the existing ordered, acknowledged web commands and local drafts.
-- Native startup coalesces repeated scene activation. Invalid imports have
-  Retry and Skip actions; skipping removes only the staged copy. Account access,
-  sync, and native database migration remain deferred.
-- External book/file opens wait for the current Reader's draft-write
-  acknowledgement before releasing its WebView. A failed save keeps that Reader
-  available. Ordinary Back already flushes through the web domain.
+- Removed the remaining Expo workspace, generated files, ignore rule, and obsolete
+  handover. `apps/ios` is a regular Swift/UIKit/WebKit app. It has no Expo,
+  React Native, CocoaPods, or Swift package dependency.
+- Used the web app as the visual specification: the original CSS colors, DM Sans,
+  reader fonts, Lucide icons, pill search, numbered navigation, circular resume
+  card, bookmark ribbon, page ruler, inset note cards, and Type/Layout/Theme
+  layouts. Library, Highlights, and Sessions retain their web content.
+- Kept native controls custom styled. UIKit supplies keyboard/text editing,
+  scrolling, context menus, file pickers, and the outer presentation of tool
+  sheets. Reader toolbars do not use Liquid Glass.
+- Replaced the modal notebook with an embedded panel. It has input-only, half,
+  and full positions. One native text view stays mounted and follows the system
+  keyboard guide; focusing the compact input does not expand the notes. The input
+  widens while typing. Opening the notebook hides the page footer. The book's
+  WebView stays the same size throughout.
+- The ruler uses native horizontal scrolling, momentum, interruption, and edge
+  bounce. Native previews update the footer; only the settled page crosses the
+  bridge. Slow movement gets light page feedback; fast movement gets chapter/end
+  feedback. Settings has a haptic switch. Cancellation restores the source page.
+- Notes use native horizontal gesture recognition with a 72 pt action threshold,
+  circular edit/delete cues, and spring return. Vertical movement belongs to
+  scrolling. Long press has native Copy/Edit/Delete actions. Delete retains Undo.
+  Detent changes have accessible actions as an alternative to dragging.
+- The ribbon creates/removes a durable bookmark through the existing web domain.
+  Ordered commands protect drafts, editing, save, navigation, and app background
+  writes. Native text composition is committed before save or focus loss; an
+  already submitted value is not sent again when closing after a save.
+- Kept the app ID `app.zsheng.reader.mobile`, origin `http://127.0.0.1:18765`,
+  persistent WebKit store, local imports, and reading data. No storage migration.
+  Account access and sync remain deferred.
 
-## Verification
+## Verification and limits
 
-- Website build and lint pass. Full client suite: **566 tests passed**.
-- **7 mobile browser tests passed** with the direct WebKit message handler.
-  Coverage includes import/errors, origin rejection, search/navigation, theme
-  propagation, checkpoints/drafts, highlights, note CRUD/Undo, command ordering,
-  and stable page geometry. These tests do not execute UIKit.
-- Xcode simulator builds pass. The documented Bun release command builds the
-  bundled web resources and the native app, then installs over the current app.
-- Before/after IndexedDB record hashes matched for all **3 books, 6 files,
-  1 highlight, 3 notes, 1 draft, and 3 checkpoints** at the migration boundary.
-- Simulator checks: book reopen at the same page, page turns, compact/large
-  notebook, software keyboard, save/edit with a separate compose draft,
-  delete/Undo, note-to-page navigation, draft restoration after relaunch, native
-  theme cards and warm Library theme refresh, Files picker, duplicate import,
-  a mixed valid/invalid import batch, Library search, new-book Start reading,
-  and portrait/landscape safe areas and page turns. The staged import queue is
-  empty after acknowledgement.
-- A native deep link switched from The Time Machine to Alice and back while an
-  unsent draft was present; the draft was retained. A focused browser assertion
-  also confirms the close acknowledgement follows the committed draft write.
-- Fixed a first-layout defect found during relaunch testing: a restored draft
-  must be measured from available width before the nested text view has bounds.
-  The compact height excludes the bottom safe area, which UIKit adds itself.
-
-The simulator library contains the original three books plus the Alice fixture,
-with a saved Swift notebook test note and an unsent test draft in The Time Machine.
+- Website build and lint pass. Full client suite: **566 tests**.
+- Xcode **Release** build passed and was installed over the existing app in the
+  iPhone 17 simulator (iOS 26.3). The standalone app launched successfully.
+- **8 mobile bridge browser tests** cover imports and errors, search/navigation,
+  appearance, reading checkpoints, drafts, highlights, note CRUD/Undo, command
+  ordering, and bookmark/page recovery across reopen. The Library resume card
+  also receives the saved book. These tests do not execute UIKit.
+- A browser reference test captures the original Library, Reader, tools, and
+  appearance panels using the local EPUB fixture.
+- Simulator checks cover the restored navigation and resume card, native Type /
+  Layout / Theme controls, theme propagation, compact/expanded notes, software
+  keyboard positioning, edit/save with keyboard retained, delete/Undo, and
+  reopening at the saved page. The temporary note from this pass was removed;
+  the original notes remain. Pride and Prejudice is at page 273 of 772.
+- No implementation blocker remains. **Physical gesture and haptic validation is
+  still open.** Automated pointer drags behaved as taps; temporary native logging
+  showed no pan-recognizer callback for a handle drag. Detent actions were checked
+  through accessibility. No claim is made that finger drag, fling interruption,
+  or tactile feedback has been validated. Temporary logging was removed.
+- The Mac locked during the final pass. Further interactive simulator checks,
+  including the compact Library search while scrolling, could not be completed.
+- iPad layouts, accessibility text-size extremes, VoiceOver reading order, and
+  physical-device signing/distribution need a device pass. Android is not included.
 
 ## Run and review
 
@@ -62,26 +67,22 @@ with a saved Swift notebook test note and an unsent test draft in The Time Machi
 bun run mobile:ios:release --device 00467167-67A0-4C89-8C70-C91576052A9E
 ```
 
-No Metro, Vite server, TestFlight, or network connection is needed to run the
-installed app. See [build instructions](../apps/ios/README.md) for Xcode/device use.
+The installed app runs from its bundled assets. It needs no development server,
+Metro, TestFlight, or network connection. See [iOS setup](../apps/ios/README.md).
 
 Suggested review order:
 
-1. `apps/ios/Reader/ReaderWebViewController.swift`, `ReaderAppController.swift`,
-   and `SceneDelegate.swift`: direct bridge, navigation, storage identity, lifecycle.
-2. `ReaderNotebookController.swift`, `ReaderNoteCell.swift`, `ReaderSheetHeader.swift`,
-   `ReaderToolsController.swift`, and `ReaderThemeCell.swift`: native sheet content.
-3. `src/features/native/runtime.ts`, `src/features/reader/native/NativeReaderBridge.tsx`,
-   and `test/e2e/mobile.spec.ts`: the shared web contract and regression checks.
-4. `scripts/ios.ts`, `apps/ios/Reader.xcodeproj`, and `vite.mobile.config.ts`: packaging.
+1. `ReaderChrome.swift`, `ReaderMenuController.swift`, `ReaderToolsController.swift`,
+   and `ReaderThemeCell.swift`: visual identity and controls.
+2. `ReaderNotebookSurface.swift`, `ReaderNotebookController.swift`, and
+   `ReaderNoteCell.swift`: detents, keyboard, draft ordering, and note actions.
+3. `ReaderScrubber.swift` and `ReaderUI.swift`: gesture handling and haptics.
+4. `ReaderAppController.swift`, `ReaderLibraryHeader.swift`, and
+   `src/features/native/NativeLibraryState.tsx`: Library and resume navigation.
+5. `src/features/reader/native/NativeReaderBridge.tsx`, `test/e2e/mobile.spec.ts`,
+   and `test/e2e/reader-design-reference.spec.ts`: domain boundary and checks.
 
-Implementation checkpoints: `b0b9860` (Swift host), `58bcdfc` (themed native
-content), and `a00d8f5` (draft writes during external navigation).
-
-## Remaining checks
-
-No implementation blocker remains. Physical iPhone signing/distribution, iPad
-layout, VoiceOver/Dynamic Type extremes, and extended gesture/memory testing need
-device validation. Simulator accessibility actions verified detent changes;
-finger-drag feel still needs a physical-device pass. Android is not implemented.
-These checks are separate from account/sync work.
+Swift files above are in `apps/ios/Reader`. Main checkpoints: `d3b33e7`
+(Expo cleanup), `fd861f8` (visual identity and native interactions). A final
+checkpoint records the validation fixes and this handover. The unrelated
+`ROADMAP.md` edit is left untouched.

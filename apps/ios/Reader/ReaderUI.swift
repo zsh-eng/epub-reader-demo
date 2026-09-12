@@ -82,12 +82,15 @@ func readerCard(_ view: UIView, colors: ReaderNativeColors, fill: CGFloat = 0.2,
 /// Optional, short feedback is generated locally; a web render or bridge round
 /// trip cannot delay the tactile response. No haptic represents an unsaved write.
 enum ReaderHaptics {
+  private static let selectionFeedback = UISelectionFeedbackGenerator()
+  private static let boundaryFeedback = UIImpactFeedbackGenerator(style: .light)
   static var enabled: Bool {
     get { UserDefaults.standard.object(forKey: "reader.haptics") as? Bool ?? true }
     set { UserDefaults.standard.set(newValue, forKey: "reader.haptics") }
   }
-  static func selection() { if enabled { UISelectionFeedbackGenerator().selectionChanged() } }
-  static func boundary() { if enabled { UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.65) } }
+  static func prepare() { if enabled { selectionFeedback.prepare(); boundaryFeedback.prepare() } }
+  static func selection() { if enabled { selectionFeedback.selectionChanged() } }
+  static func boundary() { if enabled { boundaryFeedback.impactOccurred(intensity: 0.65) } }
 }
 
 /// The web switch's small visual track with native activation and accessibility.

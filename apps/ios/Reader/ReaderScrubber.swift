@@ -11,6 +11,7 @@ final class ReaderScrubber: UIControl, UIScrollViewDelegate {
   private var lastFeedbackTime: CFTimeInterval = 0
   private var applying = false
   private var adjusting = false
+  private var sourcePage = 1
   var onPreview: ((Int) -> Void)?
   var onCommit: ((Int) -> Void)?
   var displayedPage: Int { min(total, max(1, Int((scroll.contentOffset.x / 6 + 1).rounded()))) }
@@ -42,6 +43,7 @@ final class ReaderScrubber: UIControl, UIScrollViewDelegate {
     drawPosition()
   }
   func update(page: Int, total: Int, chapters: [Int], colors: ReaderNativeColors, ready: Bool) {
+    sourcePage = page
     let changed = self.total != max(1, total)
     self.total = max(1, total)
     drawing.colors = colors
@@ -65,6 +67,7 @@ final class ReaderScrubber: UIControl, UIScrollViewDelegate {
     accessibilityValue = "Page \(displayedPage) of \(total)"
   }
   func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+    ReaderHaptics.prepare()
     adjusting = false
     lastFeedbackPage = displayedPage
   }
@@ -85,7 +88,12 @@ final class ReaderScrubber: UIControl, UIScrollViewDelegate {
       ReaderHaptics.selection(); lastFeedbackTime = now
     }
   }
-  func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) { if !decelerate { commit() } }
+  func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+    if scrollView.panGestureRecognizer.state == .cancelled || scrollView.panGestureRecognizer.state == .failed {
+      cancel(at: sourcePage); onPreview?(sourcePage); return
+    }
+    if !decelerate { commit() }
+  }
   func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) { commit() }
   func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) { adjusting = false }
   private func commit() {
