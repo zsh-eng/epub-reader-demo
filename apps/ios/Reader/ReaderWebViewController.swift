@@ -104,6 +104,15 @@ final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKS
     if ready { send(["type": "search", "query": value]) }
   }
 
+  func prepareToLeave(_ completion: @escaping (Bool) -> Void) {
+    guard let controls else { completion(true); return }
+    view.isUserInteractionEnabled = false
+    controls.prepareToLeave { [weak self] saved in
+      self?.view.isUserInteractionEnabled = true
+      completion(saved)
+    }
+  }
+
   func send(_ message: [String: Any]) {
     var versioned = message
     versioned["version"] = 1

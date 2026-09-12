@@ -415,6 +415,15 @@ test("native commands reject stale sessions and invalid settings, and commit ord
   await expect
     .poll(async () => (await readerState(page))?.draft.content)
     .toBe("Latest");
+  // The Swift host can release this WebView only after close is acknowledged.
+  // At that point the latest queued text must already be durable, without polling.
+  await readerCommand(page, { action: "close" });
+  expect(
+    await page.evaluate(async (modulePath) => {
+      const { syncV2Db: db } = await import(/* @vite-ignore */ modulePath);
+      return (await db.noteDrafts.toArray())[0]?.content;
+    }, DB_MODULE),
+  ).toBe("Latest");
   await readerCommand(page, { action: "save" });
   await expect
     .poll(async () => (await readerState(page))?.notes[0]?.text)

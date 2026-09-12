@@ -14,6 +14,7 @@ final class ReaderControlsView: UIView {
   private var notebook: ReaderNotebookController?
   private var tools: ReaderToolsController?
   private weak var presentedSheet: UIViewController?
+  private var pendingLeave: (sequence: Int, complete: (Bool) -> Void)?
 
   init() {
     super.init(frame: .zero)
@@ -49,6 +50,8 @@ final class ReaderControlsView: UIView {
   func update(json: String) {
     guard let data = json.data(using: .utf8), let next = try? JSONDecoder().decode(ReaderNativeState.self, from: data) else { return }
     if state?.session != next.session {
+      pendingLeave?.complete(false)
+      pendingLeave = nil
       presentedSheet?.dismiss(animated: false)
       notebook = nil
       tools = nil
@@ -83,6 +86,20 @@ final class ReaderControlsView: UIView {
       openRequest = next.openRequest
       showNotebook(focus: true)
     }
+    if let pending = pendingLeave, next.acknowledged >= pending.sequence {
+      pendingLeave = nil
+      presentedSheet?.view.isUserInteractionEnabled = true
+      pending.complete(next.error.isEmpty)
+    }
+  }
+
+  /// External navigation must not release WebKit while its debounced draft is
+  /// still pending. The existing ordered close command acknowledges the write.
+  func prepareToLeave(_ complete: @escaping (Bool) -> Void) {
+    guard state != nil else { complete(true); return }
+    presentedSheet?.view.endEditing(true)
+    presentedSheet?.view.isUserInteractionEnabled = false
+    pendingLeave = (send(["action": "close"]), complete)
   }
 
   @discardableResult private func send(_ command: [String: Any]) -> Int {

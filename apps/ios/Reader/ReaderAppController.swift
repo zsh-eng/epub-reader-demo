@@ -167,8 +167,15 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
   }
 
   private func openReader(_ path: String, state: Any = NSNull()) {
+    if let current = reader {
+      current.prepareToLeave { [weak self, weak current] saved in
+        guard let self, current === self.reader, saved else { return }
+        self.closeReader()
+        self.openReader(path, state: state)
+      }
+      return
+    }
     view.endEditing(true)
-    closeReader()
     let controller = ReaderWebViewController(path: path, origin: runtime.origin, colors: appearance.colors, initialState: state)
     controller.onMessage = { [weak self] in self?.receive($0, $1) }
     reader = controller
@@ -271,7 +278,14 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     if path.hasPrefix("/reader/"), path.count > 8 { openReader(path) }
   }
   private func stage(_ urls: [URL]) {
-    closeReader()
+    if let current = reader {
+      current.prepareToLeave { [weak self, weak current] saved in
+        guard let self, current === self.reader, saved else { return }
+        self.closeReader()
+        self.stage(urls)
+      }
+      return
+    }
     select(0)
     showStatus("Adding books…", canOpen: false)
     runtime.stage(urls) { [weak self] result in
