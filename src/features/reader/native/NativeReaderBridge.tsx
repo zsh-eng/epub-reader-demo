@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { createBookmark, deleteNote, getBookNotes } from "@/data/notes";
+import { noteKeys } from "@/hooks/use-notes-query";
 import { postNative } from "@/features/native/runtime";
 import { readNativeAppearance } from "@/features/native/appearance";
 import type { NoteTarget } from "@/types/note";
@@ -44,6 +47,7 @@ export function NativeReaderBridge({
   statusPrompt,
 }: Props) {
   const notes = useReaderNotes(bookId);
+  const client = useQueryClient();
   const readingStatus = useReadingStatus(bookId);
   const { deleteBook } = useSync();
   const deletedNotes = useRef(new Set<string>());
@@ -168,6 +172,26 @@ export function NativeReaderBridge({
       case "previous":
         actions.prevSpread();
         break;
+      case "bookmark": {
+        const target = resolver.capture(pagination.spread);
+        if (!target)
+          throw new Error("Wait for the page before adding a bookmark.");
+        const stored = await getBookNotes(bookId);
+        const existing = stored.find(
+          (note) =>
+            note.kind === "bookmark" &&
+            (pagination.anchorPages[note.id] === navigation.currentPage ||
+              (note.anchor.spineItemId === target.anchor.spineItemId &&
+                note.anchor.startOffset === target.anchor.startOffset)),
+        );
+        if (existing) await deleteNote(existing.id);
+        else await createBookmark(bookId, target.anchor);
+        await client.invalidateQueries({ queryKey: noteKeys.book(bookId) });
+        break;
+      }
+      case "dismiss-status":
+        statusPrompt?.onDismiss();
+        break;
       case "start-reading":
         statusPrompt?.onConfirm();
         break;
@@ -267,6 +291,19 @@ export function NativeReaderBridge({
     acknowledged,
     openRequest,
     chromeVisible,
+    isBookmarked: notes.notes.some(
+      (note) =>
+        note.kind === "bookmark" &&
+        pagination.anchorPages[note.id] === navigation.currentPage,
+    ),
+    currentChapterIndex: navigation.currentChapterIndex,
+    currentChapterEndIndex:
+      pagination.spread?.chapterIndexEnd ?? navigation.currentChapterIndex,
+    spine: chapters.entries.map((chapter, index) => ({
+      title: chapter.title,
+      index,
+      page: navigation.chapterStartPages[index] ?? 0,
+    })),
     title: state.book?.title ?? "Reader",
     author: state.book?.author ?? "",
     page: navigation.currentPage,
@@ -280,6 +317,7 @@ export function NativeReaderBridge({
     themes,
     contents,
     startLabel: statusPrompt?.actionLabel ?? "",
+    startTitle: statusPrompt?.title ?? "",
     startPending: statusPrompt?.isPending ?? false,
     readingStatus: readingStatus.status ?? "",
     statusPending: readingStatus.isLoading || readingStatus.isUpdating,
@@ -296,6 +334,8 @@ export function NativeReaderBridge({
       text: note.kind === "note" ? note.content : "Bookmark",
       kind: note.kind,
       quote: note.kind === "note" ? (note.quote?.text ?? "") : "",
+      quoteColor:
+        note.kind === "note" ? (note.quote?.color ?? "invisible") : "invisible",
       chapter:
         chapters.entries.find(
           (chapter) => chapter.spineItemId === note.anchor.spineItemId,

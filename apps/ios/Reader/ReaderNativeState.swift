@@ -3,15 +3,16 @@ import UIKit
 /// Presentation snapshots contain no database handles or EPUB bytes. The web
 /// domain remains the sole writer; sequence acknowledgements protect native input.
 struct ReaderNativeState: Decodable {
-  let session, bookId, title, author, chapter, startLabel, error, readingStatus: String
-  let acknowledged, openRequest, page, totalPages: Int
-  let chromeVisible, canGoNext, canGoPrevious, paginationReady, startPending, statusPending: Bool
+  let session, bookId, title, author, chapter, startLabel, startTitle, error, readingStatus: String
+  let acknowledged, openRequest, page, totalPages, currentChapterIndex, currentChapterEndIndex: Int
+  let chromeVisible, isBookmarked, canGoNext, canGoPrevious, paginationReady, startPending, statusPending: Bool
   let settings: ReaderNativeSettings
   let colors: ReaderNativeColors
   let draft: ReaderNativeDraft
   let notes: [ReaderNativeNote]
   let contents: [ReaderNativeChapter]
   let themes: [ReaderNativeTheme]
+  let spine: [ReaderNativeSpineChapter]
 }
 
 struct ReaderNativeTheme: Decodable {
@@ -25,7 +26,7 @@ struct ReaderNativeDraft: Decodable {
 }
 
 struct ReaderNativeNote: Decodable, Equatable {
-  let id, text, kind, quote, chapter: String
+  let id, text, kind, quote, quoteColor, chapter: String
   let page, chapterIndex, offset: Int
   let createdAt: Double
 }
@@ -35,7 +36,7 @@ struct ReaderNativeChapter: Decodable {
   let depth, page: Int
 }
 
-struct ReaderNativeSettings: Decodable {
+struct ReaderNativeSettings: Decodable, Equatable {
   let theme, fontFamily, textAlign: String
   let fontSize, lineHeight: Double
   let publisherBookStylingEnabled, matchPublisherBodyTextSize: Bool
@@ -45,6 +46,8 @@ struct ReaderNativeSettings: Decodable {
 struct ReaderNativeColors: Decodable {
   let background, foreground, secondary, muted, primary, border: String
   let dark: Bool
+  let marks: [String: String]
+  func mark(_ name: String) -> UIColor { marks[name].map { UIColor(readerHex: $0) } ?? detail }
   var canvas: UIColor { UIColor(readerHex: background) }
   var ink: UIColor { UIColor(readerHex: foreground) }
   var soft: UIColor { UIColor(readerHex: secondary) }
@@ -62,3 +65,8 @@ extension UIColor {
 }
 
 typealias ReaderNativeCommand = ([String: Any]) -> Int
+
+struct ReaderNativeSpineChapter: Decodable {
+  let title: String
+  let index, page: Int
+}

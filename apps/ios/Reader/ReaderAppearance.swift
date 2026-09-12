@@ -24,36 +24,19 @@ final class ReaderAppearance {
 extension ReaderNativeColors {
   // Existing Flexoki Light tokens in src/index.css; web snapshots replace this
   // fresh-install fallback as soon as the first screen loads.
-  static let paper = ReaderNativeColors(background: "#fffcf0", foreground: "#100f0f", secondary: "#f1efe4", muted: "#6e6d68", primary: "#100f0f", border: "#e7e5da", dark: false)
+  static let paper = ReaderNativeColors(background: "#fffcf0", foreground: "#100f0f", secondary: "#f1efe4", muted: "#6e6d68", primary: "#100f0f", border: "#e7e5da", dark: false, marks: [:])
   var rule: UIColor { UIColor(readerHex: border) }
 }
 
 enum ReaderFont {
   static func body(_ size: CGFloat = 16, weight: UIFont.Weight = .regular) -> UIFont {
-    let name = weight == .regular ? "DMSans-Regular" : "DMSans-SemiBold"
+    let name = weight == .regular ? "DMSans-Regular" : weight == .medium ? "DMSans-Medium" : "DMSans-SemiBold"
     return UIFontMetrics(forTextStyle: .body).scaledFont(for: UIFont(name: name, size: size) ?? .systemFont(ofSize: size, weight: weight))
   }
-  static func literary(_ size: CGFloat = 22) -> UIFont {
-    UIFontMetrics(forTextStyle: .title2).scaledFont(for: UIFont(name: "EBGaramond-Regular", size: size) ?? UIFont(descriptor: UIFont.systemFont(ofSize: size).fontDescriptor.withDesign(.serif)!, size: size))
+  static func literary(_ size: CGFloat = 22) -> UIFont { reading("garamond", size: size) }
+  static func reading(_ family: String, size: CGFloat) -> UIFont {
+    let names = ["lora": "Lora-Regular", "garamond": "EBGaramond-Regular", "inter": "Inter-Regular", "iowan": "IowanOldStyle-Roman", "monospace": "Menlo-Regular"]
+    let font = names[family].flatMap { UIFont(name: $0, size: size) } ?? .systemFont(ofSize: size)
+    return UIFontMetrics(forTextStyle: .body).scaledFont(for: font)
   }
-}
-
-/// Plain, themed buttons keep the web app's quiet chrome. UIKit still supplies
-/// accessibility, context menus, and touch tracking without a glass toolbar.
-func readerButton(_ title: String, symbol: String? = nil, action: @escaping () -> Void) -> UIButton {
-  let button = UIButton(type: .system)
-  var config = UIButton.Configuration.plain()
-  config.title = symbol == nil ? title : nil
-  config.image = symbol.flatMap { UIImage(systemName: $0) }
-  config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 18, weight: .regular)
-  config.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
-  config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-    var attributes = attributes; attributes.font = ReaderFont.body(14); return attributes
-  }
-  button.configuration = config
-  button.accessibilityLabel = title
-  button.addAction(UIAction { _ in action() }, for: .touchUpInside)
-  button.widthAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-  button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
-  return button
 }

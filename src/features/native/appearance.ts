@@ -15,7 +15,9 @@ export function readNativeAppearance(theme?: string) {
   canvas.width = canvas.height = 1;
   const context = canvas.getContext("2d")!;
   const color = (name: string) => {
-    context.fillStyle = style.getPropertyValue(name).trim();
+    context.fillStyle =
+      style.getPropertyValue(name).trim() ||
+      style.getPropertyValue("--muted-foreground").trim();
     context.fillRect(0, 0, 1, 1);
     const values = context.getImageData(0, 0, 1, 1).data;
     return `#${[...values]
@@ -30,6 +32,19 @@ export function readNativeAppearance(theme?: string) {
     muted: color("--muted-foreground"),
     primary: color("--primary"),
     border: color("--border"),
+    marks: Object.fromEntries(
+      [
+        "destructive",
+        "yellow-secondary",
+        "green-secondary",
+        "blue-secondary",
+        "magenta-secondary",
+        "purple-secondary",
+        "cyan-secondary",
+        "orange-secondary",
+        "red-secondary",
+      ].map((name) => [name, color(`--${name}`)]),
+    ),
   };
   if (theme) element.remove();
   const rgb = colors.background

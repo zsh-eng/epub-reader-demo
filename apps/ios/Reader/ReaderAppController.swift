@@ -3,21 +3,16 @@ import UniformTypeIdentifiers
 
 /// Owns native navigation, import delivery, and the foreground web screen. The
 /// Reader gets a fixed safe-area viewport; sheet/keyboard motion cannot resize it.
-final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocumentPickerDelegate {
+final class ReaderAppController: UIViewController, UIDocumentPickerDelegate {
   private let runtime: ReaderRuntime
   private let appearance = ReaderAppearance()
-  private let titles = ["Library", "Highlights", "Activity", "Settings"]
+  private let titles = ["Library", "Highlights", "Sessions", "Settings"]
   private let paths = ["/", "/highlights", "/reading-sessions"]
-  private let symbols = ["books.vertical", "highlighter", "chart.bar", "gearshape"]
-  private let header = UIStackView()
-  private let titleLabel = UILabel()
-  private let search = UISearchBar()
-  private let tabs = UIStackView()
+  private let header = ReaderLibraryHeader()
   private let content = UIView()
   private let rootStack = UIStackView()
   private let status = UIStackView()
   private let statusLabel = UILabel()
-  private lazy var importButton = readerButton("Add books", symbol: "plus") { [weak self] in self?.pickBooks() }
   private lazy var openImportButton = readerButton("Open") { [weak self] in self?.openImportedBook() }
   private lazy var dismissStatusButton = readerButton("Dismiss import status", symbol: "xmark") { [weak self] in self?.status.isHidden = true }
   private lazy var settings = ReaderSettingsController(runtime: runtime)
@@ -30,7 +25,7 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
   private var pendingURLs: [URL] = []
   private var inFlight = ""
   private var importedBook = ""
-  private var searchValues = [0: "", 1: ""]
+  private var recentBook: ReaderRecentBook?
 
   init(runtime: ReaderRuntime) {
     self.runtime = runtime
@@ -41,33 +36,16 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
 
   override func viewDidLoad() {
     super.viewDidLoad()
-    titleLabel.font = ReaderFont.literary(30)
-    titleLabel.adjustsFontForContentSizeCategory = true
-    header.axis = .horizontal
-    header.alignment = .center
-    header.isLayoutMarginsRelativeArrangement = true
-    header.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 4, leading: 24, bottom: 0, trailing: 12)
-    header.addArrangedSubview(titleLabel)
-    header.addArrangedSubview(importButton)
-    importButton.setContentHuggingPriority(.required, for: .horizontal)
-    search.delegate = self
-    search.searchBarStyle = .minimal
-    search.searchTextField.font = ReaderFont.body()
-    search.searchTextField.accessibilityIdentifier = "library-search"
-    search.autocapitalizationType = .none
-    tabs.axis = .horizontal
-    tabs.distribution = .fillEqually
-    for index in titles.indices {
-      let button = readerButton(titles[index]) { [weak self] in self?.select(index) }
-      button.configuration?.image = UIImage(systemName: symbols[index])
-      button.configuration?.imagePlacement = .top
-      button.configuration?.imagePadding = 4
-      button.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 10, leading: 0, bottom: 6, trailing: 0)
-      button.accessibilityIdentifier = "tab-\(titles[index].lowercased())"
-      tabs.addArrangedSubview(button)
-    }
+    header.onSearch = { [weak self] query in self?.screens[0]?.search(query) }
+    header.onNavigation = { [weak self] in self?.showNavigation() }
+    settings.onBack = { [weak self] in self?.select(0) }
     rootStack.axis = .vertical
-    for item in [header, search, content, tabs] { rootStack.addArrangedSubview(item) }
+    rootStack.addArrangedSubview(content)
+    rootStack.addSubview(header)
+    header.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      header.leadingAnchor.constraint(equalTo: rootStack.leadingAnchor), header.trailingAnchor.constraint(equalTo: rootStack.trailingAnchor), header.topAnchor.constraint(equalTo: rootStack.topAnchor),
+    ])
     view.addSubview(rootStack)
     rootStack.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
@@ -88,7 +66,7 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     status.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
       status.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16), status.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
-      status.bottomAnchor.constraint(equalTo: tabs.topAnchor, constant: -12),
+      status.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12),
     ])
     status.isHidden = true
     applyAppearance()
@@ -119,6 +97,7 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     if let screen = screens[index] { return screen }
     let screen = ReaderWebViewController(path: paths[index], origin: runtime.origin, colors: appearance.colors)
     screen.onMessage = { [weak self] in self?.receive($0, $1) }
+    if index == 0 { screen.onScroll = { [weak self] offset in self?.header.updateScroll(offset) } }
     screens[index] = screen
     mount(screen, in: content)
     return screen
@@ -139,21 +118,13 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     guard started, reader == nil else { return }
     view.endEditing(true)
     selected = index
-    titleLabel.text = titles[index]
-    importButton.isHidden = index != 0
-    search.isHidden = index > 1
-    search.text = searchValues[index] ?? ""
-    search.placeholder = index == 0 ? "Search books or authors" : "Search highlights"
+    header.isHidden = index != 0
     if index < 3 { _ = screen(index) }
     else if settings.parent == nil { mount(settings, in: content) }
     settings.view.isHidden = index != 3
     for (key, screen) in screens {
       screen.view.isHidden = key != index
       screen.setActive(key == index && active)
-    }
-    for (key, item) in tabs.arrangedSubviews.enumerated() {
-      item.tintColor = key == index ? appearance.colors.ink : appearance.colors.detail
-      item.accessibilityTraits = key == index ? [.button, .selected] : [.button]
     }
     settings.apply(appearance.colors)
   }
@@ -207,6 +178,9 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
 
   private func receive(_ screen: ReaderWebViewController, _ message: [String: Any]) {
     switch message["type"] as? String {
+    case "library-state":
+      guard screen === screens[0] else { return }
+      recentBook = (message["recent"] as? [String: Any]).flatMap(ReaderRecentBook.init)
     case "appearance":
       guard screen === reader || (reader == nil && screen === screens[selected]), appearance.update(message) else { return }
       applyAppearance()
@@ -241,23 +215,27 @@ final class ReaderAppController: UIViewController, UISearchBarDelegate, UIDocume
     overrideUserInterfaceStyle = colors.dark ? .dark : .light
     view.backgroundColor = colors.canvas
     view.tintColor = colors.ink
-    titleLabel.textColor = colors.ink
-    search.searchTextField.textColor = colors.ink
-    search.searchTextField.backgroundColor = colors.soft
+    header.apply(colors)
     status.backgroundColor = colors.soft
     statusLabel.textColor = colors.ink
     for screen in screens.values { screen.apply(colors) }
     reader?.apply(colors)
     if settings.isViewLoaded { settings.apply(colors) }
-    for (key, item) in tabs.arrangedSubviews.enumerated() { item.tintColor = key == selected ? colors.ink : colors.detail }
     setNeedsStatusBarAppearanceUpdate()
   }
 
-  func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-    searchValues[selected] = searchText
-    screens[selected]?.search(searchText)
+  private func showNavigation() {
+    guard presentedViewController == nil else { return }
+    let icons = ["library", "highlighter", "clock-3", "settings"]
+    let items = titles.enumerated().map { index, title in
+      ReaderMenuController.Item(title: title, icon: icons[index], selected: index == selected, action: { [weak self] in self?.select(index) })
+    }
+    let menu = ReaderMenuController(title: "", items: items, colors: appearance.colors, utilities: [
+      .init(title: "Theme", icon: appearance.colors.dark ? "moon" : "sun", action: { [weak self] in self?.screens[0]?.send(["type": "toggle-appearance"]) }),
+      .init(title: "Add book", icon: "book-plus", action: { [weak self] in self?.pickBooks() }),
+    ], recent: recentBook, onContinue: { [weak self] id in self?.openReader("/reader/" + id) })
+    present(menu, animated: true)
   }
-  func searchBarSearchButtonClicked(_ searchBar: UISearchBar) { searchBar.resignFirstResponder() }
 
   private func pickBooks() {
     guard presentedViewController == nil, reader == nil else { return }

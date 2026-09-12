@@ -3,11 +3,12 @@ import WebKit
 
 /// One web screen, one lifecycle owner. Hidden tabs stay warm in the default
 /// persistent data store; only the foreground screen counts reading time.
-final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler {
+final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKScriptMessageHandler, UIScrollViewDelegate {
   let path: String
   let origin: String
   let web: WKWebView
   var onMessage: ((ReaderWebViewController, [String: Any]) -> Void)?
+  var onScroll: ((CGFloat) -> Void)?
   private(set) var ready = false
   private var active = false
   private var query = ""
@@ -41,6 +42,7 @@ final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKS
     web.allowsLinkPreview = false
     web.scrollView.contentInsetAdjustmentBehavior = .never
     web.scrollView.bounces = controls == nil
+    if controls == nil { web.scrollView.delegate = self }
     controls?.onCommand = { [weak self] message in
       guard let self else { return }
       if message["type"] as? String == "back" { self.onMessage?(self, message) }
@@ -103,6 +105,7 @@ final class ReaderWebViewController: UIViewController, WKNavigationDelegate, WKS
     query = value
     if ready { send(["type": "search", "query": value]) }
   }
+  func scrollViewDidScroll(_ scrollView: UIScrollView) { onScroll?(scrollView.contentOffset.y) }
 
   func prepareToLeave(_ completion: @escaping (Bool) -> Void) {
     guard let controls else { completion(true); return }

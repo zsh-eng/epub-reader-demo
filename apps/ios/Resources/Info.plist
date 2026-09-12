@@ -54,6 +54,9 @@
 		<string>Fonts/eb-garamond-400.ttf</string>
 		<string>Fonts/dm-sans-600.ttf</string>
 		<string>Fonts/dm-sans-400.ttf</string>
+		<string>Fonts/dm-sans-500.ttf</string>
+		<string>Fonts/lora-400.ttf</string>
+		<string>Fonts/inter-400.ttf</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>

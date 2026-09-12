@@ -1,5 +1,6 @@
 import { useAppShellReady } from "@/components/AppShell";
 import { isNativeApp } from "@/features/native/runtime";
+import { NativeLibraryState } from "@/features/native/NativeLibraryState";
 import { useNativeSearch } from "@/features/native/use-native-search";
 import { BookCard } from "./BookCard";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,10 @@ import {
   prefetchReaderBooks,
 } from "@/features/reader/data/reader-cache/prefetch";
 import type { Book } from "@/lib/db";
-import { compareBooksByDateAddedDesc } from "@/lib/library-sort";
+import {
+  compareBooksByDateAddedDesc,
+  findMostRecentlyReadBook,
+} from "@/lib/library-sort";
 import { warmPaginationWorker } from "@/lib/pagination-v2/worker/pagination-worker-service";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,6 +50,13 @@ export function Library() {
   const queryClient = useQueryClient();
 
   const { data: booksData } = useBooksWithStatuses();
+  const recentReading = useMemo(
+    () =>
+      booksData
+        ? findMostRecentlyReadBook(booksData.books, booksData.lastReadByBook)
+        : null,
+    [booksData],
+  );
   const { deleteBook: syncDeleteBook } = useSync();
 
   useEffect(() => {
@@ -255,10 +266,11 @@ export function Library() {
       <main
         className={
           isNativeApp
-            ? "px-5 pt-6 pb-6"
+            ? "px-4 pt-[173px] pb-6"
             : "px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10"
         }
       >
+        {isNativeApp && <NativeLibraryState recent={recentReading} />}
         <div
           ref={searchAnchorRef}
           className="h-px shrink-0"

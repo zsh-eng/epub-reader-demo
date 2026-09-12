@@ -1,15 +1,14 @@
 import UIKit
 
-/// UIKit owns control hit testing, menus, sheets, and keyboard layout. Empty
-/// space passes touches to the book WebView without resizing its viewport.
+/// Native controls keep the web design. Empty space passes to WKWebView; neither
+/// the chrome nor the notebook changes the book's layout or pagination viewport.
 final class ReaderControlsView: UIView {
   var onCommand: (([String: Any]) -> Void)?
-  private let topBar = UIStackView()
-  private let bottomBar = UIStackView()
+  private let header = ReaderHeaderView()
+  private let footer = ReaderFooterView()
   private var state: ReaderNativeState?
   private var sequence = 0
   private var openRequest = 0
-  private var barState = ""
   private var reportedError = ""
   private var notebook: ReaderNotebookController?
   private var tools: ReaderToolsController?
@@ -18,199 +17,128 @@ final class ReaderControlsView: UIView {
 
   init() {
     super.init(frame: .zero)
-    backgroundColor = .clear
-    for bar in [topBar, bottomBar] {
-      bar.axis = .horizontal
-      bar.alignment = .center
-      bar.spacing = 4
-      addSubview(bar)
-    }
-    topBar.addArrangedSubview(item("Back to Library", symbol: "chevron.left") { [weak self] in self?.send(["action": "back"]) })
-    topBar.addArrangedSubview(UIView())
-    bottomBar.isHidden = true
+    addSubview(header); addSubview(footer)
+    header.onBack = { [weak self] in self?.send(["action": "back"]) }
+    header.onTools = { [weak self] in self?.showMenu() }
+    header.onBookmark = { [weak self] in self?.send(["action": "bookmark"]) }
+    footer.command = { [weak self] in self?.send($0) ?? 0 }
+    footer.onContents = { [weak self] in self?.showTools(.contents) }
+    footer.onNote = { [weak self] in self?.showNotebook(focus: false) }
+    header.isHidden = true; footer.isHidden = true
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
   override func layoutSubviews() {
     super.layoutSubviews()
-    topBar.frame = CGRect(x: 8, y: 0, width: max(0, bounds.width - 16), height: 48)
-    bottomBar.frame = CGRect(x: 8, y: max(0, bounds.height - 48), width: max(0, bounds.width - 16), height: 48)
+    header.frame = CGRect(x: 0, y: 0, width: bounds.width, height: 98)
+    footer.frame = CGRect(x: 0, y: max(0, bounds.height - 234), width: bounds.width, height: 234)
   }
-
   override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
     let hit = super.hitTest(point, with: event)
     return hit === self ? nil : hit
   }
-
   override func didMoveToWindow() {
     super.didMoveToWindow()
     if window == nil { presentedSheet?.dismiss(animated: false) }
   }
-
   func update(json: String) {
     guard let data = json.data(using: .utf8), let next = try? JSONDecoder().decode(ReaderNativeState.self, from: data) else { return }
     if state?.session != next.session {
-      pendingLeave?.complete(false)
-      pendingLeave = nil
+      pendingLeave?.complete(false); pendingLeave = nil
       presentedSheet?.dismiss(animated: false)
-      notebook = nil
-      tools = nil
-      sequence = 0
-      openRequest = 0
+      notebook?.close()
+      notebook?.willMove(toParent: nil); notebook?.view.removeFromSuperview(); notebook?.removeFromParent()
+      notebook = nil; tools = nil; sequence = 0; openRequest = 0
     }
+    let changedVisibility = state?.chromeVisible != next.chromeVisible || state?.isBookmarked != next.isBookmarked
     state = next
     overrideUserInterfaceStyle = next.colors.dark ? .dark : .light
-    topBar.tintColor = next.colors.ink
-    bottomBar.tintColor = next.colors.ink
-    updateBars(next)
-    for bar in [topBar, bottomBar] {
-      for case let button as UIButton in bar.arrangedSubviews {
-        button.backgroundColor = next.colors.canvas
-        button.layer.cornerRadius = 22
-        button.layer.cornerCurve = .continuous
-        button.layer.borderWidth = 0.5
-        button.layer.borderColor = next.colors.rule.cgColor
-      }
+    header.update(next); footer.update(next)
+    header.isHidden = false; footer.isHidden = notebook?.isOpen == true
+    let visible = next.chromeVisible || !next.startLabel.isEmpty
+    header.isUserInteractionEnabled = visible || next.isBookmarked
+    footer.isUserInteractionEnabled = visible
+    UIView.animate(withDuration: changedVisibility && !UIAccessibility.isReduceMotionEnabled ? 0.24 : 0, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+      self.header.transform = CGAffineTransform(translationX: 0, y: visible ? 0 : next.isBookmarked ? -80 : -104)
+      self.header.alpha = visible || next.isBookmarked ? 1 : 0
+      self.footer.transform = CGAffineTransform(translationX: 0, y: visible ? 0 : 240)
+      self.footer.alpha = visible ? 1 : 0
     }
-    notebook?.update(next)
-    tools?.update(next)
+    notebook?.update(next); tools?.update(next)
     if next.error != reportedError {
       reportedError = next.error
-      if !next.error.isEmpty, let presenter, presenter.presentedViewController == nil {
+      if !next.error.isEmpty, let presenter, presenter.presentedViewController == nil, notebook?.isOpen != true {
         let alert = UIAlertController(title: "Could not complete the action", message: next.error, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        presenter.present(alert, animated: true)
+        alert.addAction(UIAlertAction(title: "OK", style: .default)); presenter.present(alert, animated: true)
       }
     }
-    if next.openRequest > openRequest {
-      openRequest = next.openRequest
-      showNotebook(focus: true)
-    }
+    if next.openRequest > openRequest { openRequest = next.openRequest; showNotebook(focus: true) }
     if let pending = pendingLeave, next.acknowledged >= pending.sequence {
-      pendingLeave = nil
-      presentedSheet?.view.isUserInteractionEnabled = true
+      pendingLeave = nil; presentedSheet?.view.isUserInteractionEnabled = true
       pending.complete(next.error.isEmpty)
     }
   }
-
-  /// External navigation must not release WebKit while its debounced draft is
-  /// still pending. The existing ordered close command acknowledges the write.
   func prepareToLeave(_ complete: @escaping (Bool) -> Void) {
-    guard state != nil else { complete(true); return }
+    guard let state else { complete(true); return }
+    footer.scrubber.cancel(at: state.page)
+    notebook?.endEditing()
     presentedSheet?.view.endEditing(true)
     presentedSheet?.view.isUserInteractionEnabled = false
     pendingLeave = (send(["action": "close"]), complete)
   }
-
   @discardableResult private func send(_ command: [String: Any]) -> Int {
     guard let state else {
       if command["action"] as? String == "back" { onCommand?(["type": "back"]) }
       return sequence
     }
     sequence += 1
-    onCommand?(["type": "reader-command", "bookId": state.bookId,
-                "session": state.session, "sequence": sequence, "command": command])
+    onCommand?(["type": "reader-command", "bookId": state.bookId, "session": state.session, "sequence": sequence, "command": command])
     return sequence
   }
-
-  private func item(_ title: String, symbol: String, action: @escaping () -> Void) -> UIButton {
-    readerButton(title, symbol: symbol, action: action)
-  }
-
-  private func fill(_ bar: UIStackView, _ views: [UIView]) {
-    for item in bar.arrangedSubviews { bar.removeArrangedSubview(item); item.removeFromSuperview() }
-    for item in views {
-      if item is UIButton { item.setContentHuggingPriority(.required, for: .horizontal) }
-      bar.addArrangedSubview(item)
-    }
-    let spaces = views.filter { !($0 is UIButton) }
-    if let first = spaces.first {
-      for space in spaces.dropFirst() { space.widthAnchor.constraint(equalTo: first.widthAnchor).isActive = true }
-    }
-  }
-
-  private func updateBars(_ state: ReaderNativeState) {
-    let key = "\(state.session)|\(state.chromeVisible)|\(state.page)|\(state.totalPages)|\(state.canGoNext)|\(state.canGoPrevious)|\(state.startLabel)|\(state.startPending)|\(state.settings.showPageNumbers)|\(state.readingStatus)|\(state.statusPending)"
-    guard key != barState else { return }
-    barState = key
-    let visible = state.chromeVisible || !state.startLabel.isEmpty
-    topBar.isHidden = !visible
-    bottomBar.isHidden = !visible
-    let back = item("Back to Library", symbol: "chevron.left") { [weak self] in self?.send(["action": "back"]) }
-    let contents = item("Contents", symbol: "list.bullet") { [weak self] in self?.showTools(.contents) }
-    let appearance = item("Reading appearance", symbol: "textformat.size") { [weak self] in self?.showTools(.appearance) }
-    let info = UIAction(title: "About this book", image: UIImage(systemName: "info.circle")) { [weak self] _ in self?.showTools(.book) }
-    let statuses = [("want-to-read", "Want to Read"), ("reading", "Reading"), ("finished", "Finished"), ("dnf", "Did Not Finish")].map { value, title in
-      UIAction(title: title, attributes: state.statusPending ? .disabled : [], state: state.readingStatus == value ? .on : .off) { [weak self] _ in self?.send(["action": "reading-status", "status": value]) }
-    }
-    let remove = UIAction(title: "Remove from Library", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.confirmRemove() }
-    let more = item("Book actions", symbol: "ellipsis") {}
-    more.menu = UIMenu(children: [info, UIMenu(title: "Reading status", children: statuses), remove])
-    more.showsMenuAsPrimaryAction = true
-    fill(topBar, [back, UIView(), contents, appearance, more])
-    topBar.accessibilityLabel = state.title
-    let previous = item("Previous page", symbol: "chevron.left") { [weak self] in self?.send(["action": "previous"]) }
-    previous.isEnabled = state.canGoPrevious
-    let next = item("Next page", symbol: "chevron.right") { [weak self] in self?.send(["action": "next"]) }
-    next.isEnabled = state.canGoNext
-    let pageTitle = state.settings.showPageNumbers ? "\(state.page) / \(state.totalPages)" : "Reading position"
-    let page = readerButton(state.startLabel.isEmpty ? pageTitle : state.startLabel) { [weak self] in
-      if state.startLabel.isEmpty { self?.showTools(.contents) }
-      else { self?.send(["action": "start-reading"]) }
-    }
-    page.isEnabled = !state.startPending
-    page.accessibilityLabel = state.startLabel.isEmpty ? "Page \(state.page) of \(state.totalPages). Contents" : state.startLabel
-    let note = item("Write a note", symbol: "square.and.pencil") { [weak self] in self?.showNotebook(focus: false) }
-    fill(bottomBar, [previous, next, UIView(), page, UIView(), note])
-  }
-
-  private func confirmRemove() {
-    guard let presenter, let state else { return }
-    let alert = UIAlertController(title: "Remove \(state.title)?", message: "This removes the book and its notes from this library.", preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-    alert.addAction(UIAlertAction(title: "Remove", style: .destructive) { [weak self] _ in self?.send(["action": "remove-book"]) })
-    presenter.present(alert, animated: true)
-  }
-
   private var presenter: UIViewController? {
     var responder: UIResponder? = self
-    while let next = responder?.next {
-      if let controller = next as? UIViewController { return controller }
-      responder = next
-    }
+    while let next = responder?.next { if let controller = next as? UIViewController { return controller }; responder = next }
     return nil
   }
-
   private func showNotebook(focus: Bool) {
-    guard let state, let presenter else { return }
-    if let notebook, notebook.presentingViewController != nil {
-      if focus { notebook.focusComposer() }
-      return
+    guard let state, let presenter, presenter.presentedViewController == nil else { return }
+    if notebook == nil {
+      let controller = ReaderNotebookController(command: { [weak self] in self?.send($0) ?? 0 })
+      notebook = controller
+      controller.onVisibilityChange = { [weak self] open in
+        self?.footer.isHidden = open
+        self?.footer.accessibilityElementsHidden = open
+      }
+      presenter.addChild(controller)
+      presenter.view.addSubview(controller.view)
+      controller.view.translatesAutoresizingMaskIntoConstraints = false
+      NSLayoutConstraint.activate([
+        controller.view.leadingAnchor.constraint(equalTo: presenter.view.leadingAnchor), controller.view.trailingAnchor.constraint(equalTo: presenter.view.trailingAnchor), controller.view.topAnchor.constraint(equalTo: presenter.view.topAnchor), controller.view.bottomAnchor.constraint(equalTo: presenter.view.bottomAnchor),
+      ])
+      controller.didMove(toParent: presenter)
     }
-    guard presenter.presentedViewController == nil else { return }
-    let controller = notebook ?? ReaderNotebookController(command: { [weak self] in self?.send($0) ?? 0 })
-    notebook = controller
-    controller.update(state)
-    controller.modalPresentationStyle = .pageSheet
-    controller.configureSheet()
-    presentedSheet = controller
-    presenter.present(controller, animated: true) {
-      if focus { controller.focusComposer() }
-    }
+    notebook?.update(state)
+    notebook?.open(focus: focus)
   }
-
+  private func showMenu() {
+    guard let state, let presenter, presenter.presentedViewController == nil else { return }
+    notebook?.close()
+    let menu = ReaderMenuController(title: "Reader Tools", items: [
+      .init(title: "Notes", icon: "notebook-pen", action: { [weak self] in self?.showNotebook(focus: false); self?.notebook?.expand() }),
+      .init(title: "Contents", icon: "list", action: { [weak self] in self?.showTools(.contents) }),
+      .init(title: "Book Status", icon: "book-marked", action: { [weak self] in self?.showTools(.book) }),
+      .init(title: "Search Book", icon: "search", enabled: false, action: {}),
+      .init(title: "Themes & Settings", icon: "settings", action: { [weak self] in self?.showTools(.appearance) }),
+    ], colors: state.colors)
+    presentedSheet = menu; presenter.present(menu, animated: true)
+  }
   private func showTools(_ mode: ReaderToolsController.Mode) {
-    guard let state, let presenter else { return }
-    if presenter.presentedViewController is ReaderNotebookController {
-      send(["action": "close"])
-      presenter.dismiss(animated: true) { [weak self] in self?.showTools(mode) }
-      return
-    }
-    guard presenter.presentedViewController == nil else { return }
+    guard let state, let presenter, presenter.presentedViewController == nil else { return }
+    notebook?.close()
     let controller = ReaderToolsController(mode: mode, state: state, command: { [weak self] in self?.send($0) ?? 0 })
+    controller.onBack = { [weak self] in self?.showMenu() }
     tools = controller
     controller.modalPresentationStyle = .pageSheet
-    controller.sheetPresentationController?.detents = [.medium(), .large()]
+    controller.sheetPresentationController?.detents = [.custom { context in min(mode == .appearance ? 568 : 520, context.maximumDetentValue) }, .large()]
     controller.sheetPresentationController?.prefersGrabberVisible = true
     controller.sheetPresentationController?.preferredCornerRadius = 28
     presentedSheet = controller

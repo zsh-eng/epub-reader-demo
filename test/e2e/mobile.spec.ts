@@ -22,6 +22,10 @@ interface NativeReaderState {
   session: string;
   bookId: string;
   acknowledged: number;
+  isBookmarked: boolean;
+  page: number;
+  totalPages: number;
+  spine: { title: string; index: number; page: number }[];
   draft: { content: string; editingId: string; ready: boolean };
   notes: { id: string; text: string }[];
   settings: { theme: string; fontSize: number };
@@ -436,4 +440,63 @@ test("native commands reject stale sessions and invalid settings, and commit ord
     patch: { theme: "flexoki-light" },
   });
   await expect(page.locator("html")).toHaveClass(/flexoki-light/);
+});
+
+test("native ruler commits a location and bookmark across reopen without changing a draft", async ({
+  page,
+}) => {
+  const { bookId } = await importBook(page);
+  await openLocalBook(page, bookId!);
+  await readerCommand(page, { action: "start-reading" });
+  await expect
+    .poll(async () => (await readerState(page))?.totalPages ?? 0)
+    .toBeGreaterThan(10);
+  await readerCommand(page, {
+    action: "draft",
+    content: "Keep this draft while navigating.",
+  });
+  await readerCommand(page, { action: "page", page: 9 });
+  await expect.poll(async () => (await readerState(page))?.page).toBe(9);
+  expect((await readerState(page))?.spine.some(({ page }) => page > 0)).toBe(
+    true,
+  );
+  await readerCommand(page, { action: "bookmark" });
+  await expect
+    .poll(async () => (await readerState(page))?.isBookmarked)
+    .toBe(true);
+  await send(page, { type: "lifecycle", active: false });
+  await expect
+    .poll(() =>
+      page.evaluate(async (modulePath) => {
+        const { syncV2Db: db } = await import(modulePath);
+        return (await db.notes.toArray()).filter(
+          (note: { kind: string; isDeleted?: boolean }) =>
+            note.kind === "bookmark" && !note.isDeleted,
+        ).length;
+      }, DB_MODULE),
+    )
+    .toBe(1);
+  await page.reload();
+  await expect.poll(async () => (await readerState(page))?.page).toBe(9);
+  await expect
+    .poll(async () => (await readerState(page))?.isBookmarked)
+    .toBe(true);
+  await expect
+    .poll(async () => (await readerState(page))?.draft.content)
+    .toBe("Keep this draft while navigating.");
+  await readerCommand(page, { action: "bookmark" });
+  await expect
+    .poll(async () => (await readerState(page))?.isBookmarked)
+    .toBe(false);
+  await expect
+    .poll(() =>
+      page.evaluate(async (modulePath) => {
+        const { syncV2Db: db } = await import(modulePath);
+        return (await db.notes.toArray()).filter(
+          (note: { kind: string; isDeleted?: boolean }) =>
+            note.kind === "bookmark" && !note.isDeleted,
+        ).length;
+      }, DB_MODULE),
+    )
+    .toBe(0);
 });

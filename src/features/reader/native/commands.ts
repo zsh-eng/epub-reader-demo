@@ -34,6 +34,8 @@ export const readerCommandSchema = z.object({
         "next",
         "previous",
         "start-reading",
+        "bookmark",
+        "dismiss-status",
         "remove-book",
       ]),
     }),

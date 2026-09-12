@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
+import { useReaderSettings } from "@/hooks/use-reader-settings";
 import { focusManager, useQueryClient } from "@tanstack/react-query";
 import { addBookFromFile, DuplicateBookError } from "@/lib/book-service";
 import { markEpubPreparationReady } from "@/hooks/use-epub-processor";
@@ -12,6 +13,16 @@ import { readNativeAppearance } from "./appearance";
  */
 export function NativeBridge() {
   const queryClient = useQueryClient();
+  const { appearanceMode, setAppearanceMode } = useReaderSettings();
+  const toggleAppearance = useEffectEvent(() => {
+    setAppearanceMode(
+      appearanceMode === "light"
+        ? "dark"
+        : appearanceMode === "dark"
+          ? "system"
+          : "light",
+    );
+  });
   useEffect(() => {
     if (!isNativeApp) return;
     const importing = new Set<string>();
@@ -25,6 +36,10 @@ export function NativeBridge() {
         !("type" in message)
       )
         return;
+      if (message.type === "toggle-appearance") {
+        toggleAppearance();
+        return;
+      }
       if (
         message.type === "search" &&
         "query" in message &&
