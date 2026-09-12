@@ -13,7 +13,7 @@ export default defineConfig({
     alias: { "@": path.resolve(__dirname, "src") },
   },
   build: {
-    outDir: "apps/mobile/modules/reader-runtime/ios/Resources/web",
+    outDir: "apps/ios/Resources/web",
     emptyOutDir: true,
   },
 });

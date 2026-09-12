@@ -1,8 +1,0 @@
-.expo/
-ios/
-android/
-!modules/**/ios/
-!modules/**/ios/**
-modules/reader-runtime/ios/Resources/web/
-expo-env.d.ts
-*.tsbuildinfo

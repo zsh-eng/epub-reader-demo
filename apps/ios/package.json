@@ -1,0 +1,10 @@
+{
+  "name": "@reader/ios",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "build": "bun ../../scripts/ios.ts --build-only",
+    "ios": "bun ../../scripts/ios.ts",
+    "ios:release": "bun ../../scripts/ios.ts --release"
+  }
+}

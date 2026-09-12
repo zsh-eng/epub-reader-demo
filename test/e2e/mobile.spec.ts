@@ -98,8 +98,13 @@ test.beforeEach(async ({ page, context }) => {
   await context.addInitScript(() => {
     const target = window as unknown as TestWindow;
     target.nativeMessages = [];
-    window.ReactNativeWebView = {
-      postMessage: (message) => target.nativeMessages.push(JSON.parse(message)),
+    window.webkit = {
+      messageHandlers: {
+        reader: {
+          postMessage: (message) =>
+            target.nativeMessages.push(message as NativeMessage),
+        },
+      },
     };
   });
   await page.goto("/");

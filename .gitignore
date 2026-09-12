@@ -34,3 +34,6 @@ diagnostics/*
 # Browser test output
 playwright-report/
 test-results/
+
+# Superseded Expo-generated local builds (the tracked host is now apps/ios).
+/apps/mobile/

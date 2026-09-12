@@ -1,0 +1,4 @@
+build/
+Resources/web/
+*.xcuserstate
+xcuserdata/

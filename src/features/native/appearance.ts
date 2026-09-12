@@ -1,4 +1,4 @@
-/** Resolve the existing CSS palette for UIKit and React Native. Color values
+/** Resolve the existing CSS palette for UIKit. Color values
  * cross the bridge as sRGB hex because native controls cannot parse CSS tokens.
  */
 export function readNativeAppearance(theme?: string) {

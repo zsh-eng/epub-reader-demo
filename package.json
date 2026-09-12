@@ -34,8 +34,8 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "build:mobile:web": "vite build --config vite.mobile.config.ts",
-    "mobile:ios": "bun run build:mobile:web && cd apps/mobile && bun run ios",
-    "mobile:ios:release": "bun run build:mobile:web && cd apps/mobile && bun run ios:release"
+    "mobile:ios": "bun scripts/ios.ts",
+    "mobile:ios:release": "bun scripts/ios.ts --release"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
@@ -109,7 +109,6 @@
     "wrangler": "^4.85.0"
   },
   "overrides": {
-    "@react-navigation/native": "7.1.33",
     "vite": "npm:rolldown-vite@7.3.1"
   }
 }
