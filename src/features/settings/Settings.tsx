@@ -4,6 +4,7 @@ import { Switch } from "@/components/ui/switch";
 import { setDebugEnabled, useDebugEnabled } from "@/lib/debug-preference";
 import { getLabRuntime } from "@/features/sync-lab/runtime";
 import { Bug } from "lucide-react";
+import { Link } from "react-router-dom";
 
 /** Application preferences use the same compact page layout as Devices. */
 export function Settings() {
@@ -57,6 +58,17 @@ export function Settings() {
               />
             </div>
           </Card>
+          {debugEnabled && (
+            <Link
+              to="/debug/chrome-accessories"
+              className="mt-4 block rounded-2xl border border-border p-5 text-sm hover:bg-muted"
+            >
+              <strong>Chrome accessories playground →</strong>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Try desktop reading and sync prompts, appearance, and dismissal.
+              </p>
+            </Link>
+          )}
           {debugEnabled && !getLabRuntime() && (
             <a
               href="/debug/sync"

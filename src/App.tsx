@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { AppRouter } from "@/features/sync-lab/AppLocation";
 import { Settings } from "@/features/settings/Settings";
 import { DebugGate } from "@/features/settings/DebugGate";
@@ -21,6 +22,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import { getLabRuntime, registerLabDrain } from "@/features/sync-lab/runtime";
+
+const ReaderChromeDebug = lazy(() =>
+  import("@/features/reader/debug/ReaderChromeDebug").then((module) => ({
+    default: module.ReaderChromeDebug,
+  })),
+);
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,6 +101,22 @@ function App() {
                     element={
                       <DebugGate>
                         <ReaderDebug />
+                      </DebugGate>
+                    }
+                  />
+                  <Route
+                    path="/debug/chrome-accessories"
+                    element={
+                      <DebugGate>
+                        <Suspense
+                          fallback={
+                            <div className="p-8 text-sm text-muted-foreground">
+                              Loading preview…
+                            </div>
+                          }
+                        >
+                          <ReaderChromeDebug />
+                        </Suspense>
                       </DebugGate>
                     }
                   />
