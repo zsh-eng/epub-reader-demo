@@ -1,0 +1,197 @@
+import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
+import { useIsPresent } from "motion/react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
+
+const menuItemClassName =
+  "rounded-[calc(var(--radius-2xl)-5px)] hover:bg-secondary data-[highlighted]:bg-secondary focus:bg-secondary";
+
+/** Desktop notes use direct editing and a context menu, without swipe gestures. */
+export function DesktopNotebookNote({
+  children,
+  onEdit,
+  onDelete,
+  canEdit,
+  disabled,
+  editing,
+  dimmed,
+}: {
+  children: ReactNode;
+  onEdit: () => void;
+  onDelete: () => Promise<boolean>;
+  canEdit: boolean;
+  disabled: boolean;
+  editing: boolean;
+  dimmed: boolean;
+}) {
+  const present = useIsPresent();
+  return (
+    <ContextMenu disabled={disabled || !present}>
+      <ContextMenuTrigger
+        tabIndex={present ? 0 : -1}
+        inert={!present}
+        aria-hidden={!present}
+        aria-label="Note; double-click or use the context menu to edit"
+        data-note-editing={editing || undefined}
+        className={`group relative mb-2 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${dimmed ? "opacity-45" : ""}`}
+        onDoubleClick={(event) => {
+          if (disabled || editing || !canEdit) return;
+          if ((event.target as HTMLElement).closest("button,a,textarea,input"))
+            return;
+          onEdit();
+        }}
+        onKeyDown={(event) => {
+          if (
+            event.target !== event.currentTarget ||
+            disabled ||
+            editing ||
+            !canEdit
+          )
+            return;
+          if (event.key !== "Enter" && event.key !== "F2") return;
+          event.preventDefault();
+          onEdit();
+        }}
+      >
+        <article
+          className={`relative rounded-2xl px-4 py-3 transition-colors duration-150 hover:bg-secondary/70 group-data-[popup-open]:bg-secondary/70 group-focus-visible:bg-secondary/70 ${editing ? "bg-secondary/70 ring-2 ring-inset ring-ring" : "bg-secondary/40"}`}
+        >
+          {children}
+        </article>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-40 rounded-2xl p-1">
+        <ContextMenuItem
+          disabled={disabled || !canEdit || editing}
+          onClick={onEdit}
+          className={menuItemClassName}
+        >
+          <Pencil size={14} />
+          Edit note
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={disabled}
+          variant="destructive"
+          className={`${menuItemClassName} hover:bg-destructive/10 data-[highlighted]:bg-destructive/10 focus:bg-destructive/10`}
+          onClick={() => void onDelete()}
+        >
+          <Trash2 size={14} />
+          Delete note
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+interface InlineEdit {
+  value: string;
+  saving: boolean;
+  onChange: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}
+
+/** The saved text and metadata retain the row's size while an editor overlays
+ * them. Long edits scroll within the existing text area, so nearby notes stay put. */
+export function NotebookNoteBody({
+  content,
+  children,
+  edit,
+}: {
+  content: string;
+  children: ReactNode;
+  edit?: InlineEdit;
+}) {
+  const input = useRef<HTMLTextAreaElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const wasEditing = useRef(false);
+  const editing = Boolean(edit);
+  useLayoutEffect(() => {
+    if (editing) {
+      input.current?.focus({ preventScroll: true });
+      const end = input.current?.value.length ?? 0;
+      input.current?.setSelectionRange(end, end);
+    } else if (wasEditing.current) {
+      body.current
+        ?.closest<HTMLElement>('[data-slot="context-menu-trigger"]')
+        ?.focus({ preventScroll: true });
+    }
+    wasEditing.current = editing;
+  }, [editing]);
+  return (
+    <div ref={body}>
+      <div className="relative">
+        <p
+          aria-hidden={editing || undefined}
+          className={`whitespace-pre-wrap break-words text-[15px] leading-relaxed ${editing ? "invisible" : ""}`}
+        >
+          {content}
+        </p>
+        {edit && (
+          <textarea
+            ref={input}
+            aria-label="Edit note"
+            value={edit.value}
+            readOnly={edit.saving}
+            onChange={(event) => edit.onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.nativeEvent.isComposing) return;
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                edit.onCancel();
+              }
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                edit.onSave();
+              }
+            }}
+            className="absolute inset-0 m-0 size-full resize-none overflow-y-auto rounded-none border-0 bg-transparent p-0 text-[15px] leading-relaxed outline-none"
+          />
+        )}
+      </div>
+      <div className="relative mt-3">
+        <div
+          aria-hidden={editing || undefined}
+          inert={editing}
+          className={editing ? "invisible" : undefined}
+        >
+          {children}
+        </div>
+        {edit && (
+          <div className="absolute inset-0 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span role="status">
+              {edit.saving ? "Saving…" : "Editing note"}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Cancel editing"
+                title="Cancel (Escape)"
+                disabled={edit.saving}
+                onClick={edit.onCancel}
+                className="flex size-6 items-center justify-center rounded-lg hover:bg-background/80 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40"
+              >
+                <X size={15} />
+              </button>
+              <button
+                type="button"
+                aria-label="Save changes"
+                title="Save (Command or Control + Enter)"
+                disabled={edit.saving || !edit.value.trim()}
+                onClick={edit.onSave}
+                className="flex size-6 items-center justify-center rounded-lg text-foreground hover:bg-background/80 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40"
+              >
+                <Check size={15} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -155,6 +155,21 @@ export function useReaderNotes(bookId: string) {
     [flush, query.data],
   );
 
+  // Leaving the desktop editor preserves its draft and restores the composer.
+  const pauseEdit = useCallback(async () => {
+    if (!current.current?.editId || submitting.current) return;
+    submitting.current = true;
+    setSaving(true);
+    try {
+      await flush();
+      current.current = compose.current;
+      if (mounted.current) setDraft(compose.current);
+    } finally {
+      submitting.current = false;
+      if (mounted.current) setSaving(false);
+    }
+  }, [flush]);
+
   const remove = useCallback(
     async (noteId: string) => {
       if (submitting.current) return false;
@@ -250,12 +265,14 @@ export function useReaderNotes(bookId: string) {
   return {
     notes: query.data ?? EMPTY_NOTES,
     draft,
+    composeDraft: draft?.editId ? compose.current : draft,
     ready,
     saving,
     error: error || (query.isError ? "Could not load notes." : ""),
     change,
     edit,
     cancelEdit,
+    pauseEdit,
     remove,
     restore,
     editingId: draft?.noteId,

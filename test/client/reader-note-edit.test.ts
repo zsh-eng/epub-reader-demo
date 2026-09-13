@@ -100,3 +100,39 @@ it("does not rewrite a deleted edit draft when the UI closes during submission",
     })),
   ).toEqual([{ purpose: "create", content: "Unsent thought" }]);
 });
+
+it("keeps an inline edit draft separate when returning to the composer", async () => {
+  const { result } = renderHook(() => useReaderNotes("book"));
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  act(() => result.current.change("Unsent thought", target));
+  await act(async () => {
+    await result.current.edit(notes[0].id);
+  });
+  act(() => result.current.change("Unfinished revision", target));
+  expect(result.current.composeDraft?.content).toBe("Unsent thought");
+  await act(async () => {
+    await result.current.pauseEdit();
+  });
+  expect(result.current.editingId).toBeUndefined();
+  expect(result.current.draft?.content).toBe("Unsent thought");
+  expect((await getBookNotes("book"))[0].content).toBe("Original");
+  expect(
+    (await db.noteDrafts.toArray()).map(({ purpose, content }) => ({
+      purpose,
+      content,
+    })),
+  ).toEqual([
+    { purpose: "create", content: "Unsent thought" },
+    { purpose: "edit", content: "Unfinished revision" },
+  ]);
+  await act(async () => {
+    await result.current.edit(notes[0].id);
+  });
+  expect(result.current.draft?.content).toBe("Unfinished revision");
+  await act(async () => {
+    expect(await result.current.send()).toBe(true);
+  });
+  expect((await getBookNotes("book"))[0].content).toBe("Unfinished revision");
+  expect(result.current.composeDraft?.content).toBe("Unsent thought");
+  expect(await db.noteDrafts.count()).toBe(1);
+});

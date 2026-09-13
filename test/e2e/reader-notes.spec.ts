@@ -560,6 +560,9 @@ test.describe("Highlight note capture", () => {
     localBook,
   }) => {
     await openLocalBook(page, localBook.id);
+    await page
+      .getByRole("button", { name: "Start reading", exact: true })
+      .click();
     for (let index = 0; index < 8; index++) await nextSpread(page);
     await page.evaluate(() => {
       const root = document.querySelector(
@@ -686,10 +689,17 @@ test.describe("Highlight note capture", () => {
       exact: true,
     });
     await expect(editor).toHaveValue("This passage is worth revisiting.");
+    await expect(fullQuote).toHaveText(quotedText!);
+    // The pending composer quote stays separate from the note being edited.
     await expect(page.getByTestId("note-quote")).toContainText(quotedText!);
     await expect(
-      page.getByRole("button", { name: "Remove quote" }),
-    ).toHaveCount(0);
+      page.locator("[data-note-input-surface] textarea"),
+    ).toHaveValue("");
+    await expect(
+      fullQuote
+        .locator("..")
+        .getByRole("textbox", { name: "Edit note", exact: true }),
+    ).toBeFocused();
     await editor.fill("A revised reading of this passage.");
     await editor.press("Control+Enter");
     await expect(
@@ -792,8 +802,12 @@ test("swipes to edit without losing the compose draft or changing the note ancho
   await expect(page.getByText("Editing note", { exact: true })).toBeVisible();
   await editor.fill("   ");
   await expect(
-    page.getByRole("button", { name: "Save changes" }),
+    page.locator('button[aria-label="Save changes"]'),
   ).toBeDisabled();
+  await expect(page.locator('button[aria-label="Save changes"]')).toHaveCSS(
+    "opacity",
+    "0",
+  );
   await editor.fill("The revised thought.");
   await page.screenshot({ path: "/tmp/reader-note-edit.png" });
   await page.getByRole("button", { name: "Save changes" }).click();

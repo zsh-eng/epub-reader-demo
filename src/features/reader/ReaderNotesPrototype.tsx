@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { NotebookNote } from "./NotebookNote";
+import { DesktopNotebookNote, NotebookNoteBody } from "./DesktopNotebookNote";
 import { ReaderSheet } from "./shared/ReaderSheet";
 import type { NoteTarget } from "@/types/note";
 import { useReaderNotes } from "./hooks/use-reader-notes";
@@ -80,9 +81,11 @@ export function ReaderNotesPrototype({
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "chapter">("time");
   const notes = useReaderNotes(bookId);
-  const draft = notes.draft?.content ?? "";
+  const composerDraft = desktop ? notes.composeDraft : notes.draft;
+  const inlineEditing = desktop && Boolean(notes.editingId);
+  const draft = composerDraft?.content ?? "";
   const hasDraftText = draft.trim().length > 0;
-  const target = notes.draft?.target;
+  const target = composerDraft?.target;
   const editedNote = useMemo(
     () =>
       notes.editingId
@@ -90,7 +93,8 @@ export function ReaderNotesPrototype({
         : undefined,
     [notes.notes, notes.editingId],
   );
-  const editQuote = editedNote?.kind === "note" ? editedNote.quote : undefined;
+  const editQuote =
+    !desktop && editedNote?.kind === "note" ? editedNote.quote : undefined;
   const quote = editQuote
     ? { selectedText: editQuote.text, color: editQuote.color }
     : target?.kind === "highlight"
@@ -131,6 +135,7 @@ export function ReaderNotesPrototype({
     if (
       !notes.ready ||
       notes.saving ||
+      (desktop && notes.editingId) ||
       !incomingTarget ||
       handledTarget.current === incomingTarget
     )
@@ -138,7 +143,7 @@ export function ReaderNotesPrototype({
     handledTarget.current = incomingTarget;
     notes.change(draft, incomingTarget);
     onClearQuote();
-  }, [incomingTarget, notes.ready, draft, notes, onClearQuote]);
+  }, [incomingTarget, notes.ready, draft, notes, onClearQuote, desktop]);
   const entries = useMemo(
     () =>
       resolved.map(({ note, anchor }) => ({
@@ -247,6 +252,27 @@ export function ReaderNotesPrototype({
       sidebarInput.current?.focus({ preventScroll: true });
   }, [desktop, open, notebook]);
 
+  const pauseEdit = notes.pauseEdit;
+  useEffect(() => {
+    if (
+      !desktop ||
+      (open && notebook) ||
+      !notes.editingId ||
+      notes.saving ||
+      notes.error
+    )
+      return;
+    void pauseEdit().catch(() => {});
+  }, [
+    desktop,
+    open,
+    notebook,
+    notes.editingId,
+    notes.saving,
+    notes.error,
+    pauseEdit,
+  ]);
+
   const previousList = useRef({ notebook: false, ids: new Set<string>() });
   useLayoutEffect(() => {
     const previous = previousList.current;
@@ -282,13 +308,13 @@ export function ReaderNotesPrototype({
   const editNote = notes.edit;
   const startEdit = useCallback(
     async (id: string) => {
-      // Focus within the user event so iOS can open the keyboard before the draft read.
-      (notebook ? sidebarInput : input).current?.focus();
+      // Mobile must focus within the user event to open its keyboard.
+      if (!desktop) (notebook ? sidebarInput : input).current?.focus();
       if (!(await editNote(id))) return;
       onActiveChange(true);
-      (notebook ? sidebarInput : input).current?.focus();
+      if (!desktop) (notebook ? sidebarInput : input).current?.focus();
     },
-    [editNote, notebook, onActiveChange],
+    [editNote, notebook, onActiveChange, desktop],
   );
 
   const removeNote = notes.remove;
@@ -358,9 +384,25 @@ export function ReaderNotesPrototype({
   const commentSurface =
     "rounded-xl border border-border/80 bg-background/95 p-3 text-sm shadow-sm";
   function renderNoteInput(inNotebook = false) {
+    const editingInComposer = !desktop && Boolean(notes.editingId);
+    const sendButton = (
+      <button
+        aria-label={editingInComposer ? "Save changes" : "Save note"}
+        aria-hidden={!hasDraftText}
+        tabIndex={hasDraftText ? 0 : -1}
+        disabled={
+          !notes.ready || notes.saving || !hasDraftText || inlineEditing
+        }
+        onPointerDown={(event) => event.preventDefault()}
+        onClick={() => send()}
+        className={`${desktop ? "relative" : "absolute right-0 bottom-0"} flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none ${hasDraftText ? "[transform:scale(1)] opacity-100 disabled:opacity-30" : "pointer-events-none [transform:scale(0.9)] opacity-0"}`}
+      >
+        {editingInComposer ? <Check size={20} /> : <ArrowUp size={20} />}
+      </button>
+    );
     return (
       <div>
-        {notes.editingId && (
+        {editingInComposer && (
           <div
             data-note-edit-strip
             className="relative z-0 mx-4 -mb-3 flex h-10 items-center justify-between gap-2 rounded-[2rem] border border-border/50 bg-background/90 px-3 pb-2 text-xs text-muted-foreground backdrop-blur-xl"
@@ -377,124 +419,140 @@ export function ReaderNotesPrototype({
           </div>
         )}
         <div
-          data-note-input-surface
-          className={`relative z-10 border p-1 ${
-            desktop && inNotebook
-              ? "rounded-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
-              : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`
-          }`}
+          data-note-compose-row
+          inert={inlineEditing}
+          className={
+            desktop
+              ? `flex items-end ${inlineEditing ? "opacity-45" : ""}`
+              : undefined
+          }
         >
-          {quote && (
-            <div
-              className="mx-3 mt-1 flex items-center gap-2"
-              data-testid="note-quote"
-            >
-              <span
-                className="min-w-0 flex-1 truncate border-l-[3px] py-1 pl-2 text-xs text-muted-foreground"
-                style={{
-                  borderColor:
-                    quote.color === "invisible"
-                      ? "var(--muted-foreground)"
-                      : `var(--${quote.color}-secondary)`,
-                }}
+          <div
+            data-note-input-surface
+            className={`relative z-10 min-w-0 flex-1 border p-1 ${
+              desktop && inNotebook
+                ? "rounded-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
+                : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`
+            }`}
+          >
+            {quote && (
+              <div
+                className="mx-3 mt-1 flex items-center gap-2"
+                data-testid="note-quote"
               >
-                {quote.selectedText}
-              </span>
-              {!notes.editingId && (
-                <button
-                  aria-label="Remove quote"
-                  onClick={() => {
-                    if (target)
-                      notes.change(draft, {
-                        kind: "page",
-                        anchor: target.anchor,
-                      });
-                    onClearQuote();
+                <span
+                  className="min-w-0 flex-1 truncate border-l-[3px] py-1 pl-2 text-xs text-muted-foreground"
+                  style={{
+                    borderColor:
+                      quote.color === "invisible"
+                        ? "var(--muted-foreground)"
+                        : `var(--${quote.color}-secondary)`,
                   }}
-                  className="flex size-7 items-center justify-center text-muted-foreground"
                 >
-                  <X size={13} />
+                  {quote.selectedText}
+                </span>
+                {!editingInComposer && (
+                  <button
+                    aria-label="Remove quote"
+                    onClick={() => {
+                      if (target)
+                        notes.change(draft, {
+                          kind: "page",
+                          anchor: target.anchor,
+                        });
+                      onClearQuote();
+                    }}
+                    className="flex size-7 items-center justify-center text-muted-foreground"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            )}
+            {/* Mobile keeps its existing internal send slot. Desktop reserves space outside the field. */}
+            <div
+              className={`relative flex items-end gap-1 ${desktop ? "px-3" : "pr-10"}`}
+            >
+              {!desktop && (
+                <button
+                  aria-label="Open notebook"
+                  aria-expanded={notebook}
+                  onClick={() => {
+                    input.current?.blur();
+                    setNotebook(!notebook);
+                  }}
+                  className={iconButton}
+                >
+                  <BookOpen size={19} />
                 </button>
               )}
+              <NoteTextInput
+                ref={inNotebook ? sidebarInput : input}
+                autoFocus={desktop ? open && !inNotebook : !notebook}
+                aria-label={editingInComposer ? "Edit note" : "Write a note"}
+                placeholder="Write a note…"
+                value={draft}
+                disabled={!notes.ready || inlineEditing}
+                readOnly={notes.saving}
+                rows={1}
+                onChange={(event) => {
+                  const nextTarget =
+                    target ?? resolver.capture(pagination.spread);
+                  if (nextTarget) notes.change(event.target.value, nextTarget);
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    (event.metaKey || event.ctrlKey) &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault();
+                    send(false);
+                  }
+                  if (event.key === "Escape") {
+                    if (notes.editingId) void notes.cancelEdit();
+                    else close();
+                  }
+                }}
+                className={`${desktop ? "min-h-8 text-sm" : "min-h-8 text-base"} min-w-0 flex-1 resize-none bg-transparent py-1 leading-6 outline-none placeholder:text-muted-foreground/70`}
+              />
+              {!desktop && sendButton}
+            </div>
+          </div>
+          {desktop && (
+            <div
+              className={`mb-[5px] shrink-0 overflow-hidden ${hasDraftText ? "ml-2 w-8" : "w-0"}`}
+            >
+              {sendButton}
             </div>
           )}
-          {/* Keep the send slot reserved so its entrance does not reflow the draft. */}
-          <div
-            className={`relative flex items-end gap-1 pr-10 ${desktop ? "pl-3" : ""}`}
-          >
-            {!desktop && (
-              <button
-                aria-label="Open notebook"
-                aria-expanded={notebook}
-                onClick={() => {
-                  input.current?.blur();
-                  setNotebook(!notebook);
-                }}
-                className={iconButton}
-              >
-                <BookOpen size={19} />
-              </button>
-            )}
-            <NoteTextInput
-              ref={inNotebook ? sidebarInput : input}
-              autoFocus={desktop ? open && !inNotebook : !notebook}
-              aria-label={notes.editingId ? "Edit note" : "Write a note"}
-              placeholder="Write a note…"
-              value={draft}
-              disabled={!notes.ready}
-              readOnly={notes.saving}
-              rows={1}
-              onChange={(event) => {
-                const nextTarget =
-                  target ?? resolver.capture(pagination.spread);
-                if (nextTarget) notes.change(event.target.value, nextTarget);
-              }}
-              onKeyDown={(event) => {
-                if (
-                  event.key === "Enter" &&
-                  (event.metaKey || event.ctrlKey) &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault();
-                  send(false);
-                }
-                if (event.key === "Escape") {
-                  if (notes.editingId) void notes.cancelEdit();
-                  else close();
-                }
-              }}
-              className={`${desktop ? "min-h-8 text-sm" : "min-h-8 text-base"} min-w-0 flex-1 resize-none bg-transparent py-1 leading-6 outline-none placeholder:text-muted-foreground/70`}
-            />
-            <button
-              aria-label={notes.editingId ? "Save changes" : "Save note"}
-              aria-hidden={!hasDraftText}
-              tabIndex={hasDraftText ? 0 : -1}
-              disabled={!notes.ready || notes.saving || !hasDraftText}
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={() => send()}
-              className={`absolute right-0 bottom-0 flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none ${hasDraftText ? "[transform:scale(1)] opacity-100 disabled:opacity-30" : "pointer-events-none [transform:scale(0.9)] opacity-0"}`}
-            >
-              {notes.editingId ? <Check size={20} /> : <ArrowUp size={20} />}
-            </button>
-          </div>
         </div>
       </div>
     );
   }
+  const NotebookCard = desktop ? DesktopNotebookNote : NotebookNote;
   const notebookPanel = useMemo(
     () => (
       <motion.section
         key="notebook"
-        initial={{
-          opacity: 0,
-          transform: reduceMotion ? "none" : "translateY(12px)",
-        }}
+        initial={
+          desktop
+            ? false
+            : {
+                opacity: 0,
+                transform: reduceMotion ? "none" : "translateY(12px)",
+              }
+        }
         animate={{ opacity: 1, transform: "none" }}
-        exit={{
-          opacity: 0,
-          transform: reduceMotion ? "none" : "translateY(12px)",
-        }}
-        transition={transition}
+        exit={
+          desktop
+            ? undefined
+            : {
+                opacity: 0,
+                transform: reduceMotion ? "none" : "translateY(12px)",
+              }
+        }
+        transition={desktop ? { duration: 0 } : transition}
         aria-label="Book notebook"
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
@@ -543,7 +601,7 @@ export function ReaderNotesPrototype({
         >
           {!entries.length && (
             <motion.p
-              initial={{ opacity: 0 }}
+              initial={desktop ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ ...transition, delay: reduceMotion ? 0 : 0.16 }}
               className="absolute inset-x-4 top-4 px-4 py-10 text-center font-serif text-lg text-muted-foreground"
@@ -614,7 +672,8 @@ export function ReaderNotesPrototype({
                 }}
                 className="flow-root overflow-hidden"
               >
-                <NotebookNote
+                <NotebookCard
+                  dimmed={inlineEditing && notes.editingId !== entry.id}
                   disabled={!notes.ready || notes.saving}
                   canEdit={entry.kind === "note"}
                   editing={notes.editingId === entry.id}
@@ -634,35 +693,54 @@ export function ReaderNotesPrototype({
                       {entry.quote.selectedText}
                     </blockquote>
                   )}
-                  <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-                    {entry.text}
-                  </p>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
-                    <button
-                      disabled={!entry.location.page}
-                      className="min-w-0 truncate text-left hover:text-foreground"
-                      onClick={() => {
-                        onVisit(entry.location.page);
-                        close();
-                      }}
-                    >
-                      {order === "time" ? `${entry.location.chapter} · ` : ""}
-                      {entry.location.page
-                        ? `p. ${entry.location.page}`
-                        : "Location unavailable"}
-                    </button>
-                    <time
-                      dateTime={new Date(entry.createdAt).toISOString()}
-                      title={new Date(entry.createdAt).toLocaleString()}
-                      className="shrink-0"
-                    >
-                      {new Date(entry.createdAt).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </time>
-                  </div>
-                </NotebookNote>
+                  <NotebookNoteBody
+                    content={entry.text}
+                    edit={
+                      desktop && notes.editingId === entry.id
+                        ? {
+                            value: notes.draft?.content ?? "",
+                            saving: notes.saving,
+                            onChange: (value) => {
+                              if (notes.draft)
+                                notes.change(value, notes.draft.target);
+                            },
+                            onSave: () => {
+                              void notes.send();
+                            },
+                            onCancel: () => {
+                              void notes.cancelEdit();
+                            },
+                          }
+                        : undefined
+                    }
+                  >
+                    <div className="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
+                      <button
+                        disabled={!entry.location.page}
+                        className="min-w-0 truncate text-left hover:text-foreground"
+                        onClick={() => {
+                          onVisit(entry.location.page);
+                          close();
+                        }}
+                      >
+                        {order === "time" ? `${entry.location.chapter} · ` : ""}
+                        {entry.location.page
+                          ? `p. ${entry.location.page}`
+                          : "Location unavailable"}
+                      </button>
+                      <time
+                        dateTime={new Date(entry.createdAt).toISOString()}
+                        title={new Date(entry.createdAt).toLocaleString()}
+                        className="shrink-0"
+                      >
+                        {new Date(entry.createdAt).toLocaleTimeString([], {
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </time>
+                    </div>
+                  </NotebookNoteBody>
+                </NotebookCard>
               </motion.div>,
             ])}
           </AnimatePresence>
@@ -674,9 +752,9 @@ export function ReaderNotesPrototype({
       orderedEntries,
       startEdit,
       deleteNote,
-      notes.ready,
-      notes.saving,
-      notes.editingId,
+      notes,
+      inlineEditing,
+      NotebookCard,
       order,
       desktop,
       keyboardOpen,
