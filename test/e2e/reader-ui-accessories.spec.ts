@@ -44,7 +44,14 @@ test("desktop keeps status at the header and gives contents continuous hover row
     name: /CHAPTER II\. The Pool of Tears/i,
   });
   const before = await currentPages(page);
-  await chapter.click();
+  await chapter.hover();
+  await page.mouse.down();
+  await expect(chapter).toHaveCSS(
+    "transform",
+    "matrix(0.97, 0, 0, 0.97, 0, 0)",
+  );
+  await page.mouse.up();
+  await expect(chapter).toHaveCSS("transform", "none");
   await expect(chapter).toHaveAttribute("aria-current", "location");
   await expect.poll(() => currentPages(page)).not.toEqual(before);
   expect(
