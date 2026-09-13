@@ -2,6 +2,54 @@
 
 12 September 2026 · branch `codex/expo-reader`.
 
+## 13 September: UX audit and frame-rate gate
+
+**Implementation is paused at the user's 120 Hz requirement.** This pass tested
+the installed Release app in the iPhone 17 simulator and inspected the Swift/web
+boundary. No app code was changed. The earlier checks below establish functional
+coverage; they do not establish that the native UX is acceptable.
+
+### Frame rate
+
+- No supported WKWebView switch was found for 120 Hz JavaScript rendering.
+  [WebKit issue 294338](https://bugs.webkit.org/show_bug.cgi?id=294338) is still
+  NEW, last updated 12 August 2026. Its reports distinguish Safari's experimental
+  flag from embedded WKWebView. Recent comments report success through private
+  preferences; this is not a supported public API.
+- The installed iOS SDK's public WebKit headers expose no matching preference.
+  Apple's [ProMotion plist option](https://developer.apple.com/documentation/bundleresources/information-property-list/cadisableminimumframedurationonphone)
+  is also absent from this app. It permits higher native frame rates but does not
+  by itself remove the reported WKWebView JavaScript cap. Native animations and
+  accelerated web animations must be measured separately from `requestAnimationFrame`.
+- A connected iPhone 15 Pro Max has Reader installed, but Safari remote inspection
+  remained at “Connecting…”. No physical-device frame-rate measurement was made.
+  Simulator video does not establish the phone's display rate. No private API or
+  device setting was changed. A private experiment would also need to account
+  for Apple's [public-API requirement, 2.5.1](https://developer.apple.com/app-store/review/guidelines/#software-requirements).
+
+### Findings and proposed corrections
+
+| Area | Evidence | Correction if native work resumes |
+| --- | --- | --- |
+| Chrome flicker | Reproduced twice on video: header jumps down and footer jumps up over book text before fading. `ReaderControlsView` sets frames on transformed views and starts an animation for every state snapshot, including unchanged visibility. These are candidate causes, not yet isolated by a patch. | Keep layout independent of transforms; animate only when the target visibility changes. Test interrupted and repeated toggles. |
+| Scrubber | Source confirms that preview changes only native labels. Navigation crosses the bridge only when dragging/deceleration ends. | Send coalesced live previews through the existing web `previewPage` action; flush `commitPage` when the gesture ends. Do not queue a full jump/write for every tick. |
+| Contents | Selecting Chapter I moved Alice from page 2 to 7 and dismissed the sheet. Source configures a custom 520 pt detent plus large. | Use `.medium()` only; keep the sheet, filter, and scroll position when selecting a chapter. |
+| Titles/fonts | Contents visibly differs from the small tracked web captions. `readerCaption("")` supplies an empty attributed string; the title is later assigned with plain `.text`, without setting the label's font. DM Sans font files and PostScript names match. | Keep font/tracking when text changes, then compare actual rendered sizes and weights with the web panels. The bundle is not a complete match for all web font weights. |
+| Compact notes | Reproduced with and without the software keyboard: a grabber and padded outer sheet surround the input. Composer radius is fixed at 32 pt for a minimum 44 pt height. | Compact mode should show the input alone. Remove its outer sheet/padding and derive curvature from the input height; preserve the same text view through expansion. |
+| Dark sheets | No full light flash reproduced during recorded Type/Layout switching and dismissal. All settings changes rebuild the panel's child views; sheet content also disappeared before dismissal finished. | Keep this issue open. Capture the failing device sequence before assigning a cause; investigate rebuilds, button configuration transitions, and trait changes. |
+| Loading | One warm reopen of local Alice took **1.74 s** from the first loading frame to the first visible book text (video timestamps 14.887–16.627 s). `openReader` creates a new WKWebView and `closeReader` releases it. | Profile startup, fonts, data readiness, pagination, and first paint separately. Reuse the web runtime/navigation so existing memory caches remain useful; preserve the origin and persistent store. |
+
+[Chrome transition frames](images/ios-chrome-transition.png) show the before,
+incorrect intermediate position, and later fade. Temporary recordings are
+`/tmp/reader-ux-baseline.mp4` and `/tmp/reader-warm-reopen.mp4`; their timestamps
+measure visible transitions, not frame-rate capability.
+
+Alice was returned to page 2 and Flexoki Light, then reopened successfully. No
+note text was entered or changed. Existing Xcode signing/project edits remain
+untouched. No build or automated suite was run for this documentation-only pass.
+Review this audit first, then the linked transition image. App fixes and a
+physical-device gesture/performance pass remain open.
+
 ## Decisions and changes
 
 - Removed the remaining Expo workspace, generated files, ignore rule, and obsolete
