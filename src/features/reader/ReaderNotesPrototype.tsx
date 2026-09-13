@@ -378,7 +378,11 @@ export function ReaderNotesPrototype({
         )}
         <div
           data-note-input-surface
-          className={`relative z-10 border border-border/80 bg-background/95 p-1 ${desktop && inNotebook ? "rounded-(--sidebar-panel-field-radius)" : "rounded-3xl"} ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`}
+          className={`relative z-10 border p-1 ${
+            desktop && inNotebook
+              ? "rounded-xl rounded-b-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
+              : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`
+          }`}
         >
           {quote && (
             <div

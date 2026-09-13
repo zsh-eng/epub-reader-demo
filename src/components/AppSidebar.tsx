@@ -313,11 +313,11 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="px-3 pt-3 pb-1">
+      <SidebarHeader className="px-(--sidebar-panel-content-inset) pt-(--sidebar-panel-content-inset) pb-1">
         <div className="flex h-[38px] items-center">
           <Link
             to="/"
-            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/50 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
+            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-lg rounded-tl-(--sidebar-panel-field-radius) px-3 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/50 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
             title="Go to library"
           >
             <BookOpenText
@@ -328,7 +328,7 @@ export function AppSidebar() {
               Reader
             </span>
           </Link>
-          <SidebarTrigger className="ml-auto size-7 rounded-full text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground" />
+          <SidebarTrigger className="ml-auto size-[38px] rounded-lg rounded-tr-(--sidebar-panel-field-radius) text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground" />
         </div>
       </SidebarHeader>
 
@@ -399,7 +399,7 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="gap-2 px-3 pt-2 pb-3">
+      <SidebarFooter className="gap-2 px-(--sidebar-panel-content-inset) pt-2 pb-(--sidebar-panel-content-inset)">
         <SidebarSeparator className="mb-1" />
         <SidebarMenu className="pt-1">
           <SidebarMenuItem>
@@ -467,7 +467,7 @@ export function AppSidebar() {
               render={
                 <button
                   type="button"
-                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
+                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl rounded-b-(--sidebar-panel-field-radius) px-2.5 py-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 data-[popup-open]:bg-sidebar-accent/70 focus-visible:bg-sidebar-accent/70 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
                 />
               }
             >
@@ -508,7 +508,10 @@ export function AppSidebar() {
         ) : (
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => void handleGoogleSignIn()}>
+              <SidebarMenuButton
+                className="rounded-b-(--sidebar-panel-field-radius)"
+                onClick={() => void handleGoogleSignIn()}
+              >
                 <LogIn />
                 <span>Sign in with Google</span>
               </SidebarMenuButton>

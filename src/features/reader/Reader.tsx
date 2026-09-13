@@ -451,6 +451,7 @@ export function Reader() {
                 onBackToLibrary={() => navigate("/")}
                 isBookmarked={chromeState.isBookmarked}
                 onToggleBookmark={chromeActions.toggleBookmark}
+                isMenuOpen={chromeState.activeReaderSheet !== null}
                 onOpenMenu={() => {
                   if (displayReady) chromeActions.openReaderSheet("tools");
                 }}

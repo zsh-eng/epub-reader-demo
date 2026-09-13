@@ -285,7 +285,7 @@ export function Sidebar({
       >
         <div
           data-slot="sidebar-inner"
-          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-(--sidebar-panel-radius) border border-sidebar-border/80 bg-sidebar/96 text-sidebar-foreground shadow-2xl backdrop-blur-xl"
+          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-(--sidebar-panel-radius) border border-sidebar-border/80 bg-sidebar/96 text-sidebar-foreground backdrop-blur-xl"
         >
           {children}
         </div>
@@ -319,9 +319,13 @@ export function SidebarTrigger({
       data-slot="sidebar-trigger"
       variant="ghost"
       size="icon-sm"
-      className={cn("shrink-0", className)}
+      className={cn(
+        "shrink-0 aria-pressed:bg-sidebar-accent aria-pressed:text-sidebar-accent-foreground",
+        className,
+      )}
       aria-label={isMobile ? "Open navigation" : "Toggle sidebar"}
       aria-expanded={isMobile ? openMobile : open}
+      aria-pressed={isMobile ? undefined : open}
       title={
         isMobile
           ? "Open navigation"

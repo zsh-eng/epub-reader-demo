@@ -150,8 +150,11 @@ export function ReaderToolsSidebar({
         >
           <nav
             aria-label="Reader tools"
-            className="relative z-10 flex min-h-14 shrink-0 items-center gap-1.5 px-2 pb-2"
-            style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}
+            className="relative z-10 flex min-h-14 shrink-0 items-start gap-1.5 px-(--sidebar-panel-content-inset) pb-2"
+            style={{
+              paddingTop:
+                "max(env(safe-area-inset-top), var(--sidebar-panel-content-inset))",
+            }}
           >
             {SIDEBAR_TOOLS.map((tool) => {
               const isActive = activePanel === tool.id;
@@ -167,7 +170,7 @@ export function ReaderToolsSidebar({
                   aria-pressed={isActive}
                   title={tool.label}
                   className={cn(
-                    "size-9 shrink-0 rounded-xl text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+                    "size-9 shrink-0 rounded-xl first:rounded-tl-(--sidebar-panel-field-radius) text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
                     isActive && "bg-secondary/70 text-foreground shadow-sm",
                   )}
                 >
@@ -198,7 +201,8 @@ export function ReaderToolsSidebar({
               size="icon"
               onClick={onClose}
               aria-label="Close reader tools"
-              className="size-9 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
+              aria-pressed={isOpen}
+              className="size-9 shrink-0 rounded-xl rounded-tr-(--sidebar-panel-field-radius) text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95 aria-pressed:bg-secondary/70 aria-pressed:text-foreground"
             >
               <PanelRight className="size-[1.15rem]" />
             </Button>

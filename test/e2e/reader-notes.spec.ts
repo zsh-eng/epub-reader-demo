@@ -34,6 +34,18 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   }
   const trigger = page.getByRole("button", { name: "Jot a note" });
   const scrubber = page.locator("canvas.cursor-ew-resize");
+  // Chrome is still entering after the tap; compare both bounds in one frame.
+  await expect
+    .poll(() =>
+      trigger.evaluate((button) => {
+        const scrubber = document.querySelector("canvas.cursor-ew-resize")!;
+        return (
+          scrubber.getBoundingClientRect().top -
+          button.getBoundingClientRect().bottom
+        );
+      }),
+    )
+    .toBeGreaterThan(0);
   const triggerBounds = (await trigger.boundingBox())!;
   const scrubberBounds = (await scrubber.boundingBox())!;
   expect(triggerBounds.x).toBeGreaterThan(
@@ -259,7 +271,25 @@ test.describe("Desktop margin notes", () => {
     const surface = tools.locator("[data-note-input-surface]");
     const panel = tools.locator('[data-slot="reader-tools-surface"]');
     await expect(panel).toHaveCSS("border-radius", "28px");
-    await expect(surface).toHaveCSS("border-radius", "19px");
+    await expect(surface).toHaveCSS("border-bottom-right-radius", "19px");
+    await expect(surface).toHaveCSS("border-bottom-left-radius", "19px");
+    await expect(surface).toHaveCSS("box-shadow", "none");
+    const inputCorners = await surface.evaluate((field) => {
+      const style = getComputedStyle(field);
+      return {
+        top: parseFloat(style.borderTopLeftRadius),
+        bottom: parseFloat(style.borderBottomLeftRadius),
+      };
+    });
+    expect(inputCorners.top).toBeLessThan(inputCorners.bottom);
+    const headerTrigger = page.locator(
+      'button[aria-label="Open reader tools"]',
+    );
+    const closeTrigger = tools
+      .getByRole("button", { name: "Close reader tools", exact: true })
+      .last();
+    await expect(headerTrigger).toHaveAttribute("aria-pressed", "true");
+    await expect(closeTrigger).toHaveAttribute("aria-pressed", "true");
     const cornerGaps = await panel.evaluate((panel) => {
       const field = panel.querySelector("[data-note-input-surface]")!;
       const outerBounds = panel.getBoundingClientRect();
@@ -304,6 +334,11 @@ test.describe("Desktop margin notes", () => {
       .click();
     const closingSidebar = page.locator('aside[aria-label="Reader tools"]');
     await expect(closingSidebar).toHaveAttribute("aria-hidden", "true");
+    await expect(headerTrigger).toHaveAttribute("aria-pressed", "false");
+    await expect(closingSidebar.locator("nav button").last()).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
     await expect(
       closingSidebar.locator('button[aria-label="Notes"]'),
     ).toHaveAttribute("aria-pressed", "true");
@@ -343,6 +378,8 @@ test.describe("Desktop margin notes", () => {
     await page.keyboard.press(`${modifier}+Shift+Backslash`);
     await expect(noteInput).toBeFocused();
     await expect(noteInput).toHaveValue("Keep this desktop draft.");
+    await expect(closeTrigger).toHaveAttribute("aria-pressed", "true");
+    await expect(headerTrigger).toHaveAttribute("aria-pressed", "true");
     await page.setViewportSize({ width: 768, height: 850 });
     const closeInset = await toolbar.evaluate((nav) => {
       const close = nav.querySelector(

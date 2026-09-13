@@ -53,6 +53,7 @@ interface ReaderHeaderProps {
   onBackToLibrary: () => void;
   isBookmarked: boolean;
   onToggleBookmark: () => void;
+  isMenuOpen: boolean;
   onOpenMenu: () => void;
 }
 
@@ -65,6 +66,7 @@ export function ReaderHeader({
   onBackToLibrary,
   isBookmarked,
   onToggleBookmark,
+  isMenuOpen,
   onOpenMenu,
 }: ReaderHeaderProps) {
   const chromeShellY = chromeVisible
@@ -186,7 +188,9 @@ export function ReaderHeader({
                 size="icon-sm"
                 onClick={onOpenMenu}
                 aria-label="Open reader tools"
-                className={CHROME_BUTTON_CLASS_NAME}
+                aria-expanded={isMenuOpen}
+                aria-pressed={showBackButton ? undefined : isMenuOpen}
+                className={`${CHROME_BUTTON_CLASS_NAME} aria-pressed:bg-secondary/70 aria-pressed:text-foreground`}
               >
                 <MoreHorizontal className="size-4 md:hidden" />
                 <PanelRight className="hidden size-4 md:block" />
