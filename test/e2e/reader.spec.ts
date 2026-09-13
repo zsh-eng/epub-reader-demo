@@ -155,6 +155,7 @@ test.describe("Reader touch subscriptions", () => {
       await expect(peek).not.toBeInViewport();
       const before = await currentPages(page);
       const peekIndicator = peek.getByTestId("reader-peek-page-indicator");
+      const peekTime = peek.getByTestId("reader-peek-reading-time");
       await expect(peekIndicator).toContainText(`p. ${before[0]}`);
       const readPosition = () =>
         page.evaluate(async (bookId) => {
@@ -208,6 +209,7 @@ test.describe("Reader touch subscriptions", () => {
       await move(180);
       await expect(peek).toBeInViewport({ ratio: 1 });
       await expect(peekIndicator).toBeInViewport();
+      await expect(peekTime).toBeInViewport();
       await expect(peek.locator("canvas")).toBeInViewport();
       await expect(tools).not.toBeInViewport();
       await expect(footer).not.toBeInViewport();
@@ -221,7 +223,7 @@ test.describe("Reader touch subscriptions", () => {
       await expect(peek.locator("canvas")).toHaveCSS("height", "56px");
       await expect
         .poll(() =>
-          peekIndicator.evaluate(
+          peekTime.evaluate(
             (element) =>
               window.innerHeight - element.getBoundingClientRect().bottom,
           ),
@@ -275,6 +277,105 @@ test.describe("Reader touch subscriptions", () => {
       await cdp.detach();
     });
   }
+
+  test("shows recorded and current reading time only in the peek, offline", async ({
+    page,
+    localBook,
+  }, testInfo) => {
+    await page.setViewportSize({ width: 320, height: 750 });
+    await openLocalBook(page, localBook.id);
+    const peek = page.locator("[data-reader-progress-peek]");
+    await expect(peek).toHaveCSS("visibility", "visible");
+    await page.clock.install();
+    await page.context().setOffline(true);
+    await page.evaluate(async (bookId) => {
+      const path = "/src/lib/db.ts";
+      const { updateCurrentDeviceReadingSession } = await import(path);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      for (const [id, startedAt, minutes] of [
+        ["peek-today", today.getTime(), 18],
+        ["peek-yesterday", yesterday.getTime(), 120],
+      ] as const) {
+        await updateCurrentDeviceReadingSession({
+          id,
+          bookId,
+          readerInstanceId: id,
+          startedAt,
+          endedAt: startedAt + minutes * 60_000,
+          lastActiveAt: startedAt + minutes * 60_000,
+          activeMs: minutes * 60_000,
+          startSpineIndex: 0,
+          startScrollProgress: 0,
+          endSpineIndex: 0,
+          endScrollProgress: 0,
+        });
+      }
+    }, localBook.id);
+    const time = peek.getByTestId("reader-peek-reading-time");
+    await expect(time).toHaveText("18m today · 2h 18m total");
+    const originalHeight = (await peek.boundingBox())!.height;
+    // Reading without another input must be accounted for when the peek starts.
+    await page.clock.fastForward(120_000);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: 160, y: 450 }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: 160, y: 270 }],
+    });
+    await expect(peek).toBeInViewport({ ratio: 1 });
+    await expect(time).toHaveText("20m today · 2h 20m total");
+    await expect(time).toBeInViewport({ ratio: 1 });
+    expect((await peek.boundingBox())!.height).toBe(originalHeight);
+    const count = peek.getByTestId("reader-peek-page-indicator");
+    const countBounds = (await count.boundingBox())!;
+    const timeBounds = (await time.boundingBox())!;
+    expect(timeBounds.y).toBeGreaterThanOrEqual(
+      countBounds.y + countBounds.height,
+    );
+    expect(
+      Math.abs(
+        countBounds.x +
+          countBounds.width / 2 -
+          timeBounds.x -
+          timeBounds.width / 2,
+      ),
+    ).toBeLessThan(1);
+    await expect
+      .poll(() =>
+        page.evaluate(async (bookId) => {
+          const path = "/src/lib/db.ts";
+          const { getBookReadingSessions } = await import(path);
+          const active = (await getBookReadingSessions(bookId)).find(
+            (session: { endedAt: number | null }) => session.endedAt === null,
+          );
+          return active?.activeMs ?? 0;
+        }, localBook.id),
+      )
+      .toBeGreaterThanOrEqual(120_000);
+    await page.screenshot({
+      path: testInfo.outputPath("peek-reading-time.png"),
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect(peek).not.toBeInViewport();
+    await page.touchscreen.tap(160, 450);
+    const footer = page.locator("[data-reader-footer]");
+    await expect(page.getByTestId("reader-page-indicator")).toBeInViewport();
+    await expect(footer.getByTestId("reader-peek-reading-time")).toHaveCount(0);
+    await expect(footer).not.toContainText(/today|total/);
+    expect(
+      (await page.getByTestId("reader-page-indicator").boundingBox())!.height,
+    ).toBe(countBounds.height);
+    await cdp.detach();
+  });
 
   test("interrupts the progress peek return from its current position", async ({
     page,

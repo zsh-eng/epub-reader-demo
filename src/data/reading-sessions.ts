@@ -27,6 +27,17 @@ export interface ReadingSession {
   endScrollProgress: number; // Chapter-local percentage in the range 0-100
 }
 
+/** Recorded time for one book, including sessions from other synced devices. */
+export async function getBookReadingSessions(
+  bookId: string,
+): Promise<ReadingSession[]> {
+  return db.readingSessions
+    .where("bookId")
+    .equals(bookId)
+    .filter(isNotDeleted)
+    .toArray();
+}
+
 type CurrentDeviceReadingSessionInput = Omit<ReadingSession, "deviceId">;
 
 function withCurrentDeviceReadingSession(

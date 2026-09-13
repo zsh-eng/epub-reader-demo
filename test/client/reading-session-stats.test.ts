@@ -3,6 +3,7 @@ import {
   formatReadingDuration,
   formatReadingSessionRange,
   getTotalRecordedReadingTime,
+  getRecordedReadingTimeSummary,
   type ReadingSessionAnalyticsRecord,
   type ReadingSessionBookRecord,
 } from "@/lib/reading-session-stats";
@@ -209,5 +210,45 @@ describe("reading session formatting", () => {
         month: 6,
       }),
     ).toBe("Jul");
+  });
+});
+
+describe("getRecordedReadingTimeSummary", () => {
+  it("separates the local calendar day from all recorded time", () => {
+    const today = new Date(2026, 7, 16).getTime();
+    const record = (startedAt: number, activeMs: number) => ({
+      id: String(startedAt),
+      bookId: "book-a",
+      startedAt,
+      activeMs,
+    });
+    expect(
+      getRecordedReadingTimeSummary(
+        [
+          record(today - 1, HOUR),
+          record(today, HOUR / 2),
+          record(NOW, HOUR / 4),
+          record(NOW + 1, HOUR),
+          record(today + 1, 0),
+          record(today + 2, -HOUR),
+        ],
+        NOW,
+      ),
+    ).toEqual({ todayMs: HOUR * 0.75, totalMs: HOUR * 1.75 });
+  });
+
+  it("resets today's summary when the local day changes", () => {
+    const records = [session("today", "book-a", 0, HOUR)];
+    expect(getRecordedReadingTimeSummary(records, NOW)).toEqual({
+      todayMs: HOUR,
+      totalMs: HOUR,
+    });
+    expect(
+      getRecordedReadingTimeSummary(records, new Date(2026, 7, 17).getTime()),
+    ).toEqual({ todayMs: 0, totalMs: HOUR });
+    expect(getRecordedReadingTimeSummary([], NOW)).toEqual({
+      todayMs: 0,
+      totalMs: 0,
+    });
   });
 });

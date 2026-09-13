@@ -69,8 +69,13 @@ export function useReaderReadingSession({
   useEffect(() => {
     if (!bookId) return;
 
-    const recordActivity = () => {
+    const recordActivity = (event: Event) => {
       controller.recordActivity(Date.now());
+      // A touch can immediately reveal reading time. Save its activity boundary
+      // now; continuous wheel and keyboard input keep the periodic flush.
+      if (event.type === "pointerdown" || event.type === "touchstart") {
+        controller.flushLatest();
+      }
     };
 
     window.addEventListener("keydown", recordActivity);

@@ -4,11 +4,13 @@ import type { ChapterEntry } from "../types";
 import { FooterChapterRow } from "./FooterChapterRow";
 import { FooterScrubberCanvas } from "./FooterScrubberCanvas";
 import { FooterPageIndicator } from "./FooterPageIndicator";
+import { ReaderPeekReadingTime } from "./ReaderPeekReadingTime";
 
 // The peek reuses the footer visuals, but its inert surface cannot navigate.
 const ignorePeekAction = () => {};
 
 interface ReaderProgressPeekProps {
+  bookId: string;
   offset: MotionValue<number>;
   height: MotionValue<number>;
   currentPage: number;
@@ -27,6 +29,7 @@ interface ReaderProgressPeekProps {
  * Measuring the full surface keeps the gesture capped at the visible edge.
  */
 export function ReaderProgressPeek({
+  bookId,
   offset,
   height,
   currentPage,
@@ -89,11 +92,14 @@ export function ReaderProgressPeek({
             readOnly
           />
         </div>
-        <FooterPageIndicator
-          currentPage={currentPage}
-          totalPages={totalPages}
-          testId="reader-peek-page-indicator"
-        />
+        <div className="flex flex-col items-center">
+          <FooterPageIndicator
+            currentPage={currentPage}
+            totalPages={totalPages}
+            testId="reader-peek-page-indicator"
+          />
+          <ReaderPeekReadingTime bookId={bookId} enabled={available} />
+        </div>
       </div>
     </motion.div>
   );

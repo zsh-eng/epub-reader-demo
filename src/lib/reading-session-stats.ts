@@ -200,6 +200,21 @@ export function getTotalRecordedReadingTime(
   }, 0);
 }
 
+/** Uses the same session-start day assignment as the Sessions page. */
+export function getRecordedReadingTimeSummary(
+  sessions: readonly ReadingSessionAnalyticsRecord[],
+  now = Date.now(),
+): { todayMs: number; totalMs: number } {
+  const todayStart = startOfDay(now).getTime();
+  return {
+    todayMs: getTotalRecordedReadingTime(
+      sessions.filter((session) => session.startedAt >= todayStart),
+      now,
+    ),
+    totalMs: getTotalRecordedReadingTime(sessions, now),
+  };
+}
+
 /**
  * Builds the product-facing reading summary from session records. Reading time
  * is assigned to the session start bucket because sessions store accumulated

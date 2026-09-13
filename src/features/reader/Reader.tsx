@@ -458,6 +458,7 @@ export function Reader() {
 
               <ReaderProgressPeek
                 {...progressPeek}
+                bookId={book.id}
                 currentPage={sessionState.navigation.currentPage}
                 totalPages={sessionState.navigation.totalPages}
                 currentChapterIndex={
