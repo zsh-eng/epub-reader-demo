@@ -78,9 +78,10 @@ export function ReaderNotesPrototype({
   // Book-scoped history: an exiting row must not clear a pending Undo entrance.
   const restoredEntries = useRef(new Set<string>());
   const [animateSend, setAnimateSend] = useState(true);
-  const [order, setOrder] = useState<"time" | "book">("time");
+  const [order, setOrder] = useState<"time" | "chapter">("time");
   const notes = useReaderNotes(bookId);
   const draft = notes.draft?.content ?? "";
+  const hasDraftText = draft.trim().length > 0;
   const target = notes.draft?.target;
   const editedNote = useMemo(
     () =>
@@ -193,7 +194,7 @@ export function ReaderNotesPrototype({
               container.getBoundingClientRect().top,
           }
         : null;
-    setOrder(value === "book" ? "book" : "time");
+    setOrder(value === "chapter" ? "chapter" : "time");
   }
   useLayoutEffect(() => {
     const retained = retainedEntry.current;
@@ -334,7 +335,7 @@ export function ReaderNotesPrototype({
   );
   const groupLabel = useCallback(
     (entry: (typeof entries)[number]) => {
-      if (order === "book") return entry.location.chapter;
+      if (order === "chapter") return entry.location.chapter;
       const date = new Date(entry.createdAt);
       if (date.toDateString() === new Date().toDateString()) return "Today";
       return date.toLocaleDateString([], {
@@ -352,7 +353,7 @@ export function ReaderNotesPrototype({
   );
   // Use one rail geometry for the editor and saved comments. Keep the rail
   // beside the book text instead of attaching it to the window edge.
-  const commentWidth = Math.min(260, Math.max(180, margin.width - 32));
+  const commentWidth = Math.min(360, Math.max(320, margin.width - 32));
   const commentLeft = `calc(100% - ${Math.max(commentWidth + 16, margin.width - 16)}px)`;
   const commentSurface =
     "rounded-xl border border-border/80 bg-background/95 p-3 text-sm shadow-sm";
@@ -376,11 +377,8 @@ export function ReaderNotesPrototype({
           </div>
         )}
         <div
-          className={
-            desktop
-              ? `relative z-10 ${commentSurface}`
-              : "relative z-10 rounded-[2rem] border border-border/80 bg-background/95 p-1 shadow-lg backdrop-blur-xl"
-          }
+          data-note-input-surface
+          className={`relative z-10 rounded-3xl border border-border/80 bg-background/95 p-1 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`}
         >
           {quote && (
             <div
@@ -416,7 +414,10 @@ export function ReaderNotesPrototype({
               )}
             </div>
           )}
-          <div className="flex items-end gap-1">
+          {/* Keep the send slot reserved so its entrance does not reflow the draft. */}
+          <div
+            className={`relative flex items-end gap-1 pr-10 ${desktop ? "pl-3" : ""}`}
+          >
             {!desktop && (
               <button
                 aria-label="Open notebook"
@@ -432,7 +433,7 @@ export function ReaderNotesPrototype({
             )}
             <NoteTextInput
               ref={inNotebook ? sidebarInput : input}
-              autoFocus={desktop ? open : !notebook}
+              autoFocus={desktop ? open && !inNotebook : !notebook}
               aria-label={notes.editingId ? "Edit note" : "Write a note"}
               placeholder="Write a note…"
               value={draft}
@@ -462,10 +463,12 @@ export function ReaderNotesPrototype({
             />
             <button
               aria-label={notes.editingId ? "Save changes" : "Save note"}
-              disabled={!notes.ready || notes.saving || !draft.trim()}
+              aria-hidden={!hasDraftText}
+              tabIndex={hasDraftText ? 0 : -1}
+              disabled={!notes.ready || notes.saving || !hasDraftText}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => send()}
-              className="mb-0.5 flex h-7 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity disabled:opacity-30"
+              className={`absolute right-0 bottom-0 flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none ${hasDraftText ? "[transform:scale(1)] opacity-100 disabled:opacity-30" : "pointer-events-none [transform:scale(0.9)] opacity-0"}`}
             >
               {notes.editingId ? <Check size={20} /> : <ArrowUp size={20} />}
             </button>
@@ -510,8 +513,8 @@ export function ReaderNotesPrototype({
                 <DropdownMenuRadioItem value="time">
                   By time
                 </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="book">
-                  By book
+                <DropdownMenuRadioItem value="chapter">
+                  By chapter
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
@@ -550,7 +553,7 @@ export function ReaderNotesPrototype({
               groupLabel(orderedEntries[index - 1]) !== groupLabel(entry)
                 ? [
                     <motion.div
-                      key={`heading:${order}:${order === "book" ? entry.chapterIndex : new Date(entry.createdAt).toDateString()}`}
+                      key={`heading:${order}:${order === "chapter" ? entry.chapterIndex : new Date(entry.createdAt).toDateString()}`}
                       initial={
                         restoredEntries.current.has(entry.id)
                           ? { height: reduceMotion ? "auto" : 0, opacity: 0 }
@@ -699,7 +702,7 @@ export function ReaderNotesPrototype({
           bodyClassName="flex min-h-0 flex-col"
         >
           {notebookPanel}
-          <div className="shrink-0 px-2 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
+          <div className="shrink-0 px-4 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
             {renderNoteInput(true)}
           </div>
         </ReaderSheet>
@@ -809,9 +812,8 @@ export function ReaderNotesPrototype({
                     width: commentWidth,
                   }
                 : {
-                    paddingInline: keyboardOpen
-                      ? "max(6px, env(safe-area-inset-left), env(safe-area-inset-right))"
-                      : 12,
+                    paddingInline:
+                      "max(16px, env(safe-area-inset-left), env(safe-area-inset-right))",
                     paddingBottom: keyboardOpen
                       ? 0
                       : "max(8px, calc(env(safe-area-inset-bottom) - 12px))",

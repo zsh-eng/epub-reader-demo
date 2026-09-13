@@ -50,6 +50,24 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   const stageBefore = await stage.boundingBox();
   const input = page.getByRole("textbox", { name: "Write a note" });
   await expect(input).toBeFocused();
+  const sendButton = page.locator('button[aria-label="Save note"]');
+  await expect(sendButton).toHaveCSS("opacity", "0");
+  await expect(
+    page.getByRole("button", { name: "Save note", exact: true }),
+  ).toHaveCount(0);
+  await input.fill("  ");
+  await expect(sendButton).toHaveCSS("opacity", "0");
+  await input.fill("A");
+  await expect(sendButton).toHaveCSS("opacity", "1");
+  await expect(sendButton).toBeEnabled();
+  await input.fill("");
+  await expect(sendButton).toHaveCSS("opacity", "0");
+  const surface = page.locator("[data-note-input-surface]");
+  await expect(surface).toHaveCSS("border-radius", "24px");
+  const surfaceBounds = (await surface.boundingBox())!;
+  expect(surfaceBounds.x).toBeGreaterThanOrEqual(16);
+  expect(surfaceBounds.width).toBeLessThanOrEqual(358);
+  expect(surfaceBounds.height).toBeLessThanOrEqual(44);
   const closedWidth = (await input.boundingBox())!.width;
   // Emulate the viewport signal, not an actual iOS keyboard.
   await page.evaluate(() => {
@@ -61,7 +79,7 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   });
   await expect
     .poll(async () => (await input.boundingBox())!.width)
-    .toBeGreaterThan(closedWidth);
+    .toBe(closedWidth);
   await expect(page.locator("[data-note-composer]")).toHaveCSS(
     "padding-bottom",
     "0px",
@@ -128,7 +146,7 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   ).toContainText("Notebook 2");
   await page.screenshot({ path: "/tmp/reader-notebook-chat.png" });
   await page.getByRole("button", { name: "Notebook order" }).click();
-  await page.getByRole("menuitemradio", { name: "By book" }).click();
+  await page.getByRole("menuitemradio", { name: "By chapter" }).click();
   await expect(
     page.getByText("Return to this idea later.", { exact: true }),
   ).toBeVisible();
@@ -234,6 +252,13 @@ test.describe("Desktop margin notes", () => {
     await expect(
       tools.getByRole("button", { name: "Close notebook" }),
     ).toHaveCount(0);
+    await expect(tools.locator('button[aria-label="Save note"]')).toHaveCSS(
+      "opacity",
+      "0",
+    );
+    const surface = tools.locator("[data-note-input-surface]");
+    await expect(surface).toHaveCSS("border-radius", "24px");
+    expect((await surface.boundingBox())!.height).toBeLessThanOrEqual(44);
     await noteInput.fill("A note for the notebook.");
     await tools.getByRole("button", { name: "Save note", exact: true }).click();
     const heading = tools.getByRole("heading", {
@@ -314,6 +339,14 @@ test.describe("Desktop margin notes", () => {
     await page.screenshot({
       path: testInfo.outputPath("narrow-desktop-notebook-header.png"),
     });
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await noteInput.fill("");
+    const sendButton = tools.locator('button[aria-label="Save note"]');
+    await expect(sendButton).toHaveCSS("opacity", "0");
+    await expect(sendButton).toHaveCSS("transform", "none");
+    await noteInput.fill("Reduced motion keeps the send button visible.");
+    await expect(sendButton).toHaveCSS("opacity", "1");
+    await expect(sendButton).toHaveCSS("transform", "none");
   });
   test("captures a margin note without resizing the book", async ({
     page,
@@ -368,7 +401,8 @@ test.describe("Desktop margin notes", () => {
       .getByRole("textbox", { name: "Write a note" })
       .fill("A thought from the margin");
     const editorBounds = (await panel.boundingBox())!;
-    expect(editorBounds.width).toBeLessThanOrEqual(260);
+    expect(editorBounds.width).toBeGreaterThanOrEqual(320);
+    expect(editorBounds.width).toBeLessThanOrEqual(360);
     await page.getByRole("button", { name: "Save note", exact: true }).click();
     await expect(
       page.getByRole("textbox", { name: "Write a note" }),
@@ -507,6 +541,12 @@ test.describe("Highlight note capture", () => {
     await page.getByRole("button", { name: "Note on highlight" }).click();
     const quote = page.getByTestId("note-quote");
     await expect(quote).toBeVisible();
+    const composerBounds = (await page
+      .locator("[data-note-composer]")
+      .boundingBox())!;
+    expect(composerBounds.width).toBeGreaterThanOrEqual(320);
+    expect(composerBounds.x + composerBounds.width).toBeLessThanOrEqual(900);
+    await page.screenshot({ path: "/tmp/reader-highlight-composer-wide.png" });
     const quotedText = await quote.locator("span").textContent();
     await expect(quote.locator("span")).toHaveCSS("text-overflow", "ellipsis");
     expect(
@@ -540,7 +580,9 @@ test.describe("Highlight note capture", () => {
     ).toHaveCount(1);
     await page.getByRole("button", { name: "Note on highlight" }).click();
     await page.getByRole("textbox", { name: "Write a note" }).press("Escape");
-    await page.mouse.move(600, 20);
+    await page.locator('[data-reader-chrome-rail="top"]').hover({
+      position: { x: 100, y: 4 },
+    });
     await page
       .getByRole("button", { name: "Open reader tools", exact: true })
       .click();
