@@ -1,3 +1,4 @@
+import { nextStudyDayStart } from "@/lib/study-day";
 import { useEffect, useState } from "react";
 
 /** Refresh at a time boundary, and after the page resumes from sleep. */
@@ -23,12 +24,7 @@ export function useClock(boundaries: number[]) {
   return now;
 }
 
-/** Refresh existing statistics at either calendar boundary without changing their day policy. */
+/** Refresh statistics at the next local 04:00 boundary and on resume. */
 export function useStatisticsClock() {
-  const now = new Date();
-  const localMidnight = new Date(now);
-  localMidnight.setHours(24, 0, 0, 0);
-  const utcMidnight = new Date(now);
-  utcMidnight.setUTCHours(24, 0, 0, 0);
-  return useClock([localMidnight.getTime(), utcMidnight.getTime()]);
+  return useClock([nextStudyDayStart(Date.now())]);
 }

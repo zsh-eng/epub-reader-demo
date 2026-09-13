@@ -1,3 +1,4 @@
+import { addStudyDays, studyDayKey } from "@/lib/study-day";
 import { useStatisticsClock } from "@/components/hooks/use-clock";
 import { Card, CardContent } from "@/components/ui/card";
 import * as React from "react";
@@ -12,7 +13,7 @@ export function BasicStats({ reviewLogs }: BasicStatsProps) {
   const stats = React.useMemo(() => {
     // Get unique days of learning
     const uniqueDays = new Set(
-      reviewLogs.map((log) => new Date(log.review).toISOString().split("T")[0]),
+      reviewLogs.map((log) => studyDayKey(log.review)),
     );
     const totalDays = uniqueDays.size;
 
@@ -27,14 +28,7 @@ export function BasicStats({ reviewLogs }: BasicStatsProps) {
     let streak = 0;
 
     for (let i = 0; i < sortedDays.length; i++) {
-      const current = new Date(sortedDays[i]);
-      const prev = i > 0 ? new Date(sortedDays[i - 1]) : current;
-
-      const diffDays = Math.round(
-        (current.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24),
-      );
-
-      if (diffDays === 1) {
+      if (i > 0 && addStudyDays(sortedDays[i - 1], 1) === sortedDays[i]) {
         streak++;
       } else {
         streak = 1;
@@ -43,7 +37,7 @@ export function BasicStats({ reviewLogs }: BasicStatsProps) {
       longestStreak = Math.max(longestStreak, streak);
 
       // Check if streak is current (includes today)
-      const today = new Date(clock).toISOString().split("T")[0];
+      const today = studyDayKey(clock);
       if (sortedDays[i] === today) {
         currentStreak = streak;
       }
