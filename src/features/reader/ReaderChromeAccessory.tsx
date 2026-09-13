@@ -106,7 +106,7 @@ export function ReaderChromeAccessory(props: ReaderChromeAccessoryProps) {
             <Tooltip.Portal>
               <Tooltip.Positioner
                 side="bottom"
-                align="end"
+                align="center"
                 sideOffset={8}
                 collisionPadding={12}
                 className="z-50"
