@@ -34,6 +34,7 @@ is recorded below.
 | --- | --- |
 | B-09 | Undo reverses the entire grade action, including automatic sibling suspension. Undo now stores each changed sibling's previous suspension and writes inverse operations to local storage and the sync queue. It preserves a suspension changed by a later action. An absent previous suspension becomes the existing epoch-date value for an unsuspended card, so older clients can read it. |
 | B-11 | Exactly 640 pixels uses the mobile review layout. Content, grade controls, and review styles now switch to desktop only above 640 pixels. |
+| B-20 | Statistics use the device's current time zone. Each study day starts at 04:00; reviews before then count toward the previous date. Basic statistics, streak dates, heatmap, activity, and duration charts share the rule, including whole-day range limits and date labels. The hourly chart still shows the actual local review hour. |
 | B-28 | Delete a cancelled upload if possible. The backend has no delete endpoint and reuses a file key for duplicate images. Safe deletion is therefore unavailable. Upload now starts only when the user confirms the preview. Closing the preview before confirmation creates no remote file. See the remaining backend limit below. |
 | B-38 | Do not add selective retry for failed imported cards. Existing import results still report failures. No retry feature was added. |
 | B-41 | Ask before a footer action discards unsaved card text. Bookmark, bury, unsuspend, and delete now show an action-specific browser confirmation when the text differs from its initial value. Cancel retains the draft; confirm runs the action without saving that text. Unchanged text requires no prompt. |
@@ -65,7 +66,7 @@ reuses the completed upload.
 
 | Audit ID | Decision |
 | --- | --- |
-| B-20 | Which time zone defines a study day? Should a streak remain current if the last review was yesterday? The user first asked what is stored; the storage details are below. No new grouping policy has been selected. |
+| B-20 (streak only) | Should a streak remain current if the last review was in the previous study day? Current behavior still requires a review in the current study day, which now runs from 04:00 through 03:59 the next day. The time-zone and day-boundary decisions are complete. |
 | B-23 | The user's "Yes" applied to a question with several options, so the sign-out policy needs clarification: sync first and stay signed in on failure; offer explicit discard after failure; or block while pending changes remain. The current policy has not changed. |
 
 ### Review time storage (B-20)
@@ -76,10 +77,16 @@ are JavaScript `Date` values. Sync serializes these as UTC ISO strings.
 Operation timestamps are numeric epoch milliseconds. No `Asia/Singapore` or
 other IANA time-zone setting is stored.
 
-Basic statistics, the heatmap, and the review chart currently use UTC dates to
-group reviews, while some display labels use the device's local time. Existing
-timestamps can be grouped in any selected time zone. They cannot recover the
-reviewer's original local day after travel without a recorded time zone.
+Statistics now group these instants using the device's current time zone and a
+04:00 boundary. Calendar arithmetic handles daylight-saving changes and month
+boundaries. Statistics refresh at 04:00 and when the page resumes. Changing the
+device's time zone can regroup historical reviews; their original local day
+cannot be recovered without a recorded time zone. No stored timestamp or
+scheduler due time was changed.
+
+The shared rule is in `src/lib/study-day.ts`. Review that helper first, then
+`src/components/hooks/use-clock.ts`, the statistics components, and
+`tests/study-day.test.ts` and `tests/study-day-render.test.tsx`.
 
 ### Remaining upload limit (B-28)
 
@@ -123,6 +130,13 @@ records written with the old mapping.
   passed using the local `.env.production` file without printing its values.
   Generated CSS includes the strict `(width>640px)` media query. No deployment
   was run. Existing bundle size and Browserslist age warnings remain.
+- Local 04:00 statistics follow-up: unchanged baseline passed 98 tests. The
+  integrated suite passed 104 tests and 448 assertions. Tests cover UTC,
+  Singapore, Los Angeles, daylight-saving boundaries, month/year changes,
+  whole-study-day range limits, and refresh at 04:00. Both the committed source
+  and the checkout with the preserved local duration ranges passed production
+  builds. The local range composition also passed day/week/month boundary
+  checks. Lint has no errors and the same five existing warnings.
 
 ## Suggested review order for the decision follow-up
 
@@ -161,7 +175,8 @@ records written with the old mapping.
    `src/routes/CreateFlashcardRoute.tsx`, and `src/image-upload-dialog.tsx`:
    cache references, cancellation, and upload/copy recovery.
 
-The pre-existing local edit in `src/components/stats/time-bar-chart.tsx` is
-outside this change. The original audit came from a separate
+The pre-existing duration chart day/week/month range changes remain local and
+uncommitted. They are preserved and use the same 04:00 study-day rule.
+The original audit came from a separate
 `product-description` repository, which is not present in this checkout.
 This report is the available record of fixes and remaining decisions.
