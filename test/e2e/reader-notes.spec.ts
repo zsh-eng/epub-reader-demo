@@ -257,7 +257,24 @@ test.describe("Desktop margin notes", () => {
       "0",
     );
     const surface = tools.locator("[data-note-input-surface]");
-    await expect(surface).toHaveCSS("border-radius", "24px");
+    const panel = tools.locator('[data-slot="reader-tools-surface"]');
+    await expect(panel).toHaveCSS("border-radius", "28px");
+    await expect(surface).toHaveCSS("border-radius", "19px");
+    const cornerGaps = await panel.evaluate((panel) => {
+      const field = panel.querySelector("[data-note-input-surface]")!;
+      const outerBounds = panel.getBoundingClientRect();
+      const innerBounds = field.getBoundingClientRect();
+      const radiusDifference =
+        parseFloat(getComputedStyle(panel).borderBottomRightRadius) -
+        parseFloat(getComputedStyle(field).borderBottomRightRadius);
+      return {
+        horizontal: outerBounds.right - innerBounds.right,
+        vertical: outerBounds.bottom - innerBounds.bottom,
+        radiusDifference,
+      };
+    });
+    expect(cornerGaps.horizontal).toBeCloseTo(cornerGaps.radiusDifference, 1);
+    expect(cornerGaps.vertical).toBeCloseTo(cornerGaps.radiusDifference, 1);
     expect((await surface.boundingBox())!.height).toBeLessThanOrEqual(44);
     await noteInput.fill("A note for the notebook.");
     await tools.getByRole("button", { name: "Save note", exact: true }).click();
@@ -347,6 +364,17 @@ test.describe("Desktop margin notes", () => {
     await noteInput.fill("Reduced motion keeps the send button visible.");
     await expect(sendButton).toHaveCSS("opacity", "1");
     await expect(sendButton).toHaveCSS("transform", "none");
+    await tools
+      .getByRole("button", { name: "Close reader tools", exact: true })
+      .last()
+      .click();
+    await page
+      .getByRole("button", { name: "Toggle sidebar", exact: true })
+      .click();
+    await expect(page.locator('[data-slot="sidebar-inner"]')).toHaveCSS(
+      "border-radius",
+      "28px",
+    );
   });
   test("captures a margin note without resizing the book", async ({
     page,

@@ -378,7 +378,7 @@ export function ReaderNotesPrototype({
         )}
         <div
           data-note-input-surface
-          className={`relative z-10 rounded-3xl border border-border/80 bg-background/95 p-1 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`}
+          className={`relative z-10 border border-border/80 bg-background/95 p-1 ${desktop && inNotebook ? "rounded-(--sidebar-panel-field-radius)" : "rounded-3xl"} ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`}
         >
           {quote && (
             <div
@@ -711,7 +711,9 @@ export function ReaderNotesPrototype({
         <div className="flex h-full min-h-0 flex-col">
           {desktop && notebookPanel}
           {desktop && (
-            <div className="shrink-0 p-2">{renderNoteInput(true)}</div>
+            <div className="shrink-0 p-(--sidebar-panel-content-inset)">
+              {renderNoteInput(true)}
+            </div>
           )}
         </div>,
       )}

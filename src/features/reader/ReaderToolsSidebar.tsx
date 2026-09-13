@@ -144,7 +144,10 @@ export function ReaderToolsSidebar({
         )}
         style={{ transitionDuration: isOpen ? "200ms" : "140ms" }}
       >
-        <div className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-border/70 bg-background/95 text-foreground shadow-[-24px_0_64px_hsl(var(--foreground)/0.12)] backdrop-blur-2xl select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]">
+        <div
+          data-slot="reader-tools-surface"
+          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-(--sidebar-panel-radius) border border-border/70 bg-background/95 text-foreground shadow-[-24px_0_64px_hsl(var(--foreground)/0.12)] backdrop-blur-2xl select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
+        >
           <nav
             aria-label="Reader tools"
             className="relative z-10 flex min-h-14 shrink-0 items-center gap-1.5 px-2 pb-2"

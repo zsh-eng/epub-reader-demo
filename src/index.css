@@ -7,6 +7,14 @@
 :root {
   color-scheme: light;
   background-color: var(--background);
+
+  /* Keep desktop panel fields concentric with the panel's outer border.
+     The field inset includes the panel's 1px border and its content padding. */
+  --sidebar-panel-radius: 1.75rem;
+  --sidebar-panel-content-inset: 0.5rem;
+  --sidebar-panel-field-radius: calc(
+    var(--sidebar-panel-radius) - var(--sidebar-panel-content-inset) - 1px
+  );
 }
 
 :root:is(.dark, .night, .flexoki-dark) {

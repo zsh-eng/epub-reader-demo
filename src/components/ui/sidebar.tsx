@@ -285,7 +285,7 @@ export function Sidebar({
       >
         <div
           data-slot="sidebar-inner"
-          className="flex h-full min-h-0 w-full flex-col rounded-2xl border border-sidebar-border/80 bg-sidebar/96 text-sidebar-foreground shadow-2xl backdrop-blur-xl"
+          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-(--sidebar-panel-radius) border border-sidebar-border/80 bg-sidebar/96 text-sidebar-foreground shadow-2xl backdrop-blur-xl"
         >
           {children}
         </div>
