@@ -1,3 +1,9 @@
+import {
+  addStudyMonths,
+  studyDayDate,
+  studyDayKey,
+  isInStudyRange,
+} from "@/lib/study-day";
 import { useStatisticsClock } from "@/components/hooks/use-clock";
 import * as React from "react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
@@ -47,11 +53,11 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
 
   // Process review logs into daily counts for last 3 months
   const chartData = React.useMemo(() => {
-    const now = new Date(clock);
-    const threeMonthsAgo = new Date(now.setMonth(now.getMonth() - 3));
+    const today = studyDayKey(clock);
+    const threeMonthsAgo = addStudyMonths(today, -3);
 
     const dailyCounts = reviewLogs
-      .filter((log) => new Date(log.review) >= threeMonthsAgo)
+      .filter((log) => isInStudyRange(log.review, threeMonthsAgo, today))
       .reduce(
         (
           acc: Record<
@@ -66,7 +72,7 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
           >,
           log,
         ) => {
-          const date = new Date(log.review).toISOString().split("T")[0];
+          const date = studyDayKey(log.review);
           if (!acc[date]) {
             acc[date] = {
               date,
@@ -153,7 +159,7 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
               tickMargin={8}
               minTickGap={32}
               tickFormatter={(value) => {
-                const date = new Date(value);
+                const date = studyDayDate(value);
                 return date.toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
@@ -166,7 +172,7 @@ export function ReviewChart({ reviewLogs }: ReviewChartProps) {
                   className="w-[150px]"
                   nameKey={activeChart}
                   labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
+                    return studyDayDate(value).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
                       year: "numeric",

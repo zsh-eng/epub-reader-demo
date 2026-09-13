@@ -1,3 +1,4 @@
+import { studyDayKey } from "@/lib/study-day";
 import { afterEach, expect, test, setSystemTime } from "bun:test";
 import { act } from "react";
 import { MemoryRouter } from "react-router";
@@ -278,7 +279,7 @@ test("review eligibility and suspended view clocks refresh at expiry without a d
 });
 
 test("statistics refresh the current streak after a resumed day boundary", async () => {
-  setSystemTime(new Date("2026-09-07T23:59:59Z"));
+  setSystemTime(new Date(2026, 8, 8, 3, 59, 59));
   const log = gradeCard(card(), Rating.Good).reviewLog;
   const view = await mount(<BasicStats reviewLogs={[log]} />);
   const streak = () =>
@@ -286,7 +287,7 @@ test("statistics refresh the current streak after a resumed day boundary", async
       (node) => node.textContent === "Current Streak",
     )?.previousElementSibling?.textContent;
   expect(streak()?.trim()).toBe("1");
-  setSystemTime(new Date("2026-09-08T00:00:01Z"));
+  setSystemTime(new Date(2026, 8, 8, 4, 0, 1));
   await act(async () => {
     window.dispatchEvent(new Event("focus"));
   });
@@ -316,7 +317,7 @@ test("activity includes all four true states and heatmap squares have date/count
     "Review3",
     "Relearning4",
   ]);
-  const date = log.review.toISOString().split("T")[0];
+  const date = studyDayKey(log.review);
   expect(
     view.container.querySelector(`button[aria-label="10 reviews on ${date}"]`),
   ).not.toBeNull();

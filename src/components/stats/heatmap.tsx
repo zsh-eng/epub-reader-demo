@@ -1,3 +1,10 @@
+import {
+  addStudyDays,
+  addStudyMonths,
+  studyDayDate,
+  studyDayKey,
+  isInStudyRange,
+} from "@/lib/study-day";
 import { useStatisticsClock } from "@/components/hooks/use-clock";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -17,31 +24,25 @@ interface HeatmapProps {
 export function Heatmap({ reviewLogs }: HeatmapProps) {
   const clock = useStatisticsClock();
   const heatmapData = React.useMemo(() => {
-    const now = new Date(clock);
-    const yearAgo = new Date(now.setFullYear(now.getFullYear() - 1));
-
-    // Create array of all dates in the last year
-    const dates: Date[] = [];
-    for (
-      let d = new Date(yearAgo);
-      d <= new Date(clock);
-      d.setDate(d.getDate() + 1)
-    ) {
-      dates.push(new Date(d));
+    const today = studyDayKey(clock);
+    const yearAgo = addStudyMonths(today, -12);
+    const dates: string[] = [];
+    for (let day = yearAgo; day <= today; day = addStudyDays(day, 1)) {
+      dates.push(day);
     }
 
     // Count reviews per day
     const dailyCounts = reviewLogs
-      .filter((log) => new Date(log.review) >= yearAgo)
+      .filter((log) => isInStudyRange(log.review, yearAgo, today))
       .reduce((acc: Record<string, number>, log) => {
-        const date = new Date(log.review).toISOString().split("T")[0];
+        const date = studyDayKey(log.review);
         acc[date] = (acc[date] || 0) + 1;
         return acc;
       }, {});
 
     // Map dates to their counts
     return dates.map((date) => {
-      const dateStr = date.toISOString().split("T")[0];
+      const dateStr = date;
       return {
         date: dateStr,
         count: dailyCounts[dateStr] || 0,
@@ -67,7 +68,7 @@ export function Heatmap({ reviewLogs }: HeatmapProps) {
   }, [heatmapData]);
 
   const formatTooltipDate = (dateStr: string) => {
-    const date = new Date(dateStr);
+    const date = studyDayDate(dateStr);
     return `${date.toLocaleString("default", {
       month: "long",
     })} ${date.getDate()}`;

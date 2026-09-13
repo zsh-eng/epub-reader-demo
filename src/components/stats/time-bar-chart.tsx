@@ -1,3 +1,10 @@
+import { useStatisticsClock } from "@/components/hooks/use-clock";
+import {
+  addStudyMonths,
+  studyDayDate,
+  studyDayKey,
+  isInStudyRange,
+} from "@/lib/study-day";
 import {
   Card,
   CardContent,
@@ -58,20 +65,19 @@ const RANGES = {
 } as const;
 
 export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
+  const clock = useStatisticsClock();
   const [selectedRange, setSelectedRange] =
     React.useState<keyof typeof RANGES>("1M");
 
   const chartData = React.useMemo(() => {
-    const now = new Date();
-    const monthsAgo = new Date(
-      now.setMonth(now.getMonth() - RANGES[selectedRange]),
-    );
+    const today = studyDayKey(clock);
+    const monthsAgo = addStudyMonths(today, -RANGES[selectedRange]);
 
     const dailyDurations = reviewLogs
-      .filter((log) => new Date(log.review) >= monthsAgo)
+      .filter((log) => isInStudyRange(log.review, monthsAgo, today))
       .reduce(
         (acc, log) => {
-          const date = new Date(log.review).toISOString().split("T")[0];
+          const date = studyDayKey(log.review);
           if (!acc[date]) {
             acc[date] = {
               date,
@@ -106,10 +112,10 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
         >,
       );
 
-    return Object.values(dailyDurations).sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    return Object.values(dailyDurations).sort((a, b) =>
+      a.date.localeCompare(b.date),
     );
-  }, [reviewLogs, selectedRange]);
+  }, [reviewLogs, selectedRange, clock]);
 
   return (
     <Card>
@@ -146,7 +152,7 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
               tickMargin={10}
               axisLine={false}
               tickFormatter={(value) =>
-                new Date(value).toLocaleDateString(undefined, {
+                studyDayDate(value).toLocaleDateString(undefined, {
                   month: "short",
                   day: "numeric",
                 })
@@ -155,6 +161,13 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
             <ChartTooltip
               content={
                 <ChartTooltipContent
+                  labelFormatter={(value) =>
+                    studyDayDate(value).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  }
                   formatter={(value, name) =>
                     `${capitalise(name as string)}: ${(
                       (value as number) /
