@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardCopy,
   NotebookPen,
+  Highlighter,
   List,
   Search,
   Palette,
@@ -17,7 +18,12 @@ import { ReaderContentsPanel } from "./ReaderContentsSheet";
 import { ReaderSettingsList } from "./ReaderSettingsSheet";
 import type { ChapterEntry, ReaderSheetId } from "./types";
 
-type ReaderSidebarPanel = "contents" | "search" | "settings" | "notes";
+type ReaderSidebarPanel =
+  | "contents"
+  | "search"
+  | "settings"
+  | "notes"
+  | "highlights";
 
 interface ReaderToolsSidebarProps {
   activeSheet: ReaderSheetId | null;
@@ -31,6 +37,7 @@ interface ReaderToolsSidebarProps {
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
   notesPanel?: ReactNode;
+  highlightsPanel?: ReactNode;
   onCopyDebugDump?: () => void;
 }
 
@@ -42,12 +49,14 @@ const SIDEBAR_TOOLS: {
   { id: "contents", label: "Contents", icon: List },
   { id: "search", label: "Search book", icon: Search },
   { id: "settings", label: "Reading appearance", icon: Palette },
+  { id: "highlights", label: "Highlights", icon: Highlighter },
   { id: "notes", label: "Notes", icon: NotebookPen },
 ];
 
 function resolveActivePanel(
   activeSheet: ReaderSheetId | null,
 ): ReaderSidebarPanel {
+  if (activeSheet === "highlights") return "highlights";
   if (activeSheet === "notes") return "notes";
   if (activeSheet === "search") return "search";
   if (activeSheet === "settings") return "settings";
@@ -73,6 +82,7 @@ export function ReaderToolsSidebar({
   onNavigateToHref,
   onCopyDebugDump,
   notesPanel,
+  highlightsPanel,
 }: ReaderToolsSidebarProps) {
   // Closing changes visibility, not the content shown during the exit.
   const [retainedPanel, setRetainedPanel] = useState(() =>
@@ -146,7 +156,7 @@ export function ReaderToolsSidebar({
               size="icon"
               onClick={onClose}
               aria-label="Close reader tools"
-              className="size-10 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
+              className="size-9 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
             >
               <ChevronRight className="size-[1.15rem]" />
             </Button>
@@ -165,7 +175,7 @@ export function ReaderToolsSidebar({
                   aria-pressed={isActive}
                   title={tool.label}
                   className={cn(
-                    "size-10 shrink-0 rounded-xl text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+                    "size-9 shrink-0 rounded-xl text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
                     isActive && "bg-secondary/70 text-foreground shadow-sm",
                   )}
                 >
@@ -184,20 +194,23 @@ export function ReaderToolsSidebar({
                 onClick={onCopyDebugDump}
                 aria-label="Copy debug dump"
                 title="Copy debug dump"
-                className="size-10 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
+                className="size-9 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
               >
                 <ClipboardCopy className="size-[1.1rem]" />
               </Button>
             )}
 
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-background/80 to-transparent"
-            />
+            {activePanel !== "settings" && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-full h-4 bg-gradient-to-b from-background/80 to-transparent"
+              />
+            )}
           </nav>
 
           <div className="min-h-0 flex-1 overflow-hidden">
             {activePanel === "notes" && notesPanel}
+            {activePanel === "highlights" && highlightsPanel}
             {activePanel === "contents" && (
               <ReaderContentsPanel
                 isOpen={isOpen}

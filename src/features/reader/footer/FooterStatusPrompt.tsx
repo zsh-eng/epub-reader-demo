@@ -12,7 +12,7 @@ export function FooterStatusPrompt({ prompt }: { prompt: ReaderStatusAction }) {
       className="pointer-events-auto px-3 sm:px-4"
       role="status"
     >
-      <div className="mx-auto flex max-w-[min(100%,34rem)] items-center gap-2 rounded-full border border-border/80 bg-background p-1 pl-4 shadow-lg shadow-background/20">
+      <div className="mx-auto flex max-w-[min(100%,34rem)] items-center gap-2 rounded-full border border-border/80 bg-background p-2 pl-4 shadow-lg shadow-background/20">
         <span className="min-w-0 flex-1 text-xs text-foreground">
           {prompt.error || prompt.title}
         </span>

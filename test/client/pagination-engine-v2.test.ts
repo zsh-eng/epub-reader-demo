@@ -1450,6 +1450,29 @@ describe("highlight opening location", () => {
           : [],
       ),
     ).toContain("highlight-block");
+    runCommand(engine, {
+      type: "goToChapter",
+      chapterIndex: 0,
+      intent: CHAPTER_JUMP_INTENT,
+    });
+    expect(getPageContentEvent(events)?.spread.chapterIndexStart).toBe(0);
+    events.length = 0;
+    runCommand(engine, {
+      type: "goToTarget",
+      chapterIndex: 1,
+      targetId: "opening-highlight",
+      targetKind: "highlight",
+      intent: { kind: "jump", source: "highlight" },
+    });
+    const jumped = getPageContentEvent(events)!;
+    expect(jumped.spread.intent).toEqual({ kind: "jump", source: "highlight" });
+    expect(
+      jumped.spread.slots.flatMap((slot) =>
+        slot.kind === "page"
+          ? slot.page.content.map((slice) => slice.blockId)
+          : [],
+      ),
+    ).toContain("highlight-block");
   });
 });
 

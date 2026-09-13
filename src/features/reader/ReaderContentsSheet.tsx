@@ -4,8 +4,7 @@ import type { TOCItem } from "@/lib/db";
 import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import { cn } from "@/lib/utils";
 import { ChevronLeft, List } from "lucide-react";
-import { LayoutGroup, motion, useReducedMotion } from "motion/react";
-import { useId, useLayoutEffect, useMemo, useRef, type Ref } from "react";
+import { useLayoutEffect, useMemo, useRef, type Ref } from "react";
 import { ReaderSheet } from "./shared/ReaderSheet";
 import type { ChapterEntry } from "./types";
 
@@ -245,13 +244,6 @@ function resolveCurrentTocItem(
   );
 }
 
-const CHAPTER_ACTIVE_TRANSITION = {
-  type: "spring" as const,
-  stiffness: 390,
-  damping: 36,
-  mass: 0.9,
-};
-
 function SectionHeading({
   section,
   currentItemId,
@@ -309,46 +301,41 @@ function SectionHeading({
 function ChapterRow({
   item,
   currentItemId,
-  layoutId,
   onSelect,
-  reducedMotion,
   currentRef,
 }: {
   item: FlattenedTocItem;
   currentItemId?: string;
-  layoutId: string;
   onSelect: (href: string) => boolean;
-  reducedMotion: boolean;
   currentRef?: Ref<HTMLButtonElement>;
 }) {
   const isCurrent = item.id === currentItemId;
 
   return (
-    <motion.button
+    <button
       ref={isCurrent ? currentRef : undefined}
       type="button"
       aria-current={isCurrent ? "location" : undefined}
       onClick={() => {
         onSelect(item.href);
       }}
-      className="relative isolate min-h-12 w-full rounded-xl py-3 text-left outline-none transition-colors duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+      className="group relative block min-h-12 w-full rounded-xl py-3 text-left outline-none active:bg-accent/60 focus-visible:ring-2 focus-visible:ring-ring/50"
       style={{
         paddingLeft: `${0.5 + item.visualDepth * 0.85}rem`,
         paddingRight: "0.5rem",
       }}
     >
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-xl bg-accent/45 opacity-0 transition-opacity duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none"
+      />
       {isCurrent ? (
-        <motion.span
-          layoutId={layoutId}
+        <span
           aria-hidden="true"
           className="absolute inset-0 z-0 rounded-xl bg-accent/45"
-          initial={false}
-          transition={
-            reducedMotion ? { duration: 0 } : CHAPTER_ACTIVE_TRANSITION
-          }
         >
           <span className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full bg-foreground/70" />
-        </motion.span>
+        </span>
       ) : null}
 
       <div className="relative z-10 grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_minmax(2.25rem,max-content)] items-baseline gap-3 px-1">
@@ -382,7 +369,7 @@ function ChapterRow({
           {item.page ?? ""}
         </span>
       </div>
-    </motion.button>
+    </button>
   );
 }
 
@@ -398,8 +385,6 @@ export function ReaderContentsPanel({
   const scrollAreaRootRef = useRef<HTMLDivElement | null>(null);
   const currentItemRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(false);
-  const layoutGroupId = useId();
-  const reducedMotion = useReducedMotion() ?? false;
 
   const contentsModel = useMemo(
     () => buildContentsModel(toc, chapterEntries, chapterStartPages),
@@ -443,48 +428,43 @@ export function ReaderContentsPanel({
       >
         <ScrollArea className="h-full w-full min-w-0 max-w-full overflow-x-hidden px-4 pb-3 pt-2">
           {contentsModel.items.length > 0 ? (
-            <LayoutGroup id={layoutGroupId}>
-              <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-1">
-                {contentsModel.sections.map((section, index) => {
-                  const followsGroupedSection =
-                    !section.heading &&
-                    Boolean(contentsModel.sections[index - 1]?.heading);
+            <div className="w-full min-w-0 max-w-full space-y-6 overflow-x-hidden pb-1">
+              {contentsModel.sections.map((section, index) => {
+                const followsGroupedSection =
+                  !section.heading &&
+                  Boolean(contentsModel.sections[index - 1]?.heading);
 
-                  return (
-                    <section
-                      key={section.id}
-                      className={cn(
-                        "space-y-3",
-                        !section.heading && "space-y-1",
-                        followsGroupedSection &&
-                          "border-t border-border/60 pt-3",
-                      )}
-                    >
-                      <SectionHeading
-                        section={section}
-                        currentItemId={currentTocItem?.id}
-                        onSelect={onNavigateToHref}
-                        currentRef={currentItemRef}
-                      />
+                return (
+                  <section
+                    key={section.id}
+                    className={cn(
+                      "space-y-3",
+                      !section.heading && "space-y-1",
+                      followsGroupedSection && "border-t border-border/60 pt-3",
+                    )}
+                  >
+                    <SectionHeading
+                      section={section}
+                      currentItemId={currentTocItem?.id}
+                      onSelect={onNavigateToHref}
+                      currentRef={currentItemRef}
+                    />
 
-                      <div className="space-y-1">
-                        {section.rows.map((item) => (
-                          <ChapterRow
-                            key={item.id}
-                            item={item}
-                            currentItemId={currentTocItem?.id}
-                            layoutId="reader-contents-active-chapter"
-                            onSelect={onNavigateToHref}
-                            reducedMotion={reducedMotion}
-                            currentRef={currentItemRef}
-                          />
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            </LayoutGroup>
+                    <div className="flex flex-col">
+                      {section.rows.map((item) => (
+                        <ChapterRow
+                          key={item.id}
+                          item={item}
+                          currentItemId={currentTocItem?.id}
+                          onSelect={onNavigateToHref}
+                          currentRef={currentItemRef}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           ) : (
             <div className="flex h-full min-h-48 flex-col items-center justify-center px-6 text-center">
               <div className="flex size-12 items-center justify-center rounded-full border border-border/60 bg-secondary/25 text-muted-foreground">

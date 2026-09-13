@@ -173,7 +173,7 @@ export function ReaderSettingsList({
     >
       <ScrollArea
         className="min-h-0 w-full max-w-full flex-1"
-        viewportClassName="overflow-x-hidden"
+        viewportClassName="overflow-x-hidden [mask-image:none] [-webkit-mask-image:none]"
         contentClassName="min-w-0 max-w-full overflow-x-hidden"
       >
         <div className="space-y-7 px-4 py-3">

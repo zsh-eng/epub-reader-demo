@@ -77,6 +77,7 @@ export interface GoToTargetCommand {
   type: "goToTarget";
   chapterIndex: number;
   targetId: string;
+  targetKind?: "element" | "highlight";
   intent: SpreadIntent;
 }
 

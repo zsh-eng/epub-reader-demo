@@ -9,11 +9,11 @@ afterEach(() => {
 
 it("restores the desktop tab across mounts and honors explicit destinations", () => {
   const first = renderHook(() => useReaderChromeState(false));
-  act(() => first.result.current.actions.openReaderSheet("notes"));
+  act(() => first.result.current.actions.openReaderSheet("highlights"));
   first.unmount();
   const next = renderHook(() => useReaderChromeState(false));
   act(() => next.result.current.actions.openReaderSheet("tools"));
-  expect(next.result.current.state.activeReaderSheet).toBe("notes");
+  expect(next.result.current.state.activeReaderSheet).toBe("highlights");
   act(() => next.result.current.actions.openReaderSheet("contents"));
   expect(next.result.current.state.activeReaderSheet).toBe("contents");
 });
@@ -32,4 +32,16 @@ it("uses Contents when the stored tab is invalid", () => {
   const { result } = renderHook(() => useReaderChromeState(false));
   act(() => result.current.actions.openReaderSheet("tools"));
   expect(result.current.state.activeReaderSheet).toBe("contents");
+});
+
+it("uses the mobile launcher when a desktop Highlights panel crosses the breakpoint", () => {
+  const { result, rerender } = renderHook(
+    ({ isMobile }) => useReaderChromeState(isMobile),
+    { initialProps: { isMobile: false } },
+  );
+  act(() => result.current.actions.openReaderSheet("highlights"));
+  rerender({ isMobile: true });
+  expect(result.current.state.activeReaderSheet).toBe("tools");
+  rerender({ isMobile: false });
+  expect(result.current.state.activeReaderSheet).toBe("highlights");
 });

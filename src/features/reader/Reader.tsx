@@ -19,11 +19,14 @@ import { ReaderNotesPrototype } from "./ReaderNotesPrototype";
 import { ReaderController } from "./ReaderController";
 import { ReaderHeader } from "./ReaderHeader";
 import { useSidebar } from "@/components/ui/sidebar";
+import { ReaderHighlightsPanel } from "./ReaderHighlightsPanel";
 import { ReaderSheetHost } from "./ReaderSheetHost";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderProgressPeek } from "./footer/ReaderProgressPeek";
 import { ReaderFooter } from "./footer";
+import { FooterStatusPrompt } from "./footer/FooterStatusPrompt";
+import { FooterHandoffPrompt } from "./footer/FooterHandoffPrompt";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
@@ -429,6 +432,15 @@ export function Reader() {
               </div>
 
               <ReaderHeader
+                accessory={
+                  !isMobile &&
+                  !isReaderInteractionSuppressed &&
+                  (handoffPrompt ? (
+                    <FooterHandoffPrompt prompt={handoffPrompt} />
+                  ) : (
+                    statusPrompt && <FooterStatusPrompt prompt={statusPrompt} />
+                  ))
+                }
                 chromeVisible={
                   noteViewportHeight === null &&
                   (!displayReady || chromeVisible)
@@ -506,8 +518,8 @@ export function Reader() {
                   isMobile ? () => handleNotesActive(true) : undefined
                 }
                 showPageNumbers={sessionState.settings.showPageNumbers}
-                statusPrompt={statusPrompt}
-                handoffPrompt={handoffPrompt}
+                statusPrompt={isMobile ? statusPrompt : undefined}
+                handoffPrompt={isMobile ? handoffPrompt : undefined}
               />
 
               {displayReady && (
@@ -579,6 +591,15 @@ export function Reader() {
                         currentChapterHref={currentChapterEntry?.href ?? ""}
                         onNavigateToHref={sessionActions.openInternalHref}
                         notesPanel={notesPanel}
+                        highlightsPanel={
+                          !isMobile && (
+                            <ReaderHighlightsPanel
+                              highlights={sessionState.highlights}
+                              chapters={sessionState.chapters.entries}
+                              onSelect={sessionActions.goToHighlight}
+                            />
+                          )
+                        }
                         onOpenNotes={() => {
                           chromeActions.closeReaderSheet();
                           handleNotesActive(true);

@@ -415,13 +415,19 @@ test.describe("Highlight note capture", () => {
       if (!node) throw new Error("No passage to select");
       const range = document.createRange();
       range.setStart(node, 0);
-      range.setEnd(node, 25);
+      let remaining = 300;
+      while (node && (node.textContent?.length ?? 0) < remaining) {
+        remaining -= node.textContent?.length ?? 0;
+        node = walker.nextNode();
+      }
+      if (!node) throw new Error("No long passage to select");
+      range.setEnd(node, remaining);
       window.getSelection()!.removeAllRanges();
       window.getSelection()!.addRange(range);
     });
     await expect
       .poll(() => page.evaluate(() => window.getSelection()?.toString().length))
-      .toBe(25);
+      .toBe(300);
     await page.evaluate(() =>
       document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })),
     );
@@ -453,6 +459,12 @@ test.describe("Highlight note capture", () => {
     const quote = page.getByTestId("note-quote");
     await expect(quote).toBeVisible();
     const quotedText = await quote.locator("span").textContent();
+    await expect(quote.locator("span")).toHaveCSS("text-overflow", "ellipsis");
+    expect(
+      await quote
+        .locator("span")
+        .evaluate((element) => element.scrollWidth > element.clientWidth),
+    ).toBe(true);
     await page
       .getByRole("textbox", { name: "Write a note" })
       .fill("This passage is worth revisiting.");
@@ -487,6 +499,17 @@ test.describe("Highlight note capture", () => {
     await expect(
       page.getByRole("region", { name: "Book notebook" }).locator("blockquote"),
     ).toHaveText(quotedText!);
+    const fullQuote = page
+      .getByRole("region", { name: "Book notebook" })
+      .locator("blockquote");
+    await expect(fullQuote).toHaveCSS("white-space", "pre-wrap");
+    expect(
+      await fullQuote.evaluate(
+        (element) =>
+          element.clientHeight > 30 &&
+          element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
     await page
       .getByRole("region", { name: "Book notebook" })
       .locator("article")

@@ -2,6 +2,7 @@ import {
   BookStatusSheet,
   READING_STATUS_LABELS,
 } from "@/components/BookStatusSheet";
+import { useFileUrl } from "@/hooks/use-file-url";
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useSync } from "@/hooks/use-sync";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +25,7 @@ export function ReaderBookActionsSheet({
   book,
 }: ReaderBookActionsSheetProps) {
   const navigate = useNavigate();
+  const { url: coverUrl } = useFileUrl(book.cover?.fileId, { skip: !isOpen });
   const { toast } = useToast();
   const { deleteBook } = useSync();
   const { status, isLoading, setStatusAsync, isUpdating } = useReadingStatus(
@@ -91,7 +93,7 @@ export function ReaderBookActionsSheet({
       }}
       bookTitle={book.title}
       bookAuthor={book.author}
-      coverUrl={undefined}
+      coverUrl={coverUrl}
       status={displayStatus}
       isUpdating={isLoading || isUpdating}
       onBack={onBack}

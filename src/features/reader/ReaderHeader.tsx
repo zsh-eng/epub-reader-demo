@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, MoreHorizontal, PanelRight } from "lucide-react";
+import type { ReactNode } from "react";
 import { motion } from "motion/react";
 import type { ReaderChromeSurfaceProps } from "./chrome";
 
@@ -45,6 +46,7 @@ const CHROME_BUTTON_CLASS_NAME =
 
 interface ReaderHeaderProps {
   chromeVisible: boolean;
+  accessory?: ReactNode;
   chromeSurfaceProps?: ReaderChromeSurfaceProps;
   bookTitle: string;
   showBackButton: boolean;
@@ -56,6 +58,7 @@ interface ReaderHeaderProps {
 
 export function ReaderHeader({
   chromeVisible,
+  accessory,
   chromeSurfaceProps,
   bookTitle,
   showBackButton,
@@ -81,113 +84,132 @@ export function ReaderHeader({
       : CHROME_FADE_OUT_TRANSITION;
 
   return (
-    <motion.div
-      className="absolute inset-x-0 top-0 z-20 overflow-visible"
-      animate={{ y: chromeShellY }}
-      transition={{ y: chromeShellTransition }}
-      {...chromeSurfaceProps}
-      style={{
-        height: `calc(env(safe-area-inset-top) + ${CHROME_SHELL_HEIGHT_PX}px)`,
-      }}
-    >
-      <motion.button
-        type="button"
-        className="absolute right-4 top-0 z-10 w-7 cursor-pointer overflow-hidden bg-background/95 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-        animate={{
-          y: isBookmarked ? BOOKMARK_RIBBON_ACTIVE_DROP_PX : 0,
-          opacity: chromeVisible || isBookmarked ? 1 : 0,
-        }}
-        transition={{
-          y: bookmarkRibbonYTransition,
-          opacity: bookmarkRibbonOpacityTransition,
-        }}
+    <>
+      <motion.div
+        className="absolute inset-x-0 top-0 z-20 overflow-visible"
+        animate={{ y: chromeShellY }}
+        transition={{ y: chromeShellTransition }}
+        {...chromeSurfaceProps}
         style={{
-          top: `calc(env(safe-area-inset-top) + ${BOOKMARK_RIBBON_BASE_TOP_PX}px)`,
-          right: `${BOOKMARK_RIBBON_RIGHT_PX}px`,
-          width: `${BOOKMARK_RIBBON_WIDTH_PX}px`,
-          height: `${BOOKMARK_RIBBON_HEIGHT_PX}px`,
-          clipPath:
-            "polygon(0 0, 100% 0, 100% calc(100% - 12px), 50% 100%, 0 calc(100% - 12px))",
-          pointerEvents: chromeVisible || isBookmarked ? "auto" : "none",
+          height: `calc(env(safe-area-inset-top) + ${CHROME_SHELL_HEIGHT_PX}px)`,
         }}
-        onClick={onToggleBookmark}
-        aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
-        aria-pressed={isBookmarked}
       >
-        <svg
-          viewBox="0 0 28 52"
-          className="block size-full"
-          aria-hidden="true"
-          focusable="false"
+        <motion.button
+          type="button"
+          className="absolute right-4 top-0 z-10 w-7 cursor-pointer overflow-hidden bg-background/95 backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+          animate={{
+            y: isBookmarked ? BOOKMARK_RIBBON_ACTIVE_DROP_PX : 0,
+            opacity: chromeVisible || isBookmarked ? 1 : 0,
+          }}
+          transition={{
+            y: bookmarkRibbonYTransition,
+            opacity: bookmarkRibbonOpacityTransition,
+          }}
+          style={{
+            top: `calc(env(safe-area-inset-top) + ${BOOKMARK_RIBBON_BASE_TOP_PX}px)`,
+            right: `${BOOKMARK_RIBBON_RIGHT_PX}px`,
+            width: `${BOOKMARK_RIBBON_WIDTH_PX}px`,
+            height: `${BOOKMARK_RIBBON_HEIGHT_PX}px`,
+            clipPath:
+              "polygon(0 0, 100% 0, 100% calc(100% - 12px), 50% 100%, 0 calc(100% - 12px))",
+            pointerEvents: chromeVisible || isBookmarked ? "auto" : "none",
+          }}
+          onClick={onToggleBookmark}
+          aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}
+          aria-pressed={isBookmarked}
         >
-          <polygon
-            points="0.75,0.75 27.25,0.75 27.25,40 14,51.25 0.75,40"
-            fill={isBookmarked ? "var(--secondary)" : "none"}
-            stroke={isBookmarked ? "var(--muted-foreground)" : "var(--border)"}
-            strokeWidth="1.5"
-            vectorEffect="non-scaling-stroke"
+          <svg
+            viewBox="0 0 28 52"
+            className="block size-full"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <polygon
+              points="0.75,0.75 27.25,0.75 27.25,40 14,51.25 0.75,40"
+              fill={isBookmarked ? "var(--secondary)" : "none"}
+              stroke={
+                isBookmarked ? "var(--muted-foreground)" : "var(--border)"
+              }
+              strokeWidth="1.5"
+              vectorEffect="non-scaling-stroke"
+              style={{
+                transition: "fill 180ms ease, stroke 180ms ease",
+              }}
+            />
+          </svg>
+        </motion.button>
+
+        <header
+          className="absolute inset-x-0 top-0 z-20 bg-background/88 backdrop-blur-xl"
+          style={{
+            paddingTop: "env(safe-area-inset-top)",
+            pointerEvents: chromeVisible ? "auto" : "none",
+          }}
+        >
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border/70"
+            aria-hidden="true"
+          />
+          <div
+            className="pointer-events-none absolute bottom-0 h-px bg-background/88"
+            aria-hidden="true"
             style={{
-              transition: "fill 180ms ease, stroke 180ms ease",
+              right: `${HEADER_BORDER_GAP_RIGHT_PX}px`,
+              width: `${HEADER_BORDER_GAP_WIDTH_PX}px`,
             }}
           />
-        </svg>
-      </motion.button>
+          <div className="relative z-10 mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
+            {/* Zone 1 — Left: mobile reader navigation or desktop sidebar space. */}
+            <div className="flex items-center">
+              {showBackButton && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={onBackToLibrary}
+                  aria-label="Back to library"
+                  className={CHROME_BUTTON_CLASS_NAME}
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+              )}
+            </div>
 
-      <header
-        className="absolute inset-x-0 top-0 z-20 bg-background/88 backdrop-blur-xl"
-        style={{
-          paddingTop: "env(safe-area-inset-top)",
-          pointerEvents: chromeVisible ? "auto" : "none",
-        }}
-      >
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-border/70"
-          aria-hidden="true"
-        />
-        <div
-          className="pointer-events-none absolute bottom-0 h-px bg-background/88"
-          aria-hidden="true"
-          style={{
-            right: `${HEADER_BORDER_GAP_RIGHT_PX}px`,
-            width: `${HEADER_BORDER_GAP_WIDTH_PX}px`,
-          }}
-        />
-        <div className="relative z-10 mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
-          {/* Zone 1 — Left: mobile reader navigation or desktop sidebar space. */}
-          <div className="flex items-center">
-            {showBackButton && (
+            {/* Zone 2 — Center: Book title */}
+            <p className="max-w-[min(64vw,36rem)] truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {bookTitle}
+            </p>
+
+            {/* Zone 3 — Right: mobile launcher or desktop sidebar trigger. */}
+            <div className="flex items-center justify-end">
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={onBackToLibrary}
-                aria-label="Back to library"
+                onClick={onOpenMenu}
+                aria-label="Open reader tools"
                 className={CHROME_BUTTON_CLASS_NAME}
               >
-                <ChevronLeft className="size-4" />
+                <MoreHorizontal className="size-4 md:hidden" />
+                <PanelRight className="hidden size-4 md:block" />
               </Button>
-            )}
+            </div>
           </div>
-
-          {/* Zone 2 — Center: Book title */}
-          <p className="max-w-[min(64vw,36rem)] truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            {bookTitle}
-          </p>
-
-          {/* Zone 3 — Right: mobile launcher or desktop sidebar trigger. */}
-          <div className="flex items-center justify-end">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={onOpenMenu}
-              aria-label="Open reader tools"
-              className={CHROME_BUTTON_CLASS_NAME}
-            >
-              <MoreHorizontal className="size-4 md:hidden" />
-              <PanelRight className="hidden size-4 md:block" />
-            </Button>
-          </div>
-        </div>
-      </header>
-    </motion.div>
+        </header>
+      </motion.div>
+      {/* Accessories remain available when the header tucks away, and follow it
+        down when controls are shown. The right inset clears the bookmark. */}
+      {accessory && (
+        <motion.div
+          data-reader-header-accessory=""
+          className="absolute right-14 z-20 w-[min(34rem,calc(100%-4rem))]"
+          style={{ top: "calc(env(safe-area-inset-top) + 0.5rem)" }}
+          initial={false}
+          animate={{ y: chromeVisible ? HEADER_HEIGHT_PX : 0 }}
+          transition={chromeShellTransition}
+          {...(chromeVisible ? chromeSurfaceProps : undefined)}
+        >
+          {accessory}
+        </motion.div>
+      )}
+    </>
   );
 }

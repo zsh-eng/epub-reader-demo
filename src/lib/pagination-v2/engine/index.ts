@@ -198,7 +198,12 @@ export class PaginationEngine {
         });
       case "goToTarget":
         return this.runOneStepWork(intent, () => {
-          this.goToTarget(intent, cmd.chapterIndex, cmd.targetId);
+          this.goToTarget(
+            intent,
+            cmd.chapterIndex,
+            cmd.targetId,
+            cmd.targetKind,
+          );
         });
     }
   }
@@ -614,6 +619,7 @@ export class PaginationEngine {
     intent: SpreadIntent,
     chapterIndex: number,
     targetId: string,
+    targetKind: "element" | "highlight" = "element",
   ): void {
     const chapter = Math.floor(chapterIndex);
     if (chapter < 0 || chapter >= this.totalChapters) {
@@ -629,7 +635,13 @@ export class PaginationEngine {
 
     this.preferredAnchorSlotIndex = null;
     this.anchor =
-      resolveTargetToAnchor(this.preparedByChapter, chapter, targetId) ??
+      (targetKind === "highlight"
+        ? resolveHighlightToAnchor(
+            this.preparedByChapter[chapter] ?? [],
+            chapter,
+            targetId,
+          )
+        : resolveTargetToAnchor(this.preparedByChapter, chapter, targetId)) ??
       pickAnchorForPage(this.pagesByChapter, chapter, 0);
     this.emitPageContent(intent);
   }

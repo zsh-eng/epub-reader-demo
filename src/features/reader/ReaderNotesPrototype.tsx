@@ -614,7 +614,7 @@ export function ReaderNotesPrototype({
                 >
                   {entry.quote && (
                     <blockquote
-                      className="mb-2 truncate border-l-[3px] pl-2 text-xs text-muted-foreground"
+                      className="mb-2 whitespace-pre-wrap break-words border-l-[3px] pl-2 text-xs leading-relaxed text-muted-foreground"
                       style={{
                         borderColor:
                           entry.quote.color === "invisible"

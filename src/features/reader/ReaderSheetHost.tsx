@@ -22,6 +22,7 @@ interface ReaderSheetHostProps {
   currentChapterHref: string;
   onNavigateToHref: (href: string) => boolean;
   notesPanel?: ReactNode;
+  highlightsPanel?: ReactNode;
   onOpenNotes?: () => void;
   onCopyDebugDump?: () => void;
 }
@@ -48,6 +49,7 @@ export function ReaderSheetHost({
   onOpenNotes,
   onCopyDebugDump,
   notesPanel,
+  highlightsPanel,
 }: ReaderSheetHostProps) {
   if (!isMobile) {
     return (
@@ -63,6 +65,7 @@ export function ReaderSheetHost({
         currentChapterHref={currentChapterHref}
         onNavigateToHref={onNavigateToHref}
         notesPanel={notesPanel}
+        highlightsPanel={highlightsPanel}
         onCopyDebugDump={onCopyDebugDump}
       />
     );

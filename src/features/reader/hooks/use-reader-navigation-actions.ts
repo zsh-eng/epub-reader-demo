@@ -1,3 +1,4 @@
+import type { Highlight } from "@/types/highlight";
 import { splitHrefFragment } from "@/lib/epub-resource-utils";
 import type { SpreadIntent } from "@/lib/pagination-v2/types";
 import { useCallback, useMemo } from "react";
@@ -15,7 +16,7 @@ interface ReaderPaginationNavigation {
   goToTarget: (
     chapterIndex: number,
     targetId: string,
-    options: { intent: SpreadIntent },
+    options: { intent: SpreadIntent; targetKind?: "element" | "highlight" },
   ) => void;
 }
 
@@ -35,6 +36,7 @@ export interface ReaderNavigationActions {
   goToPreviousChapter: () => void;
   goToNextChapter: () => void;
   openInternalHref: (href: string) => boolean;
+  goToHighlight: (highlight: Highlight) => void;
 }
 
 /**
@@ -142,6 +144,20 @@ export function useReaderNavigationActions({
     [pagination, resolveHrefTarget],
   );
 
+  const goToHighlight = useCallback(
+    (highlight: Highlight) => {
+      const chapter = chapterEntries.find(
+        (entry) => entry.spineItemId === highlight.spineItemId,
+      );
+      if (!chapter) return;
+      pagination.goToTarget(chapter.index, highlight.id, {
+        intent: { kind: "jump", source: "highlight" },
+        targetKind: "highlight",
+      });
+    },
+    [chapterEntries, pagination],
+  );
+
   return useMemo(
     () => ({
       nextSpread,
@@ -153,6 +169,7 @@ export function useReaderNavigationActions({
       goToPreviousChapter,
       goToNextChapter,
       openInternalHref,
+      goToHighlight,
     }),
     [
       commitPage,
@@ -162,6 +179,7 @@ export function useReaderNavigationActions({
       jumpToHandoffPage,
       nextSpread,
       openInternalHref,
+      goToHighlight,
       previewPage,
       prevSpread,
     ],

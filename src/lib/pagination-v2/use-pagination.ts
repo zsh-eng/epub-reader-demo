@@ -137,7 +137,7 @@ export interface UsePaginationResult {
   goToTarget: (
     chapterIndex: number,
     targetId: string,
-    options: { intent: SpreadIntent },
+    options: { intent: SpreadIntent; targetKind?: "element" | "highlight" },
   ) => void;
 
   init: (options: {
@@ -618,12 +618,13 @@ export function usePagination(
     (
       chapterIndex: number,
       targetId: string,
-      options: { intent: SpreadIntent },
+      options: { intent: SpreadIntent; targetKind?: "element" | "highlight" },
     ) => {
       postCommand({
         type: "goToTarget",
         chapterIndex: Math.floor(chapterIndex),
         targetId,
+        targetKind: options.targetKind,
         intent: options.intent,
       });
     },

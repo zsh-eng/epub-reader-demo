@@ -96,6 +96,7 @@ export interface ReaderSessionActions {
   goToPreviousChapter: ReaderNavigationActions["goToPreviousChapter"];
   goToNextChapter: ReaderNavigationActions["goToNextChapter"];
   openInternalHref: ReaderNavigationActions["openInternalHref"];
+  goToHighlight: ReaderNavigationActions["goToHighlight"];
   createHighlight: (highlight: Highlight) => void;
   resumeBackgroundLoad: () => void;
 }
