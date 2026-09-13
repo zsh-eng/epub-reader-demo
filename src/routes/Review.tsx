@@ -116,13 +116,13 @@ export default function ReviewRoute() {
       >
         <div
           className={cn(
-            "relative col-span-12 flex flex-col gap-x-4 gap-y-0 sm:gap-y-1 bg-background/60 backdrop-blur-sm dark:bg-muted/30 rounded-t-2xl sm:rounded-b-2xl px-1 md:px-0 pt-1 h-full animate-fade-in",
+            "relative col-span-12 flex flex-col gap-x-4 gap-y-0 [@media(width>640px)]:gap-y-1 bg-background/60 backdrop-blur-sm dark:bg-muted/30 rounded-t-2xl [@media(width>640px)]:rounded-b-2xl px-1 md:px-0 pt-1 h-full animate-fade-in",
             "dark:border",
-            "sm:shadow-lg",
+            "[@media(width>640px)]:shadow-lg",
           )}
         >
           {/* Actions dropdown menu */}
-          <div className="absolute top-1 sm:-top-1 right-2 flex z-20">
+          <div className="absolute top-1 [@media(width>640px)]:-top-1 right-2 flex z-20">
             {/* <div className='px-2 py-3'>
                 <Redo2 className='size-6 text-muted-foreground/50 hover:text-muted-foreground transition-all rotate-180' />
               </div> */}
@@ -144,7 +144,7 @@ export default function ReviewRoute() {
             )}
           </div>
 
-          <div className="w-full flex flex-col-reverse sm:flex-row justify-between items-center gap-4 px-2">
+          <div className="w-full flex flex-col-reverse [@media(width>640px)]:flex-row justify-between items-center gap-4 px-2">
             <div className="flex gap-2 items-center ml-2">
               <CardCountBadges />
               {nextReviewCard && <CurrentCardBadge card={nextReviewCard} />}
@@ -155,19 +155,20 @@ export default function ReviewRoute() {
             renderItem={(ref) => {
               return (
                 <div
-                  className="flex flex-col md:flex-row justify-stretch md:justify-center items-center gap-2 lg:gap-4 w-full h-full sm:bg-background rounded-b-2xl sm:border-t"
+                  className="flex flex-col md:flex-row justify-stretch md:justify-center items-center gap-2 lg:gap-4 w-full h-full [@media(width>640px)]:bg-background rounded-b-2xl [@media(width>640px)]:border-t"
                   ref={ref}
                 >
                   {nextReviewCard ? (
-                    <div className="w-full hidden sm:flex items-center gap-6 p-6">
-                      <FlashcardContent content={nextReviewCard.front} />
-                      <FlashcardContent content={nextReviewCard.back} />
-                    </div>
+                    isMobile ? (
+                      <MobileReviewCarousel card={nextReviewCard} />
+                    ) : (
+                      <div className="w-full flex items-center gap-6 p-6">
+                        <FlashcardContent content={nextReviewCard.front} />
+                        <FlashcardContent content={nextReviewCard.back} />
+                      </div>
+                    )
                   ) : (
                     <EmptyReviewUi noCardsCreatedYet={noCardsCreatedYet} />
-                  )}
-                  {nextReviewCard && (
-                    <MobileReviewCarousel card={nextReviewCard} />
                   )}
                 </div>
               );
@@ -176,15 +177,17 @@ export default function ReviewRoute() {
         </div>
       </DesktopActionsContextMenu>
 
-      <div className="col-span-12 w-full hidden sm:block sm:mx-auto sm:w-max mb-4 px-4 pb-2">
-        {nextReviewCard && !isMobile && (
-          <DesktopGradeButtons
-            key={nextReviewCard.id}
-            onGrade={handleGrade}
-            card={nextReviewCard}
-          />
-        )}
-      </div>
+      {!isMobile && (
+        <div className="col-span-12 mx-auto w-max mb-4 px-4 pb-2">
+          {nextReviewCard && (
+            <DesktopGradeButtons
+              key={nextReviewCard.id}
+              onGrade={handleGrade}
+              card={nextReviewCard}
+            />
+          )}
+        </div>
+      )}
       <div className="col-span-12 mt-0">
         {nextReviewCard && isMobile && (
           <MobileGradeButtons key={nextReviewCard.id} onGrade={handleGrade} />

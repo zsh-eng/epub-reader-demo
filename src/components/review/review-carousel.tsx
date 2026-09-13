@@ -79,7 +79,7 @@ export default function MobileReviewCarousel({
   );
 
   return (
-    <div className="flex flex-col items-center gap-2 sm:hidden w-full pt-4">
+    <div className="flex flex-col items-center gap-2 w-full pt-4">
       <Dots current={current} count={count} />
       <Carousel className="w-full max-w-md pt-3" setApi={setApi}>
         <CarouselContent>

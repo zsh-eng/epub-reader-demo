@@ -144,9 +144,7 @@ export const cardMetadataOperationSchema = z
   })
   .passthrough();
 
-export type CardMetadataOperation = z.infer<
-  typeof cardMetadataOperationSchema
->;
+export type CardMetadataOperation = z.infer<typeof cardMetadataOperationSchema>;
 
 export const deckOperationSchema = z
   .object({
@@ -374,8 +372,8 @@ export async function gradeCardOperation(
     card,
     cardId: card.id,
     reviewLogId: reviewLogOperation.payload.id,
+    siblingSuspensions: [],
   };
-  MemoryDB.pushUndoGrade(undo);
 
   // Bury sibling cards (same noteId) until tomorrow
   const siblingBuryOps: CardSuspendedOperation[] = [];
@@ -388,18 +386,27 @@ export async function gradeCardOperation(
     for (const siblingId of siblingIds) {
       const sibling = MemoryDB.getCardById(siblingId);
       if (!sibling || sibling.deleted) continue;
-      // Don't bury if already suspended past tomorrow (e.g. permanently buried)
-      if (sibling.suspended && sibling.suspended > tomorrow) continue;
+      // Don't bury if already suspended until tomorrow or later (e.g. permanently buried)
+      if (sibling.suspended && sibling.suspended >= tomorrow) continue;
 
       const buryOp: CardSuspendedOperation = {
         type: "cardSuspended",
         payload: { cardId: siblingId, suspended: tomorrow },
-        timestamp: Date.now(),
+        timestamp: Math.max(Date.now(), sibling.cardSuspendedLastModified + 1),
       };
-      handleCardSuspendedOperation(buryOp);
+      const result = handleCardSuspendedOperation(buryOp);
+      if (!result.applied) continue;
+      undo.siblingSuspensions.push({
+        cardId: siblingId,
+        previousSuspended: sibling.suspended,
+        suspended: tomorrow,
+        timestamp: buryOp.timestamp,
+      });
       siblingBuryOps.push(buryOp);
     }
   }
+
+  MemoryDB.pushUndoGrade(undo);
 
   const allOperations: Operation[] = [
     cardOperation,
@@ -425,6 +432,7 @@ type UndoGradeResult = {
  * "Undoing" a grade is done by
  * 1. Marking the existing review log as deleted
  * 2. Writing the old version of the card
+ * 3. Restoring sibling suspensions that this grade changed
  */
 export async function undoGradeCard(): Promise<UndoGradeResult> {
   const undo = MemoryDB.popUndoGrade();
@@ -471,13 +479,41 @@ export async function undoGradeCard(): Promise<UndoGradeResult> {
     );
   }
 
+  const siblingRestoreOps: CardSuspendedOperation[] = [];
+  for (const change of undo.siblingSuspensions) {
+    const sibling = MemoryDB.getCardById(change.cardId);
+    // Keep any suspension changed after this grade, including manual changes.
+    if (
+      !sibling ||
+      sibling.deleted ||
+      sibling.cardSuspendedLastModified !== change.timestamp ||
+      sibling.suspended?.getTime() !== change.suspended.getTime()
+    )
+      continue;
+
+    const restoreOp: CardSuspendedOperation = {
+      type: "cardSuspended",
+      // Epoch is the existing wire representation of an unsuspended card.
+      payload: {
+        cardId: change.cardId,
+        suspended: change.previousSuspended ?? new Date(0),
+      },
+      timestamp: Math.max(now, sibling.cardSuspendedLastModified + 1),
+    };
+    if (handleCardSuspendedOperation(restoreOp).applied) {
+      siblingRestoreOps.push(restoreOp);
+    }
+  }
+
   const operations = [
     structuredClone(cardOperation),
     structuredClone(reviewLogDeletedOperation),
+    ...siblingRestoreOps.map((op) => structuredClone(op)),
   ];
 
   await db.operations.add(cardOperation);
   await db.reviewLogOperations.add(reviewLogDeletedOperation);
+  await db.operations.bulkAdd(siblingRestoreOps);
   await db.pendingOperations.bulkAdd(operations);
   MemoryDB.notify();
 
@@ -846,7 +882,7 @@ export async function updateSuspendedClientSide(
       cardId,
       suspended,
     },
-    timestamp: Date.now(),
+    timestamp: Math.max(Date.now(), card.cardSuspendedLastModified + 1),
   };
   await handleClientOperationWithPersistence(cardOperation);
 }
