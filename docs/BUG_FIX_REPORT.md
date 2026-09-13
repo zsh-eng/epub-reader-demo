@@ -24,8 +24,22 @@ integration into `main`.
 | B-35, B-36, B-37 | Open review actions retain their card target and reject removed targets. Editor drafts survive layout changes. Interrupted grade key presses are cancelled. |
 | B-39 | Verification and image confirmation block repeat requests and permit retry. |
 
-All 34 entries marked as fixes in the audit are addressed. The seven entries
-marked as product calls remain open below.
+All 34 entries marked as fixes in the initial audit are addressed. The user
+resolved several of the seven product calls on 13 September 2026. Their status
+is recorded below.
+
+## Follow-up decisions, 13 September 2026
+
+| Audit ID | User decision and result |
+| --- | --- |
+| B-09 | Undo reverses the entire grade action, including automatic sibling suspension. Undo now stores each changed sibling's previous suspension and writes inverse operations to local storage and the sync queue. It preserves a suspension changed by a later action. An absent previous suspension becomes the existing epoch-date value for an unsuspended card, so older clients can read it. |
+| B-11 | Exactly 640 pixels uses the mobile review layout. Content, grade controls, and review styles now switch to desktop only above 640 pixels. |
+| B-28 | Delete a cancelled upload if possible. The backend has no delete endpoint and reuses a file key for duplicate images. Safe deletion is therefore unavailable. Upload now starts only when the user confirms the preview. Closing the preview before confirmation creates no remote file. See the remaining backend limit below. |
+| B-38 | Do not add selective retry for failed imported cards. Existing import results still report failures. No retry feature was added. |
+| B-41 | Ask before a footer action discards unsaved card text. Bookmark, bury, unsuspend, and delete now show an action-specific browser confirmation when the text differs from its initial value. Cancel retains the draft; confirm runs the action without saving that text. Unchanged text requires no prompt. |
+
+Delaying upload adds upload time after confirmation. A clipboard retry still
+reuses the completed upload.
 
 ## UX choices made
 
@@ -51,13 +65,34 @@ marked as product calls remain open below.
 
 | Audit ID | Decision |
 | --- | --- |
-| B-09 | Should grade Undo also restore the automatic suspension of sibling cards? |
-| B-11 | Should the review layout at exactly 640 pixels use the mobile or desktop design? |
-| B-20 | Which time zone defines a study day? Should a streak remain current if the last review was yesterday? |
-| B-23 | Before sign-out, should unsynced work block sign-out, require an explicit discard, or offer export? |
-| B-28 | Should closing an upload preview cancel/delete the early upload, or retain it for reuse? |
-| B-38 | Should import retain a per-card failure list and offer retry of only failed cards? |
-| B-41 | Should footer actions preserve, save, or explicitly discard unsaved card text? |
+| B-20 | Which time zone defines a study day? Should a streak remain current if the last review was yesterday? The user first asked what is stored; the storage details are below. No new grouping policy has been selected. |
+| B-23 | The user's "Yes" applied to a question with several options, so the sign-out policy needs clarification: sync first and stay signed in on failure; offer explicit discard after failure; or block while pending changes remain. The current policy has not changed. |
+
+### Review time storage (B-20)
+
+The app stores an instant in time, not a time-zone name or the offset at the
+time of review. Local review fields such as `review`, `due`, and `createdAt`
+are JavaScript `Date` values. Sync serializes these as UTC ISO strings.
+Operation timestamps are numeric epoch milliseconds. No `Asia/Singapore` or
+other IANA time-zone setting is stored.
+
+Basic statistics, the heatmap, and the review chart currently use UTC dates to
+group reviews, while some display labels use the device's local time. Existing
+timestamps can be grouped in any selected time zone. They cannot recover the
+reviewer's original local day after travel without a recorded time zone.
+
+### Remaining upload limit (B-28)
+
+If the upload succeeds but copying its link fails, closing that preview can
+still leave an unused remote file. The frontend cannot safely remove it:
+`POST /api/upload` returns the same response for a new file and a deduplicated
+existing file, and the backend exposes no file deletion endpoint. Safe cleanup
+needs a backend contract that protects files used by existing cards. Existing
+remote files were not changed. This is a backend limit, not an unanswered
+preference about cancellation.
+
+Backend evidence: `src/upload.ts`, `src/index.ts`, and `test/upload.spec.ts` in
+the private `zsh-eng/spaced-backend` repository, inspected on 13 September 2026.
 
 Legacy grade history also needs a repair policy. Existing labels are not
 rewritten because valid imported records cannot be distinguished safely from
@@ -82,8 +117,28 @@ records written with the old mapping.
   mobile-to-desktop transitions, then saved successfully.
 - Account and media failures use controlled request/storage fixtures. No live
   account credentials or remote uploads are needed for these regression tests.
+- Decision follow-up baseline: 86 tests, 330 assertions passed before changes.
+- Decision follow-up integration: 98 tests, 431 assertions passed. Lint has no
+  errors and the same five existing export warnings. The production build
+  passed using the local `.env.production` file without printing its values.
+  Generated CSS includes the strict `(width>640px)` media query. No deployment
+  was run. Existing bundle size and Browserslist age warnings remain.
 
-## Suggested review order
+## Suggested review order for the decision follow-up
+
+1. `src/lib/db/memory.ts` and `src/lib/sync/operation.ts`: sibling suspension
+   snapshots, guarded restoration, and compatible inverse operations.
+2. `src/routes/Review.tsx` and
+   `src/components/review/review-carousel.tsx`: mobile review through 640 pixels.
+3. `src/components/card-actions/edit-flashcard-responsive.tsx` and
+   `edit-flashcard-footer-actions.tsx`: dirty-text confirmation shared by the
+   dialog and drawer.
+4. `src/routes/CreateFlashcardRoute.tsx`: upload starts at confirmation.
+5. `tests/review-decisions.test.tsx`,
+   `src/components/card-actions/edit-flashcard-responsive.test.tsx`, and
+   `src/routes/CreateFlashcardRoute.media.test.tsx`: regression coverage.
+
+## Suggested review order for the initial audit fixes
 
 1. `src/lib/sync/operation.ts` and `src/lib/sync/form-persistence.test.ts`:
    atomic form writes and storage rollback.
@@ -107,5 +162,6 @@ records written with the old mapping.
    cache references, cancellation, and upload/copy recovery.
 
 The pre-existing local edit in `src/components/stats/time-bar-chart.tsx` is
-outside this change. The separate `product-description` repository remains the
-baseline audit; this report records the source fixes.
+outside this change. The original audit came from a separate
+`product-description` repository, which is not present in this checkout.
+This report is the available record of fixes and remaining decisions.
