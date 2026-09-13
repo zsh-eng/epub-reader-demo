@@ -188,6 +188,12 @@ Notetaking flow
 - [x] Make app feel more native to iOS
 - [x] Sync lab
 
+- [ ] Appropriate scrolling for the notebook stuff (pinned input for keyboard, keyboard goes up)
+- [ ] Review what's the policy for figuring out the reading usage (what are the thresholds
+      we set, etc.)
+- [ ] Nice, more beautiful sync states - persistent UI for showing the syncing of books, etc.
+- [ ] Add time read for the day / for the book more prominently somewhere?
+- [ ] BUG: Still have bug for freezing when network connection is bad (but not nothing)
 - [ ] Benchmark binary encoding/table IDs against current JSON using representative
       Book/note/highlight data. Gate: compressed bytes, codec time and bundle size
       justify a change; define immutable IDs, schema versions and unknown-ID
