@@ -46,6 +46,15 @@ default to satisfy TypeScript would not preserve progress through learning
 steps. An upgrade must cover creation, grading, persistence, sync, reload, and
 Undo, with a default for older records and compatible backend validation.
 
+Old-record adaptation can run on the client, but the backend cannot remain
+unchanged. The production backup taken on 13 September confirms that `cards`
+and `review_logs` have fixed columns with no `learning_steps`. Backend commit
+`5a403f2` also strips unknown fields during payload validation and explicitly
+maps columns on push and pull. It therefore needs storage and API support for
+the new field before clients depend on it. Adding that support does not require
+recalculating historical schedules. Old clients that omit the field must not
+reset learning progress written by newer clients.
+
 For a fixed synthetic new card reviewed at `2026-09-13T04:00:00Z` using our
 current fuzz/100-day settings, Easy changed from 17 days in 4.5.0 to 8 days in
 5.4.2. This is one fixture, not a general prediction for users. It shows why
