@@ -73,6 +73,9 @@ for (const mobile of [true, false]) {
           });
         await page.reload();
         await waitForReaderReady(page);
+        if (!mobile) {
+          await page.locator('[data-reader-chrome-rail="bottom"]').hover();
+        }
         await expect(page.getByTestId("reader-page-indicator")).toHaveCount(0);
         const current = page
           .locator(
@@ -102,6 +105,9 @@ for (const mobile of [true, false]) {
         await expect(pageNumbers).toBeChecked();
         await page.reload();
         await waitForReaderReady(page);
+        if (!mobile) {
+          await page.locator('[data-reader-chrome-rail="bottom"]').hover();
+        }
         await expect(page.getByTestId("reader-page-indicator")).toHaveCount(1);
       });
     },
