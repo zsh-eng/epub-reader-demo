@@ -16,6 +16,7 @@ type EditFlashcardDialogProps = {
   onEdit: (values: CardContentFormValues) => void | Promise<void>;
   form: UseFormReturn<CardContentFormValues>;
   submitLock: MutableRefObject<boolean>;
+  beforeAction: (action: string) => boolean;
   card: CardWithMetadata;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,6 +31,7 @@ export default function EditFlashcardDialog({
   actions,
   form,
   submitLock,
+  beforeAction,
 }: EditFlashcardDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,6 +53,7 @@ export default function EditFlashcardDialog({
         {actions && (
           <EditFlashcardFooterActions
             disabled={form.formState.isSubmitting}
+            beforeAction={beforeAction}
             actions={actions}
             onClose={() => onOpenChange(false)}
           />
