@@ -10,6 +10,12 @@ export type UndoGrade = {
   card: Card;
   cardId: string;
   reviewLogId: string;
+  siblingSuspensions: {
+    cardId: string;
+    previousSuspended?: Date;
+    suspended: Date;
+    timestamp: number;
+  }[];
 };
 
 type InternalMemoryDB = {
