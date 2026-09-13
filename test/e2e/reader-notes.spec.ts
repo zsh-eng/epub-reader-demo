@@ -390,6 +390,14 @@ test.describe("Desktop margin notes", () => {
       );
     });
     expect(closeInset).toBeCloseTo(8, 0);
+    const firstToolInset = await toolbar.evaluate((nav) => {
+      const firstTool = nav.querySelector("button")!;
+      return (
+        firstTool.getBoundingClientRect().left -
+        nav.getBoundingClientRect().left
+      );
+    });
+    expect(firstToolInset).toBeCloseTo(12, 0);
     await page.screenshot({
       path: testInfo.outputPath("narrow-desktop-notebook-header.png"),
     });
@@ -405,6 +413,7 @@ test.describe("Desktop margin notes", () => {
       .getByRole("button", { name: "Close reader tools", exact: true })
       .last()
       .click();
+    await page.mouse.move(200, 10);
     await page
       .getByRole("button", { name: "Toggle sidebar", exact: true })
       .click();

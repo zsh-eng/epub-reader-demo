@@ -9,6 +9,7 @@ import {
 } from "./helpers/fixtures";
 
 async function returnToLibrary(page: import("@playwright/test").Page) {
+  await page.mouse.move(200, 10);
   await page
     .getByRole("button", { name: "Toggle sidebar", exact: true })
     .click();

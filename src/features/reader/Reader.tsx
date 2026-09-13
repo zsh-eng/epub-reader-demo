@@ -447,7 +447,7 @@ export function Reader() {
                 }
                 chromeSurfaceProps={chromeSurfaceProps}
                 bookTitle={book.title}
-                showBackButton={isMobile}
+                isMobile={isMobile}
                 onBackToLibrary={() => navigate("/")}
                 isBookmarked={chromeState.isBookmarked}
                 onToggleBookmark={chromeActions.toggleBookmark}
@@ -486,6 +486,7 @@ export function Reader() {
 
               {/* Keep both chrome edges visible while pagination prepares. */}
               <ReaderFooter
+                isMobile={isMobile}
                 chromeVisible={
                   noteViewportHeight === null &&
                   (!displayReady || chromeVisible)

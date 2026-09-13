@@ -3,6 +3,7 @@ import { ChevronLeft, MoreHorizontal, PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { motion } from "motion/react";
 import type { ReaderChromeSurfaceProps } from "./chrome";
+import { ReaderDesktopHeader } from "./ReaderDesktopHeader";
 
 const HEADER_HEIGHT_PX = 56;
 const BOOKMARK_RIBBON_WIDTH_PX = 28;
@@ -44,12 +45,12 @@ const CHROME_FADE_OUT_TRANSITION = {
 const CHROME_BUTTON_CLASS_NAME =
   "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background hover:text-foreground active:scale-95 motion-reduce:active:scale-100";
 
-interface ReaderHeaderProps {
+export interface ReaderHeaderProps {
   chromeVisible: boolean;
   accessory?: ReactNode;
   chromeSurfaceProps?: ReaderChromeSurfaceProps;
   bookTitle: string;
-  showBackButton: boolean;
+  isMobile: boolean;
   onBackToLibrary: () => void;
   isBookmarked: boolean;
   onToggleBookmark: () => void;
@@ -62,13 +63,28 @@ export function ReaderHeader({
   accessory,
   chromeSurfaceProps,
   bookTitle,
-  showBackButton,
+  isMobile,
   onBackToLibrary,
   isBookmarked,
   onToggleBookmark,
   isMenuOpen,
   onOpenMenu,
 }: ReaderHeaderProps) {
+  if (!isMobile) {
+    return (
+      <ReaderDesktopHeader
+        chromeVisible={chromeVisible}
+        accessory={accessory}
+        chromeSurfaceProps={chromeSurfaceProps}
+        bookTitle={bookTitle}
+        isBookmarked={isBookmarked}
+        onToggleBookmark={onToggleBookmark}
+        isMenuOpen={isMenuOpen}
+        onOpenMenu={onOpenMenu}
+      />
+    );
+  }
+
   const chromeShellY = chromeVisible
     ? "0px"
     : isBookmarked
@@ -88,6 +104,7 @@ export function ReaderHeader({
   return (
     <>
       <motion.div
+        data-reader-header="mobile"
         className="absolute inset-x-0 top-0 z-20 overflow-visible"
         animate={{ y: chromeShellY }}
         transition={{ y: chromeShellTransition }}
@@ -163,7 +180,7 @@ export function ReaderHeader({
           <div className="relative z-10 mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-3 sm:px-4">
             {/* Zone 1 — Left: mobile reader navigation or desktop sidebar space. */}
             <div className="flex items-center">
-              {showBackButton && (
+              {isMobile && (
                 <Button
                   variant="ghost"
                   size="icon-sm"
@@ -189,7 +206,7 @@ export function ReaderHeader({
                 onClick={onOpenMenu}
                 aria-label="Open reader tools"
                 aria-expanded={isMenuOpen}
-                aria-pressed={showBackButton ? undefined : isMenuOpen}
+                aria-pressed={isMobile ? undefined : isMenuOpen}
                 className={`${CHROME_BUTTON_CLASS_NAME} aria-pressed:bg-secondary/70 aria-pressed:text-foreground`}
               >
                 <MoreHorizontal className="size-4 md:hidden" />
@@ -199,21 +216,6 @@ export function ReaderHeader({
           </div>
         </header>
       </motion.div>
-      {/* Accessories remain available when the header tucks away, and follow it
-        down when controls are shown. The right inset clears the bookmark. */}
-      {accessory && (
-        <motion.div
-          data-reader-header-accessory=""
-          className="absolute right-14 z-20 w-[min(34rem,calc(100%-4rem))]"
-          style={{ top: "calc(env(safe-area-inset-top) + 0.5rem)" }}
-          initial={false}
-          animate={{ y: chromeVisible ? HEADER_HEIGHT_PX : 0 }}
-          transition={chromeShellTransition}
-          {...(chromeVisible ? chromeSurfaceProps : undefined)}
-        >
-          {accessory}
-        </motion.div>
-      )}
     </>
   );
 }
