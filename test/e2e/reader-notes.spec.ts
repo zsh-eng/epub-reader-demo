@@ -218,7 +218,7 @@ test.describe("Desktop margin notes", () => {
   test("remembers the sidebar tab after close and reload", async ({
     page,
     localBook,
-  }) => {
+  }, testInfo) => {
     await openLocalBook(page, localBook.id);
     await page.mouse.move(600, 20);
     await page
@@ -231,6 +231,31 @@ test.describe("Desktop margin notes", () => {
     await tools.getByRole("button", { name: "Notes", exact: true }).click();
     const noteInput = tools.getByRole("textbox", { name: "Write a note" });
     await expect(noteInput).toBeFocused();
+    await expect(
+      tools.getByRole("button", { name: "Close notebook" }),
+    ).toHaveCount(0);
+    await noteInput.fill("A note for the notebook.");
+    await tools.getByRole("button", { name: "Save note", exact: true }).click();
+    const heading = tools.getByRole("heading", {
+      name: "Notebook 1",
+      exact: true,
+    });
+    await expect(heading).toBeVisible();
+    const centers = await heading.locator("span").evaluateAll((spans) =>
+      spans.map((span) => {
+        const bounds = span.getBoundingClientRect();
+        return bounds.y + bounds.height / 2;
+      }),
+    );
+    expect(Math.abs(centers[0] - centers[1])).toBeLessThan(1);
+    await noteInput.fill("Keep this desktop draft.");
+    const toolbar = tools.getByRole("navigation", { name: "Reader tools" });
+    await expect(toolbar.getByRole("button").last()).toHaveAccessibleName(
+      "Close reader tools",
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("desktop-notebook-header.png"),
+    });
     await tools
       .getByRole("button", { name: "Close reader tools", exact: true })
       .last()
@@ -265,6 +290,30 @@ test.describe("Desktop margin notes", () => {
       tools.getByRole("button", { name: "Notes", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
     await expect(noteInput).toBeFocused();
+    await expect(noteInput).toHaveValue("Keep this desktop draft.");
+    // Match the emulated browser platform, which can differ from the test host.
+    const modifier = await page.evaluate(() =>
+      /Mac/i.test(navigator.platform) ? "Meta" : "Control",
+    );
+    // The global toggle must also work while the notebook input has focus.
+    await page.keyboard.press(`${modifier}+Shift+Backslash`);
+    await expect(closingSidebar).toHaveAttribute("aria-hidden", "true");
+    await page.keyboard.press(`${modifier}+Shift+Backslash`);
+    await expect(noteInput).toBeFocused();
+    await expect(noteInput).toHaveValue("Keep this desktop draft.");
+    await page.setViewportSize({ width: 768, height: 850 });
+    const closeInset = await toolbar.evaluate((nav) => {
+      const close = nav.querySelector(
+        'button[aria-label="Close reader tools"]',
+      )!;
+      return (
+        nav.getBoundingClientRect().right - close.getBoundingClientRect().right
+      );
+    });
+    expect(closeInset).toBeCloseTo(8, 0);
+    await page.screenshot({
+      path: testInfo.outputPath("narrow-desktop-notebook-header.png"),
+    });
   });
   test("captures a margin note without resizing the book", async ({
     page,

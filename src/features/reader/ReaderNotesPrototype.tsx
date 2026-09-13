@@ -492,9 +492,9 @@ export function ReaderNotesPrototype({
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <header className="flex items-center gap-3 px-4 py-2">
-          <h2 className="flex-1 text-sm font-medium">
-            Notebook{" "}
-            <span className="ml-1 text-xs font-normal text-muted-foreground">
+          <h2 className="flex flex-1 items-center gap-2 text-sm font-medium">
+            <span>Notebook</span>{" "}
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">
               {entries.length}
             </span>
           </h2>
@@ -516,13 +516,15 @@ export function ReaderNotesPrototype({
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-          <button
-            aria-label="Close notebook"
-            onClick={() => (desktop ? close() : setNotebook(false))}
-            className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
-          >
-            <X size={15} />
-          </button>
+          {!desktop && (
+            <button
+              aria-label="Close notebook"
+              onClick={() => setNotebook(false)}
+              className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+            >
+              <X size={15} />
+            </button>
+          )}
         </header>
         <div
           ref={list}

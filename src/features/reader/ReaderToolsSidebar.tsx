@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import type { ReaderSettings } from "@/types/reader.types";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
-  ChevronRight,
+  PanelRight,
   ClipboardCopy,
   NotebookPen,
   Highlighter,
@@ -150,17 +150,6 @@ export function ReaderToolsSidebar({
             className="relative z-10 flex min-h-14 shrink-0 items-center gap-1.5 px-2 pb-2"
             style={{ paddingTop: "max(env(safe-area-inset-top), 0.5rem)" }}
           >
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              aria-label="Close reader tools"
-              className="size-9 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
-            >
-              <ChevronRight className="size-[1.15rem]" />
-            </Button>
-
             {SIDEBAR_TOOLS.map((tool) => {
               const isActive = activePanel === tool.id;
 
@@ -199,6 +188,17 @@ export function ReaderToolsSidebar({
                 <ClipboardCopy className="size-[1.1rem]" />
               </Button>
             )}
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close reader tools"
+              className="size-9 shrink-0 rounded-xl text-muted-foreground transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95"
+            >
+              <PanelRight className="size-[1.15rem]" />
+            </Button>
 
             {activePanel !== "settings" && (
               <div
