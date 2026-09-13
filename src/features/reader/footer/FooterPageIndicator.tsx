@@ -9,6 +9,7 @@ interface FooterPageIndicatorProps {
   showPageNumbers?: boolean;
   preserveDetailsWhileLoading?: boolean;
   animateReadyDetails?: boolean;
+  testId?: string;
 }
 
 export function FooterPageIndicator({
@@ -18,6 +19,7 @@ export function FooterPageIndicator({
   showPageNumbers = true,
   preserveDetailsWhileLoading = false,
   animateReadyDetails = false,
+  testId = "reader-page-indicator",
 }: FooterPageIndicatorProps) {
   const showBlurredLoadingDetails = isLoading && preserveDetailsWhileLoading;
 
@@ -27,7 +29,7 @@ export function FooterPageIndicator({
 
   return (
     <motion.div
-      data-testid="reader-page-indicator"
+      data-testid={testId}
       className="flex items-center justify-center pb-1 pt-0.5"
       initial={{ opacity: 0 }}
       animate={{

@@ -11,6 +11,7 @@ export { CHROME_HIDE_DELAY_MS };
 
 interface ReaderControllerChildrenState {
   chromeVisible: boolean;
+  progressPeek: ReturnType<typeof useTouchSpreadTapNav>;
   showHoverRails: boolean;
   topRailProps: ReaderChromeRailProps;
   bottomRailProps: ReaderChromeRailProps;
@@ -87,7 +88,7 @@ export function ReaderController({
     );
   }, [chromeInteractionMode]);
 
-  useTouchSpreadTapNav({
+  const progressPeek = useTouchSpreadTapNav({
     containerRef,
     enabled: isTouchMode && !isChromeSuppressed,
     onPrevSpread: onPrevPage,
@@ -112,6 +113,7 @@ export function ReaderController({
     <>
       {children({
         chromeVisible,
+        progressPeek,
         showHoverRails: hoverChrome.showHoverRails,
         hideChrome,
         topRailProps: hoverChrome.topRailProps,

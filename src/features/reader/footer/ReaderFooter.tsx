@@ -111,6 +111,7 @@ export function ReaderFooter({
       {shouldRenderChromeShell && (
         <motion.div
           key="footer"
+          data-reader-footer=""
           initial={{ y: "100%", opacity: 0 }}
           animate={{
             y: chromeVisible ? 0 : "100%",
@@ -169,7 +170,10 @@ export function ReaderFooter({
             </AnimatePresence>
           </div>
 
-          <div className="mx-auto flex max-w-7xl flex-col px-3 pt-1 sm:px-4">
+          <div
+            inert={!chromeVisible}
+            className="mx-auto flex max-w-7xl flex-col px-3 pt-1 sm:px-4"
+          >
             <FooterChapterRow
               currentChapterIndex={currentChapterIndex}
               displayChapterIndex={displayChapterIndex}

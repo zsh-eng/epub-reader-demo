@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, type RefObject } from "react";
+import { animate, useMotionValue, useReducedMotion } from "motion/react";
 import { dispatchReaderTouchTapHandled } from "./reader-interaction-events";
 
 type TapZone = "left" | "center" | "right";
@@ -30,6 +31,8 @@ interface TouchPressState {
   startedAt: number;
   target: EventTarget | null;
   moved: boolean;
+  axis: "pending" | "horizontal" | "down" | "peek" | "blocked";
+  peekStartOffset: number;
 }
 
 interface TouchTapCandidate {
@@ -147,7 +150,8 @@ export function isReaderScrollGesture(candidate: {
   }
 
   const distanceX = Math.abs(candidate.endX - candidate.startX);
-  const distanceY = Math.abs(candidate.endY - candidate.startY);
+  // Upward drags belong to the temporary footer peek, including on release.
+  const distanceY = candidate.endY - candidate.startY;
 
   return distanceY > TOUCH_TAP_MOVE_TOLERANCE_PX && distanceY > distanceX;
 }
@@ -178,8 +182,9 @@ export function resolveTapNavigationAction(
 /**
  * Handles the exposed touch reading surface only.
  *
- * A clean tap dismisses visible chrome before any page navigation. Swipes and
- * long presses remain available to the swipe recognizer and native selection.
+ * A clean tap dismisses visible chrome before any page navigation. Horizontal
+ * swipes remain available to the swipe recognizer. An upward drag
+ * lifts the progress peek until release. Long presses retain native selection.
  */
 export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
   const {
@@ -196,9 +201,13 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
 
   const pressRef = useRef<TouchPressState | null>(null);
   const lastHandledTapRef = useRef<{ at: number; x: number } | null>(null);
+  const peekOffset = useMotionValue(0);
+  const peekHeight = useMotionValue(0);
+  const prefersReducedMotion = useReducedMotion();
 
   // Native listeners keep their lifetime but use committed navigation state.
   const showChrome = useEffectEvent(() => onShowChrome?.());
+  const canPeek = useEffectEvent(() => !chromeVisible);
   const navigateForTap = useEffectEvent(
     (
       clientX: number,
@@ -231,6 +240,84 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     const container = containerRef.current;
     if (!container || !enabled) return;
 
+    const endPeek = () => {
+      peekOffset.stop();
+      if (prefersReducedMotion) {
+        peekOffset.set(0);
+        return;
+      }
+      // Always return below the viewport, with no release threshold or bounce.
+      animate(peekOffset, 0, {
+        type: "tween",
+        duration: 0.18,
+        ease: "easeOut",
+      });
+    };
+
+    const releasePeekCapture = (press: TouchPressState) => {
+      if (press.source !== "pointer" || press.axis !== "peek") return;
+      if (container.hasPointerCapture(press.id)) {
+        container.releasePointerCapture(press.id);
+      }
+    };
+
+    const cancelPress = () => {
+      const press = pressRef.current;
+      pressRef.current = null;
+      if (!press || press.axis !== "peek") return;
+      releasePeekCapture(press);
+      endPeek();
+    };
+
+    const movePress = (
+      press: TouchPressState,
+      clientX: number,
+      clientY: number,
+      event: PointerEvent | TouchEvent,
+    ) => {
+      const dx = clientX - press.startX;
+      const dy = clientY - press.startY;
+      if (
+        hasExceededTouchTapMoveTolerance(
+          press.startX,
+          press.startY,
+          clientX,
+          clientY,
+        )
+      ) {
+        press.moved = true;
+      }
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < TOUCH_TAP_MOVE_TOLERANCE_PX) {
+        if (press.axis !== "peek") return;
+      }
+
+      if (press.axis === "pending") {
+        press.axis = "blocked";
+        if (event.defaultPrevented || hasActiveTextSelection()) return;
+        if (isInteractiveTapTarget(press.target)) return;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          press.axis = "horizontal";
+          return;
+        }
+        if (dy > 0) {
+          press.axis = "down";
+          return;
+        }
+        if (!canPeek()) return;
+        if (Date.now() - press.startedAt > MAX_TOUCH_TAP_DURATION_MS) return;
+        press.axis = "peek";
+        peekOffset.stop();
+        press.peekStartOffset = peekOffset.get();
+        if (press.source === "pointer") container.setPointerCapture(press.id);
+      }
+
+      if (press.axis !== "peek") return;
+      event.preventDefault();
+      peekOffset.set(
+        Math.max(0, Math.min(peekHeight.get(), press.peekStartOffset - dy)),
+      );
+    };
+
     const markHandled = (x: number) => {
       lastHandledTapRef.current = { at: Date.now(), x };
     };
@@ -259,6 +346,13 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       preventDefault: () => void,
     ) => {
       const endedAt = Date.now();
+      if (press.axis === "peek") {
+        preventDefault();
+        markHandled(clientX);
+        releasePeekCapture(press);
+        endPeek();
+        return;
+      }
       const isCleanTap = isCleanTouchTap({
         startX: press.startX,
         startY: press.startY,
@@ -270,6 +364,8 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       });
 
       if (
+        press.axis !== "horizontal" &&
+        press.axis !== "blocked" &&
         isReaderScrollGesture({
           startX: press.startX,
           startY: press.startY,
@@ -300,6 +396,10 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     const onPointerDown = (event: PointerEvent) => {
       if (event.pointerType === "mouse") return;
       if (event.button !== 0) return;
+      if (event.isPrimary === false || pressRef.current) {
+        cancelPress();
+        return;
+      }
 
       pressRef.current = {
         source: "pointer",
@@ -309,6 +409,8 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
         startedAt: Date.now(),
         target: event.target,
         moved: false,
+        axis: hasActiveTextSelection() ? "blocked" : "pending",
+        peekStartOffset: 0,
       };
     };
 
@@ -322,16 +424,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
         return;
       }
 
-      if (
-        hasExceededTouchTapMoveTolerance(
-          press.startX,
-          press.startY,
-          event.clientX,
-          event.clientY,
-        )
-      ) {
-        press.moved = true;
-      }
+      movePress(press, event.clientX, event.clientY, event);
     };
 
     const onPointerUp = (event: PointerEvent) => {
@@ -358,13 +451,16 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     const onPointerCancel = (event: PointerEvent) => {
       const press = pressRef.current;
       if (press && press.source === "pointer" && press.id === event.pointerId) {
-        pressRef.current = null;
+        cancelPress();
       }
     };
 
     const onTouchStart = (event: TouchEvent) => {
       if (window.PointerEvent) return;
-      if (event.touches.length !== 1) return;
+      if (event.touches.length !== 1) {
+        cancelPress();
+        return;
+      }
 
       const touch = event.touches.item(0);
       if (!touch) return;
@@ -377,6 +473,8 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
         startedAt: Date.now(),
         target: event.target,
         moved: false,
+        axis: hasActiveTextSelection() ? "blocked" : "pending",
+        peekStartOffset: 0,
       };
     };
 
@@ -389,16 +487,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       );
       if (!touch) return;
 
-      if (
-        hasExceededTouchTapMoveTolerance(
-          press.startX,
-          press.startY,
-          touch.clientX,
-          touch.clientY,
-        )
-      ) {
-        press.moved = true;
-      }
+      movePress(press, touch.clientX, touch.clientY, event);
     };
 
     const onTouchEnd = (event: TouchEvent) => {
@@ -411,7 +500,7 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       if (touch.identifier !== press.id) return;
       pressRef.current = null;
 
-      if (wasRecentlyHandled(touch.clientX)) return;
+      if (press.axis !== "peek" && wasRecentlyHandled(touch.clientX)) return;
 
       finishTouchPress(
         press,
@@ -425,8 +514,15 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
 
     const onTouchCancel = () => {
       if (pressRef.current?.source === "touch") {
-        pressRef.current = null;
+        cancelPress();
       }
+    };
+
+    const onLostPointerCapture = (event: PointerEvent) => {
+      if (event.target === container) onPointerCancel(event);
+    };
+    const onSelectionChange = () => {
+      if (hasActiveTextSelection()) cancelPress();
     };
 
     // A handled touch can still produce a compatibility click on Android.
@@ -442,10 +538,13 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
     container.addEventListener("pointermove", onPointerMove);
     container.addEventListener("pointerup", onPointerUp);
     container.addEventListener("pointercancel", onPointerCancel);
+    container.addEventListener("lostpointercapture", onLostPointerCapture);
     container.addEventListener("touchstart", onTouchStart);
-    container.addEventListener("touchmove", onTouchMove);
+    container.addEventListener("touchmove", onTouchMove, { passive: false });
     container.addEventListener("touchend", onTouchEnd);
     container.addEventListener("touchcancel", onTouchCancel);
+    document.addEventListener("selectionchange", onSelectionChange);
+    window.addEventListener("blur", cancelPress);
 
     return () => {
       container.removeEventListener("click", onClick, true);
@@ -453,10 +552,18 @@ export function useTouchSpreadTapNav(options: UseTouchSpreadTapNavOptions) {
       container.removeEventListener("pointermove", onPointerMove);
       container.removeEventListener("pointerup", onPointerUp);
       container.removeEventListener("pointercancel", onPointerCancel);
+      container.removeEventListener("lostpointercapture", onLostPointerCapture);
       container.removeEventListener("touchstart", onTouchStart);
       container.removeEventListener("touchmove", onTouchMove);
       container.removeEventListener("touchend", onTouchEnd);
       container.removeEventListener("touchcancel", onTouchCancel);
+      document.removeEventListener("selectionchange", onSelectionChange);
+      window.removeEventListener("blur", cancelPress);
+      cancelPress();
+      peekOffset.stop();
+      peekOffset.set(0);
     };
-  }, [containerRef, enabled]);
+  }, [containerRef, enabled, peekOffset, peekHeight, prefersReducedMotion]);
+
+  return { offset: peekOffset, height: peekHeight };
 }

@@ -14,6 +14,7 @@ interface FooterScrubberCanvasProps {
   onScrubCommit: (page: number) => void;
   onScrubPreview?: (page: number) => void;
   cancelMomentumSignal?: number;
+  readOnly?: boolean;
 }
 
 const TICK_SPACING = 6; // Pixels between page ticks; lower = denser ticks and faster scrub for same drag distance.
@@ -245,6 +246,7 @@ export function FooterScrubberCanvas({
   onScrubCommit,
   onScrubPreview,
   cancelMomentumSignal,
+  readOnly = false,
 }: FooterScrubberCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const displayPageRef = useRef<number>(currentPage);
@@ -504,12 +506,14 @@ export function FooterScrubberCanvas({
   return (
     <canvas
       ref={canvasRef}
-      className="block w-full cursor-ew-resize touch-none"
+      className={
+        readOnly ? "block w-full" : "block w-full cursor-ew-resize touch-none"
+      }
       style={{ height: 56 }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
+      onPointerDown={readOnly ? undefined : handlePointerDown}
+      onPointerMove={readOnly ? undefined : handlePointerMove}
+      onPointerUp={readOnly ? undefined : handlePointerUp}
+      onPointerCancel={readOnly ? undefined : handlePointerUp}
     />
   );
 }

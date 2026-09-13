@@ -22,6 +22,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import { ReaderSheetHost } from "./ReaderSheetHost";
 import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
+import { ReaderProgressPeek } from "./footer/ReaderProgressPeek";
 import { ReaderFooter } from "./footer";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
@@ -323,6 +324,7 @@ export function Reader() {
         >
           {({
             chromeVisible,
+            progressPeek,
             showHoverRails,
             topRailProps,
             bottomRailProps,
@@ -393,6 +395,9 @@ export function Reader() {
                 style={{
                   top: "env(safe-area-inset-top)",
                   bottom: "max(env(safe-area-inset-bottom), 0.625rem)",
+                  // Both drag axes belong to the Reader; preserve native pinch zoom.
+                  touchAction:
+                    chromeInteractionMode === "touch" ? "pinch-zoom" : "auto",
                 }}
               >
                 <DeferredEpubImageProvider key={bookId} bookId={bookId}>
@@ -437,6 +442,32 @@ export function Reader() {
                 onOpenMenu={() => {
                   if (displayReady) chromeActions.openReaderSheet("tools");
                 }}
+              />
+
+              <ReaderProgressPeek
+                {...progressPeek}
+                currentPage={sessionState.navigation.currentPage}
+                totalPages={sessionState.navigation.totalPages}
+                currentChapterIndex={
+                  sessionState.navigation.currentChapterIndex
+                }
+                currentChapterEndIndex={
+                  sessionState.pagination.spread?.chapterIndexEnd ??
+                  sessionState.navigation.currentChapterIndex
+                }
+                displayChapterIndex={
+                  sessionState.navigation.displayChapterIndex
+                }
+                chapterEntries={sessionState.chapters.entries}
+                chapterStartPages={sessionState.navigation.chapterStartPages}
+                available={
+                  displayReady &&
+                  sessionState.pagination.status === "ready" &&
+                  sessionState.settings.showPageNumbers &&
+                  !chromeVisible &&
+                  !isReaderInteractionSuppressed &&
+                  noteViewportHeight === null
+                }
               />
 
               {/* Keep both chrome edges visible while pagination prepares. */}
