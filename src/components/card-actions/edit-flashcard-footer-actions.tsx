@@ -6,15 +6,17 @@ type EditFlashcardFooterActionsProps = {
   actions: EditFlashcardActions;
   onClose: () => void;
   disabled?: boolean;
+  beforeAction: (action: string) => boolean;
 };
 
 export default function EditFlashcardFooterActions({
   actions,
   onClose,
   disabled = false,
+  beforeAction,
 }: EditFlashcardFooterActionsProps) {
-  const handleAction = (fn: () => void) => {
-    if (disabled) return;
+  const handleAction = (action: string, fn: () => void) => {
+    if (disabled || !beforeAction(action)) return;
     fn();
     onClose();
   };
@@ -29,7 +31,10 @@ export default function EditFlashcardFooterActions({
       <button
         type="button"
         onClick={() =>
-          handleAction(() => actions.onBookmark(!actions.bookmarked))
+          handleAction(
+            actions.bookmarked ? "Remove bookmark" : "Bookmark card",
+            () => actions.onBookmark(!actions.bookmarked),
+          )
         }
         className={cn(
           "flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95",
@@ -48,7 +53,7 @@ export default function EditFlashcardFooterActions({
       {isSuspended && actions.onUnsuspend ? (
         <button
           type="button"
-          onClick={() => handleAction(actions.onUnsuspend!)}
+          onClick={() => handleAction("Unsuspend card", actions.onUnsuspend!)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-all active:scale-95"
         >
           <Eye className="size-4" />
@@ -57,7 +62,7 @@ export default function EditFlashcardFooterActions({
       ) : (
         <button
           type="button"
-          onClick={() => handleAction(actions.onBury)}
+          onClick={() => handleAction("Bury card", actions.onBury)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all active:scale-95"
         >
           <Ban className="size-4" />
@@ -68,7 +73,7 @@ export default function EditFlashcardFooterActions({
       <div className="ml-auto">
         <button
           type="button"
-          onClick={() => handleAction(actions.onDelete)}
+          onClick={() => handleAction("Delete card", actions.onDelete)}
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all active:scale-95"
         >
           <Trash className="size-4" />
