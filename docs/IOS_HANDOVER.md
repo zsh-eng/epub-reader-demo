@@ -1,6 +1,29 @@
 # Swift Reader handover
 
-12 September 2026 · branch `codex/expo-reader`.
+13 September 2026 · paused branch `mobile` (formerly `codex/expo-reader`).
+
+## Pause checkpoint
+
+- Keep this work on `mobile`; do not merge it into the web app's main branch.
+  The app runs, but the UX defects below are unresolved.
+- Before resuming implementation, verify a supported route to the required
+  120 Hz WebView behavior on a physical ProMotion device, or explicitly revise
+  that requirement. Measure Reader animations as well as JavaScript frame
+  callbacks. A smooth native toolbar alone does not meet this condition.
+- The design target remains the web app's colors, typography, and components,
+  with native input, keyboard, gestures, and haptics where they improve use.
+  Account access and sync remain deferred.
+- Start with the audit below, then follow the [iOS run instructions](../apps/ios/README.md).
+  With dependencies installed and a simulator booted, run
+  `bun run mobile:ios:release`. The script rebuilds the bundled web assets.
+  Physical-device signing is configured locally in Xcode.
+- GitHub preserves source and the committed diagnostic image. It does **not**
+  back up device/simulator books, notes, drafts, or reading positions. Retain the
+  installed app's data; an in-place install with the same app ID and WebView
+  origin is required to retain the current library. Test EPUB originals are at
+  `/Users/admin/Desktop/epubs`, outside this repository.
+- The final checkpoint includes Xcode's existing shared-scheme update, checked
+  separately from the app code. No UX implementation was changed when pausing.
 
 ## 13 September: UX audit and frame-rate gate
 
