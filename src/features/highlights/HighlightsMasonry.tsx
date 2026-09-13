@@ -1892,7 +1892,7 @@ export function HighlightsMasonry() {
       await navigator.clipboard.writeText(highlight.selectedText);
       return true;
     } catch {
-      toast.error("Could not copy highlight", {
+      toast.error("Could not copy highlight.", {
         id: "highlight-copy-error",
       });
       return false;

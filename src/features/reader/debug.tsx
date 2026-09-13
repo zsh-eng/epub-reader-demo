@@ -38,8 +38,9 @@ export function ReaderDebug() {
   );
   const [spreadColumns, setSpreadColumns] = useState<1 | 2 | 3>(1);
   const [columnSpacingPx, setColumnSpacingPx] = useState(16);
-  const [loadedDump, setLoadedDump] =
-    useState<ReaderPageDebugDump | null>(null);
+  const [loadedDump, setLoadedDump] = useState<ReaderPageDebugDump | null>(
+    null,
+  );
   const [measuredPreviewEnvironment, setMeasuredPreviewEnvironment] = useState<{
     key: string;
     environment: ReaderPageDebugDumpEnvironment;
@@ -249,8 +250,7 @@ export function ReaderDebug() {
     onCopyCurrentDump: async () => {
       if (!activeDebugDump) {
         toast({
-          title: "Dump unavailable",
-          description: "Wait for pagination to render a page, then try again.",
+          message: "Page is not ready to copy.",
           variant: "destructive" as const,
         });
         return;
@@ -262,13 +262,11 @@ export function ReaderDebug() {
         );
 
         toast({
-          title: "Debug dump copied",
-          description: "Paste it back here to reproduce this page later.",
+          message: "Copied debug dump.",
         });
       } catch {
         toast({
-          title: "Could not copy dump",
-          description: "Your browser blocked clipboard access for this page.",
+          message: "Could not copy debug dump.",
           variant: "destructive",
         });
       }
@@ -276,8 +274,7 @@ export function ReaderDebug() {
     onLoadDump: (dump: ReaderPageDebugDump) => {
       setLoadedDump(dump);
       toast({
-        title: "Debug dump loaded",
-        description: "The preview is now rendering the pasted debug dump.",
+        message: "Loaded debug dump.",
       });
     },
     onClearLoadedDump: () => setLoadedDump(null),
@@ -339,7 +336,8 @@ export function ReaderDebug() {
               style={{
                 width: `${
                   previewLayout.viewport.width * previewSpreadConfig.columns +
-                  previewLayout.columnGapPx * (previewSpreadConfig.columns - 1) +
+                  previewLayout.columnGapPx *
+                    (previewSpreadConfig.columns - 1) +
                   previewLayout.paddingLeftPx +
                   previewLayout.paddingRightPx
                 }px`,

@@ -98,15 +98,13 @@ export function Library() {
     try {
       await syncDeleteBook(bookId);
       toast({
-        title: "Success",
-        description: "Book removed from library",
+        message: "Removed book from library.",
       });
       // Committed database writes refresh the Library query.
     } catch (error) {
       console.error("Error deleting book:", error);
       toast({
-        title: "Error",
-        description: "Failed to remove book",
+        message: "Could not remove book.",
         variant: "destructive",
       });
     }

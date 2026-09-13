@@ -35,7 +35,7 @@ test("mobile settings expose choices and apply themes when preference storage is
   ).toBeVisible();
   await page.getByRole("button", { name: "Inter", exact: true }).click();
   await expect(
-    page.getByText("Could not save appearance preferences", { exact: true }),
+    page.getByText("Appearance changes weren’t saved.", { exact: true }),
   ).toHaveCount(1);
   await expect(
     page.getByRole("button", { name: "Inter", pressed: true }),

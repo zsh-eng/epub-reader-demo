@@ -254,4 +254,22 @@ test("explains each status change with bold status names on hover and keyboard f
   await expect(page.getByRole("status")).toContainText(
     "Book marked as currently reading",
   );
+  const toast = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "Changed Did Not Finish to Reading." });
+  await expect(toast).toBeVisible();
+  await expect(toast.locator("strong")).toHaveText([
+    "Did Not Finish",
+    "Reading",
+  ]);
+  await page.setViewportSize({ width: 360, height: 844 });
+  const message = toast.locator("[data-title]");
+  expect(
+    await message.evaluate(
+      (node) =>
+        node.getBoundingClientRect().height <=
+          parseFloat(getComputedStyle(node).lineHeight) + 1 &&
+        node.scrollWidth <= node.clientWidth,
+    ),
+  ).toBe(true);
 });

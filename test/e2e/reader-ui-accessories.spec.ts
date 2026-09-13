@@ -321,6 +321,20 @@ test("desktop status keeps the top toolbar visible until dismissed or saved", as
   await waitForReaderReady(page);
   await expect(start).toBeVisible();
   await start.click();
+  const toast = page
+    .locator("[data-sonner-toast]")
+    .filter({ hasText: "Changed status to Reading." });
+  await expect(toast).toBeVisible();
+  await expect(toast.locator("[data-description]")).toHaveCount(0);
+  await expect(toast).toHaveCSS("border-radius", "28px");
+  const message = toast.locator("[data-title]");
+  expect(
+    await message.evaluate(
+      (node) =>
+        node.getBoundingClientRect().height <=
+        parseFloat(getComputedStyle(node).lineHeight) + 1,
+    ),
+  ).toBe(true);
   await expect.poll(readStatus).toBe("reading");
   await expect(accessory).toHaveCount(0);
   await page.mouse.move(480, 400);

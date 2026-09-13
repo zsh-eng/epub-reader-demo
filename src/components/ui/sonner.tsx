@@ -14,6 +14,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         style: {
           textAlign: "left",
+          padding: "12px 16px",
+          minHeight: 48,
+        },
+        classNames: {
+          actionButton: "!rounded-[calc(var(--sidebar-panel-radius)-13px)]",
+          cancelButton: "!rounded-[calc(var(--sidebar-panel-radius)-13px)]",
         },
       }}
       icons={{
@@ -28,7 +34,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-bg": "var(--popover)",
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          "--border-radius": "var(--sidebar-panel-radius)",
         } as React.CSSProperties
       }
       {...props}

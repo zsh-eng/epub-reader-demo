@@ -2,6 +2,7 @@ import {
   getReaderStatusPrompt,
   useReaderStatusPrompt,
 } from "@/features/reader/hooks/use-reader-status-prompt";
+import { renderToStaticMarkup } from "react-dom/server";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -75,6 +76,10 @@ describe("getReaderStatusPrompt", () => {
     act(() => result.current?.onConfirm());
     await waitFor(() => expect(result.current).toBeUndefined());
     expect(mocks.setStatusAsync).toHaveBeenCalledWith("reading");
+    expect(mocks.success).toHaveBeenCalledOnce();
+    expect(renderToStaticMarkup(mocks.success.mock.calls[0][0])).toBe(
+      "Changed status to <strong>Reading</strong>.",
+    );
     expect(mocks.prompt).not.toHaveBeenCalled();
   });
 
@@ -88,6 +93,7 @@ describe("getReaderStatusPrompt", () => {
       expect(result.current?.error).toContain("Please try again"),
     );
     expect(result.current?.isPending).toBe(false);
+    expect(mocks.success).not.toHaveBeenCalled();
     act(() => result.current?.onConfirm());
     await waitFor(() => expect(result.current).toBeUndefined());
     expect(mocks.error).not.toHaveBeenCalled();
@@ -106,4 +112,23 @@ describe("getReaderStatusPrompt", () => {
     rerender({ bookId: "c" });
     expect(result.current).toBeUndefined();
   });
+});
+
+it.each([
+  ["want-to-read", "Want to Read"],
+  ["dnf", "Did Not Finish"],
+] as const)("confirms the saved change from %s", async (status, label) => {
+  mocks.useReadingStatus.mockReturnValue({
+    status,
+    isLoading: false,
+    setStatusAsync: mocks.setStatusAsync,
+  });
+  const { result } = renderHook(() =>
+    useReaderStatusPrompt({ bookId: "book-1", isReady: true }),
+  );
+  act(() => result.current?.onConfirm());
+  await waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+  expect(renderToStaticMarkup(mocks.success.mock.calls[0][0])).toBe(
+    `Changed <strong>${label}</strong> to <strong>Reading</strong>.`,
+  );
 });

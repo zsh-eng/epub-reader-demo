@@ -174,7 +174,9 @@ test("keeps duplicate and failed imports in the Library", async ({
   await waitForReaderReady(page);
   await page.goto("/");
   await drop("broken.epub", Buffer.from("invalid EPUB"));
-  await expect(page.getByText("Import failed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Could not add 1 book.", { exact: true }),
+  ).toBeVisible();
   await expect(page).toHaveURL("/");
   await expect(
     page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }),
@@ -221,11 +223,7 @@ test("reports mixed multi-file import outcomes without opening a book", async ({
       buffer: Buffer.from("ignored"),
     },
   ]);
-  await expect(
-    page.getByText(
-      "2 books added · 1 skipped (already in library) · 1 failed · 1 non-EPUB file ignored",
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Added 2; skipped 2; failed 1.")).toBeVisible();
   await expect(page).toHaveURL("/");
   const count = await page.evaluate(async () => {
     const path = "/src/lib/db.ts";

@@ -23,12 +23,11 @@ test("duplicate batches show existing books while malformed files still report f
   };
   await (await chooseFiles()).setFiles([SAMPLE_EPUB_PATH, SAMPLE_EPUB_PATH]);
   await expect(
-    page.getByText("Already in library", { exact: true }),
+    page.getByText("Skipped 2 existing books.", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByText("2 skipped (already in library)", { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByText("Import failed", { exact: true })).toHaveCount(0);
+    page.getByText("Could not add 1 book.", { exact: true }),
+  ).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }),
   ).toHaveCount(1);
@@ -42,8 +41,9 @@ test("duplicate batches show existing books while malformed files still report f
       buffer: Buffer.from("invalid epub"),
     },
   ]);
-  await expect(page.getByText("Import failed", { exact: true })).toBeVisible();
-  await expect(page.getByText("1 failed", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Could not add 1 book.", { exact: true }),
+  ).toBeVisible();
 });
 
 test("signed-out Devices does not request account sessions", async ({
@@ -72,6 +72,19 @@ test("mobile import offers Open book after durable preparation without opening a
   await (await chooser).setFiles(SAMPLE_EPUB_PATH);
   const openBook = page.getByRole("button", { name: "Open book", exact: true });
   await expect(openBook).toBeVisible();
+  const toast = page.locator("[data-sonner-toast]").filter({ has: openBook });
+  await expect(toast.locator("[data-description]")).toHaveCount(0);
+  await expect(toast).toHaveCSS("border-radius", "28px");
+  await expect(openBook).toHaveCSS("border-radius", "15px");
+  const message = toast.locator("[data-title]");
+  await expect(message).toHaveText("Added 1 book.");
+  expect(
+    await message.evaluate(
+      (node) =>
+        node.getBoundingClientRect().height <=
+        parseFloat(getComputedStyle(node).lineHeight) + 1,
+    ),
+  ).toBe(true);
   await expect(page).toHaveURL(/\/$/);
   const prepared = await page.evaluate(async (modulePath) => {
     const { syncV2Db: db } = await import(modulePath);

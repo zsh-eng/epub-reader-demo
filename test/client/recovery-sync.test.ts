@@ -144,11 +144,13 @@ it("rejects a manual offline race without changing the last completed timestamp"
   window.dispatchEvent(new Event("offline"));
   await act(async () => {
     await expect(result.current.triggerSync()).rejects.toThrow(
-      "You are offline",
+      "Connect to the internet to sync.",
     );
   });
   expect(result.current.lastSyncedAt).toBe(completedAt);
-  expect(result.current.syncError?.message).toContain("You are offline");
+  expect(result.current.syncError?.message).toContain(
+    "Connect to the internet to sync.",
+  );
   expect(exchange).toHaveBeenCalledOnce();
 });
 it("deletes a signed-in book locally when exchange is skipped offline", async () => {
@@ -193,9 +195,7 @@ it("rejects a signed-out manual sync without exchange or a completion timestamp"
   auth.signedIn = false;
   const exchange = vi.spyOn(syncService, "syncAll");
   const { result } = mountSync();
-  await expect(result.current.triggerSync()).rejects.toThrow(
-    "Sign in to synchronize",
-  );
+  await expect(result.current.triggerSync()).rejects.toThrow("Sign in to sync");
   expect(exchange).not.toHaveBeenCalled();
   expect(result.current.lastSyncedAt).toBeNull();
 });

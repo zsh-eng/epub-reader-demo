@@ -106,7 +106,7 @@ it.each(["denied", "unavailable"])(
     fireEvent.click(
       screen.getByRole("button", { name: "Copy highlighted text" }),
     );
-    await screen.findByText("Could not copy highlight");
+    await screen.findByText("Could not copy highlight.");
     expect(
       screen
         .getByRole("button", { name: "Copy highlighted text" })

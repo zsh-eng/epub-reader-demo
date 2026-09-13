@@ -64,8 +64,7 @@ it("reports duplicate-only batches without an import error", async () => {
   const { result } = setup();
   await act(() => result.current.importFiles(files));
   expect(mocks.toast).toHaveBeenCalledWith({
-    title: "Already in library",
-    description: "2 skipped (already in library)",
+    message: "Skipped 2 existing books.",
   });
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(result.current.isProcessing).toBe(false);
@@ -84,8 +83,7 @@ it("reports real errors in a mixed duplicate and malformed batch", async () => {
   const { result } = setup();
   await act(() => result.current.importFiles(files));
   expect(mocks.toast).toHaveBeenCalledWith({
-    title: "Import failed",
-    description: "1 skipped (already in library) · 1 failed",
+    message: "Skipped 1; failed 1.",
     variant: "destructive",
   });
 });
@@ -104,9 +102,7 @@ it("offers the one newly imported book while preserving mixed batch outcomes", a
     ]),
   );
   const notification = mocks.toast.mock.calls[0][0];
-  expect(notification.description).toBe(
-    "1 book added · 1 skipped (already in library) · 1 failed · 1 non-EPUB file ignored",
-  );
+  expect(notification.message).toBe("Added 1; skipped 2; failed 1.");
   expect(notification.action.label).toBe("Open book");
   expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/");
   notification.action.onClick();
@@ -120,8 +116,7 @@ it("keeps multiple successful imports in the Library without selecting a book", 
   const { result } = setup();
   await act(() => result.current.importFiles(files));
   expect(mocks.toast).toHaveBeenCalledWith({
-    title: "Import complete",
-    description: "2 books added",
+    message: "Added 2 books.",
   });
   expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/");
 });

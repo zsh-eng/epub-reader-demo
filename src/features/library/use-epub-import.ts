@@ -15,6 +15,32 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 
+/** Compact batch feedback keeps added, skipped, and failed counts distinct. */
+function importFeedback(
+  added: number,
+  duplicates: number,
+  failed: number,
+  ignored: number,
+): string {
+  const skipped = duplicates + ignored;
+  if (!added && !failed)
+    return ignored
+      ? `Skipped ${skipped} files.`
+      : `Skipped ${duplicates} existing book${duplicates === 1 ? "" : "s"}.`;
+  if (!skipped && !failed)
+    return `Added ${added} book${added === 1 ? "" : "s"}.`;
+  if (!added && !skipped)
+    return `Could not add ${failed} book${failed === 1 ? "" : "s"}.`;
+  const parts = [
+    added && `added ${added}`,
+    skipped && `skipped ${skipped}`,
+    failed && `failed ${failed}`,
+  ]
+    .filter(Boolean)
+    .join("; ");
+  return `${parts[0].toUpperCase()}${parts.slice(1)}.`;
+}
+
 interface EpubImportContextValue {
   isProcessing: boolean;
   importFiles: (files: FileList | readonly File[]) => Promise<void>;
@@ -47,8 +73,7 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
 
       if (epubFiles.length === 0) {
         toast({
-          title: "Invalid files",
-          description: "Please select EPUB files only",
+          message: "Only EPUB files can be added.",
           variant: "destructive",
         });
         return;
@@ -80,31 +105,19 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        const summary: string[] = [];
-        if (successCount > 0) {
-          summary.push(
-            `${successCount} book${successCount > 1 ? "s" : ""} added`,
-          );
-        }
-        if (duplicateCount > 0) {
-          summary.push(`${duplicateCount} skipped (already in library)`);
-        }
-        if (errorCount > 0) {
-          summary.push(`${errorCount} failed`);
-        }
-        if (nonEpubCount > 0) {
-          summary.push(
-            `${nonEpubCount} non-EPUB file${nonEpubCount > 1 ? "s" : ""} ignored`,
-          );
-        }
+        const message = importFeedback(
+          successCount,
+          duplicateCount,
+          errorCount,
+          nonEpubCount,
+        );
 
         if (successCount > 0) {
           await queryClient.invalidateQueries({ queryKey: ["books"] });
           navigate("/");
           const bookToOpen = successCount === 1 ? lastImportedBook : null;
           toast({
-            title: "Import complete",
-            description: summary.join(" · "),
+            message,
             ...(bookToOpen
               ? {
                   duration: 10000,
@@ -130,15 +143,13 @@ export function EpubImportProvider({ children }: { children: ReactNode }) {
 
         if (duplicateCount > 0 && errorCount === 0) {
           toast({
-            title: "Already in library",
-            description: summary.join(" · "),
+            message,
           });
           return;
         }
 
         toast({
-          title: "Import failed",
-          description: summary.join(" · "),
+          message,
           variant: "destructive",
         });
       } finally {

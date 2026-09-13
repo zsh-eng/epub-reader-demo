@@ -82,16 +82,14 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   // Manual sync trigger
   const triggerSync = useCallback(async () => {
     if (!isAuthenticated)
-      throw new SyncUnavailableError("Sign in to synchronize your library.");
+      throw new SyncUnavailableError("Sign in to sync your library.");
 
     setManualError(null);
 
     try {
       const result = await syncService.syncAll();
       if (result.status === "offline") {
-        throw new SyncUnavailableError(
-          "You are offline. Connect to the internet and try again.",
-        );
+        throw new SyncUnavailableError("Connect to the internet to sync.");
       }
     } catch (error) {
       console.error("[useSync] Sync failed:", error);

@@ -8,6 +8,8 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 import { cn } from "@/lib/utils";
 import {
   ReaderChromeAccessory,
@@ -75,6 +77,13 @@ export function ReaderChromeDebug() {
   function decide(confirmed: boolean) {
     if (!active) return;
     if (confirmed && active === "handoff") setPage(targetPage);
+    if (confirmed && active === "reading")
+      toast.success(
+        <ReadingStatusChangeMessage
+          previousStatus={previousStatus === "none" ? null : previousStatus}
+          status="reading"
+        />,
+      );
     setPending((queue) => queue.slice(1));
     setFocused(false);
     setShowChrome(false);

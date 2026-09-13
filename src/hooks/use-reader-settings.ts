@@ -123,9 +123,7 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
   const reportStorageError = useCallback(() => {
     if (storageErrorReported.current) return;
     storageErrorReported.current = true;
-    toast.error("Could not save appearance preferences", {
-      description:
-        "Changes work in this session but may be lost when you reload.",
+    toast.error("Appearance changes weren’t saved.", {
       id: "reader-settings-storage-error",
     });
   }, []);

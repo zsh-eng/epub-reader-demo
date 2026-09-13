@@ -1,38 +1,20 @@
+import type { ReactNode } from "react";
 import { toast as sonnerToast } from "sonner";
 
 interface ToastOptions {
-  title?: string;
-  description?: string;
+  message: ReactNode;
   variant?: "default" | "destructive";
   duration?: number;
   action?: { label: string; onClick: () => void };
 }
 
+/** App notifications use one message, with optional actions. */
+function toast({ message, variant, duration = 4000, action }: ToastOptions) {
+  const notify =
+    variant === "destructive" ? sonnerToast.error : sonnerToast.success;
+  return notify(message, { duration, action });
+}
+
 export function useToast() {
-  const toast = ({
-    title,
-    description,
-    variant,
-    duration,
-    action,
-  }: ToastOptions) => {
-    const message = title || "";
-    const descriptionText = description || "";
-
-    if (variant === "destructive") {
-      sonnerToast.error(message, {
-        description: descriptionText,
-        duration: duration || 4000,
-        action,
-      });
-    } else {
-      sonnerToast.success(message, {
-        description: descriptionText,
-        duration: duration || 4000,
-        action,
-      });
-    }
-  };
-
   return { toast };
 }

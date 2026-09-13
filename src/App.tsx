@@ -129,14 +129,7 @@ function App() {
                     }
                   />
                 </Routes>
-                <Toaster
-                  position="top-right"
-                  toastOptions={{
-                    classNames: {
-                      toast: "!rounded-2xl",
-                    },
-                  }}
-                />
+                <Toaster position="top-right" />
                 {!getLabRuntime() && <ReloadPrompt />}
               </EpubImportProvider>
             </AppRouter>

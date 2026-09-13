@@ -34,7 +34,7 @@ export function ReloadPrompt() {
 
   useEffect(() => {
     if (offlineReady) {
-      toast.success("App ready to work offline", {
+      toast.success("Reader is ready offline.", {
         id: "pwa-offline-ready",
         duration: 3000,
         onDismiss: () => setOfflineReady(false),
@@ -45,9 +45,8 @@ export function ReloadPrompt() {
 
   useEffect(() => {
     if (needRefresh) {
-      toast.info("New version available", {
+      toast.info("An update is available.", {
         id: "pwa-update-available",
-        description: "Click reload to update the app",
         duration: Infinity,
         action: {
           label: "Reload",

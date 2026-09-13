@@ -1,5 +1,5 @@
+import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 import { BookCardActions } from "./BookCardActions";
-import { READING_STATUS_LABELS } from "@/components/BookStatusSheet";
 import { BlurHashCanvas } from "@/components/BlurHashCanvas";
 import { useSetReadingStatus } from "@/hooks/use-reading-status";
 import { useToast } from "@/hooks/use-toast";
@@ -137,13 +137,17 @@ export function BookCard({
     setStatus.mutate(newStatus, {
       onSuccess: () => {
         toast({
-          title: `Marked ${book.title} as ${READING_STATUS_LABELS[newStatus]}`,
+          message: (
+            <ReadingStatusChangeMessage
+              previousStatus={displayStatus}
+              status={newStatus}
+            />
+          ),
         });
       },
       onError: () => {
         toast({
-          title: "Could not update reading status",
-          description: "Please try again.",
+          message: "Could not change reading status.",
           variant: "destructive",
         });
       },

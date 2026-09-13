@@ -38,9 +38,7 @@ export function DesktopNotebookNote({
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      toast.error(
-        "Could not copy text. Check clipboard permissions and try again.",
-      );
+      toast.error("Could not copy note text.");
     }
   }
   return (

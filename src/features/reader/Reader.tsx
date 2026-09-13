@@ -253,8 +253,7 @@ export function Reader() {
 
     if (!spread) {
       toast({
-        title: "Dump unavailable",
-        description: "Wait for pagination to render a page, then try again.",
+        message: "Page is not ready to copy.",
         variant: "destructive",
       });
       return;
@@ -287,14 +286,11 @@ export function Reader() {
       await navigator.clipboard.writeText(serializeReaderPageDebugDump(dump));
 
       toast({
-        title: "Debug dump copied",
-        description:
-          "Paste it into the reader debug panel to reproduce this page.",
+        message: "Copied debug dump.",
       });
     } catch {
       toast({
-        title: "Could not copy dump",
-        description: "Your browser blocked clipboard access for this page.",
+        message: "Could not copy debug dump.",
         variant: "destructive",
       });
     }

@@ -239,11 +239,10 @@ export function AppSidebar() {
     } catch (error) {
       console.error("Error syncing:", error);
       toast({
-        title: "Sync failed",
-        description:
+        message:
           error instanceof SyncUnavailableError
             ? error.message
-            : "Failed to synchronize library",
+            : "Could not sync your library.",
         variant: "destructive",
       });
     }
@@ -259,8 +258,7 @@ export function AppSidebar() {
     } catch (error) {
       console.error("Error signing in:", error);
       toast({
-        title: "Error",
-        description: "Failed to sign in with Google",
+        message: "Could not sign in with Google.",
         variant: "destructive",
       });
     }
@@ -273,14 +271,12 @@ export function AppSidebar() {
       closeSidebar();
       navigate("/");
       toast({
-        title: "Signed out",
-        description: "You have been signed out successfully",
+        message: "Signed out.",
       });
     } catch (error) {
       console.error("Error signing out:", error);
       toast({
-        title: "Error",
-        description: "Failed to sign out",
+        message: "Could not sign out.",
         variant: "destructive",
       });
     }

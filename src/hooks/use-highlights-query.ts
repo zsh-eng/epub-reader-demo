@@ -116,9 +116,7 @@ export function useAddHighlightMutation(
       }
       queryClient.setQueryData(bookQueryKey, context?.previousBookHighlights);
       console.error("Failed to add highlight:", err);
-      toast.error("Could not save highlight", {
-        description: "Select the passage and try again.",
-      });
+      toast.error("Could not save highlight.");
     },
     onSettled: (_data, _error, newHighlight) => {
       // Refetch after error or success to ensure consistency
@@ -171,9 +169,7 @@ export function useDeleteHighlightMutation(
         queryClient.setQueryData(queryKey, context.previousHighlights);
       }
       console.error("Failed to delete highlight:", err);
-      toast.error("Could not delete highlight", {
-        description: "Your highlight is still saved. Try again.",
-      });
+      toast.error("Could not delete highlight.");
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });
@@ -226,9 +222,7 @@ export function useUpdateHighlightMutation(
         queryClient.setQueryData(queryKey, context.previousHighlights);
       }
       console.error("Failed to update highlight:", err);
-      toast.error("Could not change highlight color", {
-        description: "Your previous color is still saved. Try again.",
-      });
+      toast.error("Could not change highlight color.");
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey });

@@ -23,7 +23,7 @@ test("shows offline feedback when connectivity changes during manual sync", asyn
   });
   await sync.click();
   await expect(
-    page.getByText("You are offline. Connect to the internet and try again."),
+    page.getByText("Connect to the internet to sync."),
   ).toBeVisible();
   await expect(page.getByText("Library synced", { exact: true })).toHaveCount(
     0,

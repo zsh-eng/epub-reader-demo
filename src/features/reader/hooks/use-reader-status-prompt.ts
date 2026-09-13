@@ -1,6 +1,8 @@
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import type { ReadingStatus } from "@/lib/db";
-import { useState } from "react";
+import { createElement, useState } from "react";
+import { toast } from "sonner";
+import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 
 interface ReaderStatusPrompt {
   previousStatus: "want-to-read" | "dnf" | null;
@@ -69,6 +71,12 @@ export function useReaderStatusPrompt({
       setOperation({ bookId, pending: true, error: "" });
       void setStatusAsync("reading")
         .then(() => {
+          toast.success(
+            createElement(ReadingStatusChangeMessage, {
+              previousStatus: status,
+              status: "reading",
+            }),
+          );
           setDismissedBookId(bookId);
           setOperation({ bookId, pending: false, error: "" });
         })

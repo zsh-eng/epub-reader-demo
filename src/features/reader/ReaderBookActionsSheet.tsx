@@ -1,7 +1,5 @@
-import {
-  BookStatusSheet,
-  READING_STATUS_LABELS,
-} from "@/components/BookStatusSheet";
+import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
+import { BookStatusSheet } from "@/components/BookStatusSheet";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useSync } from "@/hooks/use-sync";
@@ -48,14 +46,18 @@ export function ReaderBookActionsSheet({
     void setStatusAsync(nextStatus)
       .then(() => {
         toast({
-          title: `Marked ${book.title} as ${READING_STATUS_LABELS[nextStatus]}`,
+          message: (
+            <ReadingStatusChangeMessage
+              previousStatus={previousStatus}
+              status={nextStatus}
+            />
+          ),
         });
       })
       .catch(() => {
         setDisplayStatus(previousStatus);
         toast({
-          title: "Could not update reading status",
-          description: "Please try again.",
+          message: "Could not change reading status.",
           variant: "destructive",
         });
       });
@@ -70,15 +72,13 @@ export function ReaderBookActionsSheet({
     void deleteBook(book.id)
       .then(() => {
         toast({
-          title: "Success",
-          description: "Book removed from library",
+          message: "Removed book from library.",
         });
         navigate("/");
       })
       .catch(() => {
         toast({
-          title: "Error",
-          description: "Failed to remove book",
+          message: "Could not remove book.",
           variant: "destructive",
         });
       });

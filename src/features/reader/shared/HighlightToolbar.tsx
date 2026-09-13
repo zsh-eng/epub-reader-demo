@@ -87,10 +87,7 @@ export function HighlightToolbar({
   const handleCopy = useCallback(async () => {
     if (!textToCopy) return;
     if (!navigator.clipboard) {
-      toast.error("Could not copy highlight", {
-        description:
-          "Clipboard access is unavailable. Try copying the selected text manually.",
-      });
+      toast.error("Could not copy highlight.");
       return;
     }
 
@@ -106,9 +103,7 @@ export function HighlightToolbar({
       }, 1500);
     } catch (error) {
       console.error("Failed to copy highlighted text:", error);
-      toast.error("Could not copy highlight", {
-        description: "Check clipboard permissions and try again.",
-      });
+      toast.error("Could not copy highlight.");
     }
   }, [textToCopy]);
 

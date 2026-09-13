@@ -32,7 +32,7 @@ export function useNotebookDeletion({
         toast.dismiss(deletion.toastId);
       } catch {
         restoredEntries.current.delete(deletion.id);
-        toast.error("Could not restore the note. Try Undo again.");
+        toast.error("Could not restore note.");
       } finally {
         restoring.current = false;
       }
@@ -44,7 +44,7 @@ export function useNotebookDeletion({
       if (!(await remove(id))) return false;
       const deletion: Deletion = {
         id,
-        toastId: toast("Note deleted", {
+        toastId: toast("Deleted note.", {
           duration: 8000,
           action: {
             label: "Undo",
