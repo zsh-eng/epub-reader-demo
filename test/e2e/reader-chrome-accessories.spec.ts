@@ -98,7 +98,7 @@ test("fits the prompt beside fixed toolbar icons at desktop widths and supports 
   await page
     .getByLabel("Book title", { exact: true })
     .fill(
-      "A very long book title that should stay centred without overlapping either toolbar group",
+      "A very long book title that should fit without overlapping either toolbar group",
     );
   await page
     .getByLabel("Source device", { exact: true })
@@ -108,8 +108,9 @@ test("fits the prompt beside fixed toolbar icons at desktop widths and supports 
     .getByRole("combobox", { name: "Preview width", exact: true })
     .selectOption("768");
   const accessory = page.getByTestId("chrome-accessory");
-  const title = page.getByTestId("chrome-preview-title");
+  const title = page.locator("[data-reader-header-title]");
   const bookmark = page.getByTestId("chrome-preview-bookmark");
+  await expect(title).toHaveCSS("text-align", "left");
   for (const appearance of ["soft", "minimal", "outline"]) {
     await page
       .getByRole("combobox", { name: "Appearance", exact: true })
@@ -129,6 +130,29 @@ test("fits the prompt beside fixed toolbar icons at desktop widths and supports 
         .evaluate((node) => node.scrollWidth <= node.clientWidth),
     ).toBe(true);
   }
+
+  // This uses the preview container width, even on a wide browser window.
+  for (const width of ["960", "1280", "768"]) {
+    await page
+      .getByRole("combobox", { name: "Preview width", exact: true })
+      .selectOption(width);
+    await expect(title).toHaveCSS(
+      "text-align",
+      width === "1280" ? "center" : "left",
+    );
+  }
+  await expect(
+    accessory.locator("[data-reader-jump-direction]"),
+  ).toHaveAttribute("data-reader-jump-direction", "forward");
+  await page.getByLabel("Sync target page", { exact: true }).fill("20");
+  await expect(
+    accessory.locator("[data-reader-jump-direction]"),
+  ).toHaveAttribute("data-reader-jump-direction", "backward");
+  await page.getByLabel("Sync target page", { exact: true }).fill("42");
+  await expect(accessory.locator("[data-reader-jump-direction]")).toHaveCount(
+    0,
+  );
+  await page.getByLabel("Sync target page", { exact: true }).fill("240");
   await page
     .getByRole("combobox", { name: "Preview theme", exact: true })
     .selectOption("night");
@@ -156,6 +180,7 @@ test("fits the prompt beside fixed toolbar icons at desktop widths and supports 
     }),
   ).toBeFocused();
   await page.keyboard.press("Enter");
+  await expect(title).toHaveCSS("text-align", "center");
   await expect(page.getByRole("status")).toContainText(
     "Book status is unchanged",
   );

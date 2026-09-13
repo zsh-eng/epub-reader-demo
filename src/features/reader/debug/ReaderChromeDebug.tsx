@@ -10,10 +10,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  ChromeAccessoryPreview,
+  ReaderChromeAccessory,
   type ChromePromptAppearance,
   type ChromePromptKind,
-} from "./ChromeAccessoryPreview";
+} from "../ReaderChromeAccessory";
+import { ReaderDesktopToolbar } from "../ReaderDesktopToolbar";
 
 const fieldClass =
   "h-9 w-full min-w-0 rounded-xl border border-input bg-background px-3 text-base outline-none focus-visible:ring-2 focus-visible:ring-ring sm:text-sm";
@@ -265,42 +266,59 @@ export function ReaderChromeDebug() {
                   setFocused(false);
               }}
             >
-              <div className="grid h-14 grid-cols-[minmax(19rem,1fr)_minmax(0,36rem)_minmax(19rem,1fr)] items-center px-4">
-                <span className={iconClass} aria-hidden="true">
-                  <PanelLeft className="size-[1.15rem]" />
-                </span>
-                <p
-                  data-testid="chrome-preview-title"
-                  title={bookTitle}
-                  className="min-w-0 truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground"
-                >
-                  {bookTitle}
-                </p>
-                <div className="flex items-center justify-end gap-1">
-                  {active && (
-                    <ChromeAccessoryPreview
-                      key={active}
-                      kind={active}
-                      appearance={appearance}
-                      deviceName={deviceName}
-                      targetPage={targetPage}
-                      restart={restart}
-                      onConfirm={() => decide(true)}
-                      onDismiss={() => decide(false)}
-                    />
-                  )}
-                  <span
-                    data-testid="chrome-preview-bookmark"
-                    className={iconClass}
-                    aria-hidden="true"
-                  >
-                    <Bookmark className="size-[1.15rem]" />
-                  </span>
+              <ReaderDesktopToolbar
+                bookTitle={bookTitle}
+                navigation={
                   <span className={iconClass} aria-hidden="true">
-                    <PanelRight className="size-[1.15rem]" />
+                    <PanelLeft className="size-[1.15rem]" />
                   </span>
-                </div>
-              </div>
+                }
+                accessory={
+                  active &&
+                  (active === "handoff" ? (
+                    <ReaderChromeAccessory
+                      kind="handoff"
+                      appearance={appearance}
+                      currentPage={page}
+                      prompt={{
+                        sourceLabel: deviceName,
+                        targetPage,
+                        onJump: () => decide(true),
+                        onDismiss: () => decide(false),
+                      }}
+                    />
+                  ) : (
+                    <ReaderChromeAccessory
+                      kind="reading"
+                      appearance={appearance}
+                      prompt={{
+                        title: restart
+                          ? "Give this book another try"
+                          : "Mark this book as currently reading",
+                        actionLabel: restart ? "Start again" : "Start reading",
+                        isPending: false,
+                        error: "",
+                        onConfirm: () => decide(true),
+                        onDismiss: () => decide(false),
+                      }}
+                    />
+                  ))
+                }
+                actions={
+                  <>
+                    <span
+                      data-testid="chrome-preview-bookmark"
+                      className={iconClass}
+                      aria-hidden="true"
+                    >
+                      <Bookmark className="size-[1.15rem]" />
+                    </span>
+                    <span className={iconClass} aria-hidden="true">
+                      <PanelRight className="size-[1.15rem]" />
+                    </span>
+                  </>
+                }
+              />
             </header>
             <section
               aria-label="Reading preview"

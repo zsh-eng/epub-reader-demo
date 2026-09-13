@@ -13,11 +13,14 @@ test("desktop chrome fades in place and hides all navigation controls together",
     exact: true,
   });
   const accessory = page.locator("[data-reader-header-accessory]");
+  await accessory
+    .getByRole("button", { name: "Dismiss reading status prompt" })
+    .click();
+  await page.mouse.move(640, 400);
   await expect(header).toHaveCSS("opacity", "0");
   await expect(header).toHaveCSS("transform", "none");
   await expect(leftButton).toHaveCount(0);
   await expect(footer).toHaveCount(0);
-  const promptBefore = (await accessory.boundingBox())!;
 
   await page.locator('[data-reader-chrome-rail="top"]').hover();
   await expect(header).toHaveCSS("opacity", "1");
@@ -32,7 +35,6 @@ test("desktop chrome fades in place and hides all navigation controls together",
   }));
   expect(leftButtonShape.radius).toBeGreaterThan(0);
   expect(leftButtonShape.radius).toBeLessThan(leftButtonShape.height / 2);
-  expect((await accessory.boundingBox())!.y).toBe(promptBefore.y);
   const bookmark = page.getByRole("button", {
     name: "Add bookmark",
     exact: true,
@@ -62,7 +64,6 @@ test("desktop chrome fades in place and hides all navigation controls together",
   await expect(
     page.getByRole("button", { name: "Remove bookmark", exact: true }),
   ).toHaveCount(0);
-  expect((await accessory.boundingBox())!.y).toBe(promptBefore.y);
   await page.screenshot({
     path: testInfo.outputPath("desktop-chrome-hidden.png"),
   });

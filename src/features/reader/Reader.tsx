@@ -25,8 +25,7 @@ import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderProgressPeek } from "./footer/ReaderProgressPeek";
 import { ReaderFooter } from "./footer";
-import { FooterStatusPrompt } from "./footer/FooterStatusPrompt";
-import { FooterHandoffPrompt } from "./footer/FooterHandoffPrompt";
+import { ReaderChromeAccessory } from "./ReaderChromeAccessory";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
 import { useReaderChromeState } from "./hooks/use-reader-chrome-state";
@@ -436,9 +435,18 @@ export function Reader() {
                   !isMobile &&
                   !isReaderInteractionSuppressed &&
                   (handoffPrompt ? (
-                    <FooterHandoffPrompt prompt={handoffPrompt} />
+                    <ReaderChromeAccessory
+                      kind="handoff"
+                      prompt={handoffPrompt}
+                      currentPage={sessionState.navigation.currentPage}
+                    />
                   ) : (
-                    statusPrompt && <FooterStatusPrompt prompt={statusPrompt} />
+                    statusPrompt && (
+                      <ReaderChromeAccessory
+                        kind="reading"
+                        prompt={statusPrompt}
+                      />
+                    )
                   ))
                 }
                 chromeVisible={

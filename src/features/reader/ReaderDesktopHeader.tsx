@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Bookmark, PanelRight } from "lucide-react";
 import { motion } from "motion/react";
+import { ReaderDesktopToolbar } from "./ReaderDesktopToolbar";
 import { DESKTOP_CHROME_FADE_TRANSITION } from "./chrome";
 import type { ReaderHeaderProps } from "./ReaderHeader";
 
@@ -24,30 +25,28 @@ export function ReaderDesktopHeader({
   isMenuOpen,
   onOpenMenu,
 }: ReaderDesktopHeaderProps) {
+  const visible = chromeVisible || Boolean(accessory);
   return (
-    <>
-      <motion.header
-        data-reader-header="desktop"
-        className="absolute inset-x-0 top-0 z-20 bg-background/88 backdrop-blur-xl"
-        initial={false}
-        animate={{ opacity: chromeVisible ? 1 : 0 }}
-        transition={DESKTOP_CHROME_FADE_TRANSITION}
-        inert={!chromeVisible}
-        aria-hidden={!chromeVisible}
-        {...chromeSurfaceProps}
-        style={{
-          paddingTop: "env(safe-area-inset-top)",
-          pointerEvents: chromeVisible ? "auto" : "none",
-        }}
-      >
-        <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center px-4">
-          <div className="flex items-center">
-            <SidebarTrigger className={CHROME_BUTTON_CLASS_NAME} />
-          </div>
-          <p className="max-w-[min(64vw,36rem)] truncate px-4 text-center text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            {bookTitle}
-          </p>
-          <div className="flex items-center justify-end gap-1">
+    <motion.header
+      data-reader-header="desktop"
+      className="absolute inset-x-0 top-0 z-20 bg-background/88 backdrop-blur-xl"
+      initial={false}
+      animate={{ opacity: visible ? 1 : 0 }}
+      transition={DESKTOP_CHROME_FADE_TRANSITION}
+      inert={!visible}
+      aria-hidden={!visible}
+      {...chromeSurfaceProps}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        pointerEvents: visible ? "auto" : "none",
+      }}
+    >
+      <ReaderDesktopToolbar
+        bookTitle={bookTitle}
+        navigation={<SidebarTrigger className={CHROME_BUTTON_CLASS_NAME} />}
+        accessory={accessory}
+        actions={
+          <>
             <Button
               variant="ghost"
               size="icon"
@@ -72,21 +71,9 @@ export function ReaderDesktopHeader({
             >
               <PanelRight className="size-[1.15rem]" />
             </Button>
-          </div>
-        </div>
-      </motion.header>
-      {/* Status and handoff actions stay available below the controls, without
-        moving when the chrome appears or disappears. */}
-      {accessory && (
-        <div
-          data-reader-header-accessory=""
-          className="absolute right-4 z-20 w-[min(34rem,calc(100%-4rem))]"
-          style={{ top: "calc(env(safe-area-inset-top) + 4rem)" }}
-          {...(chromeVisible ? chromeSurfaceProps : undefined)}
-        >
-          {accessory}
-        </div>
-      )}
-    </>
+          </>
+        }
+      />
+    </motion.header>
   );
 }
