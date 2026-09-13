@@ -29,6 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/use-auth";
 import { useBooksWithStatuses } from "@/hooks/use-books-with-statuses";
+import { useSidebarReadingOrder } from "@/hooks/use-sidebar-reading-order";
 import { useEpubImport } from "@/features/library/use-epub-import";
 import { useLibraryCoverUrls } from "@/hooks/use-library-cover-urls";
 import { useReaderSettings } from "@/hooks/use-reader-settings";
@@ -175,14 +176,18 @@ export function AppSidebar() {
     if (!booksData) return null;
     return findMostRecentlyReadBook(booksData.books, booksData.lastReadByBook);
   }, [booksData]);
+  const orderedReadingBooks = useSidebarReadingOrder(
+    booksData?.categorized.continueReading ?? [],
+    !isMobile && open,
+  );
   const continueReadingBooks = useMemo(() => {
     if (!booksData) return [];
 
-    return booksData.categorized.continueReading.map((book) => ({
+    return orderedReadingBooks.map((book) => ({
       book,
       lastRead: booksData.lastReadByBook.get(book.id) ?? book.dateAdded,
     }));
-  }, [booksData]);
+  }, [booksData, orderedReadingBooks]);
   const recentBooks = useMemo(
     () =>
       [
@@ -314,36 +319,26 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="px-(--sidebar-panel-content-inset) pt-(--sidebar-panel-content-inset) pb-1">
-        <div className="flex h-[38px] items-center">
-          <Link
-            to="/"
-            className="flex h-full min-w-0 flex-1 items-center gap-2.5 rounded-lg rounded-tl-(--sidebar-panel-field-radius) px-3 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/50 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
-            title="Go to library"
-          >
-            <BookOpenText
-              className="size-[17px] shrink-0 text-sidebar-foreground/70"
-              aria-hidden="true"
-            />
-            <span className="truncate font-serif text-[16px] font-medium tracking-tight">
-              Reader
-            </span>
-          </Link>
-          <SidebarTrigger className="ml-auto size-[38px] rounded-lg rounded-tr-(--sidebar-panel-field-radius) text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground" />
-        </div>
-      </SidebarHeader>
-
-      <SidebarContent className="min-h-0 overflow-hidden px-3 py-2">
-        <SidebarGroup className="min-h-0 flex-1">
-          <SidebarMenu className="shrink-0">
+        <div className="flex h-[38px] items-center gap-1">
+          <SidebarMenu className="min-w-0 flex-1">
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location.pathname === "/"}
+                className="rounded-tl-(--sidebar-panel-field-radius)"
                 render={<Link to="/" />}
               >
                 <Library />
                 <span>Library</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+          </SidebarMenu>
+          <SidebarTrigger className="ml-auto size-[38px] rounded-lg rounded-tr-(--sidebar-panel-field-radius) text-sidebar-foreground/50 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground" />
+        </div>
+      </SidebarHeader>
+
+      <SidebarContent className="min-h-0 overflow-hidden px-3 pt-0 pb-2">
+        <SidebarGroup className="min-h-0 flex-1">
+          <SidebarMenu className="shrink-0">
             <SidebarMenuItem>
               <SidebarMenuButton
                 isActive={location.pathname === "/highlights"}
