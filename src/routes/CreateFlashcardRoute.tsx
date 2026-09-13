@@ -256,26 +256,7 @@ export default function CreateFlashcardRoute() {
             setImageFile(image);
             setImageUploadDialogOpen(true);
 
-            // To hide latency, we start the image upload immediately
-            // TODO: find a way to clean up the accidentally uploaded images, and handle
-            // the fact that we don't have alt text being sent to the database anymore
-            // I think that's ok, because ultimately the alt text source of truth is what's written
-            // in the flashcard, not what's in the database
-            // TODO: alternatively, we could have image uploads happen locally immediately,
-            // then upload in the background later on.
-            // As long as we have the ability to manage images and remove the ones that are unused
-            // (we can do this be fetching the links to all images from the backend and comparing)
-            // to what we see locally, it's ok to optimistically upload.
-            const promise = uploadImage(image, undefined).catch(
-              (error): UploadResponse => ({
-                success: false,
-                error:
-                  error instanceof Error
-                    ? error.message
-                    : "Image upload failed. Try again.",
-              }),
-            );
-            setUploadPromise(promise);
+            setUploadPromise(null);
           }}
         />
 

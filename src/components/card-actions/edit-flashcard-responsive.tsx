@@ -49,10 +49,25 @@ function EditFlashcardSession({
   });
   const isMobile = useMediaQuery("(max-width: 640px)");
 
+  const beforeAction = (action: string) => {
+    if (submitLock.current) return false;
+    const values = form.getValues();
+    const hasUnsavedText =
+      values.front !== form.formState.defaultValues?.front ||
+      values.back !== form.formState.defaultValues?.back;
+    return (
+      !hasUnsavedText ||
+      window.confirm(
+        `${action}? Unsaved changes to the question and answer will be discarded. This action does not save your text. Cancel to keep editing.`,
+      )
+    );
+  };
+
   return isMobile ? (
     <EditFlashcardDrawer
       form={form}
       submitLock={submitLock}
+      beforeAction={beforeAction}
       card={card}
       open={open}
       onOpenChange={(value) => {
@@ -65,6 +80,7 @@ function EditFlashcardSession({
     <EditFlashcardDialog
       form={form}
       submitLock={submitLock}
+      beforeAction={beforeAction}
       card={card}
       open={open}
       onOpenChange={(value) => {

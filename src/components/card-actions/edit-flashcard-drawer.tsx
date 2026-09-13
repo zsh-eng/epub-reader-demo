@@ -16,6 +16,7 @@ type EditFlashcardDrawerProps = {
   onEdit: (values: CardContentFormValues) => void | Promise<void>;
   form: UseFormReturn<CardContentFormValues>;
   submitLock: MutableRefObject<boolean>;
+  beforeAction: (action: string) => boolean;
   card: CardWithMetadata;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -30,6 +31,7 @@ export default function EditFlashcardDrawer({
   actions,
   form,
   submitLock,
+  beforeAction,
 }: EditFlashcardDrawerProps) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -49,6 +51,7 @@ export default function EditFlashcardDrawer({
         {actions && (
           <EditFlashcardFooterActions
             disabled={form.formState.isSubmitting}
+            beforeAction={beforeAction}
             actions={actions}
             onClose={() => onOpenChange(false)}
           />

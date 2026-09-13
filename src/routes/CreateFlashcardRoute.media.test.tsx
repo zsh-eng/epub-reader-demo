@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import { act } from "react";
-import { input, render } from "../../tests/dom";
+import { click, input, render } from "../../tests/dom";
 import CreateFlashcardRoute from "./CreateFlashcardRoute";
 
 Object.assign(globalThis, { NodeFilter: window.NodeFilter });
@@ -36,6 +36,7 @@ test("upload and clipboard failures retain preview and retry without uploading a
     await act(async () => {
       front.dispatchEvent(paste);
     });
+    expect(upload).toHaveBeenCalledTimes(0);
     const description = document.querySelector<HTMLInputElement>(
       '[aria-label="Image description"]',
     )!;
@@ -65,6 +66,81 @@ test("upload and clipboard failures retain preview and retry without uploading a
     expect(clipboard).toHaveBeenCalledTimes(2);
     expect(clipboard).toHaveBeenLastCalledWith(
       expect.stringContaining("![Description retained]"),
+    );
+    expect(
+      document.querySelector('[aria-label="Image description"]'),
+    ).toBeNull();
+  } finally {
+    await view.unmount();
+    upload.mockRestore();
+    clipboard.mockRestore();
+  }
+});
+
+test("cancelled paste stays local and the next preview uploads only its own file and description", async () => {
+  const upload = spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(JSON.stringify({ success: true, fileKey: "second-key" }), {
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+  const clipboard = spyOn(navigator.clipboard, "writeText").mockResolvedValue(
+    undefined,
+  );
+  const view = await render(<CreateFlashcardRoute />);
+  const pasteImage = async (name: string) => {
+    const paste = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, "clipboardData", {
+      value: {
+        items: [
+          {
+            type: "image/png",
+            getAsFile: () => new File([name], name, { type: "image/png" }),
+          },
+        ],
+      },
+    });
+    await act(async () => {
+      view.container.querySelector("textarea")!.dispatchEvent(paste);
+    });
+  };
+  try {
+    await pasteImage("cancelled.png");
+    await input(
+      document.querySelector<HTMLInputElement>(
+        '[aria-label="Image description"]',
+      )!,
+      "Discarded description",
+    );
+    expect(document.querySelector('[role="dialog"] img')).not.toBeNull();
+    expect(upload).toHaveBeenCalledTimes(0);
+    const close = [
+      ...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button'),
+    ].find((button) => button.textContent === "Close")!;
+    await click(close);
+    expect(
+      document.querySelector('[aria-label="Image description"]'),
+    ).toBeNull();
+    expect(upload).toHaveBeenCalledTimes(0);
+    expect(clipboard).toHaveBeenCalledTimes(0);
+    await pasteImage("confirmed.png");
+    const description = document.querySelector<HTMLInputElement>(
+      '[aria-label="Image description"]',
+    )!;
+    expect(description.value).toBe("");
+    expect(upload).toHaveBeenCalledTimes(0);
+    await input(description, "  Confirmed description  ");
+    await click(
+      document.querySelector('[aria-label="Upload image and copy link"]')!,
+    );
+    expect(upload).toHaveBeenCalledTimes(1);
+    const body = upload.mock.calls[0][1]!.body as FormData;
+    expect((body.get("file") as File).name).toBe("confirmed.png");
+    expect(body.get("metadata")).toBe(
+      JSON.stringify({ altText: "Confirmed description" }),
+    );
+    expect(clipboard).toHaveBeenCalledTimes(1);
+    expect(clipboard).toHaveBeenLastCalledWith(
+      expect.stringContaining("![Confirmed description]"),
     );
     expect(
       document.querySelector('[aria-label="Image description"]'),
