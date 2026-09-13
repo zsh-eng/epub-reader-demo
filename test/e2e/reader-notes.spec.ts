@@ -281,7 +281,7 @@ test.describe("Desktop margin notes", () => {
         bottom: parseFloat(style.borderBottomLeftRadius),
       };
     });
-    expect(inputCorners.top).toBeLessThan(inputCorners.bottom);
+    expect(inputCorners.top).toBe(inputCorners.bottom);
     const headerTrigger = page.locator(
       'button[aria-label="Open reader tools"]',
     );
