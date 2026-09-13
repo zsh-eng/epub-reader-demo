@@ -15,7 +15,7 @@ test("desktop keeps status at the header and gives contents continuous hover row
   await openLocalBook(page, localBook.id);
   const accessory = page.locator("[data-reader-header-accessory]");
   await expect(
-    accessory.getByRole("button", { name: "Start reading", exact: true }),
+    accessory.getByRole("button", { name: "Mark as reading", exact: true }),
   ).toBeVisible();
   const promptBounds = (await accessory.boundingBox())!;
   expect(promptBounds.y).toBeLessThan(100);
@@ -273,7 +273,7 @@ for (const mobile of [false, true]) {
       await expect.poll(async () => (await currentPages(page))[0]).toBe("1");
       await expect(action).toHaveCount(0);
       await expect(
-        accessory.getByRole("button", { name: "Start reading", exact: true }),
+        accessory.getByRole("button", { name: "Mark as reading", exact: true }),
       ).toBeVisible();
     });
   });
@@ -295,7 +295,7 @@ test("desktop status keeps the top toolbar visible until dismissed or saved", as
       return getReadingStatus(bookId);
     }, localBook.id);
   const start = accessory.getByRole("button", {
-    name: "Start reading",
+    name: "Mark as reading",
     exact: true,
   });
   await expect(start).toBeVisible();

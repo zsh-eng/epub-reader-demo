@@ -23,7 +23,7 @@ test("keeps only the top chrome visible until each prompt is explicitly resolved
   await expect(footer).toHaveCSS("opacity", "0");
   await reading.press("Escape");
   await expect(
-    preview.getByRole("button", { name: "Start reading", exact: true }),
+    preview.getByRole("button", { name: "Mark as reading", exact: true }),
   ).toBeVisible();
   const bookmark = await page
     .getByTestId("chrome-preview-bookmark")
@@ -52,7 +52,7 @@ test("keeps only the top chrome visible until each prompt is explicitly resolved
     preview.getByRole("button", { name: /Continue at p. 84/ }),
   ).toBeVisible();
   await expect(
-    preview.getByRole("button", { name: "Start reading", exact: true }),
+    preview.getByRole("button", { name: "Mark as reading", exact: true }),
   ).toHaveCount(0);
   await preview.getByRole("button", { name: /Continue at p. 84/ }).click();
   await reading.hover();
@@ -61,7 +61,7 @@ test("keeps only the top chrome visible until each prompt is explicitly resolved
   );
   await expect(header).toHaveCSS("opacity", "1");
   await preview
-    .getByRole("button", { name: "Start reading", exact: true })
+    .getByRole("button", { name: "Mark as reading", exact: true })
     .click();
   await reading.hover();
   await expect(header).toHaveCSS("opacity", "0");
@@ -169,8 +169,13 @@ test("fits the prompt beside fixed toolbar icons at desktop widths and supports 
   await page
     .getByRole("button", { name: "Reading status", exact: true })
     .click();
-  await page.getByLabel("Show “Start again”", { exact: true }).check();
-  const action = page.getByRole("button", { name: "Start again", exact: true });
+  await page
+    .getByRole("combobox", { name: "Previous status", exact: true })
+    .selectOption("dnf");
+  const action = page.getByRole("button", {
+    name: "Mark as reading",
+    exact: true,
+  });
   await action.focus();
   await action.press("Tab");
   await expect(
@@ -197,4 +202,56 @@ test("gates the playground behind the existing debug preference", async ({
     page.getByRole("heading", { name: "Debug mode is off" }),
   ).toBeVisible();
   await expect(page.getByTestId("chrome-preview")).toHaveCount(0);
+});
+
+test("explains each status change with bold status names on hover and keyboard focus", async ({
+  page,
+}) => {
+  await page.goto("/debug/chrome-accessories");
+  const action = page.getByRole("button", {
+    name: "Mark as reading",
+    exact: true,
+  });
+  const tooltip = page.getByRole("tooltip");
+  for (const [value, expected, statuses] of [
+    ["none", "Set this book’s status to Reading", ["Reading"]],
+    [
+      "want-to-read",
+      "Change from Want to read to Reading",
+      ["Want to read", "Reading"],
+    ],
+    [
+      "dnf",
+      "Change from Did not finish to Reading",
+      ["Did not finish", "Reading"],
+    ],
+  ] as const) {
+    const statusSelect = page.getByRole("combobox", {
+      name: "Previous status",
+      exact: true,
+    });
+    // Move off the action before reopening a tooltip dismissed with Escape.
+    await statusSelect.hover();
+    await statusSelect.selectOption(value);
+    await action.hover();
+    await expect(tooltip).toHaveText(expected);
+    await expect(tooltip.locator("strong")).toHaveText([...statuses]);
+    for (const name of statuses)
+      await expect(tooltip.getByText(name, { exact: true })).toHaveCSS(
+        "font-weight",
+        "700",
+      );
+    await action.press("Escape");
+    await expect(tooltip).toBeHidden();
+  }
+  await page
+    .getByRole("combobox", { name: "Previous status", exact: true })
+    .focus();
+  await action.focus();
+  await expect(tooltip).toHaveText("Change from Did not finish to Reading");
+  await action.press("Enter");
+  await expect(tooltip).toBeHidden();
+  await expect(page.getByRole("status")).toContainText(
+    "Book marked as currently reading",
+  );
 });

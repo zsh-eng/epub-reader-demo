@@ -14,6 +14,7 @@ import {
   type ChromePromptAppearance,
   type ChromePromptKind,
 } from "../ReaderChromeAccessory";
+import { getReaderStatusPrompt } from "../hooks/use-reader-status-prompt";
 import { ReaderDesktopToolbar } from "../ReaderDesktopToolbar";
 
 const fieldClass =
@@ -47,7 +48,12 @@ export function ReaderChromeDebug() {
   const [bookTitle, setBookTitle] = useState("The Art of Paying Attention");
   const [deviceName, setDeviceName] = useState("MacBook Pro");
   const [targetPage, setTargetPage] = useState(84);
-  const [restart, setRestart] = useState(false);
+  const [previousStatus, setPreviousStatus] = useState<
+    "none" | "want-to-read" | "dnf"
+  >("none");
+  const readingPrompt = getReaderStatusPrompt(
+    previousStatus === "none" ? null : previousStatus,
+  );
   const [page, setPage] = useState(42);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -202,14 +208,19 @@ export function ReaderChromeDebug() {
             </Field>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-            <label className="flex items-center gap-2 text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={restart}
-                onChange={(event) => setRestart(event.target.checked)}
-                className="accent-primary"
-              />{" "}
-              Show “Start again”
+            <label className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
+              Previous status
+              <select
+                className={fieldClass}
+                value={previousStatus}
+                onChange={(event) =>
+                  setPreviousStatus(event.target.value as typeof previousStatus)
+                }
+              >
+                <option value="none">No status</option>
+                <option value="want-to-read">Want to read</option>
+                <option value="dnf">Did not finish</option>
+              </select>
             </label>
             <div className="flex items-center gap-3">
               <span
@@ -288,20 +299,19 @@ export function ReaderChromeDebug() {
                       }}
                     />
                   ) : (
-                    <ReaderChromeAccessory
-                      kind="reading"
-                      appearance={appearance}
-                      prompt={{
-                        title: restart
-                          ? "Give this book another try"
-                          : "Mark this book as currently reading",
-                        actionLabel: restart ? "Start again" : "Start reading",
-                        isPending: false,
-                        error: "",
-                        onConfirm: () => decide(true),
-                        onDismiss: () => decide(false),
-                      }}
-                    />
+                    readingPrompt && (
+                      <ReaderChromeAccessory
+                        kind="reading"
+                        appearance={appearance}
+                        prompt={{
+                          ...readingPrompt,
+                          isPending: false,
+                          error: "",
+                          onConfirm: () => decide(true),
+                          onDismiss: () => decide(false),
+                        }}
+                      />
+                    )
                   ))
                 }
                 actions={

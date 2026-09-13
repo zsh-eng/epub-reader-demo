@@ -561,7 +561,7 @@ test.describe("Highlight note capture", () => {
   }) => {
     await openLocalBook(page, localBook.id);
     await page
-      .getByRole("button", { name: "Start reading", exact: true })
+      .getByRole("button", { name: "Mark as reading", exact: true })
       .click();
     for (let index = 0; index < 8; index++) await nextSpread(page);
     await page.evaluate(() => {

@@ -42,6 +42,7 @@ describe("getReaderStatusPrompt", () => {
     "offers to start a book with status %s",
     (status) => {
       expect(getReaderStatusPrompt(status)).toEqual({
+        previousStatus: status,
         title: "Ready to start reading?",
         actionLabel: "Start reading",
       });
@@ -50,6 +51,7 @@ describe("getReaderStatusPrompt", () => {
 
   it("uses a return message for a did-not-finish book", () => {
     expect(getReaderStatusPrompt("dnf")).toEqual({
+      previousStatus: "dnf",
       title: "Giving this book another try?",
       actionLabel: "Start again",
     });

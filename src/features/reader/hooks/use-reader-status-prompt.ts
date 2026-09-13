@@ -3,6 +3,7 @@ import type { ReadingStatus } from "@/lib/db";
 import { useState } from "react";
 
 interface ReaderStatusPrompt {
+  previousStatus: "want-to-read" | "dnf" | null;
   title: string;
   actionLabel: string;
 }
@@ -12,6 +13,7 @@ export function getReaderStatusPrompt(
 ): ReaderStatusPrompt | null {
   if (status === "dnf") {
     return {
+      previousStatus: status,
       title: "Giving this book another try?",
       actionLabel: "Start again",
     };
@@ -19,6 +21,7 @@ export function getReaderStatusPrompt(
 
   if (status === null || status === "want-to-read") {
     return {
+      previousStatus: status,
       title: "Ready to start reading?",
       actionLabel: "Start reading",
     };

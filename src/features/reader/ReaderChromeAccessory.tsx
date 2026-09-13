@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { Tooltip } from "@base-ui/react/tooltip";
 import { ArrowLeft, ArrowRight, BookOpen, Laptop, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -7,6 +8,11 @@ import type { ReaderHandoffPrompt } from "./types";
 
 export type ChromePromptKind = "reading" | "handoff";
 export type ChromePromptAppearance = "soft" | "minimal" | "outline";
+
+const previousStatusLabels = {
+  "want-to-read": "Want to read",
+  dnf: "Did not finish",
+};
 
 const surfaces: Record<ChromePromptAppearance, string> = {
   soft: "border-transparent bg-secondary/70",
@@ -26,16 +32,17 @@ type ReaderChromeAccessoryProps = {
  * a handoff's arrow; a more recent checkpoint can be earlier in the book. */
 export function ReaderChromeAccessory(props: ReaderChromeAccessoryProps) {
   const errorId = useId();
+  const tooltipId = useId();
   const { appearance = "soft", prompt } = props;
   const handoff = props.kind === "handoff";
   const label =
     props.kind === "handoff"
       ? `Continue at p. ${props.prompt.targetPage}`
-      : props.prompt.actionLabel;
+      : "Mark as reading";
   const detail =
     props.kind === "handoff"
       ? `Newer position on ${props.prompt.sourceLabel}: page ${props.prompt.targetPage}`
-      : props.prompt.title;
+      : "";
   const direction =
     props.kind !== "handoff" || props.prompt.targetPage === props.currentPage
       ? null
@@ -46,6 +53,39 @@ export function ReaderChromeAccessory(props: ReaderChromeAccessoryProps) {
   const Icon = handoff ? Laptop : BookOpen;
   const pending = props.kind === "reading" && props.prompt.isPending;
   const error = props.kind === "reading" ? props.prompt.error : "";
+  const action = (
+    <Button
+      variant="ghost"
+      size="sm"
+      title={handoff ? detail : undefined}
+      aria-label={
+        props.kind === "handoff"
+          ? `${label} from ${props.prompt.sourceLabel}`
+          : label
+      }
+      aria-describedby={
+        props.kind === "reading"
+          ? [tooltipId, error && errorId].filter(Boolean).join(" ")
+          : undefined
+      }
+      aria-busy={pending}
+      disabled={pending}
+      onClick={
+        props.kind === "handoff" ? props.prompt.onJump : props.prompt.onConfirm
+      }
+      className="h-7 min-w-0 shrink-0 gap-2 rounded-[calc(var(--radius-xl)-3px)] px-2 text-xs hover:bg-muted"
+    >
+      <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
+      <span className="whitespace-nowrap">{pending ? "Saving…" : label}</span>
+      {direction && (
+        <Arrow
+          data-reader-jump-direction={direction}
+          className="size-3.5 text-muted-foreground"
+          aria-hidden="true"
+        />
+      )}
+    </Button>
+  );
   return (
     <div
       data-reader-header-accessory=""
@@ -58,37 +98,42 @@ export function ReaderChromeAccessory(props: ReaderChromeAccessoryProps) {
           surfaces[appearance],
         )}
       >
-        <Button
-          variant="ghost"
-          size="sm"
-          title={detail}
-          aria-label={
-            props.kind === "handoff"
-              ? `${label} from ${props.prompt.sourceLabel}`
-              : label
-          }
-          aria-describedby={error ? errorId : undefined}
-          aria-busy={pending}
-          disabled={pending}
-          onClick={
-            props.kind === "handoff"
-              ? props.prompt.onJump
-              : props.prompt.onConfirm
-          }
-          className="h-7 min-w-0 shrink-0 gap-2 rounded-[calc(var(--radius-xl)-3px)] px-2 text-xs hover:bg-muted"
-        >
-          <Icon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-          <span className="whitespace-nowrap">
-            {pending ? "Saving…" : label}
-          </span>
-          {direction && (
-            <Arrow
-              data-reader-jump-direction={direction}
-              className="size-3.5 text-muted-foreground"
-              aria-hidden="true"
-            />
-          )}
-        </Button>
+        {props.kind === "handoff" ? (
+          action
+        ) : (
+          <Tooltip.Root disabled={pending}>
+            <Tooltip.Trigger delay={380} render={action} />
+            <Tooltip.Portal>
+              <Tooltip.Positioner
+                side="bottom"
+                align="end"
+                sideOffset={8}
+                collisionPadding={12}
+                className="z-50"
+              >
+                <Tooltip.Popup
+                  id={tooltipId}
+                  role="tooltip"
+                  className="max-w-72 rounded-xl bg-foreground px-3 py-2 text-xs text-background"
+                >
+                  {props.prompt.previousStatus ? (
+                    <>
+                      Change from{" "}
+                      <strong>
+                        {previousStatusLabels[props.prompt.previousStatus]}
+                      </strong>{" "}
+                      to <strong>Reading</strong>
+                    </>
+                  ) : (
+                    <>
+                      Set this book’s status to <strong>Reading</strong>
+                    </>
+                  )}
+                </Tooltip.Popup>
+              </Tooltip.Positioner>
+            </Tooltip.Portal>
+          </Tooltip.Root>
+        )}
         <span className="h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
         <Button
           variant="ghost"

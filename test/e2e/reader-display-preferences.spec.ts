@@ -25,7 +25,10 @@ for (const mobile of [true, false]) {
           // This fixture has no reading status. Its contextual action mounts
           // only after the Reader accepts chrome interactions.
           await expect(
-            page.getByRole("button", { name: "Start reading", exact: true }),
+            page.getByRole("button", {
+              name: mobile ? "Start reading" : "Mark as reading",
+              exact: true,
+            }),
           ).toBeVisible();
           const tools = page.getByRole("button", {
             name: "Open reader tools",

@@ -7,6 +7,7 @@ afterEach(cleanup);
 
 it("disables duplicate saves and keeps an unsuccessful save available to retry or dismiss", () => {
   const prompt = {
+    previousStatus: null,
     title: "Ready to start reading?",
     actionLabel: "Start reading",
     error: "",
@@ -18,7 +19,7 @@ it("disables duplicate saves and keeps an unsuccessful save available to retry o
     createElement(ReaderChromeAccessory, { kind: "reading", prompt }),
   );
   const action = view.getByRole("button", {
-    name: "Start reading",
+    name: "Mark as reading",
     exact: true,
   }) as HTMLButtonElement;
   expect(action.disabled).toBe(true);
@@ -35,7 +36,7 @@ it("disables duplicate saves and keeps an unsuccessful save available to retry o
     }),
   );
   expect(action.disabled).toBe(false);
-  expect(action.getAttribute("aria-describedby")).toBe(
+  expect(action.getAttribute("aria-describedby")?.split(" ")).toContain(
     view.getByRole("alert").id,
   );
   fireEvent.click(action);
