@@ -1,9 +1,9 @@
-import { toast } from "sonner";
 import { NotebookNote } from "./NotebookNote";
 import { DesktopNotebookNote, NotebookNoteBody } from "./DesktopNotebookNote";
 import { ReaderSheet } from "./shared/ReaderSheet";
 import type { NoteTarget } from "@/types/note";
 import { useReaderNotes } from "./hooks/use-reader-notes";
+import { useNotebookDeletion } from "./hooks/use-notebook-deletion";
 import { createNoteLocationResolver, noteMarginTop } from "./note-locations";
 import type {
   ReaderSessionState,
@@ -76,11 +76,14 @@ export function ReaderNotesPrototype({
   onVisit: (page: number) => void;
 }) {
   const reduceMotion = useReducedMotion();
-  // Book-scoped history: an exiting row must not clear a pending Undo entrance.
-  const restoredEntries = useRef(new Set<string>());
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "chapter">("time");
   const notes = useReaderNotes(bookId);
+  const { deleteNote, restoredEntries } = useNotebookDeletion({
+    remove: notes.remove,
+    restore: notes.restore,
+    shortcutEnabled: desktop && open && notebook && !notes.editingId,
+  });
   const composerDraft = desktop ? notes.composeDraft : notes.draft;
   const inlineEditing = desktop && Boolean(notes.editingId);
   const draft = composerDraft?.content ?? "";
@@ -286,7 +289,7 @@ export function ReaderNotesPrototype({
       notebook,
       ids: new Set(entries.map((entry) => entry.id)),
     };
-  }, [entries, notebook]);
+  }, [entries, notebook, restoredEntries]);
 
   const flush = notes.flush;
   const close = useCallback(() => {
@@ -310,37 +313,11 @@ export function ReaderNotesPrototype({
     async (id: string) => {
       // Mobile must focus within the user event to open its keyboard.
       if (!desktop) (notebook ? sidebarInput : input).current?.focus();
-      if (!(await editNote(id))) return;
+      if (!(await editNote(id)) || desktop) return;
       onActiveChange(true);
-      if (!desktop) (notebook ? sidebarInput : input).current?.focus();
+      (notebook ? sidebarInput : input).current?.focus();
     },
     [editNote, notebook, onActiveChange, desktop],
-  );
-
-  const removeNote = notes.remove;
-  const restoreNote = notes.restore;
-  const deleteNote = useCallback(
-    async (id: string) => {
-      if (!(await removeNote(id))) return false;
-      const toastId = toast("Note deleted", {
-        duration: 8000,
-        action: {
-          label: "Undo",
-          onClick: (event) => {
-            event.preventDefault();
-            restoredEntries.current.add(id);
-            void restoreNote(id)
-              .then(() => toast.dismiss(toastId))
-              .catch(() => {
-                restoredEntries.current.delete(id);
-                toast.error("Could not restore the note. Try Undo again.");
-              });
-          },
-        },
-      });
-      return true;
-    },
-    [removeNote, restoreNote],
   );
 
   const iconButton =
@@ -673,6 +650,7 @@ export function ReaderNotesPrototype({
                 className="flow-root overflow-hidden"
               >
                 <NotebookCard
+                  text={entry.text}
                   dimmed={inlineEditing && notes.editingId !== entry.id}
                   disabled={!notes.ready || notes.saving}
                   canEdit={entry.kind === "note"}
@@ -704,9 +682,7 @@ export function ReaderNotesPrototype({
                               if (notes.draft)
                                 notes.change(value, notes.draft.target);
                             },
-                            onSave: () => {
-                              void notes.send();
-                            },
+                            onSave: notes.send,
                             onCancel: () => {
                               void notes.cancelEdit();
                             },
@@ -749,6 +725,7 @@ export function ReaderNotesPrototype({
     ),
     [
       entries,
+      restoredEntries,
       orderedEntries,
       startEdit,
       deleteNote,

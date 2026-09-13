@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, type ReactNode } from "react";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { Check, Copy, Pencil, Trash2, X } from "lucide-react";
 import { useIsPresent } from "motion/react";
+import { toast } from "sonner";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -20,6 +21,7 @@ export function DesktopNotebookNote({
   disabled,
   editing,
   dimmed,
+  text,
 }: {
   children: ReactNode;
   onEdit: () => void;
@@ -28,16 +30,30 @@ export function DesktopNotebookNote({
   disabled: boolean;
   editing: boolean;
   dimmed: boolean;
+  text: string;
 }) {
   const present = useIsPresent();
+  const menuDisabled = disabled || !present || editing || dimmed;
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      toast.error(
+        "Could not copy text. Check clipboard permissions and try again.",
+      );
+    }
+  }
   return (
-    <ContextMenu disabled={disabled || !present}>
+    <ContextMenu disabled={menuDisabled}>
       <ContextMenuTrigger
         tabIndex={present ? 0 : -1}
         inert={!present}
         aria-hidden={!present}
         aria-label="Note; double-click or use the context menu to edit"
         data-note-editing={editing || undefined}
+        onContextMenu={(event) => {
+          if (editing || dimmed) event.preventDefault();
+        }}
         className={`group relative mb-2 block rounded-2xl outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${dimmed ? "opacity-45" : ""}`}
         onDoubleClick={(event) => {
           if (disabled || editing || !canEdit) return;
@@ -64,14 +80,22 @@ export function DesktopNotebookNote({
           {children}
         </article>
       </ContextMenuTrigger>
-      <ContextMenuContent className="min-w-40 rounded-2xl p-1">
+      <ContextMenuContent className="min-w-52 rounded-2xl p-1">
         <ContextMenuItem
           disabled={disabled || !canEdit || editing}
           onClick={onEdit}
           className={menuItemClassName}
         >
           <Pencil size={14} />
-          Edit note
+          Edit
+        </ContextMenuItem>
+        <ContextMenuItem
+          disabled={disabled}
+          onClick={() => void copyText()}
+          className={menuItemClassName}
+        >
+          <Copy size={14} />
+          Copy Text
         </ContextMenuItem>
         <ContextMenuItem
           disabled={disabled}
@@ -80,7 +104,7 @@ export function DesktopNotebookNote({
           onClick={() => void onDelete()}
         >
           <Trash2 size={14} />
-          Delete note
+          Delete
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -91,7 +115,7 @@ interface InlineEdit {
   value: string;
   saving: boolean;
   onChange: (value: string) => void;
-  onSave: () => void;
+  onSave: () => Promise<boolean>;
   onCancel: () => void;
 }
 
@@ -109,19 +133,35 @@ export function NotebookNoteBody({
   const input = useRef<HTMLTextAreaElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const wasEditing = useRef(false);
+  const restoreFocus = useRef(true);
   const editing = Boolean(edit);
   useLayoutEffect(() => {
     if (editing) {
+      restoreFocus.current = true;
       input.current?.focus({ preventScroll: true });
       const end = input.current?.value.length ?? 0;
       input.current?.setSelectionRange(end, end);
-    } else if (wasEditing.current) {
+    } else if (wasEditing.current && restoreFocus.current) {
       body.current
         ?.closest<HTMLElement>('[data-slot="context-menu-trigger"]')
         ?.focus({ preventScroll: true });
     }
     wasEditing.current = editing;
   }, [editing]);
+  useEffect(() => {
+    if (!edit) return;
+    // Save before an outside control closes or switches the panel. Let that
+    // control receive the click and keep focus when the write completes.
+    const saveOutside = (event: PointerEvent) => {
+      if (event.button !== 0 || event.ctrlKey || edit.saving) return;
+      if (body.current?.closest("article")?.contains(event.target as Node))
+        return;
+      restoreFocus.current = false;
+      void edit.onSave();
+    };
+    document.addEventListener("pointerdown", saveOutside, true);
+    return () => document.removeEventListener("pointerdown", saveOutside, true);
+  }, [edit]);
   return (
     <div ref={body}>
       <div className="relative">
@@ -147,7 +187,7 @@ export function NotebookNoteBody({
               }
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
-                edit.onSave();
+                void edit.onSave();
               }
             }}
             className="absolute inset-0 m-0 size-full resize-none overflow-y-auto rounded-none border-0 bg-transparent p-0 text-[15px] leading-relaxed outline-none"
@@ -183,7 +223,7 @@ export function NotebookNoteBody({
                 aria-label="Save changes"
                 title="Save (Command or Control + Enter)"
                 disabled={edit.saving || !edit.value.trim()}
-                onClick={edit.onSave}
+                onClick={() => void edit.onSave()}
                 className="flex size-6 items-center justify-center rounded-lg text-foreground hover:bg-background/80 focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-40"
               >
                 <Check size={15} />

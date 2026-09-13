@@ -1,0 +1,85 @@
+import { useCallback, useRef } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { toast } from "sonner";
+
+type Deletion = { id: string; toastId: string | number };
+
+/** Book-scoped deletion history. Toast and keyboard Undo share one stack;
+ * failed restores stay available. Text fields retain their native undo history. */
+export function useNotebookDeletion({
+  remove,
+  restore,
+  shortcutEnabled,
+}: {
+  remove: (id: string) => Promise<boolean>;
+  restore: (id: string) => Promise<void>;
+  shortcutEnabled: boolean;
+}) {
+  const deletions = useRef<Deletion[]>([]);
+  const restoring = useRef(false);
+  // Exiting rows must not clear a pending Undo entrance or scroll it to the end.
+  const restoredEntries = useRef(new Set<string>());
+  const undo = useCallback(
+    async (deletion: Deletion) => {
+      if (restoring.current || !deletions.current.includes(deletion)) return;
+      restoring.current = true;
+      restoredEntries.current.add(deletion.id);
+      try {
+        await restore(deletion.id);
+        deletions.current = deletions.current.filter(
+          (item) => item !== deletion,
+        );
+        toast.dismiss(deletion.toastId);
+      } catch {
+        restoredEntries.current.delete(deletion.id);
+        toast.error("Could not restore the note. Try Undo again.");
+      } finally {
+        restoring.current = false;
+      }
+    },
+    [restore],
+  );
+  const deleteNote = useCallback(
+    async (id: string) => {
+      if (!(await remove(id))) return false;
+      const deletion: Deletion = {
+        id,
+        toastId: toast("Note deleted", {
+          duration: 8000,
+          action: {
+            label: "Undo",
+            onClick: (event) => {
+              event.preventDefault();
+              void undo(deletion);
+            },
+          },
+        }),
+      };
+      deletions.current.push(deletion);
+      return true;
+    },
+    [remove, undo],
+  );
+  useHotkey(
+    "Mod+Z",
+    (event) => {
+      const deletion = deletions.current.at(-1);
+      if (event.defaultPrevented || event.isComposing || !deletion) return;
+      event.preventDefault();
+      void undo(deletion);
+    },
+    {
+      target: window,
+      enabled: shortcutEnabled,
+      ignoreInputs: true,
+      preventDefault: false,
+      stopPropagation: false,
+      requireReset: true,
+      meta: {
+        name: "Undo note deletion",
+        description: "Restore the last deleted note while the notebook is open",
+      },
+    },
+  );
+  return { deleteNote, restoredEntries };
+}

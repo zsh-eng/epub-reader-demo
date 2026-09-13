@@ -683,7 +683,7 @@ test.describe("Highlight note capture", () => {
       .locator("article")
       .first()
       .click({ button: "right" });
-    await page.getByRole("menuitem", { name: "Edit note" }).click();
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
     const editor = page.getByRole("textbox", {
       name: "Edit note",
       exact: true,

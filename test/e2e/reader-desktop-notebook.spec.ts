@@ -153,7 +153,7 @@ test("desktop notes edit in place with stable rows and keep compose and edit dra
   await first.locator("article").click({ button: "right" });
   const menu = page.getByRole("menu");
   const editItem = menu.getByRole("menuitem", {
-    name: "Edit note",
+    name: "Edit",
     exact: true,
   });
   await editItem.hover();
@@ -168,23 +168,43 @@ test("desktop notes edit in place with stable rows and keep compose and edit dra
     parseFloat(getComputedStyle(node).borderTopLeftRadius),
   );
   expect(menuRadius - itemRadius).toBeCloseTo(5, 0);
+  expect((await menu.boundingBox())!.width).toBeGreaterThanOrEqual(208);
   await page.screenshot({ path: testInfo.outputPath("desktop-note-menu.png") });
   await editItem.click();
   await expect(editor).toBeFocused();
-  await editor.fill("Keep this unfinished edit.");
+  await editor.fill("Saved when I leave the note.");
+  await editor.click({ button: "right" });
+  await expect(menu).toBeHidden();
+  await second.locator("article").click({ button: "right" });
+  await expect(menu).toBeHidden();
+  await expect(editor).toHaveValue("Saved when I leave the note.");
+  await second.locator("p").click();
+  await expect(editor).toHaveCount(0);
+  await expect
+    .poll(async () => (await readSaved()).content)
+    .toBe("Saved when I leave the note.");
+  await first.locator("p").dblclick();
+  await editor.fill("Saved when I change panels.");
   await tools.getByRole("button", { name: "Contents", exact: true }).click();
   await tools.getByRole("button", { name: "Notes", exact: true }).click();
   await expect(compose).toHaveValue("An unsent thought.");
   await expect(editor).toHaveCount(0);
   await first.locator("p").dblclick();
-  await expect(editor).toHaveValue("Keep this unfinished edit.");
+  await expect(editor).toHaveValue("Saved when I change panels.");
+  await editor.fill("Cancel this revision.");
   await editor.press("Escape");
   await expect(editor).toHaveCount(0);
-  expect((await readSaved()).content).toBe(revised);
+  expect((await readSaved()).content).toBe("Saved when I change panels.");
   await expect(compose).toHaveValue("An unsent thought.");
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await first.locator("article").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy Text", exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "Saved when I change panels.",
+  );
   await first.locator("article").click({ button: "right" });
   const deleteItem = page.getByRole("menuitem", {
-    name: "Delete note",
+    name: "Delete",
     exact: true,
   });
   await deleteItem.hover();
@@ -198,4 +218,113 @@ test("desktop notes edit in place with stable rows and keep compose and edit dra
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(rows).toHaveCount(2);
   expect((await readSaved()).isDeleted).toBe(false);
+});
+
+test("desktop deletion undo follows deletion order and leaves text undo to the editor", async ({
+  page,
+  localBook,
+}) => {
+  await openLocalBook(page, localBook.id);
+  await page.mouse.move(200, 10);
+  await page
+    .getByRole("button", { name: "Open reader tools", exact: true })
+    .click();
+  const tools = page.getByRole("complementary", {
+    name: "Reader tools",
+    exact: true,
+  });
+  await tools.getByRole("button", { name: "Notes", exact: true }).click();
+  const panel = tools.getByRole("region", { name: "Book notebook" });
+  const compose = tools.getByRole("textbox", {
+    name: "Write a note",
+    exact: true,
+  });
+  for (const content of [
+    "First thought.",
+    "Second thought.",
+    "Third thought.",
+  ]) {
+    await compose.fill(content);
+    await tools.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect(compose).toHaveValue("");
+  }
+  const rows = panel.locator("[data-note-id]");
+  await expect(rows).toHaveCount(3);
+  const ids = await rows.evaluateAll((nodes) =>
+    nodes.map((node) => node.getAttribute("data-note-id")),
+  );
+  const deletedIds = () =>
+    page.evaluate(async (ids) => {
+      const modulePath = "/src/lib/sync-v2/db.ts";
+      const { syncV2Db } = await import(modulePath);
+      return (await syncV2Db.notes.bulkGet(ids))
+        .filter((note) => note.isDeleted)
+        .map((note) => note.id);
+    }, ids);
+  async function remove(content: string) {
+    await panel.getByText(content, { exact: true }).click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
+  }
+  const modifier = await page.evaluate(() =>
+    /Mac/i.test(navigator.platform) ? "Meta" : "Control",
+  );
+  await remove("First thought.");
+  await expect(rows).toHaveCount(2);
+  await remove("Second thought.");
+  await expect(rows).toHaveCount(1);
+  expect(await deletedIds()).toEqual([ids[0], ids[1]]);
+
+  // Chromium's emulated platform can differ from the host's native editing
+  // bindings. Use the host shortcut for text undo and the app's Mod key below.
+  const textModifier = process.platform === "darwin" ? "Meta" : "Control";
+  // Native text undo must work even when deletion history is available.
+  await compose.click();
+  await compose.pressSequentially("x");
+  await compose.press(`${textModifier}+z`);
+  await expect(compose).toHaveValue("");
+  expect(await deletedIds()).toEqual([ids[0], ids[1]]);
+  await panel.getByText("Third thought.", { exact: true }).dblclick();
+  const editor = panel.getByRole("textbox", { name: "Edit note", exact: true });
+  await editor.pressSequentially("x");
+  await editor.press(`${textModifier}+z`);
+  await expect(editor).toHaveValue("Third thought.");
+  expect(await deletedIds()).toEqual([ids[0], ids[1]]);
+  await editor.press("Escape");
+
+  // Undo is limited to the open notebook; closing it does not discard history.
+  await tools
+    .getByRole("navigation", { name: "Reader tools", exact: true })
+    .getByRole("button", { name: "Close reader tools", exact: true })
+    .click();
+  await expect(tools).toBeHidden();
+  await expect(
+    page.getByRole("textbox", { name: "Write a note", exact: true }),
+  ).toBeHidden();
+  await page.keyboard.press(`${modifier}+z`);
+  expect(await deletedIds()).toEqual([ids[0], ids[1]]);
+  await page.mouse.move(200, 10);
+  await page
+    .getByRole("button", { name: "Open reader tools", exact: true })
+    .click();
+  // Click a note to move focus out of the composer before using panel Undo.
+  await panel.getByText("Third thought.", { exact: true }).click();
+  await page.keyboard.press(`${modifier}+Shift+z`);
+  expect(await deletedIds()).toEqual([ids[0], ids[1]]);
+  await page.keyboard.press(`${modifier}+z`);
+  await expect(rows).toHaveCount(2);
+  expect(await deletedIds()).toEqual([ids[0]]);
+  await page.keyboard.press(`${modifier}+z`);
+  await expect(rows).toHaveCount(3);
+  expect(await deletedIds()).toEqual([]);
+  // Restoring from a toast removes that action from keyboard history too.
+  await remove("Third thought.");
+  await expect(rows).toHaveCount(2);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(rows).toHaveCount(3);
+  await remove("Second thought.");
+  await expect(rows).toHaveCount(2);
+  await panel.getByText("Third thought.", { exact: true }).click();
+  await page.keyboard.press(`${modifier}+z`);
+  await expect(rows).toHaveCount(3);
+  expect(await deletedIds()).toEqual([]);
 });
