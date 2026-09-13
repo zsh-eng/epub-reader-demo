@@ -24,8 +24,10 @@ import {
   getOrCreateSyncClientState,
   nextSyncHlcBatch,
 } from "@/lib/sync-v2/client-state";
-import { installSync } from "@/lib/sync-v2/middleware";
-import type { SyncPushChange } from "@/lib/sync-v2/protocol";
+import { installSync } from "@zsh-eng/local-sync/dexie";
+import { READER_SYNC_TABLES } from "./tables";
+export { SYNC_V2_SYNCED_TABLES } from "./tables";
+import type { SyncPushChange } from "@zsh-eng/local-sync";
 import type { Highlight } from "@/types/highlight";
 import type { NoteDraft, Note } from "@/types/note";
 import type { ReadingState } from "@/types/reading-state";
@@ -33,15 +35,6 @@ import Dexie, { type Table, type Transaction } from "dexie";
 
 export const SYNC_V2_DATABASE_NAME = "epub-reader-db-v2";
 const LEGACY_DATABASE_NAME = "epub-reader-db";
-export const SYNC_V2_SYNCED_TABLES = [
-  "books",
-  "readingCheckpoints",
-  "readingSessions",
-  "highlights",
-  "readingSettings",
-  "readingState",
-  "notes",
-] as const;
 
 export interface SyncV2DeletionState {
   isDeleted: boolean;
@@ -296,7 +289,7 @@ export function createSyncV2ApplicationDb(
     | undefined = undefined,
 ): EPUBReaderSyncV2DB {
   const db = new EPUBReaderSyncV2DB(databaseName);
-  installSync(db, SYNC_V2_SYNCED_TABLES, (count) => {
+  installSync(db, READER_SYNC_TABLES, (count) => {
     const storage = state?.storage ?? getRuntimeStorage();
     getOrCreateSyncClientState(
       state?.deviceId ?? getOrCreateDeviceId(),

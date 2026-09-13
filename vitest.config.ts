@@ -5,6 +5,13 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: "local-sync",
+          include: ["packages/local-sync/test/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        test: {
           name: "server",
           include: ["test/server/**/*.test.ts"],
           exclude: ["test/client/**/*.test.ts"],

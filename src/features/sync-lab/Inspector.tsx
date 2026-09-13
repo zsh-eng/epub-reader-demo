@@ -1,6 +1,6 @@
 import { memo, useState } from "react";
 import { Search } from "lucide-react";
-import { decodeSyncKey, decodeSyncValue } from "@/lib/sync-v2/protocol";
+import { decodeSyncKey, decodeSyncValue } from "@zsh-eng/local-sync";
 import type { LabView } from "./core/controller";
 import type { DomainRow, LabEvent } from "./types";
 

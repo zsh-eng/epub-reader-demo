@@ -11,12 +11,6 @@ export const MAX_SYNC_VALUE_BYTES = 64 * 1_024;
 export const MAX_SYNC_PUSH_BODY_BYTES = 1_024 * 1_024;
 export const MAX_SYNC_FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1_000;
 
-/**
- * Cursor and HLC state are small durable client settings, not relational data.
- * The v2 client stores them in localStorage and keeps only the outbox in Dexie.
- */
-export const SYNC_CLIENT_STATE_STORAGE_KEY = "epub-reader-sync-v2-state";
-
 const textEncoder = new TextEncoder();
 const safeNonNegativeInteger = z
   .number()

@@ -7,7 +7,7 @@ import {
 import type { LabSnapshot } from "@/features/sync-lab/core/controller";
 import type { ClientCommand } from "@/features/sync-lab/types";
 import { createSyncClientState } from "@/lib/sync-v2/client-state";
-import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/protocol";
+import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/client-state";
 
 function fixture() {
   const baseline: LabSnapshot = {

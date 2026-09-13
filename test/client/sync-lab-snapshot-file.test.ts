@@ -8,7 +8,7 @@ import {
 import type { LabSnapshot } from "@/features/sync-lab/core/controller";
 import { computeFileId } from "@/lib/files/file-id";
 import { createSyncClientState } from "@/lib/sync-v2/client-state";
-import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/protocol";
+import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/client-state";
 
 beforeEach(() => vi.stubGlobal("Blob", NodeBlob));
 afterEach(() => vi.unstubAllGlobals());

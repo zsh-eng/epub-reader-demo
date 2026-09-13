@@ -55,13 +55,14 @@ boundary and a completion gate; it does not authorize an unmeasured rewrite.
 - [ ] Extract domain types from `src/data/` into a package with no React, DOM,
       Dexie, or application-runtime imports. Include synchronized table mapping
       and anchor types. Gate: existing persistence tests use the exported types.
-- [ ] Extract pure HLC tick/observe/compare operations from
-      `src/lib/sync-v2/client-state.ts`. Storage and time injection already exist;
-      remove browser defaults from the core. Gate: rollback, remote-ahead,
-      same-millisecond batch, restart and tie-break tests without browser globals.
-- [ ] Extract sync storage operations for atomic pull apply and push reconciliation
-      before publishing a reusable engine package. Gate: adapter contract tests
-      cover edit/edit, edit/delete, duplicate push and edits during a request.
+- [x] Extract pure HLC tick/observe/compare operations into
+      `packages/local-sync/src/clock.ts`, with explicit state and time inputs.
+      Package tests cover rollback, remote-ahead clocks, same-millisecond batches,
+      restart and device tie breaks without browser globals.
+- [x] Extract sync storage operations for atomic pull apply and push reconciliation
+      into `@zsh-eng/local-sync/dexie`. The core receives a `SyncStorage` adapter;
+      independent consumer tests cover edit/edit, edit/delete, duplicate push,
+      rollback and edits during a request. Reader uses the package for record sync.
 - [ ] Define browser adapters around the explicit Dexie factory, local state and
       file store. Gate: two client instances share no database, cursor, file
       upload intent or lifecycle state; use Sync Lab isolation tests as a base.
@@ -175,6 +176,7 @@ below contains only work that still has a clear product or reliability reason.
       work; keep worker-based Pretext as a measured follow-up.
 
 Notetaking flow
+
 - [x] Decomp note-taking flow
 - [x] We should preserve whatever right sidebar option that we chose
 - [x] Autofocus on the notebook when opening sidebar on desktop
@@ -197,7 +199,7 @@ Notetaking flow
 - [ ] Benchmark binary encoding/table IDs against current JSON using representative
       Book/note/highlight data. Gate: compressed bytes, codec time and bundle size
       justify a change; define immutable IDs, schema versions and unknown-ID
-      behavior before changing `src/lib/sync-v2/protocol.ts`.
+      behavior before changing `packages/local-sync/src/protocol.ts`.
 - [x] Expose automatic sync state, pending file transfers and stale-session errors.
       Reading-data success is separate from file availability; browser checks in
       `test/e2e/sync-status.spec.ts` verify the distinction.
@@ -270,7 +272,6 @@ Notetaking flow
 - [ ] Add a nested-scroll priority rule to Reader swipe handling. Gate: a
       scrollable table/code block consumes horizontal pan before page navigation;
       define edge behavior and test with chrome visible and hidden.
-
 
 - [ ] Stabilize the Sessions redesign: reproduce and fix the overscroll flicker,
       then verify that the hover state does not create a duplicate visual layer.

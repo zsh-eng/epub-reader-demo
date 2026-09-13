@@ -5,7 +5,7 @@ import {
 } from "@/lib/sync-v2/db";
 import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
 import { resetIndexedDB } from "../setup/indexeddb";
-import { encodeSyncKey } from "@/lib/sync-v2/protocol";
+import { encodeSyncKey } from "@zsh-eng/local-sync";
 import type { NoteAnchor } from "@/types/note";
 
 let db: EPUBReaderSyncV2DB;

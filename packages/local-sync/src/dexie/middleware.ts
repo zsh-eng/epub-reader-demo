@@ -3,14 +3,13 @@
  * compacted outbox row per logical key.
  */
 
-import { nextSyncHlcBatch } from "@/lib/sync-v2/client-state";
-import { assertBookSyncValue } from "@/lib/book-file-references";
 import {
   encodeSyncKey,
   encodeSyncValue,
+  syncValueSchema,
   type SyncHlc,
   type SyncPushChange,
-} from "@/lib/sync-v2/protocol";
+} from "../protocol.js";
 import type {
   DBCore,
   DBCoreDeleteRangeRequest,
@@ -20,22 +19,25 @@ import type {
   Dexie,
 } from "dexie";
 
-const SYNC_OUTBOX_TABLE = "_sync_outbox";
-const INITIAL_SCHEMA_VERSION = 1;
+import {
+  SYNC_OUTBOX_TABLE,
+  type SyncTableMap,
+  type SyncTableDefinition,
+} from "./tables.js";
 
 export interface SyncV2MutationMiddlewareOptions {
-  syncedTables: ReadonlySet<string>;
-  nextHlcBatch?: (count: number) => readonly SyncHlc[];
+  tables: SyncTableMap;
+  nextHlcBatch: (count: number) => readonly SyncHlc[];
 }
 
 export function installSync(
   db: Dexie,
-  syncedTables: readonly string[],
-  nextHlcBatch = nextSyncHlcBatch,
+  tables: SyncTableMap,
+  nextHlcBatch: (count: number) => readonly SyncHlc[],
 ): void {
   db.use(
     createSyncV2MutationMiddleware({
-      syncedTables: new Set(syncedTables),
+      tables,
       nextHlcBatch,
     }),
   );
@@ -44,7 +46,8 @@ export function installSync(
 export function createSyncV2MutationMiddleware(
   options: SyncV2MutationMiddlewareOptions,
 ) {
-  const nextHlc = options.nextHlcBatch ?? nextSyncHlcBatch;
+  const nextHlc = options.nextHlcBatch;
+  const syncedTables = new Set(Object.keys(options.tables));
 
   return {
     stack: "dbcore" as const,
@@ -56,7 +59,7 @@ export function createSyncV2MutationMiddleware(
         transaction(stores, mode, transactionOptions) {
           const needsOutbox =
             mode === "readwrite" &&
-            stores.some((tableName) => options.syncedTables.has(tableName));
+            stores.some((tableName) => syncedTables.has(tableName));
           const transactionStores =
             needsOutbox && !stores.includes(SYNC_OUTBOX_TABLE)
               ? [...stores, SYNC_OUTBOX_TABLE]
@@ -67,7 +70,7 @@ export function createSyncV2MutationMiddleware(
 
         table(tableName: string): DBCoreTable {
           const table = core.table(tableName);
-          if (!options.syncedTables.has(tableName)) {
+          if (!syncedTables.has(tableName)) {
             return table;
           }
 
@@ -80,6 +83,7 @@ export function createSyncV2MutationMiddleware(
                 const changes = createOutboxChanges(
                   table,
                   tableName,
+                  options.tables[tableName]!,
                   values,
                   request.keys,
                   nextHlc(values.length),
@@ -106,6 +110,7 @@ export function createSyncV2MutationMiddleware(
               const changes = createOutboxChanges(
                 table,
                 tableName,
+                options.tables[tableName]!,
                 tombstones,
                 undefined,
                 nextHlc(tombstones.length),
@@ -146,6 +151,7 @@ function withDeletionState(value: unknown): Record<string, unknown> {
 function createOutboxChanges(
   table: DBCoreTable,
   tableName: string,
+  definition: SyncTableDefinition,
   values: readonly Record<string, unknown>[],
   requestKeys: readonly unknown[] | undefined,
   timestamps: readonly SyncHlc[],
@@ -155,8 +161,6 @@ function createOutboxChanges(
   }
 
   return values.map((value, index) => {
-    if (tableName === "books") assertBookSyncValue(value);
-
     const primaryKey =
       table.schema.primaryKey.extractKey?.(value) ?? requestKeys?.[index];
     if (typeof primaryKey !== "string" || primaryKey.length === 0) {
@@ -165,8 +169,10 @@ function createOutboxChanges(
 
     return {
       key: encodeSyncKey(tableName, primaryKey),
-      value: encodeSyncValue(value),
-      schemaVersion: INITIAL_SCHEMA_VERSION,
+      value: syncValueSchema.parse(
+        (definition.encode ?? encodeSyncValue)(value),
+      ),
+      schemaVersion: definition.schemaVersion,
       hlc: timestamps[index]!,
       isDeleted: value.isDeleted === true,
     };

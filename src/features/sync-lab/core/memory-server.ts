@@ -17,7 +17,7 @@ import {
   type SyncPushChange,
   type SyncPushResponse,
   type SyncRecord,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import type { SyncV2Remote } from "@/lib/sync-v2/sync";
 
 export interface MemoryServerEvent {

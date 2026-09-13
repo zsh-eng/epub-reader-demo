@@ -1,0 +1,58 @@
+{
+  "name": "@zsh-eng/local-sync",
+  "version": "0.1.0",
+  "description": "Local-first record sync with explicit storage, Dexie and Hono/D1 adapters",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./dexie": {
+      "types": "./dist/dexie/index.d.ts",
+      "import": "./dist/dexie/index.js"
+    },
+    "./hono": {
+      "types": "./dist/hono/index.d.ts",
+      "import": "./dist/hono/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "prepack": "bun run build"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@hono/zod-validator": "^0.7.6",
+    "dexie": "^4.4.2",
+    "fake-indexeddb": "^6.2.5",
+    "hono": "^4.12.15",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.5"
+  },
+  "peerDependencies": {
+    "@hono/zod-validator": "^0.7.6",
+    "dexie": "^4.4.2",
+    "hono": "^4.12.15"
+  },
+  "peerDependenciesMeta": {
+    "dexie": {
+      "optional": true
+    },
+    "hono": {
+      "optional": true
+    },
+    "@hono/zod-validator": {
+      "optional": true
+    }
+  }
+}

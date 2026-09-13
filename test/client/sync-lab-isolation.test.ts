@@ -11,7 +11,8 @@ import {
   createSyncV2ApplicationDb,
   deleteLegacyClientDatabase,
 } from "@/lib/sync-v2/db";
-import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/protocol";
+import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/client-state";
+
 import { readSyncClientState } from "@/lib/sync-v2/client-state";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Dexie from "dexie";

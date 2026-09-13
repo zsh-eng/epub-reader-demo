@@ -11,7 +11,7 @@ import {
   encodeSyncKey,
   MAX_SYNC_VALUE_BYTES,
   type SyncPushChange,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";
 

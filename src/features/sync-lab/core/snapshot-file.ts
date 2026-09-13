@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { computeFileId } from "@/lib/files/file-id";
 import { SYNC_V2_STORES, SYNC_V2_SYNCED_TABLES } from "@/lib/sync-v2/db";
+import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/client-state";
 import {
-  SYNC_CLIENT_STATE_STORAGE_KEY,
   decodeSyncKey,
   syncClientStateSchema,
   syncPushChangeSchema,
   syncRecordSchema,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import type { LabSnapshot } from "./controller";
 
 const MAX_ROWS = 50_000;

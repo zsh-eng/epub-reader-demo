@@ -4,7 +4,7 @@ import {
   createSyncV2ApplicationDb,
   EPUBReaderSyncV2DB,
 } from "@/lib/sync-v2/db";
-import { encodeSyncKey, encodeSyncValue } from "@/lib/sync-v2/protocol";
+import { encodeSyncKey, encodeSyncValue } from "@zsh-eng/local-sync";
 import { SyncV2Client, type SyncV2Remote } from "@/lib/sync-v2/sync";
 import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

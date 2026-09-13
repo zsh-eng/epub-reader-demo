@@ -4,7 +4,7 @@ import { computeFileId } from "@/lib/files/file-id";
 import {
   MAX_SYNC_FUTURE_CLOCK_SKEW_MS,
   type SyncPushChange,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import { describe, expect, it, vi } from "vitest";
 
 const change = (

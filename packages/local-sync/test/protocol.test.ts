@@ -10,7 +10,7 @@ import {
   syncPullBodySchema,
   syncPullResponseSchema,
   syncPushBodySchema,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import { describe, expect, it } from "vitest";
 
 const HLC = { wallTimeMs: 1_000, counter: 0 } as const;

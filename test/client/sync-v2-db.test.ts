@@ -8,7 +8,7 @@ import {
   SYNC_V2_VERSION_4_STORES,
 } from "@/lib/sync-v2/db";
 import { getOrCreateSyncClientState } from "@/lib/sync-v2/client-state";
-import { decodeSyncValue, encodeSyncKey } from "@/lib/sync-v2/protocol";
+import { decodeSyncValue, encodeSyncKey } from "@zsh-eng/local-sync";
 import Dexie from "dexie";
 import { afterEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";

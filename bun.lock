@@ -20,6 +20,7 @@
         "@tanstack/react-query": "^5.100.1",
         "@tanstack/react-table": "^8.21.3",
         "@tanstack/react-virtual": "^3.14.10",
+        "@zsh-eng/local-sync": "workspace:*",
         "@zsh-eng/text-highlighter": "workspace:*",
         "better-auth": "^1.6.9",
         "blurhash": "^2.0.2",
@@ -75,6 +76,32 @@
         "workbox-window": "^7.4.0",
         "wrangler": "^4.85.0",
       },
+    },
+    "packages/local-sync": {
+      "name": "@zsh-eng/local-sync",
+      "version": "0.1.0",
+      "dependencies": {
+        "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@hono/zod-validator": "^0.7.6",
+        "dexie": "^4.4.2",
+        "fake-indexeddb": "^6.2.5",
+        "hono": "^4.12.15",
+        "tsup": "^8.5.1",
+        "typescript": "^6.0.3",
+        "vitest": "^4.1.5",
+      },
+      "peerDependencies": {
+        "@hono/zod-validator": "^0.7.6",
+        "dexie": "^4.4.2",
+        "hono": "^4.12.15",
+      },
+      "optionalPeers": [
+        "@hono/zod-validator",
+        "dexie",
+        "hono",
+      ],
     },
     "packages/text-highlighter": {
       "name": "@zsh-eng/text-highlighter",
@@ -846,6 +873,8 @@
     "@vitest/spy": ["@vitest/spy@4.1.5", "", {}, "sha512-2lNOsh6+R2Idnf1TCZqSwYlKN2E/iDlD8sgU59kYVl+OMDmvldO1VDk39smRfpUNwYpNRVn3w4YfuC7KfbBnkQ=="],
 
     "@vitest/utils": ["@vitest/utils@4.1.5", "", { "dependencies": { "@vitest/pretty-format": "4.1.5", "convert-source-map": "^2.0.0", "tinyrainbow": "^3.1.0" } }, "sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug=="],
+
+    "@zsh-eng/local-sync": ["@zsh-eng/local-sync@workspace:packages/local-sync"],
 
     "@zsh-eng/text-highlighter": ["@zsh-eng/text-highlighter@workspace:packages/text-highlighter"],
 

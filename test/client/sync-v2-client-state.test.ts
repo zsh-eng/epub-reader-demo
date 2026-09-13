@@ -4,7 +4,8 @@ import {
   readSyncClientState,
   writeSyncClientState,
 } from "@/lib/sync-v2/client-state";
-import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/protocol";
+import { SYNC_CLIENT_STATE_STORAGE_KEY } from "@/lib/sync-v2/client-state";
+
 import { beforeEach, describe, expect, it } from "vitest";
 
 describe("sync v2 client state", () => {

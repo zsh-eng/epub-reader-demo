@@ -19,7 +19,7 @@ import {
   type SyncPushChange,
   type SyncPushResponse,
   type SyncRecord,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetIndexedDB } from "../setup/indexeddb";
 

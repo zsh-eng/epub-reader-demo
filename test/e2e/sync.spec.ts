@@ -50,6 +50,8 @@ test("should preserve a warm Reader when sync acknowledges local writes", async 
   await openLocalBook(page, localBook.id);
   await nextSpread(page);
   const pagesBefore = await currentPages(page);
+  // Reveal the desktop controls before opening navigation.
+  await page.mouse.move(200, 10);
   await page
     .getByRole("button", { name: "Toggle sidebar", exact: true })
     .click();

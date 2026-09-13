@@ -7,7 +7,7 @@ import {
   type SyncPushResponse,
   encodeSyncKey,
   encodeSyncValue,
-} from "@/lib/sync-v2/protocol";
+} from "@zsh-eng/local-sync";
 import { env, SELF } from "cloudflare:test";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestUser } from "./helpers";

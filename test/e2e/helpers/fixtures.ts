@@ -6,10 +6,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { fileURLToPath } from "node:url";
-import type {
-  SyncPushChange,
-  SyncRecord,
-} from "../../../src/lib/sync-v2/protocol";
+import type { SyncPushChange, SyncRecord } from "@zsh-eng/local-sync";
 
 export const SAMPLE_EPUB_PATH = fileURLToPath(
   new URL("../../fixtures/sample.epub", import.meta.url),

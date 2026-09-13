@@ -40,6 +40,13 @@ Domain data lives in IndexedDB. Local writes must work without the network;
 the sync outbox records durable changes with those writes. The server stores
 opaque records and resolves versions without owning book-specific behavior.
 
+`@zsh-eng/local-sync` owns the protocol, clock, and sync engine. Its `/dexie`
+adapter owns atomic mutation capture and reconciliation; `/hono` supplies the
+generic D1 endpoints. Reader supplies schemas, value codecs, authentication,
+storage identity, lifecycle, and query invalidation. The package core must not
+import Reader, React, Dexie, or browser storage. See the
+[package contract](../packages/local-sync/README.md).
+
 Binary EPUB and cover files are separate from synced domain values. Books hold
 file references. Expanded EPUB entries and Reader caches are local, derived
 data that can be rebuilt. Keep generic file transfer separate from decisions

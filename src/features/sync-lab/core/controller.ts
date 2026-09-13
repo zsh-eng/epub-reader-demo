@@ -9,7 +9,7 @@ import {
   createSyncClientState,
   writeSyncClientState,
 } from "@/lib/sync-v2/client-state";
-import { encodeSyncKey, encodeSyncValue } from "@/lib/sync-v2/protocol";
+import { encodeSyncKey, encodeSyncValue } from "@zsh-eng/local-sync";
 import type { LabRuntimeConfig } from "../runtime";
 import type {
   ClientCommand,

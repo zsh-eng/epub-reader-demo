@@ -85,14 +85,18 @@ entry point; keep implementation in the domain modules.
 The app stores domain rows in IndexedDB and synchronizes them through one
 opaque record log in D1.
 
-- `src/lib/sync-v2/db.ts` owns the Dexie schema and the list of synchronized
-  domain tables.
-- `src/lib/sync-v2/middleware.ts` converts ordinary local writes into compacted
-  outbox changes in the same transaction.
-- `src/lib/sync-v2/sync.ts` pulls a stable remote page, applies last-write-wins
-  conflict resolution, and then pushes the local outbox.
-- `src/lib/sync-v2/client-state.ts` owns the device ID, pull cursor, and Hybrid
-  Logical Clock state.
+- `packages/local-sync` exposes the shared protocol and engine, plus `/dexie`
+  and `/hono` adapters. Keep application imports out of this package. Its
+  [README](packages/local-sync/README.md) defines the adapter contracts.
+- `src/lib/sync-v2/db.ts` owns the Dexie schema and migrations.
+  `src/lib/sync-v2/tables.ts` owns synchronized tables and Reader value codecs.
+- The package's Dexie middleware converts ordinary local writes into compacted
+  outbox changes in the same transaction. Its storage adapter applies remote
+  rows and reconciles pushes through a raw connection.
+- `src/lib/sync-v2/sync.ts` connects the shared engine to Reader's database,
+  codecs, typed Hono transport, and Sync Lab runtime.
+- `src/lib/sync-v2/client-state.ts` supplies Reader's existing storage key and
+  runtime storage to the package's clock and state functions.
 - `src/lib/sync-service.ts` owns periodic sync and online recovery.
 - `src/lib/query-invalidation.ts` maps committed domain-table writes to
   TanStack Query prefixes. `SyncProvider` owns its subscription, including
@@ -161,7 +165,7 @@ const hasLocalBytes = await files.hasLocal(fileId);
 To add a new synchronized domain entity:
 
 1. Add its domain type and Dexie table to `src/lib/sync-v2/db.ts`.
-2. Add the table name to `SYNC_V2_SYNCED_TABLES`.
+2. Add the table definition to `READER_SYNC_TABLES` in `src/lib/sync-v2/tables.ts`.
 3. Use ordinary Dexie `add`, `put`, and `delete` operations. The middleware
    writes protocol changes to `_sync_outbox`.
 4. Add integration tests for local mutation, pull conflict resolution, push

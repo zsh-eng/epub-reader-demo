@@ -1,7 +1,7 @@
 /** Durable notebook entries. Each mutation uses the ordinary sync outbox path. */
 import type { Highlight } from "@/types/highlight";
 import type { Note, NoteAnchor, NoteTarget } from "@/types/note";
-import { MAX_SYNC_VALUE_BYTES } from "@/lib/sync-v2/protocol";
+import { MAX_SYNC_VALUE_BYTES } from "@zsh-eng/local-sync";
 import { db, isNotDeleted } from "./database";
 
 export type { Note, NoteAnchor, NoteTarget } from "@/types/note";
