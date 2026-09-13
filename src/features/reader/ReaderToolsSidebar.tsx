@@ -150,7 +150,7 @@ export function ReaderToolsSidebar({
         >
           <nav
             aria-label="Reader tools"
-            className="relative z-10 flex min-h-14 shrink-0 items-start gap-1.5 px-(--sidebar-panel-content-inset) pb-2"
+            className="relative z-10 flex min-h-14 shrink-0 items-start gap-1.5 pl-3 pr-(--sidebar-panel-content-inset) pb-2"
             style={{
               paddingTop:
                 "max(env(safe-area-inset-top), var(--sidebar-panel-content-inset))",
