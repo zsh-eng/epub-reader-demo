@@ -9,9 +9,11 @@ import type { ReaderHandoffPrompt } from "./types";
 export type ChromePromptKind = "reading" | "handoff";
 export type ChromePromptAppearance = "soft" | "minimal" | "outline";
 
-const previousStatusLabels = {
+const statusLabels = {
   "want-to-read": "Want to read",
   dnf: "Did not finish",
+  reading: "Reading",
+  finished: "Finished",
 };
 
 const surfaces: Record<ChromePromptAppearance, string> = {
@@ -38,7 +40,9 @@ export function ReaderChromeAccessory(props: ReaderChromeAccessoryProps) {
   const label =
     props.kind === "handoff"
       ? `Continue at p. ${props.prompt.targetPage}`
-      : "Mark as reading";
+      : props.prompt.targetStatus === "finished"
+        ? "Mark as finished"
+        : "Mark as reading";
   const detail =
     props.kind === "handoff"
       ? `Newer position on ${props.prompt.sourceLabel}: page ${props.prompt.targetPage}`
@@ -120,13 +124,15 @@ export function ReaderChromeAccessory(props: ReaderChromeAccessoryProps) {
                     <>
                       Change from{" "}
                       <strong>
-                        {previousStatusLabels[props.prompt.previousStatus]}
+                        {statusLabels[props.prompt.previousStatus]}
                       </strong>{" "}
-                      to <strong>Reading</strong>
+                      to{" "}
+                      <strong>{statusLabels[props.prompt.targetStatus]}</strong>
                     </>
                   ) : (
                     <>
-                      Set this book’s status to <strong>Reading</strong>
+                      Set this book’s status to{" "}
+                      <strong>{statusLabels[props.prompt.targetStatus]}</strong>
                     </>
                   )}
                 </Tooltip.Popup>

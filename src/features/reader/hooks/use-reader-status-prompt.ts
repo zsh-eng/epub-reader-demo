@@ -5,17 +5,29 @@ import { toast } from "sonner";
 import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 
 interface ReaderStatusPrompt {
-  previousStatus: "want-to-read" | "dnf" | null;
+  previousStatus: ReadingStatus | null;
+  targetStatus: "reading" | "finished";
   title: string;
   actionLabel: string;
 }
 
 export function getReaderStatusPrompt(
   status: ReadingStatus | null,
+  isLastPage = false,
 ): ReaderStatusPrompt | null {
+  if (isLastPage && status !== "finished") {
+    return {
+      previousStatus: status,
+      targetStatus: "finished",
+      title: "Finished this book?",
+      actionLabel: "Mark as finished",
+    };
+  }
+
   if (status === "dnf") {
     return {
       previousStatus: status,
+      targetStatus: "reading",
       title: "Giving this book another try?",
       actionLabel: "Start again",
     };
@@ -24,6 +36,7 @@ export function getReaderStatusPrompt(
   if (status === null || status === "want-to-read") {
     return {
       previousStatus: status,
+      targetStatus: "reading",
       title: "Ready to start reading?",
       actionLabel: "Start reading",
     };
@@ -35,6 +48,7 @@ export function getReaderStatusPrompt(
 interface UseReaderStatusPromptOptions {
   bookId: string | undefined;
   isReady: boolean;
+  isLastPage?: boolean;
 }
 
 export interface ReaderStatusAction extends ReaderStatusPrompt {
@@ -48,41 +62,48 @@ export interface ReaderStatusAction extends ReaderStatusPrompt {
 export function useReaderStatusPrompt({
   bookId,
   isReady,
+  isLastPage = false,
 }: UseReaderStatusPromptOptions): ReaderStatusAction | undefined {
   const { status, isLoading, setStatusAsync } = useReadingStatus(bookId);
-  const [dismissedBookId, setDismissedBookId] = useState("");
+  const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [operation, setOperation] = useState({
-    bookId: "",
+    key: "",
     pending: false,
     error: "",
   });
-  const prompt = getReaderStatusPrompt(status);
-  if (!bookId || !isReady || isLoading || dismissedBookId === bookId || !prompt)
-    return;
+  const prompt = getReaderStatusPrompt(status, isLastPage);
+  if (!bookId || !isReady || isLoading || !prompt) return;
+  // Starting and finishing are separate decisions within this Reader visit.
+  const key = `${bookId}:${prompt.targetStatus}`;
+  if (dismissedPrompts.has(key)) return;
+  const dismiss = () =>
+    setDismissedPrompts((previous) => new Set(previous).add(key));
 
-  const isPending = operation.bookId === bookId && operation.pending;
+  const isPending = operation.key === key && operation.pending;
   return {
     ...prompt,
     isPending,
-    error: operation.bookId === bookId ? operation.error : "",
-    onDismiss: () => setDismissedBookId(bookId),
+    error: operation.key === key ? operation.error : "",
+    onDismiss: dismiss,
     onConfirm: () => {
       if (isPending) return;
-      setOperation({ bookId, pending: true, error: "" });
-      void setStatusAsync("reading")
+      setOperation({ key, pending: true, error: "" });
+      void setStatusAsync(prompt.targetStatus)
         .then(() => {
           toast.success(
             createElement(ReadingStatusChangeMessage, {
               previousStatus: status,
-              status: "reading",
+              status: prompt.targetStatus,
             }),
           );
-          setDismissedBookId(bookId);
-          setOperation({ bookId, pending: false, error: "" });
+          dismiss();
+          setOperation({ key, pending: false, error: "" });
         })
         .catch(() => {
           setOperation({
-            bookId,
+            key,
             pending: false,
             error: "Could not update reading status. Please try again.",
           });

@@ -44,6 +44,7 @@ describe("getReaderStatusPrompt", () => {
     (status) => {
       expect(getReaderStatusPrompt(status)).toEqual({
         previousStatus: status,
+        targetStatus: "reading",
         title: "Ready to start reading?",
         actionLabel: "Start reading",
       });
@@ -53,6 +54,7 @@ describe("getReaderStatusPrompt", () => {
   it("uses a return message for a did-not-finish book", () => {
     expect(getReaderStatusPrompt("dnf")).toEqual({
       previousStatus: "dnf",
+      targetStatus: "reading",
       title: "Giving this book another try?",
       actionLabel: "Start again",
     });
@@ -131,4 +133,49 @@ it.each([
   expect(renderToStaticMarkup(mocks.success.mock.calls[0][0])).toBe(
     `Changed <strong>${label}</strong> to <strong>Reading</strong>.`,
   );
+});
+
+it.each([null, "want-to-read", "reading", "dnf"] as const)(
+  "offers to finish status %s only at the last page",
+  (status) => {
+    expect(getReaderStatusPrompt(status, true)?.targetStatus).toBe("finished");
+    expect(getReaderStatusPrompt(status, false)?.targetStatus).not.toBe(
+      "finished",
+    );
+    expect(getReaderStatusPrompt("finished", true)).toBeNull();
+  },
+);
+
+it("keeps finish dismissal separate from the start prompt and saves on confirmation", async () => {
+  const { result, rerender } = renderHook(
+    ({ isLastPage }) =>
+      useReaderStatusPrompt({ bookId: "book-1", isReady: true, isLastPage }),
+    { initialProps: { isLastPage: false } },
+  );
+  act(() => result.current?.onDismiss());
+  rerender({ isLastPage: true });
+  expect(result.current?.actionLabel).toBe("Mark as finished");
+  expect(mocks.setStatusAsync).not.toHaveBeenCalled();
+  rerender({ isLastPage: false });
+  expect(result.current).toBeUndefined();
+  rerender({ isLastPage: true });
+  act(() => result.current?.onConfirm());
+  await waitFor(() => expect(result.current).toBeUndefined());
+  expect(mocks.setStatusAsync).toHaveBeenCalledWith("finished");
+  expect(renderToStaticMarkup(mocks.success.mock.calls[0][0])).toBe(
+    "Changed status to <strong>Finished</strong>.",
+  );
+});
+
+it("keeps a dismissed finish prompt hidden on return without changing status", () => {
+  const { result, rerender } = renderHook(
+    ({ isLastPage }) =>
+      useReaderStatusPrompt({ bookId: "book-1", isReady: true, isLastPage }),
+    { initialProps: { isLastPage: true } },
+  );
+  act(() => result.current?.onDismiss());
+  rerender({ isLastPage: false });
+  rerender({ isLastPage: true });
+  expect(result.current).toBeUndefined();
+  expect(mocks.setStatusAsync).not.toHaveBeenCalled();
 });

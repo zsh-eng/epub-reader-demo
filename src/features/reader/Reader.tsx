@@ -198,7 +198,16 @@ export function Reader() {
     if (!settledPaintReady) return;
     resumeBackgroundLoad();
   }, [resumeBackgroundLoad, settledPaintReady]);
-  const statusPrompt = useReaderStatusPrompt({ bookId, isReady: displayReady });
+  const statusPrompt = useReaderStatusPrompt({
+    bookId,
+    isReady: displayReady,
+    // Only the complete page map can identify the actual end of the book.
+    isLastPage:
+      sessionState.pagination.status === "ready" &&
+      sessionState.navigation.totalPages > 0 &&
+      sessionState.navigation.currentPage + resolvedSpreadColumns - 1 >=
+        sessionState.navigation.totalPages,
+  });
 
   if (sessionState.status === "not-found" || !bookId) {
     return (

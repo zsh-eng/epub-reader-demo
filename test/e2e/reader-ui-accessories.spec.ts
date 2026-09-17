@@ -343,3 +343,62 @@ test("desktop status keeps the top toolbar visible until dismissed or saved", as
   await waitForReaderReady(page);
   await expect(accessory).toHaveCount(0);
 });
+
+for (const mobile of [false, true]) {
+  test(`offers to finish at the last page on ${mobile ? "mobile" : "desktop"}`, async ({
+    page,
+    localBook,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1280, height: 850 });
+    await openLocalBook(page, localBook.id);
+    await page
+      .getByRole("button", {
+        name: "Dismiss reading status prompt",
+        exact: true,
+      })
+      .click();
+    await page.mouse.move(600, 20);
+    await page
+      .getByRole("button", { name: "Open reader tools", exact: true })
+      .click();
+    await page.getByRole("button", { name: /CHAPTER XII\./i }).click();
+    await page
+      .getByRole("navigation", { name: "Reader tools" })
+      .getByRole("button", { name: "Close reader tools", exact: true })
+      .click();
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await waitForReaderReady(page);
+    const finish = page.getByRole("button", {
+      name: "Mark as finished",
+      exact: true,
+    });
+    await expect(finish).toHaveCount(0);
+    for (let turn = 0; turn < 60 && !(await finish.isVisible()); turn++) {
+      await nextSpread(page);
+    }
+    await expect(finish).toBeVisible();
+    await expect(
+      page.locator(
+        mobile ? "[data-reader-footer]" : '[data-reader-header="desktop"]',
+      ),
+    ).toContainText("Mark as finished");
+    const readStatus = () =>
+      page.evaluate(async (id) => {
+        const path = "/src/lib/db.ts";
+        return (await import(path)).getReadingStatus(id);
+      }, localBook.id);
+    expect(await readStatus()).toBeNull();
+    await page.screenshot({ path: testInfo.outputPath("finish-prompt.png") });
+    await finish.click();
+    await expect.poll(readStatus).toBe("finished");
+    await expect(page.locator("[data-sonner-toast]")).toContainText(
+      "Changed status to Finished.",
+    );
+    await expect(finish).toHaveCount(0);
+    await page.reload();
+    await waitForReaderReady(page);
+    await expect(finish).toHaveCount(0);
+    expect(await readStatus()).toBe("finished");
+  });
+}
