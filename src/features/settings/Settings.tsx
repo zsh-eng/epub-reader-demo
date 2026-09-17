@@ -60,6 +60,17 @@ export function Settings() {
           </Card>
           {debugEnabled && (
             <Link
+              to="/debug/jump-history"
+              className="mt-4 block rounded-2xl border border-border p-5 text-sm hover:bg-muted"
+            >
+              <strong>Jump history playground →</strong>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Run jumps, step through examples, and inspect the history array.
+              </p>
+            </Link>
+          )}
+          {debugEnabled && (
+            <Link
               to="/debug/chrome-accessories"
               className="mt-4 block rounded-2xl border border-border p-5 text-sm hover:bg-muted"
             >

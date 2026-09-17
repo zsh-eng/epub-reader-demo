@@ -1,0 +1,120 @@
+/* Keep the current visit at the true centre, with 64px cells and 8px gaps.
+   All hit areas stay 44px high in both history and quiet mode. */
+.reader-history-strip {
+  position: relative;
+  height: 44px;
+  max-width: 40rem;
+  margin-inline: auto;
+  line-height: 1;
+}
+.history-strip-focus,
+.history-strip-track {
+  position: absolute;
+  left: calc(50% - 2rem);
+}
+.history-strip-focus {
+  top: 6px;
+  width: 4rem;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--secondary);
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.history-strip-viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    var(--foreground) 16px,
+    var(--foreground) calc(100% - 16px),
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 150ms;
+}
+.history-strip-track {
+  top: 0;
+  height: 44px;
+  width: 4rem;
+}
+.history-strip-entry {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 4rem;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Match the quiet indicator's 2px top / 4px bottom padding. */
+  padding-bottom: 2px;
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: color 150ms;
+}
+.history-strip-entry[aria-current] {
+  color: var(--foreground);
+}
+/* The icon and number form one centred label; plain numbers centre alone. */
+.history-strip-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.history-strip-icon {
+  position: relative;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.history-strip-highlight-tip {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 7px;
+  height: 3px;
+  background: var(--yellow-secondary);
+  border-radius: 1px;
+}
+.history-strip-quiet {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  margin-inline: auto;
+  min-width: 44px;
+  padding-inline: 12px;
+  cursor: pointer;
+  border-radius: 999px;
+  opacity: 1;
+  transition: opacity 150ms;
+}
+.reader-history-strip[data-mode="history"] .history-strip-focus,
+.reader-history-strip[data-mode="history"] .history-strip-viewport {
+  opacity: 1;
+}
+.reader-history-strip[data-mode="history"] .history-strip-quiet {
+  opacity: 0;
+}
+.history-strip-entry:focus-visible,
+.history-strip-quiet:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .history-strip-entry:hover,
+  .history-strip-quiet:hover {
+    color: var(--primary);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .history-strip-viewport,
+  .history-strip-focus,
+  .history-strip-quiet {
+    transition-duration: 0ms;
+  }
+}

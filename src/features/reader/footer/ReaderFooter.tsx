@@ -10,7 +10,7 @@ import type { ReaderStatusAction } from "../hooks/use-reader-status-prompt";
 import { FooterStatusPrompt } from "./FooterStatusPrompt";
 import { PencilLine } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { FooterChapterRow } from "./FooterChapterRow";
 import { FooterHandoffPrompt } from "./FooterHandoffPrompt";
 import { FooterScrubberLoading } from "./FooterLoadingState";
@@ -56,6 +56,8 @@ export interface ReaderFooterProps {
   statusPrompt?: ReaderStatusAction;
   isLoading?: boolean;
   showPageNumbers?: boolean;
+  /** Alternate progress view for the history playground. */
+  pageIndicator?: ReactNode;
 }
 
 export function ReaderFooter({
@@ -80,6 +82,7 @@ export function ReaderFooter({
   statusPrompt,
   isLoading = false,
   showPageNumbers = true,
+  pageIndicator,
 }: ReaderFooterProps) {
   const [cancelMomentumSignal, setCancelMomentumSignal] = useState(0);
   const animateReadyTransition = false;
@@ -292,14 +295,16 @@ export function ReaderFooter({
               </div>
             </div>
             <div className="relative">
-              <FooterPageIndicator
-                showPageNumbers={showPageNumbers}
-                currentPage={detailCurrentPage}
-                totalPages={detailTotalPages}
-                isLoading={isLoading}
-                preserveDetailsWhileLoading={preserveDetailsWhileLoading}
-                animateReadyDetails={animateReadyTransition}
-              />
+              {pageIndicator ?? (
+                <FooterPageIndicator
+                  showPageNumbers={showPageNumbers}
+                  currentPage={detailCurrentPage}
+                  totalPages={detailTotalPages}
+                  isLoading={isLoading}
+                  preserveDetailsWhileLoading={preserveDetailsWhileLoading}
+                  animateReadyDetails={animateReadyTransition}
+                />
+              )}
             </div>
           </div>
         </motion.div>

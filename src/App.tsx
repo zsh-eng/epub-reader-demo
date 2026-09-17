@@ -8,6 +8,7 @@ import { HighlightsMasonry } from "@/features/highlights/HighlightsMasonry";
 import { Library } from "@/features/library/Library";
 import { Reader } from "@/features/reader";
 import { ReaderDebug } from "@/features/reader/debug";
+import { ReaderJumpHistoryDebug } from "@/features/reader/debug/ReaderJumpHistoryDebug";
 import { ReaderDiagnostics } from "@/features/reader/diagnostics/ReaderDiagnostics";
 import { ReadingSessions } from "@/features/reading-sessions/ReadingSessions";
 import { ReaderTraceViewer } from "@/features/reader/diagnostics/ReaderTraceViewer";
@@ -96,6 +97,14 @@ function App() {
                       element={<Navigate to="/devices" replace />}
                     />
                   </Route>
+                  <Route
+                    path="/debug/jump-history"
+                    element={
+                      <DebugGate>
+                        <ReaderJumpHistoryDebug />
+                      </DebugGate>
+                    }
+                  />
                   <Route
                     path="/debug/reader/:bookId"
                     element={
