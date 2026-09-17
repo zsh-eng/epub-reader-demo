@@ -396,7 +396,12 @@ for (const mobile of [false, true]) {
       "Changed status to Finished.",
     );
     await expect(finish).toHaveCount(0);
-    await page.reload();
+    await page
+      .locator("[data-sonner-toast]")
+      .getByRole("button", { name: "Back to library", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/$/);
+    await openLocalBook(page, localBook.id);
     await waitForReaderReady(page);
     await expect(finish).toHaveCount(0);
     expect(await readStatus()).toBe("finished");

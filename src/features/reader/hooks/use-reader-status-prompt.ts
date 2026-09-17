@@ -2,6 +2,7 @@ import { useReadingStatus } from "@/hooks/use-reading-status";
 import type { ReadingStatus } from "@/lib/db";
 import { createElement, useState } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 
 interface ReaderStatusPrompt {
@@ -64,6 +65,7 @@ export function useReaderStatusPrompt({
   isReady,
   isLastPage = false,
 }: UseReaderStatusPromptOptions): ReaderStatusAction | undefined {
+  const navigate = useNavigate();
   const { status, isLoading, setStatusAsync } = useReadingStatus(bookId);
   const [dismissedPrompts, setDismissedPrompts] = useState<Set<string>>(
     () => new Set(),
@@ -97,6 +99,15 @@ export function useReaderStatusPrompt({
               previousStatus: status,
               status: prompt.targetStatus,
             }),
+            prompt.targetStatus === "finished"
+              ? {
+                  duration: 8000,
+                  action: {
+                    label: "Back to library",
+                    onClick: () => navigate("/"),
+                  },
+                }
+              : undefined,
           );
           dismiss();
           setOperation({ key, pending: false, error: "" });

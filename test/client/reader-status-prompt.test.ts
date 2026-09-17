@@ -7,6 +7,7 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
   prompt: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
@@ -16,6 +17,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/hooks/use-reading-status", () => ({
   useReadingStatus: mocks.useReadingStatus,
+}));
+
+vi.mock("react-router-dom", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("react-router-dom")>()),
+  useNavigate: () => mocks.navigate,
 }));
 
 vi.mock("sonner", () => ({
@@ -82,6 +88,7 @@ describe("getReaderStatusPrompt", () => {
     expect(renderToStaticMarkup(mocks.success.mock.calls[0][0])).toBe(
       "Changed status to <strong>Reading</strong>.",
     );
+    expect(mocks.success.mock.calls[0][1]).toBeUndefined();
     expect(mocks.prompt).not.toHaveBeenCalled();
   });
 
@@ -165,6 +172,11 @@ it("keeps finish dismissal separate from the start prompt and saves on confirmat
   expect(renderToStaticMarkup(mocks.success.mock.calls[0][0])).toBe(
     "Changed status to <strong>Finished</strong>.",
   );
+  const options = mocks.success.mock.calls[0][1];
+  expect(options.action.label).toBe("Back to library");
+  expect(mocks.navigate).not.toHaveBeenCalled();
+  options.action.onClick();
+  expect(mocks.navigate).toHaveBeenCalledExactlyOnceWith("/");
 });
 
 it("keeps a dismissed finish prompt hidden on return without changing status", () => {
