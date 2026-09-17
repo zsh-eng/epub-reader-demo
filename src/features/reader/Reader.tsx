@@ -137,6 +137,10 @@ export function Reader() {
     layoutReady: isReaderStageMeasured,
   });
   const resumeBackgroundLoad = sessionActions.resumeBackgroundLoad;
+  const endHistoryGroup = sessionActions.endHistoryGroup;
+  useEffect(() => {
+    endHistoryGroup();
+  }, [chromeState.activeReaderSheet, endHistoryGroup]);
 
   const {
     state: annotationState,
@@ -579,7 +583,7 @@ export function Reader() {
                           ]?.title ?? "Current chapter",
                       },
                     }}
-                    onVisit={sessionActions.commitPage}
+                    onVisit={sessionActions.goToNotePage}
                   >
                     {(notesPanel) => (
                       <ReaderSheetHost
@@ -596,7 +600,7 @@ export function Reader() {
                           sessionState.navigation.chapterStartPages
                         }
                         currentChapterHref={currentChapterEntry?.href ?? ""}
-                        onNavigateToHref={sessionActions.openInternalHref}
+                        onNavigateToHref={sessionActions.openTocHref}
                         notesPanel={notesPanel}
                         highlightsPanel={
                           !isMobile && (

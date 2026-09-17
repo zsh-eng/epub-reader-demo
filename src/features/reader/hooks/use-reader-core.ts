@@ -21,6 +21,7 @@ import { useReaderReadingSession } from "./reading-sessions/use-reader-reading-s
 import { usePaginationKeyboardNav } from "./use-pagination-keyboard-nav";
 import { useReaderChapterContent } from "./use-reader-chapter-content";
 import { useReaderCheckpointController } from "./use-reader-checkpoint-controller";
+import { useReaderJumpHistory } from "./use-reader-jump-history";
 import { useReaderPaginationFeed } from "./use-reader-pagination-feed";
 
 interface UseReaderCoreOptions {
@@ -42,6 +43,7 @@ interface UseReaderCoreResult {
   spreadConfig: SpreadConfig;
   paginationConfig: PaginationConfig;
   pagination: ReturnType<typeof usePagination>;
+  jumpHistory: ReturnType<typeof useReaderJumpHistory>;
   sourceLoadWallClockMs: number | null;
   sourceLoadKind: "cache-hit" | "rebuilt" | null;
   currentPage: number;
@@ -173,7 +175,13 @@ export function useReaderCore(
     [spreadColumns],
   );
 
+  const jumpHistory = useReaderJumpHistory(
+    book?.id ?? "",
+    book?.sourceFileId ?? "",
+  );
   const pagination = usePagination({
+    sessionKey: book ? `${book.id}:${book.sourceFileId}` : bookId,
+    onLocationResolved: jumpHistory.record,
     paginationConfig,
     spreadConfig,
   });
@@ -221,6 +229,7 @@ export function useReaderCore(
     resumeBackgroundLoad: resumeBackgroundChapterArtifacts,
   } = useReaderChapterContent({
     highlightTarget,
+    resumeAnchor: jumpHistory.initialAnchor,
     bookId: epubPreparation.chapterContentBookId,
     book: epubPreparation.chapterContentBook,
     publisherBookStylingEnabled: settings.publisherBookStylingEnabled,
@@ -281,6 +290,7 @@ export function useReaderCore(
     spreadConfig,
     paginationConfig,
     pagination,
+    jumpHistory,
     sourceLoadWallClockMs,
     sourceLoadKind,
     currentPage,

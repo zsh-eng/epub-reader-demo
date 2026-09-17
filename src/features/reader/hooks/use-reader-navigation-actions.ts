@@ -36,6 +36,8 @@ export interface ReaderNavigationActions {
   goToPreviousChapter: () => void;
   goToNextChapter: () => void;
   openInternalHref: (href: string) => boolean;
+  openTocHref: (href: string) => boolean;
+  goToNotePage: (page: number) => void;
   goToHighlight: (highlight: Highlight) => void;
 }
 
@@ -120,8 +122,8 @@ export function useReaderNavigationActions({
     });
   }, [chapterEntries.length, currentChapterIndex, pagination]);
 
-  const openInternalHref = useCallback(
-    (href: string): boolean => {
+  const openHref = useCallback(
+    (href: string, source: "internal-link" | "toc"): boolean => {
       const resolvedTarget = resolveHrefTarget(href);
       if (!resolvedTarget) return false;
 
@@ -130,18 +132,33 @@ export function useReaderNavigationActions({
           resolvedTarget.chapterIndex,
           resolvedTarget.targetId,
           {
-            intent: { kind: "jump", source: "internal-link" },
+            intent: { kind: "jump", source },
           },
         );
         return true;
       }
 
       pagination.goToChapter(resolvedTarget.chapterIndex, {
-        intent: { kind: "jump", source: "internal-link" },
+        intent: { kind: "jump", source },
       });
       return true;
     },
     [pagination, resolveHrefTarget],
+  );
+
+  const openInternalHref = useCallback(
+    (href: string) => openHref(href, "internal-link"),
+    [openHref],
+  );
+  const openTocHref = useCallback(
+    (href: string) => openHref(href, "toc"),
+    [openHref],
+  );
+  const goToNotePage = useCallback(
+    (page: number) => {
+      pagination.goToPage(page, { intent: { kind: "jump", source: "note" } });
+    },
+    [pagination],
   );
 
   const goToHighlight = useCallback(
@@ -169,6 +186,8 @@ export function useReaderNavigationActions({
       goToPreviousChapter,
       goToNextChapter,
       openInternalHref,
+      openTocHref,
+      goToNotePage,
       goToHighlight,
     }),
     [
@@ -179,6 +198,8 @@ export function useReaderNavigationActions({
       jumpToHandoffPage,
       nextSpread,
       openInternalHref,
+      openTocHref,
+      goToNotePage,
       goToHighlight,
       previewPage,
       prevSpread,

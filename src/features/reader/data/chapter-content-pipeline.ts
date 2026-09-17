@@ -4,6 +4,7 @@ import {
   parseChapterHtml,
   parseChapterHtmlWithCanonicalText,
   type ChapterCanonicalText,
+  type ContentAnchor,
   type PublisherFontFace,
   type BookStylesheet,
 } from "@/lib/pagination-v2";
@@ -54,6 +55,7 @@ export interface ReaderDecoratedChapterArtifact {
 }
 
 export interface ReaderInitialLocation {
+  anchor?: ContentAnchor;
   highlightId?: string;
   chapterIndex: number;
   chapterProgress?: number;

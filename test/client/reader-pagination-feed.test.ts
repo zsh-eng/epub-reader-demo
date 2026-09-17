@@ -1,3 +1,5 @@
+import { useReaderJumpHistory } from "@/features/reader/hooks/use-reader-jump-history";
+import { READER_HISTORY_STORAGE_KEY } from "@/features/reader/data/jump-history-storage";
 import { useReaderPaginationFeed } from "@/features/reader/hooks/use-reader-pagination-feed";
 import type { ReaderChapterArtifactSubscriber } from "@/features/reader/data/reader-cache/hooks";
 import { PaginationEngine } from "@/lib/pagination-v2/engine";
@@ -209,4 +211,130 @@ it("waits for chapter artifacts and still accepts updates after reconnecting", (
   ).toBe(true);
   expect(reader.result.current.spread?.currentPage).toBe(2);
   expect(initMessages()).toHaveLength(1);
+});
+
+it("connects confirmed worker navigation to a persisted trail and anchor returns", () => {
+  localStorage.removeItem(READER_HISTORY_STORAGE_KEY);
+  function useHistoryReader() {
+    const history = useReaderJumpHistory("history-book", "source");
+    const pagination = usePagination({
+      paginationConfig: config,
+      onLocationResolved: history.record,
+    });
+    useReaderPaginationFeed({
+      pagination,
+      bookId: "history-book",
+      chapterEntries: entries,
+      initialLocation: { ...initialLocation, anchor: history.initialAnchor },
+      getChapterBlocks,
+      subscribe,
+    });
+    return { pagination, history };
+  }
+  const reader = renderHook(useHistoryReader);
+  const trail = () =>
+    reader.result.current.history.state.entries.map(
+      (entry) => entry.anchor.blockId,
+    );
+  const go = (
+    page: number,
+    source: "highlight" | "scrubber" | "internal-link",
+  ) =>
+    act(() =>
+      reader.result.current.pagination.goToPage(page, {
+        intent: { kind: "jump", source },
+      }),
+    );
+  go(2, "highlight");
+  go(3, "highlight");
+  act(() => reader.result.current.pagination.nextSpread());
+  act(() => reader.result.current.pagination.nextSpread());
+  expect(trail()).toEqual(["page-0", "page-2", "page-4"]);
+  act(() =>
+    reader.result.current.history.go(
+      "back",
+      reader.result.current.pagination.goToAnchor,
+    ),
+  );
+  expect(reader.result.current.pagination.spread?.currentPage).toBe(3);
+  expect(reader.result.current.history.state.cursor).toBe(1);
+  act(() =>
+    reader.result.current.history.go(
+      "forward",
+      reader.result.current.pagination.goToAnchor,
+    ),
+  );
+  expect(reader.result.current.pagination.spread?.currentPage).toBe(5);
+  act(() =>
+    reader.result.current.history.go(
+      "back",
+      reader.result.current.pagination.goToAnchor,
+    ),
+  );
+  go(4, "scrubber");
+  expect(trail()).toEqual(["page-0", "page-2", "page-3"]);
+  const persisted = JSON.parse(
+    localStorage.getItem(READER_HISTORY_STORAGE_KEY)!,
+  )[0].history;
+  expect(persisted).toEqual(reader.result.current.history.state);
+  act(() =>
+    reader.result.current.history.go(
+      "back",
+      reader.result.current.pagination.goToAnchor,
+    ),
+  );
+  reader.unmount();
+  const reopened = renderHook(useHistoryReader);
+  expect(reopened.result.current.pagination.spread?.currentPage).toBe(3);
+  expect(reopened.result.current.history.state.cursor).toBe(1);
+  act(() =>
+    reopened.result.current.history.go(
+      "forward",
+      reopened.result.current.pagination.goToAnchor,
+    ),
+  );
+  expect(reopened.result.current.pagination.spread?.currentPage).toBe(4);
+  const beforeFailure = reopened.result.current.history.state;
+  act(() =>
+    reopened.result.current.pagination.goToPage(10000, {
+      intent: { kind: "jump", source: "highlight" },
+    }),
+  );
+  expect(reopened.result.current.history.state).toBe(beforeFailure);
+});
+
+it("keeps histories isolated when the mounted Reader changes books", () => {
+  localStorage.removeItem(READER_HISTORY_STORAGE_KEY);
+  function useBookHistory({ bookId }: { bookId: string }) {
+    const history = useReaderJumpHistory(bookId, "source");
+    const pagination = usePagination({
+      paginationConfig: config,
+      sessionKey: bookId,
+      onLocationResolved: history.record,
+    });
+    useReaderPaginationFeed({
+      pagination,
+      bookId,
+      chapterEntries: entries,
+      initialLocation: { ...initialLocation, anchor: history.initialAnchor },
+      getChapterBlocks,
+      subscribe,
+    });
+    return { history, pagination };
+  }
+  const reader = renderHook(useBookHistory, { initialProps: { bookId: "a" } });
+  act(() =>
+    reader.result.current.pagination.goToPage(3, {
+      intent: { kind: "jump", source: "highlight" },
+    }),
+  );
+  const savedA = reader.result.current.history.state;
+  reader.rerender({ bookId: "b" });
+  expect(reader.result.current.history.state.entries).toHaveLength(1);
+  expect(reader.result.current.pagination.spread?.currentPage).toBe(1);
+  act(() => reader.result.current.pagination.nextSpread());
+  reader.rerender({ bookId: "a" });
+  expect(reader.result.current.history.state).toEqual(savedA);
+  expect(reader.result.current.pagination.spread?.currentPage).toBe(3);
+  expect(initMessages()).toHaveLength(3);
 });

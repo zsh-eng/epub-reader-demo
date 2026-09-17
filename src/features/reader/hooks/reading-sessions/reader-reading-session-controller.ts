@@ -101,7 +101,11 @@ export function shouldTrackReadingSessionIntent(intent: SpreadIntent): boolean {
 export function shouldRecordReadingSessionActivity(
   intent: SpreadIntent,
 ): boolean {
-  return intent.kind === "linear" || intent.kind === "jump";
+  return (
+    intent.kind === "linear" ||
+    intent.kind === "jump" ||
+    intent.kind === "history"
+  );
 }
 
 export function getReaderReadingSessionSnapshotKey(

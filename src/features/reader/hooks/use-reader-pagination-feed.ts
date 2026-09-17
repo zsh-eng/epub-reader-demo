@@ -76,6 +76,7 @@ export function useReaderPaginationFeed({
         totalChapters: chapterEntries.length,
         initialChapterIndex: initialLocation.chapterIndex,
         initialChapterProgress: initialLocation.chapterProgress,
+        initialAnchor: initialLocation.anchor,
         initialHighlightId: initialLocation.highlightId,
         intent: initialLocation.highlightId
           ? { kind: "jump", source: "highlight" }

@@ -69,6 +69,7 @@ export interface ReaderSessionPaginationState {
 }
 
 export interface ReaderSessionState {
+  jumpHistory: ReturnType<typeof useReaderCore>["jumpHistory"]["state"];
   status: ReaderSessionStatus;
   book: Book | null;
   settings: ReaderSettings;
@@ -86,6 +87,9 @@ export interface ReaderSessionResources {
 }
 
 export interface ReaderSessionActions {
+  goBackInHistory: () => void;
+  goForwardInHistory: () => void;
+  endHistoryGroup: () => void;
   updateSettings: (patch: Partial<ReaderSettings>) => void;
   nextSpread: ReaderNavigationActions["nextSpread"];
   prevSpread: ReaderNavigationActions["prevSpread"];
@@ -96,6 +100,8 @@ export interface ReaderSessionActions {
   goToPreviousChapter: ReaderNavigationActions["goToPreviousChapter"];
   goToNextChapter: ReaderNavigationActions["goToNextChapter"];
   openInternalHref: ReaderNavigationActions["openInternalHref"];
+  openTocHref: ReaderNavigationActions["openTocHref"];
+  goToNotePage: ReaderNavigationActions["goToNotePage"];
   goToHighlight: ReaderNavigationActions["goToHighlight"];
   createHighlight: (highlight: Highlight) => void;
   resumeBackgroundLoad: () => void;
@@ -158,6 +164,7 @@ export function useReaderSession(
 
     return {
       status,
+      jumpHistory: core.jumpHistory.state,
       book: core.book,
       settings: core.settings,
       highlights: core.bookHighlights,
@@ -187,6 +194,7 @@ export function useReaderSession(
       },
     };
   }, [
+    core.jumpHistory.state,
     core.book,
     core.bookHighlights,
     core.chapterEntries,
@@ -218,12 +226,19 @@ export function useReaderSession(
 
   const actions = useMemo<ReaderSessionActions>(
     () => ({
+      goBackInHistory: () =>
+        core.jumpHistory.go("back", core.pagination.goToAnchor),
+      goForwardInHistory: () =>
+        core.jumpHistory.go("forward", core.pagination.goToAnchor),
+      endHistoryGroup: core.jumpHistory.endGroup,
       updateSettings: core.onUpdateSettings,
       ...navigationActions,
       createHighlight,
       resumeBackgroundLoad: core.resumeBackgroundLoad,
     }),
     [
+      core.jumpHistory,
+      core.pagination.goToAnchor,
       core.onUpdateSettings,
       core.resumeBackgroundLoad,
       createHighlight,

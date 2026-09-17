@@ -67,7 +67,11 @@ export function shouldTrackCheckpointIntent(intent: SpreadIntent): boolean {
 export function shouldFlushCheckpointImmediately(
   intent: SpreadIntent,
 ): boolean {
-  return intent.kind === "jump" || intent.kind === "linear";
+  return (
+    intent.kind === "jump" ||
+    intent.kind === "linear" ||
+    intent.kind === "history"
+  );
 }
 
 export function getReaderCheckpointSnapshotKey(

@@ -1,6 +1,6 @@
 import { useBookHighlightsQuery } from "@/hooks/use-highlights-query";
 import type { Book } from "@/lib/db";
-import type { ChapterCanonicalText } from "@/lib/pagination-v2";
+import type { ChapterCanonicalText, ContentAnchor } from "@/lib/pagination-v2";
 import type { Highlight } from "@/types/highlight";
 import { useCallback, useMemo } from "react";
 import {
@@ -24,6 +24,7 @@ export interface ReaderHighlightTarget {
 }
 
 interface UseReaderChapterContentOptions {
+  resumeAnchor?: ContentAnchor;
   highlightTarget?: ReaderHighlightTarget;
   bookId?: string;
   book: Book | null;
@@ -53,6 +54,7 @@ export function useReaderChapterContent({
   bookId,
   book,
   highlightTarget: target,
+  resumeAnchor,
   publisherBookStylingEnabled,
   matchPublisherBodyTextSize,
 }: UseReaderChapterContentOptions): UseReaderChapterContentResult {
@@ -77,7 +79,13 @@ export function useReaderChapterContent({
             highlightId: target.highlightId,
             isRestore: false,
           }
-        : undefined,
+        : resumeAnchor && resumeAnchor.chapterIndex < chapterEntries.length
+          ? {
+              chapterIndex: resumeAnchor.chapterIndex,
+              anchor: resumeAnchor,
+              isRestore: true,
+            }
+          : undefined,
   });
 
   const bodyCacheQuery = useReaderBodyCacheQuery({
