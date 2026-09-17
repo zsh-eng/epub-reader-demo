@@ -67,6 +67,12 @@ export interface GoToPageCommand {
   intent: SpreadIntent;
 }
 
+export interface GoToAnchorCommand {
+  type: "goToAnchor";
+  anchor: ContentAnchor;
+  intent: SpreadIntent;
+}
+
 export interface GoToChapterCommand {
   type: "goToChapter";
   chapterIndex: number;
@@ -97,6 +103,7 @@ export type PaginationCommand =
   | NextSpreadCommand
   | PrevSpreadCommand
   | GoToPageCommand
+  | GoToAnchorCommand
   | GoToChapterCommand
   | GoToTargetCommand;
 
@@ -105,6 +112,7 @@ interface PaginationEventMetadata {
 }
 
 interface SpreadWindowEventMetadata {
+  anchor: ContentAnchor;
   spread: ResolvedSpread;
   previousSpread: ResolvedSpread | null;
   nextSpread: ResolvedSpread | null;

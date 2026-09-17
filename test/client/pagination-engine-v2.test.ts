@@ -1497,3 +1497,88 @@ it("locates a batch of notebook anchors without navigating the reader", () => {
     { type: "anchorsLocated", requestId: 7, pages: { note: 1, missing: null } },
   ]);
 });
+
+describe("content anchor return navigation", () => {
+  it("returns to the same text anchor after pagination changes", () => {
+    const { engine, events } = createEngine({
+      blocks: makeLongTextBlocks("return-text"),
+    });
+    runCommand(engine, {
+      type: "goToPage",
+      page: 4,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
+    const arrival = lastEvent(events);
+    if (arrival?.type !== "pageContent")
+      throw new Error("Expected page content");
+    expect(arrival.anchor.type).toBe("text");
+    const anchor = arrival.anchor;
+    runCommand(engine, {
+      type: "goToPage",
+      page: 1,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
+    runCommand(engine, {
+      type: "updatePaginationConfig",
+      paginationConfig: {
+        ...BASE_PAGINATION_CONFIG,
+        viewport: { width: 310, height: 430 },
+      },
+    });
+    runCommand(engine, {
+      type: "goToAnchor",
+      anchor,
+      intent: { kind: "history", targetIndex: 1 },
+    });
+    const returned = lastEvent(events);
+    if (returned?.type !== "pageContent")
+      throw new Error("Expected returned content");
+    expect(returned.anchor).toEqual(anchor);
+    expect(returned.spread.currentPage).not.toBe(arrival.spread.currentPage);
+    expect(
+      returned.spread.slots.some(
+        (slot) =>
+          slot.kind === "page" &&
+          slot.page.content.some((slice) => slice.blockId === anchor.blockId),
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects missing anchors without moving the reader", () => {
+    const { engine, events } = createEngine({
+      blocks: makeFixedPageBlocks(0, 5),
+    });
+    runCommand(engine, {
+      type: "goToPage",
+      page: 3,
+      intent: SCRUBBER_JUMP_INTENT,
+    });
+    runCommand(engine, {
+      type: "goToAnchor",
+      anchor: { type: "block", chapterIndex: 0, blockId: "missing" },
+      intent: { kind: "history", targetIndex: 0 },
+    });
+    expect(lastEvent(events)?.type).toBe("pageUnavailable");
+    runCommand(engine, { type: "nextSpread", intent: FORWARD_LINEAR_INTENT });
+    const next = lastEvent(events);
+    if (next?.type !== "pageContent") throw new Error("Expected next page");
+    expect(next.spread.currentPage).toBe(4);
+  });
+});
+
+it("restores an anchor in the first slot while preceding chapters arrive", () => {
+  const { engine, events } = createEngine({
+    totalChapters: 2,
+    initialChapterIndex: 1,
+    blocks: makeFixedPageBlocks(1, 6),
+    spreadConfig: { columns: 2, chapterFlow: "continuous" },
+    initialAnchor: { type: "block", chapterIndex: 1, blockId: "spacer-1-3" },
+  });
+  addChapter(engine, 0, makeFixedPageBlocks(0, 3));
+  const ready = getReadyEvent(events);
+  expect(ready?.spread.currentPage).toBe(7);
+  expect(ready?.spread.slots[0]).toMatchObject({
+    kind: "page",
+    page: { currentPage: 7 },
+  });
+});

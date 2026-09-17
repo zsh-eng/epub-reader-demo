@@ -89,6 +89,7 @@ function resolveIntent(command: PaginationCommand): SpreadIntent {
     case "nextSpread":
     case "prevSpread":
     case "goToPage":
+    case "goToAnchor":
     case "goToChapter":
     case "goToTarget":
       return command.intent;
@@ -173,6 +174,10 @@ export class PaginationEngine {
       case "goToPage":
         return this.runOneStepWork(intent, () => {
           this.goToPage(intent, cmd.page);
+        });
+      case "goToAnchor":
+        return this.runOneStepWork(intent, () => {
+          this.goToAnchor(intent, cmd.anchor);
         });
       case "goToChapter":
         return this.runOneStepWork(intent, () => {
@@ -287,7 +292,9 @@ export class PaginationEngine {
         initialPageIndex,
       );
     }
-    this.preferredAnchorSlotIndex = null;
+    // A restored content location starts the spread; later chapter arrivals
+    // retain that slot instead of changing spread parity around the anchor.
+    this.preferredAnchorSlotIndex = initialAnchor ? 0 : null;
 
     const spreadWindow = this.buildResolvedSpreadWindow(intent);
     if (!spreadWindow) {
@@ -306,6 +313,7 @@ export class PaginationEngine {
         type: "ready",
         intent,
         spread,
+        anchor: this.anchor,
         previousSpread: spreadWindow.previous,
         nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics ? [diagnostics] : [],
@@ -315,6 +323,7 @@ export class PaginationEngine {
         type: "partialReady",
         intent,
         spread,
+        anchor: this.anchor,
         previousSpread: spreadWindow.previous,
         nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics,
@@ -352,6 +361,7 @@ export class PaginationEngine {
         type: "ready",
         intent,
         spread: spreadWindow.current,
+        anchor: this.anchor,
         previousSpread: spreadWindow.previous,
         nextSpread: spreadWindow.next,
         chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
@@ -369,6 +379,7 @@ export class PaginationEngine {
         type: "partialReady",
         intent,
         spread: spreadWindow.current,
+        anchor: this.anchor,
         previousSpread: spreadWindow.previous,
         nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics,
@@ -597,6 +608,21 @@ export class PaginationEngine {
     this.emitPageUnavailable(intent);
   }
 
+  goToAnchor(intent: SpreadIntent, anchor: ContentAnchor): void {
+    const pages = this.pagesByChapter[anchor.chapterIndex];
+    if (
+      !pages?.some((page) =>
+        page.slices.some((slice) => slice.blockId === anchor.blockId),
+      )
+    ) {
+      this.emitPageUnavailable(intent);
+      return;
+    }
+    this.preferredAnchorSlotIndex = 0;
+    this.anchor = anchor;
+    this.emitPageContent(intent);
+  }
+
   goToChapter(intent: SpreadIntent, chapterIndex: number): void {
     const chapter = Math.floor(chapterIndex);
     if (chapter < 0 || chapter >= this.totalChapters) {
@@ -666,6 +692,7 @@ export class PaginationEngine {
         type: "partialReady",
         intent,
         spread,
+        anchor: this.anchor,
         previousSpread: spreadWindow.previous,
         nextSpread: spreadWindow.next,
         chapterDiagnostics: diagnostics,
@@ -695,6 +722,7 @@ export class PaginationEngine {
       type: "ready",
       intent,
       spread: spreadWindow.current,
+      anchor: this.anchor,
       previousSpread: spreadWindow.previous,
       nextSpread: spreadWindow.next,
       chapterDiagnostics: this.chapterDiagnosticsByChapter.filter(
@@ -842,6 +870,7 @@ export class PaginationEngine {
       type: "pageContent",
       intent,
       spread,
+      anchor: this.anchor,
       previousSpread: spreadWindow.previous,
       nextSpread: spreadWindow.next,
     });

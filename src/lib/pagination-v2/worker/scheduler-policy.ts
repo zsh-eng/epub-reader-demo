@@ -12,6 +12,7 @@ export function getCoalesceKey(command: PaginationCommand): string | null {
     case "nextSpread":
     case "prevSpread":
     case "goToPage":
+    case "goToAnchor":
     case "goToChapter":
     case "goToTarget":
     case "locateAnchors":
@@ -35,6 +36,7 @@ export const NAVIGATION_COMMANDS = new Set<PaginationCommand["type"]>([
   "nextSpread",
   "prevSpread",
   "goToPage",
+  "goToAnchor",
   "goToChapter",
   "goToTarget",
 ]);

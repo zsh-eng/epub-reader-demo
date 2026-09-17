@@ -90,6 +90,7 @@ export type ContentAnchor =
     };
 
 export type SpreadIntent =
+  | { kind: "history"; targetIndex: number }
   | {
       kind: "linear";
       direction: "forward" | "backward";
@@ -101,6 +102,7 @@ export type SpreadIntent =
         | "toc"
         | "search"
         | "highlight"
+        | "note"
         | "handoff"
         | "internal-link"
         | "scrubber";

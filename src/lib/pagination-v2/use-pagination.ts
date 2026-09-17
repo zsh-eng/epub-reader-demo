@@ -130,6 +130,10 @@ export interface UsePaginationResult {
   nextSpread: () => void;
   prevSpread: () => void;
   goToPage: (page: number, options: { intent: SpreadIntent }) => void;
+  goToAnchor: (
+    anchor: ContentAnchor,
+    options: { intent: SpreadIntent },
+  ) => void;
   goToChapter: (
     chapterIndex: number,
     options: { intent: SpreadIntent },
@@ -158,6 +162,9 @@ export interface UsePaginationResult {
 }
 
 export interface UsePaginationOptions {
+  /** Reacquire the worker session when its book or source changes. */
+  sessionKey?: string;
+  onLocationResolved?: (anchor: ContentAnchor, intent: SpreadIntent) => void;
   paginationConfig: PaginationConfig;
   spreadConfig?: SpreadConfig;
 }
@@ -173,7 +180,11 @@ export function usePagination(
     {},
   );
   const anchorRequest = useRef(0);
-  const { paginationConfig, spreadConfig = DEFAULT_SPREAD_CONFIG } = options;
+  const {
+    paginationConfig,
+    spreadConfig = DEFAULT_SPREAD_CONFIG,
+    sessionKey,
+  } = options;
 
   const [spreadWindow, setSpreadWindow] = useState<ResolvedSpreadWindow | null>(
     null,
@@ -184,6 +195,7 @@ export function usePagination(
     Map<number, number>
   >(new Map());
 
+  const workerSessionKeyRef = useRef(sessionKey);
   const workerSessionRef = useRef<PaginationWorkerSession | null>(null);
   const [sessionGeneration, setSessionGeneration] = useState<number | null>(
     null,
@@ -260,9 +272,19 @@ export function usePagination(
     event: PaginationEvent,
     mainHandlerEnteredAtEpochMs: number,
   ) => {
+    // A route change can commit before the previous worker session is released.
+    if (workerSessionKeyRef.current !== sessionKey) return;
     // Discard events from previous layout epochs.
     if ("epoch" in event && event.epoch < currentEpochRef.current) return;
     if ("epoch" in event) currentEpochRef.current = event.epoch;
+
+    if (
+      event.type === "partialReady" ||
+      event.type === "ready" ||
+      event.type === "pageContent"
+    ) {
+      options.onLocationResolved?.(event.anchor, event.intent);
+    }
 
     switch (event.type) {
       case "anchorsLocated":
@@ -419,6 +441,10 @@ export function usePagination(
   const onWorkerEvent = useEffectEvent(handleEvent);
 
   useEffect(() => {
+    setSpreadWindow(null);
+    setStatus("idle");
+    prevPaginationConfigRef.current = null;
+    prevSpreadConfigRef.current = null;
     const session = acquirePaginationWorkerSession({
       onEvent: (event, mainHandlerEnteredAtEpochMs) => {
         onWorkerEvent(event, mainHandlerEnteredAtEpochMs);
@@ -433,6 +459,7 @@ export function usePagination(
         console.error("[pagination worker error]", event);
       },
     });
+    workerSessionKeyRef.current = sessionKey;
     workerSessionRef.current = session;
     setSessionGeneration(session.sessionGeneration);
     workerStartupSpanRef.current = startReaderTraceSpan(
@@ -469,7 +496,7 @@ export function usePagination(
         setSessionGeneration(null);
       }
     };
-  }, []);
+  }, [sessionKey]);
 
   // -------------------------------------------------------------------------
   // Config updates
@@ -592,6 +619,13 @@ export function usePagination(
     postCommand({ type: "prevSpread", intent: BACKWARD_LINEAR_INTENT });
   }, [postCommand]);
 
+  const goToAnchor = useCallback(
+    (anchor: ContentAnchor, opts: { intent: SpreadIntent }) => {
+      postCommand({ type: "goToAnchor", anchor, intent: opts.intent });
+    },
+    [postCommand],
+  );
+
   const goToPage = useCallback(
     (p: number, options: { intent: SpreadIntent }) => {
       postCommand({
@@ -643,7 +677,8 @@ export function usePagination(
   );
 
   return {
-    sessionGeneration,
+    sessionGeneration:
+      workerSessionKeyRef.current === sessionKey ? sessionGeneration : null,
     spread,
     spreadWindow,
     status,
@@ -651,6 +686,7 @@ export function usePagination(
     nextSpread,
     prevSpread,
     goToPage,
+    goToAnchor,
     goToChapter,
     goToTarget,
     locateAnchors,
