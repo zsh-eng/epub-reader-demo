@@ -10,6 +10,11 @@ import {
   saveReaderJumpHistory,
 } from "../data/jump-history-storage";
 
+import {
+  QUIET_HISTORY,
+  updateHistoryPresentation,
+} from "../history-presentation";
+
 /** A book-scoped controller. Worker results update it directly, before React
  * can batch renders, so intermediate confirmed jumps are not lost.
  */
@@ -27,7 +32,18 @@ export function useReaderJumpHistory(bookId: string, sourceFileId: string) {
     }
     const controller = new ReaderJumpHistoryController(initial);
     const listeners = new Set<() => void>();
+    let snapshot = { history: initial, presentation: QUIET_HISTORY };
+    const notify = () => listeners.forEach((listener) => listener());
     return {
+      getSnapshot: () => snapshot,
+      setExpanded(expanded: boolean) {
+        if (snapshot.presentation.expanded === expanded) return;
+        snapshot = {
+          ...snapshot,
+          presentation: { ...snapshot.presentation, expanded },
+        };
+        notify();
+      },
       controller,
       initialAnchor:
         controller.getSnapshot().entries[controller.getSnapshot().cursor]
@@ -42,24 +58,43 @@ export function useReaderJumpHistory(bookId: string, sourceFileId: string) {
         if (!bookId || !sourceFileId) return;
         const previous = controller.getSnapshot();
         const next = controller.record(anchor, intent);
-        if (next === previous) return;
-        try {
-          saveReaderJumpHistory(
-            getRuntimeStorage(),
-            bookId,
-            sourceFileId,
-            next,
-          );
-        } catch (error) {
-          console.warn("Could not save Reader jump history", error);
-        }
-        listeners.forEach((listener) => listener());
+        const presentation = updateHistoryPresentation(
+          snapshot.presentation,
+          previous,
+          next,
+          intent,
+        );
+        if (next === previous && presentation === snapshot.presentation) return;
+        snapshot = { history: next, presentation };
+        if (next !== previous)
+          try {
+            saveReaderJumpHistory(
+              getRuntimeStorage(),
+              bookId,
+              sourceFileId,
+              next,
+            );
+          } catch (error) {
+            console.warn("Could not save Reader jump history", error);
+          }
+        notify();
       },
     };
   }, [bookId, sourceFileId]);
-  const state = useSyncExternalStore(
-    owner.subscribe,
-    owner.controller.getSnapshot,
+  const snapshot = useSyncExternalStore(owner.subscribe, owner.getSnapshot);
+  const select = useCallback(
+    (
+      targetIndex: number,
+      navigate: (
+        anchor: ContentAnchor,
+        options: { intent: SpreadIntent },
+      ) => void,
+    ) => {
+      const target = owner.controller.getSnapshot().entries[targetIndex];
+      if (target)
+        navigate(target.anchor, { intent: { kind: "history", targetIndex } });
+    },
+    [owner],
   );
   const go = useCallback(
     (
@@ -75,7 +110,10 @@ export function useReaderJumpHistory(bookId: string, sourceFileId: string) {
     [owner],
   );
   return {
-    state,
+    state: snapshot.history,
+    presentation: snapshot.presentation,
+    setExpanded: owner.setExpanded,
+    select,
     initialAnchor: owner.initialAnchor,
     record: owner.record,
     endGroup: owner.controller.endGroup,

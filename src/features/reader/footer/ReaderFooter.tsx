@@ -56,7 +56,7 @@ export interface ReaderFooterProps {
   statusPrompt?: ReaderStatusAction;
   isLoading?: boolean;
   showPageNumbers?: boolean;
-  /** Alternate progress view for the history playground. */
+  /** Progress content shared by the Reader and debug playground. */
   pageIndicator?: ReactNode;
 }
 
@@ -295,7 +295,9 @@ export function ReaderFooter({
               </div>
             </div>
             <div className="relative">
-              {pageIndicator ?? (
+              {showPageNumbers && !isLoading && pageIndicator ? (
+                pageIndicator
+              ) : (
                 <FooterPageIndicator
                   showPageNumbers={showPageNumbers}
                   currentPage={detailCurrentPage}

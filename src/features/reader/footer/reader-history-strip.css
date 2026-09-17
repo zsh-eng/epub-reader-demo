@@ -5,7 +5,8 @@
   height: 44px;
   max-width: 40rem;
   margin-inline: auto;
-  line-height: 1;
+  /* Match the original footer line height in both modes. */
+  line-height: 1.5;
 }
 .history-strip-focus,
 .history-strip-track {
@@ -75,7 +76,6 @@
   bottom: -1px;
   width: 7px;
   height: 3px;
-  background: var(--yellow-secondary);
   border-radius: 1px;
 }
 .history-strip-quiet {

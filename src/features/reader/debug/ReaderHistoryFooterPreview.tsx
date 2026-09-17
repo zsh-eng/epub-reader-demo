@@ -8,7 +8,7 @@ import type {
   PlaygroundAction,
   PlaygroundSession,
 } from "./jump-history-playground";
-import { ReaderHistoryStrip } from "./ReaderHistoryStrip";
+import { ReaderHistoryStrip } from "../footer/ReaderHistoryStrip";
 
 const TOTAL = 1200;
 const STARTS = [1, 75, 125, 200, 350, 600, 900];
@@ -73,6 +73,7 @@ export function ReaderHistoryFooterPreview({
     slot: firstSlot + index,
     page: samplePage(entry.anchor.blockId),
     kind: entry.kind,
+    highlightColor: "var(--yellow-secondary)",
     deviceType: SAMPLE_HANDOFF_DEVICES[entry.anchor.blockId],
   }));
   const page = preview ? samplePage(preview) : entries[snapshot.cursor].page;

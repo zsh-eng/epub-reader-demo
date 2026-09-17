@@ -19,6 +19,8 @@ import {
   type ReaderNavigationActions,
 } from "./use-reader-navigation-actions";
 
+const EMPTY_HISTORY_PAGES: Record<string, number | null> = {};
+
 export interface UseReaderSessionOptions {
   bookId?: string;
   viewport: { width: number; height: number };
@@ -61,6 +63,7 @@ export interface ReaderSessionNavigationState {
 
 export interface ReaderSessionPaginationState {
   anchorPages: Record<string, number | null>;
+  historyAnchorPages: Record<string, number | null>;
   spread: ResolvedSpread | null;
   spreadWindow: ResolvedSpreadWindow | null;
   status: PaginationStatus;
@@ -69,6 +72,9 @@ export interface ReaderSessionPaginationState {
 }
 
 export interface ReaderSessionState {
+  historyPresentation: ReturnType<
+    typeof useReaderCore
+  >["jumpHistory"]["presentation"];
   jumpHistory: ReturnType<typeof useReaderCore>["jumpHistory"]["state"];
   status: ReaderSessionStatus;
   book: Book | null;
@@ -87,6 +93,8 @@ export interface ReaderSessionResources {
 }
 
 export interface ReaderSessionActions {
+  selectHistoryVisit: (index: number) => void;
+  setHistoryExpanded: (expanded: boolean) => void;
   goBackInHistory: () => void;
   goForwardInHistory: () => void;
   endHistoryGroup: () => void;
@@ -165,6 +173,7 @@ export function useReaderSession(
     return {
       status,
       jumpHistory: core.jumpHistory.state,
+      historyPresentation: core.jumpHistory.presentation,
       book: core.book,
       settings: core.settings,
       highlights: core.bookHighlights,
@@ -173,6 +182,8 @@ export function useReaderSession(
       },
       pagination: {
         anchorPages: core.pagination.anchorPages,
+        historyAnchorPages:
+          core.pagination.anchorPagesByScope.history ?? EMPTY_HISTORY_PAGES,
         spread: core.pagination.spread,
         spreadWindow: core.pagination.spreadWindow,
         status: core.pagination.status,
@@ -195,6 +206,8 @@ export function useReaderSession(
     };
   }, [
     core.jumpHistory.state,
+    core.jumpHistory.presentation,
+    core.pagination.anchorPagesByScope,
     core.book,
     core.bookHighlights,
     core.chapterEntries,
@@ -226,6 +239,9 @@ export function useReaderSession(
 
   const actions = useMemo<ReaderSessionActions>(
     () => ({
+      selectHistoryVisit: (index) =>
+        core.jumpHistory.select(index, core.pagination.goToAnchor),
+      setHistoryExpanded: core.jumpHistory.setExpanded,
       goBackInHistory: () =>
         core.jumpHistory.go("back", core.pagination.goToAnchor),
       goForwardInHistory: () =>

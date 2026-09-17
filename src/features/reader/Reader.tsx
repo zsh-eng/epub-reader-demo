@@ -25,6 +25,7 @@ import { ReaderStateScreen } from "./ReaderStateScreen";
 import { SpreadStage } from "./SpreadStage";
 import { ReaderProgressPeek } from "./footer/ReaderProgressPeek";
 import { ReaderFooter } from "./footer";
+import { ReaderHistoryPageIndicator } from "./footer/ReaderHistoryPageIndicator";
 import { ReaderChromeAccessory } from "./ReaderChromeAccessory";
 import { usePaginatedReaderLayout } from "./hooks/use-paginated-reader-layout";
 import { useReaderAnnotations } from "./hooks/use-reader-annotations";
@@ -494,6 +495,15 @@ export function Reader() {
 
               {/* Keep both chrome edges visible while pagination prepares. */}
               <ReaderFooter
+                pageIndicator={
+                  <ReaderHistoryPageIndicator
+                    key={book.id}
+                    state={sessionState}
+                    locateAnchors={sessionResources.locateAnchors}
+                    onSelect={sessionActions.selectHistoryVisit}
+                    onExpandedChange={sessionActions.setHistoryExpanded}
+                  />
+                }
                 isMobile={isMobile}
                 chromeVisible={
                   noteViewportHeight === null &&

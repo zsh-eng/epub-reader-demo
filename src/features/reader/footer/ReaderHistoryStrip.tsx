@@ -10,7 +10,7 @@ import {
 import { motion, useReducedMotion } from "motion/react";
 import { useLayoutEffect, useRef } from "react";
 import type { DeviceType } from "@/types/session";
-import { FooterPageIndicator } from "../footer/FooterPageIndicator";
+import { FooterPageIndicator } from "./FooterPageIndicator";
 import type { ReaderVisitKind } from "../jump-history";
 import "./reader-history-strip.css";
 
@@ -40,9 +40,10 @@ const VISIT_LABELS: Record<ReaderVisitKind, string> = {
 
 export interface HistoryStripEntry {
   slot: number;
-  page: number;
+  page: number | null;
   kind: ReaderVisitKind;
   deviceType?: DeviceType;
+  highlightColor?: string;
 }
 interface ReaderHistoryStripProps {
   entries: HistoryStripEntry[];
@@ -105,7 +106,7 @@ export function ReaderHistoryStrip({
         event.preventDefault();
         const next = cursor + direction;
         event.stopPropagation();
-        if (entries[next]) {
+        if (entries[next]?.page != null) {
           moveFocus.current = true;
           onSelect(next, false);
         }
@@ -137,7 +138,7 @@ export function ReaderHistoryStrip({
                 ? DEVICE_ICONS[entry.deviceType]
                 : VISIT_ICONS[entry.kind];
             const current = index === cursor;
-            const label = `${current ? "Current" : index < cursor ? "Earlier visit:" : "Later visit:"} page ${entry.page}, ${VISIT_LABELS[entry.kind]}${entry.kind === "handoff" && entry.deviceType ? `, ${entry.deviceType}` : ""}`;
+            const label = `${current ? "Current" : index < cursor ? "Earlier visit:" : "Later visit:"} page ${entry.page ?? "unavailable"}, ${VISIT_LABELS[entry.kind]}${entry.kind === "handoff" && entry.deviceType ? `, ${entry.deviceType}` : ""}`;
             return (
               <button
                 key={entry.slot}
@@ -152,6 +153,7 @@ export function ReaderHistoryStrip({
                 tabIndex={Math.abs(index - cursor) <= 1 ? 0 : -1}
                 data-slot={entry.slot}
                 data-kind={entry.kind}
+                disabled={entry.page === null}
                 onClick={(event) => {
                   moveFocus.current = true;
                   if (current) onExpandedChange(false, event.detail !== 0);
@@ -162,12 +164,17 @@ export function ReaderHistoryStrip({
                   {Icon && (
                     <span className="history-strip-icon" aria-hidden="true">
                       <Icon size={12} strokeWidth={1.7} />
-                      {entry.kind === "highlight" && (
-                        <span className="history-strip-highlight-tip" />
+                      {entry.kind === "highlight" && entry.highlightColor && (
+                        <span
+                          className="history-strip-highlight-tip"
+                          style={{ background: entry.highlightColor }}
+                        />
                       )}
                     </span>
                   )}
-                  <span className="history-strip-number">{entry.page}</span>
+                  <span className="history-strip-number">
+                    {entry.page ?? "—"}
+                  </span>
                 </span>
               </button>
             );
