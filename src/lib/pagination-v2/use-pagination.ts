@@ -116,8 +116,14 @@ function getWorkerTraceDetails(
 // Types
 // ---------------------------------------------------------------------------
 
+const EMPTY_ANCHOR_PAGES: Record<string, number | null> = {};
+
 export interface UsePaginationResult {
-  locateAnchors: (anchors: { id: string; anchor: ContentAnchor }[]) => void;
+  locateAnchors: (
+    anchors: { id: string; anchor: ContentAnchor }[],
+    scope?: string,
+  ) => void;
+  anchorPagesByScope: Record<string, Record<string, number | null>>;
   anchorPages: Record<string, number | null>;
   /** Available once this hook owns a worker session; changes on reacquisition. */
   sessionGeneration: number | null;
@@ -176,10 +182,11 @@ export interface UsePaginationOptions {
 export function usePagination(
   options: UsePaginationOptions,
 ): UsePaginationResult {
-  const [anchorPages, setAnchorPages] = useState<Record<string, number | null>>(
-    {},
-  );
+  const [anchorPagesByScope, setAnchorPagesByScope] = useState<
+    Record<string, Record<string, number | null>>
+  >({});
   const anchorRequest = useRef(0);
+  const latestAnchorRequests = useRef(new Map<string, number>());
   const {
     paginationConfig,
     spreadConfig = DEFAULT_SPREAD_CONFIG,
@@ -288,8 +295,11 @@ export function usePagination(
 
     switch (event.type) {
       case "anchorsLocated":
-        if (event.requestId === anchorRequest.current)
-          setAnchorPages(event.pages);
+        if (event.requestId === latestAnchorRequests.current.get(event.scope))
+          setAnchorPagesByScope((previous) => ({
+            ...previous,
+            [event.scope]: event.pages,
+          }));
         return;
       case "trace":
         if (event.name === "worker-fonts-ready") {
@@ -442,6 +452,8 @@ export function usePagination(
 
   useEffect(() => {
     setSpreadWindow(null);
+    setAnchorPagesByScope({});
+    latestAnchorRequests.current.clear();
     setStatus("idle");
     prevPaginationConfigRef.current = null;
     prevSpreadConfigRef.current = null;
@@ -544,7 +556,8 @@ export function usePagination(
       const currentPaginationConfig = paginationConfigRef.current;
       const currentSpreadConfig = spreadConfigRef.current;
       currentEpochRef.current = 0;
-      setAnchorPages({});
+      setAnchorPagesByScope({});
+      latestAnchorRequests.current.clear();
       anchorRequest.current++;
       expectedChapterCountRef.current = opts.totalChapters;
       prevPaginationConfigRef.current = currentPaginationConfig;
@@ -666,11 +679,14 @@ export function usePagination(
   );
 
   const locateAnchors = useCallback(
-    (anchors: { id: string; anchor: ContentAnchor }[]) => {
+    (anchors: { id: string; anchor: ContentAnchor }[], scope = "default") => {
+      const requestId = ++anchorRequest.current;
+      latestAnchorRequests.current.set(scope, requestId);
       workerSessionRef.current?.postCommand({
         type: "locateAnchors",
         anchors,
-        requestId: ++anchorRequest.current,
+        scope,
+        requestId,
       });
     },
     [],
@@ -690,7 +706,8 @@ export function usePagination(
     goToChapter,
     goToTarget,
     locateAnchors,
-    anchorPages,
+    anchorPages: anchorPagesByScope.default ?? EMPTY_ANCHOR_PAGES,
+    anchorPagesByScope,
     init,
     addChapter,
     updateChapter,

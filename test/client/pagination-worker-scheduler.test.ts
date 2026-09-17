@@ -320,3 +320,19 @@ describe("PaginationJobScheduler", () => {
     expect(runAll(harness)).toEqual([]);
   });
 });
+
+it("coalesces page lookups within each consumer without dropping another consumer", () => {
+  const lookup = (
+    scope: string,
+    requestId: number,
+  ): QueuedPaginationCommand => ({
+    command: { type: "locateAnchors", scope, requestId, anchors: [] },
+  });
+  const note = lookup("default", 1);
+  const oldHistory = lookup("history", 2);
+  const newHistory = lookup("history", 3);
+  expect(coalesceQueuedCommands([note, oldHistory, newHistory])).toEqual([
+    note,
+    newHistory,
+  ]);
+});

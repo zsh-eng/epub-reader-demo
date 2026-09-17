@@ -15,8 +15,9 @@ export function getCoalesceKey(command: PaginationCommand): string | null {
     case "goToAnchor":
     case "goToChapter":
     case "goToTarget":
-    case "locateAnchors":
       return command.type;
+    case "locateAnchors":
+      return `${command.type}:${command.scope}`;
     case "updateChapter":
       return `${command.type}:${command.chapterIndex}`;
     default:

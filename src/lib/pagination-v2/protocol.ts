@@ -89,6 +89,7 @@ export interface GoToTargetCommand {
 
 export interface LocateAnchorsCommand {
   type: "locateAnchors";
+  scope: string;
   anchors: { id: string; anchor: ContentAnchor }[];
   requestId: number;
 }
@@ -193,6 +194,7 @@ export interface TraceEvent {
 export type PaginationEvent =
   | {
       type: "anchorsLocated";
+      scope: string;
       requestId: number;
       pages: Record<string, number | null>;
     }

@@ -1481,6 +1481,7 @@ it("locates a batch of notebook anchors without navigating the reader", () => {
   events.length = 0;
   runCommand(engine, {
     type: "locateAnchors",
+    scope: "default",
     requestId: 7,
     anchors: [
       {
@@ -1494,7 +1495,12 @@ it("locates a batch of notebook anchors without navigating the reader", () => {
     ],
   });
   expect(events).toEqual([
-    { type: "anchorsLocated", requestId: 7, pages: { note: 1, missing: null } },
+    {
+      type: "anchorsLocated",
+      scope: "default",
+      requestId: 7,
+      pages: { note: 1, missing: null },
+    },
   ]);
 });
 

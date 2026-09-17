@@ -45,6 +45,7 @@ import {
 export type EnginePaginationEvent =
   | {
       type: "anchorsLocated";
+      scope: string;
       requestId: number;
       pages: Record<string, number | null>;
     }
@@ -197,6 +198,7 @@ export class PaginationEngine {
           );
           this.emit({
             type: "anchorsLocated",
+            scope: cmd.scope,
             requestId: cmd.requestId,
             pages,
           });

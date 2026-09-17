@@ -338,3 +338,40 @@ it("keeps histories isolated when the mounted Reader changes books", () => {
   expect(reader.result.current.pagination.spread?.currentPage).toBe(3);
   expect(initMessages()).toHaveLength(3);
 });
+
+it("keeps notebook and history page lookups independent", () => {
+  const reader = renderHook(() => useReader());
+  act(() => {
+    reader.result.current.locateAnchors([
+      {
+        id: "note",
+        anchor: { type: "block", chapterIndex: 0, blockId: "page-1" },
+      },
+    ]);
+    reader.result.current.locateAnchors(
+      [
+        {
+          id: "visit",
+          anchor: { type: "block", chapterIndex: 0, blockId: "page-3" },
+        },
+      ],
+      "history",
+    );
+  });
+  expect(reader.result.current.anchorPages).toEqual({ note: 2 });
+  expect(reader.result.current.anchorPagesByScope.history).toEqual({
+    visit: 4,
+  });
+  act(() =>
+    reader.result.current.locateAnchors([
+      {
+        id: "note",
+        anchor: { type: "block", chapterIndex: 0, blockId: "page-2" },
+      },
+    ]),
+  );
+  expect(reader.result.current.anchorPages).toEqual({ note: 3 });
+  expect(reader.result.current.anchorPagesByScope.history).toEqual({
+    visit: 4,
+  });
+});
