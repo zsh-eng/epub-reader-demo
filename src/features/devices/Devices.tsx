@@ -67,11 +67,11 @@ function SessionItem({
         />
       </div>
       <div className="flex-1 min-w-0">
-        <h3 className="font-medium text-foreground truncate text-sm text-left">
+        <h3 className="text-balance font-medium text-foreground break-words text-sm text-left">
           {title}
         </h3>
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs text-muted-foreground truncate mt-0.5 text-left">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="text-xs text-muted-foreground break-words mt-0.5 text-left">
             {subtitle}
           </p>
           <p
@@ -122,7 +122,7 @@ export function Devices() {
         <header className="mb-8">
           <div className="grid grid-cols-[2rem_1fr_2rem] items-center gap-3 md:block">
             <MobileBackToLibrary />
-            <h1 className="text-center text-2xl font-bold tracking-tight text-foreground md:text-left">
+            <h1 className="text-balance text-center text-2xl font-bold tracking-tight text-foreground md:text-left">
               Devices
             </h1>
             <div className="size-8 md:hidden" aria-hidden="true" />
@@ -147,7 +147,7 @@ export function Devices() {
         {(isAuthLoading || isSessionsLoading) && (
           <div className="space-y-8">
             <div>
-              <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
+              <h2 className="text-balance text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
                 This Device
               </h2>
               <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
@@ -163,7 +163,7 @@ export function Devices() {
             {/* Current Session */}
             {currentSession && (
               <section>
-                <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
+                <h2 className="text-balance text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
                   This Device
                 </h2>
                 <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
@@ -175,7 +175,7 @@ export function Devices() {
             {/* Other Active Sessions */}
             {otherSessions.length > 0 && (
               <section>
-                <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
+                <h2 className="text-balance text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
                   Other Devices
                 </h2>
                 <Card className="overflow-hidden px-2 py-2 bg-background rounded-3xl shadow-none gap-0">

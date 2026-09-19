@@ -326,7 +326,7 @@ function SessionsHeader() {
     <header className="px-4 pt-10 pb-5 text-center md:pt-14 md:pb-7">
       <div className="grid grid-cols-[2rem_minmax(0,1fr)_2rem] items-center gap-3 md:block">
         <MobileBackToLibrary />
-        <h1 className="font-serif text-2xl font-medium leading-none tracking-tight md:text-6xl">
+        <h1 className="text-balance font-serif text-2xl font-medium leading-none tracking-tight md:text-6xl">
           Sessions
         </h1>
         <div className="size-8 md:hidden" aria-hidden="true" />
@@ -377,7 +377,7 @@ function SessionsEmptyState({
             <BookOpenText className="size-7 text-muted-foreground" />
           </span>
         </div>
-        <h2 className="font-serif text-3xl font-medium tracking-tight md:text-4xl">
+        <h2 className="text-balance font-serif text-3xl font-medium tracking-tight md:text-4xl">
           Find your next book
         </h2>
         <p className="mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
@@ -591,7 +591,7 @@ export function ReadingSessions() {
           <section className="rounded-3xl border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
-                <h2 className="font-serif text-2xl font-medium tracking-tight">
+                <h2 className="text-balance font-serif text-2xl font-medium tracking-tight">
                   Reading over time
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -610,7 +610,7 @@ export function ReadingSessions() {
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="rounded-3xl border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
               <div className="mb-5">
-                <h2 className="font-serif text-2xl font-medium tracking-tight">
+                <h2 className="text-balance font-serif text-2xl font-medium tracking-tight">
                   Time with each book
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -636,7 +636,7 @@ export function ReadingSessions() {
                             <img
                               src={coverUrl}
                               alt=""
-                              className="size-full object-cover"
+                              className="image-outline size-full object-cover"
                             />
                           ) : (
                             <BookOpenText
@@ -647,15 +647,15 @@ export function ReadingSessions() {
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="flex items-baseline justify-between gap-3">
-                            <span className="truncate text-sm font-medium">
+                            <span className="break-words text-sm font-medium">
                               {book.title}
                             </span>
-                            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                            <span className="shrink-0 text-xs font-numeric tabular-nums text-muted-foreground">
                               {formatReadingDuration(book.activeMs)}
                             </span>
                           </span>
                           {book.author && (
-                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                            <span className="mt-0.5 block break-words text-xs text-muted-foreground">
                               {book.author}
                             </span>
                           )}
@@ -679,7 +679,7 @@ export function ReadingSessions() {
 
             <section className="flex min-h-96 flex-col rounded-3xl border bg-card p-5 text-card-foreground shadow-sm sm:p-6">
               <div className="mb-5">
-                <h2 className="font-serif text-2xl font-medium tracking-tight">
+                <h2 className="text-balance font-serif text-2xl font-medium tracking-tight">
                   Recent reading
                 </h2>
                 <p className="mt-1 text-sm text-muted-foreground">
@@ -696,7 +696,7 @@ export function ReadingSessions() {
                         className="flex items-center justify-between gap-4 rounded-xl px-2 py-3 outline-none transition-[background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
                       >
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">
+                          <span className="block break-words text-sm font-medium">
                             {session.bookTitle}
                           </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -705,7 +705,7 @@ export function ReadingSessions() {
                             })}
                           </span>
                         </span>
-                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                        <span className="shrink-0 text-xs font-numeric tabular-nums text-muted-foreground">
                           {formatReadingDuration(session.activeMs)}
                         </span>
                       </Link>

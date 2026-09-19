@@ -45,7 +45,7 @@ function BookCoverVisual({
             src={coverUrl}
             alt={`Cover of ${title}`}
             draggable={false}
-            className="pointer-events-none absolute inset-0 block h-full w-full select-none object-cover"
+            className="image-outline pointer-events-none absolute inset-0 block h-full w-full select-none object-cover"
             loading="eager"
           />
         ) : blurHash ? (

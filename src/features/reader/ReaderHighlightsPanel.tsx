@@ -45,7 +45,7 @@ export function ReaderHighlightsPanel({
     >
       <header className="flex items-center justify-between px-4 py-2">
         <h2 className="text-sm font-medium">Highlights</h2>
-        <span className="text-xs tabular-nums text-muted-foreground">
+        <span className="text-xs font-numeric tabular-nums text-muted-foreground">
           {count}
         </span>
       </header>

@@ -234,7 +234,7 @@ export function Library() {
         <div className="fixed inset-0 z-50 bg-primary/10 backdrop-blur-sm border-4 border-primary border-dashed m-4 rounded-xl flex items-center justify-center pointer-events-none">
           <div className="text-center bg-background/80 p-8 rounded-2xl shadow-xl backdrop-blur-md">
             <Upload className="h-16 w-16 text-primary mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-primary mb-2">
+            <h3 className="text-balance text-2xl font-bold text-primary mb-2">
               Drop EPUB to Add
             </h3>
             <p className="text-muted-foreground">
@@ -305,7 +305,7 @@ export function Library() {
               {/* Continue Reading Section */}
               {continueReadingBooks.length > 0 && (
                 <section>
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
+                  <h2 className="text-balance text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
                     Continue Reading
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
@@ -334,7 +334,7 @@ export function Library() {
               {/* All Books Section */}
               {allBooks.length > 0 && (
                 <section>
-                  <h2 className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
+                  <h2 className="text-balance text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
                     All Books
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
@@ -381,7 +381,7 @@ export function Library() {
               </div>
             </div>
 
-            <h3 className="font-serif italic text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl text-foreground mb-2 md:mb-3 lg:mb-4">
+            <h3 className="text-balance font-serif italic text-xl sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl 2xl:text-6xl text-foreground mb-2 md:mb-3 lg:mb-4">
               {searchQuery
                 ? "Nothing on these shelves"
                 : "Your library is empty"}

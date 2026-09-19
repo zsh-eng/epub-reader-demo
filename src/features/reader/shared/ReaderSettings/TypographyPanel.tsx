@@ -100,7 +100,7 @@ export function TypographyPanel({
   }, []);
 
   return (
-    <div className="space-y-5 pb-2">
+    <div className="space-y-6 pb-2">
       {section === "layout" && (
         <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
           <h4 className={sectionLabelClassName}>Reading</h4>
@@ -347,7 +347,7 @@ export function TypographyPanel({
               <Minus className="h-4 w-4" />
               <span className="sr-only">Decrease font size</span>
             </Button>
-            <span className="inline-flex min-w-[4rem] items-baseline justify-center text-sm font-medium uppercase tracking-[0.12em] text-foreground tabular-nums">
+            <span className="inline-flex min-w-[4rem] items-baseline justify-center text-sm font-medium uppercase tracking-[0.12em] text-foreground font-numeric tabular-nums">
               <span className="inline-flex w-[2ch] justify-center">
                 <AnimatedNumber value={settings.fontSize} variant="pop" />
               </span>

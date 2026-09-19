@@ -89,7 +89,7 @@ function ContextMenuSubContent({
     <ContextMenuPrimitive.Popup
       data-slot="context-menu-sub-content"
       className={cn(
-        "bg-popover text-popover-foreground transition-[opacity,transform,filter] duration-150 ease-out data-[ending-style]:opacity-0 data-[ending-style]:[transform:scale(0.98)] data-[ending-style]:blur-[4px] motion-reduce:transition-none z-50 min-w-[8rem] origin-(--transform-origin) overflow-hidden rounded-md border p-1 shadow-lg",
+        "bg-popover text-popover-foreground transition-[opacity,transform,filter] duration-150 ease-out data-[ending-style]:opacity-0 data-[ending-style]:[transform:scale(0.98)] data-[ending-style]:blur-[4px] motion-reduce:transition-none z-50 min-w-[8rem] origin-(--transform-origin) overflow-hidden rounded-[calc(var(--radius-sm)+5px)] border p-1 shadow-lg",
         className,
       )}
       {...props}
@@ -108,7 +108,7 @@ function ContextMenuContent({
       <ContextMenuPrimitive.Popup
         data-slot="context-menu-content"
         className={cn(
-          "bg-popover text-popover-foreground transition-[opacity,transform,filter] duration-150 ease-out data-[ending-style]:opacity-0 data-[ending-style]:[transform:scale(0.98)] data-[ending-style]:blur-[4px] motion-reduce:transition-none z-50 max-h-(--available-height) min-w-[8rem] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md border p-1 shadow-md",
+          "bg-popover text-popover-foreground transition-[opacity,transform,filter] duration-150 ease-out data-[ending-style]:opacity-0 data-[ending-style]:[transform:scale(0.98)] data-[ending-style]:blur-[4px] motion-reduce:transition-none z-50 max-h-(--available-height) min-w-[8rem] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-[calc(var(--radius-sm)+5px)] border p-1 shadow-md",
           className,
         )}
         {...props}

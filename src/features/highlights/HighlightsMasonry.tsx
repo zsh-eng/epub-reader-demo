@@ -703,7 +703,7 @@ function BookIndexItem({
         )}
       >
         {coverUrl ? (
-          <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+          <img src={coverUrl} alt="" className="image-outline h-full w-full object-cover" />
         ) : (
           <span className="flex h-full w-full items-center justify-center border bg-secondary">
             <BookOpenText
@@ -769,7 +769,7 @@ function BookIndexPanel({
     <aside
       style={style}
       className={cn(
-        "max-h-[calc(100svh-7rem)] flex-col overflow-hidden rounded-2xl border bg-card p-2 shadow-xl",
+        "max-h-[calc(100svh-7rem)] flex-col overflow-hidden rounded-[calc(var(--radius-xl)+9px)] border bg-card p-2 shadow-xl",
         className,
       )}
     >
@@ -1046,7 +1046,7 @@ function BookCoverTile({
         <img
           src={coverUrl}
           alt={`Cover of ${group.book.title}`}
-          className="size-full object-cover transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.015]"
+          className="image-outline size-full object-cover transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.015]"
         />
       ) : (
         <div className="flex size-full items-center justify-center bg-secondary">

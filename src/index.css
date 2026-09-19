@@ -248,6 +248,11 @@
 }
 
 @layer components {
+  .image-outline {
+    border-radius: inherit;
+    outline: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    outline-offset: -1px;
+  }
   [data-slot="scroll-area-viewport"][data-has-overflow-y] {
     --scroll-area-fade-size: 2rem;
     -webkit-mask-image: linear-gradient(

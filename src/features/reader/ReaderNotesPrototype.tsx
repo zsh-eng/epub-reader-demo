@@ -538,7 +538,7 @@ export function ReaderNotesPrototype({
         <header className="flex items-center gap-3 px-4 py-2">
           <h2 className="flex flex-1 items-center gap-2 text-sm font-medium">
             <span>Notebook</span>{" "}
-            <span className="text-xs font-normal text-muted-foreground tabular-nums">
+            <span className="text-xs font-normal text-muted-foreground font-numeric tabular-nums">
               {entries.length}
             </span>
           </h2>

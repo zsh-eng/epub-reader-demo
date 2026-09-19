@@ -40,7 +40,7 @@ export function CircularBookCover({
           alt=""
           aria-hidden="true"
           draggable={false}
-          className="pointer-events-none size-full select-none object-cover"
+          className="image-outline pointer-events-none size-full select-none object-cover"
         />
       ) : (
         <BookOpenText

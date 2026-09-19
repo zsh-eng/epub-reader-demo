@@ -42,7 +42,7 @@ export function FooterHandoffPrompt({ prompt }: FooterHandoffPromptProps) {
             </span>
           </span>
 
-          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-[11px] font-medium tabular-nums text-foreground transition-colors group-hover:bg-background">
+          <span className="flex shrink-0 items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-[11px] font-medium font-numeric tabular-nums text-foreground transition-colors group-hover:bg-background">
             <span>p.</span>
             <span className="relative inline-grid min-w-[2.4em] overflow-hidden text-right">
               <AnimatePresence initial={false} mode="popLayout">
@@ -56,7 +56,7 @@ export function FooterHandoffPrompt({ prompt }: FooterHandoffPromptProps) {
                     y: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
                     filter: { duration: 0.14, ease: "easeOut" },
                   }}
-                  className="col-start-1 row-start-1 tabular-nums"
+                  className="col-start-1 row-start-1 font-numeric tabular-nums"
                 >
                   {prompt.targetPage}
                 </motion.span>

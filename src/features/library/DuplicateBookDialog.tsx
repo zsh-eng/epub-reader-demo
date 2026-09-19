@@ -58,7 +58,7 @@ export function DuplicateBookDialog({
               <img
                 src={coverUrl}
                 alt={existingBook.title}
-                className="h-24 rounded-md shadow-md"
+                className="image-outline h-24 rounded-md shadow-md"
               />
             </div>
           ) : isLoadingCover ? (
@@ -68,10 +68,10 @@ export function DuplicateBookDialog({
           ) : null}
 
           <div className="flex flex-col justify-center min-w-0">
-            <h3 className="font-semibold text-lg line-clamp-2">
+            <h3 className="text-balance font-semibold text-lg break-words">
               {existingBook.title}
             </h3>
-            <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+            <p className="text-xs text-muted-foreground break-words mt-0.5">
               {existingBook.author}
             </p>
             <p className="text-xs text-muted-foreground mt-2">

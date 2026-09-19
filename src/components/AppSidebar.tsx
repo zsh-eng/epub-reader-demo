@@ -136,7 +136,7 @@ function ContinueReadingCard({
             src={coverUrl}
             alt=""
             aria-hidden="true"
-            className="size-full object-cover"
+            className="image-outline size-full object-cover"
           />
         ) : (
           <BookOpenText
@@ -150,7 +150,7 @@ function ContinueReadingCard({
         <span className="min-w-0 flex-1 truncate text-[14px] font-normal">
           {book.title}
         </span>
-        <span className="shrink-0 text-[10px] font-normal tabular-nums text-sidebar-foreground/45">
+        <span className="shrink-0 text-[10px] font-normal font-numeric tabular-nums text-sidebar-foreground/45">
           {activityLabel}
         </span>
       </span>
