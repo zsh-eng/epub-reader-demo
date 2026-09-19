@@ -159,22 +159,11 @@ export type DeckOperation = z.infer<typeof deckOperationSchema>;
 export const updateDeckCardOperationSchema = z
   .object({
     type: z.literal("updateDeckCard"),
-    payload: z
-      .object({
-        deckId: z.string(),
-        cardId: z.string(),
-        present: z.boolean().optional(),
-        clCount: z.number().int().nonnegative().optional(),
-      })
-      .refine(
-        (p) => p.present !== undefined || p.clCount !== undefined,
-        "Missing membership state",
-      )
-      .transform((p) => ({
-        deckId: p.deckId,
-        cardId: p.cardId,
-        present: p.present ?? p.clCount! % 2 === 1,
-      })),
+    payload: z.object({
+      deckId: z.string(),
+      cardId: z.string(),
+      present: z.boolean(),
+    }),
     timestamp: z.number(),
   })
   .passthrough();
@@ -196,28 +185,3 @@ export const operationSchema = z.union([
   reviewLogDeletedOperationSchema,
 ]);
 export type Operation = z.infer<typeof operationSchema>;
-
-/**
- * Auto incrementing id to order the operations when storing it.
- * The IDs are for client side ordering when sending to the server,
- * and will not be used by the server.
- */
-export type OperationWithId = Operation & { _id: number };
-
-export const server2ClientSyncSchema = z.object({
-  ops: z.array(
-    z.union([
-      cardOperationSchema.extend({ seqNo: z.number() }),
-      cardContentOperationSchema.extend({ seqNo: z.number() }),
-      cardDeletedOperationSchema.extend({ seqNo: z.number() }),
-      cardBookmarkedOperationSchema.extend({ seqNo: z.number() }),
-      cardSuspendedOperationSchema.extend({ seqNo: z.number() }),
-      cardMetadataOperationSchema.extend({ seqNo: z.number() }),
-      deckOperationSchema.extend({ seqNo: z.number() }),
-      updateDeckCardOperationSchema.extend({ seqNo: z.number() }),
-      reviewLogOperationSchema.extend({ seqNo: z.number() }),
-      reviewLogDeletedOperationSchema.extend({ seqNo: z.number() }),
-    ]),
-  ),
-});
-export type Server2Client<T extends Operation> = T & { seqNo: number };

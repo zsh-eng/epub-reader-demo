@@ -13,7 +13,7 @@ import { installSync, DexieSyncStorage } from "@zsh-eng/local-sync/dexie";
 import { SpacedDatabase } from "@/lib/db/persistence";
 import { syncTables, toStoredOperation } from "@/lib/sync/records";
 import { convertRow } from "../scripts/sync-migration/convert";
-import type { Operation } from "@/lib/sync/schema";
+import { operationSchema, type Operation } from "@/lib/sync/schema";
 import { createEmptyCard, Rating } from "ts-fsrs";
 import { gradeCard } from "@/lib/review/review";
 
@@ -95,6 +95,23 @@ const membership = (present: boolean): Operation => ({
   type: "updateDeckCard",
   payload: { deckId: "deck", cardId: "card", present },
   timestamp: 1,
+});
+
+test("live deck membership requires a boolean; old counters require conversion", () => {
+  for (const present of [false, true])
+    expect(operationSchema.parse(membership(present)).payload).toEqual({
+      deckId: "deck",
+      cardId: "card",
+      present,
+    });
+  for (const clCount of [0, 1, 2])
+    expect(
+      operationSchema.safeParse({
+        type: "updateDeckCard",
+        timestamp: 1,
+        payload: { deckId: "deck", cardId: "card", clCount },
+      }).success,
+    ).toBe(false);
 });
 
 test("two clients converge on remove and re-add using HLC, independent of old CL counts", async () => {

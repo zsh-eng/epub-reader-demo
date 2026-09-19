@@ -2,7 +2,7 @@
 // IndexedDB keeps current records; MemoryDB provides fast UI reads.
 // An in-memory database is faster than fetching from IndexeDB whenever we need cards.
 import { db, persistenceReady } from "@/lib/db/persistence";
-import { handleClientOperation, OperationWithId } from "@/lib/sync/operation";
+import { handleClientOperation } from "@/lib/sync/operation";
 import { CardWithMetadata, Deck } from "@/lib/types";
 import { Card } from "ts-fsrs";
 
@@ -23,7 +23,6 @@ type InternalMemoryDB = {
   decks: Record<string, Deck>;
   decksToCards: Record<string, Record<string, number>>;
   noteIdToCardIds: Record<string, string[]>;
-  operations: Record<string, OperationWithId>;
   metadataKv: Record<string, unknown>;
 
   /**
@@ -51,7 +50,6 @@ const memoryDb: InternalMemoryDB = {
   decks: {},
   decksToCards: {},
   noteIdToCardIds: {},
-  operations: {},
   metadataKv: {},
   undoGradeStack: [],
 };

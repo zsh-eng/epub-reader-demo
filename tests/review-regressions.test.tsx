@@ -11,7 +11,7 @@ import {
   reviewLogToReviewLogOperation,
 } from "@/lib/review/review";
 import { CardWithMetadata } from "@/lib/types";
-import { OperationWithId, gradeCardOperation } from "@/lib/sync/operation";
+import { Operation, gradeCardOperation } from "@/lib/sync/operation";
 import { db, rawDb } from "@/lib/db/persistence";
 import MemoryDB from "@/lib/db/memory";
 import ReviewRoute from "@/routes/Review";
@@ -75,7 +75,7 @@ afterEach(async () => {
 });
 
 test("new history retains each selected grade and undo uses its portable ID", () => {
-  const operations: OperationWithId[] = [];
+  const operations: Operation[] = [];
   for (const [grade, label] of [
     [Rating.Again, "Again"],
     [Rating.Hard, "Hard"],
@@ -88,7 +88,7 @@ test("new history retains each selected grade and undo uses its portable ID", ()
       50,
     );
     expect(operation.payload.grade).toBe(label);
-    operations.push({ ...operation, _id: grade + 100 });
+    operations.push(operation);
   }
   const undone = operations[3];
   if (undone.type !== "reviewLog") throw new Error("Expected log");
@@ -96,7 +96,6 @@ test("new history retains each selected grade and undo uses its portable ID", ()
     type: "reviewLogDeleted",
     payload: { reviewLogId: undone.payload.id, deleted: true },
     timestamp: Date.now(),
-    _id: 999,
   });
   expect(
     processReviewLogOperations(operations).map((log) => log.rating),
@@ -105,7 +104,6 @@ test("new history retains each selected grade and undo uses its portable ID", ()
     type: "reviewLogDeleted",
     payload: { reviewLogId: undone.payload.id, deleted: false },
     timestamp: Date.now(),
-    _id: 1000,
   });
   expect(processReviewLogOperations(operations)).toHaveLength(4);
 });

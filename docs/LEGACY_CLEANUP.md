@@ -5,31 +5,25 @@ The migration and performance work is committed. Keep IndexedDB's `type` and
 16-second configuration is not the application runtime. No deployment is part
 of this commit pass.
 
-## Next code cleanup, in order
+## Completed code cleanup
 
-1. Remove unused `VITE_BACKEND_URL` typing in `src/vite-env.d.ts`, the
-   `@types/google.accounts` dependency, and `google.accounts` from TypeScript's
-   type list. The client uses `/api`; Google sign-in now redirects through
-   Better Auth. Update both lockfiles.
-2. Remove unused `server2ClientSyncSchema` and `Server2Client` exports from
-   `src/lib/sync/schema.ts`. Neither has a remaining consumer. Replace the old
-   `_id`-based `OperationWithId` type in MemoryDB and review fixtures with current
-   operation types before deleting it. The unused `memoryDb.operations` field
-   can be removed in the same pass after a reference check.
-3. Remove the `clCount` fallback from the live membership schema after updating
-   its tests. The offline converter already maps `cl_count` to `present`; retain
-   that conversion for historical backups. New runtime membership is boolean LWW.
-4. Remove `vendor/zsh-eng-local-sync-0.1.0.tgz` from the working tree and update
-   vendor notes. No active manifest references it; its bytes remain in Git history.
+- Removed the unused `VITE_BACKEND_URL` type, Google Identity Services types and
+  `@types/google.accounts` dependency; updated both lockfiles. Also removed the
+  unused legacy client-ID argument from `registerAndSync`.
+- Removed `server2ClientSyncSchema`, `Server2Client`, the `_id`-based
+  `OperationWithId` type, and the unused MemoryDB operation map. Review fixtures
+  now use current operation types without synthetic local IDs.
+- Live membership records require boolean `present`. The offline converter still
+  maps historical `cl_count` to `present`. Regression tests cover that boundary
+  and two-client remove/re-add convergence.
+- Removed the unused 0.1.0 package archive. Git history retains it; 0.2.1 is unchanged.
 
-Validate with the application tests and build, then one focused browser check of
-sign-in, restore, grading/Undo and membership changes. Keep cleanup commits separate
-from any new optimization or deployment.
+## Retained by design
 
-## Keep
-
-- `server/legacy-retired.ts` and its Wrangler config: the old API must continue
-  returning 410 so stale clients cannot write to the old store.
+- `server/legacy-retired.ts` and its Wrangler config: keep the 410 reload/sign-in
+  response, as requested. This is a helpful retirement notice, not a technical
+  requirement to keep the old Worker running forever. The old writable API stays
+  unavailable; the new app uses its own same-origin `/api` routes.
 - `server/lib/password.ts`: migrated password accounts still need the tagged
   legacy verifier. Removing it could prevent sign-in.
 - The current `/login-success` route: it completes the new Google redirect flow.
@@ -39,9 +33,16 @@ from any new optimization or deployment.
   recovery evidence. Remote deletion requires a separate retirement decision.
 - Benchmark reports: historical measurements are useful evidence, not runtime code.
 
-## Verification for this commit pass
+## Cleanup validation and review order
 
-122 application/benchmark tests passed; 36 shared-library tests passed. The app
-build, Worker dry-run and scoped shared-library lint passed. The 14 vendored package
-build artifacts match Reader commit `15b11ee` byte-for-byte. The existing statistics
-edit and local package cache were not included in the commits.
+123 application/benchmark tests passed, including the new membership-schema test.
+The application build passed. An isolated Chrome smoke test with synthetic data
+and mocked auth passed sign-in, streaming restore, grade/Undo, membership
+remove/re-add and persisted reload. This was not a new live Google OAuth test.
+The temporary browser database was deleted after the check. No deployment or
+remote-resource changes were made. The indexes and unrelated statistics edit
+remain untouched.
+
+Review `src/lib/sync/schema.ts` and `tests/sync-v2.test.ts` first, then
+`src/lib/db/memory.ts` and the review fixtures, then auth/config and lockfile
+removals, and finally `vendor/README.md` and this record.

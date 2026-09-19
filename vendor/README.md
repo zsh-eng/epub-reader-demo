@@ -11,6 +11,5 @@ cursor checkpoints after commit. Adaptive batching, compiled domain decoding,
 empty-outbox shortcuts and index removal remain benchmark experiments.
 
 To update, build and pack the source package, replace the referenced archive and
-update both lockfiles. Keep client/server protocol versions compatible. The old
-0.1.0 archive is retained for the forthcoming cleanup review; Git history also
-preserves it.
+update both lockfiles. Keep client/server protocol versions compatible. Git
+history preserves the obsolete 0.1.0 archive.
