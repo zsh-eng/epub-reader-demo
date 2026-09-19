@@ -17,7 +17,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, BookOpen, Check, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, StickyNote, Check, SlidersHorizontal, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   useLayoutEffect,
@@ -57,7 +57,14 @@ export function ReaderNotesPrototype({
   commentPosition,
   quote: incomingTarget,
   onClearQuote,
+  mobileAnnotation,
 }: {
+  mobileAnnotation?: {
+    identity: object;
+    tools: ReactNode;
+    captureTarget: () => NoteTarget | null;
+    close: () => void;
+  };
   bookId: string;
   chapters: ChapterEntry[];
   chapterAccess: ReaderSessionResources["chapterAccess"];
@@ -77,6 +84,9 @@ export function ReaderNotesPrototype({
   onActiveChange: (active: boolean) => void;
   onVisit: (page: number) => void;
 }) {
+  // Capture each selection once. Refocusing after Remove quote must not attach it again.
+  const capturedAnnotation = useRef<object | null>(null);
+  const composerOpen = open || Boolean(mobileAnnotation);
   const reduceMotion = useReducedMotion();
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "chapter">("time");
@@ -86,6 +96,7 @@ export function ReaderNotesPrototype({
     restore: notes.restore,
     shortcutEnabled: desktop && open && notebook && !notes.editingId,
   });
+  const noteCount = notes.notes.filter((note) => note.kind === "note").length;
   const composerDraft = desktop ? notes.composeDraft : notes.draft;
   const inlineEditing = desktop && Boolean(notes.editingId);
   const draft = composerDraft?.content ?? "";
@@ -226,7 +237,7 @@ export function ReaderNotesPrototype({
   useLayoutEffect(() => {
     const element = composer.current;
     const viewport = window.visualViewport;
-    if (!open || desktop || notebook || !element || !viewport) return;
+    if (!composerOpen || desktop || notebook || !element || !viewport) return;
     const update = () => {
       const inset = Math.max(
         0,
@@ -248,7 +259,7 @@ export function ReaderNotesPrototype({
       window.removeEventListener("scroll", update);
       window.removeEventListener("touchmove", update);
     };
-  }, [open, desktop, notebook]);
+  }, [composerOpen, desktop, notebook]);
 
   // Desktop keeps its panel mounted for the sidebar exit. Focus only when
   // the notebook opens; ordinary edits and the exit must not move focus.
@@ -300,12 +311,14 @@ export function ReaderNotesPrototype({
     input.current?.blur();
     setNotebook(false);
     onActiveChange(false);
+    mobileAnnotation?.close();
     setKeyboardOpen(false);
-  }, [flush, setNotebook, onActiveChange]);
+  }, [flush, setNotebook, onActiveChange, mobileAnnotation]);
   async function send(animate = true) {
     setAnimateSend(animate && !notes.editingId);
     if (!(await notes.send())) return;
     onClearQuote();
+    mobileAnnotation?.close();
     if (desktop && !notebook) close();
     else (notebook ? sidebarInput : input).current?.focus();
   }
@@ -458,16 +471,38 @@ export function ReaderNotesPrototype({
                   aria-expanded={notebook}
                   onClick={() => {
                     input.current?.blur();
+                    onActiveChange(true);
                     setNotebook(!notebook);
                   }}
-                  className={iconButton}
+                  className={`${iconButton} relative`}
+                  aria-description={`${noteCount} ${noteCount === 1 ? "note" : "notes"} in this book`}
                 >
-                  <BookOpen size={19} />
+                  <StickyNote size={26} strokeWidth={1.4} aria-hidden="true" />
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-[6px] left-0 right-0 text-center font-numeric text-[10px] font-medium leading-4 tabular-nums"
+                  >
+                    {Math.min(noteCount, 99)}
+                    {noteCount > 99 ? "+" : ""}
+                  </span>
                 </button>
               )}
               <NoteTextInput
                 ref={inNotebook ? sidebarInput : input}
-                autoFocus={desktop ? open && !inNotebook : !notebook}
+                autoFocus={
+                  desktop ? open && !inNotebook : !notebook && !mobileAnnotation
+                }
+                onFocus={() => {
+                  if (desktop || inNotebook || !mobileAnnotation) return;
+                  if (
+                    capturedAnnotation.current !== mobileAnnotation.identity
+                  ) {
+                    capturedAnnotation.current = mobileAnnotation.identity;
+                    const selectedTarget = mobileAnnotation.captureTarget();
+                    if (selectedTarget) notes.change(draft, selectedTarget);
+                  }
+                  onActiveChange(true);
+                }}
                 aria-label={editingInComposer ? "Edit note" : "Write a note"}
                 placeholder="Write a note…"
                 value={draft}
@@ -585,7 +620,8 @@ export function ReaderNotesPrototype({
               transition={{ ...transition, delay: reduceMotion ? 0 : 0.16 }}
               className="absolute inset-x-4 top-4 px-4 py-10 text-center font-serif text-lg text-muted-foreground"
             >
-              Write your first note below. Your thoughts and saved quotes will appear here.
+              Write your first note below. Your thoughts and saved quotes will
+              appear here.
             </motion.p>
           )}
           <AnimatePresence key={order} initial={false}>
@@ -851,15 +887,19 @@ export function ReaderNotesPrototype({
         </aside>
       )}
       <AnimatePresence>
-        {open && !notebook && (!desktop || margin.width < 220) && (
+        {composerOpen && !notebook && (!desktop || margin.width < 220) && (
           <motion.div
             ref={composer}
             data-note-composer
             key="composer"
-            initial={{
-              opacity: 0,
-              transform: reduceMotion ? "none" : "translateY(8px)",
-            }}
+            initial={
+              desktop
+                ? {
+                    opacity: 0,
+                    transform: reduceMotion ? "none" : "translateY(8px)",
+                  }
+                : false
+            }
             animate={{ opacity: 1, transform: "none" }}
             exit={{
               opacity: 0,
@@ -869,7 +909,7 @@ export function ReaderNotesPrototype({
             className={
               desktop
                 ? "fixed z-40 max-h-[calc(100dvh-7rem)] overflow-y-auto"
-                : "fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[32rem]"
+                : "fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/88 pt-2 backdrop-blur-xl"
             }
             style={
               desktop
@@ -890,73 +930,78 @@ export function ReaderNotesPrototype({
                   }
             }
           >
-            {!desktop && !notebook && latest && !notes.editingId && (
-              <div
-                className="relative mx-4 -mb-3 h-10 overflow-hidden"
-                aria-live="polite"
-              >
-                <motion.button
-                  key={latest.id}
-                  aria-label="Read latest note"
-                  onClick={() => {
-                    input.current?.blur();
-                    setNotebook(true);
-                  }}
-                  initial={{
-                    opacity: 0,
-                    transform:
-                      reduceMotion || !animateSend
-                        ? "none"
-                        : "translateY(10px)",
-                  }}
-                  animate={{ opacity: 1, transform: "none" }}
-                  transition={{
-                    ...transition,
-                    duration: animateSend ? 0.18 : 0,
-                  }}
-                  className="absolute inset-0 flex w-full items-center gap-2 rounded-[2rem] border border-border/50 bg-background/90 px-3 pb-2 text-left text-xs text-muted-foreground backdrop-blur-xl"
+            {mobileAnnotation?.tools}
+            {!desktop &&
+              !mobileAnnotation &&
+              !notebook &&
+              latest &&
+              !notes.editingId && (
+                <div
+                  className="relative mx-4 -mb-3 h-10 overflow-hidden"
+                  aria-live="polite"
                 >
-                  <span
-                    className="min-w-0 flex-1 truncate"
-                    aria-label={latest.text}
+                  <motion.button
+                    key={latest.id}
+                    aria-label="Read latest note"
+                    onClick={() => {
+                      input.current?.blur();
+                      setNotebook(true);
+                    }}
+                    initial={{
+                      opacity: 0,
+                      transform:
+                        reduceMotion || !animateSend
+                          ? "none"
+                          : "translateY(10px)",
+                    }}
+                    animate={{ opacity: 1, transform: "none" }}
+                    transition={{
+                      ...transition,
+                      duration: animateSend ? 0.18 : 0,
+                    }}
+                    className="absolute inset-0 flex w-full items-center gap-2 rounded-[2rem] border border-border/50 bg-background/90 px-3 pb-2 text-left text-xs text-muted-foreground backdrop-blur-xl"
                   >
-                    <span aria-hidden="true">
-                      {Array.from(latest.text.slice(0, 90)).map(
-                        (character, index) => (
-                          <motion.span
-                            key={index}
-                            className="inline-block whitespace-pre"
-                            initial={
-                              reduceMotion || !animateSend
-                                ? false
-                                : { opacity: 0, transform: "translateY(4px)" }
-                            }
-                            animate={{ opacity: 1, transform: "none" }}
-                            transition={{
-                              duration: 0.12,
-                              delay:
+                    <span
+                      className="min-w-0 flex-1 truncate"
+                      aria-label={latest.text}
+                    >
+                      <span aria-hidden="true">
+                        {Array.from(latest.text.slice(0, 90)).map(
+                          (character, index) => (
+                            <motion.span
+                              key={index}
+                              className="inline-block whitespace-pre"
+                              initial={
                                 reduceMotion || !animateSend
-                                  ? 0
-                                  : Math.min(index, 50) * 0.003,
-                              ease: [0.23, 1, 0.32, 1],
-                            }}
-                          >
-                            {character}
-                          </motion.span>
-                        ),
-                      )}
+                                  ? false
+                                  : { opacity: 0, transform: "translateY(4px)" }
+                              }
+                              animate={{ opacity: 1, transform: "none" }}
+                              transition={{
+                                duration: 0.12,
+                                delay:
+                                  reduceMotion || !animateSend
+                                    ? 0
+                                    : Math.min(index, 50) * 0.003,
+                                ease: [0.23, 1, 0.32, 1],
+                              }}
+                            >
+                              {character}
+                            </motion.span>
+                          ),
+                        )}
+                      </span>
                     </span>
-                  </span>
-                  <span className="shrink-0 text-[10px]">
-                    {new Date(latest.createdAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </motion.button>
-              </div>
-            )}
-            {renderNoteInput()}
+                    <span className="shrink-0 text-[10px]">
+                      {new Date(latest.createdAt).toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </motion.button>
+                </div>
+              )}
+            <div className="mx-auto max-w-[32rem]">{renderNoteInput()}</div>
           </motion.div>
         )}
       </AnimatePresence>

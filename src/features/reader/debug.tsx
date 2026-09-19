@@ -385,22 +385,23 @@ export function ReaderDebug() {
         </InspectorDrawer>
       )}
 
-      <HighlightToolbarContainer
-        bookId={bookId}
-        spineItemId={activeHighlightData?.spineItemId ?? undefined}
-        highlights={bookHighlights}
-        isCreatingHighlight={isCreatingHighlight}
-        creationPosition={creationPosition}
-        creationText={creationText}
-        onCreateColorSelect={selectColor}
-        onCreateClose={closeCreation}
-        activeHighlight={
-          annotationState.kind === "active" ? activeHighlight : null
-        }
-        onEditClose={clearActiveHighlight}
-        isNavVisible={isMobile}
-        onCreateNoteSubmit={undefined}
-      />
+      <div className={isMobile ? "fixed inset-x-0 bottom-4 z-50" : undefined}>
+        <HighlightToolbarContainer
+          bookId={bookId}
+          spineItemId={activeHighlightData?.spineItemId ?? undefined}
+          highlights={bookHighlights}
+          isCreatingHighlight={isCreatingHighlight}
+          creationPosition={creationPosition}
+          creationText={creationText}
+          onCreateColorSelect={selectColor}
+          onCreateClose={closeCreation}
+          activeHighlight={
+            annotationState.kind === "active" ? activeHighlight : null
+          }
+          onEditClose={clearActiveHighlight}
+          onCreateNoteSubmit={undefined}
+        />
+      </div>
     </div>
   );
 }

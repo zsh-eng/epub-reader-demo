@@ -328,7 +328,14 @@ export function Reader() {
           chromeInteractionMode={chromeInteractionMode}
           isChromeSuppressed={isReaderInteractionSuppressed}
           onDismissContentTap={
-            noteViewportHeight === null ? undefined : closeNotes
+            noteViewportHeight === null &&
+            !(isMobile && (isCreatingHighlight || activeHighlightData))
+              ? undefined
+              : () => {
+                  closeNotes();
+                  closeCreation();
+                  clearActiveHighlight();
+                }
           }
           containerRef={stageSlotRef}
           topRailHeight={topRailHeight}
@@ -549,8 +556,20 @@ export function Reader() {
                   isMobile ? () => handleNotesActive(true) : undefined
                 }
                 showPageNumbers={sessionState.settings.showPageNumbers}
-                statusPrompt={isMobile && !isCreatingHighlight && annotationState.kind !== "active" ? statusPrompt : undefined}
-                handoffPrompt={isMobile && !isCreatingHighlight && annotationState.kind !== "active" ? handoffPrompt : undefined}
+                statusPrompt={
+                  isMobile &&
+                  !isCreatingHighlight &&
+                  annotationState.kind !== "active"
+                    ? statusPrompt
+                    : undefined
+                }
+                handoffPrompt={
+                  isMobile &&
+                  !isCreatingHighlight &&
+                  annotationState.kind !== "active"
+                    ? handoffPrompt
+                    : undefined
+                }
               />
 
               {displayReady && (
@@ -558,6 +577,53 @@ export function Reader() {
                   <ReaderNotesPrototype
                     key={bookId}
                     bookId={bookId}
+                    mobileAnnotation={
+                      isMobile && (isCreatingHighlight || activeHighlightData)
+                        ? {
+                            identity: annotationState,
+                            tools: (
+                              <HighlightToolbarContainer
+                                bookId={bookId}
+                                spineItemId={activeHighlightData?.spineItemId}
+                                highlights={sessionState.highlights}
+                                isCreatingHighlight={isCreatingHighlight}
+                                creationPosition={creationPosition}
+                                creationText={creationText}
+                                onCreateColorSelect={(color) => {
+                                  const highlight = selectColor(color);
+                                  if (highlight && noteViewportHeight !== null)
+                                    setNoteQuote(
+                                      highlightNoteTarget(highlight, true),
+                                    );
+                                }}
+                                onHighlightChange={(highlight) => {
+                                  if (noteViewportHeight !== null)
+                                    setNoteQuote(
+                                      highlightNoteTarget(highlight, true),
+                                    );
+                                }}
+                                onCreateClose={closeCreation}
+                                activeHighlight={activeHighlight}
+                                onEditClose={clearActiveHighlight}
+                              />
+                            ),
+                            captureTarget: () => {
+                              const highlight =
+                                activeHighlightData ?? captureSelectionNote();
+                              return highlight
+                                ? highlightNoteTarget(
+                                    highlight,
+                                    Boolean(activeHighlightData),
+                                  )
+                                : null;
+                            },
+                            close: () => {
+                              closeCreation();
+                              clearActiveHighlight();
+                            },
+                          }
+                        : undefined
+                    }
                     chapters={sessionState.chapters.entries}
                     chapterAccess={sessionResources.chapterAccess}
                     pagination={sessionState.pagination}
@@ -651,42 +717,47 @@ export function Reader() {
                     )}
                   </ReaderNotesPrototype>
 
-                  <HighlightToolbarContainer
-                    bookId={bookId}
-                    spineItemId={activeHighlightData?.spineItemId ?? undefined}
-                    highlights={sessionState.highlights}
-                    isCreatingHighlight={isCreatingHighlight}
-                    creationPosition={creationPosition}
-                    creationText={creationText}
-                    onCreateColorSelect={selectColor}
-                    onCreateClose={closeCreation}
-                    activeHighlight={
-                      annotationState.kind === "active" ? activeHighlight : null
-                    }
-                    onEditClose={clearActiveHighlight}
-                    isNavVisible={chromeVisible}
-                    onCreateNoteSubmit={undefined}
-                    onAddSelectionNote={() => {
-                      const note = captureSelectionNote();
-                      if (!note) return;
-                      setNoteQuote(highlightNoteTarget(note, false));
-                      setCommentPosition({
-                        top: creationPosition.y,
-                        page: sessionState.navigation.currentPage,
-                      });
-                      closeCreation();
-                      handleNotesActive(true);
-                    }}
-                    onAddHighlightNote={(highlight) => {
-                      setCommentPosition({
-                        top: activeHighlight?.position.y ?? 112,
-                        page: sessionState.navigation.currentPage,
-                      });
-                      setNoteQuote(highlightNoteTarget(highlight, true));
-                      clearActiveHighlight();
-                      handleNotesActive(true);
-                    }}
-                  />
+                  {!isMobile && (
+                    <HighlightToolbarContainer
+                      bookId={bookId}
+                      spineItemId={
+                        activeHighlightData?.spineItemId ?? undefined
+                      }
+                      highlights={sessionState.highlights}
+                      isCreatingHighlight={isCreatingHighlight}
+                      creationPosition={creationPosition}
+                      creationText={creationText}
+                      onCreateColorSelect={selectColor}
+                      onCreateClose={closeCreation}
+                      activeHighlight={
+                        annotationState.kind === "active"
+                          ? activeHighlight
+                          : null
+                      }
+                      onEditClose={clearActiveHighlight}
+                      onCreateNoteSubmit={undefined}
+                      onAddSelectionNote={() => {
+                        const note = captureSelectionNote();
+                        if (!note) return;
+                        setNoteQuote(highlightNoteTarget(note, false));
+                        setCommentPosition({
+                          top: creationPosition.y,
+                          page: sessionState.navigation.currentPage,
+                        });
+                        closeCreation();
+                        handleNotesActive(true);
+                      }}
+                      onAddHighlightNote={(highlight) => {
+                        setCommentPosition({
+                          top: activeHighlight?.position.y ?? 112,
+                          page: sessionState.navigation.currentPage,
+                        });
+                        setNoteQuote(highlightNoteTarget(highlight, true));
+                        clearActiveHighlight();
+                        handleNotesActive(true);
+                      }}
+                    />
+                  )}
                 </>
               )}
             </div>

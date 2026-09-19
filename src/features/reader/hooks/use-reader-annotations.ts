@@ -89,7 +89,7 @@ interface UseReaderAnnotationsResult {
   isCreatingHighlight: boolean;
   creationPosition: { x: number; y: number };
   creationText: string;
-  selectColor: (color: AnnotationColor) => void;
+  selectColor: (color: AnnotationColor) => Highlight | undefined;
   closeCreation: () => void;
   clearActiveHighlight: () => void;
 }
@@ -390,7 +390,14 @@ export function useReaderAnnotations({
       "ontouchstart" in window || navigator.maxTouchPoints > 0;
     const delay = isTouchDevice ? 300 : 100;
 
-    const handlePointerUp = () => {
+    const handlePointerUp = (event: Event) => {
+      // Composer interactions must not replace the captured passage with the
+      // textarea selection after the keyboard takes focus.
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[data-note-composer]")
+      )
+        return;
       timeoutId = window.setTimeout(handleResolvedSelection, delay);
     };
 
@@ -459,9 +466,11 @@ export function useReaderAnnotations({
         return;
       }
 
-      onCreateHighlight(buildHighlightFromDraft(bookId, state.draft, color));
+      const highlight = buildHighlightFromDraft(bookId, state.draft, color);
+      onCreateHighlight(highlight);
       clearDomSelection();
       setState({ kind: "idle" });
+      return highlight;
     },
     [bookId, onCreateHighlight, state],
   );
@@ -481,7 +490,12 @@ export function useReaderAnnotations({
 
   const captureSelectionNote = () => {
     const selection = window.getSelection();
-    const draft = selection ? resolveSelectionDraft(selection) : null;
+    const draft =
+      state.kind === "creating"
+        ? state.draft
+        : selection
+          ? resolveSelectionDraft(selection)
+          : null;
     if (!draft || !bookId) return null;
     return buildHighlightFromDraft(bookId, draft, "invisible");
   };

@@ -321,6 +321,12 @@
   opacity: 0.8;
 }
 
+/* Note-only anchors must not inherit the browser's yellow mark background. */
+.epub-highlight[data-color="invisible"] {
+  background-color: transparent;
+  padding-inline: 0;
+}
+
 /* Predefined colors */
 .epub-highlight[data-color="yellow"] {
   background-color: var(--yellow-secondary);

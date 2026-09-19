@@ -25,6 +25,7 @@ interface HighlightToolbarContainerProps {
   creationText: string;
   onCreateColorSelect: (color: AnnotationColor) => void;
   onCreateClose: () => void;
+  onHighlightChange?: (highlight: Highlight) => void;
   /** Called when user submits a note from the toolbar */
   onAddSelectionNote?: () => void;
   onAddHighlightNote?: (highlight: Highlight) => void;
@@ -33,9 +34,6 @@ interface HighlightToolbarContainerProps {
   // For editing existing highlights
   activeHighlight: ActiveHighlightState | null;
   onEditClose: () => void;
-
-  // Mobile-specific
-  isNavVisible?: boolean;
 }
 
 export function HighlightToolbarContainer({
@@ -47,12 +45,12 @@ export function HighlightToolbarContainer({
   creationText,
   onCreateColorSelect,
   onCreateClose,
+  onHighlightChange,
   onCreateNoteSubmit,
   onAddHighlightNote,
   onAddSelectionNote,
   activeHighlight,
   onEditClose,
-  isNavVisible = false,
 }: HighlightToolbarContainerProps) {
   const isMobile = useIsMobile();
 
@@ -76,6 +74,7 @@ export function HighlightToolbarContainer({
   const handleEditColorSelect = (color: AnnotationColor) => {
     if (!activeHighlightData) return;
 
+    onHighlightChange?.({ ...activeHighlightData, color });
     updateHighlightMutation.mutate({
       id: activeHighlightData.id,
       changes: { color },
@@ -95,26 +94,13 @@ export function HighlightToolbarContainer({
       <AnimatePresence>
         {isEditingHighlight && (
           <MobileHighlightBar
-            isNavVisible={isNavVisible}
             currentColor={activeHighlightData.color}
             onColorSelect={handleEditColorSelect}
-            onAddNote={
-              onAddHighlightNote
-                ? () => onAddHighlightNote(activeHighlightData)
-                : undefined
-            }
             onDelete={handleEditDelete}
-            onClose={onEditClose}
           />
         )}
         {isCreatingHighlight && (
-          <MobileHighlightBar
-            isNavVisible={isNavVisible}
-            onAddNote={onAddSelectionNote}
-            onColorSelect={onCreateColorSelect}
-            onClose={onCreateClose}
-            showBackdrop={false}
-          />
+          <MobileHighlightBar onColorSelect={onCreateColorSelect} />
         )}
       </AnimatePresence>
     );
@@ -127,9 +113,9 @@ export function HighlightToolbarContainer({
         {isCreatingHighlight && (
           <HighlightToolbar
             position={creationPosition}
+            onClose={onCreateClose}
             onAddNote={onAddSelectionNote}
             onColorSelect={onCreateColorSelect}
-            onClose={onCreateClose}
             onNoteSubmit={onCreateNoteSubmit}
             textToCopy={creationText}
           />
@@ -140,6 +126,7 @@ export function HighlightToolbarContainer({
         {isEditingHighlight && (
           <HighlightToolbar
             position={activeHighlight!.position}
+            onClose={onEditClose}
             currentColor={activeHighlightData.color}
             onColorSelect={handleEditColorSelect}
             onAddNote={
@@ -148,7 +135,6 @@ export function HighlightToolbarContainer({
                 : undefined
             }
             onDelete={handleEditDelete}
-            onClose={onEditClose}
             textToCopy={activeHighlightData.selectedText}
           />
         )}
