@@ -1,3 +1,4 @@
+import { API_BASE } from "@/lib/api";
 import {
   broadcastRecordsChanged,
   broadcastRecordsCleared,
@@ -43,16 +44,13 @@ function sync(): Promise<void> {
     setStatus({ ...status, syncing: true, error: null });
     let touched = false;
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/auth/me`,
-        {
-          credentials: "include",
-          signal: AbortSignal.any([
-            controller.signal,
-            AbortSignal.timeout(15000),
-          ]),
-        },
-      );
+      const response = await fetch(`${API_BASE}/me`, {
+        credentials: "include",
+        signal: AbortSignal.any([
+          controller.signal,
+          AbortSignal.timeout(15000),
+        ]),
+      });
       controller.signal.throwIfAborted();
       if (response.status === 401) {
         if (await db._sync_outbox.count())
@@ -60,7 +58,7 @@ function sync(): Promise<void> {
         return;
       }
       if (!response.ok) throw new Error("Cannot verify sync account");
-      const { userId } = await response.json();
+      const { userId, expiresAt } = await response.json();
       if (typeof userId !== "string" || !userId)
         throw new Error("Invalid account identity");
       const owner = await db.metadataKv.get("owner");
@@ -73,6 +71,9 @@ function sync(): Promise<void> {
         await reloadMemory();
       }
       await db.metadataKv.put({ key: "owner", value: userId });
+      const expiry = Date.parse(expiresAt);
+      if (Number.isFinite(expiry))
+        await db.metadataKv.put({ key: "sessionExpiry", value: expiry });
       const state = ensureSyncState();
       await db.metadataKv.put({ key: "syncState", value: 2 });
       if (!(await db.metadataKv.get("clientId")))
@@ -89,11 +90,14 @@ function sync(): Promise<void> {
         storage,
         stateStore,
         remote: createRemote(controller.signal),
+        signal: controller.signal,
       });
       await client.sync();
 
       // Explicit cutover: only discard the old database after successful bootstrap.
-      void Dexie.delete("SpacedDatabase").catch(() => {});
+      for (const legacy of ["SpacedDatabase", "SpacedRecordsV2", "ImageCache"])
+        void Dexie.delete(legacy).catch(() => {});
+      localStorage.removeItem("spaced-records-v2-state");
     } catch (error) {
       if (!stopped)
         setStatus({
@@ -157,7 +161,8 @@ async function wipeDatabase() {
   await withSyncLock(async () => {
     rawDb.close();
     await db.delete();
-    await Dexie.delete("SpacedDatabase");
+    for (const legacy of ["SpacedDatabase", "SpacedRecordsV2", "ImageCache"])
+      await Dexie.delete(legacy);
     localStorage.removeItem(STATE_KEY);
     broadcastRecordsCleared();
     MemoryDB._db.cards = {};

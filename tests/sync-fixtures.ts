@@ -16,3 +16,9 @@ export function deckRecord(id: string, name: string, serverSeq = 1) {
     serverSeq,
   };
 }
+
+export function streamResponse(page: unknown) {
+  return new Response(JSON.stringify(page) + '\n{"type":"end"}\n', {
+    headers: { "Content-Type": "application/x-ndjson" },
+  });
+}

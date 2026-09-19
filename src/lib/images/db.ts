@@ -1,3 +1,4 @@
+import { API_BASE } from "@/lib/api";
 import { Dexie, type EntityTable, type Table } from "dexie";
 
 export type UncachedImage = { url: string };
@@ -24,7 +25,7 @@ export function createImageDatabase(name: string): ImageCacheDatabase {
 }
 
 // Keep metadata separate so consumers can read it without loading full images.
-export const imagePersistedDb = createImageDatabase("ImageCache");
+export const imagePersistedDb = createImageDatabase("ImageCacheV2");
 
 export function isCachedImage(
   image: CachedImage | UncachedImage,
@@ -41,7 +42,7 @@ export function isCachedImage(
 }
 
 async function fetchImage(url: string): Promise<Blob> {
-  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+  const backendUrl = API_BASE;
   const response = await fetch(
     url,
     backendUrl && url.startsWith(backendUrl)

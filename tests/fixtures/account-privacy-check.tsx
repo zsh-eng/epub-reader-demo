@@ -32,11 +32,11 @@ const pullStarted = deferred<void>(),
 let remoteSuccess = false,
   logoutCalls = 0;
 globalThis.fetch = (async (url, options) => {
-  if (String(url).includes("/auth/logout")) {
+  if (String(url).includes("/auth/sign-out")) {
     logoutCalls++;
     return new Response(null, { status: remoteSuccess ? 200 : 500 });
   }
-  if (String(url).endsWith("/auth/me"))
+  if (String(url).endsWith("/me"))
     return Response.json({ userId: "privacy-user" });
   if (options?.method === "POST") {
     pushStarted.resolve();

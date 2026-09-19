@@ -1,223 +1,80 @@
 import SyncEngine from "@/lib/sync/engine";
+import { ensureSyncState, persistenceReady } from "@/lib/db/persistence";
 import { setClientId, setSessionExpiry } from "@/lib/sync/meta";
-
-const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 30 - 1000 * 60; // 30 days with leeway
-
-type LoginResponse =
-  | {
-      success: true;
-    }
-  | {
-      success: false;
-      message: string;
-      isTempUser: boolean;
-    };
-
-const UNAUTHORIZED_MESSAGE = "Invalid email or password";
-const UNKNOWN_ERROR_MESSAGE = "An unknown error occurred";
-
-export async function login(
-  email: string,
-  password: string,
-): Promise<LoginResponse> {
-  const response = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/auth/login`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-      credentials: "include",
-    },
-  );
-
-  if (response.status === 401) {
-    const data = (await response.json()) as {
-      success: false;
-      isTempUser?: boolean;
-    };
-
+import { API_BASE } from "../api";
+const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7 - 60000;
+async function request(path: string, body: unknown) {
+  const response = await fetch(`${API_BASE}/auth/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => ({}));
+  return { response, data };
+}
+const renew = () =>
+  setSessionExpiry(new Date(Date.now() + SESSION_DURATION_MS));
+export async function login(email: string, password: string) {
+  const { response, data } = await request("sign-in/email", {
+    email,
+    password,
+  });
+  if (!response.ok)
     return {
-      success: false,
-      message: UNAUTHORIZED_MESSAGE,
-      isTempUser: data.isTempUser ?? false,
+      success: false as const,
+      message: data.message ?? "Invalid email or password",
+      isTempUser: data.code === "EMAIL_NOT_VERIFIED",
     };
-  }
-
-  if (!response.ok) {
-    return {
-      success: false,
-      message: UNKNOWN_ERROR_MESSAGE,
-      isTempUser: false,
-    };
-  }
-
-  const now = new Date();
-  const sessionExpiry = new Date(now.getTime() + SESSION_DURATION_MS);
-  await setSessionExpiry(sessionExpiry);
-
+  await renew();
+  return { success: true as const };
+}
+export async function register(email: string, password: string) {
+  const { response, data } = await request("sign-up/email", {
+    email,
+    password,
+    name: email.split("@")[0],
+  });
   return {
-    success: true,
+    success: response.ok,
+    message: response.ok ? undefined : (data.message ?? "Registration failed"),
   };
 }
-
-type RegisterResponse = {
-  success: boolean;
-  message?: string;
-};
-
-export async function register(
-  email: string,
-  password: string,
-): Promise<RegisterResponse> {
-  const response = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/auth/register`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-      credentials: "include",
-    },
-  );
-
-  if (!response.ok) {
+export async function verifyOtp(email: string, pin: string) {
+  const { response, data } = await request("email-otp/verify-email", {
+    email,
+    otp: pin,
+  });
+  if (!response.ok)
     return {
       success: false,
-      message: UNKNOWN_ERROR_MESSAGE,
+      message: data.message ?? "Incorrect or expired code",
     };
-  }
-
-  const data = (await response.json()) as {
-    success: boolean;
-    error?: string;
-  };
-
-  if (data.success) {
-    const now = new Date();
-    const sessionExpiry = new Date(now.getTime() + SESSION_DURATION_MS);
-    await setSessionExpiry(sessionExpiry);
-  }
-
+  await renew();
+  return { success: true };
+}
+export async function registerClient() {
+  await persistenceReady;
+  await setClientId(ensureSyncState().deviceId);
+  return { success: true, message: undefined };
+}
+export async function registerAndSync(_legacyClientId?: string) {
+  await registerClient();
+  await SyncEngine.syncFromServer();
+}
+export async function logout() {
+  const { response, data } = await request("sign-out", {});
   return {
-    success: data.success,
-    message: data.error,
+    success: response.ok,
+    message: response.ok ? undefined : (data.message ?? "Failed to sign out"),
   };
 }
-
-type VerifyOtpResponse = {
-  success: boolean;
-  message?: string;
-};
-
-export async function verifyOtp(
-  email: string,
-  pin: string,
-): Promise<VerifyOtpResponse> {
-  const response = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/auth/verify`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, token: pin }),
-      credentials: "include",
-    },
-  );
-
-  if (!response.ok) {
-    return {
-      success: false,
-      message: UNKNOWN_ERROR_MESSAGE,
-    };
-  }
-
-  const data: { success: true } | { success: false; error: string } =
-    await response.json();
-  if (!data.success) {
-    return {
-      success: false,
-      message: data.error,
-    };
-  }
-
-  await setSessionExpiry(new Date(Date.now() + SESSION_DURATION_MS));
-
-  return {
-    success: data.success,
-  };
-}
-
-type RegisterClientResponse = {
-  success: boolean;
-  message?: string;
-};
-
-export async function registerClient(): Promise<RegisterClientResponse> {
-  const response = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/auth/clientId`,
-    {
-      method: "POST",
-      credentials: "include",
-    },
-  );
-
-  if (!response.ok) {
-    console.error("Failed to register client", response);
-    return {
-      success: false,
-      message: UNKNOWN_ERROR_MESSAGE,
-    };
-  }
-
-  const data: { clientId: string } = await response.json();
-  await setClientId(data.clientId);
-
-  return {
-    success: true,
-  };
-}
-
-export async function registerAndSync(clientId?: string): Promise<void> {
-  if (clientId) {
-    await setClientId(clientId);
-    return SyncEngine.syncFromServer();
-  }
-
-  const clientIdResponse = await registerClient();
-  if (!clientIdResponse.success) {
-    throw new Error(clientIdResponse.message);
-  }
-
-  return SyncEngine.syncFromServer();
-}
-
-type LogoutResponse = {
-  success: boolean;
-  message?: string;
-};
-
-export async function logout(): Promise<LogoutResponse> {
-  const response = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/auth/logout`,
-    {
-      method: "POST",
-      credentials: "include",
-    },
-  );
-
-  if (!response.ok) {
-    console.error("Failed to logout", response);
-    return {
-      success: false,
-      message: UNKNOWN_ERROR_MESSAGE,
-    };
-  }
-
-  return {
-    success: true,
-  };
+export async function signInWithGoogle() {
+  const { response, data } = await request("sign-in/social", {
+    provider: "google",
+    callbackURL: new URL("/login-success", location.origin).href,
+  });
+  if (!response.ok || typeof data.url !== "string")
+    throw new Error(data.message ?? "Google sign-in failed");
+  location.assign(data.url);
 }

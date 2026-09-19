@@ -10,8 +10,8 @@ import {
 } from "@zsh-eng/local-sync";
 import { syncTables, type StoredOperation } from "../sync/records";
 
-export const DATABASE_NAME = "SpacedRecordsV2";
-export const STATE_KEY = "spaced-records-v2-state";
+export const DATABASE_NAME = "SpacedRecordsV3";
+export const STATE_KEY = "spaced-records-v3-state";
 export const stateStore = createSyncClientStateStore(localStorage, STATE_KEY);
 export function ensureSyncState() {
   return getOrCreateSyncClientState(crypto.randomUUID(), stateStore);

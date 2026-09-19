@@ -1,5 +1,5 @@
-import { deckRecord } from "./sync-fixtures";
-import { afterEach, expect, test, spyOn } from "bun:test";
+import { deckRecord, streamResponse } from "./sync-fixtures";
+import { beforeEach, afterEach, expect, test, spyOn } from "bun:test";
 import { act } from "react";
 import { MemoryRouter } from "react-router";
 import { render, click, input } from "./dom";
@@ -43,6 +43,15 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+// Other test files can leave writes in the shared fake IndexedDB connection.
+beforeEach(async () => {
+  await Promise.all([
+    rawDb.metadataKv.clear(),
+    rawDb.operations.clear(),
+    rawDb._sync_outbox.clear(),
+    rawDb.reviewLogOperations.clear(),
+  ]);
+});
 afterEach(async () => {
   for (const view of views.splice(0)) await view.unmount();
   globalThis.fetch = originalFetch;
@@ -67,7 +76,7 @@ test("the first pull returns the active promise and resolves only after local ap
   await setClientId("pull-client");
   const response = deferred<Response>();
   globalThis.fetch = (async (url) =>
-    String(url).endsWith("/auth/me")
+    String(url).endsWith("/me")
       ? Response.json({ userId: "test-user" })
       : response.promise) as typeof fetch;
   const first = SyncEngine.syncFromServer();
@@ -80,7 +89,7 @@ test("the first pull returns the active promise and resolves only after local ap
   await settle();
   expect(finished).toBe(false);
   response.resolve(
-    Response.json({
+    streamResponse({
       records: [deckRecord("pulled-deck", "Pulled", 7)],
       cursor: 7,
       head: 7,
@@ -111,7 +120,7 @@ test("client registration waits for the local client ID write", async () => {
     expect(finished).toBe(false);
     gate.resolve();
     await registering;
-    expect(await getClientId()).toBe("registered-client");
+    expect(await getClientId()).toBe(stateStore.read()?.deviceId);
   } finally {
     spy.mockRestore();
   }
@@ -125,9 +134,12 @@ test("successful code verification renews session expiry but rejected verificati
     true,
   );
   const renewed = (await getSessionExpiry())!.getTime();
-  expect(renewed).toBeGreaterThan(Date.now() + 29 * 86400000);
+  expect(renewed).toBeGreaterThan(Date.now() + 6 * 86400000);
   globalThis.fetch = (async () =>
-    Response.json({ success: false, error: "Incorrect code" })) as typeof fetch;
+    Response.json(
+      { message: "Incorrect code" },
+      { status: 400 },
+    )) as typeof fetch;
   expect((await verifyOtp("person@example.com", "BADCODE1")).success).toBe(
     false,
   );
@@ -262,16 +274,14 @@ test("callback sync is a named native button and the button itself starts sync",
   const calls: string[] = [];
   globalThis.fetch = (async (url) => {
     calls.push(String(url));
-    return Response.json(
-      String(url).endsWith("/auth/me")
-        ? { userId: "test-user" }
-        : {
-            records: [],
-            cursor: stateStore.read()?.pullCursor ?? 0,
-            head: stateStore.read()?.pullCursor ?? 0,
-            hasMore: false,
-          },
-    );
+    if (String(url).endsWith("/me"))
+      return Response.json({ userId: "test-user" });
+    return streamResponse({
+      records: [],
+      cursor: stateStore.read()?.pullCursor ?? 0,
+      head: stateStore.read()?.pullCursor ?? 0,
+      hasMore: false,
+    });
   }) as typeof fetch;
   const view = await mount(
     <MemoryRouter initialEntries={["/login-success?clientId=callback-client"]}>
@@ -284,8 +294,8 @@ test("callback sync is a named native button and the button itself starts sync",
   expect(button).not.toBeNull();
   await click(button!);
   await settle();
-  expect(await getClientId()).toBe("callback-client");
-  expect(calls.some((url) => url.includes("/sync/v2/pull?"))).toBe(true);
+  expect(await getClientId()).toBe(stateStore.read()?.deviceId);
+  expect(calls.some((url) => url.includes("/sync/v2/pull-stream?"))).toBe(true);
   await settle(1050);
 });
 

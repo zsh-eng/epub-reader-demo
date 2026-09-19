@@ -1,5 +1,4 @@
 import { SyncStatus, SyncBoundary } from "@/components/sync-status";
-import { useGoogleSignInPrompt } from "@/components/hooks/google-sign-in-prompt";
 import CommandBar from "@/components/nav/command-bar";
 import NavBar from "@/components/nav/nav-bar.tsx";
 import { SpacedIcon } from "@/components/nav/spaced-icon";
@@ -27,7 +26,6 @@ import "./index.css";
 
 SyncEngine.start();
 export default function App() {
-  useGoogleSignInPrompt({ delay: 1000 });
   const isMobile = useMediaQuery("(max-width: 640px)");
 
   return (

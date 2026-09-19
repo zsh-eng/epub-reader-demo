@@ -1,24 +1,29 @@
+import { API_BASE } from "@/lib/api";
 import {
   syncPullResponseSchema,
+  readSyncPullStream,
   syncPushResponseSchema,
   type SyncRemote,
 } from "@zsh-eng/local-sync";
 
 export function createRemote(signal: AbortSignal): SyncRemote {
-  const request = async (path: string, deviceId: string, body?: unknown) => {
-    const response = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/sync/v2/${path}`,
-      {
-        credentials: "include",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-        method: body === undefined ? "GET" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Device-ID": deviceId,
-        },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  let supportsStreaming = true;
+  const request = async (
+    path: string,
+    deviceId: string,
+    body?: unknown,
+    requestSignal = signal,
+  ) => {
+    const response = await fetch(`${API_BASE}/sync/v2/${path}`, {
+      credentials: "include",
+      signal: AbortSignal.any([requestSignal, AbortSignal.timeout(15000)]),
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Device-ID": deviceId,
       },
-    );
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
     signal.throwIfAborted();
     if (!response.ok)
       throw new Error(
@@ -36,6 +41,50 @@ export function createRemote(signal: AbortSignal): SyncRemote {
       return syncPullResponseSchema.parse(
         await request(`pull?${params}`, deviceId),
       );
+    },
+    async *pullStream(deviceId, query, streamSignal) {
+      const params = new URLSearchParams(
+        Object.entries(query).map(([key, value]) => [key, String(value)]),
+      );
+      const streamLifetime = AbortSignal.any([signal, streamSignal]);
+      if (!supportsStreaming) {
+        yield syncPullResponseSchema.parse(
+          await request(`pull?${params}`, deviceId, undefined, streamLifetime),
+        );
+        return;
+      }
+      const headersDeadline = new AbortController();
+      const combinedSignal = AbortSignal.any([
+        signal,
+        streamSignal,
+        headersDeadline.signal,
+      ]);
+      const timer = setTimeout(
+        () => headersDeadline.abort(new Error("Sync response timeout")),
+        15000,
+      );
+      let response: Response;
+      try {
+        response = await fetch(`${API_BASE}/sync/v2/pull-stream?${params}`, {
+          credentials: "include",
+          signal: combinedSignal,
+          headers: { "X-Device-ID": deviceId },
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      combinedSignal.throwIfAborted();
+      // Old servers can still serve the ordinary paginated protocol. Do not
+      // downgrade auth failures, broken streams, or server errors silently.
+      if (response.status === 404 || response.status === 405) {
+        supportsStreaming = false;
+        await response.body?.cancel();
+        yield syncPullResponseSchema.parse(
+          await request(`pull?${params}`, deviceId, undefined, combinedSignal),
+        );
+        return;
+      }
+      yield* readSyncPullStream(response, combinedSignal);
     },
     async push(deviceId, changes) {
       return syncPushResponseSchema.parse(

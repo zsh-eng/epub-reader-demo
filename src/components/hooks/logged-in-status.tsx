@@ -1,3 +1,4 @@
+import { API_BASE } from "@/lib/api";
 import { useSyncExternalStore } from "react";
 
 type LoggedInStatus = {
@@ -7,12 +8,9 @@ type LoggedInStatus = {
 
 const checkLoginStatus = async (): Promise<boolean> => {
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_BACKEND_URL}/auth/me`,
-      {
-        credentials: "include",
-      },
-    );
+    const response = await fetch(`${API_BASE}/me`, {
+      credentials: "include",
+    });
     return response.ok;
   } catch (error) {
     console.error("Error checking login status:", error);

@@ -133,10 +133,13 @@ test("cancelled paste stays local and the next preview uploads only its own file
       document.querySelector('[aria-label="Upload image and copy link"]')!,
     );
     expect(upload).toHaveBeenCalledTimes(1);
-    const body = upload.mock.calls[0][1]!.body as FormData;
-    expect((body.get("file") as File).name).toBe("confirmed.png");
-    expect(body.get("metadata")).toBe(
-      JSON.stringify({ altText: "Confirmed description" }),
+    const request = upload.mock.calls[0][1]!;
+    expect(request.method).toBe("PUT");
+    expect(new TextDecoder().decode(request.body as ArrayBuffer)).toBe(
+      "confirmed.png",
+    );
+    expect(upload.mock.calls[0][0]).toEqual(
+      expect.stringMatching(/^\/api\/files\/xxh64:[0-9a-f]{16}$/),
     );
     expect(clipboard).toHaveBeenCalledTimes(1);
     expect(clipboard).toHaveBeenLastCalledWith(

@@ -1,5 +1,5 @@
 import Dexie from "dexie";
-import { deckRecord } from "../sync-fixtures";
+import { deckRecord, streamResponse } from "../sync-fixtures";
 import assert from "node:assert/strict";
 import SyncEngine from "@/lib/sync/engine";
 import { db, rawDb } from "@/lib/db/persistence";
@@ -14,16 +14,14 @@ function deferred() {
 }
 await setClientId("write-client");
 globalThis.fetch = (async (url) =>
-  Response.json(
-    String(url).endsWith("/auth/me")
-      ? { userId: "wipe-user" }
-      : {
-          records: [deckRecord("in-flight-deck", "Private")],
-          cursor: 1,
-          head: 1,
-          hasMore: false,
-        },
-  )) as typeof fetch;
+  String(url).endsWith("/me")
+    ? Response.json({ userId: "wipe-user" })
+    : streamResponse({
+        records: [deckRecord("in-flight-deck", "Private")],
+        cursor: 1,
+        head: 1,
+        hasMore: false,
+      })) as typeof fetch;
 const started = deferred(),
   release = deferred();
 const originalTable = rawDb.table.bind(rawDb);
@@ -36,7 +34,12 @@ rawDb.operations.bulkPut = ((...args: Parameters<typeof originalAdd>) => {
   started.resolve();
   return Dexie.waitFor(release.promise).then(() => originalAdd(...args));
 }) as typeof originalAdd;
-const pull = SyncEngine.syncFromServer();
+// Wiping now cancels the stream. Attach rejection handling before triggering
+// cancellation, then still verify that deletion waits for the in-flight write.
+const pull = SyncEngine.syncFromServer().then(
+  () => null,
+  (error: Error) => error,
+);
 await started.promise;
 let cleared = false;
 const wipe = SyncEngine.wipeDatabase().then(() => {
@@ -49,7 +52,8 @@ assert.equal(
   "wipe must wait for local writes that already started",
 );
 release.resolve();
-await Promise.all([pull, wipe]);
+const [cancelled] = await Promise.all([pull, wipe]);
+assert.equal(cancelled?.name, "AbortError");
 await db.open();
 assert.equal(await db.operations.count(), 0);
 assert.equal(await db.metadataKv.count(), 0);
