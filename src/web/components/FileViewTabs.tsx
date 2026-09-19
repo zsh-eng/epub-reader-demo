@@ -1,0 +1,124 @@
+import * as stylex from "@stylexjs/stylex";
+import { Tabs } from "@base-ui/react/tabs";
+import { distinctLabels } from "../data/tab-labels";
+import { tokens, ui } from "../theme.stylex";
+import { Icon } from "./Icon";
+
+export interface FileViewTab {
+  id: string;
+  path: string;
+  pinned: boolean;
+  sourceLabel?: string;
+}
+export function FileViewTabs({
+  tabs,
+  active,
+  onSelect,
+  onClose,
+  onPin,
+  panelId = "file-view-panel",
+}: {
+  tabs: FileViewTab[];
+  active: string;
+  panelId?: string;
+  onSelect(id: string): void;
+  onClose(id: string): void;
+  onPin(id: string): void;
+}) {
+  const labels = distinctLabels(
+    tabs.map((tab) => ({
+      label: tab.path.split("/").at(-1)!,
+      qualifier: tabs.some((other) => other.id !== tab.id && other.path === tab.path)
+        ? `${tab.sourceLabel ?? "File"}/${tab.path.split("/").slice(0, -1).join("/")}`
+        : tab.path.split("/").slice(0, -1).join("/"),
+    })),
+  );
+  return (
+    <Tabs.Root
+      value={active}
+      onValueChange={(value) => onSelect(String(value))}
+      {...stylex.props(styles.root)}
+    >
+      <Tabs.List aria-label="Open files" {...stylex.props(styles.list)}>
+        <Tabs.Tab
+          value="changes"
+          aria-controls={panelId}
+          {...stylex.props(styles.tab, active === "changes" && styles.active)}
+        >
+          Changes
+        </Tabs.Tab>
+        {tabs.map((tab, index) => (
+          <div
+            key={tab.id}
+            {...stylex.props(styles.item, active === tab.id && styles.selectedItem)}
+          >
+            <Tabs.Tab
+              value={tab.id}
+              aria-controls={panelId}
+              title={`${tab.path}${tab.sourceLabel ? ` · ${tab.sourceLabel}` : ""}${tab.pinned ? "" : " · Preview (double-click to keep open)"}`}
+              onDoubleClick={() => onPin(tab.id)}
+              {...stylex.props(
+                styles.tab,
+                !tab.pinned && styles.preview,
+                active === tab.id && styles.active,
+              )}
+            >
+              <Icon name="file" size={13} />
+              <span {...stylex.props(styles.name)}>{labels[index]}</span>
+            </Tabs.Tab>
+            <button
+              {...stylex.props(ui.button, styles.close)}
+              aria-label={`Close ${tab.path}`}
+              title={`Close ${tab.path}`}
+              onClick={() => onClose(tab.id)}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+        ))}
+      </Tabs.List>
+    </Tabs.Root>
+  );
+}
+const styles = stylex.create({
+  root: {
+    flexShrink: 0,
+    minWidth: 0,
+    backgroundColor: tokens.panel,
+    borderBottomWidth: 1,
+    borderBottomStyle: "solid",
+    borderBottomColor: tokens.border,
+  },
+  list: { display: "flex", overflowX: "auto", scrollbarWidth: "thin", minHeight: 34 },
+  item: {
+    display: "flex",
+    alignItems: "center",
+    flexShrink: 0,
+    borderRightWidth: 1,
+    borderRightStyle: "solid",
+    borderRightColor: tokens.border,
+  },
+  selectedItem: { backgroundColor: tokens.canvas },
+  tab: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: { default: "transparent", ":hover": tokens.hover },
+    color: tokens.muted,
+    paddingBlock: 8,
+    paddingInline: 12,
+    minHeight: 34,
+    fontFamily: tokens.ui,
+    fontSize: 12,
+    cursor: "pointer",
+    outline: { default: "none", ":focus-visible": `2px solid ${tokens.accent}` },
+    outlineOffset: -2,
+    whiteSpace: "nowrap",
+  },
+  active: { color: tokens.text, backgroundColor: tokens.canvas },
+  preview: { fontStyle: "italic" },
+  name: { maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" },
+  close: { width: 22, minHeight: 22, paddingInline: 3, marginRight: 6 },
+});

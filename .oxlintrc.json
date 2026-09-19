@@ -1,0 +1,22 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "vitest", "jsx-a11y"],
+  "jsPlugins": [{ "name": "stylex", "specifier": "@stylexjs/eslint-plugin" }],
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    ".benchmarks/**",
+    ".test-artifacts/**",
+    "upstream/**",
+    "src/shared/hunk/**",
+    "tests/review/upstream/**"
+  ],
+  "rules": {
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "stylex/valid-styles": "error",
+    "stylex/valid-shorthands": "error",
+    "stylex/no-conflicting-props": "error",
+    "stylex/no-nonstandard-styles": "error",
+    "stylex/no-legacy-contextual-styles": "error"
+  }
+}

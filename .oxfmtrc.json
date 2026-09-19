@@ -1,0 +1,11 @@
+{
+  "ignorePatterns": [
+    "dist/**",
+    "node_modules/**",
+    ".benchmarks/**",
+    ".test-artifacts/**",
+    "upstream/**",
+    "src/shared/hunk/**",
+    "tests/review/upstream/**"
+  ]
+}

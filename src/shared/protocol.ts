@@ -1,0 +1,137 @@
+import { z } from "zod";
+
+export const comparisonSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("working") }),
+  z.object({ kind: z.literal("staged") }),
+  z.object({ kind: z.literal("unstaged") }),
+  z.object({ kind: z.literal("commit"), commit: z.string().min(1).max(256) }),
+  z.object({
+    kind: z.literal("range"),
+    base: z.string().min(1).max(256),
+    head: z.string().min(1).max(256),
+  }),
+  z.object({ kind: z.literal("patch"), path: z.string().min(1).max(4096) }),
+  z.object({
+    kind: z.literal("files"),
+    oldPath: z.string().min(1).max(4096),
+    newPath: z.string().min(1).max(4096),
+  }),
+]);
+export type Comparison = z.infer<typeof comparisonSchema>;
+export const reviewRequestSchema = z.object({
+  repo: z.string().min(1).max(4096),
+  comparison: comparisonSchema,
+});
+export type ReviewRequest = z.infer<typeof reviewRequestSchema>;
+export interface Repository {
+  path: string;
+  name: string;
+  head: string;
+  branch: string;
+  shallow: boolean;
+  git?: boolean;
+}
+export interface Worktree {
+  path: string;
+  head: string;
+  branch: string;
+  bare?: boolean;
+}
+export interface Session {
+  protocol: 1;
+  repository: Repository;
+  worktrees: Worktree[];
+  initialComparison?: Comparison;
+}
+export interface Branch {
+  name: string;
+  head: string;
+  worktreePath?: string;
+  current: boolean;
+}
+export interface Commit {
+  id: string;
+  parents: string[];
+  subject: string;
+  author: string;
+  timestamp: number;
+  refs: string[];
+}
+export interface HistoryPage {
+  commits: Commit[];
+  cursor: string | null;
+  hasMore: boolean;
+}
+export interface ReviewFile {
+  path: string;
+  previousPath?: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  binary: boolean;
+  tooLarge?: boolean;
+  untracked?: boolean;
+}
+export interface ReviewMetrics {
+  gitMs: number;
+  totalMs: number;
+  patchBytes: number;
+  cacheHit: boolean;
+}
+export interface ReviewResponse {
+  id: string;
+  repo: string;
+  comparison: Comparison;
+  base: string;
+  head: string;
+  label: string;
+  files: ReviewFile[];
+  patch: string;
+  metrics: ReviewMetrics;
+  warnings: string[];
+}
+export interface SourceResponse {
+  reviewId: string;
+  path: string;
+  old: string;
+  new: string;
+}
+export interface ChangeEvent {
+  type: "changed" | "ready";
+  repo: string;
+  revision: number;
+}
+export interface ApiError {
+  error: { code: string; message: string };
+}
+export const noteInputSchema = z.object({
+  path: z.string().min(1),
+  side: z.enum(["old", "new"]),
+  line: z.number().int().positive(),
+  endLine: z.number().int().positive().optional(),
+  text: z.string().min(1).max(16384),
+  parentId: z.string().optional(),
+});
+export type NoteInput = z.infer<typeof noteInputSchema>;
+export interface Note extends NoteInput {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  resolution?: "active" | "stale" | "orphaned";
+}
+export interface NoteState {
+  reviewId: string;
+  revision: number;
+  notes: Note[];
+}
+export const noteMutationSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("add"), note: noteInputSchema }),
+  z.object({ type: z.literal("edit"), id: z.string(), text: z.string().min(1).max(16384) }),
+  z.object({ type: z.literal("remove"), id: z.string() }),
+]);
+export type NoteMutation = z.infer<typeof noteMutationSchema>;
+export const notesRequestSchema = z.object({
+  reviewId: z.string(),
+  expectedRevision: z.number().int().nonnegative(),
+  mutation: noteMutationSchema,
+});

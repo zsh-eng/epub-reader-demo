@@ -1,0 +1,138 @@
+import { z } from "zod";
+import { comparisonSchema } from "../../shared/protocol";
+
+export const sessionSchema = z.object({
+  protocol: z.literal(1),
+  repository: z.object({
+    path: z.string(),
+    name: z.string(),
+    head: z.string(),
+    branch: z.string(),
+    shallow: z.boolean(),
+    git: z.boolean().optional(),
+  }),
+  worktrees: z.array(
+    z.object({
+      path: z.string(),
+      head: z.string(),
+      branch: z.string(),
+      bare: z.boolean().optional(),
+    }),
+  ),
+  initialComparison: comparisonSchema.optional(),
+});
+export const branchesSchema = z.array(
+  z.object({
+    name: z.string(),
+    head: z.string(),
+    worktreePath: z.string().optional(),
+    current: z.boolean(),
+  }),
+);
+export const historySchema = z.object({
+  commits: z.array(
+    z.object({
+      id: z.string(),
+      parents: z.array(z.string()),
+      subject: z.string(),
+      author: z.string(),
+      timestamp: z.number(),
+      refs: z.array(z.string()),
+    }),
+  ),
+  cursor: z.string().nullable(),
+  hasMore: z.boolean(),
+});
+export const reviewSchema = z.object({
+  id: z.string(),
+  repo: z.string(),
+  comparison: comparisonSchema,
+  base: z.string(),
+  head: z.string(),
+  label: z.string(),
+  files: z.array(
+    z.object({
+      path: z.string(),
+      previousPath: z.string().optional(),
+      status: z.string(),
+      additions: z.number(),
+      deletions: z.number(),
+      binary: z.boolean(),
+      tooLarge: z.boolean().optional(),
+      untracked: z.boolean().optional(),
+    }),
+  ),
+  patch: z.string(),
+  warnings: z.array(z.string()),
+  metrics: z.object({
+    gitMs: z.number(),
+    totalMs: z.number(),
+    patchBytes: z.number(),
+    cacheHit: z.boolean(),
+  }),
+});
+export const notesSchema = z.object({
+  reviewId: z.string(),
+  revision: z.number().int().nonnegative(),
+  notes: z.array(
+    z.object({
+      id: z.string(),
+      path: z.string(),
+      side: z.enum(["old", "new"]),
+      line: z.number().int().positive(),
+      endLine: z.number().int().positive().optional(),
+      text: z.string(),
+      parentId: z.string().optional(),
+      createdAt: z.string(),
+      updatedAt: z.string(),
+      resolution: z.enum(["active", "stale", "orphaned"]).optional(),
+    }),
+  ),
+});
+export const sourceSchema = z.object({
+  reviewId: z.string(),
+  path: z.string(),
+  old: z.string(),
+  new: z.string(),
+});
+export const eventSchema = z.object({
+  type: z.enum(["ready", "changed"]),
+  repo: z.string(),
+  revision: z.number().int().nonnegative(),
+});
+
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
+export function createApi(fetcher: typeof fetch, token: string) {
+  const headers = (input?: HeadersInit) => {
+    const result = new Headers(input);
+    if (token) result.set("Authorization", `Bearer ${token}`);
+    return result;
+  };
+  return {
+    async json<T>(url: string, schema: z.ZodType<T>, init: RequestInit = {}): Promise<T> {
+      const response = await fetcher(url, { ...init, headers: headers(init.headers) });
+      if (!response.ok) {
+        const body: unknown = await response.json().catch(() => null);
+        const parsed = z.object({ error: z.object({ message: z.string() }) }).safeParse(body);
+        throw new HttpError(
+          parsed.success ? parsed.data.error.message : `Request failed (${response.status}).`,
+          response.status,
+        );
+      }
+      const result = schema.safeParse(await response.json());
+      if (!result.success) throw new Error("The server returned an invalid response.");
+      return result.data;
+    },
+    stream(url: string, signal: AbortSignal) {
+      return fetcher(url, { headers: headers({ Accept: "text/event-stream" }), signal });
+    },
+  };
+}

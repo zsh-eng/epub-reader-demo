@@ -1,0 +1,578 @@
+import { afterEach, describe, expect, test } from "vitest";
+import { page } from "vitest/browser";
+import { useState } from "react";
+import { flushSync } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
+import { App } from "../../src/web/App";
+import { createReviewController } from "../../src/web/data/controller";
+import type { Comparison, Note, ReviewResponse } from "../../src/shared/protocol";
+import { HistoryPanel } from "../../src/web/components/HistoryPanel";
+import { initializeTheme, themeController } from "../../src/web/themes";
+import { layoutHistory } from "../../src/web/components/history-layout";
+import { createBrowseApi } from "../../src/web/data/browse";
+import type { BrowseSource } from "../../src/shared/browse";
+
+const firstCommit = "a".repeat(40);
+const secondCommit = "b".repeat(40);
+const patch = ["alpha.ts", "beta.ts"]
+  .map(
+    (path) =>
+      `diff --git a/src/${path} b/src/${path}\nindex 1111111..2222222 100644\n--- a/src/${path}\n+++ b/src/${path}\n@@ -1,2 +1,2 @@\n-export const before = 1;\n+export const after = 2;\n export const shared = true;\n`,
+  )
+  .join("");
+const commits = [
+  {
+    id: firstCommit,
+    parents: [secondCommit],
+    subject: "Improve the review stream",
+    author: "Alex",
+    timestamp: 1789776000,
+    refs: ["main"],
+  },
+  {
+    id: secondCommit,
+    parents: [],
+    subject: "Add the initial renderer",
+    author: "Sam",
+    timestamp: 1789689600,
+    refs: [],
+  },
+];
+let root: Root | undefined;
+let mount: HTMLDivElement | undefined;
+
+afterEach(() => {
+  root?.unmount();
+  mount?.remove();
+  root = undefined;
+  mount = undefined;
+});
+
+function response(comparison: Comparison): ReviewResponse {
+  return {
+    id: comparison.kind === "commit" ? comparison.commit : "c".repeat(64),
+    repo: "/test/repo",
+    comparison,
+    base: secondCommit,
+    head: comparison.kind === "commit" ? comparison.commit : "working",
+    label: "Review changes",
+    files: ["alpha.ts", "beta.ts"].map((path) => ({
+      path: `src/${path}`,
+      status: "M",
+      additions: 1,
+      deletions: 1,
+      binary: false,
+    })),
+    patch,
+    warnings: [],
+    metrics: { gitMs: 1, totalMs: 2, patchBytes: patch.length, cacheHit: false },
+  };
+}
+
+async function mountApp(
+  options: { inputOnly?: boolean; notes?: Note[]; metadataFile?: boolean; branches?: boolean } = {},
+) {
+  initializeTheme();
+  themeController.commit("graphite-dark");
+  const requests: Comparison[] = [];
+  const fileRequests: { source: BrowseSource; path: string }[] = [];
+  let notes = options.notes ?? [];
+  let revision = 0;
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = new URL(String(input), "http://localhost");
+    if (url.pathname === "/api/browse/list") {
+      const { source } = JSON.parse(String(init?.body));
+      return Response.json({
+        source,
+        entries: (source.repo === "/test/feature"
+          ? ["src/feature-only.ts"]
+          : ["src/alpha.ts", "src/beta.ts", "image.bin", "missing.ts"]
+        ).map((path) => ({ path, kind: "file" })),
+        truncated: false,
+      });
+    }
+    if (url.pathname === "/api/browse/read") {
+      const { source, path } = JSON.parse(String(init?.body));
+      fileRequests.push({ source, path });
+      const kind = path === "image.bin" ? "binary" : path === "missing.ts" ? "missing" : "text";
+      return Response.json({
+        source,
+        path,
+        kind,
+        size: 100,
+        identity: `${JSON.stringify(source)}:${path}`,
+        ...(kind === "text"
+          ? {
+              text: `export const workspace = "${source.repo}";\nexport const workingContents = true;\n`,
+            }
+          : {}),
+      });
+    }
+    if (url.pathname === "/api/session")
+      return Response.json({
+        protocol: 1,
+        repository: {
+          path: url.searchParams.get("repo") ?? "/test/repo",
+          name: "review-fixture",
+          head: firstCommit,
+          branch: url.searchParams.get("repo") === "/test/feature" ? "feature" : "main",
+          shallow: false,
+          git: !options.inputOnly,
+        },
+        worktrees: options.inputOnly
+          ? []
+          : [{ path: "/test/repo", head: firstCommit, branch: "main" }],
+        ...(options.inputOnly
+          ? { initialComparison: { kind: "patch", path: "/test/change.patch" } }
+          : {}),
+      });
+    if (url.pathname === "/api/branches")
+      return Response.json(
+        options.branches
+          ? [
+              { name: "main", head: firstCommit, worktreePath: "/test/repo", current: true },
+              {
+                name: "feature",
+                head: secondCommit,
+                worktreePath: "/test/feature",
+                current: false,
+              },
+              { name: "release", head: secondCommit, current: false },
+            ]
+          : [],
+      );
+    if (url.pathname === "/api/history")
+      return Response.json({ commits, cursor: null, hasMore: false });
+    if (url.pathname === "/api/review") {
+      const { comparison, repo } = JSON.parse(String(init?.body));
+      requests.push(comparison);
+      const review = { ...response(comparison), repo };
+      if (options.metadataFile)
+        review.files.push({
+          path: "assets/image.png",
+          status: "M",
+          additions: 0,
+          deletions: 0,
+          binary: true,
+        });
+      return Response.json(review);
+    }
+    if (url.pathname === "/api/notes") {
+      if (init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        if (body.mutation.type === "add")
+          notes = [
+            ...notes,
+            {
+              ...body.mutation.note,
+              id: `note-${revision}`,
+              resolution: "active",
+              createdAt: "2026-09-19T00:00:00Z",
+              updatedAt: "2026-09-19T00:00:00Z",
+            },
+          ];
+        if (body.mutation.type === "remove")
+          notes = notes.filter((note) => note.id !== body.mutation.id);
+        if (body.mutation.type === "edit")
+          notes = notes.map((note) =>
+            note.id === body.mutation.id ? { ...note, text: body.mutation.text } : note,
+          );
+        return Response.json({ reviewId: body.reviewId, revision: ++revision, notes });
+      }
+      return Response.json({ reviewId: url.searchParams.get("reviewId"), revision, notes });
+    }
+    throw new Error(`Unexpected request: ${url.pathname}`);
+  };
+  const controller = createReviewController({ fetch: fetcher, events: false });
+  mount = document.createElement("div");
+  document.body.append(mount);
+  root = createRoot(mount);
+  root.render(<App controller={controller} browseApi={createBrowseApi(fetcher, "fixture")} />);
+  await expect
+    .poll(() => document.querySelector("[data-review-status]")?.getAttribute("data-review-status"))
+    .toBe("ready");
+  await expect
+    .poll(() => document.querySelectorAll("diffs-container").length)
+    .toBeGreaterThanOrEqual(2);
+  return { controller, requests, fileRequests };
+}
+
+describe("graphical review", () => {
+  test("question mark shows the command guide with keycaps and no top bar", async () => {
+    await mountApp({ branches: true });
+    expect(document.querySelector("[data-theme] > header")).toBeNull();
+    const input = document.querySelector('input[aria-label="Filter changed files"]')!;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "?", bubbles: true }));
+    await expect.element(page.getByRole("dialog", { name: "Shortcuts & commands" })).toBeVisible();
+    expect(document.querySelectorAll('[role="dialog"] kbd').length).toBeGreaterThan(10);
+    await page.getByRole("option", { name: /Open command palette/ }).click();
+    await expect.element(page.getByRole("combobox", { name: "Search commands" })).toBeVisible();
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Open branch");
+    await page.getByRole("option", { name: /Open branch/ }).click();
+    await expect.element(page.getByRole("combobox", { name: "Search branches" })).toBeVisible();
+  });
+
+  test("file close shortcuts preserve Changes and close only the requested tabs", async () => {
+    await mountApp();
+    await page.getByRole("treeitem", { name: /alpha.ts/ }).dblClick();
+    await page.getByRole("treeitem", { name: /beta.ts/ }).dblClick();
+    const altKey = (code: string, shiftKey = false) =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "∑", code, altKey: true, shiftKey, bubbles: true }),
+      );
+    altKey("KeyO", true);
+    await expect
+      .element(page.getByRole("tab", { name: "alpha.ts", exact: true }))
+      .not.toBeInTheDocument();
+    await expect.element(page.getByRole("tab", { name: "beta.ts", exact: true })).toBeVisible();
+    await page.getByRole("treeitem", { name: /alpha.ts/ }).dblClick();
+    altKey("KeyW");
+    await expect
+      .element(page.getByRole("tab", { name: "alpha.ts", exact: true }))
+      .not.toBeInTheDocument();
+    altKey("KeyW", true);
+    await expect
+      .element(page.getByRole("tab", { name: "beta.ts", exact: true }))
+      .not.toBeInTheDocument();
+    await expect.element(page.getByRole("tab", { name: "Changes", exact: true })).toBeVisible();
+  });
+  test("opens working contents from a historical diff and keeps the diff mounted", async () => {
+    await page.viewport(1400, 850);
+    const { fileRequests } = await mountApp({ branches: true });
+    await page.getByRole("option", { name: /Add the initial renderer/ }).click();
+    const diffHost = document.querySelector("diffs-container");
+    await page.getByRole("treeitem", { name: /alpha.ts/ }).dblClick();
+    await expect
+      .element(page.getByRole("region", { name: "Full file", exact: true }))
+      .toBeVisible();
+    await expect
+      .poll(() => fileRequests.at(-1))
+      .toEqual({ source: { kind: "worktree", repo: "/test/repo" }, path: "src/alpha.ts" });
+    expect(diffHost?.isConnected).toBe(true);
+    await page.getByRole("button", { name: "Open before", exact: true }).click();
+    await expect.poll(() => fileRequests.at(-1)?.source.kind).toBe("commit");
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    expect(diffHost?.isConnected).toBe(true);
+    await expect
+      .element(page.getByRole("region", { name: "Full file", exact: true }))
+      .not.toBeInTheDocument();
+  });
+
+  test("Command Shift K opens a scoped file picker and binary files show metadata", async () => {
+    const { fileRequests } = await mountApp({ branches: true });
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "K",
+        metaKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    await expect
+      .element(page.getByRole("combobox", { name: "Find file", exact: true }))
+      .toBeVisible();
+    await page.getByRole("combobox", { name: "Find file", exact: true }).fill("image.bin");
+    await page.getByRole("option", { name: /image.bin/ }).click();
+    await expect
+      .poll(() => document.querySelector('[data-full-file-kind="binary"]'))
+      .not.toBeNull();
+    expect(document.querySelector('[aria-label="Full file"] diffs-container')).toBeNull();
+    await page.getByRole("tab", { name: /feature/ }).click();
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "K", metaKey: true, shiftKey: true, bubbles: true }),
+    );
+    await expect.element(page.getByRole("option", { name: /feature-only.ts/ })).toBeVisible();
+    await expect.element(page.getByRole("option", { name: /alpha.ts/ })).not.toBeInTheDocument();
+    await page.getByRole("option", { name: /feature-only.ts/ }).click();
+    await expect.poll(() => fileRequests.at(-1)?.source.repo).toBe("/test/feature");
+  });
+  test("Space stays unhandled and Command K still opens commands", async () => {
+    await mountApp();
+    for (let i = 0; i < 2; i++) {
+      const space = new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true });
+      document.body.dispatchEvent(space);
+      expect(space.defaultPrevented).toBe(false);
+    }
+    await expect
+      .element(page.getByRole("combobox", { name: "Find file", exact: true }))
+      .not.toBeInTheDocument();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await expect.element(page.getByRole("dialog")).toBeVisible();
+    await expect
+      .element(page.getByRole("combobox", { name: "Find file", exact: true }))
+      .not.toBeInTheDocument();
+  });
+  test("Command Shift B toggles only the files sidebar", async () => {
+    await page.viewport(1280, 800);
+    await mountApp();
+    for (const visible of [true, false]) {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "B",
+          metaKey: true,
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+      await expect
+        .poll(() => !!document.querySelector('[aria-label="Workspace files"]'))
+        .toBe(visible);
+      expect(document.getElementById("review-sidebar")).not.toBeNull();
+    }
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "K",
+        ctrlKey: true,
+        shiftKey: true,
+        bubbles: true,
+      }),
+    );
+    await expect
+      .element(page.getByRole("combobox", { name: "Find file", exact: true }))
+      .toBeVisible();
+  });
+  test("switches branch tabs and toggles the sidebar with Command B", async () => {
+    const { controller } = await mountApp({ branches: true });
+    await page.getByRole("tab", { name: /feature/ }).click();
+    await expect
+      .poll(() => controller.getSnapshot().session?.repository.path)
+      .toBe("/test/feature");
+    await page.getByRole("tab", { name: /release/ }).click();
+    await expect.poll(() => controller.getSnapshot().historyRef).toBe("refs/heads/release");
+    expect(controller.getSnapshot().comparison).toEqual({ kind: "commit", commit: secondCommit });
+    await expect
+      .element(page.getByRole("button", { name: "Working changes", exact: true }))
+      .not.toBeInTheDocument();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", metaKey: true, bubbles: true }));
+    await expect.poll(() => document.getElementById("review-sidebar")).toBeNull();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", metaKey: true, bubbles: true }));
+    await expect.poll(() => document.getElementById("review-sidebar")).not.toBeNull();
+  });
+
+  test("mounts real Pierre stream, changes theme and reviews commits without dropping other files", async () => {
+    await page.viewport(1280, 800);
+    const { requests } = await mountApp();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Change color theme");
+    await page.getByRole("option", { name: /Change color theme/ }).click();
+    await page.getByRole("combobox", { name: "Search themes" }).fill("Tokyo");
+    await page.getByRole("option", { name: /Tokyo Night/ }).click();
+    await expect
+      .poll(() => document.querySelector("[data-file-count]")?.getAttribute("data-file-count"))
+      .toBe("2");
+    await page.getByRole("option", { name: /Improve the review stream/ }).click();
+    await expect
+      .poll(() =>
+        document.querySelector("[data-selected-commit]")?.getAttribute("data-selected-commit"),
+      )
+      .toBe(firstCommit);
+    await expect
+      .poll(() => document.querySelectorAll("diffs-container").length)
+      .toBeGreaterThanOrEqual(2);
+    await expect.poll(() => document.body.textContent).toContain("ms frame");
+    await page.getByRole("option", { name: /Add the initial renderer/ }).click();
+    await expect
+      .poll(() =>
+        document.querySelector("[data-selected-commit]")?.getAttribute("data-selected-commit"),
+      )
+      .toBe(secondCommit);
+    expect(requests).toEqual([
+      { kind: "working" },
+      { kind: "commit", commit: firstCommit },
+      { kind: "commit", commit: secondCommit },
+    ]);
+  });
+
+  test("clears the prior frame measurement when refreshing the same review", async () => {
+    const { controller } = await mountApp();
+    await expect.poll(() => document.body.textContent).toContain("ms frame");
+    const before = controller.getSnapshot().review?.id;
+    let refreshed: Promise<void> | undefined;
+    flushSync(() => {
+      refreshed = controller.refresh();
+    });
+    expect(document.body.textContent).not.toContain("ms frame");
+    await refreshed;
+    expect(controller.getSnapshot().review?.id).toBe(before);
+  });
+
+  test("filters the full file set, switches layout, and finds across both files", async () => {
+    const { controller } = await mountApp();
+    await page.getByRole("textbox", { name: "Filter changed files" }).fill("alpha");
+    await expect.poll(() => controller.getSnapshot().visibleFiles.length).toBe(1);
+    expect(controller.getSnapshot().files).toHaveLength(2);
+    await page.getByRole("button", { name: "Clear file filter" }).click();
+    await expect.poll(() => controller.getSnapshot().visibleFiles.length).toBe(2);
+    await page.getByRole("button", { name: "Unified", exact: true }).click();
+    await expect
+      .element(page.getByRole("button", { name: "Unified", exact: true }))
+      .toHaveAttribute("aria-pressed", "true");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Find in diff");
+    await page.getByRole("option", { name: /Find in diff contents/ }).click();
+    await page.getByRole("textbox", { name: "Find in diff contents" }).fill("after");
+    await expect.element(page.getByText("1 / 2 hunks", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Next match" }).click();
+    await expect.element(page.getByText("2 / 2 hunks", { exact: true })).toBeVisible();
+  });
+
+  test("creates and deletes an inline note without retaining an old annotation portal", async () => {
+    const { controller } = await mountApp();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Find in diff");
+    await page.getByRole("option", { name: /Find in diff contents/ }).click();
+    await page.getByRole("textbox", { name: "Find in diff contents" }).fill("after");
+    await page.getByRole("button", { name: "Next match" }).click();
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "Review note text" })
+      .fill("Check inline reconciliation");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect.poll(() => controller.getSnapshot().notes?.notes.length).toBe(1);
+    await expect
+      .element(page.getByRole("textbox", { name: "Review note text" }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByText("Check inline reconciliation", { exact: true }))
+      .toBeVisible();
+    await page.getByRole("button", { name: "Delete review note" }).click();
+    await expect.poll(() => controller.getSnapshot().notes?.notes.length).toBe(0);
+    await expect
+      .element(page.getByText("Check inline reconciliation", { exact: true }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Delete review note" }))
+      .not.toBeInTheDocument();
+  });
+
+  test("advances each keyboard event when a navigation burst is batched", async () => {
+    const manyCommits = Array.from({ length: 30 }, (_, index) => ({
+      ...commits[0],
+      id: index.toString(16).padStart(40, "0"),
+      subject: `Commit ${index}`,
+      parents: index < 29 ? [(index + 1).toString(16).padStart(40, "0")] : [],
+    }));
+    const selected: string[] = [];
+    mount = document.createElement("div");
+    document.body.append(mount);
+    root = createRoot(mount);
+    function HistoryHarness() {
+      const [current, setCurrent] = useState(manyCommits[0].id);
+      return (
+        <HistoryPanel
+          commits={manyCommits}
+          selected={current}
+          loading={false}
+          hasMore={false}
+          error={null}
+          working={false}
+          onSelect={(id) => {
+            selected.push(id);
+            setCurrent(id);
+          }}
+          onLoadMore={() => {}}
+          onWorking={() => {}}
+        />
+      );
+    }
+    root.render(<HistoryHarness />);
+    await expect.element(page.getByRole("listbox", { name: "Commits" })).toBeVisible();
+    const listbox = document.querySelector('[role="listbox"]')!;
+    for (let index = 0; index < 21; index++)
+      listbox.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    expect(selected).toEqual(manyCommits.slice(1, 22).map((commit) => commit.id));
+  });
+
+  test("routes merge parents and preserves pending lanes across appended history pages", () => {
+    const history = [
+      { ...commits[0], id: "merge", parents: ["left", "right"] },
+      { ...commits[0], id: "left", parents: ["base"] },
+      { ...commits[0], id: "right", parents: ["base"] },
+      { ...commits[0], id: "base", parents: [] },
+    ];
+    const prefix = layoutHistory(history.slice(0, 2));
+    const full = layoutHistory(history);
+    expect(full.slice(0, 2)).toEqual(prefix);
+    expect(full[0].edges).toHaveLength(2);
+    expect(full[2].incoming).toBe(true);
+    expect(full[3].edges).toHaveLength(0);
+    expect(full.every((row) => row.edges.every((edge) => edge.to >= 0))).toBe(true);
+  });
+
+  test("opens a standalone patch without exposing Git controls", async () => {
+    const { requests } = await mountApp({ inputOnly: true });
+    expect(requests).toEqual([{ kind: "patch", path: "/test/change.patch" }]);
+    await expect
+      .element(page.getByRole("region", { name: "Commit history" }))
+      .not.toBeInTheDocument();
+    await expect.element(page.getByRole("combobox", { name: "Worktree" })).not.toBeInTheDocument();
+    await expect.element(page.getByRole("button", { name: "Toggle notes" })).toBeVisible();
+    await expect
+      .poll(() => document.querySelector("[data-file-count]")?.getAttribute("data-file-count"))
+      .toBe("2");
+  });
+
+  test("reveals metadata-only files selected in the sidebar", async () => {
+    await page.viewport(1280, 600);
+    const { controller } = await mountApp({ metadataFile: true });
+    await page.getByRole("treeitem", { name: /image.png/ }).click();
+    const target = page.getByText("Binary file", { exact: true });
+    await expect.element(target).toBeVisible();
+    const row = document.querySelector('[data-metadata-file="assets/image.png"]');
+    await expect
+      .poll(() => {
+        const rect = row?.getBoundingClientRect();
+        return rect !== undefined && rect.top >= 0 && rect.bottom <= innerHeight;
+      })
+      .toBe(true);
+    expect(
+      controller
+        .getSnapshot()
+        .files.find((file) => file.id === controller.getSnapshot().selectedFileId)?.path,
+    ).toBe("assets/image.png");
+  });
+
+  test("edits a stale note outside current hunks and preserves an orphaned note", async () => {
+    const { controller } = await mountApp({
+      notes: [
+        {
+          id: "inline",
+          path: "src/alpha.ts",
+          side: "new",
+          line: 900,
+          text: "Check this value",
+          createdAt: "2026-09-19T00:00:00Z",
+          updatedAt: "2026-09-19T00:00:00Z",
+          resolution: "stale",
+        },
+        {
+          id: "orphan",
+          path: "src/removed.ts",
+          side: "old",
+          line: 3,
+          text: "Preserve this concern",
+          createdAt: "2026-09-19T00:00:00Z",
+          updatedAt: "2026-09-19T00:00:00Z",
+          resolution: "orphaned",
+        },
+      ],
+    });
+    await page.getByText("2 preserved notes outside this diff", { exact: true }).click();
+    await expect.element(page.getByText("Check this value", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByText("Source changed since this note was written.", { exact: true }))
+      .toBeVisible();
+    await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+    await page
+      .getByRole("textbox", { name: "Edit note text" })
+      .fill("Checked against the current source");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => controller.getSnapshot().notes?.notes.find((note) => note.id === "inline")?.text)
+      .toBe("Checked against the current source");
+    await expect.element(page.getByText("Preserve this concern", { exact: true })).toBeVisible();
+  });
+});
