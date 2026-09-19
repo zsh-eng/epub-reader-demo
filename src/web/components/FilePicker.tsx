@@ -459,6 +459,7 @@ function PickerContents({
                           : sourceLabel
                       }
                       line={selectedResult.line}
+                      highlightQuery={displayedSearch?.query}
                       initialScrollTop={session.scroll.get(previewScrollKey)}
                       onScrollPosition={(top) => {
                         session.scroll.delete(previewScrollKey);

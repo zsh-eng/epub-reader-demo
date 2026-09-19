@@ -154,6 +154,63 @@ test("a preview is positioned at its target before its first visible frame", asy
   }
 });
 
+function searchRanges() {
+  return Array.from(CSS.highlights)
+    .filter(([name]) => name.startsWith("med-search-"))
+    .flatMap(([, highlight]) => Array.from(highlight) as Range[]);
+}
+
+test("search highlights span syntax tokens, use literal text, and clear when the preview changes", async () => {
+  const file = {
+    ...base,
+    identity: "highlight:1",
+    text: "const value = fn(value); // İ 🙂 FN(value)\n",
+  };
+  render(<FullFileView {...props} compact file={file} highlightQuery="fn(value)" />);
+  await expect
+    .poll(() => searchRanges().map((range) => range.toString()))
+    .toEqual(["fn(value)", "FN(value)"]);
+  const shadow = document.querySelector("diffs-container")!.shadowRoot!;
+  // Highlight overlays must not insert markup or remove syntax tokens.
+  expect(shadow.querySelector("mark")).toBeNull();
+  expect(shadow.querySelector("[data-line]")?.textContent).toContain(file.text.trim());
+  expect(searchRanges()[0]!.startContainer).not.toBe(searchRanges()[0]!.endContainer);
+
+  root!.render(<FullFileView {...props} compact file={file} highlightQuery="İ 🙂" />);
+  await expect.poll(() => searchRanges().map((range) => range.toString())).toEqual(["İ 🙂"]);
+  root!.render(<FullFileView {...props} compact file={file} highlightQuery="" />);
+  await expect.poll(() => searchRanges().length).toBe(0);
+  root!.render(<FullFileView {...props} compact file={file} highlightQuery="value" />);
+  await expect.poll(() => searchRanges().length).toBe(3);
+  root!.render(
+    <FullFileView {...props} compact file={{ ...base, kind: "binary" }} highlightQuery="value" />,
+  );
+  await expect.poll(() => searchRanges().length).toBe(0);
+});
+
+test("search highlights follow virtualized rows and release their ranges on close", async () => {
+  const file = {
+    ...base,
+    identity: "highlight-scroll:1",
+    plain: true,
+    text: Array.from({ length: 2000 }, (_, i) => `needle ${i + 1}\n`).join(""),
+  };
+  render(<FullFileView {...props} compact file={file} highlightQuery="needle" />);
+  await expect.poll(() => searchRanges().length).toBeGreaterThan(0);
+  const firstText = searchRanges()[0]!.startContainer.textContent;
+  await page.getByRole("region", { name: "Full file" }).wheel({ delta: { y: 4000 } });
+  await expect.poll(() => searchRanges()[0]?.startContainer.textContent).not.toBe(firstText);
+  expect(
+    searchRanges().every(
+      (range) => range.startContainer.isConnected && range.toString() === "needle",
+    ),
+  ).toBe(true);
+  expect(searchRanges().length).toBeLessThan(300);
+  root!.unmount();
+  root = undefined;
+  expect(searchRanges()).toEqual([]);
+});
+
 test("a long plain line uses horizontal scrolling instead of wrapping", async () => {
   render(
     <FullFileView

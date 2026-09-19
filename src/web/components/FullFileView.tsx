@@ -5,7 +5,15 @@ import {
   type CodeViewItem,
   type CodeViewReactOptions,
 } from "@pierre/diffs/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type { CodeViewLineSelection } from "@pierre/diffs";
 import type { BrowseRead } from "../../shared/browse";
 import type { BrowseBlame } from "../../shared/inspect";
@@ -14,6 +22,7 @@ import { tokens, ui } from "../theme.stylex";
 import { useTheme } from "../themes";
 import "../pierre-theme";
 import { Icon } from "./Icon";
+import { createSearchHighlights } from "../data/search-highlights";
 
 export interface FullFileViewProps {
   file: BrowseRead | null;
@@ -22,6 +31,7 @@ export interface FullFileViewProps {
   error: string | null;
   sourceLabel: string;
   line?: number;
+  highlightQuery?: string;
   compact?: boolean;
   initialScrollTop?: number;
   onScrollPosition?(top: number): void;
@@ -49,6 +59,7 @@ export function FullFileView({
   error,
   sourceLabel,
   line,
+  highlightQuery = "",
   compact = false,
   initialScrollTop,
   onScrollPosition,
@@ -62,6 +73,12 @@ export function FullFileView({
 }: FullFileViewProps) {
   const { active } = useTheme();
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
+  const highlightId = `med-search-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const highlights = useMemo(() => createSearchHighlights(highlightId), [highlightId]);
+  useLayoutEffect(() => {
+    highlights.refresh(highlightQuery);
+  }, [highlights, highlightQuery]);
+  useLayoutEffect(() => () => highlights.dispose(), [highlights]);
   const [localBlameEnabled, setLocalBlameEnabled] = useState(false);
   const blameOpen = !compact && (blameEnabled ?? localBlameEnabled);
   const [selection, setSelection] = useState<CodeViewLineSelection | null>(null);
@@ -137,9 +154,14 @@ export function FullFileView({
       disableFileHeader: true,
       enableLineSelection: true,
       tokenizeMaxLineLength: 1000,
+      unsafeCSS: `::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }`,
+      onPostRender(node, _instance, phase) {
+        if (phase === "unmount") highlights.dispose();
+        else highlights.update(node, highlightQuery);
+      },
       layout: { gap: 0, paddingTop: 8, paddingBottom: 16 },
     }),
-    [active],
+    [active, highlightId, highlights, highlightQuery],
   );
   useLayoutEffect(() => {
     if (!file || !items.length || loading) return;
