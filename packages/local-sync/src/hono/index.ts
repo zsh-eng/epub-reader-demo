@@ -1,3 +1,4 @@
+import { createSyncPullStream, MAX_SYNC_STREAM_PAGES } from "../stream.js";
 import { Hono, type Context, type Env, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { zValidator } from "@hono/zod-validator";
@@ -77,6 +78,79 @@ export function createSyncHonoRoutes<E extends Env>(
             deviceIdResult.data,
             changes,
           ),
+        );
+      },
+    )
+    .get(
+      "/pull-stream",
+      options.requireAuth,
+      zValidator<typeof syncV2PullQuerySchema, "query", E, "/pull-stream">(
+        "query",
+        syncV2PullQuerySchema,
+      ),
+      async (
+        c: Context<E, "/pull-stream", { out: { query: SyncPullBody } }>,
+      ) => {
+        const identity = options.getIdentity(c);
+        const device = syncDeviceIdSchema.safeParse(identity.deviceId);
+        if (!device.success) return c.json({ error: "Invalid device ID" }, 400);
+        const database = options.getDatabase(c);
+        const query = c.req.valid("query");
+        const currentHead = await readSyncV2Head(database, identity.userId);
+        const head = query.head ?? currentHead;
+        if (query.cursor > currentHead || head > currentHead)
+          return c.json(
+            { error: "Cursor or head exceeds the current stream" },
+            400,
+          );
+        const signal = c.req.raw.signal;
+        async function* pages() {
+          let cursor = query.cursor;
+          for (let i = 0; i < MAX_SYNC_STREAM_PAGES; i++) {
+            signal.throwIfAborted();
+            const page = await pullSyncV2(
+              database,
+              identity.userId,
+              device.data!,
+              { ...query, cursor },
+              head,
+              true,
+            );
+            signal.throwIfAborted();
+            yield page;
+            if (!page.hasMore) return;
+            cursor = page.cursor;
+          }
+        }
+        const acceptsGzip = (c.req.header("Accept-Encoding") ?? "")
+          .split(",")
+          .some((part) => {
+            const [name, ...parameters] = part.trim().toLowerCase().split(";");
+            const quality = parameters
+              .map((p) => p.trim())
+              .find((p) => p.startsWith("q="));
+            return (
+              name === "gzip" &&
+              (quality === undefined || Number(quality.slice(2)) > 0)
+            );
+          });
+        const stream = createSyncPullStream(pages());
+        const init: ResponseInit & { encodeBody: "manual" } = {
+          encodeBody: "manual",
+          headers: {
+            "Content-Type": "application/x-ndjson; charset=utf-8",
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+            Vary: "Accept-Encoding",
+            ...(acceptsGzip ? { "Content-Encoding": "gzip" } : {}),
+          },
+        };
+        // Workers must not compress our already-compressed bytes a second time.
+        return new Response(
+          acceptsGzip
+            ? stream.pipeThrough(new CompressionStream("gzip"))
+            : stream,
+          init,
         );
       },
     )

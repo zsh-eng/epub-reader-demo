@@ -1,6 +1,6 @@
 {
   "name": "@zsh-eng/local-sync",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Local-first record sync with explicit storage, Dexie and Hono/D1 adapters",
   "files": [
     "dist",

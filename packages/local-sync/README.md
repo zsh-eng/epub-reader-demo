@@ -123,3 +123,47 @@ with `node:sqlite` support. Reader also runs the server
 adapter in Cloudflare's D1 test runtime. Run `bun run build:packages` from the
 Reader root after a package edit when a development server is already running.
 Use `bun pm pack` to produce a local installable archive; this does not publish it.
+
+## Optional streaming pull (0.2)
+
+The Hono adapter exposes `GET /pull-stream` with the same query and identity as
+`/pull`. It returns newline-delimited page envelopes followed by `{"type":"end"}`.
+A response contains at most 32 pages. A clean partial response resumes with the
+same pagination head; EOF without the end marker is a failed transfer. The head
+bounds pagination, not a transactionally isolated snapshot. Later updates beyond
+that head arrive in the next pull.
+
+D1 pages are bounded by 500 rows and a 512 KiB raw-value/key budget (including a
+metadata allowance). One lookahead row determines whether more data remains.
+Wire frames are capped at 4 MiB after JSON escaping. The response uses gzip when
+accepted, with streaming compression and `encodeBody: "manual"` on Workers.
+
+Implement optional `SyncRemote.pullStream(deviceId, query, signal)` with
+`readSyncPullStream(response, signal)`. The decoder checks frame sizes, valid
+UTF-8, envelope schemas, the end marker, and a 30-second idle timeout. The remote
+must honor cancellation during pending reads. Hosts may fall back to `pull` on
+404/405; never hide auth errors or truncated streams as successful fallback.
+
+`SyncClient` uses one ordered writer and one page of lookahead. It retains at
+most the active page and the next decoded page, in addition to parser and
+transport buffers. Cursor checkpoints follow committed storage writes. Initial
+bootstrap is marked complete only after a clean final stream. Failed writes
+abort pending reads; local edits are still resolved by the storage adapter at
+apply time. Pass the host's sync lifetime signal as `SyncClientOptions.signal`
+when opting into streams. Account ownership and the in-memory domain model stay
+with the host. Consumers that do not implement `pullStream` keep paginated pull.
+
+## Client performance
+
+- Parse domain values once. Select schemas by record type; avoid trying every
+  branch of a union. Zod 4 compilation can reduce validation cost further;
+  measure it with your data and browser policy.
+- Overlap reads with one ordered writer. Bound the queue and save the cursor
+  only after the write commits. Streaming already supports one-page lookahead.
+- Tune local write batches separately from server pages. Larger batches can
+  reduce transaction overhead but increase memory use and UI pauses.
+- An empty-outbox shortcut can avoid per-record lookups. This is an experimental
+  optimization, not a built-in feature: check emptiness inside each apply
+  transaction and keep conflict checks when pending edits exist.
+- Measure the full restore. Network reads and database writes can overlap;
+  their elapsed times must not be added as independent costs.

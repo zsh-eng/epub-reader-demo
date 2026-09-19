@@ -5,6 +5,7 @@ import {
   type SyncPushResponse,
   type SyncRecord,
 } from "../protocol.js";
+import { SYNC_STREAM_PAGE_BYTES } from "../stream.js";
 import { DEFAULT_SYNC_PULL_LIMIT } from "../protocol.js";
 
 /** Minimal D1 interface; consumers do not need Reader's generated Worker types. */
@@ -108,6 +109,21 @@ const PULL_SYNC_V2_PAGE_SQL = `
   LIMIT ?
 `;
 
+// Bound rows returned from D1 by raw UTF-8 bytes as well as count. One row past
+// the byte budget is retained as lookahead; no full large page reaches the Worker.
+const PULL_SYNC_STREAM_PAGE_SQL = `
+  WITH candidates AS (
+    ${PULL_SYNC_V2_PAGE_SQL}
+  ), measured AS (
+    SELECT *, length(CAST(value AS BLOB)) + length(CAST(key AS BLOB)) + 512 AS record_bytes
+    FROM candidates
+  ), sized AS (
+    SELECT *, SUM(record_bytes) OVER (ORDER BY server_seq ROWS UNBOUNDED PRECEDING) AS cumulative_bytes
+    FROM measured
+  )
+  SELECT * FROM sized WHERE cumulative_bytes - record_bytes <= ? ORDER BY server_seq
+`;
+
 interface StoredSyncV2Record {
   readonly server_seq: number;
   readonly user_id: string;
@@ -189,21 +205,31 @@ export async function pullSyncV2(
   deviceId: string,
   body: SyncPullBody,
   head: number,
+  boundedBytes = false,
 ): Promise<SyncPullResponse> {
   const limit = body.limit ?? DEFAULT_SYNC_PULL_LIMIT;
+  const values: unknown[] = [
+    userId,
+    body.cursor,
+    head,
+    body.excludeOwnDevice ? 1 : 0,
+    deviceId,
+    limit + 1,
+  ];
+  if (boundedBytes) values.push(SYNC_STREAM_PAGE_BYTES);
   const result = await database
-    .prepare(PULL_SYNC_V2_PAGE_SQL)
-    .bind(
-      userId,
-      body.cursor,
-      head,
-      body.excludeOwnDevice ? 1 : 0,
-      deviceId,
-      limit + 1,
-    )
-    .all<StoredSyncV2Record>();
-  const hasMore = result.results.length > limit;
-  const records = result.results.slice(0, limit).map(decodeStoredSyncV2Record);
+    .prepare(boundedBytes ? PULL_SYNC_STREAM_PAGE_SQL : PULL_SYNC_V2_PAGE_SQL)
+    .bind(...values)
+    .all<StoredSyncV2Record & { cumulative_bytes?: number }>();
+  const selected = result.results.filter(
+    (row, index) =>
+      index < limit &&
+      (!boundedBytes ||
+        index === 0 ||
+        row.cumulative_bytes! <= SYNC_STREAM_PAGE_BYTES),
+  );
+  const hasMore = result.results.length > selected.length;
+  const records = selected.map(decodeStoredSyncV2Record);
   const lastRecord = records.at(-1);
 
   return {

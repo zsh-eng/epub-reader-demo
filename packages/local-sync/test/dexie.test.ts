@@ -173,3 +173,33 @@ describe("independent Dexie consumer", () => {
     expect(b.state.read()?.hlc.wallTimeMs).toBe(0);
   });
 });
+
+it("keeps an edit made while a streaming record waits to apply", async () => {
+  const { db, raw, state, storage } = setup("stream-local");
+  const remoteRecord = record("remote", 1);
+  const client = new SyncClient({
+    stateStore: state,
+    remote: {
+      pull: async () => {
+        throw new Error("Unexpected fallback");
+      },
+      push: async () => ({ results: [] }),
+      async *pullStream() {
+        yield { records: [remoteRecord], cursor: 2, head: 2, hasMore: false };
+      },
+    },
+    storage: {
+      prepareRemoteRecords: (rows) => storage.prepareRemoteRecords(rows),
+      async applyRemoteRecords(prepared, deviceId) {
+        await db.tasks.put({ id: "one", title: "edited while downloading" });
+        return storage.applyRemoteRecords(prepared, deviceId);
+      },
+      getPendingChanges: () => storage.getPendingChanges(),
+      reconcilePushResults: (sent, prepared) =>
+        storage.reconcilePushResults(sent, prepared),
+    },
+  });
+  expect(await client.pull()).toEqual({ pulled: 0, skipped: 1 });
+  expect((await raw.tasks.get("one"))!.title).toBe("edited while downloading");
+  expect(await raw._sync_outbox.count()).toBe(1);
+});

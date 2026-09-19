@@ -207,3 +207,100 @@ describe("standalone Hono/D1 adapter", () => {
     expect(empty).toMatchObject({ records: [], cursor: 0 });
   });
 });
+
+describe("streaming Hono/D1 pull", () => {
+  it("enforces auth and bounded windows, retaining the head across requests", async () => {
+    const api = app();
+    expect(
+      (await api.request("/bridge/pull-stream?cursor=0&excludeOwnDevice=false"))
+        .status,
+    ).toBe(401);
+    const headers = {
+      "Test-Account": "owner",
+      "Test-Device": "writer",
+      "Content-Type": "application/json",
+    };
+    const changes = Array.from({ length: 40 }, (_, n) => change(`key-${n}`, n));
+    expect(
+      (
+        await api.request("/bridge/push", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ changes }),
+        })
+      ).status,
+    ).toBe(200);
+    const read = async (cursor: number, head?: number) => {
+      const result = await api.request(
+        `/bridge/pull-stream?cursor=${cursor}&limit=1&excludeOwnDevice=false${head === undefined ? "" : `&head=${head}`}`,
+        { headers },
+      );
+      expect(result.status).toBe(200);
+      return (await result.text())
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line));
+    };
+    const first = await read(0);
+    expect(first).toHaveLength(33);
+    expect(first.at(-1)).toEqual({ type: "end" });
+    expect(first[31].hasMore).toBe(true);
+    const second = await read(first[31].cursor, first[0].head);
+    expect(second).toHaveLength(9);
+    expect(second[7].hasMore).toBe(false);
+    const other = await api.request(
+      "/bridge/pull-stream?cursor=0&excludeOwnDevice=false",
+      { headers: { ...headers, "Test-Account": "other" } },
+    );
+    expect(
+      (await other.text()).split("\n").map((s) => s && JSON.parse(s))[0]
+        .records,
+    ).toEqual([]);
+  });
+  it("bounds page bytes in SQL and serves negotiated gzip without losing records", async () => {
+    const api = app();
+    const headers = {
+      "Test-Account": "owner",
+      "Test-Device": "writer",
+      "Content-Type": "application/json",
+    };
+    for (let batch = 0; batch < 3; batch++) {
+      const changes = Array.from({ length: 8 }, (_, n) => ({
+        ...change(`large-${batch}-${n}`, batch * 8 + n),
+        value: "x".repeat(60_000),
+      }));
+      expect(
+        (
+          await api.request("/bridge/push", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ changes }),
+          })
+        ).status,
+      ).toBe(200);
+    }
+    const result = await api.request(
+      "/bridge/pull-stream?cursor=0&excludeOwnDevice=false",
+      { headers: { ...headers, "Accept-Encoding": "gzip" } },
+    );
+    expect(result.headers.get("Content-Encoding")).toBe("gzip");
+    const text = await new Response(
+      result.body!.pipeThrough(new DecompressionStream("gzip")),
+    ).text();
+    const frames = text
+      .trim()
+      .split("\n")
+      .map((s) => JSON.parse(s));
+    expect(frames.at(-1)).toEqual({ type: "end" });
+    const pages = frames.slice(0, -1);
+    expect(pages).toHaveLength(3);
+    expect(pages.flatMap((p) => p.records)).toHaveLength(24);
+    expect(pages.every((p) => p.records.length <= 8)).toBe(true);
+    const raw = await api.request(
+      "/bridge/pull-stream?cursor=0&excludeOwnDevice=false",
+      { headers: { ...headers, "Accept-Encoding": "gzip;q=0" } },
+    );
+    expect(raw.headers.get("Content-Encoding")).toBeNull();
+    await raw.body?.cancel();
+  });
+});

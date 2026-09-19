@@ -7,6 +7,12 @@ import type {
 } from "./protocol.js";
 
 export interface SyncRemote {
+  /** Optional bounded-window stream. Must honor cancellation, including pending reads. */
+  pullStream?(
+    deviceId: string,
+    request: SyncPullBody,
+    signal: AbortSignal,
+  ): AsyncIterable<SyncPullResponse>;
   pull(deviceId: string, request: SyncPullBody): Promise<SyncPullResponse>;
   push(
     deviceId: string,

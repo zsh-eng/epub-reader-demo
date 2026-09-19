@@ -20,6 +20,7 @@ export interface SyncClientOptions<Prepared> {
   storage: SyncStorage<Prepared>;
   remote: SyncRemote;
   stateStore: SyncClientStateStore;
+  signal?: AbortSignal;
 }
 
 /**
@@ -30,9 +31,11 @@ export class SyncClient<Prepared> {
   private readonly storage: SyncStorage<Prepared>;
   private readonly remote: SyncRemote;
   private readonly stateStore: SyncClientStateStore;
+  private readonly signal?: AbortSignal;
   private activeSync: Promise<SyncRunResult> | null = null;
 
   constructor(options: SyncClientOptions<Prepared>) {
+    this.signal = options.signal;
     this.storage = options.storage;
     this.remote = options.remote;
     this.stateStore = options.stateStore;
@@ -53,6 +56,7 @@ export class SyncClient<Prepared> {
   }
 
   async pull(): Promise<Pick<SyncRunResult, "pulled" | "skipped">> {
+    if (this.remote.pullStream) return this.pullStreaming();
     let pulled = 0;
     let skipped = 0;
     let head: number | undefined;
@@ -94,6 +98,99 @@ export class SyncClient<Prepared> {
         return { pulled, skipped };
       }
       head = validResponse.head;
+    }
+  }
+
+  /** One page is prefetched while one page commits; never rewrite a growing prefix. */
+  private async pullStreaming(): Promise<
+    Pick<SyncRunResult, "pulled" | "skipped">
+  > {
+    const controller = new AbortController();
+    const abort = () => controller.abort(this.signal?.reason);
+    this.signal?.addEventListener("abort", abort, { once: true });
+    if (this.signal?.aborted) abort();
+    let pulled = 0,
+      skipped = 0,
+      head: number | undefined;
+    const initial = this.requireState();
+    const deviceId = initial.deviceId;
+    const check = () => {
+      controller.signal.throwIfAborted();
+      if (this.requireState().deviceId !== deviceId)
+        throw new Error("Sync account/device changed during pull");
+    };
+    try {
+      while (true) {
+        check();
+        let request: SyncPullBody = {
+          cursor: this.requireState().pullCursor,
+          ...(head === undefined ? {} : { head }),
+          limit: DEFAULT_SYNC_PULL_LIMIT,
+          excludeOwnDevice: initial.bootstrapped,
+        };
+        const iterator = this.remote.pullStream!(
+          deviceId,
+          request,
+          controller.signal,
+        )[Symbol.asyncIterator]();
+        // Attach rejection handlers immediately so prefetched failures never escape unhandled.
+        const next = () =>
+          iterator.next().then(
+            (value) => ({ value }),
+            (error) => ({ error }),
+          );
+        let pending = next();
+        let last: SyncPullResponse | undefined;
+        try {
+          while (true) {
+            const item = await pending;
+            if ("error" in item) throw item.error;
+            check();
+            if (item.value.done) break;
+            if (last && !last.hasMore)
+              throw new Error("Sync stream continued after its final page");
+            const page = syncPullResponseSchema.parse(item.value.value);
+            validatePullResponse(request, page, head);
+            head = page.head;
+            const prepared = this.storage.prepareRemoteRecords(page.records);
+            observeSyncHlcBatch(
+              page.records.map((record) => record.hlc),
+              this.stateStore,
+            );
+            pending = next();
+            const result = await this.storage.applyRemoteRecords(
+              prepared,
+              deviceId,
+            );
+            check();
+            pulled += result.applied;
+            skipped += result.skipped;
+            this.stateStore.write({
+              ...this.requireState(),
+              pullCursor: page.cursor,
+            });
+            last = page;
+            request = { ...request, cursor: page.cursor, head };
+          }
+          if (!last) throw new Error("Sync stream returned no pages");
+          if (!last.hasMore) {
+            this.stateStore.write({
+              ...this.requireState(),
+              bootstrapped: true,
+            });
+            return { pulled, skipped };
+          }
+          // A clean partial window resumes at the committed cursor with the same head.
+        } catch (error) {
+          controller.abort(error);
+          throw error;
+        } finally {
+          await iterator.return?.();
+        }
+      }
+    } finally {
+      this.signal?.removeEventListener("abort", abort);
+      controller.abort();
     }
   }
 
