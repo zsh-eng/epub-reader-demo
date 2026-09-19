@@ -6,7 +6,7 @@ test.use({
   isMobile: true,
 });
 
-test("failed note save preserves the mobile draft and retry updates the preview once", async ({
+test("failed note save preserves the mobile draft and retry saves exactly once", async ({
   page,
   localBook,
 }) => {
@@ -46,7 +46,8 @@ test("failed note save preserves the mobile draft and retry updates the preview 
   await expect(page.locator("[data-reader-footer]")).toHaveCount(0);
   await page.context().setOffline(true);
   await save.click();
-  await expect(input).toHaveValue("");
+  await expect(input).not.toBeVisible();
+  await page.getByRole("button", { name: "Jot a note" }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(notebook).toHaveAttribute(
     "aria-description",
@@ -54,7 +55,7 @@ test("failed note save preserves the mobile draft and retry updates the preview 
   );
   await expect(
     page.getByRole("button", { name: "Read latest note" }),
-  ).toContainText("A draft that must survive a failed save");
+  ).toHaveCount(0);
   await page.context().setOffline(false);
   await expect
     .poll(() =>

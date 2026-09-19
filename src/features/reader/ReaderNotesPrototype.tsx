@@ -1,3 +1,5 @@
+import { sameNotePassage } from "./note-target";
+import { useToast } from "@/hooks/use-toast";
 import { NotebookCountIcon } from "./shared/NotebookCountIcon";
 import { NotebookNote } from "./NotebookNote";
 import { DesktopNotebookNote, NotebookNoteBody } from "./DesktopNotebookNote";
@@ -14,11 +16,19 @@ import type { ChapterEntry } from "./types";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
+  DropdownMenuItem,
   DropdownMenuContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, Check, SlidersHorizontal, X } from "lucide-react";
+import {
+  ArrowUp,
+  Check,
+  SlidersHorizontal,
+  X,
+  MoreHorizontal,
+  Palette,
+} from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   useLayoutEffect,
@@ -100,7 +110,10 @@ export function ReaderNotesPrototype({
     [onMobileComposerPresenceChange],
   );
   const reduceMotion = useReducedMotion();
-  const [animateSend, setAnimateSend] = useState(true);
+  const { toast } = useToast();
+  const [writing, setWriting] = useState(false);
+  const [showTools, setShowTools] = useState(false);
+  const [pendingTarget, setPendingTarget] = useState<NoteTarget | null>(null);
   const [order, setOrder] = useState<"time" | "chapter">("time");
   const notes = useReaderNotes(bookId);
   const { deleteNote, restoredEntries } = useNotebookDeletion({
@@ -130,6 +143,13 @@ export function ReaderNotesPrototype({
       : target?.kind === "selection"
         ? { selectedText: target.text, color: "invisible" }
         : null;
+  // The top row has one purpose at a time. Restored text shows its attachment
+  // before focus, so a new selection cannot appear to own an older draft.
+  const mobileContextVisible = Boolean(
+    (quote || pendingTarget) &&
+    !showTools &&
+    (writing || hasDraftText || !mobileAnnotation),
+  );
   const resolver = useMemo(
     () =>
       createNoteLocationResolver(
@@ -163,15 +183,34 @@ export function ReaderNotesPrototype({
     if (
       !notes.ready ||
       notes.saving ||
-      (desktop && notes.editingId) ||
+      notes.editingId ||
       !incomingTarget ||
       handledTarget.current === incomingTarget
     )
       return;
     handledTarget.current = incomingTarget;
-    notes.change(draft, incomingTarget);
+    if (
+      !desktop &&
+      hasDraftText &&
+      target &&
+      !sameNotePassage(target, incomingTarget)
+    ) {
+      setPendingTarget(incomingTarget);
+    } else {
+      setPendingTarget(null);
+      notes.change(draft, incomingTarget);
+    }
     onClearQuote();
-  }, [incomingTarget, notes.ready, draft, notes, onClearQuote, desktop]);
+  }, [
+    incomingTarget,
+    notes.ready,
+    draft,
+    notes,
+    onClearQuote,
+    desktop,
+    hasDraftText,
+    target,
+  ]);
   const entries = useMemo(
     () =>
       resolved.map(({ note, anchor }) => ({
@@ -203,6 +242,14 @@ export function ReaderNotesPrototype({
   );
 
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const previousKeyboardOpen = useRef(false);
+  useEffect(() => {
+    if (previousKeyboardOpen.current && !keyboardOpen) {
+      setWriting(false);
+      if (!pendingTarget) setShowTools(true);
+    }
+    previousKeyboardOpen.current = keyboardOpen;
+  }, [keyboardOpen, pendingTarget]);
   const composer = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const sidebarInput = useRef<HTMLTextAreaElement>(null);
@@ -325,14 +372,18 @@ export function ReaderNotesPrototype({
     onActiveChange(false);
     mobileAnnotation?.close();
     setKeyboardOpen(false);
+    setWriting(false);
+    setShowTools(false);
+    setPendingTarget(null);
   }, [flush, setNotebook, onActiveChange, mobileAnnotation]);
-  async function send(animate = true) {
-    setAnimateSend(animate && !notes.editingId);
+  async function send() {
     if (!(await notes.send())) return;
     onClearQuote();
     mobileAnnotation?.close();
-    if (desktop && !notebook) close();
-    else (notebook ? sidebarInput : input).current?.focus();
+    if (!notebook) {
+      close();
+      if (!desktop) toast({ message: "Note saved", duration: 1800 });
+    } else sidebarInput.current?.focus();
   }
 
   const editNote = notes.edit;
@@ -349,7 +400,6 @@ export function ReaderNotesPrototype({
 
   const iconButton =
     "flex h-8 w-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring";
-  const latest = entries.at(-1);
   const orderedEntries = useMemo(
     () =>
       order === "time"
@@ -390,6 +440,7 @@ export function ReaderNotesPrototype({
   function renderNoteInput(inNotebook = false) {
     const footerInput = !desktop && !inNotebook;
     const editingInComposer = !desktop && Boolean(notes.editingId);
+    const showQuote = footerInput ? mobileContextVisible : Boolean(quote);
     const sendButton = (
       <button
         aria-label={editingInComposer ? "Save changes" : "Save note"}
@@ -407,6 +458,11 @@ export function ReaderNotesPrototype({
     );
     return (
       <div>
+        {notes.error && inNotebook === notebook && (
+          <p role="alert" className="mx-3 mb-2 text-sm text-destructive">
+            {notes.error}
+          </p>
+        )}
         {editingInComposer && (
           <div
             data-note-edit-strip
@@ -455,7 +511,7 @@ export function ReaderNotesPrototype({
                 : undefined
             }
           >
-            {quote && (
+            {(quote || pendingTarget) && showQuote && (
               <div
                 className="mx-3 mt-1 flex items-center gap-2"
                 data-testid="note-quote"
@@ -464,27 +520,76 @@ export function ReaderNotesPrototype({
                   className="min-w-0 flex-1 truncate border-l-[3px] py-1 pl-2 text-xs text-muted-foreground"
                   style={{
                     borderColor:
-                      quote.color === "invisible"
+                      !quote || quote.color === "invisible"
                         ? "var(--muted-foreground)"
                         : `var(--${quote.color}-secondary)`,
                   }}
                 >
-                  {quote.selectedText}
+                  {quote?.selectedText ?? "Unquoted note"}
                 </span>
-                {!editingInComposer && (
+                {!editingInComposer &&
+                  (!footerInput ? (
+                    <button
+                      aria-label="Remove quote"
+                      className="flex size-7 items-center justify-center text-muted-foreground"
+                      onClick={() => {
+                        if (target)
+                          notes.change(draft, {
+                            kind: "page",
+                            anchor: target.anchor,
+                          });
+                        onClearQuote();
+                      }}
+                    >
+                      <X size={13} />
+                    </button>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label="Note attachment"
+                        className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground"
+                      >
+                        <MoreHorizontal size={16} />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {pendingTarget && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              notes.change(draft, pendingTarget);
+                              setPendingTarget(null);
+                            }}
+                          >
+                            Use selected passage
+                          </DropdownMenuItem>
+                        )}
+                        {quote && (
+                          <DropdownMenuItem
+                            onClick={() => {
+                              if (target)
+                                notes.change(draft, {
+                                  kind: "page",
+                                  anchor: target.anchor,
+                                });
+                              onClearQuote();
+                            }}
+                          >
+                            Remove quote
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ))}
+                {footerInput && mobileAnnotation && (
                   <button
-                    aria-label="Remove quote"
+                    aria-label="Show highlight tools"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground"
                     onClick={() => {
-                      if (target)
-                        notes.change(draft, {
-                          kind: "page",
-                          anchor: target.anchor,
-                        });
-                      onClearQuote();
+                      input.current?.blur();
+                      setWriting(false);
+                      setShowTools(true);
                     }}
-                    className="flex size-7 items-center justify-center text-muted-foreground"
                   >
-                    <X size={13} />
+                    <Palette size={16} />
                   </button>
                 )}
               </div>
@@ -501,6 +606,8 @@ export function ReaderNotesPrototype({
                     input.current?.blur();
                     onActiveChange(true);
                     mobileAnnotation?.close();
+                    setPendingTarget(null);
+                    setShowTools(false);
                     setNotebook(!notebook);
                   }}
                   className={`${iconButton} relative`}
@@ -512,16 +619,32 @@ export function ReaderNotesPrototype({
               <NoteTextInput
                 ref={inNotebook ? sidebarInput : input}
                 autoFocus={
-                  desktop ? open && !inNotebook : !notebook && !mobileAnnotation
+                  desktop
+                    ? open && !inNotebook
+                    : !notebook && !mobileAnnotation && !hasDraftText
                 }
                 onFocus={() => {
-                  if (desktop || inNotebook || !mobileAnnotation) return;
+                  if (desktop || inNotebook) return;
+                  setWriting(true);
+                  setShowTools(false);
+                  if (!mobileAnnotation) return;
                   if (
                     capturedAnnotation.current !== mobileAnnotation.identity
                   ) {
                     capturedAnnotation.current = mobileAnnotation.identity;
                     const selectedTarget = mobileAnnotation.captureTarget();
-                    if (selectedTarget) notes.change(draft, selectedTarget);
+                    if (selectedTarget) {
+                      if (
+                        hasDraftText &&
+                        target &&
+                        !sameNotePassage(target, selectedTarget)
+                      )
+                        setPendingTarget(selectedTarget);
+                      else {
+                        setPendingTarget(null);
+                        if (!hasDraftText) notes.change(draft, selectedTarget);
+                      }
+                    }
                   }
                   onActiveChange(true);
                 }}
@@ -543,7 +666,7 @@ export function ReaderNotesPrototype({
                     !event.nativeEvent.isComposing
                   ) {
                     event.preventDefault();
-                    send(false);
+                    send();
                   }
                   if (event.key === "Escape") {
                     if (notes.editingId) void notes.cancelEdit();
@@ -805,14 +928,6 @@ export function ReaderNotesPrototype({
   );
   return (
     <>
-      {notes.error && (
-        <p
-          role="alert"
-          className="fixed inset-x-4 top-16 z-50 rounded-xl bg-background p-3 text-sm"
-        >
-          {notes.error}
-        </p>
-      )}
       {!desktop && !embeddedNotebook && (
         <ReaderSheet
           open={notebook && open}
@@ -946,75 +1061,9 @@ export function ReaderNotesPrototype({
                 : undefined
             }
           >
-            {mobileAnnotation?.tools}
-            {!desktop && !notebook && latest && !notes.editingId && (
-              <div
-                className="relative mx-4 -mb-3 h-10 overflow-hidden"
-                aria-live="polite"
-              >
-                <motion.button
-                  key={latest.id}
-                  aria-label="Read latest note"
-                  onClick={() => {
-                    input.current?.blur();
-                    onActiveChange(true);
-                    mobileAnnotation?.close();
-                    setNotebook(true);
-                  }}
-                  initial={{
-                    opacity: 0,
-                    transform:
-                      reduceMotion || !animateSend
-                        ? "none"
-                        : "translateY(10px)",
-                  }}
-                  animate={{ opacity: 1, transform: "none" }}
-                  transition={{
-                    ...transition,
-                    duration: animateSend ? 0.18 : 0,
-                  }}
-                  className="absolute inset-0 flex w-full items-center gap-2 rounded-[2rem] border border-border/50 bg-background/90 px-3 pb-2 text-left text-xs text-muted-foreground backdrop-blur-xl"
-                >
-                  <span
-                    className="min-w-0 flex-1 truncate"
-                    aria-label={latest.text}
-                  >
-                    <span aria-hidden="true">
-                      {Array.from(latest.text.slice(0, 90)).map(
-                        (character, index) => (
-                          <motion.span
-                            key={index}
-                            className="inline-block whitespace-pre"
-                            initial={
-                              reduceMotion || !animateSend
-                                ? false
-                                : { opacity: 0, transform: "translateY(4px)" }
-                            }
-                            animate={{ opacity: 1, transform: "none" }}
-                            transition={{
-                              duration: 0.12,
-                              delay:
-                                reduceMotion || !animateSend
-                                  ? 0
-                                  : Math.min(index, 50) * 0.003,
-                              ease: [0.23, 1, 0.32, 1],
-                            }}
-                          >
-                            {character}
-                          </motion.span>
-                        ),
-                      )}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[10px]">
-                    {new Date(latest.createdAt).toLocaleTimeString([], {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </motion.button>
-              </div>
-            )}
+            {mobileAnnotation &&
+              !mobileContextVisible &&
+              mobileAnnotation.tools}
             {renderNoteInput()}
           </motion.div>
         )}

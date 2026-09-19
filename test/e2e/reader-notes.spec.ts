@@ -126,17 +126,8 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   await page.screenshot({ path: "/tmp/reader-note-composer.png" });
   await page.context().setOffline(true);
   await page.getByRole("button", { name: "Save note", exact: true }).click();
-  await expect(input).toHaveValue("");
-  await expect(input).toBeFocused();
-  await page.context().setOffline(false);
-  await expect(
-    page.getByRole("button", { name: "Read latest note" }),
-  ).toContainText("How easily curiosity");
-  await page.touchscreen.tap(
-    bounds.x + bounds.width * 0.9,
-    bounds.y + bounds.height * 0.3,
-  );
   await expect(input).not.toBeVisible();
+  await page.context().setOffline(false);
   expect(await currentPages(page)).toEqual(before);
   await page.getByRole("button", { name: "Jot a note" }).click();
   await input.fill("Return to this idea later.");
@@ -150,10 +141,9 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   await page.getByRole("button", { name: "Jot a note" }).click();
   await expect(input).toHaveValue("Return to this idea later.");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Read latest note" }),
-  ).toContainText("Return to this idea later.");
-  await page.getByRole("button", { name: "Read latest note" }).click();
+  await expect(input).not.toBeVisible();
+  await page.getByRole("button", { name: "Jot a note" }).click();
+  await page.getByRole("button", { name: "Open notebook" }).click();
   await expect(
     page.getByRole("region", { name: "Book notebook" }),
   ).toContainText("Notebook 2");
@@ -737,6 +727,8 @@ test("swipes to edit without losing the compose draft or changing the note ancho
   const compose = page.getByRole("textbox", { name: "Write a note" });
   await compose.fill("The original thought.");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(compose).not.toBeVisible();
+  await trigger.click();
   await expect(compose).toHaveValue("");
   const readNotes = () =>
     page.evaluate(async (path) => {
@@ -984,6 +976,8 @@ test("swipes right to delete and undo while keeping the compose draft", async ({
   const compose = page.getByRole("textbox", { name: "Write a note" });
   await compose.fill("A thought to delete.");
   await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await expect(compose).not.toBeVisible();
+  await trigger.click();
   await expect(compose).toHaveValue("");
   const readNotes = () =>
     page.evaluate(async (path) => {

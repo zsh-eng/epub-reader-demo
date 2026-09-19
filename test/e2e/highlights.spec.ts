@@ -87,7 +87,7 @@ test.describe("Mobile highlight durability", () => {
       .locator('[data-reader-spread-layer="current"] [data-highlight-id]')
       .first();
     await passage.tap();
-    const remove = page.getByRole("button", { name: "Delete highlight" });
+    const remove = page.getByRole("button", { name: "Remove highlight" });
     await expect(remove).toBeVisible();
     await remove.dispatchEvent("pointerdown", {
       pointerId: 3,

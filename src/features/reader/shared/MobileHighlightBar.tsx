@@ -23,14 +23,6 @@ export function MobileHighlightBar({
       {HIGHLIGHT_COLORS.map((color) => {
         const isCurrentColor = currentColor && color.name === currentColor;
 
-        const handleClick = () => {
-          if (isCurrentColor && onDelete) {
-            onDelete();
-            return;
-          }
-          onColorSelect(color.name);
-        };
-
         return (
           <button
             key={color.name}
@@ -40,7 +32,10 @@ export function MobileHighlightBar({
               event.preventDefault();
               event.stopPropagation();
             }}
-            onClick={handleClick}
+            onClick={() => {
+              if (!isCurrentColor) onColorSelect(color.name);
+            }}
+            aria-pressed={Boolean(isCurrentColor)}
             className={cn(
               "cursor-pointer w-full max-w-16 flex-1 h-8 rounded-full transition-[scale,border-color] duration-150 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2",
               "border border-black/5 active:border-black/10",
@@ -49,14 +44,20 @@ export function MobileHighlightBar({
             style={{
               backgroundColor: `var(--${color.name}-secondary)`,
             }}
-            aria-label={
-              isCurrentColor
-                ? "Delete highlight"
-                : `Highlight with ${color.name}`
-            }
+            aria-label={`Highlight with ${color.name}`}
           />
         );
       })}
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          className="h-8 shrink-0 rounded-full px-2 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          aria-label="Remove highlight"
+        >
+          Remove
+        </button>
+      )}
     </div>
   );
 }
