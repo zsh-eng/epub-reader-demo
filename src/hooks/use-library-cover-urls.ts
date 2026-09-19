@@ -107,9 +107,10 @@ interface UseLibraryCoverUrlsResult {
 }
 
 /**
- * Prepares the first visible cover group as one presentation unit. The first
- * two rows can use local storage or the network. Later covers load near the
- * viewport, or sequentially when the Library enables background loading.
+ * Prepares local covers in the first two rows as one presentation unit. Missing
+ * covers download independently and use the existing placeholder until ready;
+ * the network must never hold the Library's first paint. Later covers load near
+ * the viewport, or sequentially when the Library enables background loading.
  */
 export function useLibraryCoverUrls(
   books: readonly Book[],
@@ -143,6 +144,14 @@ export function useLibraryCoverUrls(
       initialBooks.map(async (book) => {
         const fileId = getBookCoverFileId(book);
         if (!fileId) return null;
+
+        if (!decodedCoverUrls.has(fileId) && !(await files.hasLocal(fileId))) {
+          void loadDecodedCoverUrl(fileId).then((url) => {
+            if (cancelled || !url) return;
+            setCoverUrls((current) => new Map(current).set(book.id, url));
+          });
+          return null;
+        }
 
         const url = await loadDecodedCoverUrl(fileId);
         return url ? ([book.id, url] as const) : null;

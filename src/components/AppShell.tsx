@@ -4,7 +4,6 @@ import {
   SidebarInset,
   SidebarProvider,
 } from "@/components/ui/sidebar";
-import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
@@ -47,7 +46,6 @@ export function AppShell() {
   const location = useLocation();
   const outlet = useOutlet();
   const prefersReducedMotion = useReducedMotion();
-  const { isLoading: isAuthLoading } = useAuth();
   const isReaderRoute = location.pathname.startsWith("/reader/");
   const routeTransitionKey = getRouteTransitionKey(location.pathname);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -55,9 +53,9 @@ export function AppShell() {
   const [readyLocationKey, setReadyLocationKey] = useState(() =>
     location.pathname === "/" ? "" : location.key,
   );
-  const canReveal =
-    isReaderRoute ||
-    (!isAuthLoading && (location.pathname !== "/" || libraryReady));
+  // Local screens must not wait for the remote session check. Account controls
+  // already show their own pending state while authentication is unresolved.
+  const canReveal = location.pathname !== "/" || libraryReady;
   const [hasRevealed, setHasRevealed] = useState(canReveal);
   // On the initial Library load, keep the complete page transparent until the
   // shell and the Library readiness gate are both open. This preserves the

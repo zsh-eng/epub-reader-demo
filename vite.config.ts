@@ -25,6 +25,9 @@ export default defineConfig({
         enabled: true,
       },
       workbox: {
+        // Built-in document and pagination-worker fonts must be available from
+        // CacheStorage on repeat launches, without an HTTP cache revalidation.
+        globPatterns: ["**/*.{js,css,html,woff,woff2}"],
         // Explicit registration must retain the existing auto-update lifecycle.
         skipWaiting: true,
         clientsClaim: true,
