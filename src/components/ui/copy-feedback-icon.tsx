@@ -12,6 +12,7 @@ export function CopyFeedbackIcon({ copied, className }: CopyFeedbackIconProps) {
   const reducedMotion = useReducedMotion() ?? false;
 
   return (
+    <>
     <span
       className={cn("relative grid place-items-center", className)}
       aria-hidden="true"
@@ -44,5 +45,7 @@ export function CopyFeedbackIcon({ copied, className }: CopyFeedbackIconProps) {
         </motion.span>
       </AnimatePresence>
     </span>
+    <span className="sr-only" role="status">{copied ? "Copied to clipboard" : ""}</span>
+    </>
   );
 }

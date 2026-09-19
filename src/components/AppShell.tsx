@@ -135,9 +135,14 @@ export function AppShell() {
         className={cn("bg-background", !hasRevealed && "invisible")}
         aria-hidden={!hasRevealed}
       >
+        <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-background focus:px-4 focus:py-3 focus:text-foreground focus:outline-2 focus:outline-ring" onClick={() => document.getElementById("main-content")?.focus()}>
+          Skip to content
+        </a>
         <AppSidebar />
         {!isReaderRoute && <SidebarFloatingTrigger className="max-md:hidden" />}
         <SidebarInset
+          id="main-content"
+          tabIndex={-1}
           className={cn(
             isReaderRoute
               ? "h-dvh min-h-0 overflow-hidden overscroll-none"

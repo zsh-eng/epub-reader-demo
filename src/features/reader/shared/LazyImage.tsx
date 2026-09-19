@@ -107,7 +107,7 @@ export function LazyImage({ src, alt, width, height, style }: LazyImageProps) {
   return (
     <img
       src={decodedImage.src}
-      alt={alt || "Chapter image"}
+      alt={alt ?? "Chapter image"}
       data-reader-image-ready="true"
       style={{
         width: `${width}px`,

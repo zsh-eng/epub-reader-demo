@@ -149,3 +149,9 @@ describe("parseChapterHtml image extraction", () => {
     expect(blocks.some((candidate) => candidate.type === "image")).toBe(false);
   });
 });
+
+it("keeps decorative image alt text distinct from missing descriptions", () => {
+  const blocks = parseChapterHtml('<img src="decoration.jpg" alt=""><img src="unknown.jpg">');
+  expect(blocks[0]).toMatchObject({ type:"image", alt:"" });
+  expect(blocks[1]).toMatchObject({ type:"image", alt:undefined });
+});

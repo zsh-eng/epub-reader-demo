@@ -252,7 +252,7 @@ function Metric({
 
 function SessionsLoadingState() {
   return (
-    <div className="space-y-4" aria-label="Loading reading sessions">
+    <div role="status" className="space-y-4" aria-label="Loading reading sessions"><span className="sr-only">Loading reading sessions…</span>
       <div className="grid gap-3 lg:grid-cols-2">
         <Skeleton className="h-44 rounded-3xl" />
         <div className="grid grid-cols-2 gap-3">

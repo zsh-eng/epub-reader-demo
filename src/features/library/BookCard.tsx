@@ -7,7 +7,7 @@ import type { Book, ReadingStatus } from "@/lib/db";
 import { beginReaderTrace } from "@/lib/reader-performance-trace";
 import { Book as BookIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 interface BookCardProps {
   book: Book;
@@ -76,10 +76,9 @@ export function BookCard({
   onCoverRequest,
   onPrefetch,
 }: BookCardProps) {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const setStatus = useSetReadingStatus(book.id);
-  const [cardElement, setCardElement] = useState<HTMLDivElement | null>(null);
+  const [cardElement, setCardElement] = useState<HTMLAnchorElement | null>(null);
   // The mutation owns the optimistic value until refreshed queries take over.
   const displayStatus = setStatus.isPending ? setStatus.variables! : status;
 
@@ -113,8 +112,6 @@ export function BookCard({
       bookTitle: book.title,
       source: "library-card",
     });
-    // Navigate to reader - the reader will handle downloading/processing if needed
-    navigate(`/reader/${book.id}`);
   };
 
   const handlePrefetch = () => {
@@ -161,9 +158,12 @@ export function BookCard({
       onSelectStatus={handleSetStatus}
       onRemove={handleDelete}
     >
-      <div
+      <Link
+        to={`/reader/${book.id}`}
+        aria-label={`Open ${book.title}`}
+        onClick={handleClick}
         ref={setCardElement}
-        className="group relative flex w-full flex-col gap-3"
+        className="group relative flex w-full flex-col gap-3 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-4"
         onFocusCapture={handlePrefetch}
         onPointerEnter={(event) => {
           if (event.pointerType !== "touch") handlePrefetch();
@@ -171,7 +171,6 @@ export function BookCard({
       >
         {/* Book Cover Container */}
         <div
-          onClick={handleClick}
           className="relative aspect-[2/3] w-full cursor-pointer perspective-1000"
         >
           <div className="relative h-full w-full transition-transform duration-300 ease-out [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-[1.02] [@media(hover:hover)_and_(pointer:fine)]:group-data-[popup-open]:-translate-y-2 [@media(hover:hover)_and_(pointer:fine)]:group-data-[popup-open]:scale-[1.02]">
@@ -186,7 +185,6 @@ export function BookCard({
         {/* Book Info */}
         <div className="space-y-1 px-1 text-center">
           <h3
-            onClick={handleClick}
             className="line-clamp-2 cursor-pointer text-sm leading-tight font-medium text-foreground transition-colors hover:text-primary"
             title={book.title}
           >
@@ -196,7 +194,7 @@ export function BookCard({
             {book.author}
           </p>
         </div>
-      </div>
+      </Link>
     </BookCardActions>
   );
 }

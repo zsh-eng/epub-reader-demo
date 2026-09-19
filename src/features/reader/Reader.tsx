@@ -504,6 +504,7 @@ export function Reader() {
 
               {/* Keep both chrome edges visible while pagination prepares. */}
               <ReaderFooter
+                pageStep={resolvedSpreadColumns}
                 pageIndicator={
                   <ReaderHistoryPageIndicator
                     key={book.id}

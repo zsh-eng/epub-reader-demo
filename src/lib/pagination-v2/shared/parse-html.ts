@@ -551,7 +551,7 @@ function createImageBlock(
     ...(targetIds.length > 0 ? { targetIds: [...targetIds] } : {}),
     ...(pageBreakHints ? { pageBreakHints: { ...pageBreakHints } } : {}),
     src,
-    alt: element.getAttribute("alt") || undefined,
+    alt: element.getAttribute("alt") ?? undefined,
     intrinsicWidth,
     intrinsicHeight,
   };

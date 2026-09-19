@@ -24,6 +24,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useId,
   useRef,
   useState,
   type ReactNode,
@@ -78,6 +79,7 @@ export function ReaderNotesPrototype({
   onVisit: (page: number) => void;
 }) {
   const reduceMotion = useReducedMotion();
+  const noteInputId = useId();
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "chapter">("time");
   const notes = useReaderNotes(bookId);
@@ -408,12 +410,15 @@ export function ReaderNotesPrototype({
         >
           <div
             data-note-input-surface
-            className={`relative z-10 min-w-0 flex-1 border p-1 ${
+            className={`relative z-10 min-w-0 flex-1 border p-1 focus-within:ring-2 focus-within:ring-ring/60 ${
               desktop && inNotebook
                 ? "rounded-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
                 : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`
             }`}
           >
+            <label htmlFor={`${noteInputId}-${inNotebook ? "notebook" : "composer"}`} className="block px-3 pt-1 text-xs font-medium text-muted-foreground">
+              {editingInComposer ? "Edit note" : "Write a note"}
+            </label>
             {quote && (
               <div
                 className="mx-3 mt-1 flex items-center gap-2"
@@ -466,6 +471,7 @@ export function ReaderNotesPrototype({
                 </button>
               )}
               <NoteTextInput
+                id={`${noteInputId}-${inNotebook ? "notebook" : "composer"}`}
                 ref={inNotebook ? sidebarInput : input}
                 autoFocus={desktop ? open && !inNotebook : !notebook}
                 aria-label={editingInComposer ? "Edit note" : "Write a note"}
@@ -585,7 +591,7 @@ export function ReaderNotesPrototype({
               transition={{ ...transition, delay: reduceMotion ? 0 : 0.16 }}
               className="absolute inset-x-4 top-4 px-4 py-10 text-center font-serif text-lg text-muted-foreground"
             >
-              A place for what stays with you.
+              Write your first note below. Your thoughts and saved quotes will appear here.
             </motion.p>
           )}
           <AnimatePresence key={order} initial={false}>

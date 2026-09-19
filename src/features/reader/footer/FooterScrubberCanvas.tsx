@@ -15,6 +15,7 @@ interface FooterScrubberCanvasProps {
   onScrubPreview?: (page: number) => void;
   cancelMomentumSignal?: number;
   readOnly?: boolean;
+  pageStep?: number;
 }
 
 const TICK_SPACING = 6; // Pixels between page ticks; lower = denser ticks and faster scrub for same drag distance.
@@ -247,6 +248,7 @@ export function FooterScrubberCanvas({
   onScrubPreview,
   cancelMomentumSignal,
   readOnly = false,
+  pageStep = 1,
 }: FooterScrubberCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const displayPageRef = useRef<number>(currentPage);
@@ -504,7 +506,9 @@ export function FooterScrubberCanvas({
   }
 
   return (
+    <div className="relative rounded-lg focus-within:outline-2 focus-within:outline-ring">
     <canvas
+      aria-hidden="true"
       ref={canvasRef}
       className={
         readOnly ? "block w-full" : "block w-full cursor-ew-resize touch-none"
@@ -515,5 +519,30 @@ export function FooterScrubberCanvas({
       onPointerUp={readOnly ? undefined : handlePointerUp}
       onPointerCancel={readOnly ? undefined : handlePointerUp}
     />
+    {!readOnly && (
+      <input
+        type="range"
+        className="sr-only"
+        aria-label="Reading page"
+        aria-valuetext={`Page ${currentPage} of ${totalPages}`}
+        step={pageStep}
+        min={1}
+        max={Math.max(1, totalPages)}
+        value={currentPage}
+        onKeyDown={(event) => event.stopPropagation()}
+        onChange={(event) => {
+          // Keyboard and assistive input interrupt any pointer momentum.
+          cancelAnimationFrame(rafRef.current);
+          cancelAnimationFrame(momentumRafRef.current);
+          isMomentumRef.current = false;
+          isDraggingRef.current = false;
+          const page = Number(event.target.value);
+          displayPageRef.current = page;
+          redraw();
+          onScrubCommit(page);
+        }}
+      />
+    )}
+    </div>
   );
 }

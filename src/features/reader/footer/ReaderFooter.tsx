@@ -39,6 +39,7 @@ export interface ReaderFooterProps {
   isMobile: boolean;
   chromeSurfaceProps?: ReaderChromeSurfaceProps;
   currentPage: number;
+  pageStep?: number;
   totalPages: number;
   currentChapterIndex: number;
   currentChapterEndIndex: number;
@@ -65,6 +66,7 @@ export function ReaderFooter({
   isMobile,
   chromeSurfaceProps,
   currentPage,
+  pageStep = 1,
   totalPages,
   currentChapterIndex,
   currentChapterEndIndex,
@@ -281,6 +283,7 @@ export function ReaderFooter({
                         }
                       >
                         <FooterScrubberCanvas
+                          pageStep={pageStep}
                           currentPage={currentPage}
                           totalPages={totalPages}
                           chapterStartPages={chapterStartPages}

@@ -1983,7 +1983,7 @@ export function HighlightsMasonry() {
         </div>
         <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
           {isLoading ? (
-            <div className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
+            <div role="status" className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
               Loading highlights…
             </div>
           ) : groups.length === 0 ? (
@@ -2077,7 +2077,7 @@ export function HighlightsMasonry() {
                     );
                   })
                 ) : (
-                  <div className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
+                  <div role="status" className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
                     <Search
                       className="mb-4 size-7 text-muted-foreground"
                       aria-hidden="true"

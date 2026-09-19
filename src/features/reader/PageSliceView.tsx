@@ -340,7 +340,7 @@ export function PageSliceView({
       >
         <LazyImage
           src={slice.src}
-          alt={slice.alt || "Chapter image"}
+          alt={slice.alt ?? "Chapter image"}
           width={slice.width}
           height={slice.height}
           style={{

@@ -170,7 +170,7 @@ export function FooterChapterRow({
               whileTap={showBlurredLoadingDetails ? undefined : { scale: 0.97 }}
               transition={{ duration: 0.15 }}
               className={cn(
-                "pointer-events-auto flex max-w-full min-w-0 items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-medium uppercase leading-tight tracking-[0.16em] text-muted-foreground transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
+                "pointer-events-auto flex min-h-8 max-w-full min-w-0 items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-medium uppercase leading-tight tracking-[0.16em] text-muted-foreground transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60",
                 showBlurredLoadingDetails
                   ? "pointer-events-none"
                   : "hover:bg-secondary/70 hover:text-foreground",

@@ -31,6 +31,7 @@ export function ReaderStateScreen(props: ReaderStateScreenProps) {
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20 font-sans text-foreground">
       <div className="flex min-h-screen items-center justify-center px-6 py-10">
         <div
+          role="status"
           className={cn(
             "w-full max-w-sm space-y-4 rounded-[1.75rem] border border-border/60 bg-background/85 px-6 py-8 text-center backdrop-blur-sm",
             contentClassName,
