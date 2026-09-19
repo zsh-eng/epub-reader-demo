@@ -22,6 +22,11 @@ export const tokens = stylex.defineVars({
 });
 
 export const ui = stylex.create({
+  instant: {
+    animationName: "none",
+    transitionProperty: "none",
+    scrollBehavior: "auto",
+  },
   button: {
     display: "inline-flex",
     alignItems: "center",

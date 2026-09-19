@@ -300,8 +300,8 @@ function PickerContents({
     >
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
         <Dialog.Portal>
-          <Dialog.Backdrop {...stylex.props(styles.backdrop)} />
-          <Dialog.Popup initialFocus={inputRef} {...stylex.props(styles.popup)}>
+          <Dialog.Backdrop {...stylex.props(styles.backdrop, ui.instant)} />
+          <Dialog.Popup initialFocus={inputRef} {...stylex.props(styles.popup, ui.instant)}>
             <div {...stylex.props(styles.heading)}>
               <Dialog.Title {...stylex.props(styles.title)}>
                 {mode === "files" ? "Find file" : "Search files"}

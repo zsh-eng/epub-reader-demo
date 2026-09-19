@@ -65,8 +65,12 @@ export function ChoiceSelect({
         </Select.Icon>
       </Select.Trigger>
       <Select.Portal>
-        <Select.Positioner sideOffset={6} align="start" {...stylex.props(styles.positioner)}>
-          <Select.Popup {...stylex.props(ui.popup)}>
+        <Select.Positioner
+          sideOffset={6}
+          align="start"
+          {...stylex.props(styles.positioner, ui.instant)}
+        >
+          <Select.Popup {...stylex.props(ui.popup, ui.instant)}>
             <Select.List>
               {choices.map((choice) => (
                 <Select.Item
@@ -108,8 +112,12 @@ export function ActionMenu({
         {children ?? <Icon name="settings" />}
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner align="end" sideOffset={6} {...stylex.props(styles.positioner)}>
-          <Menu.Popup {...stylex.props(ui.popup)}>
+        <Menu.Positioner
+          align="end"
+          sideOffset={6}
+          {...stylex.props(styles.positioner, ui.instant)}
+        >
+          <Menu.Popup {...stylex.props(ui.popup, ui.instant)}>
             {actions.map((action) => (
               <Menu.Item
                 key={action.label}
@@ -181,8 +189,8 @@ export function CommandDialog({
       }}
     >
       <Dialog.Portal>
-        <Dialog.Backdrop {...stylex.props(styles.backdrop)} />
-        <Dialog.Popup {...stylex.props(styles.dialog)}>
+        <Dialog.Backdrop {...stylex.props(styles.backdrop, ui.instant)} />
+        <Dialog.Popup {...stylex.props(styles.dialog, ui.instant)}>
           <Dialog.Title {...stylex.props(styles.commandTitle)}>{title}</Dialog.Title>
           <Dialog.Description {...stylex.props(styles.hidden)}>
             Find and run a review command.

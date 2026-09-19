@@ -26,30 +26,25 @@ export function usePickerPreview(
     const [kind, repo, oid] = JSON.parse(scope) as ["worktree" | "commit", string, string?];
     const requestSource: BrowseSource =
       kind === "commit" ? { kind, repo, oid: oid! } : { kind, repo };
-    const timer = setTimeout(() => {
-      void api
-        .read(requestSource, path, controller.signal)
-        .then((file) => {
-          if (
-            !controller.signal.aborted &&
-            browseSourceKey(file.source) === scope &&
-            file.path === path
-          )
-            setState({ key, file, error: null });
-        })
-        .catch((error: unknown) => {
-          if (!controller.signal.aborted)
-            setState({
-              key,
-              file: null,
-              error: error instanceof Error ? error.message : "Cannot preview file.",
-            });
-        });
-    }, 90);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
+    void api
+      .read(requestSource, path, controller.signal)
+      .then((file) => {
+        if (
+          !controller.signal.aborted &&
+          browseSourceKey(file.source) === scope &&
+          file.path === path
+        )
+          setState({ key, file, error: null });
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted)
+          setState({
+            key,
+            file: null,
+            error: error instanceof Error ? error.message : "Cannot preview file.",
+          });
+      });
+    return () => controller.abort();
   }, [api, scope, path, revision, key]);
   const current = state.key === key;
   return {
