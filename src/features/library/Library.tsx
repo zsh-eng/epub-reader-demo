@@ -235,7 +235,7 @@ export function Library() {
           <div className="text-center bg-background/80 p-8 rounded-2xl shadow-xl backdrop-blur-md">
             <Upload className="h-16 w-16 text-primary mx-auto mb-4" />
             <h3 className="text-balance text-2xl font-bold text-primary mb-2">
-              Drop EPUB to Add
+              Drop EPUB to add
             </h3>
             <p className="text-muted-foreground">
               Release to add to your library
@@ -245,7 +245,7 @@ export function Library() {
       )}
 
       {/* Main Content */}
-      <main className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
+      <div className="px-4 pt-16 pb-6 md:px-8 md:pt-20 md:pb-10">
         <div
           ref={searchAnchorRef}
           className="h-px shrink-0"
@@ -302,11 +302,11 @@ export function Library() {
         {hasAnyBooks ? (
           libraryDisplayReady ? (
             <div className="space-y-8">
-              {/* Continue Reading Section */}
+              {/* Continue reading Section */}
               {continueReadingBooks.length > 0 && (
                 <section>
                   <h2 className="text-balance text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
-                    Continue Reading
+                    Continue reading
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
                     {continueReadingBooks.map((book) => (
@@ -331,11 +331,11 @@ export function Library() {
                 </div>
               )}
 
-              {/* All Books Section */}
+              {/* All books Section */}
               {allBooks.length > 0 && (
                 <section>
                   <h2 className="text-balance text-xs font-medium uppercase tracking-wider text-muted-foreground mb-6 px-1">
-                    All Books
+                    All books
                   </h2>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-6 md:gap-8">
                     {allBooks.map((book) => (
@@ -388,10 +388,12 @@ export function Library() {
             </h3>
             <p className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl 2xl:text-3xl text-muted-foreground max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg xl:max-w-xl 2xl:max-w-2xl mx-auto mb-6 sm:mb-8 md:mb-10 lg:mb-12">
               {searchQuery
-                ? `No results for "${searchQuery}"`
+                ? `No results for “${searchQuery}”`
                 : "Drag and drop an EPUB file here, or click the button below to add your first book."}
             </p>
-            {!searchQuery && (
+            {searchQuery ? (
+              <Button variant="outline" onClick={() => { setSearchQuery(""); searchInputRef.current?.focus(); }}>Clear search</Button>
+            ) : (
               <Button
                 onClick={openFilePicker}
                 disabled={isProcessing}
@@ -403,7 +405,7 @@ export function Library() {
             )}
           </div>
         ) : null}
-      </main>
+      </div>
     </div>
   );
 }

@@ -37,12 +37,12 @@ const themes: ThemeConfig[] = [
   },
   {
     value: "flexoki-light",
-    label: "Flexoki Light",
+    label: "Flexoki light",
     themeClass: "flexoki-light",
   },
   {
     value: "flexoki-dark",
-    label: "Flexoki Dark",
+    label: "Flexoki dark",
     themeClass: "flexoki-dark",
   },
 ];

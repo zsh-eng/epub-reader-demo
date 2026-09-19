@@ -18,6 +18,7 @@ import {
   READER_FONT_SIZE_MIN_PX,
 } from "@/types/reader.types";
 import {
+  Check,
   AlignCenter,
   AlignJustify,
   AlignLeft,
@@ -139,7 +140,7 @@ export function TypographyPanel({
 
       {section === "type" && (
         <div className="space-y-2.5">
-          <h4 className={sectionLabelClassName}>Font Family</h4>
+          <h4 className={sectionLabelClassName}>Font family</h4>
           <div
             ref={scrollContainerRef}
             className="-mx-4 flex gap-2 overflow-x-auto px-4 py-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
@@ -154,12 +155,13 @@ export function TypographyPanel({
                   data-state={isSelected ? "on" : "off"}
                   onClick={() => onUpdateSettings({ fontFamily: font.value })}
                   className={cn(
-                    "flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-[background-color,border-color,opacity,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
+                    "relative flex h-24 w-28 shrink-0 cursor-pointer flex-col justify-between rounded-[1.25rem] border px-3 py-3 text-left transition-[background-color,border-color,opacity,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-[0.98] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
                     isSelected
                       ? "border-border bg-background ring-1 ring-border/70"
                       : "border-border/40 bg-secondary/20 hover:bg-secondary/35",
                   )}
                 >
+                  {isSelected && <Check className="absolute right-3 top-3 size-4 text-foreground" aria-hidden="true" />}
                   <span
                     className="text-3xl leading-none text-foreground"
                     style={{ fontFamily: font.stack }}
@@ -178,7 +180,7 @@ export function TypographyPanel({
 
       {section === "layout" && (
         <div className="space-y-2">
-          <h4 className={sectionLabelClassName}>Line Height</h4>
+          <h4 className={sectionLabelClassName}>Line height</h4>
           <div className="flex items-center gap-2">
             <MoveVertical className="h-4 w-4 text-muted-foreground" />
             <SegmentedToggleGroup
@@ -204,7 +206,7 @@ export function TypographyPanel({
 
       {section === "layout" && showContentWidthControl && (
         <div className="space-y-2 hidden sm:block">
-          <h4 className={sectionLabelClassName}>Content Width</h4>
+          <h4 className={sectionLabelClassName}>Content width</h4>
           {/* Paginated mode keeps measure automatic; this stays available for scroll layouts. */}
           <div className="flex items-center gap-2">
             <MoveHorizontal className="h-4 w-4 text-muted-foreground" />
@@ -284,7 +286,7 @@ export function TypographyPanel({
 
       {section === "type" && (
         <div className="space-y-3 rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
-          <h4 className={sectionLabelClassName}>Publisher Styling</h4>
+          <h4 className={sectionLabelClassName}>Publisher styling</h4>
           <label
             htmlFor={publisherStylingSwitchId}
             className="flex cursor-pointer items-center justify-between gap-4"
@@ -328,7 +330,7 @@ export function TypographyPanel({
 
       {section === "type" && (
         <div className="space-y-2">
-          <h4 className={sectionLabelClassName}>Font Size</h4>
+          <h4 className={sectionLabelClassName}>Font size</h4>
           <div className="flex items-center justify-between rounded-[1.25rem] border border-border/50 bg-secondary/20 px-3 py-3">
             <Button
               variant="outline"

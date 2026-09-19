@@ -199,7 +199,7 @@ function ReadingTimeChart({ buckets }: { buckets: ReadingTimeBucket[] }) {
                       tabIndex={0}
                       role="img"
                       aria-label={`${bucket.label}: ${formatReadingDuration(bucket.activeMs)}`}
-                      className="block size-full rounded-t-[5px] rounded-b-[2px] bg-chart-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="block size-full rounded-t-[5px] rounded-b-[2px] bg-activity-bar outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     />
                     <span className="pointer-events-none absolute bottom-[calc(100%+0.5rem)] left-1/2 z-10 hidden w-max -translate-x-1/2 rounded-xl border bg-popover px-3 py-2 text-left text-popover-foreground opacity-0 shadow-lg group-hover:block group-hover:opacity-100 group-focus-within:block group-focus-within:opacity-100">
                       <span className="block text-[11px] text-muted-foreground">
@@ -351,7 +351,7 @@ function SessionsEmptyState({
 }) {
   if (invitation.kind === "keep-reading") {
     return (
-      <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-20">
+      <div className="flex flex-1 items-center justify-center px-6 pt-4 pb-20">
         <ContinueReadingCard
           bookId={invitation.bookId}
           bookTitle={invitation.bookTitle}
@@ -360,12 +360,12 @@ function SessionsEmptyState({
           appearance="open"
           className="w-full max-w-xl"
         />
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center px-6 pt-4 pb-20">
+    <div className="flex flex-1 items-center justify-center px-6 pt-4 pb-20">
       <section className="flex max-w-md flex-col items-center text-center">
         <div
           className="relative mb-8 grid size-32 place-items-center"
@@ -391,7 +391,7 @@ function SessionsEmptyState({
           Browse library
         </Link>
       </section>
-    </main>
+    </div>
   );
 }
 
@@ -491,9 +491,9 @@ export function ReadingSessions() {
     return (
       <div className="min-h-svh bg-background text-foreground">
         <SessionsHeader />
-        <main className="mx-auto w-full max-w-6xl px-4 pt-4 pb-12 md:px-8">
+        <div className="mx-auto w-full max-w-6xl px-4 pt-4 pb-12 md:px-8">
           <SessionsLoadingState />
-        </main>
+        </div>
       </div>
     );
   }
@@ -502,13 +502,13 @@ export function ReadingSessions() {
     return (
       <div className="flex min-h-svh flex-col bg-background text-foreground">
         <SessionsHeader />
-        <main className="flex flex-1 items-center justify-center px-4 pb-16">
+        <div className="flex flex-1 items-center justify-center px-4 pb-16">
           <div className="w-full max-w-xl">
             <EmptyPanel>
               Reading history could not be loaded. Please try again.
             </EmptyPanel>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -551,7 +551,7 @@ export function ReadingSessions() {
         />
       </div>
 
-      <main className="mx-auto w-full max-w-6xl px-4 pt-4 pb-12 md:px-8">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-4 pb-12 md:px-8">
         <div className="space-y-4">
           <section className="grid gap-3 lg:grid-cols-2">
             <div className="flex min-h-44 flex-col justify-between overflow-hidden rounded-3xl border bg-card p-6 text-card-foreground shadow-sm">
@@ -723,7 +723,7 @@ export function ReadingSessions() {
             </section>
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

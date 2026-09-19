@@ -77,10 +77,10 @@ export function ReaderSheetHost({
 
   const page = activeSheet ?? "tools";
   const titles: Record<string, string> = {
-    tools: "Reader Tools",
+    tools: "Reader tools",
     contents: "Contents",
-    settings: "Reading Settings",
-    "book-actions": "Reading Status",
+    settings: "Reading settings",
+    "book-actions": "Reading status",
     notes: "Notebook",
   };
   return (
@@ -89,7 +89,7 @@ export function ReaderSheetHost({
       onClose={onCloseSheet}
       page={page}
       rootPage="tools"
-      title={titles[page] ?? "Reader Tools"}
+      title={titles[page] ?? "Reader tools"}
       onBack={() => onOpenSheet("tools")}
     >
       {page === "tools" && (

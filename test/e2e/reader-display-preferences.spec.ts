@@ -45,7 +45,7 @@ for (const mobile of [true, false]) {
             .click();
           if (mobile) {
             await page
-              .getByRole("button", { name: /Themes & Settings$/ })
+              .getByRole("button", { name: /Themes & settings$/ })
               .click();
             await page.getByRole("tab", { name: "Layout" }).click();
           } else {

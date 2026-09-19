@@ -68,6 +68,7 @@ import {
   BookOpen,
   BookOpenText,
   Copy,
+  Check,
   Ellipsis,
   Highlighter,
   Pin,
@@ -1570,11 +1571,13 @@ function ColorFilters({
             aria-pressed={isSelected}
             title={actionLabel}
             className={cn(
-              "size-8 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-6",
+              "relative grid place-items-center size-8 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-6",
               !isSelected && "opacity-25 shadow-none",
             )}
             style={getHighlightAccentStyle(name)}
-          />
+          >
+            {isSelected && <span className="grid size-4 place-items-center rounded-full bg-background text-foreground"><Check className="size-3" aria-hidden="true" /></span>}
+          </button>
         );
       })}
     </div>
@@ -1595,22 +1598,7 @@ function HighlightsSearch({
   onToggleColor: (color: HighlightColor) => void;
 }) {
   const reducedMotion = useReducedMotion() ?? false;
-  const [draftValue, setDraftValue] = useState(value);
-
-  useEffect(() => {
-    if (draftValue === value) return;
-
-    const timer = window.setTimeout(() => {
-      onChange(draftValue);
-    }, SEARCH_DEBOUNCE_MS);
-
-    return () => window.clearTimeout(timer);
-  }, [draftValue, onChange, value]);
-
-  const clearSearch = () => {
-    setDraftValue("");
-    onChange("");
-  };
+  const clearSearch = () => onChange("");
 
   return (
     <motion.div
@@ -1631,18 +1619,18 @@ function HighlightsSearch({
       />
       <Input
         type="search"
-        value={draftValue}
-        onChange={(event) => setDraftValue(event.target.value)}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
         id="highlight-search"
         placeholder="Search all highlights…"
         aria-label="Search all highlights"
         className={cn(
           "h-14 appearance-none bg-background/75 pl-10 text-base shadow-md backdrop-blur-xl [@media(prefers-reduced-transparency:reduce)]:bg-background [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none dark:bg-background/80 md:text-base [&::-webkit-search-cancel-button]:hidden",
-          draftValue ? "pr-48" : "pr-40",
+          value ? "pr-48" : "pr-40",
         )}
       />
       <div className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1 md:right-4 md:gap-2.5">
-        {draftValue && (
+        {value && (
           <button
             type="button"
             onClick={clearSearch}
@@ -1671,6 +1659,11 @@ export function HighlightsMasonry() {
     [],
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
   const [selectedHighlight, setSelectedHighlight] = useState<Highlight | null>(
     null,
   );
@@ -1963,7 +1956,7 @@ export function HighlightsMasonry() {
           </div>
           {!isLoading && groups.length > 0 && (
             <p className="mt-3 text-sm text-muted-foreground">
-              {totalHighlightCount} highlights across {groups.length}{" "}
+              {totalHighlightCount} {totalHighlightCount === 1 ? "highlight" : "highlights"} across {groups.length}{" "}
               {groups.length === 1 ? "book" : "books"}
             </p>
           )}
@@ -1977,15 +1970,15 @@ export function HighlightsMasonry() {
         <div className="sticky top-0 z-30 isolate w-full pt-3">
           <div className="mx-auto w-full max-w-2xl px-4">
             <HighlightsSearch
-              value={searchQuery}
-              onChange={setSearchQuery}
+              value={searchInput}
+              onChange={setSearchInput}
               isCompact={isSearchCompact}
               selectedColors={selectedColors}
               onToggleColor={handleToggleColor}
             />
           </div>
         </div>
-        <main className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
+        <div className="mx-auto min-h-0 w-full max-w-[1600px] flex-1 px-4 pt-4 pb-4 md:px-6 md:pb-6 xl:px-8">
           {isLoading ? (
             <div role="status" className="flex min-h-80 items-center justify-center text-sm text-muted-foreground">
               Loading highlights…
@@ -2019,7 +2012,7 @@ export function HighlightsMasonry() {
               <div
                 ref={mosaicsElementRef}
                 className={cn("relative min-w-0", hasNoMatches && "h-full")}
-                style={{ height: mosaicVirtualizer.getTotalSize() }}
+                style={hasNoMatches ? undefined : { height: mosaicVirtualizer.getTotalSize() }}
               >
                 {visibleGroups.length > 0 ? (
                   virtualMosaicSections.map((virtualSection) => {
@@ -2082,7 +2075,7 @@ export function HighlightsMasonry() {
                     );
                   })
                 ) : (
-                  <div role="status" className="flex h-full min-h-0 w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
+                  <div role="status" className="flex min-h-80 w-full flex-col items-center justify-center rounded-2xl border border-dashed text-center">
                     <Search
                       className="mb-4 size-7 text-muted-foreground"
                       aria-hidden="true"
@@ -2093,6 +2086,12 @@ export function HighlightsMasonry() {
                     <p className="mt-1 text-sm text-muted-foreground">
                       Change the search text or color filters.
                     </p>
+                    <Button className="mt-4" variant="outline" onClick={() => {
+                      setSearchInput("");
+                      setSearchQuery("");
+                      setSelectedColors([...ALL_HIGHLIGHT_COLORS]);
+                      document.getElementById("highlight-search")?.focus();
+                    }}>Clear filters</Button>
                   </div>
                 )}
               </div>
@@ -2108,7 +2107,7 @@ export function HighlightsMasonry() {
               )}
             </div>
           )}
-        </main>
+        </div>
         {isMobile && bookIndexGroups.length > 0 && (
           <MobileBookIndex
             groups={bookIndexGroups}

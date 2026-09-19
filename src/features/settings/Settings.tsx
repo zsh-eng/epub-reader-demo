@@ -29,7 +29,7 @@ export function Settings() {
             id="device-settings-title"
             className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1"
           >
-            This Device
+            This device
           </h2>
           <Card className="overflow-hidden px-2 py-2 bg-muted rounded-3xl shadow-none">
             <div className="flex items-center gap-4 p-4">

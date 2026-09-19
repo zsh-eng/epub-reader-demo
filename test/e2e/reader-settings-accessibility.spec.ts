@@ -29,7 +29,7 @@ test("mobile settings expose choices and apply themes when preference storage is
   await page
     .getByRole("button", { name: "Open reader tools", exact: true })
     .click();
-  await page.getByRole("button", { name: /Themes & Settings$/ }).click();
+  await page.getByRole("button", { name: /Themes & settings$/ }).click();
   await expect(
     page.getByRole("button", { name: "Lora", pressed: true }),
   ).toBeVisible();

@@ -124,8 +124,8 @@ describe("getReaderStatusPrompt", () => {
 });
 
 it.each([
-  ["want-to-read", "Want to Read"],
-  ["dnf", "Did Not Finish"],
+  ["want-to-read", "Want to read"],
+  ["dnf", "Did not finish"],
 ] as const)("confirms the saved change from %s", async (status, label) => {
   mocks.useReadingStatus.mockReturnValue({
     status,

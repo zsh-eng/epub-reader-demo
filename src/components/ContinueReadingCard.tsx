@@ -116,7 +116,7 @@ export function ContinueReadingCard({
 
       <span
         className={cn(
-          "relative z-10 block truncate font-serif font-medium tracking-[-0.01em] text-foreground",
+          "relative z-10 block break-words text-balance font-serif font-medium tracking-[-0.01em] text-foreground",
           isOpen ? "text-xl sm:text-2xl" : "text-base",
         )}
       >

@@ -17,7 +17,7 @@ describe("ReaderControlMenu", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Book Status/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Book status/ }));
 
     expect(onOpenBookActions).toHaveBeenCalledOnce();
   });

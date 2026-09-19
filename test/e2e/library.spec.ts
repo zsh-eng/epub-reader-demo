@@ -115,12 +115,12 @@ test("updates reading status and library placement while offline", async ({
   await book.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Reading", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Continue Reading", exact: true }),
+    page.getByRole("heading", { name: "Continue reading", exact: true }),
   ).toBeVisible();
   await book.click({ button: "right" });
   await page.getByRole("menuitem", { name: "Finished", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Continue Reading", exact: true }),
+    page.getByRole("heading", { name: "Continue reading", exact: true }),
   ).not.toBeVisible();
   await expect
     .poll(() =>
@@ -162,14 +162,14 @@ test("keeps duplicate and failed imports in the Library", async ({
       },
       { name, bytes: [...bytes] },
     );
-    await page.locator("main").last().dispatchEvent("drop", { dataTransfer });
+    await page.getByRole("heading", { name: SAMPLE_BOOK_TITLE }).dispatchEvent("drop", { dataTransfer });
     await dataTransfer.dispose();
   };
   await drop("sample.epub", await readFile(SAMPLE_EPUB_PATH));
   await expect(
-    page.getByRole("heading", { name: "Duplicate Found" }),
+    page.getByRole("heading", { name: "Book already added" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Open Book", exact: true }).click();
+  await page.getByRole("button", { name: "Open book", exact: true }).click();
   await expect(page).toHaveURL(`/reader/${localBook.id}`);
   await waitForReaderReady(page);
   await page.goto("/");

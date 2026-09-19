@@ -152,7 +152,7 @@ export function SettingsSection({
 
         {/* Font size */}
         <SliderRow
-          label="Font Size"
+          label="Font size"
           value={settings.fontSize}
           min={READER_FONT_SIZE_MIN_PX}
           max={READER_FONT_SIZE_MAX_PX}
@@ -163,7 +163,7 @@ export function SettingsSection({
 
         {/* Line height */}
         <SliderRow
-          label="Line Height"
+          label="Line height"
           value={settings.lineHeight}
           min={1.0}
           max={2.5}
@@ -249,7 +249,7 @@ export function SettingsSection({
 
         <div className="space-y-2 rounded-lg border border-border/50 bg-secondary/20 px-3 py-2.5">
           <span className="text-[11px] text-muted-foreground">
-            Publisher Styling
+            Publisher styling
           </span>
           <div className="flex items-center justify-between gap-3">
             <span className="text-[11px] text-foreground">Book styles</span>
@@ -287,7 +287,7 @@ export function SettingsSection({
         <div className="space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-muted-foreground">
-              Content Width
+              Content width
             </span>
             <Button
               variant={viewportAutoMode ? "secondary" : "ghost"}

@@ -21,7 +21,7 @@ for (const mobile of [false, true]) {
         await page
           .getByRole("button", { name: "Open reader tools", exact: true })
           .click();
-        await page.getByRole("button", { name: /Book Status/ }).click();
+        await page.getByRole("button", { name: /Book status/ }).click();
       }
       const openConfirmation = async () => {
         if (!mobile) {
@@ -44,20 +44,33 @@ for (const mobile of [false, true]) {
       await expect(
         dialog.getByRole("button", { name: "Cancel", exact: true }),
       ).toBeFocused();
-      const folder = resolve("diagnostics/interface-review", process.env.INTERFACE_REVIEW_STAGE ?? "after");
+      const folder = resolve(
+        "diagnostics/interface-review",
+        process.env.INTERFACE_REVIEW_STAGE ?? "after",
+      );
       await mkdir(folder, { recursive: true });
       await page.screenshot({
         path: resolve(folder, `${mobile ? "mobile" : "desktop"}-remove.png`),
         animations: "disabled",
       });
       await page.evaluate(() => {
-        const state = window as unknown as { backdropSamples: number[]; backdropDone: Promise<void> };
+        const state = window as unknown as {
+          backdropSamples: number[];
+          backdropDone: Promise<void>;
+        };
         state.backdropSamples = [];
         state.backdropDone = new Promise<void>((resolve) => {
           function sample() {
-            const backdrop = document.querySelector('[data-slot="dialog-overlay"]');
-            state.backdropSamples.push(backdrop ? Number(getComputedStyle(backdrop).opacity) : 0);
-            if (!backdrop) { resolve(); return; }
+            const backdrop = document.querySelector(
+              '[data-slot="dialog-overlay"]',
+            );
+            state.backdropSamples.push(
+              backdrop ? Number(getComputedStyle(backdrop).opacity) : 0,
+            );
+            if (!backdrop) {
+              resolve();
+              return;
+            }
             requestAnimationFrame(sample);
           }
           requestAnimationFrame(sample);
@@ -65,13 +78,24 @@ for (const mobile of [false, true]) {
       });
       await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
       const samples = await page.evaluate(async () => {
-        const state = window as unknown as { backdropSamples: number[]; backdropDone: Promise<void> };
+        const state = window as unknown as {
+          backdropSamples: number[];
+          backdropDone: Promise<void>;
+        };
         await state.backdropDone;
         return state.backdropSamples;
       });
-      await writeFile(resolve(folder, `${mobile ? "mobile" : "desktop"}-backdrop.json`), JSON.stringify(samples));
-      const opacityIncreases = samples.slice(1).filter((value, i) => value > samples[i] + 0.05);
-      expect(opacityIncreases, "The closing backdrop must never flash darker again").toEqual([]);
+      await writeFile(
+        resolve(folder, `${mobile ? "mobile" : "desktop"}-backdrop.json`),
+        JSON.stringify(samples),
+      );
+      const opacityIncreases = samples
+        .slice(1)
+        .filter((value, i) => value > samples[i] + 0.05);
+      expect(
+        opacityIncreases,
+        "The closing backdrop must never flash darker again",
+      ).toEqual([]);
       await expect(dialog).not.toBeVisible();
       const exists = () =>
         page.evaluate(async (id) => {

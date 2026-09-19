@@ -45,7 +45,7 @@ describe("BookCardActions", () => {
       ).toBeNull(),
     );
 
-    expect(screen.queryByText("Want to Read")).toBeNull();
+    expect(screen.queryByText("Want to read")).toBeNull();
   });
 
   it("keeps the context-menu trigger on desktop", async () => {

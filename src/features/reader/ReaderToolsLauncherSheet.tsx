@@ -36,7 +36,7 @@ export function ReaderToolsLauncherSheet({
 
         onClose();
       }}
-      title="Reader Tools"
+      title="Reader tools"
       panelClassName="max-w-md"
     >
       <ReaderControlMenu

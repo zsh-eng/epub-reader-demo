@@ -45,18 +45,18 @@ describe("ReaderSettingsPanel", () => {
     Element.prototype.scrollIntoView = vi.fn();
     render(createElement(SettingsPanelHarness));
 
-    expect(screen.getByRole("heading", { name: "Font Family" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Font family" })).toBeTruthy();
     expect(
-      screen.getByRole("heading", { name: "Publisher Styling" }),
+      screen.getByRole("heading", { name: "Publisher styling" }),
     ).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Font Size" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Line Height" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Font size" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Line height" })).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Layout" }));
 
-    expect(screen.getByRole("heading", { name: "Line Height" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Line height" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Alignment" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Font Family" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Font family" })).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Theme" }));
     expect(screen.getByRole("heading", { name: "Theme" })).toBeTruthy();
@@ -74,9 +74,9 @@ describe("ReaderSettingsPanel", () => {
 
     expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.getByRole("heading", { name: "Theme" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Font Family" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Font Size" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Line Height" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Font family" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Font size" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Line height" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Alignment" })).toBeTruthy();
 
     const headings = screen

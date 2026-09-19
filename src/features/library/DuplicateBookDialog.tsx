@@ -45,7 +45,7 @@ export function DuplicateBookDialog({
       <DialogContent className="rounded-3xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold tracking-tight text-foreground">
-            Duplicate Found
+            Book already added
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
             This book is already in your library.
@@ -94,7 +94,7 @@ export function DuplicateBookDialog({
             Close
           </Button>
           <Button onClick={handleOpenBook} className="rounded-xl">
-            Open Book
+            Open book
           </Button>
         </div>
       </DialogContent>

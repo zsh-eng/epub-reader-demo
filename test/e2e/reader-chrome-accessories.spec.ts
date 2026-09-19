@@ -256,10 +256,10 @@ test("explains each status change with bold status names on hover and keyboard f
   );
   const toast = page
     .locator("[data-sonner-toast]")
-    .filter({ hasText: "Changed Did Not Finish to Reading." });
+    .filter({ hasText: "Changed Did not finish to Reading." });
   await expect(toast).toBeVisible();
   await expect(toast.locator("strong")).toHaveText([
-    "Did Not Finish",
+    "Did not finish",
     "Reading",
   ]);
   await page.setViewportSize({ width: 360, height: 844 });

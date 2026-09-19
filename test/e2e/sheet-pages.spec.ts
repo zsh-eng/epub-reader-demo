@@ -30,15 +30,15 @@ for (const reducedMotion of [false, true]) {
     await expect(
       dialog.getByRole("button", { name: "Highlights", exact: true }),
     ).toBeDisabled();
-    await page.screenshot({ path: testInfo.outputPath("Reader Tools.png") });
+    await page.screenshot({ path: testInfo.outputPath("Reader tools.png") });
     const shell = await dialog.elementHandle();
     const height = await dialog.evaluate(
       (el) => el.getBoundingClientRect().height,
     );
     for (const [button, title] of [
-      ["Themes & Settings", "Reading Settings"],
+      ["Themes & settings", "Reading settings"],
       ["Notes", "Notebook"],
-      [/Book Status/, "Reading Status"],
+      [/Book status/, "Reading status"],
       [/Contents/, "Contents"],
     ] as const) {
       await dialog
@@ -76,7 +76,7 @@ for (const reducedMotion of [false, true]) {
       ).toBeVisible();
     }
     // Reverse before the page slide completes; outgoing pages must not keep focus.
-    await dialog.getByRole("button", { name: "Themes & Settings" }).click();
+    await dialog.getByRole("button", { name: "Themes & settings" }).click();
     await dialog.getByRole("button", { name: "Back to reader tools" }).click();
     await dialog.getByRole("button", { name: "Notes", exact: true }).click();
     await expect(

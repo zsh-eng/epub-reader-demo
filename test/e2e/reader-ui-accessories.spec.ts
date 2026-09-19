@@ -177,9 +177,9 @@ test.describe("mobile Reader accessories", () => {
     await expect(
       page.getByRole("button", { name: "Highlights", exact: true }),
     ).toBeDisabled();
-    await page.getByRole("button", { name: /Book Status/ }).click();
+    await page.getByRole("button", { name: /Book status/ }).click();
     const cover = page
-      .getByRole("dialog", { name: "Reading Status", exact: true })
+      .getByRole("dialog", { name: "Reading status", exact: true })
       .locator("img");
     await expect(cover).toBeVisible();
     await expect

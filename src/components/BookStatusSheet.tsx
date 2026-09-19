@@ -23,10 +23,10 @@ export interface ReadingStatusOption {
 }
 
 export const READING_STATUS_LABELS: Record<ReadingStatus, string> = {
-  "want-to-read": "Want to Read",
+  "want-to-read": "Want to read",
   reading: "Reading",
   finished: "Finished",
-  dnf: "Did Not Finish",
+  dnf: "Did not finish",
 };
 
 export const READING_STATUS_OPTIONS: ReadingStatusOption[] = [
@@ -134,7 +134,7 @@ export function BookStatusSheet({
           </Button>
 
           <p className="truncate text-center text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            Reading Status
+            Reading status
           </p>
 
           <div className="size-8" aria-hidden="true" />

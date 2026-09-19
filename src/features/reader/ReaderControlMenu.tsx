@@ -34,11 +34,11 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "contents", label: "Contents", icon: List, isAvailable: true },
   {
     id: "book-actions",
-    label: "Book Status",
+    label: "Book status",
     icon: BookMarked,
     isAvailable: true,
   },
-  { id: "search", label: "Search Book", icon: Search, isAvailable: false },
+  { id: "search", label: "Search book", icon: Search, isAvailable: false },
   {
     id: "debug-dump",
     label: "Copy Debug Dump",
@@ -137,7 +137,7 @@ export function ReaderControlMenu({
       <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-[1.25rem] border border-border/60 bg-secondary/20">
         <SheetUtilityButton
           label="Theme"
-          accessibleLabel="Themes & Settings"
+          accessibleLabel="Themes & settings"
           onClick={onOpenSettings}
         >
           <Palette className="size-5" aria-hidden="true" />

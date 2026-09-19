@@ -136,7 +136,7 @@ export function Devices() {
         {error && (
           <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
             <div className="p-6 text-center">
-              <p className="text-destructive">
+              <p role="alert" className="text-destructive">
                 Failed to load devices. Please try again.
               </p>
             </div>
@@ -145,10 +145,11 @@ export function Devices() {
 
         {/* Loading State */}
         {(isAuthLoading || isSessionsLoading) && (
-          <div className="space-y-8">
+          <div role="status" className="space-y-8">
+            <span className="sr-only">Loading devices…</span>
             <div>
               <h2 className="text-balance text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-                This Device
+                This device
               </h2>
               <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
                 <SessionSkeleton />
@@ -164,7 +165,7 @@ export function Devices() {
             {currentSession && (
               <section>
                 <h2 className="text-balance text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-                  This Device
+                  This device
                 </h2>
                 <Card className="overflow-hidden px-2 py-2 hover:bg-muted bg-muted rounded-3xl shadow-none">
                   <SessionItem session={currentSession} isLast />
@@ -176,7 +177,7 @@ export function Devices() {
             {otherSessions.length > 0 && (
               <section>
                 <h2 className="text-balance text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 ml-1">
-                  Other Devices
+                  Other devices
                 </h2>
                 <Card className="overflow-hidden px-2 py-2 bg-background rounded-3xl shadow-none gap-0">
                   {otherSessions.map((session, index) => (

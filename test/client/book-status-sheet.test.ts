@@ -25,7 +25,7 @@ describe("BookStatusSheet", () => {
       }),
     );
 
-    expect(screen.getAllByText("Reading status")).toHaveLength(1);
+    expect(screen.getAllByText("Reading status", { selector: "p" })).toHaveLength(1);
     const dialog = screen.getByRole("dialog", { name: "Reading status" });
     expect(dialog.querySelector("[data-base-ui-swipe-ignore]")).toBeNull();
     expect(dialog.querySelector(".select-none")).toBeTruthy();

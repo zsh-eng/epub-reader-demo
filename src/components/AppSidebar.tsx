@@ -150,7 +150,7 @@ function ContinueReadingCard({
         <span className="min-w-0 flex-1 truncate text-[14px] font-normal">
           {book.title}
         </span>
-        <span className="shrink-0 text-[10px] font-normal font-numeric tabular-nums text-sidebar-foreground/45">
+        <span className="shrink-0 text-[10px] font-normal font-numeric tabular-nums text-muted-foreground">
           {activityLabel}
         </span>
       </span>
@@ -370,7 +370,7 @@ export function AppSidebar() {
             <>
               <SidebarSeparator className="my-3 shrink-0" />
               <div className="flex min-h-0 flex-1 flex-col px-1">
-                <p className="mb-2 shrink-0 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
+                <p className="mb-2 shrink-0 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   Continue reading
                 </p>
                 <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
@@ -478,7 +478,7 @@ export function AppSidebar() {
                 >
                   {user.name}
                 </span>
-                <span className="block truncate text-xs leading-[18px] text-sidebar-foreground/60">
+                <span className="block truncate text-xs leading-[18px] text-muted-foreground">
                   {user.email}
                 </span>
               </span>
