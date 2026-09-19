@@ -1,5 +1,9 @@
 # ts-fsrs update review
 
+Local implementation update, 19 September 2026: ts-fsrs 5.4.2 and the fitted
+21-parameter configuration are active locally. See [SYNC_MIGRATION.md](SYNC_MIGRATION.md).
+The comparison below records the pre-upgrade baseline. Production is unchanged.
+
 Checked on 13 September 2026. This is an assessment; no dependency update was made.
 
 ## Installed and available versions
@@ -68,3 +72,51 @@ across reload, sync, and Undo; compare representative grade results; and keep
 the current retention/fuzz/maximum-interval choices explicit. Treat the 6.x
 beta as a separate evaluation. The 4am statistics boundary does not require a
 scheduler package update and does not change card due times.
+
+## Migration guidance check — 19 September 2026
+
+The scoped migration is a data-shape conversion and backfill, not a replay of
+history or bulk rescheduling. It can share the sync migration's production
+cutover while keeping independent conversion tests.
+
+No dedicated v4-to-v5 application/database migration guide was found in the
+v5.4.2 repository file list, README, API documentation, or checked release notes.
+The tagged source provides compatibility helpers, rather than a complete
+application migration procedure:
+
+- `generatorParameters` calls `migrateParameters`. It accepts 17-, 19-, and
+  21-weight arrays, converting and clipping older arrays. This converts a
+  parameter format; it does not train weights from review history. Spaced does
+  not currently supply a custom `w` array, so there are no personalized weights
+  to migrate. Subsequent local optimization produced personal FSRS-6 weights;
+  use the staged configuration in `FSRS_OPTIMIZATION.md` for future reviews
+  after the scheduler migration.
+  [Parameter conversion](https://github.com/open-spaced-repetition/ts-fsrs/blob/v5.4.2/packages/fsrs/src/default.ts)
+- New cards start with `learning_steps: 0`. The learning scheduler also uses
+  zero when that field is missing. Proposed Spaced backfill: preserve an existing
+  valid value, otherwise write zero. For cards already Learning/Relearning, this
+  means the next review uses step index zero as its starting point; it does not
+  reconstruct an unrecorded old step. Keep the stored state and due date.
+  [Learning scheduler](https://github.com/open-spaced-repetition/ts-fsrs/blob/v5.4.2/packages/fsrs/src/impl/basic_scheduler.ts)
+- Both Card and ReviewLog require `learning_steps` in the new types. Apply a zero
+  compatibility default to legacy logs at the conversion boundary, with legacy
+  provenance in the migration manifest/schema. Do not label it as observed
+  historical progress. `TypeConvert` converts dates/enums but does not backfill
+  this field in stored cards/logs. Keep existing elapsed-day fields during the
+  5.4.2 migration; they are deprecated, not removed in this release.
+  [Types](https://github.com/open-spaced-repetition/ts-fsrs/blob/v5.4.2/packages/fsrs/src/models.ts),
+  [Type conversion](https://github.com/open-spaced-repetition/ts-fsrs/blob/v5.4.2/packages/fsrs/src/convert.ts)
+
+Before implementation, test these transforms for all four card states and verify
+that due dates, memory state, review IDs, ratings, and timestamps remain unchanged.
+Test the next review separately, since FSRS-6 changes future scheduling behavior.
+
+FSRS-6 has 21 weights instead of FSRS-5's 19. It changes same-day stability
+updates and makes the forgetting-curve decay parameter trainable. Ordinary
+reviews update the card's stability/difficulty using the configured weights;
+they do not fit a new personal weight vector. The separate
+`@open-spaced-repetition/binding` package exposes `computeParameters` for that
+purpose and is marked public beta in the tagged documentation. Adding scheduled
+or user-triggered optimization remains a separate feature.
+[Algorithm](https://github.com/open-spaced-repetition/awesome-fsrs/wiki/The-Algorithm#fsrs-6),
+[Optimizer documentation](https://github.com/open-spaced-repetition/ts-fsrs/blob/v5.4.2/packages/binding/README.md)
