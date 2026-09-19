@@ -252,7 +252,6 @@ export function Library() {
           aria-hidden="true"
         />
         <div className="sticky top-0 z-30 isolate mb-10 pt-3 md:mb-16">
-          <label htmlFor="library-search" className="mx-auto mb-2 block w-full max-w-3xl text-sm font-medium">Search library</label>
           <motion.div
             className="mx-auto flex w-full max-w-3xl origin-top items-center gap-3"
             initial={false}

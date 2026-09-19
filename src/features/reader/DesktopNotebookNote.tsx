@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useId, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Check, Copy, Pencil, Trash2, X } from "lucide-react";
 import { useIsPresent } from "motion/react";
 import { toast } from "sonner";
@@ -128,7 +128,6 @@ export function NotebookNoteBody({
   children: ReactNode;
   edit?: InlineEdit;
 }) {
-  const inputId = useId();
   const input = useRef<HTMLTextAreaElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const wasEditing = useRef(false);
@@ -163,7 +162,6 @@ export function NotebookNoteBody({
   }, [edit]);
   return (
     <div ref={body}>
-      {edit && <label htmlFor={inputId} className="mb-2 block text-xs font-medium text-muted-foreground">Edit note</label>}
       <div className="relative">
         <p
           aria-hidden={editing || undefined}
@@ -173,7 +171,6 @@ export function NotebookNoteBody({
         </p>
         {edit && (
           <textarea
-            id={inputId}
             ref={input}
             aria-label="Edit note"
             value={edit.value}

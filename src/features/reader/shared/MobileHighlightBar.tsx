@@ -66,7 +66,7 @@ export function MobileHighlightBar({
             <button
               aria-label="Note on highlight"
               onClick={onAddNote}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground transition-transform duration-150 active:scale-[0.97] motion-reduce:active:scale-100"
+              className="flex h-8 w-9 shrink-0 items-center justify-center rounded-full text-foreground transition-transform duration-150 active:scale-[0.97] motion-reduce:active:scale-100"
             >
               <MessageSquarePlus size={17} />
             </button>
@@ -93,7 +93,7 @@ export function MobileHighlightBar({
                 }}
                 onClick={handleClick}
                 className={cn(
-                  "cursor-pointer w-[min(13vw,3.5rem)] h-11 rounded-full transition-[scale,border-color] duration-150 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 shadow-sm",
+                  "cursor-pointer w-[13vw] h-8 rounded-full transition-[scale,border-color] duration-150 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 shadow-sm",
                   "border border-black/5 active:border-black/10",
                   isCurrentColor && "ring-2 ring-offset-2 ring-foreground/50",
                 )}

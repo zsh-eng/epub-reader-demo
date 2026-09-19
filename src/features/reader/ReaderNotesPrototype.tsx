@@ -24,7 +24,6 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  useId,
   useRef,
   useState,
   type ReactNode,
@@ -79,7 +78,6 @@ export function ReaderNotesPrototype({
   onVisit: (page: number) => void;
 }) {
   const reduceMotion = useReducedMotion();
-  const noteInputId = useId();
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "chapter">("time");
   const notes = useReaderNotes(bookId);
@@ -416,9 +414,6 @@ export function ReaderNotesPrototype({
                 : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`
             }`}
           >
-            <label htmlFor={`${noteInputId}-${inNotebook ? "notebook" : "composer"}`} className="block px-3 pt-1 text-xs font-medium text-muted-foreground">
-              {editingInComposer ? "Edit note" : "Write a note"}
-            </label>
             {quote && (
               <div
                 className="mx-3 mt-1 flex items-center gap-2"
@@ -471,7 +466,6 @@ export function ReaderNotesPrototype({
                 </button>
               )}
               <NoteTextInput
-                id={`${noteInputId}-${inNotebook ? "notebook" : "composer"}`}
                 ref={inNotebook ? sidebarInput : input}
                 autoFocus={desktop ? open && !inNotebook : !notebook}
                 aria-label={editingInComposer ? "Edit note" : "Write a note"}
