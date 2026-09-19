@@ -146,7 +146,7 @@ export function ReaderToolsSidebar({
       >
         <div
           data-slot="reader-tools-surface"
-          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-(--sidebar-panel-radius) border border-border/70 bg-background/95 text-foreground shadow-[-24px_0_64px_hsl(var(--foreground)/0.12)] backdrop-blur-2xl select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
+          className="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-(--sidebar-panel-radius) border border-border/70 bg-background/95 text-foreground shadow-[-24px_0_64px_color-mix(in_srgb,var(--foreground)_12%,transparent)] backdrop-blur-2xl select-none [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]"
         >
           <nav
             aria-label="Reader tools"

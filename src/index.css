@@ -171,6 +171,11 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  /* Reuse the established dark reading palette for legible marked text. */
+  --yellow-secondary: #664d01;
+  --blue-secondary: #163b66;
+  --green-secondary: #3d4c07;
+  --magenta-secondary: #641f46;
 }
 
 .night {

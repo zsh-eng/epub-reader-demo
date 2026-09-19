@@ -187,7 +187,7 @@ export function HighlightToolbar({
       className={cn(
         "highlight-toolbar fixed z-50 flex flex-col gap-2",
         isBareDesktopPicker
-          ? "rounded-full border border-border bg-popover/95 px-3 py-2 shadow-[0_8px_28px_hsl(var(--foreground)/0.14)] backdrop-blur-sm"
+          ? "rounded-full border border-border bg-popover/95 px-3 py-2 shadow-[0_8px_28px_color-mix(in_srgb,var(--foreground)_14%,transparent)] backdrop-blur-sm"
           : "rounded-2xl border border-border bg-background p-2 shadow-xl",
       )}
       initial={
@@ -233,7 +233,7 @@ export function HighlightToolbar({
                 "[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110",
                 isBareDesktopPicker
                   ? "size-7 shadow-inner shadow-foreground/10 focus-visible:ring-offset-popover"
-                  : "size-10 border-2 border-background/80 shadow-[0_2px_10px_hsl(var(--foreground)/0.18)] focus-visible:ring-offset-background md:size-8",
+                  : "size-10 border-2 border-background/80 shadow-[0_2px_10px_color-mix(in_srgb,var(--foreground)_18%,transparent)] focus-visible:ring-offset-background md:size-8",
                 currentColor &&
                   color.name === currentColor &&
                   (isBareDesktopPicker

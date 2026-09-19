@@ -223,7 +223,7 @@ export function Sidebar({
       <Drawer direction="bottom" open={openMobile} onOpenChange={setOpenMobile}>
         <DrawerContent
           data-slot="sidebar"
-          className="mx-auto h-[min(42rem,88dvh)]! w-full! max-w-3xl! gap-0 overflow-hidden rounded-t-[1.9rem]! border border-sidebar-border/80 bg-sidebar/96 p-0 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)] backdrop-blur-xl transition-transform ease-[cubic-bezier(0.23,1,0.32,1)]! data-[drawer-direction=bottom]:max-h-[88dvh]! [&>div:first-child]:mt-3 [&>div:first-child]:h-1 [&>div:first-child]:w-10 [&>div:first-child]:bg-sidebar-border/80"
+          className="mx-auto h-[min(42rem,88dvh)]! w-full! max-w-3xl! gap-0 overflow-hidden rounded-t-[1.9rem]! border border-sidebar-border/80 bg-sidebar/96 p-0 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[0_-24px_60px_color-mix(in_srgb,var(--foreground)_8%,transparent)] backdrop-blur-xl transition-transform ease-[cubic-bezier(0.23,1,0.32,1)]! data-[drawer-direction=bottom]:max-h-[88dvh]! [&>div:first-child]:mt-3 [&>div:first-child]:h-1 [&>div:first-child]:w-10 [&>div:first-child]:bg-sidebar-border/80"
           overlayClassName={cn(
             "bg-transparent ease-[cubic-bezier(0.23,1,0.32,1)]!",
             transitionMode === "instant"

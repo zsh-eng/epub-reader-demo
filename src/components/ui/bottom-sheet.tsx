@@ -107,7 +107,7 @@ export function BottomSheet({
           className={cn(
             "mx-auto flex max-h-full min-h-0 w-full max-w-3xl select-none flex-col overflow-hidden [-webkit-tap-highlight-color:transparent] [-webkit-touch-callout:none] [-webkit-user-select:none]",
             "rounded-t-[1.9rem] border-x border-t border-border/70 bg-background",
-            "shadow-[0_-24px_60px_hsl(var(--foreground)/0.08)]",
+            "shadow-[0_-24px_60px_color-mix(in_srgb,var(--foreground)_8%,transparent)]",
             panelClassName,
           )}
         >
