@@ -226,10 +226,16 @@
 }
 
 @layer base {
+  a {
+    text-underline-position: from-font;
+    text-decoration-skip-ink: auto;
+  }
   * {
     @apply border-border outline-ring/50;
   }
   body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     @apply bg-background text-foreground font-sans;
   }
   button,

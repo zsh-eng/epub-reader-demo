@@ -103,10 +103,7 @@ export function Library() {
       // Committed database writes refresh the Library query.
     } catch (error) {
       console.error("Error deleting book:", error);
-      toast({
-        message: "Could not remove book.",
-        variant: "destructive",
-      });
+      throw error;
     }
   };
 
@@ -255,6 +252,7 @@ export function Library() {
           aria-hidden="true"
         />
         <div className="sticky top-0 z-30 isolate mb-10 pt-3 md:mb-16">
+          <label htmlFor="library-search" className="mx-auto mb-2 block w-full max-w-3xl text-sm font-medium">Search library</label>
           <motion.div
             className="mx-auto flex w-full max-w-3xl origin-top items-center gap-3"
             initial={false}
@@ -273,6 +271,7 @@ export function Library() {
               />
               <SmoothCaretInput
                 ref={searchInputRef}
+                id="library-search"
                 type="search"
                 aria-label="Search library"
                 placeholder="Search my library…"

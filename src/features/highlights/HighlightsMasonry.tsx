@@ -7,6 +7,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MobileBackToLibrary } from "@/components/ui/mobile-back-to-library";
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
@@ -1623,6 +1624,8 @@ function HighlightsSearch({
       }}
       transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
     >
+      <label htmlFor="highlight-search" className="mb-2 block text-sm font-medium">Search highlights</label>
+      <div className="relative">
       <Search
         className="pointer-events-none absolute top-1/2 left-3.5 z-10 size-4 -translate-y-1/2 text-muted-foreground"
         aria-hidden="true"
@@ -1631,6 +1634,7 @@ function HighlightsSearch({
         type="search"
         value={draftValue}
         onChange={(event) => setDraftValue(event.target.value)}
+        id="highlight-search"
         placeholder="Search all highlights…"
         aria-label="Search all highlights"
         className={cn(
@@ -1654,6 +1658,7 @@ function HighlightsSearch({
           selectedColors={selectedColors}
           onToggle={onToggleColor}
         />
+      </div>
       </div>
     </motion.div>
   );
@@ -1994,12 +1999,13 @@ export function HighlightsMasonry() {
                   aria-hidden="true"
                 />
               </div>
-              <h2 className="font-serif text-3xl font-medium">
+              <h2 className="text-balance font-serif text-3xl font-medium">
                 No highlights yet
               </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                Start reading and highlighting text to see it here.
+              <p className="mt-2 text-pretty text-sm text-muted-foreground">
+                Select text in a book to save your first highlight here.
               </p>
+              <Button className="mt-4" render={<Link to="/" />}>Open library</Button>
             </div>
           ) : (
             <div

@@ -1,3 +1,4 @@
+import { RemoveBookDialog } from "@/components/RemoveBookDialog";
 import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 import { BookStatusPanel, BookStatusSheet } from "@/components/BookStatusSheet";
 import { useFileUrl } from "@/hooks/use-file-url";
@@ -25,6 +26,7 @@ export function ReaderBookActionsSheet({
   book,
 }: ReaderBookActionsSheetProps) {
   const navigate = useNavigate();
+  const [removeOpen, setRemoveOpen] = useState(false);
   const { url: coverUrl } = useFileUrl(book.cover?.fileId, { skip: !isOpen });
   const { toast } = useToast();
   const { deleteBook } = useSync();
@@ -66,29 +68,19 @@ export function ReaderBookActionsSheet({
   };
 
   const handleRemove = (): boolean => {
-    const shouldDelete = window.confirm(
-      `Are you sure you want to remove "${book.title}" from your library?`,
-    );
-    if (!shouldDelete) return false;
+    setRemoveOpen(true);
+    return false;
+  };
 
-    void deleteBook(book.id)
-      .then(() => {
-        toast({
-          message: "Removed book from library.",
-        });
-        navigate("/");
-      })
-      .catch(() => {
-        toast({
-          message: "Could not remove book.",
-          variant: "destructive",
-        });
-      });
-    return true;
+  const confirmRemove = async () => {
+    await deleteBook(book.id);
+    toast({ message: "Removed book from library." });
+    navigate("/");
   };
 
   const Content = embedded ? BookStatusPanel : BookStatusSheet;
   return (
+    <>
     <Content
       open={isOpen}
       onOpenChange={(open) => {
@@ -103,5 +95,7 @@ export function ReaderBookActionsSheet({
       onSelectStatus={handleSelectStatus}
       onRemove={handleRemove}
     />
+    <RemoveBookDialog open={removeOpen} onOpenChange={setRemoveOpen} bookTitle={book.title} onConfirm={confirmRemove} />
+    </>
   );
 }

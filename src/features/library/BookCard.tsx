@@ -1,3 +1,4 @@
+import { RemoveBookDialog } from "@/components/RemoveBookDialog";
 import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
 import { BookCardActions } from "./BookCardActions";
 import { BlurHashCanvas } from "@/components/BlurHashCanvas";
@@ -13,7 +14,7 @@ interface BookCardProps {
   book: Book;
   status: ReadingStatus | null;
   coverUrl?: string;
-  onDelete: (bookId: string) => void;
+  onDelete: (bookId: string) => void | Promise<void>;
   onCoverRequest?: (book: Book) => void;
   onPrefetch?: (book: Book) => void;
 }
@@ -77,6 +78,7 @@ export function BookCard({
   onPrefetch,
 }: BookCardProps) {
   const { toast } = useToast();
+  const [removeOpen, setRemoveOpen] = useState(false);
   const setStatus = useSetReadingStatus(book.id);
   const [cardElement, setCardElement] = useState<HTMLAnchorElement | null>(null);
   // The mutation owns the optimistic value until refreshed queries take over.
@@ -119,13 +121,8 @@ export function BookCard({
   };
 
   const handleDelete = (): boolean => {
-    const shouldDelete = window.confirm(
-      `Are you sure you want to remove "${book.title}" from your library?`,
-    );
-    if (!shouldDelete) return false;
-
-    onDelete(book.id);
-    return true;
+    setRemoveOpen(true);
+    return false;
   };
 
   const handleSetStatus = (newStatus: ReadingStatus) => {
@@ -152,6 +149,7 @@ export function BookCard({
   };
 
   return (
+    <>
     <BookCardActions
       status={displayStatus}
       isUpdating={setStatus.isPending}
@@ -190,11 +188,13 @@ export function BookCard({
           >
             {book.title}
           </h3>
-          <p className="line-clamp-1 text-xs text-muted-foreground">
+          <p className="line-clamp-1 text-xs text-muted-foreground" title={book.author}>
             {book.author}
           </p>
         </div>
       </Link>
     </BookCardActions>
+    <RemoveBookDialog open={removeOpen} onOpenChange={setRemoveOpen} bookTitle={book.title} onConfirm={() => onDelete(book.id)} />
+    </>
   );
 }

@@ -54,7 +54,7 @@ export function BookCardActions({
           disabled={isUpdating}
         >
           <Trash2 className="size-4" />
-          Remove Book
+          Remove book
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

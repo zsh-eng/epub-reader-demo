@@ -172,10 +172,10 @@ export function BookStatusPanel({
     <>
       <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
       <div className="min-w-0">
-        <p className="truncate font-serif text-xl font-medium tracking-[-0.01em] text-foreground">
+        <p className="break-words text-balance font-serif text-xl font-medium tracking-[-0.01em] text-foreground">
           {bookTitle}
         </p>
-        <p className="mt-1 truncate text-sm text-muted-foreground">
+        <p className="mt-1 break-words text-sm text-muted-foreground">
           {bookAuthor}
         </p>
       </div>
@@ -218,7 +218,7 @@ export function BookStatusPanel({
         {...removePress}
       >
         <Trash2 className="size-5" aria-hidden="true" />
-        Remove Book
+        Remove book
       </motion.button>
     </div>
   );
