@@ -7,8 +7,9 @@ Fitted locally on 19 September 2026 using the official Python
 ## Status
 
 The 21 fitted weights in `src/lib/review/fsrs6-personal-parameters.ts` are now
-active in the local ts-fsrs 5.4.2 scheduler. The migration preserves existing
-schedules and uses these weights for future reviews. Production is unchanged.
+active in the production ts-fsrs 5.4.2 scheduler. The migration preserves existing
+schedules and uses these weights for future reviews. The 19 September release
+was verified after deployment.
 
 The user's account was selected by review volume: 65,269 reviews versus at most
 23 for any other account. Other accounts were excluded from training. The user
@@ -71,6 +72,30 @@ The check also found ts-fsrs 5.4.2 can produce 101–102 day outcomes despite a
 with both default and fitted weights (1,649 versus 1,652 of the 31,752 outcomes).
 Track this during the scheduler upgrade if the cap must be strict; the optimizer
 did not introduce it.
+
+## Practical interval comparison
+
+Compare final personal weights with FSRS-6 defaults on the same 5,248 stored
+Review cards at 19 September 2026, 04:00 UTC. Disable fuzz in both schedulers
+for this comparison only, to isolate the weights. Production keeps fuzz enabled.
+
+| Answer | Shorter next interval | Same interval | Longer next interval |
+| --- | ---: | ---: | ---: |
+| Hard | 43 | 4,197 | 1,008 |
+| Good | 46 | 4,273 | 929 |
+| Easy | 925 | 4,278 | 45 |
+
+For Good, this is about 1% shorter, 81% unchanged and 18% longer. Most mature
+cards are already near the interval cap, which limits the effect. The weights
+do not simply multiply all intervals: Easy can become shorter on existing cards.
+Again keeps the same immediate relearning step, but later scheduling can differ.
+
+For a new card, Again stays at 1 minute, Hard at 6 minutes, and Good at 10 minutes.
+Easy changes from 8 days to 36 days. These are previews, not new due dates written
+to the database. This snapshot compares defaults with final personal weights;
+it is not a long-term workload simulation or a comparison with the old FSRS version.
+Private reproduction: `optimizer.local/client-check/impact.ts`; results:
+`optimizer.local/run/interval-impact.json`.
 
 ## Reproduce and activate
 

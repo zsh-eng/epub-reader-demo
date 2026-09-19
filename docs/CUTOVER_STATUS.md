@@ -27,12 +27,17 @@ The existing Pages project remains for recovery; no DNS change was required.
 
 ## Deployment and recovery
 
-New Worker version: `05a049a9-650a-47c1-8287-6de95c41363a`.
+Current Worker version: `197edba8-2ebd-4312-848b-cc474be01672`.
+Previous consolidated Worker version: `05a049a9-650a-47c1-8287-6de95c41363a`.
 App route: `4888f2fd959e402f97281bd931fa94f0`, with fail-open disabled.
 Legacy frozen version: `4bb1209f-d44f-436f-bb3a-a4366a830261`.
 Previous legacy version: `65fe4abe-e16d-48b7-9a80-3182569bd6b6`.
 
-The legacy API at `api.spaced2.zsheng.app` returns HTTP 410 with a reload message.
+The legacy Worker was configured to return HTTP 410 with a reload message.
+At the latest release check, `api.spaced2.zsheng.app` did not resolve and was
+absent from the account Worker custom-domain list. Thus the notice is currently
+unavailable at that hostname. DNS record inspection was denied by the token scope.
+The new app uses same-origin `/api` routes and passed its live checks.
 Its database, R2 bucket, secrets, prior deployment, and local source are retained.
 The retirement handler and config are `server/legacy-retired.ts` and
 `wrangler.legacy-retired.jsonc`. Do not redeploy the old application over it.
@@ -63,8 +68,12 @@ metadata are in `cutover.local`; backups contain full auth and study data.
 
 ## Local performance work after cutover
 
-Streaming package/client changes are local and have not been deployed by this
-commit pass. The roughly 16-second benchmark baseline also uses experimental
+Streaming package/client changes and legacy code cleanup were deployed from
+commit `fd23572`, using the clean snapshot `release-20260919.local`. All 123 tests
+and the production build passed. Live checks verified the deployed HTML, auth,
+Google callback configuration, a migrated image checksum, and all 97,267 owner
+records streamed across seven requests with unique keys and ordered cursors.
+The temporary probe session was revoked. No data reseed was needed. The roughly 16-second benchmark baseline also uses experimental
 adaptive batching, an empty-outbox shortcut and a compiled Zod 4 domain decoder;
 these are not all present in the application runtime. See the benchmark reports
 for the exact configurations. Keep the type and timestamp indexes: the user
