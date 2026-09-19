@@ -84,18 +84,17 @@ describe("AppMobileNavigationSheets", () => {
 
     expect(cover?.parentElement?.classList.contains("rounded-full")).toBe(true);
     expect(continueLink.textContent).not.toContain("00");
-    expect(screen.getAllByText("Reader")).toHaveLength(1);
+    expect(screen.getByRole("dialog", { name: "Reader" })).toBeTruthy();
   });
 
   it("keeps utility actions separate from the navigation rows", () => {
     const { onAddBook, onAppearanceChange, onClose } = renderSheets();
 
-    const libraryLink = screen.getByRole("link", { name: /01 Library/ });
-    expect(libraryLink).toBeTruthy();
-    expect(screen.getByRole("link", { name: /02 Highlights/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /03 Sessions/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /04 Settings/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /05 Performance/ })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Library/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /01 Highlights/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /02 Sessions/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /03 Settings/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /04 Performance/ })).toBeTruthy();
 
     const appearanceButton = screen.getByRole("button", {
       name: "Switch appearance. Current setting: System",
@@ -103,14 +102,14 @@ describe("AppMobileNavigationSheets", () => {
 
     fireEvent.click(appearanceButton);
     fireEvent.click(screen.getByRole("button", { name: "Add book" }));
-    fireEvent.click(libraryLink);
+    fireEvent.click(screen.getByRole("link", { name: /Highlights/ }));
 
     expect(onAppearanceChange).toHaveBeenCalledWith("light");
     expect(onAddBook).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("opens account actions as a peer sheet and returns to navigation", async () => {
+  it("opens account actions in the same sheet and returns to navigation", async () => {
     renderSheets();
 
     fireEvent.click(
