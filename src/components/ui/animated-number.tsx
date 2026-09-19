@@ -31,12 +31,14 @@ function SpringAnimatedNumber({
   springConfig = defaultSpringConfig,
   className,
 }: AnimatedNumberProps) {
+  const reducedMotion = useReducedMotion();
   const spring = useSpring(value, springConfig);
   const display = useTransform(spring, (current) => format(current));
 
   useEffect(() => {
-    spring.set(value);
-  }, [spring, value]);
+    if (reducedMotion) spring.jump(value);
+    else spring.set(value);
+  }, [spring, value, reducedMotion]);
 
   return <motion.span className={className}>{display}</motion.span>;
 }

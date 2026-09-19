@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 const LOADING_LOOP = {
   duration: 2.3,
@@ -21,6 +21,8 @@ const MARK_PULSE_TIMES = [0, 0.24, 1];
 const SHIMMER_TIMES = [0, 0.26, 1];
 
 export function FooterScrubberLoading() {
+  const reducedMotion = useReducedMotion();
+  if (reducedMotion) return <div aria-hidden="true" className="h-14 border-t border-border/60" />;
   return (
     <div aria-hidden="true" className="relative h-14 w-full overflow-hidden">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-border/70 to-transparent" />

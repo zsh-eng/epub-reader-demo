@@ -190,16 +190,12 @@ export function HighlightToolbar({
           ? "rounded-full border border-border bg-popover/95 px-3 py-2 shadow-[0_8px_28px_color-mix(in_srgb,var(--foreground)_14%,transparent)] backdrop-blur-sm"
           : "rounded-2xl border border-border bg-background p-2 shadow-xl",
       )}
-      initial={
-        prefersReducedMotion
-          ? { opacity: 0, transform: "scale(1)" }
-          : { opacity: 0, transform: "scale(0.95)" }
-      }
+      initial={false}
       animate={{ opacity: 1, transform: "scale(1)" }}
       exit={
         prefersReducedMotion
           ? { opacity: 0, transform: "scale(1)" }
-          : { opacity: 0, transform: "scale(0.95)" }
+          : { opacity: 0, transform: "scale(0.98)", filter: "blur(4px)" }
       }
       transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
       style={{
@@ -265,7 +261,7 @@ export function HighlightToolbar({
             title={copied ? "Copied" : "Copy text"}
             className={cn(
               "flex size-7 items-center justify-center rounded-full text-muted-foreground",
-              "transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+              "transition-[color,background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
               "focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground/70 focus-visible:ring-offset-2 focus-visible:ring-offset-popover",
               "[@media(hover:hover)_and_(pointer:fine)]:hover:scale-110 [@media(hover:hover)_and_(pointer:fine)]:hover:bg-muted",
               copied && "text-foreground",
@@ -303,7 +299,7 @@ export function HighlightToolbar({
             onClick={handleNoteSubmit}
             disabled={!noteText.trim()}
             className={cn(
-              "rounded-full p-2 transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+              "rounded-full p-2 transition-[color,background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
               noteText.trim()
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
                 : "bg-muted text-muted-foreground cursor-not-allowed",

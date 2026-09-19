@@ -120,7 +120,7 @@ function TimeRangeNavigator({
               type="button"
               aria-pressed={isActive}
               onClick={() => onScaleChange(option.value)}
-              className={`relative flex-1 cursor-pointer rounded-lg px-3 text-sm font-medium outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98] motion-reduce:transition-colors motion-reduce:active:scale-100 md:text-xs ${
+              className={`relative flex-1 cursor-pointer rounded-lg px-3 text-sm font-medium outline-none transition-[background-color,color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98] motion-reduce:transition-colors motion-reduce:active:scale-100 md:text-xs ${
                 isActive
                   ? "bg-background text-foreground shadow-sm ring-1 ring-border/70"
                   : "text-muted-foreground hover:text-foreground"
@@ -145,7 +145,7 @@ function TimeRangeNavigator({
               type="button"
               aria-pressed={isActive}
               onClick={() => onRangeChange(option.range)}
-              className={`relative min-h-11 shrink-0 cursor-pointer rounded-full px-4 py-2.5 text-sm font-medium text-foreground outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100 md:min-h-0 md:px-3 md:py-1.5 md:text-xs ${
+              className={`relative min-h-11 shrink-0 cursor-pointer rounded-full px-4 py-2.5 text-sm font-medium text-foreground outline-none transition-[background-color,color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] motion-reduce:transition-colors motion-reduce:active:scale-100 md:min-h-0 md:px-3 md:py-1.5 md:text-xs ${
                 isActive
                   ? "bg-secondary shadow-sm ring-1 ring-border/70"
                   : "hover:bg-muted"
@@ -629,7 +629,7 @@ export function ReadingSessions() {
                       <Link
                         key={book.bookId}
                         to={`/reader/${book.bookId}`}
-                        className="group flex min-w-0 items-center gap-3 rounded-2xl p-2 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
+                        className="group flex min-w-0 items-center gap-3 rounded-2xl p-2 outline-none transition-[background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
                       >
                         <span className="flex aspect-2/3 w-10 shrink-0 items-center justify-center overflow-hidden rounded-r-md rounded-l-xs border bg-muted shadow-sm">
                           {coverUrl ? (
@@ -693,7 +693,7 @@ export function ReadingSessions() {
                     <li key={session.id}>
                       <Link
                         to={`/reader/${session.bookId}`}
-                        className="flex items-center justify-between gap-4 rounded-xl px-2 py-3 outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
+                        className="flex items-center justify-between gap-4 rounded-xl px-2 py-3 outline-none transition-[background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-muted/70 active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-ring motion-reduce:active:scale-100"
                       >
                         <span className="min-w-0">
                           <span className="block truncate text-sm font-medium">

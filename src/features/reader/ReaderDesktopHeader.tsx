@@ -7,7 +7,7 @@ import { DESKTOP_CHROME_FADE_TRANSITION } from "./chrome";
 import type { ReaderHeaderProps } from "./ReaderHeader";
 
 const CHROME_BUTTON_CLASS_NAME =
-  "size-9 rounded-xl text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary/70 hover:text-foreground active:scale-95 motion-reduce:active:scale-100 aria-pressed:bg-secondary/70 aria-pressed:text-foreground";
+  "size-9 rounded-xl text-muted-foreground transition-[color,background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary/70 hover:text-foreground active:scale-95 motion-reduce:active:scale-100 aria-pressed:bg-secondary/70 aria-pressed:text-foreground";
 
 type ReaderDesktopHeaderProps = Omit<
   ReaderHeaderProps,

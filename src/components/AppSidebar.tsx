@@ -458,7 +458,7 @@ export function AppSidebar() {
               render={
                 <button
                   type="button"
-                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl rounded-b-(--sidebar-panel-field-radius) px-2.5 py-2 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 data-[popup-open]:bg-sidebar-accent/70 focus-visible:bg-sidebar-accent/70 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
+                  className="flex min-h-14 w-full items-center gap-2.5 rounded-xl rounded-b-(--sidebar-panel-field-radius) px-2.5 py-2 text-left outline-none transition-[background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 data-[popup-open]:bg-sidebar-accent/70 focus-visible:bg-sidebar-accent/70 active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-sidebar-ring motion-reduce:active:scale-100"
                 />
               }
             >

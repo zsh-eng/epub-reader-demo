@@ -163,7 +163,7 @@ function SharedHighlightsTooltip({
             collisionPadding={8}
             className="z-50"
           >
-            <Tooltip.Popup className="origin-[var(--transform-origin)] rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-lg transition-[opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-[ending-style]:scale-[0.96] data-[ending-style]:opacity-0 data-[instant]:transition-none data-[starting-style]:scale-[0.96] data-[starting-style]:opacity-0 motion-reduce:transition-opacity motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100">
+            <Tooltip.Popup className="origin-[var(--transform-origin)] rounded-lg bg-foreground px-2.5 py-1.5 text-xs font-medium text-background shadow-lg transition-[opacity,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-[ending-style]:scale-[0.96] data-[ending-style]:opacity-0 data-[instant]:transition-none data-[starting-style]:scale-[0.96] data-[starting-style]:opacity-0 motion-reduce:transition-opacity motion-reduce:data-[ending-style]:scale-100 motion-reduce:data-[starting-style]:scale-100">
               {payload?.label}
             </Tooltip.Popup>
           </Tooltip.Positioner>
@@ -788,7 +788,7 @@ function BookIndexPanel({
           aria-pressed={isPinned}
           title={isPinned ? "Unpin book index" : "Pin book index"}
           className={cn(
-            "grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]",
+            "grid size-8 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground outline-none transition-[background-color,color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96]",
             isPinned && "bg-secondary text-foreground",
           )}
         >
@@ -842,7 +842,7 @@ function MobileBookIndex({
         aria-expanded={isOpen}
         aria-controls="mobile-highlights-book-index"
         onClick={() => onOpenChange(true)}
-        className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 grid size-12 place-items-center rounded-full border bg-card text-foreground shadow-xl outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] lg:hidden"
+        className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-40 grid size-12 place-items-center rounded-full border bg-card text-foreground shadow-xl outline-none transition-[background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-secondary focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.96] lg:hidden"
       >
         <span className="grid size-6 content-center gap-0.5" aria-hidden="true">
           <span className="ml-auto h-0.5 w-5 rounded-full bg-current" />
@@ -1131,7 +1131,7 @@ function HighlightQuoteCard({
           isMobile ? "Show highlight actions" : "Copy highlight to clipboard"
         }
         className={cn(
-          "group flex h-full w-full cursor-pointer flex-col px-5 pt-4 pb-5 text-left outline-none transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 group-data-[popup-open]:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy",
+          "group flex h-full w-full cursor-pointer flex-col px-5 pt-4 pb-5 text-left outline-none transition-[background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-accent/35 group-data-[popup-open]:bg-accent/35 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.99] md:cursor-copy",
           !showsMetadata && "text-center",
         )}
       >
@@ -1569,7 +1569,7 @@ function ColorFilters({
             aria-pressed={isSelected}
             title={actionLabel}
             className={cn(
-              "size-8 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-6",
+              "size-8 rounded-full border-2 border-background bg-[var(--highlight-accent)] shadow-[0_0_0_1px_var(--muted-foreground)] transition-[transform,opacity,box-shadow,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-6",
               !isSelected && "opacity-25 shadow-none",
             )}
             style={getHighlightAccentStyle(name)}
@@ -1645,7 +1645,7 @@ function HighlightsSearch({
             onClick={clearSearch}
             aria-label="Clear highlight search"
             title="Clear search"
-            className="grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-7"
+            className="grid size-8 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] md:size-7"
           >
             <X className="size-4 md:size-3.5" aria-hidden="true" />
           </button>

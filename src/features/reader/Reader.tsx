@@ -548,8 +548,8 @@ export function Reader() {
                   isMobile ? () => handleNotesActive(true) : undefined
                 }
                 showPageNumbers={sessionState.settings.showPageNumbers}
-                statusPrompt={isMobile ? statusPrompt : undefined}
-                handoffPrompt={isMobile ? handoffPrompt : undefined}
+                statusPrompt={isMobile && !isCreatingHighlight && annotationState.kind !== "active" ? statusPrompt : undefined}
+                handoffPrompt={isMobile && !isCreatingHighlight && annotationState.kind !== "active" ? handoffPrompt : undefined}
               />
 
               {displayReady && (

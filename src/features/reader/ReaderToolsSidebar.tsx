@@ -137,7 +137,7 @@ export function ReaderToolsSidebar({
 
       <div
         className={cn(
-          "pointer-events-auto fixed inset-y-3 right-3 z-50 flex min-w-[20rem] w-[min(42vw,25rem)] transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
+          "pointer-events-auto fixed inset-y-3 right-3 z-50 flex min-w-[20rem] w-[min(42vw,25rem)] transition-[opacity,transform,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
           isOpen
             ? "[transform:translate3d(0,0,0)] opacity-100"
             : "pointer-events-none [transform:translate3d(12px,0,0)] opacity-0",
@@ -170,7 +170,7 @@ export function ReaderToolsSidebar({
                   aria-pressed={isActive}
                   title={tool.label}
                   className={cn(
-                    "size-9 shrink-0 rounded-xl first:rounded-tl-(--sidebar-panel-field-radius) text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
+                    "size-9 shrink-0 rounded-xl first:rounded-tl-(--sidebar-panel-field-radius) text-muted-foreground transition-[color,background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95",
                     isActive && "bg-secondary/70 text-foreground shadow-sm",
                   )}
                 >
@@ -202,7 +202,7 @@ export function ReaderToolsSidebar({
               onClick={onClose}
               aria-label="Close reader tools"
               aria-pressed={isOpen}
-              className="size-9 shrink-0 rounded-xl rounded-tr-(--sidebar-panel-field-radius) text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95 aria-pressed:bg-secondary/70 aria-pressed:text-foreground"
+              className="size-9 shrink-0 rounded-xl rounded-tr-(--sidebar-panel-field-radius) text-muted-foreground transition-[color,background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] active:scale-95 aria-pressed:bg-secondary/70 aria-pressed:text-foreground"
             >
               <PanelRight className="size-[1.15rem]" />
             </Button>

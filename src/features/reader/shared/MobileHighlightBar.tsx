@@ -4,7 +4,7 @@ import {
   type AnnotationColor,
 } from "@/lib/highlight-constants";
 import { cn } from "@/lib/utils";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 interface MobileHighlightBarProps {
   onColorSelect: (color: AnnotationColor) => void;
@@ -25,6 +25,7 @@ export function MobileHighlightBar({
   isNavVisible,
   showBackdrop = true,
 }: MobileHighlightBarProps) {
+  const reducedMotion = useReducedMotion();
   return (
     <>
       {showBackdrop && (
@@ -42,7 +43,7 @@ export function MobileHighlightBar({
       {/* Highlight bar */}
       <div
         className={cn(
-          "fixed left-0 right-0 z-50 flex justify-center px-4 transition-all duration-300 ease-out",
+          "fixed left-0 right-0 z-50 flex justify-center px-4 transition-[bottom] duration-150 ease-out motion-reduce:transition-none",
         )}
         style={{
           bottom: isNavVisible
@@ -52,19 +53,20 @@ export function MobileHighlightBar({
       >
         <motion.div
           className="flex items-center gap-3 p-3 rounded-full bg-background/80 dark:bg-input/30 backdrop-blur-md shadow-xl border border-border"
-          initial={{ opacity: 0, y: 8 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 8 }}
+          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 2, filter: "blur(4px)" }}
           transition={{
             opacity: { duration: 0.15, ease: "easeInOut" },
-            y: { duration: 0.25, ease: [0.16, 1, 0.3, 1] },
+            y: { duration: 0.12, ease: [0.23, 1, 0.32, 1] },
+            filter: { duration: 0.12 },
           }}
         >
           {onAddNote && (
             <button
               aria-label="Note on highlight"
               onClick={onAddNote}
-              className="flex h-8 w-9 shrink-0 items-center justify-center rounded-full text-foreground"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground transition-transform duration-150 active:scale-[0.97] motion-reduce:active:scale-100"
             >
               <MessageSquarePlus size={17} />
             </button>
@@ -91,7 +93,7 @@ export function MobileHighlightBar({
                 }}
                 onClick={handleClick}
                 className={cn(
-                  "cursor-pointer w-[13vw] h-8 rounded-full transition-all active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 shadow-sm",
+                  "cursor-pointer w-[min(13vw,3.5rem)] h-11 rounded-full transition-[scale,border-color] duration-150 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 shadow-sm",
                   "border border-black/5 active:border-black/10",
                   isCurrentColor && "ring-2 ring-offset-2 ring-foreground/50",
                 )}

@@ -168,16 +168,17 @@
   display: inline;
 }
 
-.reader-inline-link:hover,
-.reader-inline-link:focus-visible {
+@media (hover: hover) {
+.reader-inline-link:hover {
   color: var(--foreground);
   text-decoration-color: var(--foreground);
 }
 
-.reader-inline-link-cluster:hover .reader-inline-link,
-.reader-inline-link-cluster:focus-within .reader-inline-link {
+.reader-inline-link-cluster:hover .reader-inline-link {
   color: var(--foreground);
   text-decoration-color: var(--foreground);
+}
+
 }
 
 .reader-inline-code {
@@ -222,11 +223,13 @@
     box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.reader-note-ref:hover .reader-note-ref-badge,
-.reader-note-ref:focus-visible .reader-note-ref-badge {
+@media (hover: hover) {
+.reader-note-ref:hover .reader-note-ref-badge {
   background: var(--secondary);
   color: var(--foreground);
   box-shadow: 0.22rem 0.22rem 0 0 var(--accent);
+}
+
 }
 
 /* Some ebooks wrap the paragraph text in a link tag. TODO: we have to handle this. */
@@ -304,8 +307,8 @@
   padding-right: 0.08em;
 }
 
-.epub-highlight:hover {
-  opacity: 0.8;
+@media (hover: hover) {
+  .epub-highlight:hover { opacity: 0.8; }
 }
 
 /* Active state for selected highlights (when delete popover is shown) */
@@ -337,4 +340,14 @@
 
 mark {
   color: inherit;
+}
+
+.reader-inline-link:focus-visible,
+.reader-inline-link-cluster:focus-within .reader-inline-link {
+  color: var(--foreground);
+  text-decoration-color: var(--foreground);
+}
+.reader-note-ref:focus-visible .reader-note-ref-badge {
+  background: var(--secondary);
+  color: var(--foreground);
 }

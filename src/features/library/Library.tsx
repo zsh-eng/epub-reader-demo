@@ -286,7 +286,7 @@ export function Library() {
                   onClick={() => setSearchQuery("")}
                   aria-label="Clear library search"
                   title="Clear search"
-                  className="absolute top-1/2 right-3 z-30 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94]"
+                  className="absolute top-1/2 right-3 z-30 grid size-8 -translate-y-1/2 place-items-center rounded-full text-muted-foreground outline-none transition-[color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94]"
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>

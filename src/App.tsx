@@ -1,3 +1,4 @@
+import { MotionConfig } from "motion/react";
 import { lazy, Suspense } from "react";
 import { AppRouter } from "@/features/sync-lab/AppLocation";
 import { Settings } from "@/features/settings/Settings";
@@ -67,6 +68,7 @@ function FileUploadInitializer({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
+    <MotionConfig reducedMotion="user">
     <QueryClientProvider client={queryClient}>
       <ReaderSettingsProvider>
         <SyncProvider>
@@ -146,6 +148,7 @@ function App() {
         </SyncProvider>
       </ReaderSettingsProvider>
     </QueryClientProvider>
+    </MotionConfig>
   );
 }
 

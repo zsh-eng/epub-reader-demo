@@ -65,7 +65,7 @@ export function ThemePanel({ settings, onUpdateSettings }: ThemePanelProps) {
               aria-pressed={isSelected}
               onClick={() => onUpdateSettings({ theme: theme.value })}
               className={cn(
-                "relative h-36 overflow-hidden rounded-[1.25rem] border text-left transition-[background-color,border-color,opacity,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
+                "relative h-36 overflow-hidden rounded-[1.25rem] border text-left transition-[background-color,border-color,opacity,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:active:scale-100 motion-reduce:active:opacity-80",
                 "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                 "active:scale-[0.98]",
                 isSelected

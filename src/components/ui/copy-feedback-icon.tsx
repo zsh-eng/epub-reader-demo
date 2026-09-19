@@ -16,20 +16,20 @@ export function CopyFeedbackIcon({ copied, className }: CopyFeedbackIconProps) {
       className={cn("relative grid place-items-center", className)}
       aria-hidden="true"
     >
-      <AnimatePresence initial={false} mode="wait">
+      <AnimatePresence initial={false} mode="sync">
         <motion.span
           key={copied ? "copied" : "copy"}
           className="absolute inset-0 grid place-items-center"
           initial={
             reducedMotion
               ? { opacity: 0 }
-              : { opacity: 0, transform: "scale(0.88)" }
+              : { opacity: 0, transform: "scale(0.25)", filter: "blur(4px)" }
           }
-          animate={{ opacity: 1, transform: "scale(1)" }}
+          animate={{ opacity: 1, transform: "scale(1)", filter: "blur(0px)" }}
           exit={
             reducedMotion
               ? { opacity: 0 }
-              : { opacity: 0, transform: "scale(0.88)" }
+              : { opacity: 0, transform: "scale(0.25)", filter: "blur(4px)" }
           }
           transition={{
             duration: reducedMotion ? 0.1 : 0.15,

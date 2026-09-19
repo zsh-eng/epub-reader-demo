@@ -276,7 +276,7 @@ export function Sidebar({
       <div
         data-slot="sidebar-container"
         className={cn(
-          "pointer-events-auto fixed inset-y-3 left-3 z-50 flex w-(--sidebar-width) transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
+          "pointer-events-auto fixed inset-y-3 left-3 z-50 flex w-(--sidebar-width) transition-[opacity,transform,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
           open
             ? "[transform:translate3d(0,0,0)] opacity-100"
             : "pointer-events-none [transform:translate3d(-12px,0,0)] opacity-0",
@@ -351,7 +351,7 @@ export function SidebarFloatingTrigger({ className }: { className?: string }) {
     <div
       aria-hidden={isSidebarOpen}
       className={cn(
-        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 rounded-full bg-background transition-[opacity,transform] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
+        "fixed left-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-30 rounded-full bg-background transition-[opacity,transform,scale] ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transform-none",
         isSidebarOpen
           ? "pointer-events-none invisible [transform:translate3d(0,-4px,0)] opacity-0"
           : "[transform:translate3d(0,0,0)] opacity-100",
@@ -454,7 +454,7 @@ export function SidebarMenuButton({
         "data-active": isActive,
         type: "button",
         className: cn(
-          "flex min-h-[38px] w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[14px] font-normal outline-none transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
+          "flex min-h-[38px] w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[14px] font-normal outline-none transition-[background-color,color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring active:scale-[0.985] motion-reduce:active:scale-100 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0",
           className,
         ),
       },

@@ -43,7 +43,7 @@ const CHROME_FADE_OUT_TRANSITION = {
   ease: "easeIn" as const,
 };
 const CHROME_BUTTON_CLASS_NAME =
-  "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-[color,background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background hover:text-foreground active:scale-95 motion-reduce:active:scale-100";
+  "size-8 rounded-full border border-border/70 bg-background/70 text-muted-foreground transition-[color,background-color,transform,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-background hover:text-foreground active:scale-95 motion-reduce:active:scale-100";
 
 export interface ReaderHeaderProps {
   chromeVisible: boolean;

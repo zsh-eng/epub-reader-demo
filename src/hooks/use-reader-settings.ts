@@ -40,7 +40,7 @@ const DEFAULT_SETTINGS = {
   showPageNumbers: true,
 } satisfies ReaderSettings;
 
-const THEME_TRANSITION_DURATION_MS = 300;
+const THEME_TRANSITION_DURATION_MS = 0;
 
 function clampFontSizePx(value: number): number {
   return Math.min(
@@ -198,6 +198,8 @@ export function ReaderSettingsProvider({ children }: { children: ReactNode }) {
     // on first mount so restored dark themes do not retain a white browser bar.
     root.classList.remove(...THEME_CLASSES);
     root.classList.add(settings.theme);
+    // Commit the new palette while descendant transitions are suppressed.
+    void root.offsetHeight;
     window.document
       .querySelector('meta[name="theme-color"]')
       ?.setAttribute(
