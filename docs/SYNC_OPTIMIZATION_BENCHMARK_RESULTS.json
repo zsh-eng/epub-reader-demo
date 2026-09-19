@@ -1,0 +1,486 @@
+{
+  "meta": {
+    "records": 97266,
+    "head": 99810,
+    "zod": "4.6.5",
+    "decoder": "single discriminated compiled",
+    "loadStart": [
+      17.64501953125,
+      57.35498046875,
+      50.65380859375
+    ]
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "plannedRuns": 18,
+  "status": "complete",
+  "results": [
+    {
+      "mode": "fixed-500",
+      "repeat": 0,
+      "totalMs": 25903.400000095367,
+      "prepareMs": 2445.800000190735,
+      "writeMs": 22718.50000011921,
+      "maxPrepareMs": 179.10000002384186,
+      "maxWriteMs": 824.5,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          13.31640625,
+          51.8671875,
+          48.9228515625
+        ],
+        "at": "2026-09-19T13:09:46.621Z"
+      }
+    },
+    {
+      "mode": "fixed-5000",
+      "repeat": 0,
+      "totalMs": 20878.799999952316,
+      "prepareMs": 2088.4000000953674,
+      "writeMs": 18393.499999642372,
+      "maxPrepareMs": 203.90000009536743,
+      "maxWriteMs": 1826.1999999284744,
+      "requests": 7,
+      "writes": 21,
+      "minWriteRecords": 943,
+      "maxWriteRecords": 5000,
+      "peakQueueRecords": 5000,
+      "peakQueueJsonBytes": 4113470,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          11.07861328125,
+          47.04638671875,
+          47.28271484375
+        ],
+        "at": "2026-09-19T13:10:18.426Z"
+      }
+    },
+    {
+      "mode": "fixed-20000",
+      "repeat": 0,
+      "totalMs": 21598.800000071526,
+      "prepareMs": 1896.8999999761581,
+      "writeMs": 16347.799999833107,
+      "maxPrepareMs": 448.6999999284744,
+      "maxWriteMs": 3976.399999976158,
+      "requests": 7,
+      "writes": 6,
+      "minWriteRecords": 943,
+      "maxWriteRecords": 20000,
+      "peakQueueRecords": 20000,
+      "peakQueueJsonBytes": 15705374,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          10.27685546875,
+          43.41015625,
+          45.955078125
+        ],
+        "at": "2026-09-19T13:10:49.276Z"
+      }
+    },
+    {
+      "mode": "adaptive",
+      "repeat": 0,
+      "totalMs": 21057.199999928474,
+      "prepareMs": 2013.5000003576279,
+      "writeMs": 18844.299999833107,
+      "maxPrepareMs": 245.70000004768372,
+      "maxWriteMs": 1184.5,
+      "requests": 7,
+      "writes": 27,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 4000,
+      "peakQueueRecords": 4000,
+      "peakQueueJsonBytes": 3291778,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          8.31005859375,
+          39.78173828125,
+          44.55126953125
+        ],
+        "at": "2026-09-19T13:11:20.741Z"
+      }
+    },
+    {
+      "mode": "fixed-500-fast",
+      "repeat": 0,
+      "totalMs": 19339.800000071526,
+      "prepareMs": 2020.7999991178513,
+      "writeMs": 16627.5,
+      "maxPrepareMs": 169.60000002384186,
+      "maxWriteMs": 531.8999999761581,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 202,
+      "outboxGets": 0,
+      "verified": true,
+      "host": {
+        "load": [
+          8.16162109375,
+          36.77978515625,
+          43.29931640625
+        ],
+        "at": "2026-09-19T13:11:49.334Z"
+      }
+    },
+    {
+      "mode": "adaptive-fast",
+      "repeat": 0,
+      "totalMs": 16075,
+      "prepareMs": 1983.1000001430511,
+      "writeMs": 13888.000000357628,
+      "maxPrepareMs": 212.5,
+      "maxWriteMs": 923.5,
+      "requests": 7,
+      "writes": 27,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 4000,
+      "peakQueueRecords": 4000,
+      "peakQueueJsonBytes": 3291778,
+      "outboxChecks": 27,
+      "outboxGets": 0,
+      "verified": true,
+      "host": {
+        "load": [
+          9.25732421875,
+          34.71484375,
+          42.36376953125
+        ],
+        "at": "2026-09-19T13:12:14.272Z"
+      }
+    },
+    {
+      "mode": "fixed-5000",
+      "repeat": 1,
+      "totalMs": 26432.299999952316,
+      "prepareMs": 2631.800000190735,
+      "writeMs": 22708.800000429153,
+      "maxPrepareMs": 464.10000002384186,
+      "maxWriteMs": 2709.5,
+      "requests": 7,
+      "writes": 21,
+      "minWriteRecords": 943,
+      "maxWriteRecords": 5000,
+      "peakQueueRecords": 5000,
+      "peakQueueJsonBytes": 4113470,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          11.306640625,
+          32.39501953125,
+          41.2080078125
+        ],
+        "at": "2026-09-19T13:12:51.005Z"
+      }
+    },
+    {
+      "mode": "fixed-20000",
+      "repeat": 1,
+      "totalMs": 27022.199999928474,
+      "prepareMs": 1946.4999998807907,
+      "writeMs": 20689.39999985695,
+      "maxPrepareMs": 489.5,
+      "maxWriteMs": 4885.199999928474,
+      "requests": 7,
+      "writes": 6,
+      "minWriteRecords": 943,
+      "maxWriteRecords": 20000,
+      "peakQueueRecords": 20000,
+      "peakQueueJsonBytes": 15705374,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          10.908203125,
+          29.66015625,
+          39.80126953125
+        ],
+        "at": "2026-09-19T13:13:29.560Z"
+      }
+    },
+    {
+      "mode": "adaptive",
+      "repeat": 1,
+      "totalMs": 20750.200000047684,
+      "prepareMs": 2166.8000000715256,
+      "writeMs": 18265.50000023842,
+      "maxPrepareMs": 212.19999992847443,
+      "maxWriteMs": 1241.6000000238419,
+      "requests": 7,
+      "writes": 27,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 4000,
+      "peakQueueRecords": 4000,
+      "peakQueueJsonBytes": 3291778,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          8.91748046875,
+          27.4072265625,
+          38.63330078125
+        ],
+        "at": "2026-09-19T13:13:59.664Z"
+      }
+    },
+    {
+      "mode": "fixed-500-fast",
+      "repeat": 1,
+      "totalMs": 18997.899999976158,
+      "prepareMs": 2067.8000004291534,
+      "writeMs": 15992.400000095367,
+      "maxPrepareMs": 176.29999995231628,
+      "maxWriteMs": 366.89999997615814,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 202,
+      "outboxGets": 0,
+      "verified": true,
+      "host": {
+        "load": [
+          8.66455078125,
+          25.59521484375,
+          37.58740234375
+        ],
+        "at": "2026-09-19T13:14:28.371Z"
+      }
+    },
+    {
+      "mode": "adaptive-fast",
+      "repeat": 1,
+      "totalMs": 18938.5,
+      "prepareMs": 3145.3000000715256,
+      "writeMs": 15550.200000166893,
+      "maxPrepareMs": 966.7000000476837,
+      "maxWriteMs": 1198.3000000715256,
+      "requests": 7,
+      "writes": 27,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 4000,
+      "peakQueueRecords": 4000,
+      "peakQueueJsonBytes": 3291778,
+      "outboxChecks": 27,
+      "outboxGets": 0,
+      "verified": true,
+      "host": {
+        "load": [
+          9.23388671875,
+          24.10498046875,
+          36.62939453125
+        ],
+        "at": "2026-09-19T13:15:00.445Z"
+      }
+    },
+    {
+      "mode": "fixed-500",
+      "repeat": 1,
+      "totalMs": 29137,
+      "prepareMs": 3397.3000005483627,
+      "writeMs": 24981.700000047684,
+      "maxPrepareMs": 400.2000000476837,
+      "maxWriteMs": 949.7999999523163,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          10.58984375,
+          22.4990234375,
+          35.45849609375
+        ],
+        "at": "2026-09-19T13:15:40.291Z"
+      }
+    },
+    {
+      "mode": "fixed-20000",
+      "repeat": 2,
+      "totalMs": 22992.200000047684,
+      "prepareMs": 2255.5999999046326,
+      "writeMs": 17682.5,
+      "maxPrepareMs": 590.2000000476837,
+      "maxWriteMs": 4314.5,
+      "requests": 7,
+      "writes": 6,
+      "minWriteRecords": 943,
+      "maxWriteRecords": 20000,
+      "peakQueueRecords": 20000,
+      "peakQueueJsonBytes": 15705374,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          9.03369140625,
+          20.78564453125,
+          34.31005859375
+        ],
+        "at": "2026-09-19T13:16:12.802Z"
+      }
+    },
+    {
+      "mode": "adaptive",
+      "repeat": 2,
+      "totalMs": 20889.299999952316,
+      "prepareMs": 1897.3000000715256,
+      "writeMs": 18742.000000476837,
+      "maxPrepareMs": 202.5,
+      "maxWriteMs": 1086.1000000238419,
+      "requests": 7,
+      "writes": 27,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 4000,
+      "peakQueueRecords": 4000,
+      "peakQueueJsonBytes": 3291778,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          8.0595703125,
+          19.43310546875,
+          33.3505859375
+        ],
+        "at": "2026-09-19T13:16:42.802Z"
+      }
+    },
+    {
+      "mode": "fixed-500-fast",
+      "repeat": 2,
+      "totalMs": 20721.800000071526,
+      "prepareMs": 2233.500000476837,
+      "writeMs": 17767.10000061989,
+      "maxPrepareMs": 196.69999992847443,
+      "maxWriteMs": 870.9000000953674,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 202,
+      "outboxGets": 0,
+      "verified": true,
+      "host": {
+        "load": [
+          7.24365234375,
+          18.16064453125,
+          32.40673828125
+        ],
+        "at": "2026-09-19T13:17:12.996Z"
+      }
+    },
+    {
+      "mode": "adaptive-fast",
+      "repeat": 2,
+      "totalMs": 18816.799999952316,
+      "prepareMs": 2257.699999809265,
+      "writeMs": 16327.899999976158,
+      "maxPrepareMs": 306.60000002384186,
+      "maxWriteMs": 2909.399999976158,
+      "requests": 7,
+      "writes": 27,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 4000,
+      "peakQueueRecords": 4000,
+      "peakQueueJsonBytes": 3291778,
+      "outboxChecks": 27,
+      "outboxGets": 0,
+      "verified": true,
+      "host": {
+        "load": [
+          7.96923828125,
+          17.46826171875,
+          31.7451171875
+        ],
+        "at": "2026-09-19T13:17:40.344Z"
+      }
+    },
+    {
+      "mode": "fixed-500",
+      "repeat": 2,
+      "totalMs": 28683,
+      "prepareMs": 3101.8000000715256,
+      "writeMs": 24576.000000834465,
+      "maxPrepareMs": 567.3999999761581,
+      "maxWriteMs": 631.3000000715256,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          8.90771484375,
+          16.541015625,
+          30.75
+        ],
+        "at": "2026-09-19T13:18:18.907Z"
+      }
+    },
+    {
+      "mode": "fixed-5000",
+      "repeat": 2,
+      "totalMs": 25887.200000047684,
+      "prepareMs": 2961.2999995946884,
+      "writeMs": 22462.39999985695,
+      "maxPrepareMs": 580.6000000238419,
+      "maxWriteMs": 2314.5,
+      "requests": 7,
+      "writes": 21,
+      "minWriteRecords": 943,
+      "maxWriteRecords": 5000,
+      "peakQueueRecords": 5000,
+      "peakQueueJsonBytes": 4113470,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          9.26416015625,
+          15.84765625,
+          29.927734375
+        ],
+        "at": "2026-09-19T13:18:55.685Z"
+      }
+    }
+  ]
+}
