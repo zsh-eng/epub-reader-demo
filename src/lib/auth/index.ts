@@ -58,7 +58,7 @@ export async function registerClient() {
   await setClientId(ensureSyncState().deviceId);
   return { success: true, message: undefined };
 }
-export async function registerAndSync(_legacyClientId?: string) {
+export async function registerAndSync() {
   await registerClient();
   await SyncEngine.syncFromServer();
 }
