@@ -1,3 +1,6 @@
+> Superseded by the local implementation in [BACKEND_MIGRATION.md](BACKEND_MIGRATION.md).
+> Production cutover is recorded in [CUTOVER_STATUS.md](CUTOVER_STATUS.md).
+
 # Migration Plan: Merge spaced-backend into spaced2 (Workers + Assets)
 
 ## Overview

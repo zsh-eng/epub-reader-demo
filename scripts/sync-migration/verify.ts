@@ -2,7 +2,10 @@
 import { Database } from "bun:sqlite";
 import assert from "node:assert/strict";
 import { encodeSyncKey } from "@zsh-eng/local-sync";
-const [sourcePath, targetPath] = process.argv.slice(2);
+const [sourcePath, targetPath, aliasesPath] = process.argv.slice(2);
+const aliases: Record<string, string> | undefined = aliasesPath
+  ? await Bun.file(aliasesPath).json()
+  : undefined;
 if (!sourcePath || !targetPath)
   throw Error(
     "Usage: bun scripts/sync-migration/verify.ts source.sqlite converted.sqlite",
@@ -142,6 +145,20 @@ for (const [table, def] of Object.entries(mapping)) {
       if (def.dates?.includes(column) && expected !== null)
         expected = new Date(Number(expected)).toISOString();
       if (def.flags?.includes(column)) expected = !!expected;
+      if (
+        aliases &&
+        table === "card_contents" &&
+        (column === "front" || column === "back")
+      ) {
+        expected = String(expected).replace(
+          /https?:\/\/api\.spaced2\.zsheng\.app\/api\/files\/([a-zA-Z0-9-]+\/[a-zA-Z0-9-]+)/g,
+          (_, key) => {
+            assert.ok(aliases[key], `Missing file alias: ${key}`);
+            assert.equal(key.split("/")[0], row.user_id);
+            return `/api/files/${aliases[key]}`;
+          },
+        );
+      }
       assert.deepEqual(op.payload[field], expected, `${table}.${column}`);
       fields++;
     }

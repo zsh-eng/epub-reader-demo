@@ -1,13 +1,15 @@
 # Local sync and FSRS-6 migration
 
-Implemented locally on 19 September 2026. **Production has not changed.**
-The frontend is `/Users/admin/spaced2`; the backend is `/Users/admin/spaced-backend`.
+Implemented and deployed on 19 September 2026. See [CUTOVER_STATUS.md](CUTOVER_STATUS.md).
+The backend is now consolidated into `/Users/admin/spaced2`. See
+[BACKEND_MIGRATION.md](BACKEND_MIGRATION.md) for the current conversion and deployment plan.
+The rehearsal below documents the preceding sync-only stage.
 
 ## Implemented behavior
 
 - Both applications use the same pinned `@zsh-eng/local-sync@0.1.0` archive in
   `vendor/`. Reader owns the package source. A sibling checkout is not needed to build.
-- `SpacedRecordsV2` replaces the legacy client operation log. Each operation
+- `SpacedRecordsV3` now replaces the legacy client operation log. Each operation
   family has one current record per entity. This retains separate conflict
   boundaries for schedule, content, bookmark, deletion, suspension, and metadata.
 - Local records and the outbox commit in one IndexedDB transaction. MemoryDB
@@ -30,8 +32,8 @@ The frontend is `/Users/admin/spaced2`; the backend is `/Users/admin/spaced-back
   due dates, stability, difficulty, history, IDs, and timestamps are preserved.
   Grading, persistence, sync, and Undo retain the new field.
 
-The backend keeps the old tables for rollback reference. New writes go to
-`sync_records`; they are not copied back into the old tables.
+The earlier backend kept legacy tables. The consolidated backend has only auth,
+file metadata, and sync records. The original database remains in the backup.
 
 ## Data rehearsal
 
