@@ -22,7 +22,8 @@ import { NoteService } from "./notes";
 import { browseListRequestSchema, browseReadRequestSchema } from "../shared/browse";
 import { listBrowse, readBrowse } from "./repository/browse";
 import { browseBlameRequestSchema, browseSearchRequestSchema } from "../shared/inspect";
-import { blameBrowse, searchBrowse } from "./repository/inspect";
+import { blameBrowse } from "./repository/inspect";
+import { ZoektSearchService, type SearchOptions } from "./search/service";
 
 export interface StartHostOptions {
   repo: string;
@@ -32,6 +33,7 @@ export interface StartHostOptions {
   initialComparison?: Comparison;
   allowedInputPaths?: readonly string[];
   onClose?: () => Promise<void>;
+  search?: SearchOptions;
 }
 export interface RunningHost {
   url: string;
@@ -103,6 +105,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
     new Set((options.allowedInputPaths ?? []).map((path) => resolve(path))),
   );
   const notes = new NoteService(reviews);
+  const search = new ZoektSearchService(repository.path, options.search);
   const allowed = new Set<string>([repository.path]);
   allowed.add(resolve(options.repo));
   const watchers = new Map<string, Promise<() => Promise<void>>>();
@@ -141,7 +144,10 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       }
       return watchRepository(
         repo,
-        () => publish({ type: "changed", repo, revision: ++revision }),
+        () => {
+          search.refresh();
+          publish({ type: "changed", repo, revision: ++revision });
+        },
         live,
       );
     })();
@@ -265,7 +271,11 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           if (url.pathname === "/api/browse/search" && request.method === "POST") {
             const input = browseSearchRequestSchema.parse(await readBody(request));
             input.source.repo = requireRepo(input.source.repo);
-            json(response, 200, await searchBrowse(input.source, input.query, abort.signal));
+            json(response, 200, await search.search(input.source, input.query, abort.signal));
+            return;
+          }
+          if (url.pathname === "/api/search/status" && request.method === "GET") {
+            json(response, 200, search.status());
             return;
           }
           if (url.pathname === "/api/browse/blame" && request.method === "POST") {
@@ -444,6 +454,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   if (!address || typeof address === "string")
     throw new Error("The local server did not open a TCP port.");
   port = address.port;
+  if (repository.git !== false) await search.start();
   if (options.open) {
     const command =
       process.platform === "darwin"
@@ -477,6 +488,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       for (const stream of streams) stream.end();
       streams.clear();
       await Promise.allSettled([...watchers.values()].map(async (stop) => (await stop)()));
+      await search.close();
       reviews.clear();
       notes.clear();
       await new Promise<void>((resolvePromise) => {

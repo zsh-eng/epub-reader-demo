@@ -402,6 +402,130 @@ test("content search is scoped, previews the matching line, and resumes its last
   expect(onOpen).toHaveBeenCalledWith("src/main.ts", 2);
 });
 
+test("committed search previews and opens the exact result commit, while Files stays in the worktree", async () => {
+  const source: BrowseSource = { kind: "worktree", repo: "/feature" };
+  const resultSource: BrowseSource = { kind: "commit", repo: source.repo, oid: "a".repeat(40) };
+  const api: BrowseApi = {
+    list: vi.fn<BrowseApi["list"]>(),
+    read: vi.fn<BrowseApi["read"]>(async (source, path) => ({
+      source,
+      path,
+      kind: "text",
+      size: 18,
+      identity: JSON.stringify(source),
+      text: "first\nneedle\nlast\n",
+    })),
+    search: vi.fn<NonNullable<BrowseApi["search"]>>(async (source, query) => ({
+      source,
+      query,
+      resultSource,
+      engine: "zoekt",
+      index: { state: "ready" },
+      matches: [{ path: "src/main.ts", line: 2, text: "needle" }],
+      truncated: false,
+    })),
+  };
+  const onOpen = vi.fn<(path: string, line?: number, source?: BrowseSource) => void>();
+  render(
+    <FilePicker
+      open
+      onOpenChange={() => {}}
+      entries={entries}
+      loading={false}
+      error={null}
+      sourceLabel="Feature worktree"
+      source={source}
+      api={api}
+      onOpen={onOpen}
+      initialMode="content"
+    />,
+  );
+  await page.getByRole("combobox", { name: "Search file contents" }).fill("needle");
+  await expect
+    .element(page.getByText("Committed files · uncommitted changes excluded · aaaaaaaa · Zoekt"))
+    .toBeVisible();
+  await expect
+    .poll(() => api.read)
+    .toHaveBeenCalledWith(resultSource, "src/main.ts", expect.any(AbortSignal));
+  await userEvent.keyboard("{Enter}");
+  expect(onOpen).toHaveBeenCalledWith("src/main.ts", 2, resultSource);
+  await page.getByRole("button", { name: "Files", exact: true }).click();
+  await expect
+    .poll(() => api.read)
+    .toHaveBeenCalledWith(source, "src/main.ts", expect.any(AbortSignal));
+  await page.getByRole("combobox", { name: "Find file" }).fill("main.ts");
+  await userEvent.keyboard("{Enter}");
+  expect(onOpen).toHaveBeenLastCalledWith("src/main.ts", undefined);
+});
+
+test("resume restores the content query after Enter opens an immutable result", async () => {
+  const source: BrowseSource = { kind: "worktree", repo: "/feature" };
+  const resultSource: BrowseSource = { kind: "commit", repo: source.repo, oid: "a".repeat(40) };
+  const api: BrowseApi = {
+    list: vi.fn<BrowseApi["list"]>(),
+    read: vi.fn<BrowseApi["read"]>(async (source, path) => ({
+      source,
+      path,
+      kind: "text",
+      size: 24,
+      identity: JSON.stringify(source),
+      text: "rewriteForProxiedHttp();\n",
+    })),
+    search: vi.fn<NonNullable<BrowseApi["search"]>>(async (source, query) => ({
+      source,
+      query,
+      resultSource,
+      engine: "zoekt",
+      index: { state: "ready" },
+      matches: [{ path: "src/main.ts", line: 1, text: "rewriteForProxiedHttp();" }],
+      truncated: false,
+    })),
+  };
+  const onOpen = vi.fn<(path: string, line?: number, source?: BrowseSource) => void>();
+  let reopen = () => {};
+  function Harness() {
+    const [open, setOpen] = useState(true);
+    const [resume, setResume] = useState(false);
+    useEffect(() => {
+      reopen = () => {
+        setResume(true);
+        setOpen(true);
+      };
+    }, []);
+    return (
+      <FilePicker
+        open={open}
+        onOpenChange={setOpen}
+        entries={entries}
+        loading={false}
+        error={null}
+        sourceLabel="Working files · main"
+        source={source}
+        api={api}
+        onOpen={onOpen}
+        initialMode="content"
+        resume={resume}
+      />
+    );
+  }
+  render(<Harness />);
+  await expect.element(page.getByRole("combobox", { name: "Search file contents" })).toBeVisible();
+  await userEvent.keyboard("rewriteForProxiedHttp");
+  await expect
+    .element(page.getByRole("option", { name: "main.ts:1 src rewriteForProxiedHttp();" }))
+    .toBeVisible();
+  await userEvent.keyboard("{Enter}");
+  expect(onOpen).toHaveBeenCalledWith("src/main.ts", 1, resultSource);
+  await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+  reopen();
+  await expect
+    .element(page.getByRole("combobox", { name: "Search file contents" }))
+    .toHaveValue("rewriteForProxiedHttp");
+  await expect
+    .element(page.getByRole("option", { name: "main.ts:1 src rewriteForProxiedHttp();" }))
+    .toBeVisible();
+});
+
 test("a late preview from a different workspace cannot replace the active preview", async () => {
   type Read = Awaited<ReturnType<BrowseApi["read"]>>;
   const requests: {

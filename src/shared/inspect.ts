@@ -15,6 +15,14 @@ export const browseSearchSchema = browseSearchRequestSchema.extend({
   ),
   truncated: z.boolean(),
   reason: z.string().optional(),
+  resultSource: browseSourceSchema.optional(),
+  engine: z.enum(["zoekt", "git"]).optional(),
+  index: z
+    .object({
+      state: z.enum(["ready", "indexing", "unavailable", "error"]),
+      message: z.string().optional(),
+    })
+    .optional(),
 });
 export type BrowseSearch = z.infer<typeof browseSearchSchema>;
 export const browseSearchResponseSchema = browseSearchSchema;

@@ -17,7 +17,7 @@ export interface FilePickerProps {
   loading: boolean;
   error: string | null;
   sourceLabel: string;
-  onOpen(path: string, line?: number): void;
+  onOpen(path: string, line?: number, source?: BrowseSource): void;
   source?: BrowseSource | null;
   api?: BrowseApi;
   sourceRevision?: number | string;
@@ -248,9 +248,14 @@ function PickerContents({
     return matches;
   }, [entries, query, openPaths, recentPaths, mode, search, searchKey, restoreId]);
   const selectedResult = results.find((entry) => entry.id === selected) ?? results[0];
+  const currentSearch = search.key === searchKey ? search.result : undefined;
+  const resultSource = mode === "content" ? currentSearch?.resultSource : undefined;
+  const previewSource = resultSource ?? source;
+  const previewSourceKey = previewSource ? browseSourceKey(previewSource) : "";
+  const previewScrollKey = JSON.stringify([previewSourceKey, selectedResult?.id]);
   const preview = usePickerPreview(
     api,
-    source,
+    previewSource,
     selectedResult?.path,
     `${sourceRevision}:${refresh}`,
   );
@@ -258,7 +263,8 @@ function PickerContents({
     mode === "files" ? loading : !!query.trim() && search.key !== searchKey && !!api?.search;
   const failure = mode === "files" ? error : search.key === searchKey ? search.error : null;
   const choose = (entry: PickerResult) => {
-    onOpen(entry.path, entry.line);
+    if (resultSource) onOpen(entry.path, entry.line, resultSource);
+    else onOpen(entry.path, entry.line);
     onOpenChange(false);
   };
   return (
@@ -343,7 +349,7 @@ function PickerContents({
                 ref={inputRef}
                 aria-label={mode === "files" ? "Find file" : "Search file contents"}
                 placeholder={
-                  mode === "files" ? "Search files… or file:line" : "Search text in this workspace…"
+                  mode === "files" ? "Search files… or file:line" : "Search committed text…"
                 }
                 onKeyDown={(event) => {
                   if (
@@ -361,13 +367,23 @@ function PickerContents({
                 {...stylex.props(styles.input)}
               />
             </div>
+            {mode === "content" && (
+              <p {...stylex.props(styles.searchNotice)}>
+                Committed files · uncommitted changes excluded
+                {resultSource?.kind === "commit" && ` · ${resultSource.oid.slice(0, 8)}`}
+                {currentSearch?.engine &&
+                  ` · ${currentSearch.engine === "zoekt" ? "Zoekt" : "Git search"}`}
+                {currentSearch?.index?.state === "indexing" && " · Index updating"}
+              </p>
+            )}
             <div {...stylex.props(styles.body)}>
-              <div {...stylex.props(styles.results)}>
+              <div {...stylex.props(styles.results)} aria-busy={busy}>
                 {busy ? (
-                  <p role="status" {...stylex.props(styles.message)}>
-                    {" "}
-                    {mode === "files" ? "Loading files…" : "Searching…"}
-                  </p>
+                  mode === "content" ? (
+                    <p role="status" {...stylex.props(styles.message)}>
+                      Searching…
+                    </p>
+                  ) : null
                 ) : failure ? (
                   <p role="alert" {...stylex.props(styles.message)}>
                     {failure}
@@ -377,7 +393,7 @@ function PickerContents({
                     <Combobox.Empty>
                       <div {...stylex.props(styles.message)}>
                         {mode === "content" && !query.trim()
-                          ? "Type text to search this workspace."
+                          ? "Type text to search the selected commit."
                           : "No matching files."}
                       </div>
                     </Combobox.Empty>
@@ -429,15 +445,19 @@ function PickerContents({
                 <div {...stylex.props(styles.preview)} aria-label="File preview">
                   {selectedResult ? (
                     <FullFileView
-                      key={selectedResult.path}
+                      key={`${previewSourceKey}:${selectedResult.path}`}
                       compact
                       {...preview}
-                      sourceLabel={sourceLabel}
+                      sourceLabel={
+                        resultSource?.kind === "commit"
+                          ? `Commit ${resultSource.oid.slice(0, 8)}`
+                          : sourceLabel
+                      }
                       line={selectedResult.line}
-                      initialScrollTop={session.scroll.get(selectedResult.id)}
+                      initialScrollTop={session.scroll.get(previewScrollKey)}
                       onScrollPosition={(top) => {
-                        session.scroll.delete(selectedResult.id);
-                        session.scroll.set(selectedResult.id, top);
+                        session.scroll.delete(previewScrollKey);
+                        session.scroll.set(previewScrollKey, top);
                         while (session.scroll.size > 50)
                           session.scroll.delete(session.scroll.keys().next().value!);
                       }}
@@ -453,6 +473,9 @@ function PickerContents({
               <p role="status" {...stylex.props(styles.searchNotice)}>
                 {search.result.reason}
               </p>
+            )}
+            {mode === "content" && currentSearch?.index?.message && (
+              <p {...stylex.props(styles.searchNotice)}>{currentSearch.index.message}</p>
             )}
             <div {...stylex.props(styles.footer)}>
               <span>

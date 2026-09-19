@@ -7,6 +7,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { startHost } from "../host/server";
 import type { Comparison } from "../shared/protocol";
+import { installSearchTools } from "../host/search/install";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -17,12 +18,17 @@ const { values, positionals } = parseArgs({
     help: { type: "boolean", short: "h" },
     patch: { type: "string" },
     files: { type: "boolean" },
+    "setup-search": { type: "boolean" },
   },
 });
 if (values.help) {
   console.log(
-    "Usage: med-diff [repository] [--port <port>] [--no-open]\n       med-diff --patch <path|-> [--no-open]\n       med-diff --files <old> <new> [--no-open]\n\nOpen a local, read-only review. Use --patch - to read a patch from stdin.",
+    "Usage: med-diff [repository] [--port <port>] [--no-open]\n       med-diff --patch <path|-> [--no-open]\n       med-diff --files <old> <new> [--no-open]\n       med-diff --setup-search\n\nOpen a local, read-only review. Use --patch - to read a patch from stdin.\nSetup search builds pinned Zoekt binaries once; it requires Go during setup only.",
   );
+} else if (values["setup-search"]) {
+  console.log("Setting up pinned Zoekt search tools…");
+  const result = await installSearchTools();
+  console.log(`Search tools ready: ${result.binDir}`);
 } else {
   const port = values.port === undefined ? undefined : Number(values.port);
   if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535))

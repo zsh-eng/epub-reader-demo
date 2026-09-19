@@ -940,7 +940,15 @@ export function App({
         recentPaths={fileState.recentPaths}
         initialMode={pickerMode}
         resume={pickerResume}
-        onOpen={(path, line) => fileWorkspace.open(path, false, line)}
+        onOpen={(path, line, source) =>
+          fileWorkspace.open(
+            path,
+            false,
+            line,
+            source,
+            source?.kind === "commit" ? `Commit ${source.oid.slice(0, 8)}` : sourceLabel,
+          )
+        }
       />
       <div
         {...stylex.props(styles.workspace)}
@@ -1455,9 +1463,7 @@ export function App({
         <span {...stylex.props(styles.statusDot)} />
         <span>
           {activeFile
-            ? fileState.loading
-              ? "Loading file…"
-              : "Read-only file"
+            ? "Read-only file"
             : state.comparison.kind === "patch"
               ? "Patch review"
               : state.comparison.kind === "files"

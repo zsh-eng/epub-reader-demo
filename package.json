@@ -9,6 +9,7 @@
   "files": [
     "dist",
     "upstream",
+    "tools/zoekt",
     "README.md",
     "LICENSE"
   ],

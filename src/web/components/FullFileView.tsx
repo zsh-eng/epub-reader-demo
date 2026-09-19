@@ -233,11 +233,7 @@ export function FullFileView({
         <div role="alert" {...stylex.props(styles.notice)}>
           {error}
         </div>
-      ) : loading ? (
-        <div role="status" {...stylex.props(styles.notice)}>
-          Loading file…
-        </div>
-      ) : file ? (
+      ) : loading ? null : file ? (
         <>
           {(plain || file.truncated) && file.kind === "text" && (
             <div role="status" {...stylex.props(styles.banner)}>
