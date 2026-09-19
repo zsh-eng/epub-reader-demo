@@ -9,19 +9,11 @@ vi.mock("@/features/reader/ReaderToolsSidebar", () => ({
   ReaderToolsSidebar: () => "desktop reader sidebar",
 }));
 
-vi.mock("@/features/reader/ReaderToolsLauncherSheet", () => ({
-  ReaderToolsLauncherSheet: ({ isOpen }: { isOpen: boolean }) =>
-    isOpen ? "mobile reader launcher" : null,
-}));
-
 vi.mock("@/features/reader/ReaderContentsSheet", () => ({
-  ReaderContentsSheet: ({ isOpen }: { isOpen: boolean }) =>
-    isOpen ? "mobile contents sheet" : null,
+  ReaderContentsPanel: () => "contents panel",
 }));
-
 vi.mock("@/features/reader/ReaderSettingsSheet", () => ({
-  ReaderSettingsSheet: ({ isOpen }: { isOpen: boolean }) =>
-    isOpen ? "mobile settings sheet" : null,
+  ReaderSettingsPanel: () => "settings panel",
 }));
 
 vi.mock("@/features/reader/ReaderBookActionsSheet", () => ({
@@ -83,7 +75,12 @@ describe("ReaderSheetHost", () => {
   it("keeps the existing sheet launcher on mobile", () => {
     renderHost(true);
 
-    expect(screen.getByText("mobile reader launcher")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Notes" })).toBeTruthy();
+    expect(
+      screen
+        .getByRole("button", { name: "Highlights" })
+        .hasAttribute("disabled"),
+    ).toBe(true);
     expect(screen.queryByText("desktop reader sidebar")).toBeNull();
   });
 
@@ -91,7 +88,7 @@ describe("ReaderSheetHost", () => {
     renderHost(false);
 
     expect(screen.getByText("desktop reader sidebar")).toBeTruthy();
-    expect(screen.queryByText("mobile reader launcher")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Notes" })).toBeNull();
   });
 
   it("keeps the full book actions sheet in the mobile reader tools", () => {
@@ -100,6 +97,6 @@ describe("ReaderSheetHost", () => {
     fireEvent.click(screen.getByRole("button", { name: "Book actions" }));
 
     expect(onOpenSheet).toHaveBeenCalledWith("tools");
-    expect(screen.queryByText("mobile reader launcher")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Notes" })).toBeNull();
   });
 });

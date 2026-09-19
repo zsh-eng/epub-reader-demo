@@ -1,3 +1,4 @@
+import { SheetUtilityButton } from "@/components/SheetUtilityButton";
 import { cn } from "@/lib/utils";
 import { useSpringPressAnimation } from "@/components/ui/spring-press";
 import {
@@ -6,7 +7,8 @@ import {
   List,
   NotebookPen,
   Search,
-  Settings,
+  Palette,
+  Highlighter,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -19,13 +21,7 @@ interface ReaderControlMenuProps {
   onCopyDebugDump?: () => void;
 }
 
-type MenuItemId =
-  | "notes"
-  | "contents"
-  | "book-actions"
-  | "search"
-  | "settings"
-  | "debug-dump";
+type MenuItemId = "contents" | "book-actions" | "search" | "debug-dump";
 
 interface MenuItem {
   id: MenuItemId;
@@ -35,7 +31,6 @@ interface MenuItem {
 }
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "notes", label: "Notes", icon: NotebookPen, isAvailable: true },
   { id: "contents", label: "Contents", icon: List, isAvailable: true },
   {
     id: "book-actions",
@@ -44,12 +39,6 @@ const MENU_ITEMS: MenuItem[] = [
     isAvailable: true,
   },
   { id: "search", label: "Search Book", icon: Search, isAvailable: false },
-  {
-    id: "settings",
-    label: "Themes & Settings",
-    icon: Settings,
-    isAvailable: true,
-  },
   {
     id: "debug-dump",
     label: "Copy Debug Dump",
@@ -72,16 +61,7 @@ function ReaderControlMenuItem({
   const springPress = useSpringPressAnimation();
 
   return (
-    <motion.div
-      initial={{ opacity: 0, transform: "translateY(16px)" }}
-      animate={{ opacity: 1, transform: "translateY(0px)" }}
-      exit={{ opacity: 0, transform: "translateY(16px)" }}
-      transition={{
-        duration: 0.2,
-        ease: [0.16, 1, 0.3, 1],
-        delay: index * 0.06,
-      }}
-    >
+    <div>
       <motion.button
         type="button"
         disabled={disabled}
@@ -102,7 +82,7 @@ function ReaderControlMenuItem({
         </div>
         <item.icon className="size-4 text-muted-foreground" />
       </motion.button>
-    </motion.div>
+    </div>
   );
 }
 
@@ -114,17 +94,8 @@ export function ReaderControlMenu({
   onCopyDebugDump,
 }: ReaderControlMenuProps) {
   const handleRowClick = (id: MenuItemId) => {
-    if (id === "notes") {
-      onOpenNotes?.();
-      return;
-    }
     if (id === "contents") {
       onOpenContents();
-      return;
-    }
-
-    if (id === "settings") {
-      onOpenSettings();
       return;
     }
 
@@ -150,9 +121,7 @@ export function ReaderControlMenu({
           (item) => item.id !== "debug-dump" || onCopyDebugDump,
         ).map((item, index) => {
           const isDisabled =
-            !item.isAvailable ||
-            (item.id === "notes" && !onOpenNotes) ||
-            (item.id === "debug-dump" && !onCopyDebugDump);
+            !item.isAvailable || (item.id === "debug-dump" && !onCopyDebugDump);
 
           return (
             <ReaderControlMenuItem
@@ -164,6 +133,30 @@ export function ReaderControlMenu({
             />
           );
         })}
+      </div>
+      <div className="mt-3 grid grid-cols-3 overflow-hidden rounded-[1.25rem] border border-border/60 bg-secondary/20">
+        <SheetUtilityButton
+          label="Theme"
+          accessibleLabel="Themes & Settings"
+          onClick={onOpenSettings}
+        >
+          <Palette className="size-5" aria-hidden="true" />
+        </SheetUtilityButton>
+        <SheetUtilityButton
+          label="Notes"
+          onClick={onOpenNotes}
+          disabled={!onOpenNotes}
+          className="border-l border-border/60"
+        >
+          <NotebookPen className="size-5" aria-hidden="true" />
+        </SheetUtilityButton>
+        <SheetUtilityButton
+          label="Highlights"
+          disabled
+          className="border-l border-border/60"
+        >
+          <Highlighter className="size-5" aria-hidden="true" />
+        </SheetUtilityButton>
       </div>
     </div>
   );

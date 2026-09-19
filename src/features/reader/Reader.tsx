@@ -563,7 +563,7 @@ export function Reader() {
                     locateAnchors={sessionResources.locateAnchors}
                     open={
                       noteViewportHeight !== null ||
-                      (!isMobile && chromeState.activeReaderSheet === "notes")
+                      chromeState.activeReaderSheet === "notes"
                     }
                     location={{
                       page: sessionState.navigation.currentPage,
@@ -571,15 +571,26 @@ export function Reader() {
                     }}
                     notebook={
                       isMobile
-                        ? notebookOpen
+                        ? notebookOpen ||
+                          chromeState.activeReaderSheet === "notes"
                         : chromeState.activeReaderSheet === "notes"
                     }
                     setNotebook={(nextOpen) => {
-                      if (isMobile) setNotebookOpen(nextOpen);
-                      else if (nextOpen) chromeActions.openReaderSheet("notes");
+                      if (isMobile) {
+                        setNotebookOpen(nextOpen);
+                        if (
+                          !nextOpen &&
+                          chromeState.activeReaderSheet === "notes"
+                        )
+                          chromeActions.closeReaderSheet();
+                      } else if (nextOpen)
+                        chromeActions.openReaderSheet("notes");
                       else if (chromeState.activeReaderSheet === "notes")
                         chromeActions.closeReaderSheet();
                     }}
+                    embeddedNotebook={
+                      isMobile && chromeState.activeReaderSheet === "notes"
+                    }
                     desktop={!isMobile}
                     commentPosition={commentPosition}
                     quote={noteQuote}
@@ -630,11 +641,6 @@ export function Reader() {
                             />
                           )
                         }
-                        onOpenNotes={() => {
-                          chromeActions.closeReaderSheet();
-                          handleNotesActive(true);
-                          setNotebookOpen(true);
-                        }}
                         onCopyDebugDump={
                           debugEnabled
                             ? () => void handleCopyDebugDump()

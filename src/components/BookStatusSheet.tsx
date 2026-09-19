@@ -115,21 +115,6 @@ export function BookStatusSheet({
   onSelectStatus,
   onRemove,
 }: BookStatusSheetProps) {
-  const removePress = useSpringPressAnimation();
-  const bookSummary = (
-    <>
-      <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
-      <div className="min-w-0">
-        <p className="truncate font-serif text-xl font-medium tracking-[-0.01em] text-foreground">
-          {bookTitle}
-        </p>
-        <p className="mt-1 truncate text-sm text-muted-foreground">
-          {bookAuthor}
-        </p>
-      </div>
-    </>
-  );
-
   return (
     <BottomSheet
       open={open}
@@ -158,44 +143,83 @@ export function BookStatusSheet({
       panelClassName="max-w-md"
       bodyClassName="overflow-y-auto"
     >
-      <div
-        className="px-4 pt-3"
-        style={{
-          paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
-        }}
-      >
-        <div className="mb-5 flex min-w-0 items-center gap-4 px-2 py-1">
-          {bookSummary}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {READING_STATUS_OPTIONS.map((option) => {
-            const isSelected = status === option.value;
-
-            return (
-              <BookStatusOptionButton
-                key={option.value}
-                option={option}
-                isSelected={isSelected}
-                isUpdating={isUpdating}
-                onSelect={() => onSelectStatus(option.value)}
-              />
-            );
-          })}
-        </div>
-
-        <motion.button
-          type="button"
-          className="mt-6 flex min-h-12 w-full items-center justify-center gap-2.5 rounded-[1.1rem] border border-destructive/40 bg-destructive/5 px-4 py-3 text-center text-sm font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/60"
-          onClick={() => {
-            if (onRemove()) onOpenChange(false);
-          }}
-          {...removePress}
-        >
-          <Trash2 className="size-5" aria-hidden="true" />
-          Remove Book
-        </motion.button>
-      </div>
+      <BookStatusPanel
+        bookTitle={bookTitle}
+        bookAuthor={bookAuthor}
+        coverUrl={coverUrl}
+        status={status}
+        isUpdating={isUpdating}
+        onSelectStatus={onSelectStatus}
+        onRemove={onRemove}
+        onOpenChange={onOpenChange}
+      />
     </BottomSheet>
+  );
+}
+
+export function BookStatusPanel({
+  bookTitle,
+  bookAuthor,
+  coverUrl,
+  status,
+  isUpdating,
+  onSelectStatus,
+  onRemove,
+  onOpenChange,
+}: Omit<BookStatusSheetProps, "open" | "onBack">) {
+  const removePress = useSpringPressAnimation();
+  const bookSummary = (
+    <>
+      <CircularBookCover coverUrl={coverUrl} className="size-20 shrink-0" />
+      <div className="min-w-0">
+        <p className="truncate font-serif text-xl font-medium tracking-[-0.01em] text-foreground">
+          {bookTitle}
+        </p>
+        <p className="mt-1 truncate text-sm text-muted-foreground">
+          {bookAuthor}
+        </p>
+      </div>
+    </>
+  );
+
+  return (
+    <div
+      className="px-4 pt-3"
+      style={{
+        paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`,
+      }}
+    >
+      <div className="mb-5 flex min-w-0 items-center gap-4 px-2 py-1">
+        {bookSummary}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {READING_STATUS_OPTIONS.map((option) => {
+          const isSelected = status === option.value;
+
+          return (
+            <BookStatusOptionButton
+              key={option.value}
+              option={option}
+              isSelected={isSelected}
+              isUpdating={isUpdating}
+              onSelect={() => onSelectStatus(option.value)}
+            />
+          );
+        })}
+      </div>
+
+      <motion.button
+        type="button"
+        className="mt-6 flex min-h-12 w-full items-center justify-center gap-2.5 rounded-[1.1rem] border border-destructive/40 bg-destructive/5 px-4 py-3 text-center text-sm font-medium text-destructive outline-none transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/60"
+        onClick={() => {
+          if (onRemove()) onOpenChange(false);
+        }}
+        {...removePress}
+      >
+        <Trash2 className="size-5" aria-hidden="true" />
+        Remove Book
+      </motion.button>
+    </div>
   );
 }

@@ -53,6 +53,7 @@ export function ReaderNotesPrototype({
   onVisit,
   margin,
   desktop,
+  embeddedNotebook = false,
   commentPosition,
   quote: incomingTarget,
   onClearQuote,
@@ -67,6 +68,7 @@ export function ReaderNotesPrototype({
   setNotebook: (open: boolean) => void;
   commentPosition: { top: number; page: number };
   desktop: boolean;
+  embeddedNotebook?: boolean;
   quote: NoteTarget | null;
   onClearQuote: () => void;
   margin: { width: number; location: Location; enabled: boolean };
@@ -314,10 +316,10 @@ export function ReaderNotesPrototype({
       // Mobile must focus within the user event to open its keyboard.
       if (!desktop) (notebook ? sidebarInput : input).current?.focus();
       if (!(await editNote(id)) || desktop) return;
-      onActiveChange(true);
+      if (!embeddedNotebook) onActiveChange(true);
       (notebook ? sidebarInput : input).current?.focus();
     },
-    [editNote, notebook, onActiveChange, desktop],
+    [editNote, notebook, onActiveChange, desktop, embeddedNotebook],
   );
 
   const iconButton =
@@ -513,7 +515,7 @@ export function ReaderNotesPrototype({
       <motion.section
         key="notebook"
         initial={
-          desktop
+          desktop || embeddedNotebook
             ? false
             : {
                 opacity: 0,
@@ -522,14 +524,14 @@ export function ReaderNotesPrototype({
         }
         animate={{ opacity: 1, transform: "none" }}
         exit={
-          desktop
+          desktop || embeddedNotebook
             ? undefined
             : {
                 opacity: 0,
                 transform: reduceMotion ? "none" : "translateY(12px)",
               }
         }
-        transition={desktop ? { duration: 0 } : transition}
+        transition={desktop || embeddedNotebook ? { duration: 0 } : transition}
         aria-label="Book notebook"
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
@@ -734,6 +736,7 @@ export function ReaderNotesPrototype({
       NotebookCard,
       order,
       desktop,
+      embeddedNotebook,
       keyboardOpen,
       close,
       onVisit,
@@ -752,7 +755,7 @@ export function ReaderNotesPrototype({
           {notes.error}
         </p>
       )}
-      {!desktop && (
+      {!desktop && !embeddedNotebook && (
         <ReaderSheet
           open={notebook && open}
           onOpenChange={setNotebook}
@@ -768,9 +771,15 @@ export function ReaderNotesPrototype({
       )}
       {children(
         <div className="flex h-full min-h-0 flex-col">
-          {desktop && notebookPanel}
-          {desktop && (
-            <div className="shrink-0 p-(--sidebar-panel-content-inset)">
+          {(desktop || embeddedNotebook) && notebookPanel}
+          {(desktop || embeddedNotebook) && (
+            <div
+              className={
+                desktop
+                  ? "shrink-0 p-(--sidebar-panel-content-inset)"
+                  : "shrink-0 p-4"
+              }
+            >
               {renderNoteInput(true)}
             </div>
           )}

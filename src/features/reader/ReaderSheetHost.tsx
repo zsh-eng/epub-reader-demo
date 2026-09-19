@@ -1,10 +1,14 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Book, TOCItem } from "@/lib/db";
 import type { ReaderSettings } from "@/types/reader.types";
-import { ReaderContentsSheet } from "./ReaderContentsSheet";
+import { ReaderContentsPanel } from "./ReaderContentsSheet";
 import { ReaderBookActionsSheet } from "./ReaderBookActionsSheet";
-import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
-import { ReaderToolsLauncherSheet } from "./ReaderToolsLauncherSheet";
+import {
+  ReaderSettingsPanel,
+  type ReaderSettingsPanelTab,
+} from "./ReaderSettingsSheet";
+import { ReaderControlMenu } from "./ReaderControlMenu";
+import { SlidingSheet } from "@/components/SlidingSheet";
 import { ReaderToolsSidebar } from "./ReaderToolsSidebar";
 import type { ChapterEntry, ReaderSheetId } from "./types";
 
@@ -23,14 +27,13 @@ interface ReaderSheetHostProps {
   onNavigateToHref: (href: string) => boolean;
   notesPanel?: ReactNode;
   highlightsPanel?: ReactNode;
-  onOpenNotes?: () => void;
   onCopyDebugDump?: () => void;
 }
 
 /**
  * Coordinates the reader's peer-level overlays.
  *
- * Mobile retains the compact launcher and peer sheets. Desktop tools share one
+ * Mobile pages share one fixed-height sheet. Desktop tools share one
  * right-side workspace so contents and appearance stay beside the book.
  */
 export function ReaderSheetHost({
@@ -46,11 +49,12 @@ export function ReaderSheetHost({
   chapterStartPages,
   currentChapterHref,
   onNavigateToHref,
-  onOpenNotes,
   onCopyDebugDump,
   notesPanel,
   highlightsPanel,
 }: ReaderSheetHostProps) {
+  const [settingsTab, setSettingsTab] =
+    useState<ReaderSettingsPanelTab>("theme");
   if (!isMobile) {
     return (
       <ReaderToolsSidebar
@@ -71,43 +75,62 @@ export function ReaderSheetHost({
     );
   }
 
+  const page = activeSheet ?? "tools";
+  const titles: Record<string, string> = {
+    tools: "Reader Tools",
+    contents: "Contents",
+    settings: "Reading Settings",
+    "book-actions": "Reading Status",
+    notes: "Notebook",
+  };
   return (
-    <>
-      <ReaderToolsLauncherSheet
-        isOpen={activeSheet === "tools"}
-        onClose={onCloseSheet}
-        onOpenContents={() => onOpenSheet("contents")}
-        onOpenBookActions={() => onOpenSheet("book-actions")}
-        onOpenSettings={() => onOpenSheet("settings")}
-        onOpenNotes={onOpenNotes}
-        onCopyDebugDump={onCopyDebugDump}
-      />
-
-      <ReaderBookActionsSheet
-        isOpen={activeSheet === "book-actions"}
-        onClose={onCloseSheet}
-        onBack={() => onOpenSheet("tools")}
-        book={book}
-      />
-
-      <ReaderContentsSheet
-        isOpen={activeSheet === "contents"}
-        onClose={onCloseSheet}
-        onBack={() => onOpenSheet("tools")}
-        toc={toc}
-        chapterEntries={chapterEntries}
-        chapterStartPages={chapterStartPages}
-        currentChapterHref={currentChapterHref}
-        onNavigateToHref={onNavigateToHref}
-      />
-
-      <ReaderSettingsSheet
-        isOpen={activeSheet === "settings"}
-        onClose={onCloseSheet}
-        onBack={() => onOpenSheet("tools")}
-        settings={settings}
-        onUpdateSettings={onUpdateSettings}
-      />
-    </>
+    <SlidingSheet
+      open={activeSheet !== null}
+      onClose={onCloseSheet}
+      page={page}
+      rootPage="tools"
+      title={titles[page] ?? "Reader Tools"}
+      onBack={() => onOpenSheet("tools")}
+    >
+      {page === "tools" && (
+        <ReaderControlMenu
+          onOpenContents={() => onOpenSheet("contents")}
+          onOpenBookActions={() => onOpenSheet("book-actions")}
+          onOpenSettings={() => onOpenSheet("settings")}
+          onOpenNotes={() => onOpenSheet("notes")}
+          onCopyDebugDump={onCopyDebugDump}
+        />
+      )}
+      {page === "book-actions" && (
+        <ReaderBookActionsSheet
+          embedded
+          isOpen
+          onClose={onCloseSheet}
+          onBack={() => onOpenSheet("tools")}
+          book={book}
+        />
+      )}
+      {page === "contents" && (
+        <ReaderContentsPanel
+          isOpen
+          toc={toc}
+          chapterEntries={chapterEntries}
+          chapterStartPages={chapterStartPages}
+          currentChapterHref={currentChapterHref}
+          onNavigateToHref={onNavigateToHref}
+          className="h-full"
+        />
+      )}
+      {page === "settings" && (
+        <ReaderSettingsPanel
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
+          activeTab={settingsTab}
+          onActiveTabChange={setSettingsTab}
+          className="mt-0 h-full"
+        />
+      )}
+      {page === "notes" && notesPanel}
+    </SlidingSheet>
   );
 }

@@ -1,5 +1,5 @@
 import { ReadingStatusChangeMessage } from "@/components/ReadingStatusChangeMessage";
-import { BookStatusSheet } from "@/components/BookStatusSheet";
+import { BookStatusPanel, BookStatusSheet } from "@/components/BookStatusSheet";
 import { useFileUrl } from "@/hooks/use-file-url";
 import { useReadingStatus } from "@/hooks/use-reading-status";
 import { useSync } from "@/hooks/use-sync";
@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 
 interface ReaderBookActionsSheetProps {
   isOpen: boolean;
+  embedded?: boolean;
   onClose: () => void;
   onBack: () => void;
   book: Book;
@@ -18,6 +19,7 @@ interface ReaderBookActionsSheetProps {
 /** Keeps the full book-status sheet available from the mobile reader tools. */
 export function ReaderBookActionsSheet({
   isOpen,
+  embedded = false,
   onClose,
   onBack,
   book,
@@ -85,8 +87,9 @@ export function ReaderBookActionsSheet({
     return true;
   };
 
+  const Content = embedded ? BookStatusPanel : BookStatusSheet;
   return (
-    <BookStatusSheet
+    <Content
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) onClose();
