@@ -1,66 +1,46 @@
 import {
-  Operation,
-  Server2Client,
-  server2ClientSyncSchema,
-} from "@/lib/sync/operation";
-import { z } from "zod";
+  syncPullResponseSchema,
+  syncPushResponseSchema,
+  type SyncRemote,
+} from "@zsh-eng/local-sync";
 
-/**
- * Pull operations from the server.
- */
-export async function pullFromServer(
-  clientId: string,
-  seqNo: number,
-): Promise<Server2Client<Operation>[]> {
-  const response = await fetch(
-    `${import.meta.env.VITE_BACKEND_URL}/sync?seqNo=${seqNo}`,
-    {
-      credentials: "include",
-      headers: {
-        "X-Client-Id": clientId,
+export function createRemote(signal: AbortSignal): SyncRemote {
+  const request = async (path: string, deviceId: string, body?: unknown) => {
+    const response = await fetch(
+      `${import.meta.env.VITE_BACKEND_URL}/sync/v2/${path}`,
+      {
+        credentials: "include",
+        signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
+        method: body === undefined ? "GET" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Device-ID": deviceId,
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       },
+    );
+    signal.throwIfAborted();
+    if (!response.ok)
+      throw new Error(
+        response.status === 401
+          ? "Sign in to sync"
+          : `Sync failed (${response.status}). The server must be migrated first.`,
+      );
+    return response.json();
+  };
+  return {
+    async pull(deviceId, query) {
+      const params = new URLSearchParams(
+        Object.entries(query).map(([k, v]) => [k, String(v)]),
+      );
+      return syncPullResponseSchema.parse(
+        await request(`pull?${params}`, deviceId),
+      );
     },
-  );
-
-  if (!response.ok) {
-    throw new Error("Failed to pull operations from server");
-  }
-
-  const data = await response.json();
-
-  const parsedData = server2ClientSyncSchema.parse(data);
-  const operations = parsedData.ops satisfies Server2Client<Operation>[];
-
-  return operations;
-}
-
-/**
- * Push operations to the server.
- */
-export async function pushToServer(
-  clientId: string,
-  operations: Operation[],
-): Promise<{ success: boolean }> {
-  const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/sync`, {
-    credentials: "include",
-    method: "POST",
-    headers: {
-      "X-Client-Id": clientId,
-      "Content-Type": "application/json",
+    async push(deviceId, changes) {
+      return syncPushResponseSchema.parse(
+        await request("push", deviceId, { changes }),
+      );
     },
-    body: JSON.stringify({ ops: operations }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to push operations to server");
-  }
-
-  const data = await response.json();
-  const parsedData = z
-    .object({
-      success: z.boolean(),
-    })
-    .parse(data);
-
-  return parsedData;
+  };
 }

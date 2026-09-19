@@ -11,7 +11,7 @@ import {
   handleClientOperation,
   operationSchema,
 } from "@/lib/sync/operation";
-import { db } from "@/lib/db/persistence";
+import { db, rawDb } from "@/lib/db/persistence";
 import MemoryDB from "@/lib/db/memory";
 import ReviewRoute from "@/routes/Review";
 import { processReviewLogOperations } from "@/lib/review/review";
@@ -59,9 +59,9 @@ afterEach(async () => {
   }
   MemoryDB.notify();
   await Promise.all([
-    db.operations.clear(),
-    db.pendingOperations.clear(),
-    db.reviewLogOperations.clear(),
+    rawDb.operations.clear(),
+    rawDb._sync_outbox.clear(),
+    rawDb.reviewLogOperations.clear(),
   ]);
 });
 
@@ -87,9 +87,11 @@ test("Undo restores all changed siblings and its inverse survives storage and JS
     processReviewLogOperations(await db.reviewLogOperations.toArray()),
   ).toHaveLength(0);
   const persisted = await db.operations.toArray();
-  const pending = await db.pendingOperations.toArray();
-  expect(persisted.filter((op) => op.type === "cardSuspended")).toHaveLength(4);
-  expect(pending.filter((op) => op.type === "cardSuspended")).toHaveLength(4);
+  const pending = (await db._sync_outbox.toArray()).map((row) =>
+    operationSchema.parse(JSON.parse(row.value)),
+  );
+  expect(persisted.filter((op) => op.type === "cardSuspended")).toHaveLength(2);
+  expect(pending.filter((op) => op.type === "cardSuspended")).toHaveLength(2);
   for (const operations of [persisted, pending]) {
     for (const item of [current, ...siblings]) MemoryDB.putCard(item);
     for (const operation of operations) {
@@ -138,9 +140,12 @@ test("Undo preserves existing long suspensions and subsequent sibling changes", 
   );
   expect(MemoryDB.getCardById(edited.id)?.front).toBe("Edited later");
   expect(MemoryDB.getCardById(edited.id)?.suspended).toEqual(new Date(0));
-  const restores = (await db.pendingOperations.toArray()).filter(
-    (op) => op.type === "cardSuspended" && op.payload.suspended.getTime() === 0,
-  );
+  const restores = (await db._sync_outbox.toArray())
+    .map((row) => operationSchema.parse(JSON.parse(row.value)))
+    .filter(
+      (op) =>
+        op.type === "cardSuspended" && op.payload.suspended.getTime() === 0,
+    );
   expect(restores).toHaveLength(1);
 });
 

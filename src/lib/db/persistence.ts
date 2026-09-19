@@ -1,19 +1,59 @@
-import { OperationWithId } from "@/lib/sync/operation";
-import { Dexie, type EntityTable } from "dexie";
+import { withSyncLock } from "../sync/lock";
+import Dexie, { type Table } from "dexie";
+import { installSync } from "@zsh-eng/local-sync/dexie";
+import {
+  createSyncClientState,
+  createSyncClientStateStore,
+  getOrCreateSyncClientState,
+  nextSyncHlcBatch,
+  type SyncPushChange,
+} from "@zsh-eng/local-sync";
+import { syncTables, type StoredOperation } from "../sync/records";
 
-export const db = new Dexie("SpacedDatabase") as Dexie & {
-  operations: EntityTable<OperationWithId, "_id">;
-  // Store review logs in a separate table
-  // as they are separate from the card-related logic and we can
-  // save on startup time by not loading them from memory
-  reviewLogOperations: EntityTable<OperationWithId, "_id">;
-  pendingOperations: EntityTable<OperationWithId, "_id">;
-  metadataKv: EntityTable<{ key: string; value: unknown }, "key">;
-};
+export const DATABASE_NAME = "SpacedRecordsV2";
+export const STATE_KEY = "spaced-records-v2-state";
+export const stateStore = createSyncClientStateStore(localStorage, STATE_KEY);
+export function ensureSyncState() {
+  return getOrCreateSyncClientState(crypto.randomUUID(), stateStore);
+}
+export class SpacedDatabase extends Dexie {
+  operations!: Table<StoredOperation, string>;
+  reviewLogOperations!: Table<StoredOperation, string>;
+  _sync_outbox!: Table<SyncPushChange, string>;
+  metadataKv!: Table<{ key: string; value: unknown }, string>;
+  constructor(name = DATABASE_NAME, captureWrites = false) {
+    super(name);
+    this.version(1).stores({
+      operations: "id, type, timestamp",
+      reviewLogOperations: "id, type, timestamp",
+      _sync_outbox: "key",
+      metadataKv: "key",
+    });
+    if (captureWrites)
+      installSync(this, syncTables, (count) => {
+        ensureSyncState();
+        return nextSyncHlcBatch(count, stateStore, Date.now());
+      });
+  }
+}
+export const db = new SpacedDatabase(DATABASE_NAME, true);
+export const rawDb = new SpacedDatabase();
 
-db.version(1).stores({
-  operations: "++_id, timestamp",
-  reviewLogOperations: "++_id, timestamp",
-  pendingOperations: "++_id, timestamp",
-  metadataKv: "key, value",
+// A cleared IndexedDB must never retain a cursor from an older database.
+export const persistenceReady = withSyncLock(async () => {
+  if (!(await rawDb.metadataKv.get("syncState"))) {
+    stateStore.write(createSyncClientState(crypto.randomUUID()));
+    await rawDb.metadataKv.put({ key: "syncState", value: 2 });
+  } else {
+    ensureSyncState();
+  }
 });
+
+let writesDisabled = false;
+export function disableLocalWrites() {
+  writesDisabled = true;
+}
+export function assertLocalWritesAllowed() {
+  if (writesDisabled)
+    throw new Error("Local data was cleared. Reload before making changes.");
+}

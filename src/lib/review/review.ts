@@ -5,16 +5,14 @@ import {
   STATE_NUMBER_TO_NAME,
 } from "@/lib/card-mapping";
 import {
-  OperationWithId,
+  Operation,
   ReviewLogDeletedOperation,
   ReviewLogOperation,
 } from "@/lib/sync/operation";
 import { Card, fsrs, generatorParameters, Grade, ReviewLog } from "ts-fsrs";
 
-const params = generatorParameters({
-  enable_fuzz: true,
-  maximum_interval: 100,
-});
+import { FSRS6_PERSONAL_PARAMETERS } from "./fsrs6-personal-parameters";
+const params = generatorParameters(FSRS6_PERSONAL_PARAMETERS);
 const f = fsrs(params);
 
 export function previewGradeSchedule(card: Card, now = new Date()) {
@@ -83,12 +81,12 @@ export function reviewLogToReviewLogOperation(
  * Processes review log operations and returns a list of review logs.
  */
 export function processReviewLogOperations(
-  operations: OperationWithId[],
+  operations: Operation[],
 ): (ReviewLog & { duration: number })[] {
   const reviewLogMap: Record<string, ReviewLog & { duration: number }> = {};
 
   const reviewLogOperations = operations.filter(
-    (op): op is ReviewLogOperation & { _id: number } => op.type === "reviewLog",
+    (op): op is ReviewLogOperation => op.type === "reviewLog",
   );
 
   reviewLogOperations.forEach((op) => {
@@ -96,8 +94,7 @@ export function processReviewLogOperations(
   });
 
   const reviewLogDeletedOperations = operations.filter(
-    (op): op is ReviewLogDeletedOperation & { _id: number } =>
-      op.type === "reviewLogDeleted",
+    (op): op is ReviewLogDeletedOperation => op.type === "reviewLogDeleted",
   );
   const reviewLogsToDeleteSet = new Set<string>();
   reviewLogDeletedOperations.forEach((op) => {

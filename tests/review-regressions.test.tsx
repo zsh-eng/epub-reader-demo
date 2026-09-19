@@ -12,7 +12,7 @@ import {
 } from "@/lib/review/review";
 import { CardWithMetadata } from "@/lib/types";
 import { OperationWithId, gradeCardOperation } from "@/lib/sync/operation";
-import { db } from "@/lib/db/persistence";
+import { db, rawDb } from "@/lib/db/persistence";
 import MemoryDB from "@/lib/db/memory";
 import ReviewRoute from "@/routes/Review";
 import MobileGradeButtons from "@/components/review/mobile-grade-buttons";
@@ -68,9 +68,9 @@ afterEach(async () => {
   }
   MemoryDB.notify();
   await Promise.all([
-    db.operations.clear(),
-    db.pendingOperations.clear(),
-    db.reviewLogOperations.clear(),
+    rawDb.operations.clear(),
+    rawDb._sync_outbox.clear(),
+    rawDb.reviewLogOperations.clear(),
   ]);
 });
 

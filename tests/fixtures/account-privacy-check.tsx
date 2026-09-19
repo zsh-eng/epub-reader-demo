@@ -1,3 +1,4 @@
+import { toStoredOperation } from "@/lib/sync/records";
 // Run in a separate process: sign-out deliberately stops sync and image writes until reload.
 import assert from "node:assert/strict";
 import { act } from "react";
@@ -35,12 +36,21 @@ globalThis.fetch = (async (url, options) => {
     logoutCalls++;
     return new Response(null, { status: remoteSuccess ? 200 : 500 });
   }
+  if (String(url).endsWith("/auth/me"))
+    return Response.json({ userId: "privacy-user" });
   if (options?.method === "POST") {
     pushStarted.resolve();
     return push.promise;
   }
   pullStarted.resolve();
-  return pull.promise;
+  return Promise.race([
+    pull.promise,
+    new Promise<Response>((_, reject) =>
+      options?.signal?.addEventListener("abort", () =>
+        reject(new Error("Aborted")),
+      ),
+    ),
+  ]);
 }) as typeof fetch;
 Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
 await setClientId("privacy-client");
@@ -54,8 +64,7 @@ const operation = {
   },
   timestamp: Date.now(),
 };
-await db.operations.add(operation);
-await db.pendingOperations.add(operation);
+await db.operations.add(toStoredOperation(operation));
 await imagePersistedDb.images.put({
   url: "https://image/private",
   altText: "Private",
@@ -71,9 +80,9 @@ await getCachedImage("https://image/private", "Private");
 localStorage.setItem("create-flashcard-draft", "private draft");
 localStorage.setItem("vite-ui-theme", "dark");
 
-const pulling = SyncEngine.syncFromServer(),
-  pushing = SyncEngine.syncToServer();
-await Promise.all([pullStarted.promise, pushStarted.promise]);
+const pulling = SyncEngine.syncFromServer().catch(() => {}),
+  pushing = SyncEngine.syncToServer().catch(() => {});
+await pullStarted.promise;
 await assert.rejects(logoutAndClearLocalData());
 assert.equal(await db.operations.count(), 1);
 assert.equal(await imagePersistedDb.images.count(), 1);
@@ -168,7 +177,7 @@ await Promise.all([pulling, pushing]);
 await db.open();
 await imagePersistedDb.open();
 assert.equal(await db.operations.count(), 0);
-assert.equal(await db.pendingOperations.count(), 0);
+assert.equal(await db._sync_outbox.count(), 0);
 assert.equal(await db.metadataKv.count(), 0);
 assert.equal(await imagePersistedDb.images.count(), 0);
 assert.equal(await imagePersistedDb.imageBlobs.count(), 0);

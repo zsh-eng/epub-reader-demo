@@ -1,3 +1,4 @@
+import { deckRecord } from "./sync-fixtures";
 import { afterEach, expect, test, spyOn } from "bun:test";
 import { act } from "react";
 import { MemoryRouter } from "react-router";
@@ -15,7 +16,7 @@ import {
   setSessionExpiry,
 } from "@/lib/sync/meta";
 import SyncEngine from "@/lib/sync/engine";
-import { db } from "@/lib/db/persistence";
+import { db, rawDb, stateStore } from "@/lib/db/persistence";
 import MemoryDB from "@/lib/db/memory";
 import LoginSuccessRoute from "@/routes/LoginSuccessRoute";
 
@@ -55,17 +56,20 @@ afterEach(async () => {
   localStorage.removeItem("account-test-theme");
   document.documentElement.classList.remove("dark", "light");
   await Promise.all([
-    db.metadataKv.clear(),
-    db.operations.clear(),
-    db.pendingOperations.clear(),
-    db.reviewLogOperations.clear(),
+    rawDb.metadataKv.clear(),
+    rawDb.operations.clear(),
+    rawDb._sync_outbox.clear(),
+    rawDb.reviewLogOperations.clear(),
   ]);
 });
 
 test("the first pull returns the active promise and resolves only after local application", async () => {
   await setClientId("pull-client");
   const response = deferred<Response>();
-  globalThis.fetch = (() => response.promise) as typeof fetch;
+  globalThis.fetch = (async (url) =>
+    String(url).endsWith("/auth/me")
+      ? Response.json({ userId: "test-user" })
+      : response.promise) as typeof fetch;
   const first = SyncEngine.syncFromServer();
   expect(first).toBeInstanceOf(Promise);
   expect(SyncEngine.syncFromServer()).toBe(first);
@@ -77,24 +81,15 @@ test("the first pull returns the active promise and resolves only after local ap
   expect(finished).toBe(false);
   response.resolve(
     Response.json({
-      ops: [
-        {
-          type: "deck",
-          payload: {
-            id: "pulled-deck",
-            name: "Pulled",
-            description: "",
-            deleted: false,
-          },
-          timestamp: Date.now(),
-          seqNo: 7,
-        },
-      ],
+      records: [deckRecord("pulled-deck", "Pulled", 7)],
+      cursor: 7,
+      head: 7,
+      hasMore: false,
     }),
   );
   await first;
   expect(MemoryDB.getDeckById("pulled-deck")?.name).toBe("Pulled");
-  expect((await db.metadataKv.get("seqNo"))?.value).toBe(7);
+  expect(stateStore.read()?.pullCursor).toBe(7);
   expect(await db.operations.count()).toBe(1);
 });
 
@@ -267,7 +262,16 @@ test("callback sync is a named native button and the button itself starts sync",
   const calls: string[] = [];
   globalThis.fetch = (async (url) => {
     calls.push(String(url));
-    return Response.json({ ops: [] });
+    return Response.json(
+      String(url).endsWith("/auth/me")
+        ? { userId: "test-user" }
+        : {
+            records: [],
+            cursor: stateStore.read()?.pullCursor ?? 0,
+            head: stateStore.read()?.pullCursor ?? 0,
+            hasMore: false,
+          },
+    );
   }) as typeof fetch;
   const view = await mount(
     <MemoryRouter initialEntries={["/login-success?clientId=callback-client"]}>
@@ -281,7 +285,7 @@ test("callback sync is a named native button and the button itself starts sync",
   await click(button!);
   await settle();
   expect(await getClientId()).toBe("callback-client");
-  expect(calls.some((url) => url.includes("/sync?"))).toBe(true);
+  expect(calls.some((url) => url.includes("/sync/v2/pull?"))).toBe(true);
   await settle(1050);
 });
 

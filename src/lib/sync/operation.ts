@@ -1,220 +1,27 @@
+import { broadcastRecordsChanged } from "./broadcast";
 import { STATE_NAME_TO_NUMBER, STATE_NUMBER_TO_NAME } from "@/lib/card-mapping";
-import MemoryDB, { UndoGrade } from "@/lib/db/memory";
-import { db } from "@/lib/db/persistence";
+import MemoryDB, { UndoGrade, memoryReady } from "@/lib/db/memory";
+import { db, assertLocalWritesAllowed } from "@/lib/db/persistence";
 import { gradeCard, reviewLogToReviewLogOperation } from "@/lib/review/review";
 import { defaultCard, defaultDeck } from "@/lib/sync/default";
-import { getSeqNo, setSeqNo } from "@/lib/sync/meta";
 import { CardWithMetadata, Deck } from "@/lib/types";
 import { createEmptyCard, Grade } from "ts-fsrs";
-import { z } from "zod";
 
-export const states = ["New", "Learning", "Review", "Relearning"] as const;
-export const ratings = ["Manual", "Easy", "Good", "Hard", "Again"] as const;
-
-export const cardOperationSchema = z
-  .object({
-    type: z.literal("card"),
-    payload: z.object({
-      id: z.string(),
-      // card variables
-      due: z.coerce.date(),
-      stability: z.number(),
-      difficulty: z.number(),
-      elapsed_days: z.number(),
-      scheduled_days: z.number(),
-      reps: z.number(),
-      lapses: z.number(),
-      state: z.enum(states),
-      last_review: z.coerce.date().nullable(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type CardOperation = z.infer<typeof cardOperationSchema>;
-
-export const reviewLogOperationSchema = z
-  .object({
-    type: z.literal("reviewLog"),
-    payload: z.object({
-      id: z.string(),
-      cardId: z.string(),
-
-      grade: z.enum(ratings),
-      state: z.enum(states),
-
-      due: z.coerce.date(),
-      stability: z.number(),
-      difficulty: z.number(),
-      elapsed_days: z.number(),
-      last_elapsed_days: z.number(),
-      scheduled_days: z.number(),
-      review: z.coerce.date(),
-      duration: z.number(),
-
-      createdAt: z.coerce.date(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type ReviewLogOperation = z.infer<typeof reviewLogOperationSchema>;
-
-export const reviewLogDeletedOperationSchema = z
-  .object({
-    type: z.literal("reviewLogDeleted"),
-    payload: z.object({
-      reviewLogId: z.string(),
-      deleted: z.boolean(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type ReviewLogDeletedOperation = z.infer<
-  typeof reviewLogDeletedOperationSchema
->;
-
-export const cardContentOperationSchema = z
-  .object({
-    type: z.literal("cardContent"),
-    payload: z.object({
-      cardId: z.string(),
-      front: z.string(),
-      back: z.string(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type CardContentOperation = z.infer<typeof cardContentOperationSchema>;
-
-export const cardDeletedOperationSchema = z
-  .object({
-    type: z.literal("cardDeleted"),
-    payload: z.object({
-      cardId: z.string(),
-      deleted: z.boolean(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type CardDeletedOperation = z.infer<typeof cardDeletedOperationSchema>;
-
-export const cardBookmarkedOperationSchema = z
-  .object({
-    type: z.literal("cardBookmarked"),
-    payload: z.object({
-      cardId: z.string(),
-      bookmarked: z.boolean(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type CardBookmarkedOperation = z.infer<
-  typeof cardBookmarkedOperationSchema
->;
-
-export const cardSuspendedOperationSchema = z
-  .object({
-    type: z.literal("cardSuspended"),
-    payload: z.object({
-      cardId: z.string(),
-      suspended: z.coerce.date(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type CardSuspendedOperation = z.infer<
-  typeof cardSuspendedOperationSchema
->;
-
-export const cardMetadataOperationSchema = z
-  .object({
-    type: z.literal("cardMetadata"),
-    payload: z.object({
-      cardId: z.string(),
-      noteId: z.string(),
-      siblingTag: z.string(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type CardMetadataOperation = z.infer<typeof cardMetadataOperationSchema>;
-
-export const deckOperationSchema = z
-  .object({
-    type: z.literal("deck"),
-    payload: z.object({
-      id: z.string(),
-      name: z.string(),
-      deleted: z.boolean(),
-      description: z.string(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type DeckOperation = z.infer<typeof deckOperationSchema>;
-
-export const updateDeckCardOperationSchema = z
-  .object({
-    type: z.literal("updateDeckCard"),
-    payload: z.object({
-      deckId: z.string(),
-      cardId: z.string(),
-      clCount: z.number(),
-    }),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
-export type UpdateDeckCardOperation = z.infer<
-  typeof updateDeckCardOperationSchema
->;
-
-export const operationSchema = z.union([
-  cardOperationSchema,
-  cardContentOperationSchema,
-  cardDeletedOperationSchema,
-  cardBookmarkedOperationSchema,
-  cardSuspendedOperationSchema,
-  cardMetadataOperationSchema,
-  deckOperationSchema,
-  updateDeckCardOperationSchema,
-  reviewLogOperationSchema,
-  reviewLogDeletedOperationSchema,
-]);
-export type Operation = z.infer<typeof operationSchema>;
-
-/**
- * Auto incrementing id to order the operations when storing it.
- * The IDs are for client side ordering when sending to the server,
- * and will not be used by the server.
- */
-export type OperationWithId = Operation & { _id: number };
-
-export const server2ClientSyncSchema = z.object({
-  ops: z.array(
-    z.union([
-      cardOperationSchema.extend({ seqNo: z.number() }),
-      cardContentOperationSchema.extend({ seqNo: z.number() }),
-      cardDeletedOperationSchema.extend({ seqNo: z.number() }),
-      cardBookmarkedOperationSchema.extend({ seqNo: z.number() }),
-      cardSuspendedOperationSchema.extend({ seqNo: z.number() }),
-      cardMetadataOperationSchema.extend({ seqNo: z.number() }),
-      deckOperationSchema.extend({ seqNo: z.number() }),
-      updateDeckCardOperationSchema.extend({ seqNo: z.number() }),
-      reviewLogOperationSchema.extend({ seqNo: z.number() }),
-      reviewLogDeletedOperationSchema.extend({ seqNo: z.number() }),
-    ]),
-  ),
-});
-export type Server2Client<T extends Operation> = T & { seqNo: number };
+export * from "./schema";
+import {
+  type Operation,
+  type CardOperation,
+  type CardContentOperation,
+  type CardDeletedOperation,
+  type CardBookmarkedOperation,
+  type CardSuspendedOperation,
+  type CardMetadataOperation,
+  type DeckOperation,
+  type UpdateDeckCardOperation,
+  type ReviewLogDeletedOperation,
+} from "./schema";
+import { toStoredOperation } from "./records";
+import { withSyncLock } from "./lock";
 
 export function emptyCardToOperations(card: CardWithMetadata): Operation[] {
   const now = Date.now();
@@ -222,11 +29,13 @@ export function emptyCardToOperations(card: CardWithMetadata): Operation[] {
     type: "card",
     payload: {
       id: card.id,
+      createdAt: card.createdAt || Date.now(),
       due: card.due,
       stability: card.stability,
       difficulty: card.difficulty,
       elapsed_days: card.elapsed_days,
       scheduled_days: card.scheduled_days,
+      learning_steps: card.learning_steps,
       reps: card.reps,
       lapses: card.lapses,
       state: STATE_NUMBER_TO_NAME[card.state],
@@ -254,7 +63,7 @@ function cardDeckOperations(
 ): UpdateDeckCardOperation[] {
   return decks.map((deckId) => ({
     type: "updateDeckCard",
-    payload: { deckId, cardId, clCount: 1 },
+    payload: { deckId, cardId, present: true },
     timestamp: Date.now(),
   }));
 }
@@ -343,11 +152,13 @@ export async function gradeCardOperation(
     type: "card",
     payload: {
       id: card.id,
+      createdAt: card.createdAt || Date.now(),
       due: nextCard.due,
       stability: nextCard.stability,
       difficulty: nextCard.difficulty,
       elapsed_days: nextCard.elapsed_days,
       scheduled_days: nextCard.scheduled_days,
+      learning_steps: nextCard.learning_steps,
       reps: nextCard.reps,
       lapses: nextCard.lapses,
       state: STATE_NUMBER_TO_NAME[nextCard.state],
@@ -361,13 +172,6 @@ export async function gradeCardOperation(
     card.id,
     duration,
   );
-  const cardOperationResult = handleCardOperation(cardOperation);
-  if (!cardOperationResult.applied) {
-    throw new Error(
-      "SHOULD NOT HAPPEN - there should not be conflict when grading cards",
-    );
-  }
-
   const undo: UndoGrade = {
     card,
     cardId: card.id,
@@ -394,8 +198,6 @@ export async function gradeCardOperation(
         payload: { cardId: siblingId, suspended: tomorrow },
         timestamp: Math.max(Date.now(), sibling.cardSuspendedLastModified + 1),
       };
-      const result = handleCardSuspendedOperation(buryOp);
-      if (!result.applied) continue;
       undo.siblingSuspensions.push({
         cardId: siblingId,
         previousSuspended: sibling.suspended,
@@ -406,21 +208,13 @@ export async function gradeCardOperation(
     }
   }
 
-  MemoryDB.pushUndoGrade(undo);
-
   const allOperations: Operation[] = [
     cardOperation,
     reviewLogOperation,
     ...siblingBuryOps,
   ];
-  const operationsCopy = allOperations.map((op) => structuredClone(op));
-
-  await db.operations.add(cardOperation);
-  await db.reviewLogOperations.add(reviewLogOperation);
-  if (siblingBuryOps.length > 0) {
-    await db.operations.bulkAdd(siblingBuryOps);
-  }
-  await db.pendingOperations.bulkAdd(operationsCopy);
+  await persistFormOperations(allOperations);
+  MemoryDB.pushUndoGrade(undo);
   MemoryDB.notify();
 }
 
@@ -435,7 +229,7 @@ type UndoGradeResult = {
  * 3. Restoring sibling suspensions that this grade changed
  */
 export async function undoGradeCard(): Promise<UndoGradeResult> {
-  const undo = MemoryDB.popUndoGrade();
+  const undo = MemoryDB.getUndoStack().at(-1);
   if (!undo) {
     return { applied: false };
   }
@@ -459,11 +253,13 @@ export async function undoGradeCard(): Promise<UndoGradeResult> {
     type: "card",
     payload: {
       id: undo.cardId,
+      createdAt: card.createdAt,
       due: undo.card.due,
       stability: undo.card.stability,
       difficulty: undo.card.difficulty,
       elapsed_days: undo.card.elapsed_days,
       scheduled_days: undo.card.scheduled_days,
+      learning_steps: undo.card.learning_steps,
       reps: undo.card.reps,
       lapses: undo.card.lapses,
       state: STATE_NUMBER_TO_NAME[undo.card.state],
@@ -471,13 +267,6 @@ export async function undoGradeCard(): Promise<UndoGradeResult> {
     },
     timestamp: now,
   };
-
-  const cardOperationResult = handleCardOperation(cardOperation);
-  if (!cardOperationResult.applied) {
-    throw new Error(
-      "SHOULD NOT HAPPEN - there should not be conflict when undoing card grading",
-    );
-  }
 
   const siblingRestoreOps: CardSuspendedOperation[] = [];
   for (const change of undo.siblingSuspensions) {
@@ -500,9 +289,7 @@ export async function undoGradeCard(): Promise<UndoGradeResult> {
       },
       timestamp: Math.max(now, sibling.cardSuspendedLastModified + 1),
     };
-    if (handleCardSuspendedOperation(restoreOp).applied) {
-      siblingRestoreOps.push(restoreOp);
-    }
+    siblingRestoreOps.push(restoreOp);
   }
 
   const operations = [
@@ -511,10 +298,8 @@ export async function undoGradeCard(): Promise<UndoGradeResult> {
     ...siblingRestoreOps.map((op) => structuredClone(op)),
   ];
 
-  await db.operations.add(cardOperation);
-  await db.reviewLogOperations.add(reviewLogDeletedOperation);
-  await db.operations.bulkAdd(siblingRestoreOps);
-  await db.pendingOperations.bulkAdd(operations);
+  await persistFormOperations(operations);
+  MemoryDB.popUndoGrade();
   MemoryDB.notify();
 
   return { applied: true };
@@ -538,16 +323,29 @@ export async function createNewDeck(name: string, description: string) {
 // Commit the durable operation and sync queue together before publishing form
 // changes. A storage failure must leave both the database and the UI unchanged.
 async function persistFormOperations(operations: Operation[]) {
-  await db.transaction("rw", db.operations, db.pendingOperations, async () => {
-    await db.operations.bulkAdd(
-      operations.map((operation) => structuredClone(operation)),
+  await memoryReady;
+  await withSyncLock(async () => {
+    assertLocalWritesAllowed();
+    const rows = operations.map(toStoredOperation);
+    await db.transaction(
+      "rw",
+      db.operations,
+      db.reviewLogOperations,
+      db._sync_outbox,
+      async () => {
+        for (const row of rows) {
+          const table =
+            row.type === "reviewLog" || row.type === "reviewLogDeleted"
+              ? db.reviewLogOperations
+              : db.operations;
+          await table.put(row);
+        }
+      },
     );
-    await db.pendingOperations.bulkAdd(
-      operations.map((operation) => structuredClone(operation)),
-    );
+    for (const row of rows) handleClientOperation(row);
+    MemoryDB.notify();
+    broadcastRecordsChanged();
   });
-  for (const operation of operations) handleClientOperation(operation);
-  MemoryDB.notify();
 }
 
 type OperationResult = {
@@ -566,21 +364,18 @@ function handleCardOperation(operation: CardOperation): OperationResult {
       difficulty: operation.payload.difficulty,
       elapsed_days: operation.payload.elapsed_days,
       scheduled_days: operation.payload.scheduled_days,
+      learning_steps: operation.payload.learning_steps,
       reps: operation.payload.reps,
       lapses: operation.payload.lapses,
       state: STATE_NAME_TO_NUMBER[operation.payload.state],
       last_review: operation.payload.last_review ?? undefined,
 
-      createdAt: operation.timestamp,
+      createdAt: operation.payload.createdAt ?? operation.timestamp,
 
       // CRDT metadata
       cardLastModified: operation.timestamp,
     });
     return { applied: true };
-  }
-
-  if (card.cardLastModified > operation.timestamp) {
-    return { applied: false };
   }
 
   const updatedCard = {
@@ -591,6 +386,7 @@ function handleCardOperation(operation: CardOperation): OperationResult {
     difficulty: operation.payload.difficulty,
     elapsed_days: operation.payload.elapsed_days,
     scheduled_days: operation.payload.scheduled_days,
+    learning_steps: operation.payload.learning_steps,
     reps: operation.payload.reps,
     lapses: operation.payload.lapses,
     state: STATE_NAME_TO_NUMBER[operation.payload.state],
@@ -617,10 +413,6 @@ function handleCardContentOperation(
       cardContentLastModified: operation.timestamp,
     });
     return { applied: true };
-  }
-
-  if (card.cardContentLastModified > operation.timestamp) {
-    return { applied: false };
   }
 
   const updatedCard = {
@@ -650,10 +442,6 @@ function handleCardDeletedOperation(
     return { applied: true };
   }
 
-  if (card.cardDeletedLastModified > operation.timestamp) {
-    return { applied: false };
-  }
-
   const updatedCard = {
     ...card,
     deleted: operation.payload.deleted,
@@ -679,10 +467,6 @@ function handleCardBookmarkedOperation(
     return { applied: true };
   }
 
-  if (card.cardBookmarkedLastModified > operation.timestamp) {
-    return { applied: false };
-  }
-
   const updatedCard = {
     ...card,
     bookmarked: operation.payload.bookmarked,
@@ -706,10 +490,6 @@ function handleCardSuspendedOperation(
       cardSuspendedLastModified: operation.timestamp,
     });
     return { applied: true };
-  }
-
-  if (card.cardSuspendedLastModified > operation.timestamp) {
-    return { applied: false };
   }
 
   const updatedCard = {
@@ -738,10 +518,6 @@ function handleCardMetadataOperation(
     return { applied: true };
   }
 
-  if (card.cardMetadataLastModified > operation.timestamp) {
-    return { applied: false };
-  }
-
   const updatedCard = {
     ...card,
     noteId: operation.payload.noteId,
@@ -768,10 +544,6 @@ function handleDeckOperation(operation: DeckOperation): OperationResult {
     return { applied: true };
   }
 
-  if (deck.lastModified > operation.timestamp) {
-    return { applied: false };
-  }
-
   const updatedDeck: Deck = {
     ...deck,
     name: operation.payload.name,
@@ -786,23 +558,24 @@ function handleDeckOperation(operation: DeckOperation): OperationResult {
 function handleUpdateDeckCardOperation(
   operation: UpdateDeckCardOperation,
 ): OperationResult {
-  const cardsMap = MemoryDB._db.decksToCards[operation.payload.deckId];
-
-  if (!cardsMap) {
-    MemoryDB._db.decksToCards[operation.payload.deckId] = {
-      [operation.payload.cardId]: operation.payload.clCount,
-    };
-    return { applied: true };
-  }
-
-  const existingClCount = cardsMap[operation.payload.cardId];
-
-  if (operation.payload.clCount <= existingClCount) {
-    return { applied: false };
-  }
-
-  cardsMap[operation.payload.cardId] = operation.payload.clCount;
+  const { deckId, cardId, present } = operation.payload;
+  const cards = (MemoryDB._db.decksToCards[deckId] ??= {});
+  cards[cardId] = present ? 1 : 0;
   return { applied: true };
+}
+
+export async function setDeckMembership(
+  deckId: string,
+  cardId: string,
+  present: boolean,
+) {
+  await persistFormOperations([
+    {
+      type: "updateDeckCard",
+      payload: { deckId, cardId, present },
+      timestamp: Date.now(),
+    },
+  ]);
 }
 
 export function handleClientOperation(operation: Operation): OperationResult {
@@ -835,16 +608,8 @@ export function handleClientOperation(operation: Operation): OperationResult {
 export async function handleClientOperationWithPersistence(
   operation: Operation,
 ): Promise<OperationResult> {
-  const result = handleClientOperation(operation);
-
-  if (result.applied) {
-    const operationCopy = structuredClone(operation);
-    await db.operations.add(operation);
-    await db.pendingOperations.add(operationCopy);
-    MemoryDB.notify();
-  }
-
-  return result;
+  await persistFormOperations([operation]);
+  return { applied: true };
 }
 
 export async function updateDeletedClientSide(
@@ -907,67 +672,9 @@ export async function updateBookmarkedClientSide(
   await handleClientOperationWithPersistence(cardOperation);
 }
 
+/** Import legacy operation exports as current records, keeping the newest family. */
 export async function applyOperations(operations: Operation[]) {
-  const appliedOperations: Operation[] = [];
-  for (const operation of operations) {
-    const result = handleClientOperation(operation);
-    if (result.applied) {
-      appliedOperations.push(operation);
-    }
-  }
-
-  const reviewLogOperations = operations.filter(
-    (op) => op.type === "reviewLog" || op.type === "reviewLogDeleted",
+  await persistFormOperations(
+    [...operations].sort((a, b) => a.timestamp - b.timestamp),
   );
-
-  const operationsCopy = [...appliedOperations, ...reviewLogOperations].map(
-    (op) => structuredClone(op),
-  );
-
-  await db.operations.bulkAdd(appliedOperations);
-  await db.reviewLogOperations.bulkAdd(reviewLogOperations);
-  await db.pendingOperations.bulkAdd(operationsCopy);
-  MemoryDB.notify();
-}
-
-// We assume that the updates are being applied sequentially
-// in order of seqNo (which is provided by the server)
-// If this guarantee is violated, then we might miss out on some operations applied
-// If the updates are applied sequentially, we can just update the sequence number
-// whenever an operation succeeds in being applied
-export async function applyServerOperations(
-  operations: Server2Client<Operation>[],
-) {
-  const seqNo = await getSeqNo();
-  const highestSeqNo = operations.reduce((max, operation) => {
-    return Math.max(max, operation.seqNo);
-  }, 0);
-
-  if (seqNo >= highestSeqNo) {
-    return;
-  }
-
-  const operationsApplied = operations
-    .filter((op) => op.seqNo > seqNo)
-    .map((op) => {
-      const result = handleClientOperation(op);
-      if (result.applied) {
-        return op;
-      }
-      return null;
-    })
-    .filter((op) => op !== null);
-
-  MemoryDB.notify();
-
-  await setSeqNo(highestSeqNo);
-  const reviewLogOperations = operations.filter(
-    (op) => op.type === "reviewLog" || op.type === "reviewLogDeleted",
-  );
-  const reviewLogPromise = db.reviewLogOperations.bulkAdd(reviewLogOperations);
-
-  await Promise.all([
-    db.operations.bulkAdd(operationsApplied),
-    reviewLogPromise,
-  ]);
 }

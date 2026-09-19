@@ -1,6 +1,8 @@
+import Dexie from "dexie";
+import { deckRecord } from "../sync-fixtures";
 import assert from "node:assert/strict";
 import SyncEngine from "@/lib/sync/engine";
-import { db } from "@/lib/db/persistence";
+import { db, rawDb } from "@/lib/db/persistence";
 import { setClientId } from "@/lib/sync/meta";
 
 function deferred() {
@@ -11,28 +13,28 @@ function deferred() {
   return { promise, resolve };
 }
 await setClientId("write-client");
-globalThis.fetch = (async () =>
-  Response.json({
-    ops: [
-      {
-        type: "deck",
-        payload: {
-          id: "in-flight-deck",
-          name: "Private",
-          description: "",
-          deleted: false,
+globalThis.fetch = (async (url) =>
+  Response.json(
+    String(url).endsWith("/auth/me")
+      ? { userId: "wipe-user" }
+      : {
+          records: [deckRecord("in-flight-deck", "Private")],
+          cursor: 1,
+          head: 1,
+          hasMore: false,
         },
-        timestamp: Date.now(),
-        seqNo: 1,
-      },
-    ],
-  })) as typeof fetch;
+  )) as typeof fetch;
 const started = deferred(),
   release = deferred();
-const originalAdd = db.operations.bulkAdd.bind(db.operations);
-db.operations.bulkAdd = ((...args: Parameters<typeof originalAdd>) => {
+const originalTable = rawDb.table.bind(rawDb);
+rawDb.table = ((name: string) =>
+  name === "operations"
+    ? rawDb.operations
+    : originalTable(name)) as typeof rawDb.table;
+const originalAdd = rawDb.operations.bulkPut.bind(rawDb.operations);
+rawDb.operations.bulkPut = ((...args: Parameters<typeof originalAdd>) => {
   started.resolve();
-  return release.promise.then(() => originalAdd(...args));
+  return Dexie.waitFor(release.promise).then(() => originalAdd(...args));
 }) as typeof originalAdd;
 const pull = SyncEngine.syncFromServer();
 await started.promise;

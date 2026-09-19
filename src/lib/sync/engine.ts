@@ -1,180 +1,184 @@
-// Pending operations are persisted to IndexedDB.
-// The sync engine is responsible for pushing pending operations to the server
-// and for pulling operations from the server.
-// It runs in the background and executes periodically.
-// For pushing pending operations:
-// 1. Executed every X seconds
-// 2. Executed when we come online
-// 3. Executed when the visibility changes
+import {
+  broadcastRecordsChanged,
+  broadcastRecordsCleared,
+  listenForRecordChanges,
+} from "./broadcast";
+import Dexie from "dexie";
+import { SyncClient, createSyncClientState } from "@zsh-eng/local-sync";
+import { DexieSyncStorage } from "@zsh-eng/local-sync/dexie";
+import {
+  db,
+  rawDb,
+  stateStore,
+  ensureSyncState,
+  STATE_KEY,
+  disableLocalWrites,
+} from "../db/persistence";
+import MemoryDB, { reloadMemory, memoryReady } from "../db/memory";
+import { syncTables } from "./records";
+import { createRemote } from "./server";
+import { withSyncLock } from "./lock";
 
-import { db } from "@/lib/db/persistence";
-import { getClientId, getSeqNo } from "@/lib/sync/meta";
-import { applyServerOperations } from "@/lib/sync/operation";
-import { pullFromServer, pushToServer } from "@/lib/sync/server";
-
-// Note: we don't have to handle race conditions as the operations being sent
-// to the server are idempotent.
-
-const MAX_OPERATIONS = 2500;
-
-const SYNC_TO_SERVER_INTERVAL = 10000;
-const SYNC_FROM_SERVER_INTERVAL = 30 * 1000 * 5; // Sync from server interval can be long
-let started = false;
-let stopped = false;
-const localWork = new Set<Promise<unknown>>();
-
-// A privacy wipe waits for local writes, but need not wait for a network response.
-function trackLocal<T>(work: Promise<T>): Promise<T> {
-  localWork.add(work);
-  void work.then(
-    () => localWork.delete(work),
-    () => localWork.delete(work),
-  );
-  return work;
+type Status = { syncing: boolean; error: string | null; restoring: boolean };
+let status: Status = { syncing: false, error: null, restoring: false };
+const listeners = new Set<() => void>();
+function setStatus(next: Status) {
+  status = next;
+  listeners.forEach((fn) => fn());
 }
+let stopped = false,
+  started = false;
+let pending: Promise<void> | undefined;
+let controller: AbortController | undefined;
+let interval: ReturnType<typeof setInterval> | undefined;
 
-let syncToServerInProgress = false;
-async function syncToServer() {
-  if (stopped || syncToServerInProgress) {
-    return;
-  }
-
-  syncToServerInProgress = true;
-
-  try {
-    if (!navigator.onLine) {
-      return;
-    }
-
-    const clientId = await trackLocal(getClientId());
-    if (stopped || !clientId) {
-      return;
-    }
-
-    const pendingOperations = await trackLocal(db.pendingOperations.toArray());
-    if (stopped || pendingOperations.length === 0) {
-      return;
-    }
-
-    // Process operations in chunks
-    for (let i = 0; i < pendingOperations.length; i += MAX_OPERATIONS) {
-      if (stopped) return;
-      const chunk = pendingOperations.slice(i, i + MAX_OPERATIONS);
-
-      console.log("Pushing", chunk.length, "operations");
-      const { success } = await pushToServer(clientId, chunk);
-
-      if (stopped) return;
-      if (!success) {
-        console.error("Failed to push operations to server");
-        break;
-      }
-
-      // Delete the successfully sent chunk
-      await trackLocal(
-        db.pendingOperations.bulkDelete(chunk.map((op) => op._id)),
-      );
-      console.log(
-        "Synced",
-        Math.min(i + MAX_OPERATIONS, pendingOperations.length),
-        "operations",
-        "of",
-        pendingOperations.length,
-      );
-    }
-  } finally {
-    syncToServerInProgress = false;
-  }
-}
-
-let syncFromServerInProgress = false;
-let promise: Promise<void> | null = null;
-
-async function syncFromServer() {
-  try {
-    const clientId = await trackLocal(getClientId());
-    if (stopped || !clientId) {
-      return;
-    }
-
-    const seqNo = await trackLocal(getSeqNo());
-    if (stopped) return;
-
-    const operations = await pullFromServer(clientId, seqNo);
-    if (stopped || operations.length === 0) {
-      return;
-    }
-
-    await trackLocal(applyServerOperations(operations));
-  } finally {
-    syncFromServerInProgress = false;
-  }
-}
-
-// We sync from server more infrequently as we don't want to overload the server
-function syncFromServerCached(): Promise<void> {
+function sync(): Promise<void> {
   if (stopped) return Promise.resolve();
-  if (syncFromServerInProgress) {
-    return promise!;
-  }
+  if (pending) return pending;
+  pending = withSyncLock(async () => {
+    if (stopped) return;
+    await memoryReady;
+    controller = new AbortController();
 
-  syncFromServerInProgress = true;
-  promise = syncFromServer();
-  return promise;
+    setStatus({ ...status, syncing: true, error: null });
+    let touched = false;
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/auth/me`,
+        {
+          credentials: "include",
+          signal: AbortSignal.any([
+            controller.signal,
+            AbortSignal.timeout(15000),
+          ]),
+        },
+      );
+      controller.signal.throwIfAborted();
+      if (response.status === 401) {
+        if (await db._sync_outbox.count())
+          throw new Error("Sign in to save pending changes");
+        return;
+      }
+      if (!response.ok) throw new Error("Cannot verify sync account");
+      const { userId } = await response.json();
+      if (typeof userId !== "string" || !userId)
+        throw new Error("Invalid account identity");
+      const owner = await db.metadataKv.get("owner");
+      if (owner && owner.value !== userId) {
+        await rawDb.transaction("rw", rawDb.tables, async () => {
+          for (const table of rawDb.tables) await table.clear();
+        });
+        stateStore.write(createSyncClientState(crypto.randomUUID()));
+        MemoryDB._db.undoGradeStack = [];
+        await reloadMemory();
+      }
+      await db.metadataKv.put({ key: "owner", value: userId });
+      const state = ensureSyncState();
+      await db.metadataKv.put({ key: "syncState", value: 2 });
+      if (!(await db.metadataKv.get("clientId")))
+        await db.metadataKv.put({ key: "clientId", value: state.deviceId });
+      setStatus({ ...status, restoring: !state.bootstrapped });
+      const storage = new DexieSyncStorage({
+        db: rawDb,
+        tables: syncTables,
+        onEvent: () => {
+          touched = true;
+        },
+      });
+      const client = new SyncClient({
+        storage,
+        stateStore,
+        remote: createRemote(controller.signal),
+      });
+      await client.sync();
+
+      // Explicit cutover: only discard the old database after successful bootstrap.
+      void Dexie.delete("SpacedDatabase").catch(() => {});
+    } catch (error) {
+      if (!stopped)
+        setStatus({
+          ...status,
+          syncing: false,
+          error: error instanceof Error ? error.message : "Sync failed",
+        });
+      throw error;
+    } finally {
+      if (touched && !stopped) {
+        await reloadMemory();
+        broadcastRecordsChanged();
+      }
+      setStatus({
+        ...status,
+        syncing: false,
+        restoring: status.restoring && !stateStore.read()?.bootstrapped,
+      });
+      controller = undefined;
+    }
+  });
+  const reset = () => {
+    pending = undefined;
+  };
+  void pending.then(reset, reset);
+  return pending;
 }
-
+const background = () => {
+  if (navigator.onLine) void sync().catch(() => {});
+};
 function start() {
-  if (started || stopped) {
-    return;
-  }
-
+  if (started || stopped) return;
   started = true;
-
-  void syncToServer().catch(console.error);
-  void syncFromServerCached().catch(console.error);
-
-  // Sync to server
-  setInterval(
-    () => void syncToServer().catch(console.error),
-    SYNC_TO_SERVER_INTERVAL,
-  );
-  document.addEventListener("visibilitychange", () => {
-    // Sync when the user switches away
-    if (document.visibilityState === "hidden") {
-      void syncToServer().catch(console.error);
+  listenForRecordChanges((cleared) => {
+    if (cleared) {
+      stopped = true;
+      disableLocalWrites();
+      controller?.abort();
+      location.reload();
+      return;
     }
+    void withSyncLock(async () => {
+      if (!stopped) {
+        await reloadMemory();
+        MemoryDB._db.undoGradeStack = [];
+      }
+    }).catch(() => {});
   });
-  document.addEventListener("online", () => {
-    void syncToServer().catch(console.error);
-  });
-
-  // Sync from server
-  setInterval(
-    () => void syncFromServerCached().catch(console.error),
-    SYNC_FROM_SERVER_INTERVAL,
-  );
-  document.addEventListener("online", () => {
-    void syncFromServerCached().catch(console.error);
-  });
-  // Grab from serve whenever the user comes back
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      void syncFromServerCached().catch(console.error);
-    }
-  });
+  background();
+  interval = setInterval(background, 30000);
+  window.addEventListener("online", background);
+  document.addEventListener("visibilitychange", background);
 }
-
 async function wipeDatabase() {
   stopped = true;
-  await Promise.allSettled([...localWork]);
-  await db.delete();
+  disableLocalWrites();
+  controller?.abort();
+  if (interval) clearInterval(interval);
+  window.removeEventListener("online", background);
+  document.removeEventListener("visibilitychange", background);
+  await withSyncLock(async () => {
+    rawDb.close();
+    await db.delete();
+    await Dexie.delete("SpacedDatabase");
+    localStorage.removeItem(STATE_KEY);
+    broadcastRecordsCleared();
+    MemoryDB._db.cards = {};
+    MemoryDB._db.decks = {};
+    MemoryDB._db.decksToCards = {};
+    MemoryDB._db.noteIdToCardIds = {};
+    MemoryDB._db.undoGradeStack = [];
+    MemoryDB.notify();
+  });
 }
-
 const SyncEngine = {
-  syncToServer,
-  syncFromServer: syncFromServerCached,
+  syncToServer: sync,
+  syncFromServer: sync,
   start,
   wipeDatabase,
+  subscribe(fn: () => void) {
+    listeners.add(fn);
+    return () => {
+      listeners.delete(fn);
+    };
+  },
+  getSnapshot: () => status,
 };
-
 export default SyncEngine;

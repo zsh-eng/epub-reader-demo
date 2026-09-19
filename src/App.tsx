@@ -1,3 +1,4 @@
+import { SyncStatus, SyncBoundary } from "@/components/sync-status";
 import { useGoogleSignInPrompt } from "@/components/hooks/google-sign-in-prompt";
 import CommandBar from "@/components/nav/command-bar";
 import NavBar from "@/components/nav/nav-bar.tsx";
@@ -67,22 +68,28 @@ export default function App() {
           <SpacedIcon />
           <NavBar />
           <SessionExpiredBanner />
-          <Routes>
-            <Route path="/" element={<ReviewRoute />} />
-            <Route path="/decks" element={<DecksRoute />} />
-            <Route path="/decks/_all" element={<AllCardsRoute />} />
-            <Route path="/decks/_suspended" element={<SuspendedCardsRoute />} />
-            <Route path="/decks/:deckId" element={<DeckRoute />} />
-            <Route path="/saved" element={<SavedRoute />} />
-            {/* <Route path='/debug' element={<DebugRoute />} /> */}
-            <Route path="/create" element={<CreateFlashcardRoute />} />
-            <Route path="/profile" element={<ProfileRoute />} />
-            <Route path="/stats" element={<StatsRoute />} />
-            <Route path="/login-success" element={<LoginSuccessRoute />} />
-            <Route path="/import" element={<ImportRoute />} />
+          <SyncStatus />
+          <SyncBoundary>
+            <Routes>
+              <Route path="/" element={<ReviewRoute />} />
+              <Route path="/decks" element={<DecksRoute />} />
+              <Route path="/decks/_all" element={<AllCardsRoute />} />
+              <Route
+                path="/decks/_suspended"
+                element={<SuspendedCardsRoute />}
+              />
+              <Route path="/decks/:deckId" element={<DeckRoute />} />
+              <Route path="/saved" element={<SavedRoute />} />
+              {/* <Route path='/debug' element={<DebugRoute />} /> */}
+              <Route path="/create" element={<CreateFlashcardRoute />} />
+              <Route path="/profile" element={<ProfileRoute />} />
+              <Route path="/stats" element={<StatsRoute />} />
+              <Route path="/login-success" element={<LoginSuccessRoute />} />
+              <Route path="/import" element={<ImportRoute />} />
 
-            <Route path="/images" element={<ImagesRoute />} />
-          </Routes>
+              <Route path="/images" element={<ImagesRoute />} />
+            </Routes>
+          </SyncBoundary>
         </div>
       </ThemeProvider>
     </BrowserRouter>

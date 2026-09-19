@@ -1,7 +1,7 @@
 // This in-memory database is the data store for cards.
-// We only persist operations, which are applied again every time we restart the app.
+// IndexedDB keeps current records; MemoryDB provides fast UI reads.
 // An in-memory database is faster than fetching from IndexeDB whenever we need cards.
-import { db } from "@/lib/db/persistence";
+import { db, persistenceReady } from "@/lib/db/persistence";
 import { handleClientOperation, OperationWithId } from "@/lib/sync/operation";
 import { CardWithMetadata, Deck } from "@/lib/types";
 import { Card } from "ts-fsrs";
@@ -127,7 +127,7 @@ const getCardById = (id: string) => {
  * Does not include deleted cards.
  */
 const getCards = memoize(() => {
-  return Object.values(memoryDb.cards).filter((card) => !card.deleted);
+  return Object.values(memoryDb.cards).filter((card) => card && !card.deleted);
 });
 
 const putDeck = (deck: Deck) => {
@@ -161,9 +161,9 @@ const getCardsForDeck = (deckId: string) => {
   }
 
   const cards = Object.entries(cardsMap)
-    .filter(([, count]) => count % 2 == 1) // Count is even when CL set shows that card is added to the deck
+    .filter(([, count]) => count === 1)
     .map(([cardId]) => memoryDb.cards[cardId])
-    .filter((card) => !card.deleted);
+    .filter((card) => card && !card.deleted);
 
   return cards;
 };
@@ -230,12 +230,18 @@ const MemoryDB = {
   getSiblingCardIds,
   pushUndoGrade,
   popUndoGrade,
+  getUndoStack,
 };
 
 export default MemoryDB;
 
-async function init() {
+export async function reloadMemory() {
+  await persistenceReady;
   const operations = await db.operations.toArray();
+  memoryDb.cards = {};
+  memoryDb.decks = {};
+  memoryDb.decksToCards = {};
+  memoryDb.noteIdToCardIds = {};
   for (const operation of operations) {
     handleClientOperation(operation);
   }
@@ -243,4 +249,4 @@ async function init() {
   notify();
 }
 
-init();
+export const memoryReady = reloadMemory();
