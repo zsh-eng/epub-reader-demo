@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { page } from "vitest/browser";
 import { useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { flushSync } from "react-dom";
 import { WorkerPoolContextProvider, useWorkerPool } from "@pierre/diffs/react";
 import PierreWorker from "@pierre/diffs/worker/worker.js?worker";
 import type { BrowseRead } from "../../src/shared/browse";
@@ -104,6 +105,53 @@ test("large plain files remain virtualized and never enter worker syntax highlig
     .poll(() => document.querySelector("diffs-container")?.shadowRoot?.textContent)
     .toContain("value38999");
   expect(lines()!.length).toBeLessThan(300);
+});
+
+test("a preview is positioned at its target before its first visible frame", async () => {
+  const file: BrowseRead = {
+    ...base,
+    identity: "first-frame:1",
+    plain: true,
+    text: Array.from({ length: 2000 }, (_, i) => `line ${i + 1}\n`).join(""),
+  };
+  render(<FullFileView {...props} file={file} compact />);
+  await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+  const frames: number[] = [];
+  let frame = 0;
+  const sample = () => {
+    const container = document.querySelector("diffs-container");
+    if (container?.shadowRoot?.querySelector("[data-line]")) {
+      const scroller = Array.from(mount!.querySelectorAll("div")).find(
+        (node) => getComputedStyle(node).overflowY === "auto",
+      );
+      if (scroller) frames.push(scroller.scrollTop);
+    }
+    frame = requestAnimationFrame(sample);
+  };
+  frame = requestAnimationFrame(sample);
+  try {
+    flushSync(() =>
+      root!.render(
+        <FullFileView
+          {...props}
+          file={{ ...file, identity: "first-frame:2" }}
+          compact
+          line={1500}
+        />,
+      ),
+    );
+    await expect.poll(() => frames.length).toBeGreaterThan(2);
+    expect(frames.every((top) => top > 20_000)).toBe(true);
+    await expect
+      .poll(() =>
+        document
+          .querySelector("diffs-container")
+          ?.shadowRoot?.querySelector('[data-line="1500"][data-selected-line]'),
+      )
+      .not.toBeNull();
+  } finally {
+    cancelAnimationFrame(frame);
+  }
 });
 
 test("a long plain line uses horizontal scrolling instead of wrapping", async () => {

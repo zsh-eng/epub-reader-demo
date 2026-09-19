@@ -1236,13 +1236,6 @@ export function App({
                   </button>
                 </div>
               )}
-              {state.status === "loading" && (
-                <div role="status" {...stylex.props(styles.notice)}>
-                  {state.review
-                    ? "Loading comparison · previous review remains visible"
-                    : "Reading repository changes…"}
-                </div>
-              )}
               {state.error && (
                 <div role="alert" {...stylex.props(styles.notice, styles.error)}>
                   <span>{state.error}</span>

@@ -204,31 +204,35 @@ function PickerContents({
   const [refresh, setRefresh] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const sourceKey = source ? browseSourceKey(source) : "";
-  const searchKey = JSON.stringify([sourceKey, query, sourceRevision]);
-  const [search, setSearch] = useState<{ key: string; result?: BrowseSearch; error?: string }>({
-    key: "",
-  });
+  const searchScope = JSON.stringify([sourceKey, sourceRevision]);
+  const searchKey = JSON.stringify([searchScope, query]);
+  const [search, setSearch] = useState<{
+    key: string;
+    scope: string;
+    result?: BrowseSearch;
+    error?: string;
+  }>({ key: "", scope: "" });
   useEffect(() => {
     if (mode !== "content" || !source || !api?.search || !query.trim()) return;
     const controller = new AbortController();
-    const timer = setTimeout(() => {
-      void api.search!(source, query, controller.signal)
-        .then((result) => {
-          if (!controller.signal.aborted) setSearch({ key: searchKey, result });
-        })
-        .catch((cause: unknown) => {
-          if (!controller.signal.aborted)
-            setSearch({
-              key: searchKey,
-              error: cause instanceof Error ? cause.message : "Search failed.",
-            });
-        });
-    }, 180);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [mode, sourceKey, source, api, query, searchKey]);
+    void api
+      .search(source, query, controller.signal)
+      .then((result) => {
+        if (!controller.signal.aborted) setSearch({ key: searchKey, scope: searchScope, result });
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setSearch({
+            key: searchKey,
+            scope: searchScope,
+            error: cause instanceof Error ? cause.message : "Search failed.",
+          });
+      });
+    return () => controller.abort();
+  }, [mode, sourceKey, source, api, query, searchKey, searchScope]);
+  // Keep the last result and its commit preview while this source's next query runs.
+  const displayedSearch =
+    mode === "content" && query.trim() && search.scope === searchScope ? search.result : undefined;
   const results = useMemo<PickerResult[]>(() => {
     const matches =
       mode === "files"
@@ -237,19 +241,17 @@ function PickerContents({
             path: entry.path,
             line: parseFileQuery(query).line,
           }))
-        : search.key === searchKey
-          ? (search.result?.matches ?? [])
-              .slice(0, 200)
-              .map((match) => ({ ...match, id: `${match.path}:${match.line}` }))
-          : [];
+        : (displayedSearch?.matches ?? [])
+            .slice(0, 200)
+            .map((match) => ({ ...match, id: `${match.path}:${match.line}` }));
     // Place the previously selected result first on resume. Base UI owns keyboard highlight.
     const index = matches.findIndex((entry) => entry.id === restoreId);
     if (index > 0) matches.unshift(matches.splice(index, 1)[0]!);
     return matches;
-  }, [entries, query, openPaths, recentPaths, mode, search, searchKey, restoreId]);
+  }, [entries, query, openPaths, recentPaths, mode, displayedSearch, restoreId]);
   const selectedResult = results.find((entry) => entry.id === selected) ?? results[0];
   const currentSearch = search.key === searchKey ? search.result : undefined;
-  const resultSource = mode === "content" ? currentSearch?.resultSource : undefined;
+  const resultSource = displayedSearch?.resultSource;
   const previewSource = resultSource ?? source;
   const previewSourceKey = previewSource ? browseSourceKey(previewSource) : "";
   const previewScrollKey = JSON.stringify([previewSourceKey, selectedResult?.id]);
@@ -263,6 +265,7 @@ function PickerContents({
     mode === "files" ? loading : !!query.trim() && search.key !== searchKey && !!api?.search;
   const failure = mode === "files" ? error : search.key === searchKey ? search.error : null;
   const choose = (entry: PickerResult) => {
+    if (busy || failure) return;
     if (resultSource) onOpen(entry.path, entry.line, resultSource);
     else onOpen(entry.path, entry.line);
     onOpenChange(false);
@@ -352,6 +355,11 @@ function PickerContents({
                   mode === "files" ? "Search files… or file:line" : "Search committed text…"
                 }
                 onKeyDown={(event) => {
+                  if (event.key === "Enter" && busy && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    event.preventBaseUIHandler();
+                    return;
+                  }
                   if (
                     event.key === "Enter" &&
                     !event.nativeEvent.isComposing &&
@@ -371,32 +379,28 @@ function PickerContents({
               <p {...stylex.props(styles.searchNotice)}>
                 Committed files · uncommitted changes excluded
                 {resultSource?.kind === "commit" && ` · ${resultSource.oid.slice(0, 8)}`}
-                {currentSearch?.engine &&
-                  ` · ${currentSearch.engine === "zoekt" ? "Zoekt" : "Git search"}`}
-                {currentSearch?.index?.state === "indexing" && " · Index updating"}
+                {displayedSearch?.engine &&
+                  ` · ${displayedSearch.engine === "zoekt" ? "Zoekt" : "Git search"}`}
+                {displayedSearch?.index?.state === "indexing" && " · Index updating"}
               </p>
             )}
             <div {...stylex.props(styles.body)}>
               <div {...stylex.props(styles.results)} aria-busy={busy}>
-                {busy ? (
-                  mode === "content" ? (
-                    <p role="status" {...stylex.props(styles.message)}>
-                      Searching…
-                    </p>
-                  ) : null
-                ) : failure ? (
+                {failure ? (
                   <p role="alert" {...stylex.props(styles.message)}>
                     {failure}
                   </p>
                 ) : (
                   <>
-                    <Combobox.Empty>
-                      <div {...stylex.props(styles.message)}>
-                        {mode === "content" && !query.trim()
-                          ? "Type text to search the selected commit."
-                          : "No matching files."}
-                      </div>
-                    </Combobox.Empty>
+                    {!busy && (
+                      <Combobox.Empty>
+                        <div {...stylex.props(styles.message)}>
+                          {mode === "content" && !query.trim()
+                            ? "Type text to search the selected commit."
+                            : "No matching files."}
+                        </div>
+                      </Combobox.Empty>
+                    )}
                     <Combobox.List aria-label="Files" {...stylex.props(styles.list)}>
                       {(entry: PickerResult) => {
                         const slash = entry.path.lastIndexOf("/");
@@ -404,6 +408,7 @@ function PickerContents({
                           <Combobox.Item
                             key={entry.id}
                             value={entry}
+                            disabled={busy}
                             className={(state) =>
                               stylex.props(
                                 styles.item,
@@ -488,7 +493,7 @@ function PickerContents({
                   ? results.length === 50
                     ? "Top 50 matches"
                     : `${results.length} files`
-                  : `${results.length} matches${search.result?.truncated || (search.result?.matches.length ?? 0) > 200 ? " · more available" : ""}`}
+                  : `${results.length} matches${displayedSearch?.truncated || (displayedSearch?.matches.length ?? 0) > 200 ? " · more available" : ""}`}
               </span>
             </div>
           </Dialog.Popup>

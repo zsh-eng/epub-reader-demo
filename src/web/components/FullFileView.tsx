@@ -5,7 +5,7 @@ import {
   type CodeViewItem,
   type CodeViewReactOptions,
 } from "@pierre/diffs/react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CodeViewLineSelection } from "@pierre/diffs";
 import type { BrowseRead } from "../../shared/browse";
 import type { BrowseBlame } from "../../shared/inspect";
@@ -141,20 +141,25 @@ export function FullFileView({
     }),
     [active],
   );
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!file || !items.length || loading) return;
-    const frame = requestAnimationFrame(() => {
-      if (line && line > 0)
-        viewer.current?.scrollTo({
-          type: "line",
-          id: file.identity,
-          lineNumber: line,
-          align: "center",
-        });
-      else if (initialScrollTop !== undefined)
-        viewer.current?.scrollTo({ type: "position", position: initialScrollTop });
-    });
-    return () => cancelAnimationFrame(frame);
+    const instance = viewer.current?.getInstance();
+    if (!instance) return;
+    if (line && line > 0) {
+      instance.setSelectedLines({ id: file.identity, range: { start: line, end: line } });
+      instance.scrollTo({
+        type: "line",
+        id: file.identity,
+        lineNumber: line,
+        align: "center",
+        behavior: "instant",
+      });
+    } else if (initialScrollTop !== undefined) {
+      instance.scrollTo({ type: "position", position: initialScrollTop, behavior: "instant" });
+    } else return;
+    // scrollTo queues Pierre's virtualizer. Flush it before the browser paints,
+    // so a new preview never shows line 1 on its way to the requested location.
+    instance.render(true);
     // initialScrollTop is a mount/source restore value, not a controlled scroll
     // position. Feeding onScrollPosition back must not move the user's viewport.
     // eslint-disable-next-line react-hooks/exhaustive-deps

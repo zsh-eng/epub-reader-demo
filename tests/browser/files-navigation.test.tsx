@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { FilePicker, findFiles, parseFileQuery } from "../../src/web/components/FilePicker";
 import { RepositoryFiles } from "../../src/web/components/RepositoryFiles";
 import { useBrowseFiles, type BrowseApi } from "../../src/web/data/browse";
+import type { BrowseSearch } from "../../src/shared/inspect";
 import type { BrowseEntry, BrowseList, BrowseSource } from "../../src/shared/browse";
 import "../../src/web/reset.css";
 
@@ -456,6 +457,88 @@ test("committed search previews and opens the exact result commit, while Files s
   await page.getByRole("combobox", { name: "Find file" }).fill("main.ts");
   await userEvent.keyboard("{Enter}");
   expect(onOpen).toHaveBeenLastCalledWith("src/main.ts", undefined);
+});
+
+test("content search retains previews, blocks stale opens, and ignores late responses", async () => {
+  const source: BrowseSource = { kind: "worktree", repo: "/feature" };
+  const resultSource: BrowseSource = { kind: "commit", repo: source.repo, oid: "a".repeat(40) };
+  const pending = new Map<string, { signal?: AbortSignal; resolve(result: BrowseSearch): void }>();
+  const api: BrowseApi = {
+    list: vi.fn<BrowseApi["list"]>(),
+    read: vi.fn<BrowseApi["read"]>(async (source, path) => ({
+      source,
+      path,
+      kind: "text",
+      size: 6,
+      identity: path,
+      text: "first\n",
+    })),
+    // Deliberately ignore abort here to exercise the UI's late-response guard.
+    search: vi.fn<NonNullable<BrowseApi["search"]>>(
+      (_source, query, signal) => new Promise((resolve) => pending.set(query, { signal, resolve })),
+    ),
+  };
+  const onOpen = vi.fn<(path: string, line?: number, source?: BrowseSource) => void>();
+  const resolve = (query: string) =>
+    pending.get(query)!.resolve({
+      source,
+      query,
+      resultSource,
+      engine: "zoekt",
+      matches: [{ path: `src/${query}.ts`, line: 1, text: query }],
+      truncated: false,
+    });
+  render(
+    <FilePicker
+      open
+      onOpenChange={() => {}}
+      entries={entries}
+      loading={false}
+      error={null}
+      sourceLabel="Feature worktree"
+      source={source}
+      api={api}
+      onOpen={onOpen}
+      initialMode="content"
+    />,
+  );
+  const input = page.getByRole("combobox", { name: "Search file contents" });
+  await input.fill("first");
+  await expect.poll(() => pending.has("first")).toBe(true);
+  resolve("first");
+  const first = page.getByRole("option", { name: "first.ts:1 src first" });
+  await expect.element(first).toBeVisible();
+  await expect
+    .poll(() => api.read)
+    .toHaveBeenCalledWith(resultSource, "src/first.ts", expect.any(AbortSignal));
+  const previewCalls = vi.mocked(api.read).mock.calls.length;
+
+  await input.fill("second");
+  await expect.poll(() => pending.has("second")).toBe(true);
+  await expect.element(first).toBeVisible();
+  await expect.element(first).toHaveAttribute("aria-disabled", "true");
+  await expect.element(page.getByText("Searching…", { exact: true })).not.toBeInTheDocument();
+  await expect
+    .element(page.getByText("No matching files.", { exact: true }))
+    .not.toBeInTheDocument();
+  expect(vi.mocked(api.read).mock.calls.length).toBe(previewCalls);
+  await userEvent.keyboard("{Enter}");
+  await first.click({ force: true });
+  expect(onOpen).not.toHaveBeenCalled();
+
+  await input.fill("third");
+  await expect.poll(() => pending.has("third")).toBe(true);
+  expect(pending.get("second")!.signal!.aborted).toBe(true);
+  resolve("third");
+  await expect.element(page.getByRole("option", { name: "third.ts:1 src third" })).toBeVisible();
+  resolve("second");
+  await expect.element(page.getByRole("option", { name: "third.ts:1 src third" })).toBeVisible();
+  await userEvent.keyboard("{Enter}");
+  expect(onOpen).toHaveBeenCalledWith("src/third.ts", 1, resultSource);
+
+  await input.fill("   ");
+  await expect.element(page.getByRole("option")).not.toBeInTheDocument();
+  expect(pending.has("   ")).toBe(false);
 });
 
 test("resume restores the content query after Enter opens an immutable result", async () => {
