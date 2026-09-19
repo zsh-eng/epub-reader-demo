@@ -75,11 +75,12 @@ test("captures thoughts over a stable book and browses both notebook orders", as
   await input.fill("");
   await expect(sendButton).toHaveCSS("opacity", "0");
   const surface = page.locator("[data-note-input-surface]");
-  await expect(surface).toHaveCSS("border-radius", "24px");
+  await expect(surface).toHaveCSS("border-radius", "0px");
+  await expect(surface).toHaveCSS("box-shadow", "none");
   const surfaceBounds = (await surface.boundingBox())!;
-  expect(surfaceBounds.x).toBeGreaterThanOrEqual(16);
-  expect(surfaceBounds.width).toBeLessThanOrEqual(358);
-  expect(surfaceBounds.height).toBeLessThanOrEqual(44);
+  expect(surfaceBounds.x).toBe(0);
+  expect(surfaceBounds.width).toBe(390);
+  expect(surfaceBounds.height).toBeLessThanOrEqual(56);
   const closedWidth = (await input.boundingBox())!.width;
   // Emulate the viewport signal, not an actual iOS keyboard.
   await page.evaluate(() => {

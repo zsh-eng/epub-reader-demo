@@ -1,3 +1,4 @@
+import { NotebookCountIcon } from "./shared/NotebookCountIcon";
 import { NotebookNote } from "./NotebookNote";
 import { DesktopNotebookNote, NotebookNoteBody } from "./DesktopNotebookNote";
 import { ReaderSheet } from "./shared/ReaderSheet";
@@ -17,7 +18,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import { ArrowUp, StickyNote, Check, SlidersHorizontal, X } from "lucide-react";
+import { ArrowUp, Check, SlidersHorizontal, X } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   useLayoutEffect,
@@ -376,6 +377,7 @@ export function ReaderNotesPrototype({
   const commentSurface =
     "rounded-xl border border-border/80 bg-background/95 p-3 text-sm shadow-sm";
   function renderNoteInput(inNotebook = false) {
+    const footerInput = !desktop && !inNotebook;
     const editingInComposer = !desktop && Boolean(notes.editingId);
     const sendButton = (
       <button
@@ -421,11 +423,26 @@ export function ReaderNotesPrototype({
         >
           <div
             data-note-input-surface
-            className={`relative z-10 min-w-0 flex-1 border p-1 focus-within:ring-2 focus-within:ring-ring/60 ${
-              desktop && inNotebook
-                ? "rounded-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
-                : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : "shadow-lg backdrop-blur-xl"}`
-            }`}
+            className={
+              footerInput
+                ? "relative z-10 min-w-0 border-t border-border/70 bg-background/88 px-4 py-2 backdrop-blur-xl focus-within:border-ring"
+                : `relative z-10 min-w-0 flex-1 border p-1 focus-within:ring-2 focus-within:ring-ring/60 ${
+                    desktop && inNotebook
+                      ? "rounded-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
+                      : `rounded-3xl border-border/80 bg-background/95 ${desktop ? "shadow-sm" : ""}`
+                  }`
+            }
+            style={
+              footerInput
+                ? {
+                    paddingInline:
+                      "max(16px, env(safe-area-inset-left), env(safe-area-inset-right))",
+                    paddingBottom: keyboardOpen
+                      ? 8
+                      : "max(8px, env(safe-area-inset-bottom))",
+                  }
+                : undefined
+            }
           >
             {quote && (
               <div
@@ -477,14 +494,7 @@ export function ReaderNotesPrototype({
                   className={`${iconButton} relative`}
                   aria-description={`${noteCount} ${noteCount === 1 ? "note" : "notes"} in this book`}
                 >
-                  <StickyNote size={26} strokeWidth={1.4} aria-hidden="true" />
-                  <span
-                    aria-hidden="true"
-                    className="absolute top-[6px] left-0 right-0 text-center font-numeric text-[10px] font-medium leading-4 tabular-nums"
-                  >
-                    {Math.min(noteCount, 99)}
-                    {noteCount > 99 ? "+" : ""}
-                  </span>
+                  <NotebookCountIcon count={noteCount} />
                 </button>
               )}
               <NoteTextInput
@@ -909,7 +919,7 @@ export function ReaderNotesPrototype({
             className={
               desktop
                 ? "fixed z-40 max-h-[calc(100dvh-7rem)] overflow-y-auto"
-                : "fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/88 pt-2 backdrop-blur-xl"
+                : "fixed inset-x-0 bottom-0 z-40"
             }
             style={
               desktop
@@ -921,13 +931,7 @@ export function ReaderNotesPrototype({
                     left: commentLeft,
                     width: commentWidth,
                   }
-                : {
-                    paddingInline:
-                      "max(16px, env(safe-area-inset-left), env(safe-area-inset-right))",
-                    paddingBottom: keyboardOpen
-                      ? 0
-                      : "max(8px, calc(env(safe-area-inset-bottom) - 12px))",
-                  }
+                : undefined
             }
           >
             {mobileAnnotation?.tools}
@@ -1001,7 +1005,7 @@ export function ReaderNotesPrototype({
                   </motion.button>
                 </div>
               )}
-            <div className="mx-auto max-w-[32rem]">{renderNoteInput()}</div>
+            {renderNoteInput()}
           </motion.div>
         )}
       </AnimatePresence>

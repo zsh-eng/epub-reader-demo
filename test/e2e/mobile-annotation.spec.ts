@@ -23,7 +23,8 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
   });
   await expect(colors).toBeVisible();
   await expect(input).not.toBeFocused();
-  await expect(notebook).toHaveText("0");
+  await expect(notebook).toHaveAttribute("aria-description", "0 notes in this book");
+  await expect(page.getByRole("button", { name: "Highlight with yellow" })).toHaveCSS("box-shadow", "none");
   await expect(colors).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(
     page.getByRole("button", { name: "Highlight with yellow" }),
@@ -36,6 +37,13 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
       path: `diagnostics/interface-review/annotation-after/${name}.png`,
       animations: "disabled",
     });
+  await expect(page.locator("[data-note-composer]")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const surface = page.locator("[data-note-input-surface]");
+  await expect(surface).toHaveCSS("box-shadow", "none");
+  await expect(surface).toHaveCSS("border-radius", "0px");
+  expect((await surface.boundingBox())!.width).toBe(390);
+  const icon = await notebook.locator("svg").boundingBox();
+  expect(icon!.width).toBe(icon!.height);
   await screenshot("mobile-picker");
   await input.fill("A useful thought from this passage.");
   await expect(page.getByTestId("note-quote")).toBeVisible();
@@ -71,7 +79,7 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
   );
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(input).toHaveValue("");
-  await expect(notebook).toHaveText("1");
+  await expect(notebook).toHaveAttribute("aria-description", "1 note in this book");
   await expect(notebook).toHaveAttribute(
     "aria-description",
     "1 note in this book",
@@ -151,7 +159,7 @@ test("mobile note can remove its quote and add a highlight while typing", async 
   await expect(input).toHaveValue("");
   await expect(
     page.getByRole("button", { name: "Open notebook", exact: true }),
-  ).toHaveText("1");
+  ).toHaveAttribute("aria-description", "1 note in this book");
   const saved = await page.evaluate(async () => {
     const { syncV2Db: db } = await import("/src/lib/sync-v2/db.ts");
     return {

@@ -18,7 +18,7 @@ export function MobileHighlightBar({
     <div
       role="group"
       aria-label="Highlight colors"
-      className="flex items-center justify-center gap-3 px-3 py-2"
+      className="flex items-center justify-center gap-3 px-4 pb-3 pt-2"
     >
       {HIGHLIGHT_COLORS.map((color) => {
         const isCurrentColor = currentColor && color.name === currentColor;
@@ -42,7 +42,7 @@ export function MobileHighlightBar({
             }}
             onClick={handleClick}
             className={cn(
-              "cursor-pointer w-full max-w-16 flex-1 h-8 rounded-full transition-[scale,border-color] duration-150 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2 shadow-sm",
+              "cursor-pointer w-full max-w-16 flex-1 h-8 rounded-full transition-[scale,border-color] duration-150 active:scale-95 motion-reduce:active:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-foreground focus-visible:ring-offset-2",
               "border border-black/5 active:border-black/10",
               isCurrentColor && "ring-2 ring-offset-2 ring-foreground/50",
             )}
