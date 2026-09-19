@@ -35,6 +35,8 @@ const CHROME_FADE_OUT_TRANSITION = {
 };
 
 export interface ReaderFooterProps {
+  /** Another bottom surface owns the viewport; omit even the exit animation. */
+  suppressed?: boolean;
   chromeVisible: boolean;
   isMobile: boolean;
   chromeSurfaceProps?: ReaderChromeSurfaceProps;
@@ -62,6 +64,7 @@ export interface ReaderFooterProps {
 }
 
 export function ReaderFooter({
+  suppressed = false,
   chromeVisible,
   isMobile,
   chromeSurfaceProps,
@@ -115,6 +118,8 @@ export function ReaderFooter({
   const detailChapterStartPages = chapterStartPages;
   const shouldRenderChromeShell =
     chromeVisible || handoffPrompt !== undefined || statusPrompt !== undefined;
+
+  if (suppressed) return null;
 
   return (
     <AnimatePresence>

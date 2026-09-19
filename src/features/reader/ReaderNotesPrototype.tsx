@@ -51,6 +51,7 @@ export function ReaderNotesPrototype({
   setNotebook,
   open,
   onActiveChange,
+  onMobileComposerPresenceChange,
   onVisit,
   margin,
   desktop,
@@ -83,11 +84,21 @@ export function ReaderNotesPrototype({
   location: Location;
   open: boolean;
   onActiveChange: (active: boolean) => void;
+  onMobileComposerPresenceChange: (present: boolean) => void;
   onVisit: (page: number) => void;
 }) {
   // Capture each selection once. Refocusing after Remove quote must not attach it again.
   const capturedAnnotation = useRef<object | null>(null);
   const composerOpen = open || Boolean(mobileAnnotation);
+  // Keep reading chrome suppressed through exit, including quick dismiss/reopen.
+  useLayoutEffect(() => {
+    if (desktop) onMobileComposerPresenceChange(false);
+    else if (composerOpen && !notebook) onMobileComposerPresenceChange(true);
+  }, [desktop, composerOpen, notebook, onMobileComposerPresenceChange]);
+  useLayoutEffect(
+    () => () => onMobileComposerPresenceChange(false),
+    [onMobileComposerPresenceChange],
+  );
   const reduceMotion = useReducedMotion();
   const [animateSend, setAnimateSend] = useState(true);
   const [order, setOrder] = useState<"time" | "chapter">("time");
@@ -425,7 +436,7 @@ export function ReaderNotesPrototype({
             data-note-input-surface
             className={
               footerInput
-                ? "relative z-10 min-w-0 border-t border-border/70 bg-background/88 px-4 py-2 backdrop-blur-xl focus-within:border-ring"
+                ? "relative z-10 min-w-0 border-t border-border/50 px-4 py-2 focus-within:border-ring"
                 : `relative z-10 min-w-0 flex-1 border p-1 focus-within:ring-2 focus-within:ring-ring/60 ${
                     desktop && inNotebook
                       ? "rounded-(--sidebar-panel-field-radius) border-border/50 bg-secondary/35 focus-within:border-border"
@@ -489,6 +500,7 @@ export function ReaderNotesPrototype({
                   onClick={() => {
                     input.current?.blur();
                     onActiveChange(true);
+                    mobileAnnotation?.close();
                     setNotebook(!notebook);
                   }}
                   className={`${iconButton} relative`}
@@ -896,20 +908,20 @@ export function ReaderNotesPrototype({
           )}
         </aside>
       )}
-      <AnimatePresence>
+      <AnimatePresence
+        onExitComplete={() => {
+          if (!composerOpen || notebook) onMobileComposerPresenceChange(false);
+        }}
+      >
         {composerOpen && !notebook && (!desktop || margin.width < 220) && (
           <motion.div
             ref={composer}
             data-note-composer
             key="composer"
-            initial={
-              desktop
-                ? {
-                    opacity: 0,
-                    transform: reduceMotion ? "none" : "translateY(8px)",
-                  }
-                : false
-            }
+            initial={{
+              opacity: 0,
+              transform: reduceMotion ? "none" : "translateY(8px)",
+            }}
             animate={{ opacity: 1, transform: "none" }}
             exit={{
               opacity: 0,
@@ -919,7 +931,7 @@ export function ReaderNotesPrototype({
             className={
               desktop
                 ? "fixed z-40 max-h-[calc(100dvh-7rem)] overflow-y-auto"
-                : "fixed inset-x-0 bottom-0 z-40"
+                : "fixed inset-x-0 bottom-0 z-40 border-t border-border/70 bg-background/88 backdrop-blur-xl"
             }
             style={
               desktop
@@ -935,76 +947,74 @@ export function ReaderNotesPrototype({
             }
           >
             {mobileAnnotation?.tools}
-            {!desktop &&
-              !mobileAnnotation &&
-              !notebook &&
-              latest &&
-              !notes.editingId && (
-                <div
-                  className="relative mx-4 -mb-3 h-10 overflow-hidden"
-                  aria-live="polite"
+            {!desktop && !notebook && latest && !notes.editingId && (
+              <div
+                className="relative mx-4 -mb-3 h-10 overflow-hidden"
+                aria-live="polite"
+              >
+                <motion.button
+                  key={latest.id}
+                  aria-label="Read latest note"
+                  onClick={() => {
+                    input.current?.blur();
+                    onActiveChange(true);
+                    mobileAnnotation?.close();
+                    setNotebook(true);
+                  }}
+                  initial={{
+                    opacity: 0,
+                    transform:
+                      reduceMotion || !animateSend
+                        ? "none"
+                        : "translateY(10px)",
+                  }}
+                  animate={{ opacity: 1, transform: "none" }}
+                  transition={{
+                    ...transition,
+                    duration: animateSend ? 0.18 : 0,
+                  }}
+                  className="absolute inset-0 flex w-full items-center gap-2 rounded-[2rem] border border-border/50 bg-background/90 px-3 pb-2 text-left text-xs text-muted-foreground backdrop-blur-xl"
                 >
-                  <motion.button
-                    key={latest.id}
-                    aria-label="Read latest note"
-                    onClick={() => {
-                      input.current?.blur();
-                      setNotebook(true);
-                    }}
-                    initial={{
-                      opacity: 0,
-                      transform:
-                        reduceMotion || !animateSend
-                          ? "none"
-                          : "translateY(10px)",
-                    }}
-                    animate={{ opacity: 1, transform: "none" }}
-                    transition={{
-                      ...transition,
-                      duration: animateSend ? 0.18 : 0,
-                    }}
-                    className="absolute inset-0 flex w-full items-center gap-2 rounded-[2rem] border border-border/50 bg-background/90 px-3 pb-2 text-left text-xs text-muted-foreground backdrop-blur-xl"
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    aria-label={latest.text}
                   >
-                    <span
-                      className="min-w-0 flex-1 truncate"
-                      aria-label={latest.text}
-                    >
-                      <span aria-hidden="true">
-                        {Array.from(latest.text.slice(0, 90)).map(
-                          (character, index) => (
-                            <motion.span
-                              key={index}
-                              className="inline-block whitespace-pre"
-                              initial={
+                    <span aria-hidden="true">
+                      {Array.from(latest.text.slice(0, 90)).map(
+                        (character, index) => (
+                          <motion.span
+                            key={index}
+                            className="inline-block whitespace-pre"
+                            initial={
+                              reduceMotion || !animateSend
+                                ? false
+                                : { opacity: 0, transform: "translateY(4px)" }
+                            }
+                            animate={{ opacity: 1, transform: "none" }}
+                            transition={{
+                              duration: 0.12,
+                              delay:
                                 reduceMotion || !animateSend
-                                  ? false
-                                  : { opacity: 0, transform: "translateY(4px)" }
-                              }
-                              animate={{ opacity: 1, transform: "none" }}
-                              transition={{
-                                duration: 0.12,
-                                delay:
-                                  reduceMotion || !animateSend
-                                    ? 0
-                                    : Math.min(index, 50) * 0.003,
-                                ease: [0.23, 1, 0.32, 1],
-                              }}
-                            >
-                              {character}
-                            </motion.span>
-                          ),
-                        )}
-                      </span>
+                                  ? 0
+                                  : Math.min(index, 50) * 0.003,
+                              ease: [0.23, 1, 0.32, 1],
+                            }}
+                          >
+                            {character}
+                          </motion.span>
+                        ),
+                      )}
                     </span>
-                    <span className="shrink-0 text-[10px]">
-                      {new Date(latest.createdAt).toLocaleTimeString([], {
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </motion.button>
-                </div>
-              )}
+                  </span>
+                  <span className="shrink-0 text-[10px]">
+                    {new Date(latest.createdAt).toLocaleTimeString([], {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </motion.button>
+              </div>
+            )}
             {renderNoteInput()}
           </motion.div>
         )}

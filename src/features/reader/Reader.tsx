@@ -83,6 +83,7 @@ export function Reader() {
   const isMobile = useIsMobile();
   const { toast } = useToast();
   const [notebookOpen, setNotebookOpen] = useState(false);
+  const [noteComposerPresent, setNoteComposerPresent] = useState(false);
   const [commentPosition, setCommentPosition] = useState({ top: 112, page: 1 });
   const [noteQuote, setNoteQuote] = useState<NoteTarget | null>(null);
   const [noteViewportHeight, setNoteViewportHeight] = useState<number | null>(
@@ -258,6 +259,18 @@ export function Reader() {
     isSidebarOpen ||
     isMobileSidebarOpen ||
     !displayReady;
+  // The annotation panel owns the mobile bottom edge, including before focus
+  // and while its notebook is open. Reading controls must not compete with it.
+  const mobileAnnotationVisible =
+    isMobile &&
+    Boolean(
+      isCreatingHighlight ||
+      activeHighlightData ||
+      noteViewportHeight !== null ||
+      notebookOpen ||
+      noteComposerPresent ||
+      chromeState.activeReaderSheet === "notes",
+    );
   const shouldPrepareSwipePages =
     chromeInteractionMode === "touch" && displayReady;
   const swipeNavigationEnabled =
@@ -504,6 +517,7 @@ export function Reader() {
                   sessionState.pagination.status === "ready" &&
                   sessionState.settings.showPageNumbers &&
                   !chromeVisible &&
+                  !mobileAnnotationVisible &&
                   !isReaderInteractionSuppressed &&
                   noteViewportHeight === null
                 }
@@ -511,6 +525,7 @@ export function Reader() {
 
               {/* Keep both chrome edges visible while pagination prepares. */}
               <ReaderFooter
+                suppressed={mobileAnnotationVisible}
                 pageStep={resolvedSpreadColumns}
                 pageIndicator={
                   <ReaderHistoryPageIndicator
@@ -663,6 +678,7 @@ export function Reader() {
                     quote={noteQuote}
                     onClearQuote={() => setNoteQuote(null)}
                     onActiveChange={handleNotesActive}
+                    onMobileComposerPresenceChange={setNoteComposerPresent}
                     margin={{
                       width: stagePadding.paddingX,
                       enabled: !isMobile && !isReaderInteractionSuppressed,

@@ -23,8 +23,13 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
   });
   await expect(colors).toBeVisible();
   await expect(input).not.toBeFocused();
-  await expect(notebook).toHaveAttribute("aria-description", "0 notes in this book");
-  await expect(page.getByRole("button", { name: "Highlight with yellow" })).toHaveCSS("box-shadow", "none");
+  await expect(notebook).toHaveAttribute(
+    "aria-description",
+    "0 notes in this book",
+  );
+  await expect(
+    page.getByRole("button", { name: "Highlight with yellow" }),
+  ).toHaveCSS("box-shadow", "none");
   await expect(colors).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(
     page.getByRole("button", { name: "Highlight with yellow" }),
@@ -37,7 +42,10 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
       path: `diagnostics/interface-review/annotation-after/${name}.png`,
       animations: "disabled",
     });
-  await expect(page.locator("[data-note-composer]")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(page.locator("[data-note-composer]")).not.toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
   const surface = page.locator("[data-note-input-surface]");
   await expect(surface).toHaveCSS("box-shadow", "none");
   await expect(surface).toHaveCSS("border-radius", "0px");
@@ -79,7 +87,10 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
   );
   await page.getByRole("button", { name: "Save note", exact: true }).click();
   await expect(input).toHaveValue("");
-  await expect(notebook).toHaveAttribute("aria-description", "1 note in this book");
+  await expect(notebook).toHaveAttribute(
+    "aria-description",
+    "1 note in this book",
+  );
   await expect(notebook).toHaveAttribute(
     "aria-description",
     "1 note in this book",
@@ -115,22 +126,33 @@ test("mobile annotation keeps the passage, draft and book note count", async ({
   ).toHaveLength(0);
 });
 
-async function selectPassage(page: Page) {
-  await page.evaluate(() => {
+async function selectPassage(page: Page, length = 40) {
+  await page.evaluate((length) => {
+    // Selecting page text transfers focus away from the composer on a device.
+    (document.activeElement as HTMLElement | null)?.blur();
     const root = document.querySelector(
       '[data-reader-spread-layer="current"]',
     )!;
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let node = walker.nextNode();
-    while (node && (node.textContent?.trim().length ?? 0) < 40)
-      node = walker.nextNode();
-    if (!node) throw new Error("No sample passage");
     const range = document.createRange();
+    while (node) {
+      range.selectNodeContents(node);
+      // The state matrix starts with chrome visible. Select a passage below
+      // the header, as a user would, rather than clicking text covered by it.
+      if (
+        (node.textContent?.trim().length ?? 0) >= length &&
+        (length !== 20 || range.getBoundingClientRect().top >= 120)
+      )
+        break;
+      node = walker.nextNode();
+    }
+    if (!node) throw new Error("No sample passage");
     range.setStart(node, 0);
-    range.setEnd(node, 40);
+    range.setEnd(node, length);
     getSelection()!.removeAllRanges();
     getSelection()!.addRange(range);
-  });
+  }, length);
   await page.evaluate(() =>
     document.dispatchEvent(new MouseEvent("mouseup", { bubbles: true })),
   );
@@ -180,3 +202,176 @@ test("mobile note can remove its quote and add a highlight while typing", async 
     animations: "disabled",
   });
 });
+
+for (const reduced of [false, true]) {
+  test(`annotation state matrix: ${reduced ? "narrow dark reduced motion" : "standard light motion"}`, async ({
+    page,
+    localBook,
+  }, testInfo) => {
+    test.setTimeout(60_000);
+    if (reduced) await page.setViewportSize({ width: 320, height: 700 });
+    await page.emulateMedia({
+      reducedMotion: reduced ? "reduce" : "no-preference",
+    });
+    await page.clock.install();
+    await openLocalBook(page, localBook.id);
+    for (let i = 0; i < 8; i++) await nextSpread(page);
+    if (reduced)
+      await page.evaluate(() => document.documentElement.classList.add("dark"));
+    const width = page.viewportSize()!.width;
+    const footer = page.locator("[data-reader-footer]");
+    const panel = page.locator("[data-note-composer]");
+    const colors = page.getByRole("group", { name: "Highlight colors" });
+    const input = page.getByRole("textbox", { name: "Write a note" });
+    const previous = page.getByRole("button", { name: "Read latest note" });
+    const notebook = page.getByRole("button", {
+      name: "Open notebook",
+      exact: true,
+    });
+    if (!(await page.getByRole("button", { name: "Jot a note" }).isVisible()))
+      await page.touchscreen.tap(width / 2, 300);
+    await expect(footer).toBeVisible();
+    await expect(footer).toHaveCSS("transform", "none");
+    // Programmatic ranges skip the native long press. Advance past the tap's
+    // intentional 500 ms selection guard before starting the new gesture.
+    await page.clock.runFor(550);
+
+    // Observe every painted frame, including entrance/exit and quick reversals.
+    await page.evaluate(() => {
+      const state = { running: true, overlaps: 0, shifts: [] as number[] };
+      (
+        window as unknown as { annotationFrames: typeof state }
+      ).annotationFrames = state;
+      const sample = () => {
+        const composer = document.querySelector("[data-note-composer]");
+        if (composer) {
+          if (document.querySelector("[data-reader-footer]")) state.overlaps++;
+          state.shifts.push(
+            new DOMMatrixReadOnly(getComputedStyle(composer).transform).m42,
+          );
+        }
+        if (state.running) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+
+    // Selection before input focus replaces already-visible reading chrome.
+    await selectPassage(page, 20);
+    await expect(colors).toBeVisible();
+    await expect(footer).toHaveCount(0);
+    await expect(input).not.toBeFocused();
+    await expect(previous).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Save note", exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Highlight with yellow" }).click();
+    await expect(panel).toHaveCount(0);
+    await expect(footer).toBeVisible();
+
+    // Existing highlight, save, then return to selection with a previous note.
+    const mark = page
+      .locator('[data-reader-spread-layer="current"] mark[data-highlight-id]')
+      .first();
+    await mark.click();
+    await expect(
+      page.getByRole("button", { name: "Delete highlight", exact: true }),
+    ).toBeVisible();
+    await expect(footer).toHaveCount(0);
+    await input.fill("First saved thought");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect(previous).toContainText("First saved thought");
+    await expect(colors).toHaveCount(0);
+    // Reopen an existing highlight during the composer's 180 ms exit.
+    await input.press("Escape");
+    await mark.click();
+    await expect(colors).toBeVisible();
+    await expect(panel).toHaveCount(1);
+    await expect(previous).toBeVisible();
+    await selectPassage(page, 20);
+    await expect(colors).toBeVisible();
+    await expect(previous).toBeVisible();
+    await input.fill("Keep this unfinished thought");
+    await expect(page.getByTestId("note-quote")).toBeVisible();
+    await expect(previous).toBeVisible();
+    await page.screenshot({
+      path: testInfo.outputPath("selection-with-previous-note.png"),
+      animations: "disabled",
+    });
+
+    // Notebook entry is explicit: leave highlight mode, retain draft and preview.
+    await notebook.click();
+    const sheet = page.getByRole("dialog", { name: "Notebook", exact: true });
+    await expect(sheet).toBeVisible();
+    await expect(footer).toHaveCount(0);
+    await expect(sheet.getByRole("textbox")).toHaveValue(
+      "Keep this unfinished thought",
+    );
+    await sheet.getByRole("button", { name: "Close notebook" }).click();
+    await expect(sheet).not.toBeVisible();
+    await expect(colors).toHaveCount(0);
+    await expect(previous).toBeVisible();
+    await expect(input).toHaveValue("Keep this unfinished thought");
+
+    // Dismiss and reopen an existing highlight; recolor then delete while typing.
+    await input.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(footer).toBeVisible();
+    await mark.click();
+    await expect(colors).toBeVisible();
+    await expect(previous).toBeVisible();
+    await input.focus();
+    await page.getByRole("button", { name: "Highlight with green" }).click();
+    await expect(mark).toHaveAttribute("data-color", "green");
+    await expect(input).toHaveValue("Keep this unfinished thought");
+    await page
+      .getByRole("button", { name: "Delete highlight", exact: true })
+      .click();
+    await expect(mark).toHaveCount(0);
+    await expect(input).toHaveValue("Keep this unfinished thought");
+    await expect(previous).toBeVisible();
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect(notebook).toHaveAttribute(
+      "aria-description",
+      "2 notes in this book",
+    );
+    await expect(previous).toContainText("Keep this unfinished thought");
+    await previous.click();
+    await expect(sheet).toBeVisible();
+    await expect(
+      sheet.getByText("First saved thought", { exact: true }),
+    ).toBeVisible();
+    await sheet.getByRole("button", { name: "Close notebook" }).click();
+    await expect(sheet).not.toBeVisible();
+
+    // Returning to selection must not leave two panels or resurrect reading chrome.
+    await input.press("Escape");
+    await selectPassage(page, 20);
+    await expect(colors).toBeVisible();
+    await expect(panel).toHaveCount(1);
+    await expect(previous).toBeVisible();
+    await expect(footer).toHaveCount(0);
+    const frames = await page.evaluate(() => {
+      const state = (
+        window as unknown as {
+          annotationFrames: {
+            running: boolean;
+            overlaps: number;
+            shifts: number[];
+          };
+        }
+      ).annotationFrames;
+      state.running = false;
+      return state;
+    });
+    expect(frames.overlaps).toBe(0);
+    expect(frames.shifts.length).toBeGreaterThan(0);
+    expect(Math.max(...frames.shifts)).toBeLessThanOrEqual(8.1);
+    if (reduced) expect(frames.shifts.every((shift) => shift === 0)).toBe(true);
+    else expect(frames.shifts.some((shift) => shift > 0)).toBe(true);
+    const saved = await page.evaluate(async () => {
+      const { syncV2Db: db } = await import("/src/lib/sync-v2/db.ts");
+      return (await db.notes.toArray()).filter((note) => !note.isDeleted);
+    });
+    expect(saved).toHaveLength(2);
+  });
+}
