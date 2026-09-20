@@ -182,10 +182,13 @@ export function createFileWorkspace(api: BrowseApi) {
       });
     },
     close(id: string) {
+      const index = snapshot.tabs.findIndex((tab) => tab.id === id);
+      if (index < 0) return;
       const wasActive = snapshot.active === id;
+      const tabs = snapshot.tabs.filter((tab) => tab.id !== id);
       publish({
-        tabs: snapshot.tabs.filter((tab) => tab.id !== id),
-        ...(wasActive ? { active: "changes" } : {}),
+        tabs,
+        ...(wasActive ? { active: (tabs[index] ?? tabs[index - 1])?.id ?? "changes" } : {}),
       });
       if (wasActive) void load();
     },

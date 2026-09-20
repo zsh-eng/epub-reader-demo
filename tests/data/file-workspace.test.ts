@@ -68,7 +68,7 @@ describe("file workspace", () => {
     expect(workspace.getSnapshot().recentPaths).toEqual(["two.ts", "one.ts"]);
     workspace.dispose();
   });
-  test("reuses one preview, retains pinned tabs and returns to changes after closing", () => {
+  test("reuses one preview and selects the adjacent file when closing", () => {
     const { workspace } = fixture();
     workspace.configure("first", A, "First");
     workspace.open("one.ts");
@@ -85,8 +85,29 @@ describe("file workspace", () => {
     expect(workspace.getSnapshot().tabs).toHaveLength(2);
     expect(workspace.getSnapshot().tabs[0]!.line).toBe(12);
     workspace.close(workspace.getSnapshot().active);
+    expect(workspace.getSnapshot().active).toBe(workspace.getSnapshot().tabs[0]!.id);
+    workspace.close(workspace.getSnapshot().active);
     expect(workspace.getSnapshot().active).toBe("changes");
     expect(workspace.getSnapshot().file).toBeNull();
+    workspace.dispose();
+  });
+  test("closing selects the right neighbor, then the left, without disturbing background closes", () => {
+    const { workspace, pending } = fixture();
+    workspace.configure("first", A, "First");
+    for (const name of ["one.ts", "two.ts", "three.ts"]) workspace.open(name, true);
+    const [one, two, three] = workspace.getSnapshot().tabs;
+    workspace.select(two!.id);
+    workspace.close(two!.id);
+    expect(workspace.getSnapshot().active).toBe(three!.id);
+    expect(pending.at(-1)?.path).toBe("three.ts");
+    workspace.close(three!.id);
+    expect(workspace.getSnapshot().active).toBe(one!.id);
+    workspace.open("four.ts", true);
+    const reads = pending.length;
+    const active = workspace.getSnapshot().active;
+    workspace.close(one!.id);
+    expect(workspace.getSnapshot().active).toBe(active);
+    expect(pending).toHaveLength(reads);
     workspace.dispose();
   });
   test("restores tabs by worktree and rejects late bytes from the previous scope", async () => {

@@ -315,6 +315,15 @@ describe("graphical review", () => {
     await expect
       .element(page.getByRole("tab", { name: "alpha.ts", exact: true }))
       .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("tab", { name: "beta.ts", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+    await expect
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
+      .toBeVisible();
+    await expect
+      .poll(() => document.activeElement)
+      .toBe(page.getByRole("textbox", { name: "File navigation", exact: true }).element());
     altKey("KeyW", true);
     await expect
       .element(page.getByRole("tab", { name: "beta.ts", exact: true }))
