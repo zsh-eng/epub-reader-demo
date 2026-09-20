@@ -201,7 +201,12 @@ export function HistoryPanel({
                     <span {...stylex.props(styles.refs)}>{row.commit.refs.join(" · ")}</span>
                   )}
                   <span {...stylex.props(ui.truncate)}>{row.commit.author}</span>
-                  <span>{dateFormatter.format(new Date(row.commit.timestamp * 1000))}</span>
+                  <time
+                    dateTime={new Date(row.commit.timestamp).toISOString()}
+                    title={`Author date: ${new Date(row.commit.timestamp).toString()}`}
+                  >
+                    {dateFormatter.format(row.commit.timestamp)}
+                  </time>
                 </span>
               </span>
               <span {...stylex.props(styles.commitHash)}>{row.commit.id.slice(0, 7)}</span>

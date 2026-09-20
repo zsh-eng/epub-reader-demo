@@ -26,7 +26,7 @@ const commits = [
     parents: [secondCommit],
     subject: "Improve the review stream",
     author: "Alex",
-    timestamp: 1789776000,
+    timestamp: 1789909685000,
     refs: ["main"],
   },
   {
@@ -34,7 +34,7 @@ const commits = [
     parents: [],
     subject: "Add the initial renderer",
     author: "Sam",
-    timestamp: 1789689600,
+    timestamp: 1789909063000,
     refs: [],
   },
 ];
@@ -292,6 +292,18 @@ async function openBranch(name: string) {
 }
 
 describe("graphical review", () => {
+  test("commit dates use the host's millisecond timestamp without converting it again", async () => {
+    await mountApp();
+    const row = document.getElementById(`commit-${firstCommit}`)!;
+    const date = row.querySelector("time")!;
+    expect(date.dateTime).toBe("2026-09-20T13:08:05.000Z");
+    expect(date.textContent).toBe(
+      new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+        new Date("2026-09-20T13:08:05.000Z"),
+      ),
+    );
+    expect(date.title).toContain("2026");
+  });
   test("saved review return and target selection restore Changes after live file browsing", async () => {
     const { controller } = await mountApp({ savedReview: true, branches: true });
     await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();

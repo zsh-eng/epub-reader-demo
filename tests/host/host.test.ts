@@ -140,7 +140,9 @@ describe("Git history and comparisons", () => {
       subject: "third",
       author: "Test",
     });
-    expect(page.commits[0]!.timestamp).toBeGreaterThan(1_000_000_000_000);
+    expect(page.commits[0]!.timestamp).toBe(
+      Number(git(repo, "show", "-s", "--format=%at", third)) * 1000,
+    );
     await commit(repo, "four\n", "fourth");
     const next = await loadHistory(repo, page.cursor, 1);
     expect(next.commits[0]!.id).toBe(second);

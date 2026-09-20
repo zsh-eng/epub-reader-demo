@@ -75,6 +75,7 @@ export interface Commit {
   parents: string[];
   subject: string;
   author: string;
+  /** Git author time as Unix milliseconds. */
   timestamp: number;
   refs: string[];
 }
