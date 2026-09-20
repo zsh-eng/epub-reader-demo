@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -174,7 +174,9 @@ test("search highlights span syntax tokens, use literal text, and clear when the
   // Highlight overlays must not insert markup or remove syntax tokens.
   expect(shadow.querySelector("mark")).toBeNull();
   expect(shadow.querySelector("[data-line]")?.textContent).toContain(file.text.trim());
-  expect(searchRanges()[0]!.startContainer).not.toBe(searchRanges()[0]!.endContainer);
+  await expect
+    .poll(() => searchRanges()[0]?.startContainer !== searchRanges()[0]?.endContainer)
+    .toBe(true);
 
   root!.render(<FullFileView {...props} compact file={file} highlightQuery="İ 🙂" />);
   await expect.poll(() => searchRanges().map((range) => range.toString())).toEqual(["İ 🙂"]);
@@ -434,3 +436,298 @@ test("Changes stays available; preview file tabs can be pinned and closed", asyn
   expect(closed).toBe("a");
   await expect.element(page.getByRole("tab", { name: "Changes", exact: true })).toBeVisible();
 });
+
+test("Vim moves a logical cursor through a virtualized file and searches exact text", async () => {
+  const file = {
+    ...base,
+    plain: true,
+    identity: "vim-large",
+    text: Array.from({ length: 40000 }, (_, i) => `value${i} = example;\n`).join(""),
+  };
+  render(<FullFileView {...props} file={file} vimEnabled />);
+  await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+  const pane = document.querySelector<HTMLElement>('[aria-label="File navigation"]')!;
+  pane.focus();
+  const key = (value: string, ctrlKey = false) =>
+    pane.dispatchEvent(
+      new KeyboardEvent("keydown", { key: value, ctrlKey, bubbles: true, cancelable: true }),
+    );
+  for (const value of "39000G") key(value);
+  expect(pane.dataset.vimLine).toBe("39000");
+  expect(lines()!.length).toBeLessThan(300);
+  await expect
+    .poll(() => document.querySelector<HTMLElement>("[data-vim-caret]")!.hidden)
+    .toBe(false);
+  key("w");
+  expect(Number(pane.dataset.vimColumn)).toBeGreaterThan(1);
+  key("/");
+  await expect.element(page.getByRole("textbox", { name: "Search in file" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Search in file" }).fill("value39990");
+  await expect.poll(() => pane.dataset.vimLine).toBe("39991");
+  await page
+    .getByRole("textbox", { name: "Search in file" })
+    .element()
+    .dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  // Submit the form explicitly: synthetic keyboard events do not trigger native submit.
+  page.getByRole("textbox", { name: "Search in file" }).element().closest("form")!.requestSubmit();
+  await expect.poll(() => pane.dataset.vimLine).toBe("39991");
+  key("z");
+  key("z");
+  await expect
+    .poll(() => document.querySelector<HTMLElement>("[data-vim-caret]")!.hidden)
+    .toBe(false);
+});
+
+test("Vim incremental search uses smart case, accepts once, and Escape clears highlights", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{
+        ...base,
+        plain: true,
+        identity: "incremental",
+        text: "intro\nFOO\nFoo\nfoo\nFoo\nend\n",
+      }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  const element = pane.element() as HTMLElement;
+  const key = (key: string) =>
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  element.focus();
+  key("/");
+  const input = page.getByRole("textbox", { name: "Search in file", exact: true });
+  await input.fill("f");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+  await input.fill("foo");
+  await expect
+    .poll(() => searchRanges().map((range) => range.toString()))
+    .toEqual(["FOO", "Foo", "foo", "Foo"]);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+  await input.fill("Foo");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "3");
+  await expect.poll(() => searchRanges().map((range) => range.toString())).toEqual(["Foo", "Foo"]);
+  await userEvent.keyboard("{Enter}");
+  await expect.element(input).not.toBeInTheDocument();
+  await expect.element(pane).toHaveAttribute("data-vim-line", "3");
+  key("n");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "5");
+  key("Escape");
+  await expect.poll(() => searchRanges().length).toBe(0);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "5");
+  key("/");
+  await input.fill("intro");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await userEvent.keyboard("{Escape}");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "5");
+  await expect.poll(() => searchRanges().length).toBe(0);
+  key("n");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "3");
+  await expect.poll(() => searchRanges().map((range) => range.toString())).toEqual(["Foo", "Foo"]);
+});
+
+test("Vim backward preview and an empty query restore the starting position", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{
+        ...base,
+        plain: true,
+        identity: "backward-incremental",
+        text: "intro\nfoo\nFoo\nfoo\nend\n",
+      }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  const element = pane.element() as HTMLElement;
+  element.focus();
+  const key = (key: string) =>
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  key("G");
+  key("?");
+  const input = page.getByRole("textbox", { name: "Search in file", exact: true });
+  await input.fill("f");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "4");
+  await input.fill("foo");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "4");
+  await input.fill("");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "5");
+  await expect.poll(() => searchRanges().length).toBe(0);
+  await input.fill("missing");
+  await expect.element(page.getByText("No matches · missing", { exact: false })).toBeVisible();
+  await expect.element(pane).toHaveAttribute("data-vim-line", "5");
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(() => document.activeElement).toBe(element);
+});
+
+test("Vim ignores old worker results after query changes and Escape", async () => {
+  const sent: { worker: Worker; id: number; query: string }[] = [];
+  vi.spyOn(Worker.prototype, "postMessage").mockImplementation(function (this: Worker, message) {
+    if (message.id !== -1) sent.push({ worker: this, ...message });
+  });
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, identity: "incremental-races", text: "intro\nfoo\nbar\n" }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  const element = pane.element() as HTMLElement;
+  element.focus();
+  element.dispatchEvent(new KeyboardEvent("keydown", { key: "/", bubbles: true }));
+  const input = page.getByRole("textbox", { name: "Search in file", exact: true });
+  await input.fill("foo");
+  await input.fill("bar");
+  const deliver = (item: (typeof sent)[number], matches: number[]) =>
+    item.worker.onmessage?.call(
+      item.worker,
+      new MessageEvent("message", { data: { id: item.id, matches: Uint32Array.from(matches) } }),
+    );
+  deliver(sent[0]!, [6]);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  deliver(sent[1]!, [10]);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "3");
+  await input.fill("foo");
+  await input.fill("");
+  deliver(sent[2]!, [6]);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await expect.poll(() => searchRanges().length).toBe(0);
+  await input.fill("bar");
+  await userEvent.keyboard("{Escape}");
+  deliver(sent[3]!, [10]);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await expect.poll(() => searchRanges().length).toBe(0);
+  element.dispatchEvent(new KeyboardEvent("keydown", { key: "/", bubbles: true }));
+  await input.fill("foo");
+  flushSync(() =>
+    root!.render(
+      <FullFileView
+        {...props}
+        file={{ ...base, plain: true, identity: "replacement", text: "new source\n" }}
+        vimEnabled
+      />,
+    ),
+  );
+  deliver(sent[4]!, [6]);
+  await expect.element(input).not.toBeInTheDocument();
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await expect.poll(() => searchRanges().length).toBe(0);
+});
+
+test("Vim ignores commands outside its pane and preserves standard input keys", async () => {
+  render(<FullFileView {...props} file={base} vimEnabled />);
+  await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+  const pane = document.querySelector<HTMLElement>('[aria-label="File navigation"]')!;
+  const event = new KeyboardEvent("keydown", { key: "?", bubbles: true, cancelable: true });
+  pane.focus();
+  pane.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  await expect.element(page.getByRole("textbox", { name: "Search in file" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Search in file" }).fill("jj{}");
+  expect(pane.dataset.vimLine).toBe("1");
+  const input = page.getByRole("textbox", { name: "Search in file" }).element();
+  input.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+  );
+  await expect
+    .element(page.getByRole("textbox", { name: "Search in file" }))
+    .not.toBeInTheDocument();
+});
+
+test("benchmark: Vim cursor response on 40k lines and a 100k-character line", async ({
+  annotate,
+}) => {
+  const percentile = (values: number[], p: number) =>
+    [...values].sort((a, b) => a - b)[Math.floor((values.length - 1) * p)]!;
+  const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const scenarios = [
+    {
+      name: "40000-lines-local",
+      text: Array.from({ length: 40000 }, (_, i) => `export const value${i} = ${i};\n`).join(""),
+      commands: ["j", "k", "w", "b"],
+    },
+    {
+      name: "40000-lines-scroll",
+      text: Array.from({ length: 40000 }, (_, i) => `export const value${i} = ${i};\n`).join(""),
+      commands: ["j"],
+    },
+    {
+      name: "40000-lines-far-jump",
+      text: Array.from({ length: 40000 }, (_, i) => `export const value${i} = ${i};\n`).join(""),
+      commands: ["G", "g", "g"],
+    },
+    {
+      name: "100000-character-line",
+      text: `${"word ".repeat(20000)}\nnext line\n`,
+      commands: ["$", "h", "l", "0", "w", "b"],
+    },
+  ];
+  const results = [];
+  for (const scenario of scenarios) {
+    const file = {
+      ...base,
+      plain: true,
+      identity: `benchmark-${scenario.name}`,
+      text: scenario.text,
+      size: scenario.text.length,
+    };
+    if (!root) render(<FullFileView {...props} file={file} vimEnabled />);
+    else flushSync(() => root!.render(<FullFileView {...props} file={file} vimEnabled />));
+    await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+    await frame();
+    const pane = document.querySelector<HTMLElement>('[aria-label="File navigation"]')!;
+    pane.focus();
+    const handlers: number[] = [],
+      frames: number[] = [];
+    for (let i = 0; i < 70; i++) {
+      await frame();
+      const started = performance.now();
+      pane.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: scenario.commands[i % scenario.commands.length]!,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      handlers.push(performance.now() - started);
+      await frame();
+      const cursor = document.querySelector<HTMLElement>("[data-vim-caret]")!;
+      for (
+        let attempt = 0;
+        attempt < 20 &&
+        (cursor.hidden ||
+          cursor.dataset.vimLine !== pane.dataset.vimLine ||
+          cursor.dataset.vimColumn !== pane.dataset.vimColumn);
+        attempt++
+      )
+        await frame();
+      expect(cursor.hidden).toBe(false);
+      expect(cursor.dataset.vimLine).toBe(pane.dataset.vimLine);
+      expect(cursor.dataset.vimColumn).toBe(pane.dataset.vimColumn);
+      frames.push(performance.now() - started);
+    }
+    results.push({
+      scenario: scenario.name,
+      bytes: file.size,
+      samples: handlers.length,
+      handlerP50Ms: percentile(handlers, 0.5),
+      handlerP95Ms: percentile(handlers, 0.95),
+      handlerMaxMs: Math.max(...handlers),
+      nextFrameP50Ms: percentile(frames, 0.5),
+      nextFrameP95Ms: percentile(frames, 0.95),
+      mountedRows: lines()!.length,
+    });
+    expect(lines()!.length).toBeLessThan(300);
+  }
+  await annotate(`VIM_BROWSER_BENCHMARK ${JSON.stringify(results)}`, "benchmark", {
+    contentType: "application/json",
+    body: JSON.stringify(results, null, 2),
+    bodyEncoding: "utf-8",
+  });
+}, 30000);

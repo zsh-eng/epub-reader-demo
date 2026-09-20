@@ -21,7 +21,10 @@ import { browseSearchSchema, type BrowseSearch } from "../../shared/inspect";
 import { listBranches, listWorktrees, resolveCommit } from "../repository/history";
 import { searchBrowse } from "../repository/inspect";
 import { git, runProcess } from "../runtime/process";
-import { searchBinDir, searchCacheRoot, ZOEKT_VERSION } from "./install";
+import { searchBinDir, searchCacheRoot, ZOEKT_VERSION, SEARCH_HELPER_VERSION } from "./install";
+
+import { discoverCtags, ctagsSetupMessage, type CtagsTool } from "./symbols";
+import { symbolSearchSchema, type SymbolSearch } from "../../shared/symbols";
 
 const oid = z.string().regex(/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/);
 const entrySchema = z.object({
@@ -98,6 +101,7 @@ export class ZoektSearchService {
   private readonly abort = new AbortController();
   private readonly owner = randomBytes(12).toString("hex");
   private readonly bin: string;
+  private ctags?: CtagsTool;
   private directory = "";
   private metadata = "";
   private commonDir = "";
@@ -148,6 +152,7 @@ export class ZoektSearchService {
       return;
     }
     try {
+      this.ctags = await discoverCtags();
       this.commonDir = await realpath(
         (
           await git(this.repo, ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
@@ -161,7 +166,10 @@ export class ZoektSearchService {
       this.directory = join(
         this.options.cacheRoot ?? searchCacheRoot(),
         "repositories",
-        hash(`${ZOEKT_VERSION}:v2:${this.commonDir}`).slice(0, 32),
+        hash(`${ZOEKT_VERSION}:v3:${this.ctags?.version ?? "no-ctags"}:${this.commonDir}`).slice(
+          0,
+          32,
+        ),
       );
       this.metadata = join(this.directory, "manifest.json");
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
@@ -374,7 +382,7 @@ export class ZoektSearchService {
         "-branches",
         desired.map((branch) => branch.alias).join(","),
         "-submodules=false",
-        "-disable_ctags",
+        ...(this.ctags ? ["-require_ctags"] : ["-disable_ctags"]),
         "-parallelism",
         "2",
         "-file_limit",
@@ -389,7 +397,7 @@ export class ZoektSearchService {
         signal: this.indexingAbort.signal,
         timeoutMs: 300_000,
         maxBytes: 1024 * 1024,
-        env: { GOMAXPROCS: "2" },
+        env: { GOMAXPROCS: "2", CTAGS_COMMAND: this.ctags?.path, SCIP_CTAGS_COMMAND: "" },
       },
     );
     if (this.closed) return;
@@ -440,7 +448,7 @@ export class ZoektSearchService {
           await socketJson(this.socketPath, "/health", undefined, this.indexingAbort.signal),
         );
         if (
-          health.version !== ZOEKT_VERSION ||
+          health.version !== SEARCH_HELPER_VERSION ||
           health.branches.length !== expected.length ||
           expected.some(
             (branch) =>
@@ -474,6 +482,58 @@ export class ZoektSearchService {
       clearTimeout(force);
     }
     if (socketDir) await rm(socketDir, { recursive: true, force: true });
+  }
+  async symbols(source: BrowseSource, query: string, signal?: AbortSignal): Promise<SymbolSearch> {
+    const bounded = signal ? AbortSignal.any([signal, this.abort.signal]) : this.abort.signal;
+    const base: SymbolSearch = { source, query, matches: [], truncated: false, engine: "zoekt" };
+    if (!query.trim()) return base;
+    if (!this.ctags)
+      return {
+        ...base,
+        unavailable: this.enabled ? ctagsSetupMessage : (this.current.message ?? ctagsSetupMessage),
+      };
+    const resultSource: BrowseSource =
+      source.kind === "commit"
+        ? source
+        : {
+            kind: "commit",
+            repo: source.repo,
+            oid: await resolveCommit(source.repo, "HEAD", bounded),
+          };
+    const branch = this.indexed.find((entry) => entry.commit === resultSource.oid);
+    if (this.current.state !== "ready" || !branch || !this.socketPath)
+      return {
+        ...base,
+        resultSource,
+        unavailable:
+          this.current.state === "ready"
+            ? "This commit is not indexed. File symbol search is still available."
+            : (this.current.message ?? "The symbol index is not ready."),
+      };
+    const child = this.child;
+    try {
+      const reply = await socketJson(
+        this.socketPath,
+        "/search",
+        { branch: branch.alias, commit: branch.commit, query, symbols: true },
+        bounded,
+      );
+      const parsed = symbolSearchSchema.pick({ matches: true, truncated: true }).parse(reply);
+      if (child !== this.child || this.current.state !== "ready")
+        return {
+          ...base,
+          resultSource,
+          unavailable: "The index changed. Retry the symbol search.",
+        };
+      return { ...base, ...parsed, resultSource };
+    } catch {
+      bounded.throwIfAborted();
+      return {
+        ...base,
+        resultSource,
+        unavailable: "The indexed symbol search could not complete.",
+      };
+    }
   }
   async search(source: BrowseSource, query: string, signal?: AbortSignal): Promise<BrowseSearch> {
     const bounded = signal ? AbortSignal.any([signal, this.abort.signal]) : this.abort.signal;

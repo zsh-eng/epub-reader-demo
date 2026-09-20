@@ -45,7 +45,7 @@ func requestSearch(s *service, q searchRequest) *httptest.ResponseRecorder {
 
 func TestQueryIsLiteralAndBranchIsExact(t *testing.T) {
 	s, f := fixture()
-	w := requestSearch(s, searchRequest{"main", testCommit, "repo:other OR branch:other"})
+	w := requestSearch(s, searchRequest{"main", testCommit, "repo:other OR branch:other", false})
 	if w.Code != 200 {
 		t.Fatal(w.Code, w.Body.String())
 	}
@@ -62,7 +62,7 @@ func TestQueryIsLiteralAndBranchIsExact(t *testing.T) {
 
 func TestDifferentCommitCannotSearch(t *testing.T) {
 	s, f := fixture()
-	w := requestSearch(s, searchRequest{"main", strings.Repeat("b", 40), "needle"})
+	w := requestSearch(s, searchRequest{"main", strings.Repeat("b", 40), "needle", false})
 	if w.Code != 409 || f.q != nil {
 		t.Fatalf("stale source was searched: %d %#v", w.Code, f.q)
 	}
@@ -75,7 +75,7 @@ func TestResultsAreBoundedAndPathsAreSafe(t *testing.T) {
 		lines[i] = zoekt.LineMatch{LineNumber: i + 1, Line: []byte(strings.Repeat("界", 3000)), LineFragments: []zoekt.LineFragmentMatch{{LineOffset: 6000, MatchLength: 3}}}
 	}
 	f.result.Files = []zoekt.FileMatch{{Repository: "test", FileName: "../outside", LineMatches: lines}, {Repository: "test", FileName: "src/example.ts", LineMatches: lines}}
-	w := requestSearch(s, searchRequest{"main", testCommit, "界"})
+	w := requestSearch(s, searchRequest{"main", testCommit, "界", false})
 	var result searchResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestResultsAreBoundedAndPathsAreSafe(t *testing.T) {
 func TestInvalidQueryNeverReachesSearcher(t *testing.T) {
 	for _, value := range []string{"", "one\ntwo", strings.Repeat("x", 257)} {
 		s, f := fixture()
-		w := requestSearch(s, searchRequest{"main", testCommit, value})
+		w := requestSearch(s, searchRequest{"main", testCommit, value, false})
 		if w.Code != 400 || f.q != nil {
 			t.Fatalf("invalid query searched: %q", value)
 		}
@@ -109,7 +109,7 @@ func TestHealthReflectsLoadedBranches(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Branches) != 2 || result.Version != version || result.Branches[0].Name != "feature" || result.Branches[1].Commit != testCommit {
+	if len(result.Branches) != 2 || result.Version != version+"-symbols-v1" || result.Branches[0].Name != "feature" || result.Branches[1].Commit != testCommit {
 		t.Fatal(result)
 	}
 }
@@ -154,5 +154,25 @@ func TestCacheLockExcludesOtherOwnersAndKeepsTheInode(t *testing.T) {
 	}
 	if after.Mode().Perm() != 0600 {
 		t.Fatal("lock mode", after.Mode().Perm())
+	}
+}
+
+func TestSymbolSearchUsesLiteralAtomAndDeclarationMetadata(t *testing.T) {
+	s, f := fixture()
+	f.result.Files = []zoekt.FileMatch{{Repository: "test", FileName: "src/a.ts", LineMatches: []zoekt.LineMatch{{LineNumber: 3, Line: []byte("function hello() {}"), LineFragments: []zoekt.LineFragmentMatch{{SymbolInfo: &zoekt.Symbol{Sym: "hello", Kind: "function", Parent: "Example"}}, {Offset: 40, SymbolInfo: &zoekt.Symbol{Sym: "helloAgain", Kind: "function"}}}}}}}
+	w := requestSearch(s, searchRequest{Branch: "main", Commit: testCommit, Query: "hell", Symbols: true})
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	atom := f.q.(*query.And).Children[1].(*query.Symbol).Expr.(*query.Substring)
+	if atom.Pattern != "hell" || atom.CaseSensitive {
+		t.Fatal(atom)
+	}
+	var result searchResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Matches) != 2 || result.Matches[1].Name != "helloAgain" || result.Matches[0].Name != "hello" || result.Matches[0].Scope != "Example" {
+		t.Fatal(result)
 	}
 }

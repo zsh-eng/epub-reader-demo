@@ -1,0 +1,184 @@
+import { afterEach, expect, test } from "vitest";
+import { page, userEvent } from "vitest/browser";
+import { createRoot, type Root } from "react-dom/client";
+import { App } from "../../src/web/App";
+import { createReviewController } from "../../src/web/data/controller";
+import { createBrowseApi } from "../../src/web/data/browse";
+import { initializeTheme } from "../../src/web/themes";
+import "../../src/web/reset.css";
+
+let root: Root | undefined;
+let mount: HTMLDivElement | undefined;
+afterEach(() => {
+  root?.unmount();
+  mount?.remove();
+  root = undefined;
+  mount = undefined;
+  localStorage.removeItem("med:vim");
+});
+async function mountFile(vim = false) {
+  localStorage.setItem("med:vim", vim ? "on" : "off");
+  initializeTheme();
+  await page.viewport(1200, 800);
+  const head = "a".repeat(40);
+  const text = Array.from(
+    { length: 100 },
+    (_, i) => `export const example${i + 1} = ${i + 1};`,
+  ).join("\n");
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = new URL(String(input), "http://localhost");
+    if (url.pathname === "/api/session")
+      return Response.json({
+        protocol: 1,
+        repository: {
+          path: "/test/repo",
+          name: "navigation-fixture",
+          head,
+          branch: "main",
+          shallow: false,
+          git: true,
+        },
+        worktrees: [{ path: "/test/repo", head, branch: "main" }],
+      });
+    if (url.pathname === "/api/branches") return Response.json([]);
+    if (url.pathname === "/api/history")
+      return Response.json({ commits: [], cursor: null, hasMore: false });
+    if (url.pathname === "/api/review") {
+      const { comparison } = JSON.parse(String(init?.body));
+      return Response.json({
+        id: "b".repeat(64),
+        repo: "/test/repo",
+        comparison,
+        base: head,
+        head: "working",
+        label: "Working changes",
+        files: [{ path: "main.ts", status: "M", additions: 1, deletions: 1, binary: false }],
+        patch:
+          "diff --git a/main.ts b/main.ts\nindex 1111111..2222222 100644\n--- a/main.ts\n+++ b/main.ts\n@@ -1 +1 @@\n-export const old = 1;\n+export const example1 = 1;\n",
+        warnings: [],
+        metrics: { gitMs: 1, totalMs: 2, patchBytes: 200, cacheHit: false },
+      });
+    }
+    if (url.pathname === "/api/notes")
+      return Response.json({ reviewId: url.searchParams.get("reviewId"), revision: 0, notes: [] });
+    if (url.pathname === "/api/browse/read") {
+      const { source, path } = JSON.parse(String(init?.body));
+      return Response.json({
+        source,
+        path,
+        identity: "fixture-text",
+        kind: "text",
+        text,
+        size: text.length,
+        plain: true,
+      });
+    }
+    if (url.pathname === "/api/browse/symbols") {
+      const { source, path, identity, query } = JSON.parse(String(init?.body));
+      return Response.json({
+        source,
+        path,
+        identity,
+        query,
+        engine: "ctags",
+        truncated: false,
+        matches: [{ path: "main.ts", line: 80, column: 14, name: "example80", kind: "constant" }],
+      });
+    }
+    if (url.pathname === "/api/browse/list") {
+      const { source } = JSON.parse(String(init?.body));
+      return Response.json({
+        source,
+        entries: [{ path: "main.ts", kind: "file" }],
+        truncated: false,
+      });
+    }
+    throw new Error(`Unexpected request: ${url.pathname}`);
+  };
+  const controller = createReviewController({ fetch: fetcher, events: false });
+  mount = document.createElement("div");
+  document.body.append(mount);
+  root = createRoot(mount);
+  root.render(<App controller={controller} browseApi={createBrowseApi(fetcher, "fixture")} />);
+  await expect
+    .poll(() => document.querySelector("[data-review-status]")?.getAttribute("data-review-status"))
+    .toBe("ready");
+  await page.getByRole("treeitem", { name: /main.ts/ }).dblClick();
+  await expect
+    .element(page.getByRole("textbox", { name: vim ? "File navigation" : "File content" }))
+    .toBeVisible();
+}
+function shortcut(key: string, shiftKey = false) {
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent("keydown", { key, metaKey: true, shiftKey, bubbles: true, cancelable: true }),
+  );
+}
+function focusedKey(key: string) {
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
+  );
+}
+async function command(name: string) {
+  shortcut("k");
+  await page.getByRole("combobox", { name: "Search commands" }).fill(name);
+  await page.getByRole("option", { name: new RegExp(`^${name} gg$`) }).click();
+}
+
+test("Vim focus owns question mark while the rest of the app keeps the command guide", async () => {
+  await mountFile(true);
+  const pane = page.getByRole("textbox", { name: "File navigation" }).element() as HTMLElement;
+  pane.focus();
+  focusedKey("?");
+  await expect.element(page.getByRole("textbox", { name: "Search in file" })).toBeVisible();
+  await expect
+    .poll(() => document.activeElement)
+    .toBe(page.getByRole("textbox", { name: "Search in file" }).element());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(() => document.activeElement).toBe(pane);
+  document.body.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "?", bubbles: true, cancelable: true }),
+  );
+  await expect.element(page.getByRole("dialog", { name: "Shortcuts & commands" })).toBeVisible();
+});
+
+test("Find works with Vim disabled and a palette command moves after the modal closes", async () => {
+  await mountFile();
+  shortcut("f");
+  const search = page.getByRole("textbox", { name: "Search in file" });
+  await expect.element(search).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(search.element());
+  await search.fill("example80");
+  await userEvent.keyboard("{Enter}");
+  const pane = page.getByRole("textbox", { name: "File content" });
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  await command("Start of file");
+  const vimPane = page.getByRole("textbox", { name: "File navigation" });
+  await expect.element(vimPane).toHaveAttribute("data-vim-line", "1");
+  await expect.poll(() => document.activeElement).toBe(vimPane.element());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(localStorage.getItem("med:vim")).toBe("on");
+});
+
+test("symbol palette preview and Escape leave the current Vim cursor unchanged", async () => {
+  await mountFile(true);
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  (pane.element() as HTMLElement).focus();
+  focusedKey("4");
+  focusedKey("2");
+  focusedKey("G");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "42");
+  shortcut("o");
+  await expect.element(page.getByRole("option", { name: /example80/ })).toBeVisible();
+  await expect
+    .poll(() =>
+      document
+        .querySelector('[aria-label="Symbol preview"] diffs-container')
+        ?.shadowRoot?.querySelector('[data-line="80"][data-selected-line]'),
+    )
+    .toBeTruthy();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(page.getByRole("dialog", { name: "Find symbol" })).not.toBeInTheDocument();
+  await expect.element(pane).toHaveAttribute("data-vim-line", "42");
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+});

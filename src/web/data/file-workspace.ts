@@ -9,6 +9,7 @@ export interface OpenFileTab {
   source: BrowseSource;
   sourceLabel: string;
   line?: number;
+  column?: number;
 }
 interface Workspace {
   tabs: OpenFileTab[];
@@ -129,6 +130,7 @@ export function createFileWorkspace(api: BrowseApi) {
       line?: number,
       source = snapshot.source,
       label = snapshot.sourceLabel,
+      column?: number,
     ) {
       if (!source || disposed) return;
       const id = `${sourceKey(source)}:${path}`;
@@ -136,7 +138,9 @@ export function createFileWorkspace(api: BrowseApi) {
       let tabs: OpenFileTab[];
       if (existing)
         tabs = snapshot.tabs.map((tab) =>
-          tab.id === id ? { ...tab, pinned: tab.pinned || pinned, ...(line ? { line } : {}) } : tab,
+          tab.id === id
+            ? { ...tab, pinned: tab.pinned || pinned, ...(line ? { line, column } : {}) }
+            : tab,
         );
       else {
         tabs = snapshot.tabs.filter((tab) => tab.pinned);
@@ -144,7 +148,14 @@ export function createFileWorkspace(api: BrowseApi) {
           publish({ error: "Close a file tab before opening another (12-tab limit)." });
           return;
         }
-        tabs.push({ id, path, pinned, source, sourceLabel: label, ...(line ? { line } : {}) });
+        tabs.push({
+          id,
+          path,
+          pinned,
+          source,
+          sourceLabel: label,
+          ...(line ? { line, column } : {}),
+        });
       }
       publish({
         tabs,

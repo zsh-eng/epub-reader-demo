@@ -6,6 +6,7 @@ import {
   type BrowseEntry,
 } from "../../shared/browse";
 import { createApi } from "./api";
+import { symbolSearchSchema } from "../../shared/symbols";
 import { browseSearchResponseSchema } from "../../shared/inspect";
 
 export function browseSourceKey(source: BrowseSource): string {
@@ -17,6 +18,33 @@ export function browseSourceKey(source: BrowseSource): string {
 export function createBrowseApi(fetcher: typeof fetch, token: string) {
   const api = createApi(fetcher, token);
   return {
+    async symbols(
+      source: BrowseSource,
+      query: string,
+      options?: { path?: string; identity?: string },
+      signal?: AbortSignal,
+    ) {
+      const result = await api.json("/api/browse/symbols", symbolSearchSchema, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, query, ...options }),
+        signal,
+      });
+      if (
+        browseSourceKey(result.source) !== browseSourceKey(source) ||
+        result.query !== query ||
+        result.path !== options?.path
+      )
+        throw new Error("The symbols belong to another source or query.");
+      if (
+        result.resultSource &&
+        (result.resultSource.kind !== "commit" ||
+          result.resultSource.repo !== source.repo ||
+          (source.kind === "commit" && result.resultSource.oid !== source.oid))
+      )
+        throw new Error("The symbols belong to another commit.");
+      return result;
+    },
     async search(source: BrowseSource, query: string, signal?: AbortSignal) {
       const result = await api.json("/api/browse/search", browseSearchResponseSchema, {
         method: "POST",
@@ -60,8 +88,8 @@ export function createBrowseApi(fetcher: typeof fetch, token: string) {
   };
 }
 type CompleteBrowseApi = ReturnType<typeof createBrowseApi>;
-export type BrowseApi = Omit<CompleteBrowseApi, "search"> &
-  Partial<Pick<CompleteBrowseApi, "search">>;
+export type BrowseApi = Omit<CompleteBrowseApi, "search" | "symbols"> &
+  Partial<Pick<CompleteBrowseApi, "search" | "symbols">>;
 
 export function createDefaultBrowseApi(): BrowseApi {
   const token =

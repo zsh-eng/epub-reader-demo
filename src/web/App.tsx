@@ -25,6 +25,7 @@ import { createBrowseApi, useBrowseFiles, type BrowseApi } from "./data/browse";
 import { createFileWorkspace, sourceKey, useFileWorkspace } from "./data/file-workspace";
 import { RepositoryFiles } from "./components/RepositoryFiles";
 import { FilePicker } from "./components/FilePicker";
+import { SymbolPicker } from "./components/SymbolPicker";
 import { FullFileView } from "./components/FullFileView";
 import { FileViewTabs } from "./components/FileViewTabs";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
@@ -68,7 +69,27 @@ export function App({
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState<"files" | "content">("files");
   const [pickerResume, setPickerResume] = useState(false);
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const [symbolPickerOpen, setSymbolPickerOpen] = useState(false);
+  const [symbolMode, setSymbolMode] = useState<"file" | "project">("file");
+  const [vimEnabled, setVimEnabled] = useState(
+    () => readPreference("vim", "off", ["on", "off"]) === "on",
+  );
+  useEffect(() => {
+    try {
+      localStorage.setItem("med:vim", vimEnabled ? "on" : "off");
+    } catch {
+      /* Storage can be unavailable. */
+    }
+  }, [vimEnabled]);
   const [helpOpen, setHelpOpen] = useState(false);
+  const fileNavigation = useRef<((key: string, control?: boolean) => void) | null>(null);
+  const onNavigationReady = useCallback(
+    (command: ((key: string, control?: boolean) => void) | null) => {
+      fileNavigation.current = command;
+    },
+    [],
+  );
   const [blameEnabled, setBlameEnabled] = useState(false);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const [browseApi] = useState(
@@ -118,6 +139,11 @@ export function App({
     fileWorkspace.invalidate();
   }, [fileWorkspace, state.sourceRevision]);
   const activeFile = fileState.tabs.find((tab) => tab.id === fileState.active);
+  const openSymbols = useCallback((mode: "file" | "project") => {
+    setSymbolMode(mode);
+    setSymbolPickerOpen(true);
+    setCommandsOpen(false);
+  }, []);
   const openFilePicker = useCallback(() => {
     setPickerMode("files");
     setPickerResume(false);
@@ -151,7 +177,6 @@ export function App({
   );
   const [wrap, setWrap] = useState(false);
   const [showNotes, setShowNotes] = useState(true);
-  const [commandsOpen, setCommandsOpen] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
   const [find, setFind] = useState("");
   const [findIndex, setFindIndex] = useState(0);
@@ -475,6 +500,7 @@ export function App({
       if (event.isComposing || event.defaultPrevented) return;
       const modal =
         themePickerOpen ||
+        symbolPickerOpen ||
         filePickerOpen ||
         commandsOpen ||
         helpOpen ||
@@ -517,7 +543,13 @@ export function App({
         else toggleReviewSidebar();
         return;
       }
-      if (themePickerOpen || filePickerOpen || helpOpen || rangeOpen) return;
+      if (themePickerOpen || filePickerOpen || symbolPickerOpen || helpOpen || rangeOpen) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "o") {
+        if (event.shiftKey ? !browseSource : !activeFile || fileState.file?.kind !== "text") return;
+        event.preventDefault();
+        if (!event.repeat) openSymbols(event.shiftKey ? "project" : "file");
+        return;
+      }
       if (
         (event.metaKey || event.ctrlKey) &&
         event.shiftKey &&
@@ -540,7 +572,14 @@ export function App({
         return;
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
-        if (fileState.active !== "changes") return;
+        if (commandsOpen || branchPickerOpen) return;
+        if (fileState.active !== "changes") {
+          if (fileState.file?.kind === "text") {
+            event.preventDefault();
+            fileNavigation.current?.("/");
+          }
+          return;
+        }
         event.preventDefault();
         openFind();
         return;
@@ -579,6 +618,8 @@ export function App({
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   }, [
+    symbolPickerOpen,
+    openSymbols,
     branchPickerOpen,
     themePickerOpen,
     filePickerOpen,
@@ -632,7 +673,83 @@ export function App({
         (file) => file.path === activeFile?.path || file.info.previousPath === activeFile?.path,
       )
     : undefined;
+  const runFileNavigation = (keys: string, control = false) => {
+    if (keys !== "/" && keys !== "?") setVimEnabled(true);
+    // Run after the palette releases its focus trap.
+    requestAnimationFrame(() => {
+      for (const key of keys) fileNavigation.current?.(key, control);
+    });
+  };
+  const fileMotions: [string, string, string, boolean?][] = [
+    ["left", "Move left in file", "h"],
+    ["down", "Move down in file", "j"],
+    ["up", "Move up in file", "k"],
+    ["right", "Move right in file", "l"],
+    ["word-next", "Next word in file", "w"],
+    ["word-back", "Previous word in file", "b"],
+    ["word-end", "End of word in file", "e"],
+    ["line-start", "Start of file line", "0"],
+    ["line-text", "First non-space character in file line", "^"],
+    ["line-end", "End of file line", "$"],
+    ["paragraph-back", "Previous paragraph in file", "{"],
+    ["paragraph-next", "Next paragraph in file", "}"],
+    ["file-start", "Start of file", "gg"],
+    ["file-end", "End of file", "G"],
+    ["page-down", "Half page down in file", "d", true],
+    ["page-up", "Half page up in file", "u", true],
+    ["center", "Center file cursor", "zz"],
+    ["char-forward", "Find character forward in line", "f"],
+    ["char-back", "Find character backward in line", "F"],
+    ["till-forward", "Move before character forward in line", "t"],
+    ["till-back", "Move after character backward in line", "T"],
+    ["char-repeat", "Repeat character search", ";"],
+    ["char-reverse", "Reverse character search", ","],
+    ["search-next", "Next file search match", "n"],
+    ["search-back", "Previous file search match", "N"],
+    ["search-word", "Search file for word at cursor", "*"],
+    ["search-word-back", "Search file backward for word at cursor", "#"],
+  ];
   const commands: ReviewCommand[] = [
+    {
+      id: "find-file-text",
+      label: "Find text in current file",
+      shortcut: "⌘ F",
+      disabled: !activeFile || fileState.file?.kind !== "text",
+      run: () => runFileNavigation("/"),
+    },
+    {
+      id: "find-file-backward",
+      label: "Search current file backward",
+      shortcut: "?",
+      disabled: !activeFile || fileState.file?.kind !== "text",
+      run: () => runFileNavigation("?"),
+    },
+    ...fileMotions.map(([id, label, keys, control]) => ({
+      id: `vim-${id}`,
+      label,
+      shortcut: control ? `Ctrl ${keys.toUpperCase()}` : keys,
+      disabled: !activeFile || fileState.file?.kind !== "text",
+      run: () => runFileNavigation(keys, control),
+    })),
+    {
+      id: "file-symbols",
+      label: "Search symbols in current file",
+      shortcut: "⌘ O",
+      disabled: !activeFile || fileState.file?.kind !== "text",
+      run: () => openSymbols("file"),
+    },
+    {
+      id: "project-symbols",
+      label: "Search symbols in project commits",
+      shortcut: "⌘ ⇧ O",
+      disabled: !browseSource,
+      run: () => openSymbols("project"),
+    },
+    {
+      id: "vim",
+      label: vimEnabled ? "Disable Vim navigation in files" : "Enable Vim navigation in files",
+      run: () => setVimEnabled((value) => !value),
+    },
     {
       id: "open-branch",
       label: "Open branch or worktree",
@@ -924,6 +1041,29 @@ export function App({
         />
       )}
       <ThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} />
+      <SymbolPicker
+        open={symbolPickerOpen}
+        onOpenChange={setSymbolPickerOpen}
+        mode={symbolMode}
+        onModeChange={setSymbolMode}
+        source={symbolMode === "file" ? (activeFile?.source ?? null) : browseSource}
+        path={activeFile?.path}
+        identity={fileState.file?.kind === "text" ? fileState.file.identity : undefined}
+        currentFile={fileState.file}
+        sourceRevision={state.sourceRevision}
+        sourceLabel={symbolMode === "file" ? (activeFile?.sourceLabel ?? sourceLabel) : sourceLabel}
+        api={browseApi}
+        onOpen={(path, line, source, column) =>
+          fileWorkspace.open(
+            path,
+            false,
+            line,
+            source,
+            source.kind === "commit" ? `Commit ${source.oid.slice(0, 8)}` : sourceLabel,
+            column,
+          )
+        }
+      />
       <FilePicker
         open={filePickerOpen && !!browseSource}
         onOpenChange={setFilePickerOpen}
@@ -1421,6 +1561,9 @@ export function App({
                 onBlameEnabledChange={setBlameEnabled}
                 sourceLabel={activeFile.sourceLabel}
                 line={activeFile.line}
+                column={activeFile.column}
+                vimEnabled={vimEnabled}
+                onNavigationReady={onNavigationReady}
                 onRefresh={() => void fileWorkspace.refresh()}
                 onClose={() => fileWorkspace.close(activeFile.id)}
                 onOpenBefore={
@@ -1456,7 +1599,9 @@ export function App({
         <span {...stylex.props(styles.statusDot)} />
         <span>
           {activeFile
-            ? "Read-only file"
+            ? vimEnabled
+              ? "Read-only file · Vim"
+              : "Read-only file"
             : state.comparison.kind === "patch"
               ? "Patch review"
               : state.comparison.kind === "files"

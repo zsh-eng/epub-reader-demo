@@ -94,6 +94,8 @@ The executable uses Node, including when launched through `bunx`. The package se
 | All commands and shortcuts        | `?`          | `?`                       |
 | Command palette                   | `⌘K`         | `Ctrl+K`                  |
 | Find a file                       | `⌘⇧K`        | `Ctrl+Shift+K`            |
+| Symbols in current file           | `⌘O`         | `Ctrl+O`                  |
+| Symbols in project commits        | `⌘⇧O`        | `Ctrl+Shift+O`            |
 | Search file contents              | `⌘⇧F`        | `Ctrl+Shift+F`            |
 | Toggle left / right sidebar       | `⌘B` / `⌘⇧B` | `Ctrl+B` / `Ctrl+Shift+B` |
 | Resume search                     | `⌥R`         | `Alt+R`                   |
@@ -104,6 +106,23 @@ The executable uses Node, including when launched through `bunx`. The package se
 | Close other files                 | `⌥⇧O`        | `Alt+Shift+O`             |
 
 Close actions preserve the Changes tab and other workspaces. Desktop or browser shortcuts can take priority over a web app; the command palette provides the same actions.
+
+## Symbols and Vim navigation
+
+![Project symbol palette with a Bun source preview](docs/validation/project-symbols.png)
+
+Symbol search opens a palette with a file preview. Use the **File** scope for the exact file on screen, or **Project** for the selected repository's indexed commit. Arrow keys preview a result; Enter opens it; Escape leaves the current file unchanged. There is no outline panel.
+
+Symbol extraction uses Universal Ctags. Install it with `brew install universal-ctags` on macOS or `sudo pacman -S ctags` on Omarchy. The project index and individual file extraction share this binary. Project symbols require the optional Zoekt setup above. After updating from a text-only search build, run `node dist/cli.js --setup-search` again to install the updated helper. Existing text-only indexes rebuild when symbol extraction is enabled. Language coverage follows the installed Ctags parsers: Universal Ctags 6.2.1 covers TypeScript and C/C++, but does not include a Zig parser. Text search still works for Zig.
+
+Use the command palette to **Enable Vim navigation in files**. This preference is saved. Click the file pane to use normal-mode navigation:
+
+- `h j k l`, `w b e`, `0 ^ $`, and counts such as `10j`.
+- `gg`, `G`, `42G`, `{` / `}` for paragraphs, and `Ctrl+D` / `Ctrl+U` for half pages.
+- `f` / `F` / `t` / `T` followed by a character, `;` / `,` to repeat, and `zz` to center the cursor.
+- `/` / `?` for live forward/backward file search, `n` / `N` for matches, and `*` / `#` for the word at the cursor. Lowercase queries ignore case; uppercase letters enable case-sensitive matching. Enter accepts the preview. Escape cancels a preview and clears highlights; in normal mode it clears highlights while keeping the search.
+
+The file remains read-only. While a Vim file pane has focus, `?` searches backward; `⌘K` / `Ctrl+K` still opens commands. Palettes and text inputs keep their normal keyboard behavior. Symbol search does not require Vim mode.
 
 ## Development
 
@@ -139,3 +158,5 @@ This is a browser app backed by a local server. Native desktop packaging, shared
 - [Feature status and navigation behavior](docs/SNACKS_REVIEW.md)
 
 Hunk's retained semantic source and tests carry their original [MIT notice](upstream/HUNK-LICENSE). [Source provenance](upstream/HUNK.md) records the pinned revision and adaptations.
+
+Symbol and navigation validation: [Ctags and Zoekt benchmarks](docs/validation/SYMBOL_SEARCH.md), [Vim cursor benchmarks](docs/validation/VIM_NAVIGATION.md), [file symbol palette](docs/validation/file-symbols.png), [Vim file search](docs/validation/vim-navigation.png).

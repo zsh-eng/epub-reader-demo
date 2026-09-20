@@ -7,6 +7,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { startHost } from "../host/server";
 import type { Comparison } from "../shared/protocol";
+import { ctagsSetupMessage, discoverCtags } from "../host/search/symbols";
 import { installSearchTools } from "../host/search/install";
 
 const { values, positionals } = parseArgs({
@@ -29,6 +30,8 @@ if (values.help) {
   console.log("Setting up pinned Zoekt search tools…");
   const result = await installSearchTools();
   console.log(`Search tools ready: ${result.binDir}`);
+  const ctags = await discoverCtags();
+  console.log(ctags ? `Symbol extraction ready: ${ctags.path}` : ctagsSetupMessage);
 } else {
   const port = values.port === undefined ? undefined : Number(values.port);
   if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535))

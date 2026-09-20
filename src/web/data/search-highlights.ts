@@ -1,4 +1,8 @@
 const MAX_MATCHES = 1000;
+export interface SearchHighlightOptions {
+  caseSensitive?: boolean;
+  wholeWord?: boolean;
+}
 
 /** Highlight mounted text ranges without rewriting Pierre's syntax-token DOM. */
 export function createSearchHighlights(name: string) {
@@ -6,11 +10,15 @@ export function createSearchHighlights(name: string) {
   const clear = () => {
     if (typeof CSS !== "undefined" && CSS.highlights) CSS.highlights.delete(name);
   };
-  const refresh = (query: string) => {
+  const refresh = (query: string, options: SearchHighlightOptions = {}) => {
     clear();
     if (!host || !query.trim() || typeof Highlight === "undefined" || !CSS.highlights) return;
     const root = host.shadowRoot ?? host;
-    const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu");
+    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(
+      options.wholeWord ? `(?<![\\p{L}\\p{N}\\p{M}_])${escaped}(?![\\p{L}\\p{N}\\p{M}_])` : escaped,
+      options.caseSensitive ? "gu" : "giu",
+    );
     const ranges: Range[] = [];
     for (const row of root.querySelectorAll<HTMLElement>("[data-line]")) {
       // These are only the virtualizer's mounted lines, never the whole file.
@@ -47,9 +55,9 @@ export function createSearchHighlights(name: string) {
   };
   return {
     refresh,
-    update(node: HTMLElement, query: string) {
+    update(node: HTMLElement, query: string, options?: SearchHighlightOptions) {
       host = node;
-      refresh(query);
+      refresh(query, options);
     },
     dispose() {
       host = undefined;

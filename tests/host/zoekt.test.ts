@@ -264,3 +264,31 @@ test.skipIf(!binaryDirectory)(
   },
   45_000,
 );
+
+test.skipIf(!binaryDirectory)(
+  "indexed symbols exclude references and dirty files and keep the exact commit",
+  async () => {
+    const { repo, cacheRoot } = await fixture();
+    await writeFile(
+      join(repo, "symbol.ts"),
+      "export function committedSymbol() {}\ncommittedSymbol();\n",
+    );
+    git(repo, "add", ".");
+    git(repo, "commit", "-qm", "Symbol");
+    const oid = git(repo, "rev-parse", "HEAD");
+    const service = await start(repo, cacheRoot);
+    await ready(service);
+    await writeFile(join(repo, "symbol.ts"), "export function dirtySymbol() {}\n");
+    const result = await service.symbols({ kind: "worktree", repo }, "committedSymbol");
+    expect(result.unavailable).toBeUndefined();
+    expect(result.resultSource).toEqual({ kind: "commit", repo, oid });
+    expect(result.matches).toEqual([
+      { name: "committedSymbol", kind: "function", path: "symbol.ts", line: 1 },
+    ]);
+    expect((await service.symbols({ kind: "worktree", repo }, "dirtySymbol")).matches).toEqual([]);
+    expect(
+      (await service.symbols({ kind: "commit", repo, oid: "b".repeat(40) }, "committedSymbol"))
+        .unavailable,
+    ).toContain("not indexed");
+  },
+);

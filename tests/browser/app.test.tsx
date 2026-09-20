@@ -91,6 +91,27 @@ async function mountApp(
         truncated: false,
       });
     }
+    if (url.pathname === "/api/browse/symbols") {
+      const { source, path, identity, query } = JSON.parse(String(init?.body));
+      return Response.json({
+        source,
+        resultSource: path ? undefined : { kind: "commit", repo: source.repo, oid: firstCommit },
+        path,
+        identity,
+        query,
+        engine: path ? "ctags" : "zoekt",
+        truncated: false,
+        matches: [
+          {
+            name: "workingContents",
+            kind: "constant",
+            path: path ?? "src/alpha.ts",
+            line: 2,
+            column: 14,
+          },
+        ],
+      });
+    }
     if (url.pathname === "/api/browse/read") {
       const { source, path } = JSON.parse(String(init?.body));
       fileRequests.push({ source, path });
@@ -198,6 +219,27 @@ async function mountApp(
 }
 
 describe("graphical review", () => {
+  test("symbol shortcuts open file and project palettes and project selection opens the indexed commit", async () => {
+    const { fileRequests } = await mountApp({ branches: true });
+    await page.getByRole("treeitem", { name: /alpha.ts/ }).dblClick();
+    await expect
+      .element(page.getByRole("region", { name: "Full file", exact: true }))
+      .toBeVisible();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "o", metaKey: true, bubbles: true }));
+    await expect.element(page.getByRole("dialog", { name: "Find symbol" })).toBeVisible();
+    await page.getByRole("combobox").fill("working");
+    await page.getByRole("option", { name: /workingContents/ }).click();
+    await expect.poll(() => fileRequests.at(-1)?.source.kind).toBe("worktree");
+    await expect.element(page.getByRole("dialog", { name: "Find symbol" })).not.toBeInTheDocument();
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "o", metaKey: true, shiftKey: true, bubbles: true }),
+    );
+    await page.getByRole("combobox").fill("working");
+    await page.getByRole("option", { name: /workingContents/ }).click();
+    await expect
+      .poll(() => fileRequests.at(-1)?.source)
+      .toEqual({ kind: "commit", repo: "/test/repo", oid: firstCommit });
+  });
   test("question mark shows the command guide with keycaps and no top bar", async () => {
     await mountApp({ branches: true });
     expect(document.querySelector("[data-theme] > header")).toBeNull();

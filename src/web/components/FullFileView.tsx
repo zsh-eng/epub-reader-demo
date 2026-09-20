@@ -22,6 +22,7 @@ import { tokens, ui } from "../theme.stylex";
 import { useTheme } from "../themes";
 import "../pierre-theme";
 import { Icon } from "./Icon";
+import { useFileVim, type FileNavigationCommand } from "../data/use-file-vim";
 import { createSearchHighlights } from "../data/search-highlights";
 
 export interface FullFileViewProps {
@@ -31,6 +32,9 @@ export interface FullFileViewProps {
   error: string | null;
   sourceLabel: string;
   line?: number;
+  column?: number;
+  vimEnabled?: boolean;
+  onNavigationReady?(command: FileNavigationCommand | null): void;
   highlightQuery?: string;
   compact?: boolean;
   initialScrollTop?: number;
@@ -59,6 +63,9 @@ export function FullFileView({
   error,
   sourceLabel,
   line,
+  column,
+  vimEnabled = false,
+  onNavigationReady,
   highlightQuery = "",
   compact = false,
   initialScrollTop,
@@ -73,11 +80,34 @@ export function FullFileView({
 }: FullFileViewProps) {
   const { active } = useTheme();
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
+  const vim = useFileVim({
+    text: file?.kind === "text" ? (file.text ?? "") : "",
+    identity: file?.identity ?? "",
+    enabled: vimEnabled && !compact,
+    viewer,
+    line,
+    column,
+    onNavigationReady,
+  });
+  const effectiveHighlightQuery = vim.highlightQuery || highlightQuery;
+  const currentHighlightQuery = useRef(effectiveHighlightQuery);
+  currentHighlightQuery.current = effectiveHighlightQuery;
+  const currentHighlightOptions = useRef(vim.highlightOptions);
+  currentHighlightOptions.current = vim.highlightQuery
+    ? vim.highlightOptions
+    : { caseSensitive: false, wholeWord: false };
+  const vimRender = useRef(vim.onPostRender);
+  vimRender.current = vim.onPostRender;
   const highlightId = `med-search-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const highlights = useMemo(() => createSearchHighlights(highlightId), [highlightId]);
   useLayoutEffect(() => {
-    highlights.refresh(highlightQuery);
-  }, [highlights, highlightQuery]);
+    highlights.refresh(effectiveHighlightQuery, currentHighlightOptions.current);
+  }, [
+    highlights,
+    effectiveHighlightQuery,
+    vim.highlightOptions.wholeWord,
+    vim.highlightOptions.caseSensitive,
+  ]);
   useLayoutEffect(() => () => highlights.dispose(), [highlights]);
   const [localBlameEnabled, setLocalBlameEnabled] = useState(false);
   const blameOpen = !compact && (blameEnabled ?? localBlameEnabled);
@@ -154,14 +184,16 @@ export function FullFileView({
       disableFileHeader: true,
       enableLineSelection: true,
       tokenizeMaxLineLength: 1000,
-      unsafeCSS: `::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }`,
+      unsafeCSS: `[data-line] { tab-size: 2; } ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }`,
       onPostRender(node, _instance, phase) {
+        vimRender.current(node, phase);
         if (phase === "unmount") highlights.dispose();
-        else highlights.update(node, highlightQuery);
+        else
+          highlights.update(node, currentHighlightQuery.current, currentHighlightOptions.current);
       },
       layout: { gap: 0, paddingTop: 8, paddingBottom: 16 },
     }),
-    [active, highlightId, highlights, highlightQuery],
+    [active, highlightId, highlights],
   );
   useLayoutEffect(() => {
     if (!file || !items.length || loading) return;
@@ -185,7 +217,7 @@ export function FullFileView({
     // initialScrollTop is a mount/source restore value, not a controlled scroll
     // position. Feeding onScrollPosition back must not move the user's viewport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file?.identity, loading, line]);
+  }, [file?.identity, loading, line, column]);
   return (
     <section
       {...stylex.props(styles.root)}
@@ -269,24 +301,45 @@ export function FullFileView({
             </div>
           )}
           {items.length ? (
-            <CodeView
-              key={file.identity}
-              ref={viewer}
-              items={items}
-              options={options}
-              onScroll={onScrollPosition}
-              onSelectedLinesChange={setSelection}
-              className={stylex.props(styles.code).className}
-              style={
-                {
-                  "--diffs-font-family": tokens.code,
-                  "--diffs-font-size": "12px",
-                  "--diffs-line-height": "20px",
-                  "--diffs-bg-context-override": tokens.canvas,
-                  "--diffs-bg-context-gutter-override": tokens.canvas,
-                } as CSSProperties
-              }
-            />
+            <div
+              ref={vim.pane}
+              {...stylex.props(styles.viewport)}
+              tabIndex={vimEnabled ? 0 : -1}
+              role="textbox"
+              aria-readonly="true"
+              aria-multiline="true"
+              aria-label={vimEnabled ? "File navigation" : "File content"}
+              onKeyDown={vim.keyDown}
+              onFocus={vim.onFocus}
+              onBlur={vim.onBlur}
+              onClick={vim.onClick}
+            >
+              <CodeView
+                key={file.identity}
+                ref={viewer}
+                items={items}
+                options={options}
+                onScroll={onScrollPosition}
+                onSelectedLinesChange={setSelection}
+                className={stylex.props(styles.code).className}
+                style={
+                  {
+                    "--diffs-font-family": tokens.code,
+                    "--diffs-font-size": "12px",
+                    "--diffs-line-height": "20px",
+                    "--diffs-bg-context-override": tokens.canvas,
+                    "--diffs-bg-context-gutter-override": tokens.canvas,
+                  } as CSSProperties
+                }
+              />
+              <span
+                ref={vim.caret}
+                data-vim-caret=""
+                hidden
+                aria-hidden="true"
+                {...stylex.props(styles.caret)}
+              />
+            </div>
           ) : (
             <div {...stylex.props(styles.notice)}>
               <p>
@@ -304,6 +357,42 @@ export function FullFileView({
         </>
       ) : (
         <div {...stylex.props(styles.notice)}>Choose a file to preview.</div>
+      )}
+      {vim.search && (
+        <form
+          {...stylex.props(styles.search)}
+          onSubmit={(event) => {
+            event.preventDefault();
+            vim.submitSearch();
+          }}
+        >
+          <span>{vim.search.direction === 1 ? "/" : "?"}</span>
+          <input
+            ref={(element) => element?.focus()}
+            aria-label="Search in file"
+            placeholder="Search text (literal, smart case)"
+            value={vim.search.query}
+            {...stylex.props(styles.searchInput)}
+            onChange={(event) => vim.updateSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                vim.cancelSearch();
+              }
+            }}
+          />
+          <kbd>Enter</kbd>
+          <span>accept</span>
+          <kbd>Esc</kbd>
+          <span>cancel</span>
+        </form>
+      )}
+      {(vimEnabled || vim.message) && !compact && (
+        <div {...stylex.props(styles.vimStatus)}>
+          {vimEnabled ? "NORMAL · " : ""}
+          {vim.message || "Read-only navigation"}
+        </div>
       )}
       {blameOpen && file?.kind === "text" && (
         <aside aria-label="Git blame" {...stylex.props(styles.blame)}>
@@ -396,6 +485,49 @@ const styles = stylex.create({
     overflow: "hidden",
     textOverflow: "ellipsis",
     maxWidth: "35%",
+  },
+  viewport: {
+    position: "relative",
+    display: "flex",
+    flex: "1",
+    minHeight: 0,
+    minWidth: 0,
+    overflow: "hidden",
+    outline: "none",
+  },
+  caret: {
+    position: "absolute",
+    pointerEvents: "none",
+    backgroundColor: tokens.accent,
+    opacity: 0.45,
+    zIndex: 5,
+  },
+  search: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: 8,
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
+  },
+  searchInput: {
+    flex: "1",
+    minWidth: 0,
+    borderWidth: 0,
+    outline: "none",
+    backgroundColor: tokens.canvas,
+    color: tokens.text,
+    fontFamily: tokens.code,
+  },
+  vimStatus: {
+    paddingBlock: 3,
+    paddingInline: 12,
+    color: tokens.muted,
+    fontSize: 10,
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: tokens.border,
   },
   code: {
     flex: "1",

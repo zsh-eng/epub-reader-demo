@@ -23,6 +23,8 @@ import { browseListRequestSchema, browseReadRequestSchema } from "../shared/brow
 import { listBrowse, readBrowse } from "./repository/browse";
 import { browseBlameRequestSchema, browseSearchRequestSchema } from "../shared/inspect";
 import { blameBrowse } from "./repository/inspect";
+import { symbolSearchRequestSchema } from "../shared/symbols";
+import { FileSymbolService } from "./search/symbols";
 import { ZoektSearchService, type SearchOptions } from "./search/service";
 
 export interface StartHostOptions {
@@ -105,6 +107,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
     new Set((options.allowedInputPaths ?? []).map((path) => resolve(path))),
   );
   const notes = new NoteService(reviews);
+  const symbols = new FileSymbolService();
   const search = new ZoektSearchService(repository.path, options.search);
   const allowed = new Set<string>([repository.path]);
   allowed.add(resolve(options.repo));
@@ -266,6 +269,18 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
               observe(input.source.repo, true);
             }
             json(response, 200, await readBrowse(input.source, input.path, abort.signal));
+            return;
+          }
+          if (url.pathname === "/api/browse/symbols" && request.method === "POST") {
+            const input = symbolSearchRequestSchema.parse(await readBody(request));
+            input.source.repo = requireRepo(input.source.repo);
+            json(
+              response,
+              200,
+              input.path
+                ? await symbols.search(input, abort.signal)
+                : await search.symbols(input.source, input.query, abort.signal),
+            );
             return;
           }
           if (url.pathname === "/api/browse/search" && request.method === "POST") {

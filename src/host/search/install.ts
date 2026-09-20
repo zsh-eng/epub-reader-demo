@@ -5,8 +5,9 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+export const SEARCH_HELPER_VERSION = "v0.0.0-20260911061844-153817f643cd-symbols-v1";
 export const ZOEKT_VERSION = "v0.0.0-20260911061844-153817f643cd";
-const TOOL_REVISION = "153817f643cd-v2";
+const TOOL_REVISION = "153817f643cd-v3";
 const INSTALL_TIMEOUT_MS = 10 * 60 * 1000;
 const MAX_LOG_BYTES = 1024 * 1024;
 

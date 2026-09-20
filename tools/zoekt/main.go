@@ -42,14 +42,18 @@ type healthResponse struct {
 	Version  string       `json:"version"`
 }
 type searchRequest struct {
-	Branch string `json:"branch"`
-	Commit string `json:"commit"`
-	Query  string `json:"query"`
+	Branch  string `json:"branch"`
+	Commit  string `json:"commit"`
+	Query   string `json:"query"`
+	Symbols bool   `json:"symbols,omitempty"`
 }
 type match struct {
-	Path string `json:"path"`
-	Line int    `json:"line"`
-	Text string `json:"text"`
+	Path  string `json:"path"`
+	Line  int    `json:"line"`
+	Text  string `json:"text,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Kind  string `json:"kind,omitempty"`
+	Scope string `json:"scope,omitempty"`
 }
 type searchResponse struct {
 	Matches   []match `json:"matches"`
@@ -206,7 +210,7 @@ func (s *service) health(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
-	writeJSON(w, healthResponse{branches, version})
+	writeJSON(w, healthResponse{branches, version + "-symbols-v1"})
 }
 
 func (s *service) selected(ctx context.Context, request searchRequest) (string, error) {
@@ -254,7 +258,11 @@ func (s *service) search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Content and branch are structured atoms. User query syntax is always literal.
-	q := &query.And{Children: []query.Q{&query.Branch{Pattern: request.Branch, Exact: true}, &query.Substring{Pattern: request.Query, Content: true, CaseSensitive: false}}}
+	var atom query.Q = &query.Substring{Pattern: request.Query, Content: true, CaseSensitive: false}
+	if request.Symbols {
+		atom = &query.Symbol{Expr: atom}
+	}
+	q := &query.And{Children: []query.Q{&query.Branch{Pattern: request.Branch, Exact: true}, atom}}
 	result, err := s.searcher.Search(ctx, q, &zoekt.SearchOptions{ShardMaxMatchCount: 1000, TotalMaxMatchCount: 1000, MaxDocDisplayCount: 201, MaxMatchDisplayCount: 201, MaxWallTime: 3 * time.Second})
 	if err != nil {
 		fail(w, 503, "The indexed search could not complete.")
@@ -296,14 +304,36 @@ outer:
 				response.Truncated = true
 				break outer
 			}
-			entry := match{file.FileName, line.LineNumber, snippet(line)}
-			encoded, _ := json.Marshal(entry)
-			if bytes+len(encoded)+1 > maxResponseBytes {
-				response.Truncated = true
-				break outer
+			entries := []match{{Path: file.FileName, Line: line.LineNumber, Text: snippet(line)}}
+			if request.Symbols {
+				entries = nil
+				symbols := make(map[string]bool)
+				for _, fragment := range line.LineFragments {
+					info := fragment.SymbolInfo
+					if info == nil || info.Sym == "" {
+						continue
+					}
+					key := fmt.Sprintf("%d:%s", fragment.Offset, info.Sym)
+					if symbols[key] {
+						continue
+					}
+					symbols[key] = true
+					kind := info.Kind
+					if kind == "" {
+						kind = "symbol"
+					}
+					entries = append(entries, match{Path: file.FileName, Line: line.LineNumber, Name: info.Sym, Kind: kind, Scope: info.Parent})
+				}
 			}
-			bytes += len(encoded) + 1
-			response.Matches = append(response.Matches, entry)
+			for _, entry := range entries {
+				encoded, _ := json.Marshal(entry)
+				if len(response.Matches) == 200 || bytes+len(encoded)+1 > maxResponseBytes {
+					response.Truncated = true
+					break outer
+				}
+				bytes += len(encoded) + 1
+				response.Matches = append(response.Matches, entry)
+			}
 		}
 	}
 	writeJSON(w, response)

@@ -35,6 +35,16 @@ async function settle() {
 }
 
 describe("file workspace", () => {
+  test("symbol jumps retain their exact source and column, then clear column for a line-only jump", () => {
+    const { workspace } = fixture();
+    const commit: BrowseSource = { kind: "commit", repo: A.repo, oid: "a".repeat(40) };
+    workspace.configure("first", A, "First");
+    workspace.open("same.ts", true, 12, commit, "Commit aaaaaaaa", 9);
+    expect(workspace.getSnapshot().tabs[0]).toMatchObject({ source: commit, line: 12, column: 9 });
+    workspace.open("same.ts", false, 18, commit);
+    expect(workspace.getSnapshot().tabs[0]).toMatchObject({ line: 18, column: undefined });
+    workspace.dispose();
+  });
   test("close others and close all affect only the current workspace and retain recent paths", async () => {
     const { workspace, pending } = fixture();
     workspace.configure("first", A, "First");
