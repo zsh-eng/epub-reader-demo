@@ -9,7 +9,7 @@ final class AnnotationUITests: XCTestCase {
     selectPassage(in: app)
     tapSelectionAction("Highlight", in: app)
     let notes = app.buttons["reader-notes"]
-    expectValue("1 passages", on: notes)
+    expectValue("1 passage", on: notes)
     notes.tap()
     let passage = annotationRows(in: app).firstMatch
     XCTAssertTrue(passage.waitForExistence(timeout: 5), app.debugDescription)
@@ -25,7 +25,7 @@ final class AnnotationUITests: XCTestCase {
     // Terminating while the collection is open proves the draft was written,
     // rather than merely copied into the presenting view's state.
     reopenOffline(app)
-    expectValue("1 passages", on: notes)
+    expectValue("1 passage", on: notes)
     notes.tap()
     XCTAssertTrue(app.staticTexts["Keep this thought for tomorrow."].waitForExistence(timeout: 5))
     XCTAssertEqual(annotationRows(in: app).count, 1)

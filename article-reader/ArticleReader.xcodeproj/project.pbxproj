@@ -51,6 +51,7 @@
 		038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092EA8ED3C38F268ED5CD960; };
 		ABC000000000000000000003 /* ArcticSync in Frameworks */ = {isa = PBXBuildFile; productRef = ABC000000000000000000002; };
 		C152409799A6DD136ABDE906 /* Tests/ReaderPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDE499DF7195A9AF2D03CBFA; };
+		7BD85323A4807875A1E15639 /* Sources/ReaderFontScheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353E9B7484F57124364E4DB4; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -123,6 +124,7 @@
 		215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PreviewImageWorkLimit.swift; sourceTree = "<group>"; };
 		092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleSyncRepository.swift; sourceTree = "<group>"; };
 		DDE499DF7195A9AF2D03CBFA /* Tests/ReaderPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ReaderPerformanceUITests.swift; sourceTree = "<group>"; };
+		353E9B7484F57124364E4DB4 /* Sources/ReaderFontScheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ReaderFontScheme.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -179,6 +181,7 @@
 				AC0000000000000000000002 /* LibraryCards.swift */,
 				215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */,
 				092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */,
+				353E9B7484F57124364E4DB4 /* Sources/ReaderFontScheme.swift */,
 				3AC7E3F6AF5D3349C2B82840 /* Sources/AnnotationStore.swift */,
 				E2C4040636A8440F5AB50B3E /* Sources/ReaderAnnotations.swift */,
 				864C6F1CB9FB13DA8613C8A4 /* Resources/annotations.js */,
@@ -385,6 +388,7 @@
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,
 				F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */,
 				038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */,
+				7BD85323A4807875A1E15639 /* Sources/ReaderFontScheme.swift in Sources */,
 				5BF86EF416D56DD5760525E5 /* Sources/AnnotationStore.swift in Sources */,
 				E8E6F3EAD101B0744972C82F /* Sources/ReaderAnnotations.swift in Sources */,
 				3753BC55C93758D0B1748C68 /* Sources/ArticleStore.swift in Sources */,

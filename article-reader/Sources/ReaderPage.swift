@@ -287,7 +287,9 @@ struct ReaderNavigationBar: View {
       .readerGlass()
       .accessibilityLabel("Notes")
       .accessibilityIdentifier("reader-notes")
-      .accessibilityValue("\(browser.annotations.count) passages")
+      .accessibilityValue(
+        "\(browser.annotations.count) \(browser.annotations.count == 1 ? "passage" : "passages")"
+      )
       .disabled(!browser.readerReady)
       Menu {
         Button("Archive article", systemImage: "archivebox") {
