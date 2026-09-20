@@ -60,6 +60,14 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
     let model = ShareSaveModel(context: context)
     self.model = model
     super.init(rootView: ShareSaveView(model: model))
+    // Extension host notifications are the reliable lifecycle source here; this
+    // UIKit-hosted subtree does not own a SwiftUI App scene.
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(hostDidBecomeActive),
+      name: .NSExtensionHostDidBecomeActive, object: context)
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(hostWillResignActive),
+      name: .NSExtensionHostWillResignActive, object: context)
     model.heightDidChange = { [weak self] height in
       // Resolve detents after SwiftUI finishes the current layout pass.
       DispatchQueue.main.async { self?.resize(to: height) }
@@ -74,6 +82,19 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
     view.accessibilityIdentifier = "share-content"
     model.start()
   }
+
+  override func viewDidAppear(_ animated: Bool) {
+    super.viewDidAppear(animated)
+    model.isVisible = true
+  }
+
+  override func viewWillDisappear(_ animated: Bool) {
+    model.isVisible = false
+    super.viewWillDisappear(animated)
+  }
+
+  @objc private func hostDidBecomeActive() { model.hostIsActive = true }
+  @objc private func hostWillResignActive() { model.hostIsActive = false }
 
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
@@ -112,6 +133,8 @@ private final class ShareSaveModel: ObservableObject {
   @Published var image: UIImage?
   @Published var isSaved = false
   @Published var isTagging = false
+  @Published var isVisible = false
+  @Published var hostIsActive = true
   @Published var tagNames: [String]?
   @Published var message: String?
   @Published var error: String?
@@ -306,6 +329,7 @@ private final class ShareSaveModel: ObservableObject {
   }
 
   func cancelWork() {
+    isVisible = false
     linkTask?.cancel()
     previewTask?.cancel()
     taggingTask?.cancel()
@@ -322,7 +346,6 @@ private final class ShareSaveModel: ObservableObject {
 private struct ShareSaveView: View {
   @ObservedObject var model: ShareSaveModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var completionGlowing = false
 
   private var reveal: AnyTransition {
     reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 10))
@@ -338,10 +361,20 @@ private struct ShareSaveView: View {
           )
           .font(.headline)
           .foregroundStyle(model.isSaved ? ArcticBrand.accent : Color.primary)
-          articleCard
-          if let tags = model.tagNames, !tags.isEmpty {
-            tagResult(tags).transition(reveal)
+          ConnectedTagReveal(
+            isProcessing: model.isTagging, tags: model.tagNames ?? [], cornerRadius: 22,
+            onRevealed: model.presentTagFeedback
+          ) {
+            VStack(spacing: 0) {
+              articleCard
+              if let tags = model.tagNames, !tags.isEmpty {
+                tagResult(tags)
+              }
+            }
+            .background(
+              Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
           }
+          .environment(\.scenePhase, model.isVisible && model.hostIsActive ? .active : .inactive)
           if let message = model.message {
             Text(message).font(.subheadline).foregroundStyle(.secondary)
           }
@@ -412,7 +445,6 @@ private struct ShareSaveView: View {
     }
     .background(Color(uiColor: .secondarySystemBackground))
     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    .tagBeam(active: model.isTagging, cornerRadius: 22)
     .accessibilityValue(model.isTagging ? "Adding tags" : "")
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -422,12 +454,8 @@ private struct ShareSaveView: View {
 
   private func tagResult(_ tags: [String]) -> some View {
     LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 8) {
-      ForEach(tags, id: \.self) { tag in
-        Text(tag)
-          .font(.subheadline.weight(.medium))
-          .padding(.horizontal, 12)
-          .padding(.vertical, 8)
-          .background(Color(uiColor: .tertiarySystemBackground), in: Capsule())
+      ForEach(Array(tags.enumerated()), id: \.element) { index, tag in
+        TagRevealPill(name: tag, index: index)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -436,14 +464,7 @@ private struct ShareSaveView: View {
       Color(uiColor: .secondarySystemBackground),
       in: RoundedRectangle(cornerRadius: 20, style: .continuous)
     )
-    .tagBeam(active: completionGlowing, cornerRadius: 20)
     .accessibilityIdentifier("share-added-tags")
-    .task(id: tags) {
-      model.presentTagFeedback()
-      completionGlowing = true
-      do { try await Task.sleep(for: .seconds(2.4)) } catch { return }
-      withAnimation(.easeOut(duration: 0.2)) { completionGlowing = false }
-    }
   }
 
   private var footer: some View {

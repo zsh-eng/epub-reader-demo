@@ -10,7 +10,7 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 - Copy an HTTP(S) link and enter Arctic. Choose **Open** in the clipboard banner above Search, then use the Reader bookmark to save.
 - Cards use an inset Open Graph image, a source badge at the upper left, and a
   material caption at the bottom. A one-line title can include one subtitle line;
-  longer titles use the caption space alone. Links without images use a compact
+  longer titles use at most two balanced lines with an ellipsis and no subtitle. Links without images use a compact
   text card. The previous gradient design remains in `GradientArticleCard` as an
   unused alternative. A failed preview does not prevent opening the link.
 - Tap an article to open a full reading page. Use the native Back button or swipe from the left edge to return.
@@ -22,12 +22,14 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   Missing metadata is omitted. Reader uses bundled Defuddle and DOMPurify. Website restores
   the live page without reloading it. Tap the **Aa** icon beside Reader to open
   live Reader appearance controls (five fonts, size, side padding, line spacing,
-  and System/White/Paper/Ink/Night palettes). The article remains visible and scrollable.
+  and System/White/Paper/Ink/Night palettes). Tap minus or plus for precise steps.
+  The article remains visible and scrollable.
   Aa also enters Reader mode when opened from the publisher's page.
 - Search titles, descriptions and domains. Results use compact rows with matched
-  text highlighted; clearing or cancelling restores the library.
+  text highlighted. A one-line title allows up to two subtitle lines; longer titles
+  use two lines alone. Clearing or cancelling restores the library.
 - **Saved** is the default inbox. The top folder strip switches between Saved,
-  Downloaded, History, Archive, then article tags. History and Archive use compact
+  Downloaded, article tags, History, then Archive. History and Archive use compact
   search-style rows; Saved, Downloaded and tags retain image cards. Swipe horizontally through these folders. The bottom has one native search field in a glass capsule, with a soft scroll edge on iOS 26 and a material fallback on older iOS. The field stays mounted from launch so the first tap can focus it directly.
 - **History** records each URL you view, most recently viewed first, including links
   followed inside articles. Opening does not save a link. Preloading does not add history.
@@ -46,8 +48,11 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   Preloading makes network requests to publishers or Unwall. Saved articles with a
   stored Reader view do not need a speculative publisher request on the next launch.
 - **Downloaded** includes saved articles, including archived articles, whose Defuddle
-  Reader view has been written to disk. Open them from this folder to read stored text,
-  code and embedded header images without loading the website. Appearance controls
+  Reader view has been written to disk. Cached articles open from their styled local
+  HTML in any folder, without briefly showing the website. Reader and Website
+  crossfade while preserving their separate scroll positions. Website loads on demand;
+  the cached Reader stays visible until it is ready. Stored text, code and embedded
+  header images do not need the website. Appearance controls
   still work. Inline article media can still require a network connection. Deleting
   a link removes its stored Reader view; archiving keeps it.
 - Preview images and favicons share a memory cache and a durable 128 MB disk cache.
@@ -109,7 +114,9 @@ visits the copied URL (and Unwall where configured) before Open is tapped.
 
 Onboarding bundles the real title, byline, and Open Graph photograph from Elizabeth Rush’s [Glacial Longings](https://emergencemagazine.org/essay/glacial-longings/), published by Emergence Magazine. Its taller article, share, and tagging scenes use local assets only; replay does not access the publisher or Jev. The source credit is in `THIRD_PARTY_NOTICES.txt`.
 
-Onboarding uses three concise, replayable native demonstrations: sharing from Safari, choosing Allow in Settings, and tags appearing on a saved card. The demonstrations follow the system appearance and use a completed static scene with Reduce Motion. Arctic uses a glacier-blue accent and separate light/dark ice-shelf app icons. Page two
+Onboarding uses three concise, replayable native demonstrations: sharing from Safari, choosing Allow in Settings, and tags appearing on a saved card. A single pointer travels between controls, pauses, then presses with a tap ripple.
+The share replay shows the URL while its preview loads, then expands upward above
+fixed Save and Cancel buttons. The demonstrations follow the system appearance and use a completed static scene with Reduce Motion. Arctic uses a glacier-blue accent and separate light/dark ice-shelf app icons. Page two
 opens the app's Settings page; it cannot grant or inspect iOS paste permission.
 The paste setting may appear only after the first cross-app paste prompt. All
 pages can be skipped, including key setup, without blocking local reading.
@@ -133,7 +140,8 @@ merged into the latest record; deletion, unsave, new metadata, key replacement,
 and explicit re-tagging invalidate stale work. Network failures leave work pending
 until a later foreground activation. Invalid credentials pause the queue and show
 an error in Automatic tags. Tag completion has a finite border-beam highlight and
-an Edit tags action. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
+an Edit tags action. The light leaves the card border and travels into each tag pill
+in order. A share receipt is recorded only after those tags have appeared. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
 
 Simulator tests use separate article files and fixture classifications, never a
 real Jev key or request. `-test-onboarding -reset-onboarding` exercises first run;

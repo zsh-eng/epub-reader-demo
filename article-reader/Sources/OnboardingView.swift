@@ -311,7 +311,9 @@ private struct JevPrivacyNote: View {
           Text(
             "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
           )
-          .font(.subheadline)
+          .font(.subheadline).lineLimit(nil)
+          .frame(width: 260, alignment: .leading)
+          .fixedSize(horizontal: false, vertical: true)
           .padding(20)
           .presentationCompactAdaptation(.popover)
         }

@@ -347,38 +347,33 @@ struct PasteOnboardingIllustration: View {
 /// A bounded demonstration: the card itself communicates classification.
 struct TaggingOnboardingIllustration: View {
   @Environment(\.articleReduceMotion) private var reduceMotion
-  @State private var showTags = false
-  @State private var beam = false
+  @State private var processing = true
+  @State private var revealed = false
   @State private var replay = 0
+  private let tags = ["Attention & wonder", "Life & meaning"]
 
   var body: some View {
     VStack(spacing: 8) {
-      DemoArticleCard(showTags: showTags)
-        .tagBeam(active: beam)
-        .accessibilityElement(children: .ignore)
-        .accessibilityIdentifier("onboarding-tags-demo")
-        .accessibilityValue(showTags ? "tagged" : "pending")
-        .accessibilityLabel(
-          "Glacial Longings by Elizabeth Rush. Automatic tags: Attention and wonder; Life and meaning."
-        )
+      ConnectedTagReveal(
+        isProcessing: processing, tags: tags, replayID: replay, onRevealed: { revealed = true }
+      ) {
+        DemoArticleCard(showTags: true)
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityIdentifier("onboarding-tags-demo")
+      .accessibilityValue(revealed ? "tagged" : "pending")
+      .accessibilityLabel(
+        "Glacial Longings by Elizabeth Rush. Automatic tags: Attention and wonder; Life and meaning."
+      )
       IllustrationReplay(id: "tags") { replay += 1 }
     }
-    .task(id: replay) { await demonstrate() }
-  }
-
-  @MainActor private func demonstrate() async {
-    beam = false
-    showTags = reduceMotion
-    guard !reduceMotion else { return }
-    do {
-      try await Task.sleep(for: .milliseconds(450))
-      beam = true
-      try await Task.sleep(for: .milliseconds(900))
-      withAnimation(.easeOut(duration: 0.24)) { showTags = true }
-      try await Task.sleep(for: .milliseconds(1400))
-      beam = false
-    } catch {
-      // Leaving or replaying the page cancels the demonstration.
+    .task(id: replay) {
+      processing = true
+      revealed = false
+      if !reduceMotion {
+        do { try await Task.sleep(for: .milliseconds(1100)) } catch { return }
+      }
+      processing = false
     }
   }
 }
@@ -432,11 +427,9 @@ private struct DemoArticleCard: View {
         .font(.system(size: 12)).foregroundStyle(.secondary)
       if reservesTags {
         HStack(spacing: 6) {
-          ForEach(["Attention & wonder", "Life & meaning"], id: \.self) { tag in
-            Text(tag)
-              .font(.system(size: 10, weight: .medium))
-              .padding(.horizontal, 9).padding(.vertical, 6)
-              .background(ReaderTheme.background, in: Capsule())
+          ForEach(Array(["Attention & wonder", "Life & meaning"].enumerated()), id: \.element) {
+            index, tag in
+            TagRevealPill(name: tag, index: index, compact: true)
           }
         }
         .opacity(showTags ? 1 : 0)

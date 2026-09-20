@@ -68,6 +68,11 @@ final class ArticleOnboardingUITests: XCTestCase {
       app.staticTexts[
         "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
       ].waitForExistence(timeout: 3))
+    let disclosure = app.staticTexts[
+      "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
+    ]
+    XCTAssertGreaterThan(disclosure.frame.height, 50)
+    capture(app, "arctic-key-disclosure")
 
   }
 

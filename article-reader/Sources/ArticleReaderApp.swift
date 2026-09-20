@@ -529,7 +529,7 @@ struct LibraryView: View {
           selection.insert(article.id)
         }
       } else {
-        selected = browsers.open(article.url, store: store, downloaded: folder == .downloaded)
+        selected = browsers.open(article.url, store: store)
       }
     } label: {
       content()
