@@ -178,6 +178,8 @@ struct LibraryView: View {
             .accessibilityIdentifier("preload-requested")
             Text(browsers.readyReaderURLs.map(\.lastPathComponent).joined(separator: ","))
             .accessibilityIdentifier("preload-ready")
+            Text(browsers.lastOpenState)
+            .accessibilityIdentifier("reader-open-state")
           }.font(.caption2).padding(4).background(.thinMaterial)
         }
       }
@@ -211,6 +213,11 @@ struct LibraryView: View {
     }
     .task(id: clipboard.url) { await clipboard.preparePreview() }
     .task(id: preloadURLs) { await browsers.preload(preloadURLs, store: store) }
+    .onReceive(
+      NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
+    ) { _ in
+      browsers.releaseOffscreen()
+    }
     .onChange(of: store.articles.filter(\.saved).map(\.id)) { _, _ in
       browsers.persistExtractions(in: store)
     }
@@ -270,6 +277,11 @@ struct LibraryView: View {
   /// Preload the rows the user can see, then their nearest two neighbors. Lazy
   /// stack appearance is not visibility: it includes rows outside the viewport.
   private var preloadURLs: [URL] {
+    #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-disable-preloading") {
+        return []
+      }
+    #endif
     guard scenePhase == .active, selected == nil, !showingOnboarding,
       !showingTaggingSettings, !choosingImport, editingTags == nil
     else { return [] }
