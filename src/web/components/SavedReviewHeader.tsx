@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import * as stylex from "@stylexjs/stylex";
 import type { ReviewController, ReviewControllerSnapshot } from "../data/controller";
@@ -22,7 +22,9 @@ export function SavedReviewHeader({
 }) {
   const saved = state.savedReview!;
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [operation, setOperation] = useState<"copy" | "clear" | null>(null);
+  const inFlight = useRef(false);
+  const busy = operation !== null;
   const [copied, setCopied] = useState<{ count: number } | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [clearRevision, setClearRevision] = useState<number | null>(null);
@@ -39,8 +41,10 @@ export function SavedReviewHeader({
     const timer = setTimeout(() => setCopied(null), 2000);
     return () => clearTimeout(timer);
   }, [copied]);
-  const run = async (action: () => Promise<string | void>) => {
-    setBusy(true);
+  const run = async (kind: "copy" | "clear", action: () => Promise<string | void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setOperation(kind);
     setNotice(null);
     try {
       const text = await action();
@@ -52,7 +56,8 @@ export function SavedReviewHeader({
         error: true,
       });
     } finally {
-      setBusy(false);
+      inFlight.current = false;
+      setOperation(null);
     }
   };
   return (
@@ -136,13 +141,16 @@ export function SavedReviewHeader({
           Return<span {...stylex.props(styles.desktop)}>to review</span>
         </button>
       )}
+      {/* During copy, handlers block actions without native disabled dimming both buttons. */}
       <button
         {...stylex.props(ui.button, styles.fixed)}
         aria-label="Copy comments"
         data-copied={copied !== null}
-        disabled={busy || saved.commentCount === 0}
+        disabled={operation === "clear" || saved.commentCount === 0}
+        aria-disabled={busy || saved.commentCount === 0}
+        aria-busy={operation === "copy"}
         onClick={() =>
-          void run(async () => {
+          void run("copy", async () => {
             const comments = await controller.copyFeedback();
             setCopied({ count: comments.count });
           })
@@ -154,12 +162,15 @@ export function SavedReviewHeader({
       </button>
       <Popover.Root
         open={clearRevision !== null}
-        onOpenChange={(open) => setClearRevision(open ? saved.revision : null)}
+        onOpenChange={(open) => {
+          if (!busy) setClearRevision(open ? saved.revision : null);
+        }}
       >
         <Popover.Trigger
           {...stylex.props(ui.button, styles.fixed)}
           aria-label="Clear all comments"
-          disabled={busy || saved.commentCount === 0}
+          disabled={operation === "clear" || saved.commentCount === 0}
+          aria-disabled={busy || saved.commentCount === 0}
         >
           <Icon name="trash" size={14} />
           <span {...stylex.props(styles.desktop)}>Clear</span>
@@ -181,7 +192,7 @@ export function SavedReviewHeader({
                     {...stylex.props(ui.button)}
                     disabled={busy}
                     onClick={() =>
-                      void run(async () => {
+                      void run("clear", async () => {
                         await controller.clearSavedComments(clearRevision!);
                         setClearRevision(null);
                         setCopied(null);

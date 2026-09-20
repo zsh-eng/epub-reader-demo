@@ -169,3 +169,45 @@ test("copy success resets in place and failed clipboard writes never show a chec
   await expect.element(page.getByRole("alert")).toHaveTextContent("Clipboard unavailable");
   await expect.element(button).toHaveAttribute("data-copied", "false");
 });
+
+test("copy keeps both buttons visually stable while the clipboard request is pending", async () => {
+  const { copy, clear } = await setup();
+  let finish: (() => void) | undefined;
+  copy.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = () => resolve({ text: "Comments", count: 6, repositoryCount: 2, revision: 7 });
+      }),
+  );
+  const copyButton = page.getByRole("button", { name: "Copy comments" });
+  await copyButton.hover();
+  const buttons = [
+    document.querySelector<HTMLButtonElement>('[aria-label="Copy comments"]')!,
+    document.querySelector<HTMLButtonElement>('[aria-label="Clear all comments"]')!,
+  ];
+  const appearance = () =>
+    buttons.map((button) => {
+      const style = getComputedStyle(button);
+      return {
+        opacity: style.opacity,
+        color: style.color,
+        background: style.backgroundColor,
+        bounds: button.getBoundingClientRect().toJSON(),
+      };
+    });
+  const before = appearance();
+  await copyButton.click();
+  await expect.element(copyButton).toHaveAttribute("aria-busy", "true");
+  expect(appearance()).toEqual(before);
+  expect(buttons.every((button) => !button.disabled)).toBe(true);
+  // Native clicks exercise the handlers even while aria-disabled blocks activation.
+  buttons[0]!.click();
+  buttons[1]!.click();
+  expect(copy).toHaveBeenCalledOnce();
+  expect(clear).not.toHaveBeenCalled();
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+  finish?.();
+  await expect.element(copyButton).toHaveAttribute("data-copied", "true");
+  await expect.element(copyButton).toHaveAttribute("aria-busy", "false");
+  expect(appearance()).toEqual(before);
+});
