@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The image stays intact. Small material panels keep text readable on any cover.
 struct ArticleCard: View {
@@ -25,12 +26,18 @@ struct ArticleCard: View {
       } else {
         VStack(alignment: .leading, spacing: 20) {
           source
-          Text(article.title).font(.title3.weight(.semibold)).lineLimit(4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-          if !article.subtitle.isEmpty {
-            Text(article.subtitle).font(.subheadline).foregroundStyle(ReaderTheme.muted)
-              .lineLimit(2)
+          ViewThatFits(in: .horizontal) {
+            VStack(alignment: .leading, spacing: 6) {
+              Text(article.title).font(.title3.weight(.semibold))
+                .fixedSize(horizontal: true, vertical: false)
+              if !article.subtitle.isEmpty {
+                Text(article.subtitle).font(.subheadline).foregroundStyle(ReaderTheme.muted)
+                  .lineLimit(2).accessibilityIdentifier("card-caption-subtitle")
+              }
+            }
+            LibraryTitle(text: article.title, style: .title3)
           }
+          .frame(maxWidth: .infinity, alignment: .leading)
         }.padding(20)
       }
     }
@@ -60,8 +67,59 @@ struct ArticleCard: View {
             .frame(width: width, alignment: .leading)
         }
       }
-      Text(article.title).font(.headline).lineLimit(3)
+      LibraryTitle(text: article.title)
     }.frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// Native push-out wrapping avoids a short orphan at the end of a heading.
+/// Keep the complete title accessible while limiting its visible layout to two lines.
+struct LibraryTitle: UIViewRepresentable {
+  let text: String
+  var style: UIFont.TextStyle = .headline
+  var pointSize: CGFloat? = nil
+  var weight: UIFont.Weight = .semibold
+  var query = ""
+
+  func makeUIView(context: Context) -> UILabel {
+    let label = UILabel()
+    label.numberOfLines = 2
+    label.lineBreakMode = .byTruncatingTail
+    label.lineBreakStrategy = .pushOut
+    label.adjustsFontForContentSizeCategory = true
+    label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    label.accessibilityIdentifier = "article-title-two-lines"
+    return label
+  }
+
+  func updateUIView(_ label: UILabel, context: Context) {
+    let size = pointSize ?? UIFontDescriptor.preferredFontDescriptor(withTextStyle: style).pointSize
+    label.font =
+      pointSize == nil
+      ? .systemFont(ofSize: size, weight: weight)
+      : UIFontMetrics(forTextStyle: style).scaledFont(
+        for: .systemFont(ofSize: size, weight: weight))
+    label.textColor = .label
+    let attributed = NSMutableAttributedString(string: text)
+    for word in query.split(whereSeparator: \.isWhitespace) {
+      var search = text.startIndex..<text.endIndex
+      while let range = text.range(
+        of: String(word), options: [.caseInsensitive, .diacriticInsensitive], range: search)
+      {
+        attributed.addAttribute(
+          .backgroundColor, value: UIColor.secondarySystemBackground,
+          range: NSRange(range, in: text))
+        search = range.upperBound..<text.endIndex
+      }
+    }
+    label.attributedText = attributed
+    label.accessibilityLabel = text
+  }
+
+  func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+    let width = proposal.width ?? uiView.intrinsicContentSize.width
+    let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    return CGSize(width: width, height: fitting.height)
   }
 }
 

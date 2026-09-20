@@ -261,7 +261,7 @@ struct LibraryView: View {
   }
 
   private var folderItems: [ArticleFolder] {
-    [.saved, .downloaded, .history, .archive] + store.allTags.map(ArticleFolder.tag)
+    [.saved, .downloaded] + store.allTags.map(ArticleFolder.tag) + [.history, .archive]
   }
 
   /// This bar belongs to the stack, not either sliding page. Only its contents
@@ -324,8 +324,14 @@ struct LibraryView: View {
       }
       .readerGlass().accessibilityLabel("Sort and filter")
       .accessibilityHidden(searching)
-    }.overlay { Text("Arctic").font(.headline) }
-      .padding(.horizontal, 16)
+    }
+    .overlay {
+      HStack(spacing: 6) {
+        ArcticMark().frame(width: 22, height: 22)
+        Text("Arctic").font(.system(.headline, design: .rounded, weight: .semibold))
+      }.allowsHitTesting(false)
+    }
+    .padding(.horizontal, 16)
   }
 
   private var folders: some View {

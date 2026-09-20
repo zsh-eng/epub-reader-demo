@@ -126,19 +126,31 @@ struct ArticleThumbnail: View {
 struct ArticleSearchRow: View {
   let article: SavedArticle
   let query: String
+  @ScaledMetric(relativeTo: .body) private var thumbnailHeight = 74
+
   var body: some View {
-    HStack(alignment: .top, spacing: 14) {
+    HStack(alignment: .center, spacing: 14) {
       ArticleThumbnail(url: article.imageURL)
-        .frame(width: 58, height: 66).clipShape(RoundedRectangle(cornerRadius: 10))
+        .frame(width: 58, height: thumbnailHeight).clipShape(RoundedRectangle(cornerRadius: 10))
       VStack(alignment: .leading, spacing: 4) {
         Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
           .font(ReaderTheme.sans(11, weight: .medium, relativeTo: .caption))
           .foregroundStyle(ReaderTheme.muted)
-        Text(highlighted(article.title)).font(ReaderTheme.sans(16, weight: .medium))
-          .lineLimit(2)
-        Text(highlighted(article.subtitle.isEmpty ? article.url.absoluteString : article.subtitle))
-          .font(ReaderTheme.sans(13, relativeTo: .subheadline))
-          .foregroundStyle(ReaderTheme.muted).lineLimit(2)
+        ViewThatFits(in: .horizontal) {
+          VStack(alignment: .leading, spacing: 4) {
+            Text(highlighted(article.title)).font(ReaderTheme.sans(16, weight: .medium))
+              .fixedSize(horizontal: true, vertical: false)
+            Text(
+              highlighted(article.subtitle.isEmpty ? article.url.absoluteString : article.subtitle)
+            )
+            .font(ReaderTheme.sans(13, relativeTo: .subheadline))
+            .foregroundStyle(ReaderTheme.muted).lineLimit(2)
+            .accessibilityIdentifier("search-result-subtitle")
+          }
+          LibraryTitle(
+            text: article.title, style: .body, pointSize: 16, weight: .medium, query: query)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
