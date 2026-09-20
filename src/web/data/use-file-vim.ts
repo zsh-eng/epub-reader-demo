@@ -92,11 +92,17 @@ export function useFileVim({
         lineBounds.top < visibleBounds.top ||
         lineBounds.bottom > visibleBounds.bottom;
       if (align && instance && (align !== "nearest" || needsScroll)) {
+        const lineHeight = lineBounds?.height || 20;
+        const edgeSpace = Math.min(
+          4 * lineHeight,
+          Math.max(0, ((visibleBounds?.height ?? container.clientHeight) - lineHeight) / 2),
+        );
         instance.scrollTo({
           type: "line",
           id: identity,
           lineNumber: model.line + 1,
           align,
+          offset: align === "start" || align === "end" ? edgeSpace : 0,
           behavior: "instant",
         });
         // Let Pierre coalesce pending navigation before its next render. Initial

@@ -16,7 +16,7 @@ afterEach(() => {
   mount = undefined;
   localStorage.removeItem("med:vim");
 });
-async function mountFile(vim = false) {
+async function mountFile(vim = false, beforeRead?: () => Promise<void>) {
   localStorage.setItem("med:vim", vim ? "on" : "off");
   initializeTheme();
   await page.viewport(1200, 800);
@@ -62,6 +62,7 @@ async function mountFile(vim = false) {
     if (url.pathname === "/api/notes")
       return Response.json({ reviewId: url.searchParams.get("reviewId"), revision: 0, notes: [] });
     if (url.pathname === "/api/browse/read") {
+      await beforeRead?.();
       const { source, path } = JSON.parse(String(init?.body));
       return Response.json({
         source,
@@ -251,4 +252,24 @@ test("file symbols retain a selected query and Enter accepts without reloading t
   await expect.element(input).toHaveValue("missing");
   await userEvent.keyboard("{Escape}");
   await expect.element(pane).toHaveAttribute("data-vim-line", "81");
+});
+
+test("opening a file shows the selected path before the read completes", async () => {
+  let complete = () => {};
+  const pending = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  const opened = mountFile(true, () => pending);
+  const region = page.getByRole("region", { name: "Full file", exact: true });
+  await expect.element(region).toHaveAttribute("aria-busy", "true");
+  await expect.element(page.getByTitle("main.ts", { exact: true })).toBeVisible();
+  expect(region.element().textContent).not.toContain("File preview");
+  const status = page.getByText("NORMAL · Read-only navigation", { exact: true });
+  const before = status.element().getBoundingClientRect().top;
+  complete();
+  await opened;
+  await expect.element(region).toHaveAttribute("aria-busy", "false");
+  await expect.element(page.getByTitle("main.ts", { exact: true })).toBeVisible();
+  expect(Math.abs(status.element().getBoundingClientRect().top - before)).toBeLessThan(1);
+  await expect.poll(() => document.activeElement?.getAttribute("data-file-pane")).toBe("main");
 });

@@ -34,6 +34,7 @@ export type BeginFileSymbolPreview = () => FileSymbolPreview;
 
 export interface FullFileViewProps {
   file: BrowseRead | null;
+  path?: string;
   loading: boolean;
   stale?: boolean;
   error: string | null;
@@ -66,6 +67,7 @@ const notices = {
 /** One read-only, virtualized file. Metadata responses never reach Pierre. */
 export function FullFileView({
   file,
+  path,
   loading,
   stale = false,
   error,
@@ -87,6 +89,7 @@ export function FullFileView({
   onOpenBefore,
   onOpenAfter,
 }: FullFileViewProps) {
+  const displayPath = path ?? file?.path;
   const { active } = useTheme();
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
   const vim = useFileVim({
@@ -279,8 +282,8 @@ export function FullFileView({
       {!compact && (
         <header {...stylex.props(styles.header)}>
           <Icon name="file" size={15} />
-          <span {...stylex.props(styles.path)} title={file?.path}>
-            {file?.path ?? "File preview"}
+          <span {...stylex.props(styles.path)} title={displayPath}>
+            {displayPath}
           </span>
           <span {...stylex.props(styles.badge)} title={sourceLabel}>
             {sourceLabel.replace(/^Working files\b/, "Working file")}
@@ -342,7 +345,9 @@ export function FullFileView({
         <div role="alert" {...stylex.props(styles.notice)}>
           {error}
         </div>
-      ) : loading ? null : file ? (
+      ) : loading ? (
+        <div {...stylex.props(styles.pending)} aria-hidden="true" />
+      ) : file ? (
         <>
           {(plain || file.truncated) && file.kind === "text" && (
             <div role="status" {...stylex.props(styles.banner)}>
@@ -546,6 +551,7 @@ const styles = stylex.create({
     overflow: "hidden",
     outline: "none",
   },
+  pending: { flex: "1", minHeight: 0 },
   caret: {
     position: "absolute",
     pointerEvents: "none",

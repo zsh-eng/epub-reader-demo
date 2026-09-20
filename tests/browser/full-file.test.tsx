@@ -799,9 +799,9 @@ test("Shift+A and z commands position the cursor and viewport in a virtualized f
         const viewport = scroller.getBoundingClientRect();
         return Math.abs(
           align === "start"
-            ? bounds.top - viewport.top
+            ? bounds.top - viewport.top - 4 * bounds.height
             : align === "end"
-              ? bounds.bottom - viewport.bottom
+              ? bounds.bottom - viewport.bottom + 4 * bounds.height
               : (bounds.top + bounds.bottom - viewport.top - viewport.bottom) / 2,
         );
       })
@@ -816,4 +816,33 @@ test("Shift+A and z commands position the cursor and viewport in a virtualized f
   await expect.element(pane).toHaveAttribute("data-vim-line", "1");
   await expect.poll(() => caret.hidden).toBe(false);
   await expect.poll(() => scroller.scrollTop).toBe(0);
+});
+
+test("a pending file keeps its requested name and footer position", async () => {
+  render(<FullFileView {...props} file={null} path="src/parser.rs" loading vimEnabled />);
+  const header = page.getByTitle("src/parser.rs", { exact: true });
+  await expect.element(header).toBeVisible();
+  expect(mount!.textContent).not.toContain("File preview");
+  const footer = page.getByText("NORMAL · Read-only navigation", { exact: true }).element();
+  const top = footer.getBoundingClientRect().top;
+  flushSync(() =>
+    root!.render(
+      <FullFileView
+        {...props}
+        file={{ ...base, path: "src/parser.rs", plain: true }}
+        path="src/parser.rs"
+        vimEnabled
+      />,
+    ),
+  );
+  await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+  await expect.element(header).toBeVisible();
+  expect(Math.abs(footer.getBoundingClientRect().top - top)).toBeLessThan(1);
+  flushSync(() =>
+    root!.render(<FullFileView {...props} file={null} path="src/next.rs" loading vimEnabled />),
+  );
+  await expect.element(page.getByTitle("src/next.rs", { exact: true })).toBeVisible();
+  expect(mount!.textContent).not.toContain("src/parser.rs");
+  expect(mount!.textContent).not.toContain("File preview");
+  expect(Math.abs(footer.getBoundingClientRect().top - top)).toBeLessThan(1);
 });

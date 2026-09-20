@@ -1600,6 +1600,7 @@ export function App({
             {activeFile && (
               <FullFileView
                 file={fileState.file}
+                path={activeFile.path}
                 loading={fileState.loading}
                 error={fileState.error}
                 stale={fileState.stale}
