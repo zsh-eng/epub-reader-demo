@@ -124,8 +124,9 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
   }
 }
 
-/// Preview work is optional. The save file is committed before classification;
-/// dismissal can cancel all network work without losing the user's save.
+/// Metadata and classification start while the user reviews the preview. Results
+/// stay in memory until Save commits the inbox entry; Cancel leaves no article
+/// or tagging receipt behind. Artwork never blocks classification.
 @MainActor
 private final class ShareSaveModel: ObservableObject {
   @Published var url: URL?
@@ -133,6 +134,7 @@ private final class ShareSaveModel: ObservableObject {
   @Published var image: UIImage?
   @Published var isSaved = false
   @Published var isTagging = false
+  @Published private(set) var taggingState = "idle"
   @Published var isVisible = false
   @Published var hostIsActive = true
   @Published var tagNames: [String]?
@@ -147,10 +149,41 @@ private final class ShareSaveModel: ObservableObject {
   private let metadataProvider = LPMetadataProvider()
   private var linkTask: Task<Void, Never>?
   private var previewTask: Task<Void, Never>?
+  private var metadataTask: Task<Void, Never>?
   private var thumbnailTask: Task<Void, Never>?
   private var taggingTask: Task<Void, Never>?
   private var imageLoadProgress: Progress?
   private var pendingTaggingResult: SharedTaggingResult?
+  private var savedTransfer: SharedArticleTransfer?
+  private var taggingContext: TaggingContext?
+  private var classification: Classification?
+  private var taggingRevision: String?
+
+  private struct TaggingContext {
+    var title: String
+    var subtitle: String
+    var text: String
+  }
+
+  private struct Classification {
+    var context: TaggingContext
+    var tags: [String]
+    var credentialRevision: String
+  }
+
+  private var isFixture: Bool {
+    #if DEBUG
+      return url?.host == "fixture.example"
+    #else
+      return false
+    #endif
+  }
+
+  private func accepts(_ revision: String) -> Bool {
+    isFixture
+      || (TaggingPreferences.enabled && !TaggingPreferences.credentialFailure
+        && TaggingPreferences.credentialRevision == revision)
+  }
 
   init(context: NSExtensionContext) {
     self.context = context
@@ -180,6 +213,7 @@ private final class ShareSaveModel: ObservableObject {
         guard let url = SharedInbox.webURL(text) else { continue }
         self.url = url
         previewTask = Task { await loadPreview(for: url) }
+        metadataTask = Task { await loadTaggingContext(for: url) }
         return
       }
     }
@@ -204,11 +238,42 @@ private final class ShareSaveModel: ObservableObject {
       let candidate = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       if !candidate.isEmpty && candidate != url.absoluteString { title = candidate }
       guard let provider = metadata.imageProvider else { return }
-      // A slow image provider must not hold up title-based classification.
+      // A slow image provider must not hold up classification.
       thumbnailTask = Task { await loadThumbnail(from: provider) }
     } catch {
       // A publisher can refuse previews. The original URL remains saveable.
     }
+  }
+
+  private func loadTaggingContext(for url: URL) async {
+    do {
+      #if DEBUG
+        if isFixture {
+          try await Task.sleep(for: .milliseconds(250))
+          try Task.checkCancellation()
+          taggingContext = TaggingContext(
+            title: "The quiet art of paying attention",
+            subtitle: "An essay on attention, meaning, and the natural world.",
+            text: "An essay on attention, meaning, and the natural world.")
+          startClassification()
+          return
+        }
+      #endif
+      let metadata = try await ArticleMetadata.fetch(url)
+      try Task.checkCancellation()
+      taggingContext = TaggingContext(
+        title: metadata.title, subtitle: metadata.description, text: metadata.taggingText)
+      if title == nil { title = metadata.title }
+    } catch is CancellationError {
+      return
+    } catch {
+      // Some publishers block HTML fetches but permit Link Presentation. Use
+      // that title only after richer context has proved unavailable.
+      await previewTask?.value
+      guard !Task.isCancelled, let title else { return }
+      taggingContext = TaggingContext(title: title, subtitle: "", text: "")
+    }
+    startClassification()
   }
 
   private func loadThumbnail(from provider: NSItemProvider) async {
@@ -237,7 +302,7 @@ private final class ShareSaveModel: ObservableObject {
       else { return }
       image = UIImage(cgImage: thumbnail)
     } catch {
-      // Preview artwork is optional; title-based tagging can already proceed.
+      // Preview artwork is optional; metadata-based tagging can already proceed.
     }
   }
 
@@ -264,105 +329,116 @@ private final class ShareSaveModel: ObservableObject {
   func save() {
     guard !isSaved, let url else { return }
     do {
-      let transfer = try SharedInbox.save(url, title: title)
+      savedTransfer = try SharedInbox.save(
+        url, title: taggingContext?.title ?? title, subtitle: taggingContext?.subtitle,
+        taggingText: taggingContext?.text)
       isSaved = true
       error = nil
       UIAccessibility.post(notification: .announcement, argument: "Saved to Arctic")
-      #if DEBUG
-        if url.host == "fixture.example" {
-          isTagging = true
-          taggingTask = Task { await classifyFixture(transfer) }
-          return
-        }
-      #endif
-      guard TaggingPreferences.enabled else { return }
-      guard !TaggingPreferences.credentialFailure else {
-        message = "Update your API key in Arctic to add tags."
+      if let classification, accepts(classification.credentialRevision) {
+        try publish(classification)
         return
       }
-      isTagging = true
-      taggingTask = Task { await classify(transfer) }
+      // A changed key or disabled setting must not reuse speculative results.
+      classification = nil
+      if let taggingRevision, !accepts(taggingRevision) {
+        taggingTask?.cancel()
+        taggingTask = nil
+        isTagging = false
+        taggingState = "idle"
+      }
+      startClassification()
     } catch { self.error = error.localizedDescription }
   }
 
-  private func classify(_ transfer: SharedArticleTransfer) async {
-    defer { isTagging = false }
-    let credentialRevision = TaggingPreferences.credentialRevision
+  private func startClassification() {
+    guard taggingTask == nil, classification == nil, let taggingContext else { return }
+    guard isFixture || TaggingPreferences.enabled else { return }
+    guard isFixture || !TaggingPreferences.credentialFailure else {
+      message = "Update your API key in Arctic to add tags."
+      return
+    }
+    let revision = TaggingPreferences.credentialRevision
+    taggingRevision = revision
+    isTagging = true
+    taggingState = "started"
+    taggingTask = Task { await classify(taggingContext, revision: revision) }
+  }
+
+  private func classify(_ input: TaggingContext, revision: String) async {
+    defer {
+      // An older, cancelled request must not reset a replacement request.
+      if taggingRevision == revision {
+        isTagging = false
+        taggingTask = nil
+      }
+    }
     do {
-      guard let key = try JevKeychain.read(), !key.isEmpty else {
-        message = "Add your Jev API key in Arctic to turn on automatic tags."
-        return
-      }
-      await previewTask?.value
+      let tags: [String]
+      #if DEBUG
+        if isFixture {
+          try await Task.sleep(for: .milliseconds(650))
+          tags = ["Attention & wonder", "Life & meaning"]
+        } else {
+          guard let key = try JevKeychain.read(), !key.isEmpty else {
+            message = "Add your Jev API key in Arctic to turn on automatic tags."
+            return
+          }
+          tags = try await JevClient.classify(
+            title: input.title, description: input.text, apiKey: key)
+        }
+      #else
+        guard let key = try JevKeychain.read(), !key.isEmpty else {
+          message = "Add your Jev API key in Arctic to turn on automatic tags."
+          return
+        }
+        tags = try await JevClient.classify(
+          title: input.title, description: input.text, apiKey: key)
+      #endif
       try Task.checkCancellation()
-      guard TaggingPreferences.enabled && !TaggingPreferences.credentialFailure,
-        TaggingPreferences.credentialRevision == credentialRevision
-      else { return }
-      guard let title else {
-        message = "Tags will be added when you open Arctic."
-        return
-      }
-      let tags = try await JevClient.classify(title: title, description: "", apiKey: key)
-      try Task.checkCancellation()
-      guard TaggingPreferences.enabled,
-        TaggingPreferences.credentialRevision == credentialRevision
-      else { return }
-      try finishClassification(tags, title: title, transfer: transfer)
+      guard accepts(revision) else { return }
+      let result = Classification(context: input, tags: tags, credentialRevision: revision)
+      classification = result
+      taggingState = "ready"
+      if isSaved { try publish(result) }
     } catch is CancellationError {
-      // The main app resumes pending work from the durable save request.
+      // Cancel discards speculative work; a saved entry remains available to the app.
     } catch JevError.invalidKey {
-      guard TaggingPreferences.credentialRevision == credentialRevision else { return }
+      guard TaggingPreferences.credentialRevision == revision else { return }
       TaggingPreferences.credentialFailure = true
       TaggingPreferences.lastError = JevError.invalidKey.localizedDescription
-      message = "Your article is saved. Update your API key in Arctic to add tags."
+      message = "Update your API key in Arctic to add tags."
     } catch {
-      message = "Your article is saved. Tags can finish when you open Arctic."
+      message = "Tags can finish when you open Arctic."
     }
   }
 
-  private func finishClassification(
-    _ tags: [String], title: String, transfer: SharedArticleTransfer
-  ) throws {
-    // Keep the save request immutable. The separate completion receipt is emitted
-    // only when the result has appeared; early dismissal leaves work for the app.
+  private func publish(_ classification: Classification) throws {
+    guard let transfer = savedTransfer, accepts(classification.credentialRevision) else { return }
+    let input = classification.context
+    // Do not rewrite the immutable inbox entry: the app may have imported it.
+    // The result carries the exact richer input used for this classification.
     let result = SharedTaggingResult(
-      id: transfer.id, url: transfer.url, title: title, subtitle: nil,
-      tagNames: tags,
-      inputFingerprint: ArticleTagCatalog.identity(title: title, description: ""),
+      id: transfer.id, url: transfer.url, title: input.title, subtitle: input.subtitle,
+      taggingText: input.text, tagNames: classification.tags,
+      inputFingerprint: ArticleTagCatalog.identity(title: input.title, description: input.text),
       categoryVersion: ArticleTagCatalog.version, feedbackPresented: false)
-    if tags.isEmpty {
+    if classification.tags.isEmpty {
       try SharedInbox.saveTaggingResult(result)
     } else {
       pendingTaggingResult = result
     }
-    tagNames = tags
+    tagNames = classification.tags
     UIAccessibility.post(
       notification: .announcement,
-      argument: tags.isEmpty ? "No matching tags" : "Added tags: " + tags.joined(separator: ", "))
+      argument: classification.tags.isEmpty
+        ? "No matching tags" : "Added tags: " + classification.tags.joined(separator: ", "))
   }
 
-  #if DEBUG
-    /// Exercise the actual extension's save, reveal, and receipt without a secret,
-    /// network call, or changing the user's tagging preferences.
-    private func classifyFixture(_ transfer: SharedArticleTransfer) async {
-      defer { isTagging = false }
-      do {
-        await previewTask?.value
-        try Task.checkCancellation()
-        try await Task.sleep(for: .milliseconds(650))
-        try finishClassification(
-          ["Attention & wonder", "Life & meaning"],
-          title: title ?? "The quiet art of paying attention", transfer: transfer)
-      } catch is CancellationError {
-        // Closing the fixture cancels it just like a real classification.
-      } catch {
-        self.error = "Could not keep the fixture tags."
-      }
-    }
-  #endif
-
   func presentTagFeedback() {
-    guard var result = pendingTaggingResult else { return }
+    guard var result = pendingTaggingResult, let classification,
+      accepts(classification.credentialRevision)
+    else { return }
     result.feedbackPresented = true
     do {
       try SharedInbox.saveTaggingResult(result)
@@ -372,9 +448,20 @@ private final class ShareSaveModel: ObservableObject {
   }
 
   func cancelWork() {
+    // Done or swipe dismissal can precede the reveal. Keep completed tags with
+    // an unpresented receipt so the app can show them once after import.
+    if let result = pendingTaggingResult, let classification,
+      accepts(classification.credentialRevision)
+    {
+      do {
+        try SharedInbox.saveTaggingResult(result)
+        pendingTaggingResult = nil
+      } catch { error = "Could not keep these tags. Arctic will try again." }
+    }
     isVisible = false
     linkTask?.cancel()
     previewTask?.cancel()
+    metadataTask?.cancel()
     thumbnailTask?.cancel()
     taggingTask?.cancel()
     imageLoadProgress?.cancel()
@@ -406,7 +493,8 @@ private struct ShareSaveView: View {
           .font(.headline)
           .foregroundStyle(model.isSaved ? ArcticBrand.accent : Color.primary)
           ConnectedTagReveal(
-            isProcessing: model.isTagging, tags: model.tagNames ?? [], cornerRadius: 22,
+            isProcessing: model.isSaved && model.isTagging, tags: model.tagNames ?? [],
+            cornerRadius: 22,
             onRevealed: model.presentTagFeedback
           ) {
             VStack(spacing: 0) {
@@ -419,7 +507,7 @@ private struct ShareSaveView: View {
               Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
           }
           .environment(\.scenePhase, model.isVisible && model.hostIsActive ? .active : .inactive)
-          if let message = model.message {
+          if model.isSaved, let message = model.message {
             Text(message).font(.subheadline).foregroundStyle(.secondary)
           }
           if let error = model.error {
@@ -489,7 +577,7 @@ private struct ShareSaveView: View {
     }
     .background(Color(uiColor: .secondarySystemBackground))
     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    .accessibilityValue(model.isTagging ? "Adding tags" : "")
+    .accessibilityValue(model.isSaved && model.isTagging ? "Adding tags" : "")
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
@@ -527,6 +615,9 @@ private struct ShareSaveView: View {
       .disabled(!model.isSaved && model.url == nil)
       .accessibilityIdentifier(model.isSaved ? "share-done" : "share-save")
       .accessibilityLabel(model.isSaved ? "Done" : "Save article")
+      #if DEBUG
+        .accessibilityValue(model.taggingState)
+      #endif
     }
     .padding(.horizontal, 24)
     .padding(.top, 8)
