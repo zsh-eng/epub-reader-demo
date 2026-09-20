@@ -489,12 +489,16 @@ private struct DemoPointer: View {
   var body: some View {
     ZStack {
       Circle()
-        .strokeBorder(ArcticBrand.accent.opacity(0.65), lineWidth: 1.5)
+        .strokeBorder(ReaderTheme.background.opacity(0.95), lineWidth: 3)
+        .overlay { Circle().strokeBorder(ArcticBrand.accent.opacity(0.8), lineWidth: 1.5) }
         .scaleEffect(ripple ? 1.7 : 0.8)
-        .opacity(ripple ? 0 : 1)
+        .opacity(model.tapCount == 0 || ripple ? 0 : 1)
       Circle()
-        .fill(ArcticBrand.accent.opacity(model.pressed ? 0.3 : 0.12))
-        .overlay { Circle().strokeBorder(ArcticBrand.accent.opacity(0.55), lineWidth: 1.5) }
+        // A neutral core remains visible when the pointer reaches a blue button.
+        .fill(ReaderTheme.background.opacity(model.pressed ? 0.9 : 0.72))
+        .overlay { Circle().fill(ArcticBrand.accent.opacity(model.pressed ? 0.2 : 0.06)) }
+        .overlay { Circle().strokeBorder(ArcticBrand.accent.opacity(0.8), lineWidth: 1.5) }
+        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
         .scaleEffect(model.pressed ? 0.76 : 1)
     }
     .frame(width: 34, height: 34)
