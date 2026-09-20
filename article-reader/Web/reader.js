@@ -54,6 +54,12 @@ globalThis.extractArticle = () => {
   const image = assetURL(result.image);
   // Move an existing lead image with its caption into the header, rather than duplicate it.
   let heroCaption = "";
+  const sourceHero = [...source.images].find(candidate => candidate.currentSrc === image || candidate.src === image);
+  const width = Number(sourceHero?.naturalWidth || source.querySelector('meta[property="og:image:width"]')?.content);
+  const height = Number(sourceHero?.naturalHeight || source.querySelector('meta[property="og:image:height"]')?.content);
+  const hasRatio = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
+  const heroWidth = String(hasRatio ? width : 16);
+  const heroHeight = String(hasRatio ? height : 9);
   if (image) {
     const lead = [...parsed.querySelectorAll("img")].find(img => img.src === image);
     if (lead) {
@@ -75,6 +81,6 @@ globalThis.extractArticle = () => {
   return {
     title: result.title || source.title, author: result.author || "",
     description: result.description || "", favicon: assetURL(result.favicon),
-    image, authorImage, heroCaption, originalContent, content: parsed.body.innerHTML
+    image, authorImage, heroCaption, heroWidth, heroHeight, originalContent, content: parsed.body.innerHTML
   };
 };

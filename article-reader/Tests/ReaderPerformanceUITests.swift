@@ -1,0 +1,78 @@
+import XCTest
+
+final class ReaderPerformanceUITests: XCTestCase {
+  override func setUp() { continueAfterFailure = false }
+
+  @MainActor func testReaderTextDoesNotWaitForArtworkOrBodyImages() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard", "-hold-reader-artwork",
+    ]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    let open = app.buttons["open-copied-link"]
+    XCTAssertTrue(open.waitForExistence(timeout: 10))
+    open.tap()
+    let bookmark = app.buttons["reader-save"]
+    XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+    if bookmark.value as? String == "Not saved" { bookmark.tap() }
+    showReader(app)
+    let appearance = app.buttons["reader-appearance"]
+    let heldArtwork = expectation(
+      for: NSPredicate(format: "value CONTAINS 'artwork held'"), evaluatedWith: appearance)
+    wait(for: [heldArtwork], timeout: 5)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    capture(app, "reader-text-with-artwork-held")
+
+    // Open the saved HTML with a subresource that never finishes. This proves
+    // document readiness does not depend on WebKit's didFinish navigation event.
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-hold-reader-body-image"]
+    app.launchEnvironment = [:]
+    app.launch()
+    let card = app.buttons["article-story"]
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    card.tap()
+    showReader(app)
+    let heldBodyImage = expectation(
+      for: NSPredicate(format: "value CONTAINS 'resource load pending'"), evaluatedWith: appearance)
+    wait(for: [heldBodyImage], timeout: 5)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    capture(app, "cached-reader-with-body-image-held")
+  }
+
+  @MainActor func testPreloadedPublisherRedirectRetainsRequestedCacheIdentity() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-test-preloading"]
+    // TestMode resolves this alias to story.html. Its final source URL becomes
+    // fixture.example/story, while the requested library identity stays below.
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/redirect-story"
+    app.launch()
+    let ready = expectation(
+      for: NSPredicate(format: "label CONTAINS 'redirect-story'"),
+      evaluatedWith: app.staticTexts["preload-ready"])
+    wait(for: [ready], timeout: 20)
+    app.buttons["open-copied-link"].tap()
+    XCTAssertTrue(app.buttons["reader-toggle"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    capture(app, "warm-redirected-reader")
+  }
+
+  @MainActor private func showReader(_ app: XCUIApplication) {
+    let toggle = app.buttons["reader-toggle"]
+    let enabled = expectation(
+      for: NSPredicate(format: "exists == true AND enabled == true"), evaluatedWith: toggle)
+    wait(for: [enabled], timeout: 20)
+    if toggle.label == "Reader" { toggle.tap() }
+    XCTAssertTrue(app.buttons["Website"].waitForExistence(timeout: 10), app.debugDescription)
+  }
+
+  @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+}

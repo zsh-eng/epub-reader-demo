@@ -75,3 +75,17 @@ test('preserves Unicode punctuation and selectable text through extraction', asy
   expect(selected.selectable).not.toBe('none');
   await page.close();
 });
+
+test('reserves declared OG image geometry before decorative image bytes arrive', async () => {
+  const page = await browser.newPage();
+  const html = readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/story.html'), 'utf8')
+    .replace('<meta property="og:image" content="cover.png">', '<meta property="og:image" content="https://fixture.example/og-only.png"><meta property="og:image:width" content="1600"><meta property="og:image:height" content="900">');
+  await page.route('https://fixture.example/**', route => route.fulfill({ contentType: 'text/html', body: html }));
+  await page.goto('https://fixture.example/story');
+  await page.evaluate(script);
+  const result = await page.evaluate(() => (globalThis as any).extractArticle());
+  expect(result.heroWidth).toBe('1600');
+  expect(result.heroHeight).toBe('900');
+  expect(result.content).toContain('A little room to think');
+  await page.close();
+});
