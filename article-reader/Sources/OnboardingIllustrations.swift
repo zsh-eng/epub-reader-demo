@@ -6,6 +6,8 @@ struct ShareOnboardingIllustration: View {
   @Environment(\.articleReduceMotion) private var reduceMotion
   @State private var step = 0
   @State private var replay = 0
+  @State private var pointer = DemoPointerModel()
+  @State private var targets: [String: CGRect] = [:]
 
   var body: some View {
     VStack(spacing: 8) {
@@ -21,6 +23,8 @@ struct ShareOnboardingIllustration: View {
         }
       }
       .frame(height: 400)
+      .coordinateSpace(name: "share-demo")
+      .overlay { DemoPointer(model: pointer) }
       .background(Color(uiColor: .systemGroupedBackground))
       .clipShape(RoundedRectangle(cornerRadius: 28))
       .overlay {
@@ -29,7 +33,7 @@ struct ShareOnboardingIllustration: View {
       }
       .accessibilityElement(children: .ignore)
       .accessibilityIdentifier("onboarding-share-demo")
-      .accessibilityValue(["safari", "share", "save", "saved"][step])
+      .accessibilityValue(["safari", "share", "link", "save", "saved"][step])
       .accessibilityLabel(
         "Glacial Longings by Elizabeth Rush. In Safari, tap Share. Choose Arctic in the app row, then tap Save. If Arctic is missing, choose More to add it."
       )
@@ -76,7 +80,7 @@ struct ShareOnboardingIllustration: View {
         Spacer()
         Image(systemName: "square.and.arrow.up")
           .foregroundStyle(ArcticBrand.accent)
-          .overlay { if step == 0 { DemoTap() } }
+          .demoTarget("share", in: "share-demo", positions: $targets)
         Spacer()
         Image(systemName: "book")
         Spacer()
@@ -111,7 +115,7 @@ struct ShareOnboardingIllustration: View {
         shareApp("AirDrop", symbol: "airplay.audio")
         VStack(spacing: 7) {
           ArcticMark().frame(width: 48, height: 48)
-            .overlay { DemoTap() }
+            .demoTarget("arctic", in: "share-demo", positions: $targets)
           Text("Arctic").font(.system(size: 10))
         }
         .frame(maxWidth: .infinity)
@@ -147,55 +151,85 @@ struct ShareOnboardingIllustration: View {
   }
 
   private var saveSheet: some View {
-    VStack(spacing: 18) {
+    VStack(spacing: 14) {
       HStack(spacing: 7) {
         ArcticMark().frame(width: 22, height: 22)
         Text("Arctic").font(.system(size: 13, weight: .semibold))
         Spacer()
-        if step == 3 {
+        if step == 4 {
           Image(systemName: "checkmark").font(.system(size: 14, weight: .semibold))
             .foregroundStyle(ArcticBrand.accent)
         }
       }
-      DemoArticleCard(showTags: false, reservesTags: false, imageHeight: 120)
-      HStack(spacing: 10) {
-        if step < 3 {
-          Text("Cancel")
-            .frame(maxWidth: .infinity, minHeight: 42)
-            .background(ReaderTheme.secondary, in: Capsule())
+      if step == 2 {
+        HStack(spacing: 12) {
+          Image(systemName: "link")
+            .font(.system(size: 20)).foregroundStyle(.secondary)
+          Text(OnboardingArticle.link)
+            .font(.system(size: 13))
+            .lineLimit(2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+          ProgressView().controlSize(.small)
         }
-        Text(step == 3 ? "Done" : "Save")
+        .padding(16)
+        .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 18))
+        .transition(.opacity)
+      } else {
+        DemoArticleCard(showTags: false, reservesTags: false, imageHeight: 95)
+          .transition(.opacity.combined(with: .offset(y: 8)))
+      }
+      HStack(spacing: 10) {
+        Text("Cancel")
+          .frame(maxWidth: .infinity, minHeight: 42)
+          .background(ReaderTheme.secondary, in: Capsule())
+        Text(step == 4 ? "Done" : "Save")
           .frame(maxWidth: .infinity, minHeight: 42)
           .foregroundStyle(ArcticBrand.onAccent)
           .background(ArcticBrand.accent, in: Capsule())
-          .overlay { if step == 2 { DemoTap() } }
+          .demoTarget("save", in: "share-demo", positions: $targets)
       }
       .font(.system(size: 14, weight: .semibold))
     }
     .padding(18)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(ReaderTheme.background)
+    .frame(maxWidth: .infinity)
+    .background(
+      ReaderTheme.background,
+      in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+    )
     .dynamicTypeSize(.medium)
   }
 
   @MainActor private func demonstrate() async {
-    step = reduceMotion ? 3 : 0
+    pointer.reset()
+    step = reduceMotion ? 4 : 0
     guard !reduceMotion else { return }
     do {
-      for next in 1...3 {
-        try await Task.sleep(for: .milliseconds(next == 1 ? 2200 : 1300))
-        withAnimation(.spring(response: 0.3, dampingFraction: 1)) { step = next }
-      }
+      try await Task.sleep(for: .milliseconds(1100))
+      try await pointer.tap(targets["share"])
+      withAnimation(.spring(response: 0.3, dampingFraction: 1)) { step = 1 }
+      try await Task.sleep(for: .milliseconds(450))
+      try await pointer.tap(targets["arctic"])
+      withAnimation(.easeOut(duration: 0.24)) { step = 2 }
+      // The real extension starts with a URL while its preview is fetched.
+      try await Task.sleep(for: .milliseconds(1100))
+      withAnimation(.spring(response: 0.4, dampingFraction: 1)) { step = 3 }
+      try await Task.sleep(for: .milliseconds(500))
+      try await pointer.tap(targets["save"])
+      withAnimation(.easeOut(duration: 0.2)) { step = 4 }
+      pointer.hide()
     } catch {
       // Leaving or replaying the page cancels the demonstration.
     }
   }
+
 }
 
 struct PasteOnboardingIllustration: View {
   @Environment(\.articleReduceMotion) private var reduceMotion
   @State private var step = 0
   @State private var replay = 0
+  @State private var pointer = DemoPointerModel()
+  @State private var targets: [String: CGRect] = [:]
 
   var body: some View {
     VStack(spacing: 8) {
@@ -223,6 +257,8 @@ struct PasteOnboardingIllustration: View {
         Spacer(minLength: 0)
       }
       .frame(height: 330)
+      .coordinateSpace(name: "paste-demo")
+      .overlay { DemoPointer(model: pointer) }
       .background(Color(uiColor: .systemGroupedBackground))
       .clipShape(RoundedRectangle(cornerRadius: 28))
       .overlay {
@@ -262,7 +298,7 @@ struct PasteOnboardingIllustration: View {
       .background(
         Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16)
       )
-      .overlay(alignment: .trailing) { DemoTap().padding(.trailing, 22) }
+      .demoTarget("paste", in: "paste-demo", positions: $targets)
     }
   }
 
@@ -281,9 +317,7 @@ struct PasteOnboardingIllustration: View {
         .font(.system(size: 16))
         .padding(.horizontal, 16)
         .frame(height: 47)
-        .overlay(alignment: .trailing) {
-          if option == "Allow", step == 1 { DemoTap().padding(.trailing, 20) }
-        }
+        .demoTarget(option, in: "paste-demo", positions: $targets)
         if option != "Allow" { Divider().padding(.leading, 16) }
       }
     }
@@ -292,17 +326,22 @@ struct PasteOnboardingIllustration: View {
   }
 
   @MainActor private func demonstrate() async {
+    pointer.reset()
     step = reduceMotion ? 2 : 0
     guard !reduceMotion else { return }
     do {
-      try await Task.sleep(for: .milliseconds(1300))
+      try await Task.sleep(for: .milliseconds(750))
+      try await pointer.tap(targets["paste"], trailing: true)
       withAnimation(.easeOut(duration: 0.24)) { step = 1 }
-      try await Task.sleep(for: .milliseconds(1500))
+      try await Task.sleep(for: .milliseconds(400))
+      try await pointer.tap(targets["Allow"], trailing: true)
       withAnimation(.easeOut(duration: 0.2)) { step = 2 }
+      pointer.hide()
     } catch {
       // Leaving or replaying the page cancels the demonstration.
     }
   }
+
 }
 
 /// A bounded demonstration: the card itself communicates classification.
@@ -351,6 +390,7 @@ private enum OnboardingArticle {
   static let author = "Elizabeth Rush"
   static let publisher = "Emergence Magazine"
   static let domain = "emergencemagazine.org"
+  static let link = "emergencemagazine.org/essay/glacial-longings/"
 }
 
 private struct OnboardingArticleImage: View {
@@ -410,13 +450,86 @@ private struct DemoArticleCard: View {
   }
 }
 
-private struct DemoTap: View {
+/// One pointer stays in the scene coordinate space as its targets change.
+/// Travel, a short dwell, and a press/release make each demonstrated tap legible.
+@MainActor @Observable
+private final class DemoPointerModel {
+  var position = CGPoint.zero
+  var visible = false
+  var pressed = false
+  var tapCount = 0
+
+  func reset() {
+    visible = false
+    pressed = false
+    tapCount = 0
+  }
+
+  func tap(_ target: CGRect?, trailing: Bool = false) async throws {
+    guard let target else { return }
+    let destination = CGPoint(x: trailing ? target.maxX - 26 : target.midX, y: target.midY)
+    if !visible {
+      position = CGPoint(x: destination.x + 20, y: destination.y - 40)
+      withAnimation(.easeOut(duration: 0.2)) { visible = true }
+      try await Task.sleep(for: .milliseconds(80))
+    }
+    withAnimation(.timingCurve(0.77, 0, 0.175, 1, duration: 0.52)) {
+      position = destination
+    }
+    try await Task.sleep(for: .milliseconds(800))
+    withAnimation(.easeOut(duration: 0.12)) { pressed = true }
+    try await Task.sleep(for: .milliseconds(120))
+    withAnimation(.easeOut(duration: 0.18)) { pressed = false }
+    tapCount += 1
+    try await Task.sleep(for: .milliseconds(180))
+  }
+
+  func hide() {
+    withAnimation(.easeOut(duration: 0.25)) { visible = false }
+  }
+}
+
+private struct DemoPointer: View {
+  var model: DemoPointerModel
+  @State private var ripple = false
+
   var body: some View {
-    Circle()
-      .fill(ArcticBrand.accent.opacity(0.12))
-      .overlay { Circle().strokeBorder(ArcticBrand.accent.opacity(0.5), lineWidth: 1.5) }
-      .frame(width: 34, height: 34)
-      .allowsHitTesting(false)
+    ZStack {
+      Circle()
+        .strokeBorder(ArcticBrand.accent.opacity(0.65), lineWidth: 1.5)
+        .scaleEffect(ripple ? 1.7 : 0.8)
+        .opacity(ripple ? 0 : 1)
+      Circle()
+        .fill(ArcticBrand.accent.opacity(model.pressed ? 0.3 : 0.12))
+        .overlay { Circle().strokeBorder(ArcticBrand.accent.opacity(0.55), lineWidth: 1.5) }
+        .scaleEffect(model.pressed ? 0.76 : 1)
+    }
+    .frame(width: 34, height: 34)
+    .position(model.position)
+    .opacity(model.visible ? 1 : 0)
+    .allowsHitTesting(false)
+    .accessibilityHidden(true)
+    .task(id: model.tapCount) {
+      guard model.tapCount > 0 else { return }
+      var transaction = Transaction()
+      transaction.disablesAnimations = true
+      withTransaction(transaction) { ripple = false }
+      await Task.yield()
+      guard !Task.isCancelled else { return }
+      withAnimation(.easeOut(duration: 0.45)) { ripple = true }
+    }
+  }
+}
+
+extension View {
+  fileprivate func demoTarget(
+    _ name: String, in coordinateSpace: String, positions: Binding<[String: CGRect]>
+  ) -> some View {
+    onGeometryChange(for: CGRect.self) { geometry in
+      geometry.frame(in: .named(coordinateSpace))
+    } action: { frame in
+      positions.wrappedValue[name] = frame
+    }
   }
 }
 

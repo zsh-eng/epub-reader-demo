@@ -89,6 +89,8 @@ struct OnboardingView: View {
         Text("Appears after your first paste permission prompt.")
           .font(.caption).foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, 16)
+          .accessibilityIdentifier("onboarding-paste-note")
       }
     default:
       VStack(alignment: .leading, spacing: 12) {
@@ -100,8 +102,10 @@ struct OnboardingView: View {
           Link("Get a key", destination: URL(string: "https://console.typesafe.ai/keys")!)
         }
         .font(.caption)
-        JevPrivacyNote()
-          .accessibilityElement(children: .combine)
+        .padding(.horizontal, 16)
+        JevPrivacyNote(compact: true)
+          .padding(.horizontal, 16)
+          .accessibilityElement(children: .contain)
           .accessibilityIdentifier("onboarding-privacy-note")
         if let error = credentials.error {
           Text(error).font(.subheadline).accessibilityIdentifier("onboarding-key-error")
@@ -181,7 +185,7 @@ struct OnboardingView: View {
   }
 
   private var heading: some View {
-    Text(["Keep a good read.", "Open copied links.", "A little automagic."][page])
+    Text(["Keep a good read.", "Open copied links.", "A little magic."][page])
       .font(.system(.largeTitle, design: .rounded, weight: .semibold))
       .tracking(-0.8)
       .fixedSize(horizontal: false, vertical: true)
@@ -287,16 +291,37 @@ private struct JevKeyField: View {
 }
 
 private struct JevPrivacyNote: View {
+  var compact = false
+  @State private var showsDetails = false
+
   var body: some View {
-    Label {
-      Text(
-        "Key stored in Keychain. Saved titles and descriptions go to Jev."
-      )
-      .fixedSize(horizontal: false, vertical: true)
-    } icon: {
-      Image(systemName: "lock")
+    if compact {
+      HStack(spacing: 6) {
+        Text("Key stored in Keychain.")
+          .fixedSize(horizontal: false, vertical: true)
+        Button {
+          showsDetails = true
+        } label: {
+          Image(systemName: "info.circle")
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("What is sent to Jev")
+        .popover(isPresented: $showsDetails) {
+          Text(
+            "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
+          )
+          .font(.subheadline)
+          .padding(20)
+          .presentationCompactAdaptation(.popover)
+        }
+      }
+      .font(.caption).foregroundStyle(.secondary)
+    } else {
+      Text("Key stored in Keychain. Saved titles and descriptions go to Jev.")
+        .font(.footnote).foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
     }
-    .font(.footnote).foregroundStyle(.secondary)
   }
 }
 

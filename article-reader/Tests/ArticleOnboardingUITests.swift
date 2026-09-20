@@ -33,6 +33,8 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(share.waitForExistence(timeout: 10))
     XCTAssertGreaterThan(share.frame.height, 390)
     XCTAssertTrue(share.label.contains("Glacial Longings"))
+    waitForDemo(share, value: "link")
+    capture(app, "arctic-share-url-preview")
     waitForDemo(share, value: "saved")
     capture(app, "arctic-share-demo-complete")
     app.buttons["onboarding-replay-share"].tap()
@@ -56,7 +58,17 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertGreaterThanOrEqual(tags.frame.minX, 24)
     XCTAssertLessThanOrEqual(tags.frame.maxX, app.frame.width - 24)
     assertPrivacyFits(in: app)
+    XCTAssertTrue(app.staticTexts["A little magic."].exists)
+    let privacy = app.descendants(matching: .any)
+      .matching(identifier: "onboarding-privacy-note").firstMatch
+    XCTAssertLessThanOrEqual(privacy.frame.height, 36)
     capture(app, "arctic-tags-demo-complete")
+    app.buttons["What is sent to Jev"].tap()
+    XCTAssertTrue(
+      app.staticTexts[
+        "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
+      ].waitForExistence(timeout: 3))
+
   }
 
   @MainActor private func assertPrivacyFits(in app: XCUIApplication) {
@@ -72,7 +84,7 @@ final class ArticleOnboardingUITests: XCTestCase {
   @MainActor private func waitForDemo(_ element: XCUIElement, value: String) {
     let finished = expectation(
       for: NSPredicate(format: "value == %@", value), evaluatedWith: element)
-    wait(for: [finished], timeout: 8)
+    wait(for: [finished], timeout: 12)
   }
 
   @MainActor func testReplayTutorialFromLibrary() {
