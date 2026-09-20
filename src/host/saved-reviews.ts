@@ -14,6 +14,8 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
+import { parsePatchFiles, type FileDiffMetadata } from "@pierre/diffs";
+import { normalizeDiffMetadataPaths } from "../shared/hunk/diffPaths";
 import {
   comparisonSchema,
   noteInputSchema,
@@ -120,6 +122,112 @@ const recordSchema = z.object({
     .max(16),
 });
 type SavedRecord = z.infer<typeof recordSchema>;
+
+/** Rebuild only a selected slice of captured patch rows. Large added files must
+ * not repeat their complete initial-add hunk for every comment. */
+function* commentDiffExcerpt(file: FileDiffMetadata, note: Note): Generator<string> {
+  const end = note.endLine ?? note.line;
+  for (const hunk of file.hunks) {
+    const start = note.side === "old" ? hunk.deletionStart : hunk.additionStart;
+    const count = note.side === "old" ? hunk.deletionCount : hunk.additionCount;
+    if (!count || start > end || start + count <= note.line) continue;
+    const segments: {
+      prefix: " " | "-" | "+";
+      count: number;
+      old: number;
+      new: number;
+      row: number;
+      lines: string[];
+      offset: number;
+    }[] = [];
+    let oldLine = hunk.deletionStart + (hunk.deletionCount ? 0 : 1);
+    let newLine = hunk.additionStart + (hunk.additionCount ? 0 : 1);
+    let row = 0;
+    const add = (prefix: " " | "-" | "+", count: number, offset: number) => {
+      if (!count) return;
+      segments.push({
+        prefix,
+        count,
+        old: oldLine,
+        new: newLine,
+        row,
+        lines: prefix === "-" ? file.deletionLines : file.additionLines,
+        offset,
+      });
+      if (prefix !== "+") oldLine += count;
+      if (prefix !== "-") newLine += count;
+      row += count;
+    };
+    for (const block of hunk.hunkContent) {
+      if (block.type === "context") add(" ", block.lines, block.additionLineIndex);
+      else {
+        add("-", block.deletions, block.deletionLineIndex);
+        add("+", block.additions, block.additionLineIndex);
+      }
+    }
+    let first = Infinity;
+    let last = -1;
+    for (const segment of segments) {
+      if (segment.prefix === (note.side === "old" ? "+" : "-")) continue;
+      const line = segment[note.side];
+      const from = Math.max(0, note.line - line);
+      const to = Math.min(segment.count - 1, end - line);
+      if (from <= to) {
+        first = Math.min(first, segment.row + from);
+        last = Math.max(last, segment.row + to);
+      }
+    }
+    if (last < 0) continue;
+    first = Math.max(0, first - 3);
+    last = Math.min(row - 1, last + 3);
+    const slices = segments.flatMap((segment) => {
+      const from = Math.max(0, first - segment.row);
+      const to = Math.min(segment.count, last + 1 - segment.row);
+      return from < to ? [{ segment, from, to }] : [];
+    });
+    const firstSlice = slices[0]!;
+    const oldCount = slices.reduce(
+      (sum, { segment, from, to }) => sum + (segment.prefix === "+" ? 0 : to - from),
+      0,
+    );
+    const newCount = slices.reduce(
+      (sum, { segment, from, to }) => sum + (segment.prefix === "-" ? 0 : to - from),
+      0,
+    );
+    const oldStart =
+      firstSlice.segment.old +
+      (firstSlice.segment.prefix === "+" ? 0 : firstSlice.from) -
+      (oldCount ? 0 : 1);
+    const newStart =
+      firstSlice.segment.new +
+      (firstSlice.segment.prefix === "-" ? 0 : firstSlice.from) -
+      (newCount ? 0 : 1);
+    yield `@@ -${oldStart},${oldCount} +${newStart},${newCount} @@`;
+    for (const { segment, from, to } of slices) {
+      for (let offset = from; offset < to; offset++) {
+        const index = segment.offset + offset;
+        yield segment.prefix + segment.lines[index]!.replace(/\n$/, "");
+        if (
+          index === segment.lines.length - 1 &&
+          (segment.prefix === "-" ? hunk.noEOFCRDeletions : hunk.noEOFCRAdditions)
+        )
+          yield "\\ No newline at end of file";
+      }
+    }
+  }
+}
+
+function patchCoversSelection(file: FileDiffMetadata, note: Note): boolean {
+  let next = note.line;
+  const end = note.endLine ?? note.line;
+  for (const hunk of file.hunks) {
+    const start = note.side === "old" ? hunk.deletionStart : hunk.additionStart;
+    const count = note.side === "old" ? hunk.deletionCount : hunk.additionCount;
+    if (start <= next && start + count > next) next = start + count;
+    if (next > end) return true;
+  }
+  return false;
+}
 
 /** Disk records own frozen sources and notes; live repository services are never consulted. */
 export class SavedReviewStore {
@@ -551,6 +659,8 @@ export class SavedReviewStore {
         }
       };
       appendText(
+        "# Diff comments:",
+        "",
         `Review: ${record.saved.title}`,
         `Review ID: ${id}`,
         `Captured: ${record.saved.createdAt}`,
@@ -562,51 +672,65 @@ export class SavedReviewStore {
         if (!target.notes.notes.length) continue;
         const info = record.saved.targets.find((item) => item.id === target.targetId)!;
         repositories.add(info.repositoryId);
-        appendText(
-          `Repository: ${info.repo}`,
-          `Repository ID: ${info.repositoryId}`,
-          `Worktree: ${info.repo}`,
-          `Branch: ${info.branch ?? "detached"}`,
-          `Target ID: ${info.id}`,
-          `Comparison: ${info.base} → ${info.head}`,
-          `Comparison kind: ${info.comparison.kind}`,
-          `Captured working state: ${info.captured ? "yes" : "no"}`,
-          "",
-        );
+        let parsed: FileDiffMetadata[] = [];
+        try {
+          parsed = parsePatchFiles(target.review.patch, undefined, true)
+            .flatMap((patch) => patch.files)
+            .map(normalizeDiffMetadataPaths);
+        } catch {
+          // A captured source excerpt remains usable if an older patch cannot be parsed.
+        }
+        const appendCode = (label: string, language: string, lines: Iterable<string>) => {
+          const snippet: string[] = [];
+          let snippetBytes = 0;
+          let longest = 2;
+          for (const line of lines) {
+            snippetBytes += Buffer.byteLength(line) + (snippet.length ? 1 : 0);
+            checkBytes(outputBytes + snippetBytes);
+            snippet.push(line);
+            for (const match of line.matchAll(/`+/g)) longest = Math.max(longest, match[0].length);
+          }
+          const fence = "`".repeat(longest + 1);
+          appendText(label, `${fence}${language}`, snippet.join("\n"), fence);
+        };
         const append = (note: Note, parentNumber?: number) => {
           const number = ++index;
           const file = target.review.files.find((item) => item.path === note.path)!;
           const path = note.side === "old" ? (file.previousPath ?? note.path) : note.path;
           const end = note.endLine ?? note.line;
           appendText(
-            `${parentNumber ? `Reply ${number} to comment ${parentNumber}` : `Comment ${number}`} (${note.id})`,
+            `## User Comment ${number}`,
             `File: ${path}`,
-            `Side: ${note.side === "old" ? "before" : "after"}`,
-            `Selected lines: ${note.line}–${end}`,
+            `Workspace: ${info.repo}`,
+            `Side: ${note.side === "old" ? "L" : "R"}`,
+            `Lines: ${note.line === end ? note.line : `${note.line}-${end}`}`,
+            `Comparison: ${info.base} → ${info.head}`,
+            `Comparison kind: ${info.comparison.kind}`,
+            `Captured working state: ${info.captured ? "yes" : "no"}`,
+            `Repository ID: ${info.repositoryId}`,
+            `Target ID: ${info.id}`,
+            `Comment ID: ${note.id}`,
           );
+          if (parentNumber) appendText(`Reply to: User Comment ${parentNumber}`);
           if (file.previousPath) appendText(`Rename: ${file.previousPath} → ${file.path}`);
+          const diff = parsed.find((item) => item.name === note.path);
+          const covered = diff && patchCoversSelection(diff, note);
+          if (covered) appendCode("Diff hunk:", "diff", commentDiffExcerpt(diff, note));
           const source = target.sources.find((item) => item.path === note.path);
-          if (source) {
+          if (!covered && source) {
             const lines = source[note.side].split("\n");
             if (lines.at(-1) === "") lines.pop();
             const from = Math.max(1, note.line - 3);
             const to = Math.min(lines.length, end + 3);
-            const snippetLines: string[] = [];
-            let snippetBytes = 0;
-            let longest = 2;
-            for (let position = from; position <= to; position++) {
-              const line = lines[position - 1]!;
-              const rendered = `${position >= note.line && position <= end ? ">" : " "} ${position} | ${line}`;
-              snippetBytes += Buffer.byteLength(rendered) + (snippetLines.length ? 1 : 0);
-              checkBytes(outputBytes + snippetBytes);
-              snippetLines.push(rendered);
-              for (const match of line.matchAll(/`+/g))
-                longest = Math.max(longest, match[0].length);
-            }
-            const snippet = snippetLines.join("\n");
-            const fence = "`".repeat(longest + 1);
-            appendText("", fence, snippet, fence);
-          } else appendText("", "Source context was not captured for this file.");
+            appendCode(
+              "Captured source (saved diff does not cover the full selection):",
+              "",
+              (function* () {
+                for (let position = from; position <= to; position++)
+                  yield `${position >= note.line && position <= end ? ">" : " "} ${position} | ${lines[position - 1]!}`;
+              })(),
+            );
+          } else if (!covered) appendText("Source context was not captured for this file.");
           appendText("", "Comment:", note.text, "");
           for (const reply of target.notes.notes.filter((item) => item.parentId === note.id))
             append(reply, number);

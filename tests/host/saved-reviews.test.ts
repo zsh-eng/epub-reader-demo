@@ -103,6 +103,10 @@ describe("saved reviews", () => {
       includeBase: false,
     });
     expect((await store.review(saved.id, target.id)).comparison).toEqual(target.comparison);
+    await store.mutate(saved.id, target.id, 0, note());
+    expect((await store.feedback(saved.id)).text).toContain(
+      "Comparison: resolved-parent-of-main → resolved-topic\nComparison kind: range\nCaptured working state: no",
+    );
   });
 
   it("clears notes from all targets and counts linked worktrees as one repository", async () => {
@@ -165,16 +169,113 @@ describe("saved reviews", () => {
     await store.mutate(saved.id, b.id, 0, note("B feedback"));
     const feedback = await store.feedback(saved.id);
     expect(feedback).toMatchObject({ count: 3, repositoryCount: 2, revision: 3 });
-    expect(feedback.text).toContain("File: old.ts\nSide: before\nSelected lines: 5–6");
+    expect(feedback.text).toMatch(/^# Diff comments:\n/);
+    expect(feedback.text).toContain(
+      "## User Comment 1\nFile: old.ts\nWorkspace: /repo/a\nSide: L\nLines: 5-6",
+    );
     expect(feedback.text).toContain("Rename: old.ts → new.ts");
     expect(feedback.text).toContain(
       "  2 | two\n  3 | three\n  4 | four\n> 5 | five\n> 6 | six\n  7 | seven\n  8 | eight\n  9 | nine",
     );
     expect(feedback.text).not.toContain("  1 | one");
-    expect(feedback.text).toContain("Reply 2 to comment 1");
-    expect(feedback.text).toContain("Repository: /repo/b");
+    expect(feedback.text).toContain("Reply to: User Comment 1");
+    expect(feedback.text).toContain(
+      "## User Comment 3\nFile: new.ts\nWorkspace: /repo/b\nSide: R\nLines: 5-6",
+    );
     expect(feedback.text).toContain("Comparison: base-oid → working");
     expect((await store.get(saved.id)).commentCount).toBe(3);
+  });
+
+  it("exports captured renamed diff hunks with both sides and exact selected ranges", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => {
+      const value = capture();
+      value.review.patch =
+        "diff --git a/old.ts b/new.ts\nsimilarity index 70%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n@@ -2,8 +2,8 @@\n two\n three\n four\n-five\n-six\n+FIVE\n+SIX\n seven\n eight\n nine\n";
+      value.sources[0].new = value.sources[0].new.replace("five\nsix", "FIVE\nSIX");
+      return value;
+    });
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, note());
+    await store.mutate(saved.id, target.id, 1, {
+      ...note(),
+      note: { ...note().note, side: "old" },
+    });
+    const exported = await store.feedback(saved.id);
+    const [newComment, oldComment] = exported.text.split("## User Comment ").slice(1);
+    expect(newComment).toContain("File: new.ts\nWorkspace: /repo/a\nSide: R\nLines: 5-6");
+    expect(oldComment).toContain("File: old.ts\nWorkspace: /repo/a\nSide: L\nLines: 5-6");
+    for (const comment of [newComment, oldComment]) {
+      expect(comment).toContain("Diff hunk:\n```diff\n@@");
+      expect(comment).toContain("-five\n-six\n+FIVE\n+SIX");
+      expect(comment).toContain("Rename: old.ts → new.ts");
+      expect(comment).not.toContain("Captured source");
+    }
+  });
+
+  it("bounds excerpts from huge added hunks and keeps safe diff fences and newline markers", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => {
+      const lines = Array.from({ length: 1000 }, (_, index) => `line ${index + 1}`);
+      lines[499] = "````";
+      const value = capture("/repo/a", lines.join("\n"));
+      value.review.files[0] = {
+        path: "new.ts",
+        status: "A",
+        additions: 1000,
+        deletions: 0,
+        binary: false,
+      };
+      value.sources[0].old = "";
+      value.review.patch = `diff --git a/new.ts b/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,1000 @@\n${lines.map((line) => `+${line}`).join("\n")}\n\\ No newline at end of file\n`;
+      return value;
+    });
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, {
+      type: "add",
+      note: { path: "new.ts", side: "new", line: 500, endLine: 502, text: "Middle range" },
+    });
+    await store.mutate(saved.id, target.id, 1, {
+      type: "add",
+      note: { path: "new.ts", side: "new", line: 1000, text: "Last line" },
+    });
+    const exported = await store.feedback(saved.id);
+    expect(exported.text).toContain("Diff hunk:\n`````diff\n@@ -0,0 +497,9 @@\n+line 497");
+    expect(exported.text).toContain("+````\n+line 501\n+line 502");
+    expect(exported.text).not.toContain("+line 496\n");
+    expect(exported.text).not.toContain("+line 506\n");
+    expect(exported.text).toContain("@@ -0,0 +997,4 @@");
+    expect(exported.text).toContain("+line 1000\n\\ No newline at end of file");
+    expect(exported.text.length).toBeLessThan(2000);
+  });
+
+  it("uses captured source for a selection that crosses a gap between patch hunks", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => {
+      const value = capture("/repo/a", "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\n");
+      value.review.patch =
+        "diff --git a/new.ts b/new.ts\n--- a/new.ts\n+++ b/new.ts\n@@ -1,2 +1,2 @@\n one\n-two\n+TWO\n@@ -8,2 +8,2 @@\n-eight\n+EIGHT\n nine\n";
+      value.sources[0].new = value.sources[0].new.replace("two", "TWO").replace("eight", "EIGHT");
+      return value;
+    });
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, {
+      type: "add",
+      note: {
+        path: "new.ts",
+        side: "new",
+        line: 2,
+        endLine: 8,
+        text: "Range including expanded unchanged lines",
+      },
+    });
+    const exported = await store.feedback(saved.id);
+    expect(exported.text).toContain(
+      "Captured source (saved diff does not cover the full selection):",
+    );
+    expect(exported.text).toContain("> 2 | TWO\n> 3 | three");
+    expect(exported.text).toContain("> 8 | EIGHT\n  9 | nine");
+    expect(exported.text).not.toContain("Diff hunk:");
   });
 
   it("clears across targets only at the expected bundle revision and invalidates old note writes", async () => {
@@ -316,30 +417,40 @@ describe("saved reviews", () => {
     expect(exported.text).toContain("> 6 | f");
   });
 
-  it("bounds repeated source context by UTF-8 bytes without truncating or changing comments", async () => {
-    const store = new SavedReviewStore(directory);
-    const content = "é".repeat(768 * 1024);
-    const saved = await store.create(input, async () => capture("/repo/a", `${content}\n`));
-    const target = saved.targets[0];
-    for (let revision = 0; revision < 6; revision++) {
-      await store.mutate(saved.id, target.id, revision, {
-        type: "add",
-        note: { path: "new.ts", side: "new", line: 1, text: `Feedback ${revision}` },
+  it.each(["source", "diff"])(
+    "bounds repeated %s context by UTF-8 bytes without truncating or changing comments",
+    async (kind) => {
+      const store = new SavedReviewStore(directory);
+      const content = "é".repeat(768 * 1024);
+      const saved = await store.create(input, async () => {
+        const value = capture("/repo/a", `${content}\n`);
+        if (kind === "diff") {
+          value.sources[0].old = "";
+          value.review.patch = `diff --git a/new.ts b/new.ts\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1 @@\n+${content}\n`;
+        }
+        return value;
       });
-    }
-    await expect(store.feedback(saved.id)).rejects.toMatchObject({
-      code: "saved-feedback-too-large",
-      status: 413,
-    });
-    const notes = await store.notes(saved.id, target.id);
-    expect(notes.notes).toHaveLength(6);
-    await store.mutate(saved.id, target.id, 6, { type: "remove", id: notes.notes[5].id });
-    await store.mutate(saved.id, target.id, 7, { type: "remove", id: notes.notes[4].id });
-    const feedback = await store.feedback(saved.id);
-    expect(feedback.count).toBe(4);
-    expect(Buffer.byteLength(feedback.text)).toBeLessThan(8 * 1024 * 1024);
-    expect(feedback.text.split(content)).toHaveLength(5);
-  });
+      const target = saved.targets[0];
+      for (let revision = 0; revision < 6; revision++) {
+        await store.mutate(saved.id, target.id, revision, {
+          type: "add",
+          note: { path: "new.ts", side: "new", line: 1, text: `Feedback ${revision}` },
+        });
+      }
+      await expect(store.feedback(saved.id)).rejects.toMatchObject({
+        code: "saved-feedback-too-large",
+        status: 413,
+      });
+      const notes = await store.notes(saved.id, target.id);
+      expect(notes.notes).toHaveLength(6);
+      await store.mutate(saved.id, target.id, 6, { type: "remove", id: notes.notes[5].id });
+      await store.mutate(saved.id, target.id, 7, { type: "remove", id: notes.notes[4].id });
+      const feedback = await store.feedback(saved.id);
+      expect(feedback.count).toBe(4);
+      expect(Buffer.byteLength(feedback.text)).toBeLessThan(8 * 1024 * 1024);
+      expect(feedback.text.split(content)).toHaveLength(5);
+    },
+  );
 
   it("exports source with many backtick runs without exceeding the function argument limit", async () => {
     const store = new SavedReviewStore(directory);
