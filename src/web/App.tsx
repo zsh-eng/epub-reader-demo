@@ -32,6 +32,7 @@ import { FileViewTabs } from "./components/FileViewTabs";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
 
 import { createFilePrefetch } from "./data/file-prefetch";
+import { createRenderDiagnostics } from "./data/render-diagnostics";
 
 type Annotation = { note?: Note; draft?: NoteTarget };
 type Selection = {
@@ -101,6 +102,7 @@ export function App({
   const [blameEnabled, setBlameEnabled] = useState(false);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
   const workerPool = useWorkerPool();
+  const [diagnostics] = useState(createRenderDiagnostics);
   const [rawBrowseApi] = useState(
     () =>
       providedBrowseApi ??
@@ -355,6 +357,32 @@ export function App({
     });
   }, [files, notes, showNotes, draft, collapsed, currentVersion]);
 
+  useEffect(() => {
+    diagnostics.record("comparison", {
+      review: state.review?.id,
+      status: state.status,
+      version: currentVersion,
+      mode,
+      wrap,
+      theme: activeTheme.id,
+      fileCount: items.length,
+      files: items.slice(0, 50).map((item) => ({
+        id: item.id,
+        name: item.type === "diff" ? item.fileDiff.name : item.file.name,
+      })),
+    });
+  }, [
+    diagnostics,
+    state.review?.id,
+    state.status,
+    currentVersion,
+    mode,
+    wrap,
+    activeTheme.id,
+    items,
+  ]);
+
+  const reviewId = state.review?.id;
   const options = useMemo<CodeViewReactOptions<Annotation, undefined>>(
     () => ({
       theme: activeTheme.pierreTheme,
@@ -370,7 +398,13 @@ export function App({
       layout: { gap: 0, paddingTop: 0, paddingBottom: 0 },
       loadDiffFiles: async (metadata: FileDiffMetadata) => {
         try {
+          const expectedReview = reviewId;
+          if (controller.getSnapshot().review?.id !== expectedReview)
+            throw new Error("The comparison changed.");
+          diagnostics.record("context-request", { review: expectedReview, path: metadata.name });
           const source = await controller.loadSources(metadata.name);
+          if (source.reviewId !== expectedReview) throw new Error("The comparison changed.");
+          diagnostics.record("context-ready", { review: source.reviewId, path: metadata.name });
           setContextError(null);
           return {
             oldFile:
@@ -388,11 +422,27 @@ export function App({
             },
           };
         } catch (error) {
-          setContextError(error instanceof Error ? error.message : "Could not load file context");
+          if (controller.getSnapshot().review?.id === reviewId)
+            setContextError(error instanceof Error ? error.message : "Could not load file context");
           throw error;
         }
       },
-      onPostRender: (_node, _instance, phase) => {
+      onPostRender: (node, instance, phase) => {
+        const rendered = "fileDiff" in instance ? instance.fileDiff : undefined;
+        if (phase !== "unmount")
+          diagnostics.rendered(
+            node,
+            {
+              review: reviewId,
+              phase,
+              mode,
+              wrap,
+              path: rendered?.name,
+              cacheKey: rendered?.cacheKey,
+              hunks: rendered?.hunks.length,
+            },
+            instance,
+          );
         if (phase === "unmount" || renderStart.current.measured) return;
         renderStart.current.measured = true;
         const generation = renderStart.current.generation;
@@ -405,7 +455,7 @@ export function App({
         );
       },
     }),
-    [controller, theme, activeTheme.pierreTheme, mode, wrap],
+    [controller, theme, activeTheme.pierreTheme, mode, wrap, reviewId, diagnostics],
   );
 
   const hits = useMemo(() => {
@@ -739,6 +789,11 @@ export function App({
     ["search-word-back", "Search file backward for word at cursor", "#"],
   ];
   const commands: ReviewCommand[] = [
+    {
+      id: "render-diagnostics",
+      label: "Download render diagnostics",
+      run: () => diagnostics.download(),
+    },
     {
       id: "find-file-text",
       managesFocus: true,
@@ -1486,6 +1541,7 @@ export function App({
               )}
               {items.length > 0 ? (
                 <CodeView
+                  key={state.review?.id}
                   ref={viewer}
                   onScroll={(position) => {
                     if (fileState.active === "changes") reviewScroll.current = position;

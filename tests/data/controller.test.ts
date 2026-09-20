@@ -205,6 +205,26 @@ describe("review request ownership", () => {
     controller.dispose();
   });
 
+  test("reselecting or refreshing the same review retains Pierre metadata identity", async () => {
+    const { controller } = fixture({
+      parse: async () =>
+        parseReviewPatch(
+          "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n",
+        ),
+    });
+    await controller.initialize();
+    await controller.selectComparison({ kind: "commit", commit: A });
+    const before = controller.getSnapshot().files;
+    expect(before[0].metadata).not.toBeNull();
+    await controller.selectComparison({ kind: "commit", commit: A });
+    expect(controller.getSnapshot().files).toBe(before);
+    await controller.refresh();
+    expect(controller.getSnapshot().files[0].metadata).toBe(before[0].metadata);
+    await controller.selectComparison({ kind: "commit", commit: B });
+    expect(controller.getSnapshot().files[0].metadata).not.toBe(before[0].metadata);
+    controller.dispose();
+  });
+
   test("renderer hydration cannot mutate the canonical byte-bounded commit cache", async () => {
     const patch = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n";
     const { controller, calls } = fixture({

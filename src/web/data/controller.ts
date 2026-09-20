@@ -225,10 +225,16 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       : { ...semantic, userNotes: [], liveNotes: [], draftNote: null };
     // Pierre hydrates partial metadata in place. Keep renderer-owned metadata separate
     // from the canonical entries whose retained size is measured by the review LRU.
-    const files = entry.files.map((file) => ({
-      ...file,
-      metadata: file.metadata ? structuredClone(file.metadata) : null,
-    }));
+    // Re-selecting the same review must retain the exact metadata objects.
+    // Pierre compares prepared and rendered layouts by object identity, even
+    // when their cache keys match. Replacing these during highlighting races
+    // with its existing render cache and can fail finalizeRender.
+    const files = sameReview
+      ? snapshot.files
+      : entry.files.map((file) => ({
+          ...file,
+          metadata: file.metadata ? structuredClone(file.metadata) : null,
+        }));
     const visibleFiles = filtered(files, snapshot.filter);
     const selectedFileId = visibleFiles.some((file) => file.id === snapshot.selectedFileId)
       ? snapshot.selectedFileId
