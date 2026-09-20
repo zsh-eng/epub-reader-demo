@@ -107,3 +107,38 @@ test("word motions handle non-BMP letters without splitting a character", () => 
   keys(model, "b");
   expect(model.column).toBe(0);
 });
+
+test("Shift+A moves to the final grapheme without entering edit mode", () => {
+  const model = new VimNavigation("a🙂e\u0301\n\nlonger line");
+  keys(model, "A");
+  expect([model.line, model.column, model.characterLength]).toEqual([0, 3, 2]);
+  keys(model, "jA");
+  expect([model.line, model.column]).toEqual([1, 0]);
+  keys(model, "j0A");
+  expect([model.line, model.column]).toEqual([2, 10]);
+  expect(model.text).toBe("a🙂e\u0301\n\nlonger line");
+});
+
+test("z motions align the current line, retain its column, and accept a line count", () => {
+  const model = new VimNavigation("abcdef\nabcdef\nabcdef\n");
+  keys(model, "j3l");
+  for (const [key, align] of [
+    ["z", "center"],
+    ["t", "start"],
+    ["b", "end"],
+  ]) {
+    model.key("z");
+    expect(model.key(key!)).toEqual({ handled: true, align });
+    expect([model.line, model.column]).toEqual([1, 3]);
+  }
+  keys(model, "3z");
+  expect(model.key("t").align).toBe("start");
+  expect([model.line, model.column]).toEqual([2, 3]);
+  keys(model, "99z");
+  model.key("b");
+  expect([model.line, model.column]).toEqual([2, 3]);
+  keys(model, "2z");
+  model.key("Escape");
+  keys(model, "k");
+  expect(model.line).toBe(1);
+});

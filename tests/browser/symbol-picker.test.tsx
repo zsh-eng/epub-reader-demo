@@ -88,13 +88,9 @@ test("file symbols filter locally and Enter opens the arrow-selected symbol", as
   expect(getComputedStyle(popup).transitionProperty).toBe("none");
   await page.getByRole("combobox", { name: "Find symbol in file" }).fill("ex");
   await userEvent.keyboard("{ArrowDown}");
-  await expect
-    .poll(() =>
-      document
-        .querySelector("diffs-container")
-        ?.shadowRoot?.querySelector('[data-line="80"][data-selected-line]'),
-    )
-    .toBeTruthy();
+  expect(document.querySelector('[aria-label="Symbol preview"]')).toBeNull();
+  expect(popup.getBoundingClientRect().left).toBe(8);
+  expect(popup.getBoundingClientRect().width).toBeLessThan(350);
   expect(onOpen).not.toHaveBeenCalled();
   expect(api.symbols).toHaveBeenCalledTimes(1);
   expect(api.read).not.toHaveBeenCalled();

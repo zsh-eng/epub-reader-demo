@@ -48,6 +48,7 @@ export function useFileVim({
   const host = useRef<HTMLElement | null>(null);
   const active = useRef(false);
   const paintPending = useRef(false);
+  const currentPaint = useRef<() => void>(() => {});
   const worker = useRef<Worker | null>(null);
   const request = useRef(0);
   const restoreFocus = useRef(false);
@@ -69,7 +70,7 @@ export function useFileVim({
   const message = result.identity === identity ? result.message : "";
   const highlightQuery = highlightsVisible && result.identity === identity ? result.query : "";
   const paint = useCallback(
-    (align?: "center" | "nearest") => {
+    (align?: "start" | "center" | "end" | "nearest") => {
       const element = caret.current,
         container = pane.current;
       if (!element || !container) return;
@@ -90,7 +91,7 @@ export function useFileVim({
         !visibleBounds ||
         lineBounds.top < visibleBounds.top ||
         lineBounds.bottom > visibleBounds.bottom;
-      if (align && instance && (align === "center" || needsScroll)) {
+      if (align && instance && (align !== "nearest" || needsScroll)) {
         instance.scrollTo({
           type: "line",
           id: identity,
@@ -101,6 +102,9 @@ export function useFileVim({
         // Let Pierre coalesce pending navigation before its next render. Initial
         // file positioning still uses a synchronous flush in FullFileView.
         element.hidden = true;
+        // An already-aligned or clamped scroll can leave the DOM unchanged.
+        // Repaint even when Pierre has no new rows to report.
+        if (align !== "nearest") requestAnimationFrame(() => currentPaint.current());
         return;
       }
       container.dataset.vimLine = String(model.line + 1);
@@ -118,6 +122,7 @@ export function useFileVim({
         first: Text | null = null,
         last: Text | null = null;
       const end = model.column + Math.max(1, model.characterLength);
+      const emptyLine = model.characterLength === 0;
       while (walker.nextNode()) {
         const node = walker.currentNode as Text;
         if (!first && offset + node.length > model.column) {
@@ -131,7 +136,8 @@ export function useFileVim({
         }
         offset += node.length;
       }
-      let bounds = first && last ? range.getBoundingClientRect() : row.getBoundingClientRect();
+      const characterBounds = first && last && !emptyLine;
+      let bounds = characterBounds ? range.getBoundingClientRect() : row.getBoundingClientRect();
       // Pierre owns a horizontal scroller inside the shadow root. Keep the actual
       // character visible, rather than scrolling the full (potentially wide) row.
       if (align) {
@@ -144,7 +150,7 @@ export function useFileVim({
           const rect = parent.getBoundingClientRect();
           if (bounds.right > rect.right - 12) parent.scrollLeft += bounds.right - rect.right + 12;
           else if (bounds.left < rect.left + 50) parent.scrollLeft -= rect.left + 50 - bounds.left;
-          bounds = first && last ? range.getBoundingClientRect() : row.getBoundingClientRect();
+          bounds = characterBounds ? range.getBoundingClientRect() : row.getBoundingClientRect();
           break;
         }
       }
@@ -154,9 +160,15 @@ export function useFileVim({
         element.hidden = true;
         return;
       }
-      element.style.left = `${bounds.left - box.left}px`;
-      element.style.top = `${bounds.top - box.top}px`;
-      element.style.width = `${first && last ? Math.max(2, bounds.width) : 7}px`;
+      // Animate cursor moves only. Scrolling and initial placement stay exact.
+      const left = `${bounds.left - box.left}px`;
+      const top = `${bounds.top - box.top}px`;
+      if (align || element.style.left !== left || element.style.top !== top)
+        element.dataset.animate = String(!!align && !element.hidden);
+      element.style.font = getComputedStyle(row).font;
+      element.style.left = left;
+      element.style.top = top;
+      element.style.width = characterBounds ? `${Math.max(2, bounds.width)}px` : "1ch";
       element.style.height = `${bounds.height || 20}px`;
       element.dataset.vimLine = String(model.line + 1);
       element.dataset.vimColumn = String(model.column + 1);
@@ -164,7 +176,6 @@ export function useFileVim({
     },
     [identity, model, viewer],
   );
-  const currentPaint = useRef(paint);
   useLayoutEffect(() => {
     currentPaint.current = paint;
   }, [paint]);
@@ -284,7 +295,10 @@ export function useFileVim({
   useEffect(() => {
     const element = pane.current;
     if (!element) return;
-    const onScroll = () => paint();
+    const onScroll = () => {
+      if (caret.current) caret.current.dataset.animate = "false";
+      paint();
+    };
     element.addEventListener("scroll", onScroll, true);
     const observer = new ResizeObserver(onScroll);
     observer.observe(element);
@@ -324,7 +338,36 @@ export function useFileVim({
     }
     paint(result.align ?? "nearest");
   };
+  const position = useMemo(
+    () => ({
+      capture() {
+        return {
+          line: model.line,
+          column: model.column,
+          desired: model.desired,
+          query: model.query,
+          direction: model.direction,
+          matches: model.matches,
+        };
+      },
+      restore(
+        saved: Pick<
+          SearchSession,
+          "line" | "column" | "desired" | "query" | "direction" | "matches"
+        >,
+      ) {
+        model.restoreSearch(saved);
+        paint();
+      },
+      jump(line: number, column = 1) {
+        model.jump(line - 1, column - 1);
+        paint("center");
+      },
+    }),
+    [model, paint],
+  );
   return {
+    position,
     pane,
     caret,
     search,

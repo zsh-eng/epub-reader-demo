@@ -9,7 +9,8 @@ A local Git review app for macOS and Omarchy Linux. Browse commits, branches, an
 - **Continuous review.** Keep all changed paths in view. Switch between split and unified diffs, expand context, wrap lines, and add notes to selected lines.
 - **Branches and worktrees.** Tabs find existing worktrees automatically. View a branch without a worktree directly from its Git objects. Selecting a commit does not check it out.
 - **Full-file browsing.** The right sidebar includes unchanged and untracked files in the selected worktree. Preview a file with one click; keep its tab with a double-click. Historical before/after versions are available from the diff.
-- **File and content search.** Preview results beside the list. File search ranks open and recent paths within the selected source. Resume the last query and preview position.
+- **Open full files.** Click a filename in Changes to open its full file in the selected source.
+- **File and content search.** Preview results beside the list. File search ranks open and recent paths within the selected source. Reopening selects the saved query, so typing replaces it; Right Arrow lets you extend it.
 - **Line history.** Select a line or range in a full file to see its Git blame attribution.
 - **Live themes.** Preview Vitesse, Rosé Pine, Tokyo Night, and Graphite palettes. Geist and Geist Mono load locally.
 - **Keyboard commands.** Press `?` for a searchable command guide with keycaps. No space-key leader.
@@ -109,17 +110,18 @@ Close actions preserve the Changes tab and other workspaces. Desktop or browser 
 
 ## Symbols and Vim navigation
 
-![Project symbol palette with a Bun source preview](docs/validation/project-symbols.png)
+![In-file symbol palette with a live jump in the current file](docs/validation/symbol-navigation.png)
 
-Symbol search opens a palette with a file preview. Use the **File** scope for the exact file on screen, or **Project** for the selected repository's indexed commit. Arrow keys preview a result; Enter opens it; Escape leaves the current file unchanged. There is no outline panel.
+In-file symbol search (`⌘O`) opens a narrow palette over the left sidebar. Arrow keys jump in the current file and highlight the symbol name. Enter keeps that position; Escape restores the original cursor and scroll position. Project symbol search (`⌘⇧O`) keeps a separate file preview and searches the selected repository’s indexed commit. Both palettes retain and select the last query.
 
 Symbol extraction uses Universal Ctags. Install it with `brew install universal-ctags` on macOS or `sudo pacman -S ctags` on Omarchy. The project index and individual file extraction share this binary. Project symbols require the optional Zoekt setup above. After updating from a text-only search build, run `node dist/cli.js --setup-search` again to install the updated helper. Existing text-only indexes rebuild when symbol extraction is enabled. Language coverage follows the installed Ctags parsers: Universal Ctags 6.2.1 covers TypeScript and C/C++, but does not include a Zig parser. Text search still works for Zig.
 
-Use the command palette to **Enable Vim navigation in files**. This preference is saved. Click the file pane to use normal-mode navigation:
+Use the command palette to **Enable Vim navigation in files**. This preference is saved. Files take keyboard focus when opened, ready for normal-mode navigation:
 
 - `h j k l`, `w b e`, `0 ^ $`, and counts such as `10j`.
 - `gg`, `G`, `42G`, `{` / `}` for paragraphs, and `Ctrl+D` / `Ctrl+U` for half pages.
-- `f` / `F` / `t` / `T` followed by a character, `;` / `,` to repeat, and `zz` to center the cursor.
+- `f` / `F` / `t` / `T` followed by a character, `;` / `,` to repeat, and `Shift+A` to move to the end of the line.
+- `zz` / `zt` / `zb` to place the current line at the middle / top / bottom of the view. These keep the cursor column.
 - `/` / `?` for live forward/backward file search, `n` / `N` for matches, and `*` / `#` for the word at the cursor. Lowercase queries ignore case; uppercase letters enable case-sensitive matching. Enter accepts the preview. Escape cancels a preview and clears highlights; in normal mode it clears highlights while keeping the search.
 
 The file remains read-only. While a Vim file pane has focus, `?` searches backward; `⌘K` / `Ctrl+K` still opens commands. Palettes and text inputs keep their normal keyboard behavior. Symbol search does not require Vim mode.

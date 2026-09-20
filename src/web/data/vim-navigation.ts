@@ -15,7 +15,7 @@ const floorIndex = (values: number[], value: number) => {
 const kind = (char: string) => (/\s/u.test(char) ? 0 : keyword.test(char) ? 1 : 2);
 export type VimMotion = {
   handled: boolean;
-  align?: "center";
+  align?: "start" | "center" | "end";
   search?: 1 | -1;
   wordSearch?: string;
 };
@@ -231,8 +231,12 @@ export class VimNavigation {
       if (key === "g") this.jump(explicit ? n - 1 : 0);
       return { handled: true };
     }
-    if (prefix === "z")
-      return { handled: true, ...(key === "z" ? { align: "center" as const } : {}) };
+    if (prefix === "z") {
+      const align =
+        key === "t" ? "start" : key === "z" ? "center" : key === "b" ? "end" : undefined;
+      if (align && explicit) this.jump(n - 1, this.desired, true);
+      return { handled: true, ...(align ? { align } : {}) };
+    }
     if (key === "j" || key === "k")
       this.jump(this.line + (key === "j" ? n : -n), this.desired, true);
     else if (key === "h" || key === "l") {
@@ -246,8 +250,8 @@ export class VimNavigation {
       for (let i = 0; i < n; i++) this.word(key);
     } else if (key === "0") this.jump(this.line);
     else if (key === "^") this.jump(this.line, Math.max(0, this.lines[this.line]!.search(/\S/)));
-    else if (key === "$") {
-      this.jump(this.line + n - 1);
+    else if (key === "$" || key === "A") {
+      this.jump(this.line + (key === "$" ? n - 1 : 0));
       this.jump(this.line, this.endColumn);
       this.desired = Infinity;
     } else if (key === "G") this.jump(explicit ? n - 1 : this.lines.length - 1);

@@ -26,7 +26,7 @@ import { createFileWorkspace, sourceKey, useFileWorkspace } from "./data/file-wo
 import { RepositoryFiles } from "./components/RepositoryFiles";
 import { FilePicker } from "./components/FilePicker";
 import { SymbolPicker } from "./components/SymbolPicker";
-import { FullFileView } from "./components/FullFileView";
+import { FullFileView, type BeginFileSymbolPreview } from "./components/FullFileView";
 import { FileViewTabs } from "./components/FileViewTabs";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
 
@@ -71,6 +71,11 @@ export function App({
   const [pickerResume, setPickerResume] = useState(false);
   const [commandsOpen, setCommandsOpen] = useState(false);
   const [symbolPickerOpen, setSymbolPickerOpen] = useState(false);
+  const [beginFilePreview, setBeginFilePreview] = useState<BeginFileSymbolPreview>();
+  const onSymbolPreviewReady = useCallback(
+    (begin: BeginFileSymbolPreview | null) => setBeginFilePreview(() => begin ?? undefined),
+    [],
+  );
   const [symbolMode, setSymbolMode] = useState<"file" | "project">("file");
   const [vimEnabled, setVimEnabled] = useState(
     () => readPreference("vim", "off", ["on", "off"]) === "on",
@@ -238,6 +243,7 @@ export function App({
     });
   }, [controller]);
   const files = state.visibleFiles;
+  const fileInfoById = useMemo(() => new Map(files.map((file) => [file.id, file.info])), [files]);
   const notes = state.notes?.notes ?? emptyNotes;
   const selectedFile = files.find((file) => file.id === state.selectedFileId);
 
@@ -691,6 +697,7 @@ export function App({
     ["line-start", "Start of file line", "0"],
     ["line-text", "First non-space character in file line", "^"],
     ["line-end", "End of file line", "$"],
+    ["line-end-a", "End of file line (Shift+A)", "A"],
     ["paragraph-back", "Previous paragraph in file", "{"],
     ["paragraph-next", "Next paragraph in file", "}"],
     ["file-start", "Start of file", "gg"],
@@ -698,6 +705,8 @@ export function App({
     ["page-down", "Half page down in file", "d", true],
     ["page-up", "Half page up in file", "u", true],
     ["center", "Center file cursor", "zz"],
+    ["cursor-top", "Place current file line at top", "zt"],
+    ["cursor-bottom", "Place current file line at bottom", "zb"],
     ["char-forward", "Find character forward in line", "f"],
     ["char-back", "Find character backward in line", "F"],
     ["till-forward", "Move before character forward in line", "t"],
@@ -1001,7 +1010,13 @@ export function App({
           }}
         >
           <Icon name="file" size={13} />
-          <span>{file.path}</span>
+          <button
+            role="link"
+            {...stylex.props(styles.fileLink)}
+            onClick={() => openWorkingFile(file.path)}
+          >
+            {file.path}
+          </button>
           <span {...stylex.props(ui.grow)} />
           <span {...stylex.props(ui.muted)}>
             {file.info.binary
@@ -1042,6 +1057,8 @@ export function App({
       )}
       <ThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} />
       <SymbolPicker
+        sidebarWidth={sidebarVisible ? sidebarWidth : 316}
+        beginFilePreview={beginFilePreview}
         open={symbolPickerOpen}
         onOpenChange={setSymbolPickerOpen}
         mode={symbolMode}
@@ -1466,26 +1483,56 @@ export function App({
                       "--diffs-deletion-color-override": tokens.red,
                     } as CSSProperties
                   }
-                  renderHeaderPrefix={(item) => (
-                    <button
-                      {...stylex.props(ui.button, ui.iconButton)}
-                      aria-label={`${collapsed.has(item.id) ? "Expand" : "Collapse"} ${item.type === "diff" ? item.fileDiff.name : item.file.name}`}
-                      onClick={() =>
-                        setCollapsed((current) => {
-                          const next = new Set(current);
-                          if (next.has(item.id)) next.delete(item.id);
-                          else next.add(item.id);
-                          return next;
-                        })
-                      }
-                    >
-                      <Icon
-                        name="chevron"
-                        size={12}
-                        style={{ transform: collapsed.has(item.id) ? "rotate(-90deg)" : undefined }}
-                      />
-                    </button>
-                  )}
+                  renderCustomHeader={(item) => {
+                    const path = item.type === "diff" ? item.fileDiff.name : item.file.name;
+                    const info = fileInfoById.get(item.id);
+                    return (
+                      <div {...stylex.props(styles.diffHeader)}>
+                        <button
+                          {...stylex.props(ui.button, ui.iconButton)}
+                          aria-label={`${collapsed.has(item.id) ? "Expand" : "Collapse"} ${path}`}
+                          onClick={() =>
+                            setCollapsed((current) => {
+                              const next = new Set(current);
+                              if (next.has(item.id)) next.delete(item.id);
+                              else next.add(item.id);
+                              return next;
+                            })
+                          }
+                        >
+                          <Icon
+                            name="chevron"
+                            size={12}
+                            style={{
+                              transform: collapsed.has(item.id) ? "rotate(-90deg)" : undefined,
+                            }}
+                          />
+                        </button>
+                        {item.type === "diff" &&
+                          item.fileDiff.prevName &&
+                          item.fileDiff.prevName !== path && (
+                            <span {...stylex.props(ui.muted)} title={item.fileDiff.prevName}>
+                              {item.fileDiff.prevName} →
+                            </span>
+                          )}
+                        <button
+                          role="link"
+                          {...stylex.props(styles.fileLink)}
+                          onClick={() => openWorkingFile(path)}
+                          title={`Open full file · ${path}`}
+                        >
+                          {path}
+                        </button>
+                        <span {...stylex.props(ui.grow)} />
+                        {info && (
+                          <>
+                            <span {...stylex.props(ui.added)}>+{info.additions}</span>
+                            <span {...stylex.props(ui.removed)}>−{info.deletions}</span>
+                          </>
+                        )}
+                      </div>
+                    );
+                  }}
                   renderAnnotation={(annotation) =>
                     annotation.metadata?.draft ? (
                       <NoteComposer
@@ -1564,6 +1611,7 @@ export function App({
                 column={activeFile.column}
                 vimEnabled={vimEnabled}
                 onNavigationReady={onNavigationReady}
+                onSymbolPreviewReady={onSymbolPreviewReady}
                 onRefresh={() => void fileWorkspace.refresh()}
                 onClose={() => fileWorkspace.close(activeFile.id)}
                 onOpenBefore={
@@ -1665,6 +1713,31 @@ export function App({
 }
 
 const styles = stylex.create({
+  diffHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: 8,
+    backgroundColor: tokens.panel,
+    color: tokens.text,
+    fontFamily: tokens.ui,
+    fontSize: 12,
+    minHeight: 40,
+  },
+  fileLink: {
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    color: tokens.text,
+    fontFamily: tokens.ui,
+    fontSize: 12,
+    cursor: "pointer",
+    textAlign: "left",
+    padding: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    textDecoration: { default: "none", ":hover": "underline" },
+  },
   app: {
     position: "fixed",
     inset: 0,

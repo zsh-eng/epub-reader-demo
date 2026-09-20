@@ -731,3 +731,89 @@ test("benchmark: Vim cursor response on 40k lines and a 100k-character line", as
     bodyEncoding: "utf-8",
   });
 }, 30000);
+
+test("Vim blank-line cursor is one cell wide and only cursor moves animate", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, text: "0000\n\nnext\n", identity: "empty-caret" }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation" });
+  await expect.element(pane).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  const caret = document.querySelector<HTMLElement>("[data-vim-caret]")!;
+  await expect.poll(() => caret.hidden).toBe(false);
+  const width = caret.getBoundingClientRect().width;
+  await userEvent.keyboard("j");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+  expect(caret.style.width).toBe("1ch");
+  expect(Math.abs(caret.getBoundingClientRect().width - width)).toBeLessThan(0.6);
+  expect(caret.getBoundingClientRect().width).toBeGreaterThan(5);
+  expect(caret.getBoundingClientRect().width).toBeLessThan(12);
+  // Check the next key synchronously; initial font/resize events may cancel
+  // the first transition, as they should when viewport geometry changes.
+  pane
+    .element()
+    .dispatchEvent(new KeyboardEvent("keydown", { key: "k", bubbles: true, cancelable: true }));
+  expect(getComputedStyle(caret).transitionTimingFunction).toBe("ease-out");
+  expect(getComputedStyle(caret).transitionProperty).toBe("left, top");
+  expect(getComputedStyle(caret).transitionDuration).toBe("0.065s");
+  pane.element().dispatchEvent(new Event("scroll"));
+  expect(getComputedStyle(caret).transitionProperty).toBe("none");
+});
+
+test("Shift+A and z commands position the cursor and viewport in a virtualized file", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, identity: "vim-alignment", text: "  abcdef\n".repeat(4000) }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation" });
+  await expect.element(pane).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  const scroller = [...pane.element().querySelectorAll("div")].find(
+    (node) => getComputedStyle(node).overflowY === "auto",
+  )!;
+  const caret = document.querySelector<HTMLElement>("[data-vim-caret]")!;
+  await userEvent.keyboard("2000G{Shift>}A{/Shift}");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2000");
+  await expect.element(pane).toHaveAttribute("data-vim-column", "8");
+  for (const [keys, align] of [
+    ["zz", "center"],
+    ["zt", "start"],
+    ["zb", "end"],
+    ["zb", "end"],
+  ]) {
+    await userEvent.keyboard(keys!);
+    await expect
+      .poll(() => {
+        const row = document
+          .querySelector("diffs-container")
+          ?.shadowRoot?.querySelector('[data-line="2000"]');
+        if (!row) return Infinity;
+        const bounds = row.getBoundingClientRect();
+        const viewport = scroller.getBoundingClientRect();
+        return Math.abs(
+          align === "start"
+            ? bounds.top - viewport.top
+            : align === "end"
+              ? bounds.bottom - viewport.bottom
+              : (bounds.top + bounds.bottom - viewport.top - viewport.bottom) / 2,
+        );
+      })
+      .toBeLessThan(2);
+    await expect.poll(() => caret.hidden).toBe(false);
+    await expect.element(pane).toHaveAttribute("data-vim-line", "2000");
+    await expect.element(pane).toHaveAttribute("data-vim-column", "8");
+    expect(lines()!.length).toBeLessThan(300);
+  }
+  // Clamping at the file boundary must not leave the cursor hidden.
+  await userEvent.keyboard("ggzbzb");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await expect.poll(() => caret.hidden).toBe(false);
+  await expect.poll(() => scroller.scrollTop).toBe(0);
+});

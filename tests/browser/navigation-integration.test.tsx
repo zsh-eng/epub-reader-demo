@@ -160,25 +160,95 @@ test("Find works with Vim disabled and a palette command moves after the modal c
   expect(localStorage.getItem("med:vim")).toBe("on");
 });
 
-test("symbol palette preview and Escape leave the current Vim cursor unchanged", async () => {
+test("symbol palette previews in the current file and Escape restores cursor and scroll", async () => {
   await mountFile(true);
-  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  const pane = page.getByRole("textbox", {
+    name: "File navigation",
+    exact: true,
+    includeHidden: true,
+  });
   (pane.element() as HTMLElement).focus();
   focusedKey("4");
   focusedKey("2");
   focusedKey("G");
   await expect.element(pane).toHaveAttribute("data-vim-line", "42");
+  const scroller = [...pane.element().querySelectorAll("div")].find(
+    (node) => getComputedStyle(node).overflowY === "auto",
+  )!;
+  await expect.poll(() => scroller.scrollTop).toBeGreaterThan(0);
+  const scrollTop = scroller.scrollTop;
   shortcut("o");
   await expect.element(page.getByRole("option", { name: /example80/ })).toBeVisible();
-  await expect
-    .poll(() =>
-      document
-        .querySelector('[aria-label="Symbol preview"] diffs-container')
-        ?.shadowRoot?.querySelector('[data-line="80"][data-selected-line]'),
-    )
-    .toBeTruthy();
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  expect(document.querySelector('[aria-label="Symbol preview"]')).toBeNull();
+  expect(document.querySelectorAll('[data-file-pane="main"]')).toHaveLength(1);
+  expect(
+    [...CSS.highlights.values()]
+      .flatMap((highlight) => [...highlight])
+      .some((range) => range.toString() === "example80"),
+  ).toBe(true);
   await userEvent.keyboard("{Escape}");
   await expect.element(page.getByRole("dialog", { name: "Find symbol" })).not.toBeInTheDocument();
   await expect.element(pane).toHaveAttribute("data-vim-line", "42");
+  await expect.poll(() => scroller.scrollTop).toBe(scrollTop);
   await expect.poll(() => document.activeElement).toBe(pane.element());
+});
+
+test("opening files focuses Vim and a diff filename opens the full file", async () => {
+  await mountFile(true);
+  const pane = page.getByRole("textbox", {
+    name: "File navigation",
+    exact: true,
+    includeHidden: true,
+  });
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("j");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+  await page.getByRole("tab", { name: "Changes", exact: true }).click();
+  await page.getByRole("link", { name: "main.ts", exact: true }).click();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("j");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+  shortcut("k", true);
+  const input = page.getByRole("combobox", { name: "Find file" });
+  await input.fill("main");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  shortcut("k", true);
+  await expect.element(input).toHaveValue("main");
+  await expect.poll(() => (input.element() as HTMLInputElement).selectionEnd).toBe(4);
+  await expect.poll(() => (input.element() as HTMLInputElement).selectionStart).toBe(0);
+  await userEvent.keyboard("{ArrowRight}.ts");
+  await expect.element(input).toHaveValue("main.ts");
+  await userEvent.keyboard("{Escape}");
+  shortcut("k", true);
+  await expect.element(input).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(input.element());
+  await userEvent.keyboard("x");
+  await expect.element(input).toHaveValue("x");
+});
+
+test("file symbols retain a selected query and Enter accepts without reloading the file", async () => {
+  await mountFile(true);
+  const pane = page.getByRole("textbox", {
+    name: "File navigation",
+    exact: true,
+    includeHidden: true,
+  });
+  shortcut("o");
+  const input = page.getByRole("combobox", { name: "Find symbol in file" });
+  await input.fill("example80");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  await userEvent.keyboard("{Enter}");
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("j");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "81");
+  shortcut("o");
+  await expect.element(input).toHaveValue("example80");
+  await expect.poll(() => (input.element() as HTMLInputElement).selectionEnd).toBe(9);
+  await expect.poll(() => (input.element() as HTMLInputElement).selectionStart).toBe(0);
+  await userEvent.keyboard("missing");
+  await expect.element(input).toHaveValue("missing");
+  await userEvent.keyboard("{Escape}");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "81");
 });

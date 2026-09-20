@@ -1,3 +1,4 @@
+import { focusPaletteInput } from "../data/palette-focus";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Combobox } from "@base-ui/react/combobox";
@@ -35,7 +36,9 @@ export function ThemePicker({ open, onOpenChange }: ThemePickerProps) {
       items={themes}
       value={saved}
       inputValue={query}
-      onInputValueChange={setQuery}
+      onInputValueChange={(value, details) => {
+        if (details.reason === "input-change" || details.reason === "input-clear") setQuery(value);
+      }}
       itemToStringLabel={(theme) => theme.label}
       autoHighlight
       onItemHighlighted={(theme) => {
@@ -47,16 +50,13 @@ export function ThemePicker({ open, onOpenChange }: ThemePickerProps) {
         onOpenChange(false);
       }}
     >
-      <Dialog.Root
-        open={open}
-        onOpenChange={setOpen}
-        onOpenChangeComplete={(next) => {
-          if (!next) setQuery("");
-        }}
-      >
+      <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Portal>
           <Dialog.Backdrop {...stylex.props(styles.backdrop, ui.instant)} />
-          <Dialog.Popup initialFocus={inputRef} {...stylex.props(styles.popup, ui.instant)}>
+          <Dialog.Popup
+            initialFocus={() => focusPaletteInput(inputRef.current)}
+            {...stylex.props(styles.popup, ui.instant)}
+          >
             <div {...stylex.props(styles.heading)}>
               <Dialog.Title {...stylex.props(styles.title)}>Theme</Dialog.Title>
               <span {...stylex.props(styles.preview)}>Live preview</span>
@@ -73,6 +73,7 @@ export function ThemePicker({ open, onOpenChange }: ThemePickerProps) {
             <div {...stylex.props(styles.search)}>
               <Combobox.Input
                 ref={inputRef}
+                onFocus={(event) => event.currentTarget.select()}
                 aria-label="Search themes"
                 placeholder="Search themes…"
                 {...stylex.props(ui.input, styles.input)}

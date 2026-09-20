@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { focusPaletteInput } from "../data/palette-focus";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Dialog } from "@base-ui/react/dialog";
 import { Combobox } from "@base-ui/react/combobox";
 import * as stylex from "@stylexjs/stylex";
@@ -8,7 +9,7 @@ import { browseSourceKey, type BrowseApi } from "../data/browse";
 import { usePickerPreview } from "../data/picker-preview";
 import { findSymbols, symbolMatchId } from "../data/symbol-matches";
 import { tokens, ui } from "../theme.stylex";
-import { FullFileView } from "./FullFileView";
+import { FullFileView, type BeginFileSymbolPreview, type FileSymbolPreview } from "./FullFileView";
 import { Icon } from "./Icon";
 
 export interface SymbolPickerProps {
@@ -23,15 +24,25 @@ export interface SymbolPickerProps {
   currentFile?: BrowseRead | null;
   sourceRevision?: number | string;
   api: BrowseApi;
+  sidebarWidth?: number;
+  beginFilePreview?: BeginFileSymbolPreview;
   onOpen(path: string, line: number, source: BrowseSource, column?: number): void;
 }
 
 export function SymbolPicker(props: SymbolPickerProps) {
+  const [queries] = useState(() => new Map<string, string>());
   const scope = props.source ? browseSourceKey(props.source) : "";
+  const queryKey = JSON.stringify([scope, props.mode, props.mode === "file" ? props.path : null]);
   return props.open ? (
     <SymbolPickerContents
       key={JSON.stringify([scope, props.mode, props.path, props.identity, props.sourceRevision])}
       {...props}
+      initialQuery={queries.get(queryKey) ?? ""}
+      onQueryChange={(query) => {
+        queries.delete(queryKey);
+        queries.set(queryKey, query);
+        while (queries.size > 32) queries.delete(queries.keys().next().value!);
+      }}
     />
   ) : null;
 }
@@ -49,8 +60,24 @@ function SymbolPickerContents({
   sourceRevision = 0,
   api,
   onOpen,
-}: SymbolPickerProps) {
-  const [query, setQuery] = useState("");
+  beginFilePreview,
+  sidebarWidth = 300,
+  initialQuery,
+  onQueryChange,
+}: SymbolPickerProps & { initialQuery: string; onQueryChange(query: string): void }) {
+  const [query, setQuery] = useState(initialQuery);
+  const session = useRef<FileSymbolPreview | null>(null);
+  const accepted = useRef(false);
+  useLayoutEffect(() => {
+    if (mode !== "file") return;
+    const preview = beginFilePreview?.() ?? null;
+    session.current = preview;
+    accepted.current = false;
+    return () => {
+      preview?.finish(accepted.current);
+      session.current = null;
+    };
+  }, [mode, beginFilePreview]);
   const [selected, setSelected] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +143,7 @@ function SymbolPickerContents({
       ? currentFile
       : null;
   const preview = usePickerPreview(
-    exactFile ? undefined : api,
+    mode === "file" ? undefined : api,
     resultSource,
     chosen?.path,
     `${sourceRevision}:${refresh}`,
@@ -124,12 +151,18 @@ function SymbolPickerContents({
   const previewFile = exactFile ?? preview.file;
   const previewChanged =
     mode === "file" &&
-    previewFile &&
-    displayed?.identity &&
-    previewFile.identity !== displayed.identity;
+    chosen &&
+    displayed &&
+    (!exactFile || currentFile?.identity !== displayed.identity);
+  useLayoutEffect(() => {
+    if (mode === "file" && chosen && !busy && !failure && !previewChanged)
+      session.current?.preview(chosen.line, chosen.column, chosen.name);
+  }, [mode, chosen, busy, failure, previewChanged]);
   const choose = (match: SymbolMatch) => {
     if (busy || failure || !resultSource || previewChanged) return;
-    onOpen(match.path, match.line, resultSource, match.column);
+    session.current?.preview(match.line, match.column, match.name);
+    accepted.current = true;
+    if (!session.current) onOpen(match.path, match.line, resultSource, match.column);
     onOpenChange(false);
   };
   return (
@@ -144,6 +177,7 @@ function SymbolPickerContents({
       onInputValueChange={(value, details) => {
         if (details.reason !== "input-change" && details.reason !== "input-clear") return;
         setQuery(value);
+        onQueryChange(value);
         setSelected(null);
       }}
       itemToStringLabel={(match) => match.name}
@@ -157,22 +191,31 @@ function SymbolPickerContents({
     >
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
         <Dialog.Portal>
-          <Dialog.Backdrop {...stylex.props(styles.backdrop, ui.instant)} />
-          <Dialog.Popup initialFocus={inputRef} {...stylex.props(styles.popup, ui.instant)}>
+          <Dialog.Backdrop
+            {...stylex.props(styles.backdrop, mode === "file" && styles.clearBackdrop, ui.instant)}
+          />
+          <Dialog.Popup
+            initialFocus={() => focusPaletteInput(inputRef.current)}
+            finalFocus={() =>
+              document.querySelector<HTMLElement>('[data-file-pane="main"]') ?? true
+            }
+            {...stylex.props(
+              styles.popup,
+              mode === "file" && styles.filePopup,
+              mode === "file" && styles.fileWidth(Math.max(240, sidebarWidth - 16)),
+              ui.instant,
+            )}
+          >
             <div {...stylex.props(styles.heading)}>
               <Dialog.Title {...stylex.props(styles.title)}>Find symbol</Dialog.Title>
               <span {...stylex.props(styles.scope)} title={sourceLabel}>
                 {sourceLabel}
               </span>
-              {onModeChange && (
+              {onModeChange && mode === "project" && (
                 <div {...stylex.props(styles.modes)}>
                   <button
-                    {...stylex.props(
-                      ui.button,
-                      styles.mode,
-                      mode === "file" && styles.selectedMode,
-                    )}
-                    aria-pressed={mode === "file"}
+                    {...stylex.props(ui.button, styles.mode)}
+                    aria-pressed={false}
                     onClick={() => onModeChange("file")}
                   >
                     File
@@ -195,13 +238,14 @@ function SymbolPickerContents({
               </Dialog.Close>
             </div>
             <Dialog.Description {...stylex.props(styles.hidden)}>
-              Search symbol declarations. Arrow keys preview; Enter opens; Escape keeps your current
-              file.
+              Search symbol declarations. Arrow keys preview; Enter accepts; Escape restores your
+              position.
             </Dialog.Description>
             <div {...stylex.props(styles.search)}>
               <Icon name="search" />
               <Combobox.Input
                 ref={inputRef}
+                onFocus={(event) => event.currentTarget.select()}
                 maxLength={256}
                 aria-label={mode === "file" ? "Find symbol in file" : "Find symbol in project"}
                 placeholder={
@@ -223,7 +267,11 @@ function SymbolPickerContents({
             </p>
             <div {...stylex.props(styles.body)}>
               <div {...stylex.props(styles.results)} aria-busy={busy}>
-                {failure ? (
+                {previewChanged ? (
+                  <p role="alert" {...stylex.props(styles.message)}>
+                    The file changed. Close and reopen symbol search to refresh.
+                  </p>
+                ) : failure ? (
                   <p role="alert" {...stylex.props(styles.message)}>
                     {failure}
                   </p>
@@ -275,31 +323,33 @@ function SymbolPickerContents({
                   </>
                 )}
               </div>
-              <div {...stylex.props(styles.preview)} aria-label="Symbol preview">
-                {previewChanged ? (
-                  <p role="alert" {...stylex.props(styles.message)}>
-                    The file changed. Close and reopen symbol search to refresh.
-                  </p>
-                ) : chosen && resultSource ? (
-                  <FullFileView
-                    key={`${browseSourceKey(resultSource)}:${chosen.path}`}
-                    compact
-                    file={previewFile}
-                    loading={exactFile ? false : preview.loading}
-                    error={exactFile ? null : preview.error}
-                    sourceLabel={
-                      resultSource.kind === "commit"
-                        ? `Commit ${resultSource.oid.slice(0, 8)}`
-                        : sourceLabel
-                    }
-                    line={chosen.line}
-                    highlightQuery={chosen.name}
-                    onRefresh={() => setRefresh((value) => value + 1)}
-                  />
-                ) : (
-                  <p {...stylex.props(styles.message)}>Select a symbol to preview.</p>
-                )}
-              </div>
+              {mode === "project" && (
+                <div {...stylex.props(styles.preview)} aria-label="Symbol preview">
+                  {previewChanged ? (
+                    <p role="alert" {...stylex.props(styles.message)}>
+                      The file changed. Close and reopen symbol search to refresh.
+                    </p>
+                  ) : chosen && resultSource ? (
+                    <FullFileView
+                      key={`${browseSourceKey(resultSource)}:${chosen.path}`}
+                      compact
+                      file={previewFile}
+                      loading={exactFile ? false : preview.loading}
+                      error={exactFile ? null : preview.error}
+                      sourceLabel={
+                        resultSource.kind === "commit"
+                          ? `Commit ${resultSource.oid.slice(0, 8)}`
+                          : sourceLabel
+                      }
+                      line={chosen.line}
+                      highlightQuery={chosen.name}
+                      onRefresh={() => setRefresh((value) => value + 1)}
+                    />
+                  ) : (
+                    <p {...stylex.props(styles.message)}>Select a symbol to preview.</p>
+                  )}
+                </div>
+              )}
             </div>
             <div {...stylex.props(styles.footer)}>
               <span>
@@ -321,6 +371,16 @@ function SymbolPickerContents({
 
 const styles = stylex.create({
   backdrop: { position: "fixed", inset: 0, backgroundColor: "#00000030", zIndex: 110 },
+  fileWidth: (width: number) => ({ width, maxWidth: "calc(100vw - 16px)" }),
+  clearBackdrop: { backgroundColor: "transparent" },
+  filePopup: {
+    left: 8,
+    top: 48,
+    transform: "none",
+    width: "min(340px, calc(100vw - 16px))",
+    height: "min(620px, calc(100vh - 80px))",
+    maxHeight: "calc(100vh - 80px)",
+  },
   popup: {
     position: "fixed",
     top: "10vh",

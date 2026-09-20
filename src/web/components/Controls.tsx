@@ -1,3 +1,4 @@
+import { focusPaletteInput } from "../data/palette-focus";
 import * as stylex from "@stylexjs/stylex";
 import { Menu } from "@base-ui/react/menu";
 import { Select } from "@base-ui/react/select";
@@ -157,6 +158,7 @@ export function CommandDialog({
   searchLabel?: string;
   commands: ReviewCommand[];
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const resultList = useRef<HTMLDivElement>(null);
@@ -172,7 +174,6 @@ export function CommandDialog({
     const command = results[index];
     if (command && !command.disabled) {
       onOpenChange(false);
-      setQuery("");
       setActive(0);
       command.run();
     }
@@ -183,14 +184,16 @@ export function CommandDialog({
       onOpenChange={onOpenChange}
       onOpenChangeComplete={(next) => {
         if (!next) {
-          setQuery("");
           setActive(0);
         }
       }}
     >
       <Dialog.Portal>
         <Dialog.Backdrop {...stylex.props(styles.backdrop, ui.instant)} />
-        <Dialog.Popup {...stylex.props(styles.dialog, ui.instant)}>
+        <Dialog.Popup
+          initialFocus={() => focusPaletteInput(inputRef.current)}
+          {...stylex.props(styles.dialog, ui.instant)}
+        >
           <Dialog.Title {...stylex.props(styles.commandTitle)}>{title}</Dialog.Title>
           <Dialog.Description {...stylex.props(styles.hidden)}>
             Find and run a review command.
@@ -198,7 +201,9 @@ export function CommandDialog({
           <div {...stylex.props(styles.commandInput)}>
             <Icon name="search" />
             <input
+              ref={inputRef}
               value={query}
+              onFocus={(event) => event.currentTarget.select()}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setActive(0);

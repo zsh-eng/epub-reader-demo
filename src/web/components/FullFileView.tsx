@@ -6,6 +6,7 @@ import {
   type CodeViewReactOptions,
 } from "@pierre/diffs/react";
 import {
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -25,6 +26,12 @@ import { Icon } from "./Icon";
 import { useFileVim, type FileNavigationCommand } from "../data/use-file-vim";
 import { createSearchHighlights } from "../data/search-highlights";
 
+export interface FileSymbolPreview {
+  preview(line: number, column: number | undefined, name: string): void;
+  finish(accept: boolean): void;
+}
+export type BeginFileSymbolPreview = () => FileSymbolPreview;
+
 export interface FullFileViewProps {
   file: BrowseRead | null;
   loading: boolean;
@@ -34,6 +41,7 @@ export interface FullFileViewProps {
   line?: number;
   column?: number;
   vimEnabled?: boolean;
+  onSymbolPreviewReady?(begin: BeginFileSymbolPreview | null): void;
   onNavigationReady?(command: FileNavigationCommand | null): void;
   highlightQuery?: string;
   compact?: boolean;
@@ -66,6 +74,7 @@ export function FullFileView({
   column,
   vimEnabled = false,
   onNavigationReady,
+  onSymbolPreviewReady,
   highlightQuery = "",
   compact = false,
   initialScrollTop,
@@ -89,13 +98,53 @@ export function FullFileView({
     column,
     onNavigationReady,
   });
-  const effectiveHighlightQuery = vim.highlightQuery || highlightQuery;
+  const [symbolHighlight, setSymbolHighlight] = useState<string | null>(null);
+  const beginSymbolPreview = useCallback<BeginFileSymbolPreview>(() => {
+    const instance = viewer.current?.getInstance();
+    const origin = vim.position.capture();
+    const scrollTop = instance?.getScrollTop() ?? 0;
+    const selected = instance?.getSelectedLines() ?? null;
+    return {
+      preview(target, targetColumn, name) {
+        vim.position.jump(target, targetColumn);
+        instance?.setSelectedLines({
+          id: file?.identity ?? "",
+          range: { start: target, end: target },
+        });
+        instance?.render(true);
+        setSymbolHighlight(name);
+      },
+      finish(accept) {
+        setSymbolHighlight(null);
+        if (!accept) {
+          vim.position.restore(origin);
+          instance?.setSelectedLines(selected);
+          instance?.scrollTo({ type: "position", position: scrollTop, behavior: "instant" });
+          instance?.render(true);
+        }
+      },
+    };
+  }, [vim.position, file?.identity]);
+  useLayoutEffect(() => {
+    if (compact || file?.kind !== "text" || loading) return;
+    onSymbolPreviewReady?.(beginSymbolPreview);
+    return () => onSymbolPreviewReady?.(null);
+  }, [beginSymbolPreview, compact, file?.kind, loading, onSymbolPreviewReady]);
+  // Preview panes must never take focus from the picker input.
+  useLayoutEffect(() => {
+    if (!compact && !loading && file?.kind === "text")
+      vim.pane.current?.focus({ preventScroll: true });
+  }, [compact, loading, file?.identity, file?.kind, vim.pane]);
+  const effectiveHighlightQuery = symbolHighlight ?? (vim.highlightQuery || highlightQuery);
   const currentHighlightQuery = useRef(effectiveHighlightQuery);
   currentHighlightQuery.current = effectiveHighlightQuery;
   const currentHighlightOptions = useRef(vim.highlightOptions);
-  currentHighlightOptions.current = vim.highlightQuery
-    ? vim.highlightOptions
-    : { caseSensitive: false, wholeWord: false };
+  currentHighlightOptions.current =
+    symbolHighlight !== null
+      ? { caseSensitive: true, wholeWord: true }
+      : vim.highlightQuery
+        ? vim.highlightOptions
+        : { caseSensitive: false, wholeWord: false };
   const vimRender = useRef(vim.onPostRender);
   vimRender.current = vim.onPostRender;
   const highlightId = `med-search-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -107,6 +156,7 @@ export function FullFileView({
     effectiveHighlightQuery,
     vim.highlightOptions.wholeWord,
     vim.highlightOptions.caseSensitive,
+    symbolHighlight,
   ]);
   useLayoutEffect(() => () => highlights.dispose(), [highlights]);
   const [localBlameEnabled, setLocalBlameEnabled] = useState(false);
@@ -303,6 +353,7 @@ export function FullFileView({
           {items.length ? (
             <div
               ref={vim.pane}
+              data-file-pane={compact ? "preview" : "main"}
               {...stylex.props(styles.viewport)}
               tabIndex={vimEnabled ? 0 : -1}
               role="textbox"
@@ -501,6 +552,9 @@ const styles = stylex.create({
     backgroundColor: tokens.accent,
     opacity: 0.45,
     zIndex: 5,
+    transitionProperty: { default: "none", ':is([data-animate="true"])': "left, top" },
+    transitionDuration: { default: "65ms", "@media (prefers-reduced-motion: reduce)": "0ms" },
+    transitionTimingFunction: "ease-out",
   },
   search: {
     display: "flex",
