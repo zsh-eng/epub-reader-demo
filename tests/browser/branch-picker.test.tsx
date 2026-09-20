@@ -87,6 +87,7 @@ test("groups identical branches by repository and focuses existing cross-reposit
   await expect
     .element(page.getByRole("tab", { name: "frontend / main", exact: true }))
     .toBeVisible();
+  expect(document.querySelectorAll('[role="tab"]')).toHaveLength(1);
   await expect
     .element(page.getByRole("tab", { name: "backend / main", exact: true }))
     .not.toBeInTheDocument();
@@ -114,7 +115,7 @@ test("groups identical branches by repository and focuses existing cross-reposit
   await expect
     .element(page.getByRole("tab", { name: "backend / main", exact: true }))
     .not.toBeInTheDocument();
-  expect(selections.at(-1)).toBe("frontend:/repos/frontend-detached");
+  expect(selections.at(-1)).toBe("frontend:main");
 });
 
 test("searches canonical paths, qualifies matching repo names, and opens detached worktrees", async () => {
@@ -170,9 +171,11 @@ test("shows a limit instead of silently closing tabs and frees capacity when a t
   }));
   many.worktrees = [];
   await setup([many]);
-  await page.getByRole("button", { name: "Open branch", exact: true }).click();
-  await page.getByRole("combobox", { name: "Search branches" }).fill("branch-31");
-  await userEvent.keyboard("{Enter}");
+  for (let index = 1; index <= 31; index++) {
+    await page.getByRole("button", { name: "Open branch", exact: true }).click();
+    await page.getByRole("combobox", { name: "Search branches" }).fill(`branch-${index}`);
+    await userEvent.keyboard("{Enter}");
+  }
   await page.getByRole("button", { name: "Open branch", exact: true }).click();
   await page.getByRole("combobox", { name: "Search branches" }).fill("branch-32");
   await userEvent.keyboard("{Enter}");
@@ -210,6 +213,9 @@ test("bounds the result list while searching every branch", async () => {
 
 test("removes the final repository and starts with fresh branch tabs when it is added again", async () => {
   await setup([repository("frontend", "/repos/frontend")]);
+  await page.getByRole("button", { name: "Open branch", exact: true }).click();
+  await page.getByRole("combobox", { name: "Search branches" }).fill("release");
+  await userEvent.keyboard("{Enter}");
   await expect.element(page.getByRole("tab", { name: "release", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Open branch", exact: true }).click();
   await page.getByText("Manage repositories", { exact: true }).click();
@@ -220,11 +226,11 @@ test("removes the final repository and starts with fresh branch tabs when it is 
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect.element(page.getByRole("group", { name: "frontend", exact: true })).toBeVisible();
   await userEvent.keyboard("{Escape}");
-  await expect.element(page.getByRole("tab", { name: "main", exact: true })).toBeVisible();
+  await expect.element(page.getByRole("tab", { name: "release", exact: true })).toBeVisible();
   await expect
-    .element(page.getByRole("tab", { name: "release", exact: true }))
+    .element(page.getByRole("tab", { name: "main", exact: true }))
     .not.toBeInTheDocument();
   await expect
-    .element(page.getByRole("button", { name: "Close main", exact: true }))
+    .element(page.getByRole("button", { name: "Close release", exact: true }))
     .toBeDisabled();
 });

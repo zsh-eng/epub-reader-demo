@@ -35,7 +35,6 @@ export function BranchTabs({
   onPickerOpenChange(open: boolean): void;
 }) {
   const [opened, setOpened] = useState<string[]>([]);
-  const initialized = useRef(false);
   const lastActive = useRef<string | null>(null);
   const entries = useMemo<BranchEntry[]>(
     () =>
@@ -77,29 +76,18 @@ export function BranchTabs({
     return repositories.length > 1 ? `${repositoryLabels[index]} / ${entry.label}` : entry.label;
   };
   useEffect(() => {
-    const seed = !initialized.current && entries.length > 0;
     const changed = lastActive.current !== active;
-    if (entries.length) initialized.current = true;
-    lastActive.current = entries.length ? active : null;
+    lastActive.current = entries.some((entry) => entry.key === active) ? active : null;
     setOpened((current) => {
       const available = new Set(entries.map((entry) => entry.key));
-      let next = current.filter((key) => available.has(key));
-      if (seed) {
-        next = entries
-          .filter(
-            (entry, index) =>
-              entry.repositoryId === repositories[0]?.id && (index < 5 || entry.path),
-          )
-          .slice(0, 31)
-          .map((entry) => entry.key);
-      }
+      const next = current.filter((key) => available.has(key));
       if (changed && available.has(active) && !next.includes(active) && next.length < 32)
         next.push(active);
       return next.length === current.length && next.every((key, index) => key === current[index])
         ? current
         : next;
     });
-  }, [active, entries, repositories]);
+  }, [active, entries]);
   const visible = opened.flatMap((key) => {
     const entry = entries.find((candidate) => candidate.key === key);
     return entry ? [entry] : [];

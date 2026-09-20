@@ -220,6 +220,12 @@ async function mountApp(
   return { controller, requests, fileRequests };
 }
 
+async function openBranch(name: string) {
+  await page.getByRole("button", { name: "Open branch", exact: true }).click();
+  await page.getByRole("combobox", { name: "Search branches" }).fill(name);
+  await page.getByRole("option", { name: new RegExp(`^${name} `) }).click();
+}
+
 describe("graphical review", () => {
   test("hovering a full-file link shares the read with opening it", async () => {
     const { fileRequests } = await mountApp();
@@ -400,7 +406,7 @@ describe("graphical review", () => {
       .poll(() => document.querySelector('[data-full-file-kind="binary"]'))
       .not.toBeNull();
     expect(document.querySelector('[aria-label="Full file"] diffs-container')).toBeNull();
-    await page.getByRole("tab", { name: /feature/ }).click();
+    await openBranch("feature");
     window.dispatchEvent(
       new KeyboardEvent("keydown", { key: "K", metaKey: true, shiftKey: true, bubbles: true }),
     );
@@ -482,7 +488,7 @@ describe("graphical review", () => {
     await expect.poll(() => host?.checkVisibility()).toBe(true);
     expect(document.querySelector('[aria-label="Workspace files"] file-tree-container')).toBe(host);
     await expect.element(folder).toHaveAttribute("aria-expanded", "false");
-    await page.getByRole("tab", { name: /feature/ }).click();
+    await openBranch("feature");
     await expect
       .element(sidebar.getByRole("treeitem", { name: "feature-only.ts", exact: true }))
       .toBeVisible();
@@ -495,11 +501,11 @@ describe("graphical review", () => {
   });
   test("switches branch tabs and toggles the sidebar with Command B", async () => {
     const { controller } = await mountApp({ branches: true });
-    await page.getByRole("tab", { name: /feature/ }).click();
+    await openBranch("feature");
     await expect
       .poll(() => controller.getSnapshot().session?.repository.path)
       .toBe("/test/feature");
-    await page.getByRole("tab", { name: /release/ }).click();
+    await openBranch("release");
     await expect.poll(() => controller.getSnapshot().historyRef).toBe("refs/heads/release");
     expect(controller.getSnapshot().comparison).toEqual({ kind: "commit", commit: secondCommit });
     await expect

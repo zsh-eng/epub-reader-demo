@@ -36,7 +36,7 @@ npm run dev -- /path/to/frontend /path/to/backend
 
 Use **Open branch** (`+`) to search the registered repositories' branches and worktrees. The picker shows repository groups and worktree paths. Add another repository by entering its local path in the picker. Remove a repository there to close its views and release its resources; this does not delete files or Git branches.
 
-Branch tabs can belong to different repositories. Repository labels distinguish matching branch names. Each tab keeps its comparison and file navigation for the current browser session. The history, files, content search, and symbols all use that tab's repository and branch or worktree. Content search still reads committed content.
+Opening the launch URL starts with only the selected branch or worktree tab. Open additional tabs from **Open branch**. Branch tabs can belong to different repositories. Repository labels distinguish matching branch names. Each tab keeps its comparison and file navigation for the current browser session. The history, files, content search, and symbols all use that tab's repository and branch or worktree. Content search still reads committed content.
 
 Linked worktrees belong to one repository entry. Separate clones remain separate entries, even when they use the same remote. Repository registration lasts for the local server session; restart with the paths you want to use. Patch and file-pair inputs remain separate launch modes.
 
