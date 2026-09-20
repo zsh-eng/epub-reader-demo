@@ -77,7 +77,7 @@ struct TaggingNotice: Identifiable {
     guard fixtureTagging else { return }
     let continuations = fixtureTaggingContinuations
     fixtureTaggingContinuations.removeAll()
-    continuations.forEach { $0.resume() }
+    for continuation in continuations { continuation.resume() }
   }
   private let fileURL: URL
   private let downloads: URL
