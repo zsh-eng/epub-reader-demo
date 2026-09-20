@@ -7,6 +7,7 @@ import type {
   Comparison,
   NoteMutation,
   NoteState,
+  RegisteredRepository,
   ReviewResponse,
   Session,
   SourceResponse,
@@ -30,6 +31,7 @@ import {
   historySchema,
   HttpError,
   notesSchema,
+  repositoriesSchema,
   reviewSchema,
   sessionSchema,
   sourceSchema,
@@ -39,6 +41,8 @@ import { readServerEvents } from "./sse";
 export type { ParsedReviewFile } from "../../shared/review";
 export interface ReviewControllerSnapshot {
   session: Session | null;
+  repositories: RegisteredRepository[];
+  activeRepositoryId: string | null;
   branches: Branch[];
   branchesError: string | null;
   activeBranch: string | null;
@@ -78,8 +82,11 @@ export interface ReviewController {
   selectComparison(comparison: Comparison): Promise<void>;
   refresh(): Promise<void>;
   loadMoreHistory(): Promise<void>;
-  selectWorktree(path: string): Promise<void>;
-  selectBranch(name: string): Promise<void>;
+  selectWorktree(path: string, repositoryId?: string): Promise<void>;
+  selectBranch(name: string, repositoryId?: string): Promise<void>;
+  addRepository(path: string): Promise<void>;
+  removeRepository(id: string): Promise<void>;
+  refreshRepositories(): Promise<void>;
   revealFile(id: string): void;
   setFilter(text: string): void;
   loadSources(path: string): Promise<SourceResponse>;
@@ -132,6 +139,8 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
   const listeners = new Set<() => void>();
   let snapshot: ReviewControllerSnapshot = {
     session: null,
+    repositories: [],
+    activeRepositoryId: null,
     branches: [],
     branchesError: null,
     activeBranch: null,
@@ -155,7 +164,34 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     metrics: null,
     semantic: null,
   };
-  let homeRepo: string | undefined;
+  let hasRepositoryCatalogue = false;
+  let catalogueGeneration = 0;
+  let catalogueAbort: AbortController | undefined;
+  let activeTarget: string | undefined;
+  let restoreFilePath: string | null = null;
+  const navigation = new Map<
+    string,
+    {
+      comparison: Comparison;
+      filter: string;
+      selectedFileId: string | null;
+      selectedFilePath: string | null;
+    }
+  >();
+  const targetKey = (repositoryId: string, path: string, branch: string | null) =>
+    JSON.stringify([repositoryId, branch ? "branch" : "worktree", branch ?? path]);
+  const rememberTarget = () => {
+    if (!activeTarget || !snapshot.session) return;
+    navigation.delete(activeTarget);
+    navigation.set(activeTarget, {
+      comparison: snapshot.comparison,
+      filter: snapshot.filter,
+      selectedFileId: snapshot.selectedFileId,
+      selectedFilePath:
+        snapshot.files.find((file) => file.id === snapshot.selectedFileId)?.path ?? restoreFilePath,
+    });
+    while (navigation.size > 32) navigation.delete(navigation.keys().next().value!);
+  };
   let branchGeneration = 0;
   let branchAbort: AbortController | undefined;
   let disposed = false;
@@ -221,7 +257,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       : createInitialReviewState(entry.document, { showAgentNotes: true });
     // Notes are scoped to the authoritative review ID. Never show another commit's notes.
     const sameReview = snapshot.review?.id === entry.response.id;
-    const reconciled = sameReview
+    let reconciled = sameReview
       ? semantic
       : { ...semantic, userNotes: [], liveNotes: [], draftNote: null };
     // Pierre hydrates partial metadata in place. Keep renderer-owned metadata separate
@@ -237,9 +273,21 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
           metadata: file.metadata ? structuredClone(file.metadata) : null,
         }));
     const visibleFiles = filtered(files, snapshot.filter);
-    const selectedFileId = visibleFiles.some((file) => file.id === snapshot.selectedFileId)
-      ? snapshot.selectedFileId
-      : (visibleFiles[0]?.id ?? null);
+    const selectedFileId =
+      visibleFiles.find((file) => file.path === restoreFilePath)?.id ??
+      (visibleFiles.some((file) => file.id === snapshot.selectedFileId)
+        ? snapshot.selectedFileId
+        : (visibleFiles[0]?.id ?? null));
+    restoreFilePath = null;
+    if (reconciled.filter !== snapshot.filter)
+      reconciled = reduceReviewState(reconciled, { type: "filter/set", filter: snapshot.filter });
+    if (selectedFileId && reconciled.selection.fileKey !== selectedFileId)
+      reconciled = reduceReviewState(reconciled, {
+        type: "selection/select",
+        fileKey: selectedFileId,
+        hunkIndex: 0,
+        reveal: { anchor: "none", scrollToNote: false },
+      });
     update({
       review: entry.response,
       files,
@@ -370,6 +418,11 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
         : null;
       if (!disposed && generation === branchGeneration) {
         update({
+          repositories: snapshot.repositories.map((repository) =>
+            repository.id === snapshot.activeRepositoryId
+              ? { ...repository, branches, worktrees: session?.worktrees ?? repository.worktrees }
+              : repository,
+          ),
           branches,
           branchesError: null,
           ...(session
@@ -391,6 +444,133 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       if (!disposed && generation === branchGeneration) update({ branchesError: message(error) });
     }
   }
+  async function publishRepositories(repositories: RegisteredRepository[]) {
+    const removedIds = new Set(
+      snapshot.repositories
+        .filter((previous) => !repositories.some((repository) => repository.id === previous.id))
+        .map((repository) => repository.id),
+    );
+    const removedActive =
+      snapshot.activeRepositoryId !== null &&
+      !repositories.some((repository) => repository.id === snapshot.activeRepositoryId);
+    if (removedIds.size) {
+      for (const key of navigation.keys())
+        if (removedIds.has(JSON.parse(key)[0])) navigation.delete(key);
+      reviewCache.clear();
+    }
+    if (removedActive) activeTarget = undefined;
+    update({
+      repositories,
+      branches:
+        repositories.find((repository) => repository.id === snapshot.activeRepositoryId)
+          ?.branches ?? [],
+      branchesError: null,
+    });
+    if (removedActive || snapshot.activeRepositoryId === null) {
+      const nextRepository = repositories[0];
+      if (nextRepository) await openWorkspace(nextRepository.path, undefined, nextRepository.id);
+      else clearWorkspace();
+    }
+  }
+
+  async function refreshRepositories(): Promise<void> {
+    if (disposed) return;
+    // Older servers and non-Git inputs expose only the original session endpoint.
+    if (!hasRepositoryCatalogue) return loadBranches(true);
+    const generation = ++catalogueGeneration;
+    catalogueAbort?.abort();
+    catalogueAbort = new AbortController();
+    try {
+      const result = await api.json("/api/repositories", repositoriesSchema, {
+        signal: catalogueAbort.signal,
+      });
+      if (!disposed && generation === catalogueGeneration)
+        await publishRepositories(result.repositories);
+    } catch (error) {
+      if (!disposed && generation === catalogueGeneration) {
+        update({ branchesError: message(error) });
+        throw error;
+      }
+    }
+  }
+
+  // Serialize writes: a delayed registration response must not restore a removed entry.
+  let registryWrite = Promise.resolve();
+  function mutateRepositories(init: RequestInit, id?: string): Promise<void> {
+    const next = registryWrite
+      .catch(() => {})
+      .then(async () => {
+        if (disposed) return;
+        ++catalogueGeneration;
+        catalogueAbort?.abort();
+        const result = await api.json(
+          `/api/repositories${id ? `?${query({ id })}` : ""}`,
+          repositoriesSchema,
+          init,
+        );
+        if (disposed) return;
+        ++catalogueGeneration;
+        catalogueAbort?.abort();
+        hasRepositoryCatalogue = true;
+        await publishRepositories(result.repositories);
+      });
+    registryWrite = next;
+    return next;
+  }
+  function addRepository(path: string): Promise<void> {
+    return mutateRepositories({
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+  }
+  function removeRepository(id: string): Promise<void> {
+    return mutateRepositories({ method: "DELETE" }, id);
+  }
+
+  function clearWorkspace() {
+    ++workspaceGeneration;
+    ++branchGeneration;
+    ++reviewGeneration;
+    ++historyGeneration;
+    sessionAbort?.abort();
+    branchAbort?.abort();
+    reviewAbort?.abort();
+    historyAbort?.abort();
+    cancelSources();
+    stopEvents();
+    sourceCache.clear();
+    activeTarget = undefined;
+    restoreFilePath = null;
+    historyCursor = null;
+    update({
+      session: null,
+      activeRepositoryId: null,
+      activeBranch: null,
+      historyRef: null,
+      branches: [],
+      branchesError: null,
+      history: [],
+      historyHasMore: false,
+      historyLoading: false,
+      historyError: null,
+      review: null,
+      files: [],
+      visibleFiles: [],
+      semantic: null,
+      notes: null,
+      notesError: null,
+      comparison: { kind: "working" },
+      filter: "",
+      selectedFileId: null,
+      status: "idle",
+      error: null,
+      connection: "closed",
+      metrics: null,
+      sourceRevision: snapshot.sourceRevision + 1,
+    });
+  }
+
   async function refresh(): Promise<void> {
     update({ sourceRevision: snapshot.sourceRevision + 1 });
     await Promise.all([
@@ -466,10 +646,30 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
           abort.signal,
         );
       } catch (error) {
+        if (disposed || workspace !== workspaceGeneration || abort.signal.aborted) return;
+        if (error instanceof HttpError && error.status === 403 && hasRepositoryCatalogue) {
+          // Another client may have removed this repository while its event stream was open.
+          try {
+            await refreshRepositories();
+          } catch (refreshError) {
+            if (disposed || workspace !== workspaceGeneration) return;
+            update({ connection: "closed", error: message(refreshError) });
+            return;
+          }
+          if (disposed || workspace !== workspaceGeneration) return;
+          update({
+            connection: "closed",
+            error: "Live updates are unavailable for this repository.",
+          });
+          return;
+        }
         if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
           update({
             connection: "closed",
-            error: "The session token has expired. Open the address shown by the server.",
+            error:
+              error.status === 401
+                ? "The session token has expired. Open the address shown by the server."
+                : "Live updates are unavailable for this repository.",
           });
           return;
         }
@@ -484,9 +684,15 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     void connect();
   }
 
-  async function openWorkspace(path?: string, branch?: Branch): Promise<void> {
+  async function openWorkspace(
+    path?: string,
+    branch?: Branch,
+    repositoryId?: string,
+  ): Promise<void> {
     if (disposed) return;
+    rememberTarget();
     const generation = ++workspaceGeneration;
+    const catalogueVersion = catalogueGeneration;
     ++branchGeneration;
     branchAbort?.abort();
     ++reviewGeneration;
@@ -501,6 +707,15 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     historyCursor = null;
     update({
       session: null,
+      activeRepositoryId: repositoryId ?? snapshot.activeRepositoryId,
+      branches: repositoryId
+        ? (snapshot.repositories.find((entry) => entry.id === repositoryId)?.branches ?? [])
+        : snapshot.branches,
+      branchesError: null,
+      activeBranch: branch?.name ?? null,
+      historyRef: null,
+      connection: "closed",
+      sourceRevision: snapshot.sourceRevision + 1,
       status: "loading",
       error: null,
       history: [],
@@ -512,7 +727,9 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       visibleFiles: [],
       semantic: null,
       notes: null,
+      notesError: null,
       selectedFileId: null,
+      filter: "",
     });
     try {
       const session = await api.json(
@@ -521,29 +738,76 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
         { signal: sessionAbort.signal },
       );
       if (disposed || generation !== workspaceGeneration) return;
-      homeRepo ??= session.repository.path;
+      hasRepositoryCatalogue ||= session.repositories !== undefined;
+      const id =
+        session.repositoryId ??
+        repositoryId ??
+        snapshot.activeRepositoryId ??
+        session.repository.path;
+      const repositories =
+        (catalogueVersion === catalogueGeneration ? session.repositories : undefined) ??
+        (snapshot.repositories.length
+          ? snapshot.repositories
+          : [
+              {
+                id,
+                path: session.repository.path,
+                name: session.repository.name,
+                branches: [],
+                worktrees: session.worktrees,
+              },
+            ]);
+      const activeBranch =
+        branch?.name ??
+        (session.repository.branch === "Detached HEAD" ? null : session.repository.branch || null);
+      activeTarget = targetKey(id, session.repository.path, activeBranch);
+      const saved = navigation.get(activeTarget);
+      restoreFilePath = saved?.selectedFilePath ?? null;
       const branchSnapshot =
         branch && (!branch.worktreePath || session.repository.branch !== branch.name);
-      const comparison = branchSnapshot
+      const initialComparison = branchSnapshot
         ? { kind: "commit" as const, commit: branch.head }
         : ((!path && !branch ? session.initialComparison : undefined) ?? {
             kind: "working" as const,
           });
+      const comparison =
+        saved &&
+        !(branchSnapshot && ["working", "staged", "unstaged"].includes(saved.comparison.kind))
+          ? saved.comparison
+          : initialComparison;
       update({
         session,
+        repositories,
+        activeRepositoryId: id,
+        branches: repositories.find((entry) => entry.id === id)?.branches ?? [],
         comparison,
-        activeBranch:
-          branch?.name ??
-          (session.repository.branch === "Detached HEAD"
-            ? null
-            : session.repository.branch || null),
+        filter: saved?.filter ?? "",
+        selectedFileId: saved?.selectedFileId ?? null,
+        activeBranch,
         historyRef: branchSnapshot ? `refs/heads/${branch.name}` : null,
       });
       startEvents();
       await Promise.all([selectComparison(comparison), loadHistory(true), loadBranches()]);
     } catch (error) {
-      if (!disposed && generation === workspaceGeneration)
-        update({ status: "error", error: message(error) });
+      if (disposed || generation !== workspaceGeneration) return;
+      // An empty registry has no default session. Its catalogue remains available
+      // so a fresh browser can show the normal Add repository action.
+      if (!path && error instanceof HttpError && error.status === 403) {
+        try {
+          const result = await api.json("/api/repositories", repositoriesSchema, {
+            signal: sessionAbort.signal,
+          });
+          if (disposed || generation !== workspaceGeneration) return;
+          hasRepositoryCatalogue = true;
+          await publishRepositories(result.repositories);
+          return;
+        } catch (catalogueError) {
+          if (disposed || generation !== workspaceGeneration) return;
+          update({ status: "error", error: message(catalogueError) });
+          return;
+        }
+      }
+      update({ status: "error", error: message(error) });
     }
   }
 
@@ -648,19 +912,39 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       };
     },
     initialize: () => openWorkspace(),
-    selectWorktree(path) {
+    selectWorktree(path, repositoryId) {
       if (snapshot.session?.repository.git === false) {
         update({ error: "Worktrees are not available for this input." });
         return Promise.resolve();
       }
-      return openWorkspace(path);
-    },
-    selectBranch(name) {
-      const branch = snapshot.branches.find((entry) => entry.name === name);
-      if (!branch || !homeRepo || snapshot.session?.repository.git === false)
+      const repository = repositoryId
+        ? snapshot.repositories.find((entry) => entry.id === repositoryId)
+        : snapshot.repositories.find((entry) =>
+            entry.worktrees.some((worktree) => worktree.path === path),
+          );
+      if (
+        hasRepositoryCatalogue &&
+        (!repository || !repository.worktrees.some((worktree) => worktree.path === path))
+      )
         return Promise.resolve();
-      return openWorkspace(branch.worktreePath ?? homeRepo, branch);
+      return openWorkspace(
+        path,
+        undefined,
+        repository?.id ?? snapshot.activeRepositoryId ?? undefined,
+      );
     },
+    selectBranch(name, repositoryId) {
+      const repository = snapshot.repositories.find(
+        (entry) => entry.id === (repositoryId ?? snapshot.activeRepositoryId),
+      );
+      const branch = repository?.branches.find((entry) => entry.name === name);
+      if (!branch || !repository || snapshot.session?.repository.git === false)
+        return Promise.resolve();
+      return openWorkspace(branch.worktreePath ?? repository.path, branch, repository.id);
+    },
+    refreshRepositories,
+    addRepository,
+    removeRepository,
     selectComparison: (comparison) => selectComparison(comparison),
     refresh,
     loadMoreHistory: () => loadHistory(false),
@@ -690,6 +974,9 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     },
     dispose() {
       disposed = true;
+      ++catalogueGeneration;
+      catalogueAbort?.abort();
+      navigation.clear();
       ++branchGeneration;
       branchAbort?.abort();
       ++workspaceGeneration;

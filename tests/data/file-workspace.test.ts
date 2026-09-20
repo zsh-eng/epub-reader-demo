@@ -35,6 +35,21 @@ async function settle() {
 }
 
 describe("file workspace", () => {
+  test("removing a repository forgets its tabs and rejects pending file contents", async () => {
+    const { workspace, pending } = fixture();
+    const key = JSON.stringify(["first-repository", "branch", "main"]);
+    workspace.configure(key, A, "First");
+    workspace.open("same.ts", true);
+    workspace.forgetRepository("first-repository");
+    expect(pending[0]!.signal?.aborted).toBe(true);
+    pending[0]!.resolve(result(A, "same.ts"));
+    await settle();
+    expect(workspace.getSnapshot().file).toBeNull();
+    workspace.configure(key, A, "First");
+    expect(workspace.getSnapshot().tabs).toEqual([]);
+    expect(workspace.getSnapshot().recentPaths).toEqual([]);
+    workspace.dispose();
+  });
   test("symbol jumps retain their exact source and column, then clear column for a line-only jump", () => {
     const { workspace } = fixture();
     const commit: BrowseSource = { kind: "commit", repo: A.repo, oid: "a".repeat(40) };
@@ -182,11 +197,35 @@ describe("file workspace", () => {
     for (let i = 0; i < 13; i++) workspace.open(`${i}.ts`, true);
     expect(workspace.getSnapshot().tabs).toHaveLength(12);
     expect(workspace.getSnapshot().error).toContain("12-tab limit");
-    for (let i = 0; i < 8; i++)
+    for (let i = 0; i < 32; i++)
       workspace.configure(`workspace-${i}`, { kind: "worktree", repo: `/repo-${i}` }, "Other");
     workspace.configure("first", A, "First");
     expect(workspace.getSnapshot().tabs).toHaveLength(0);
     expect(workspace.getSnapshot().active).toBe("changes");
+    workspace.dispose();
+  });
+  test("retains file navigation across ten repository branch tabs without retaining bytes", async () => {
+    const { workspace, pending } = fixture();
+    for (let i = 0; i < 10; i++) {
+      const source: BrowseSource = { kind: "worktree", repo: `/repo-${i}` };
+      workspace.configure(JSON.stringify([`repository-${i}`, "branch", "main"]), source, "main");
+      workspace.open("same.ts", true);
+      pending.at(-1)!.resolve(result(source, "same.ts"));
+      await settle();
+    }
+    const source: BrowseSource = { kind: "worktree", repo: "/repo-0" };
+    workspace.configure(JSON.stringify(["repository-0", "branch", "main"]), source, "main");
+    expect(workspace.getSnapshot().tabs).toHaveLength(1);
+    expect(workspace.getSnapshot().tabs[0]).toMatchObject({
+      source,
+      path: "same.ts",
+      pinned: true,
+    });
+    expect(workspace.getSnapshot().active).toBe(workspace.getSnapshot().tabs[0]!.id);
+    expect(workspace.getSnapshot().file).toBeNull();
+    pending.at(-1)!.resolve(result(source, "same.ts"));
+    await settle();
+    expect(workspace.getSnapshot().file?.source.repo).toBe("/repo-0");
     workspace.dispose();
   });
   test("invalidation marks loaded working files stale without fetching or changing commit snapshots", async () => {

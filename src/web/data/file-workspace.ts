@@ -60,7 +60,8 @@ export function createFileWorkspace(api: BrowseApi) {
         active: snapshot.active,
         recentPaths: snapshot.recentPaths,
       });
-      while (workspaces.size > 8) workspaces.delete(workspaces.keys().next().value!);
+      // Match the branch-tab limit. These entries contain navigation, never file bytes.
+      while (workspaces.size > 32) workspaces.delete(workspaces.keys().next().value!);
     }
     for (const listener of listeners) listener();
   };
@@ -208,6 +209,32 @@ export function createFileWorkspace(api: BrowseApi) {
     closeOthers() {
       if (snapshot.active === "changes") return;
       publish({ tabs: snapshot.tabs.filter((tab) => tab.id === snapshot.active) });
+    },
+    forgetRepository(repositoryId: string) {
+      const belongsToRepository = (key: string) => {
+        try {
+          const identity: unknown = JSON.parse(key);
+          return Array.isArray(identity) && identity[0] === repositoryId;
+        } catch {
+          return false;
+        }
+      };
+      for (const key of workspaces.keys()) if (belongsToRepository(key)) workspaces.delete(key);
+      if (belongsToRepository(snapshot.key)) {
+        cancel();
+        publish({
+          key: "",
+          source: null,
+          sourceLabel: "",
+          tabs: [],
+          recentPaths: [],
+          active: "changes",
+          file: null,
+          loading: false,
+          stale: false,
+          error: null,
+        });
+      }
     },
     invalidate() {
       const tab = snapshot.tabs.find((item) => item.id === snapshot.active);

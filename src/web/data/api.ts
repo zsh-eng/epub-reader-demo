@@ -1,6 +1,31 @@
 import { z } from "zod";
 import { comparisonSchema } from "../../shared/protocol";
 
+const worktreeSchema = z.object({
+  path: z.string(),
+  head: z.string(),
+  branch: z.string(),
+  bare: z.boolean().optional(),
+});
+export const branchesSchema = z.array(
+  z.object({
+    name: z.string(),
+    head: z.string(),
+    worktreePath: z.string().optional(),
+    current: z.boolean(),
+  }),
+);
+export const registeredRepositorySchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  name: z.string(),
+  branches: branchesSchema,
+  worktrees: z.array(worktreeSchema),
+  error: z.string().optional(),
+});
+export const repositoriesSchema = z.object({
+  repositories: z.array(registeredRepositorySchema),
+});
 export const sessionSchema = z.object({
   protocol: z.literal(1),
   repository: z.object({
@@ -11,24 +36,11 @@ export const sessionSchema = z.object({
     shallow: z.boolean(),
     git: z.boolean().optional(),
   }),
-  worktrees: z.array(
-    z.object({
-      path: z.string(),
-      head: z.string(),
-      branch: z.string(),
-      bare: z.boolean().optional(),
-    }),
-  ),
+  worktrees: z.array(worktreeSchema),
+  repositoryId: z.string().optional(),
+  repositories: z.array(registeredRepositorySchema).optional(),
   initialComparison: comparisonSchema.optional(),
 });
-export const branchesSchema = z.array(
-  z.object({
-    name: z.string(),
-    head: z.string(),
-    worktreePath: z.string().optional(),
-    current: z.boolean(),
-  }),
-);
 export const historySchema = z.object({
   commits: z.array(
     z.object({
