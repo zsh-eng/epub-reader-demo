@@ -39,14 +39,27 @@ try {
     await writeFile(join(path, "same.ts"), `export const project = "${name} working";\n`);
     repositories.push(path);
   }
-  host = spawn(process.execPath, ["dist/cli.js", ...repositories.slice(0, 2), "--no-open"], {
-    stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      MED_SEARCH_CACHE: join(directory, "search-cache"),
-      MED_ZOEKT_BIN: process.env.MED_VALIDATION_ZOEKT_BIN ?? join(directory, "no-search-binaries"),
+  host = spawn(
+    process.execPath,
+    [
+      "dist/cli.js",
+      ...repositories.slice(0, 2),
+      "--no-open",
+      "--port",
+      "0",
+      "--state-dir",
+      join(directory, "state"),
+    ],
+    {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        MED_SEARCH_CACHE: join(directory, "search-cache"),
+        MED_ZOEKT_BIN:
+          process.env.MED_VALIDATION_ZOEKT_BIN ?? join(directory, "no-search-binaries"),
+      },
     },
-  });
+  );
   let errors = "";
   host.stderr.on("data", (chunk) => {
     errors += chunk;

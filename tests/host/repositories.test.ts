@@ -365,6 +365,7 @@ test("active event streams keep their watchers while inactive sources are evicte
   }
   const { request, base, headers } = await launch(repo);
   const controllers: AbortController[] = [];
+  const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
   const openEvents = async (path: string) => {
     const controller = new AbortController();
     controllers.push(controller);
@@ -373,6 +374,10 @@ test("active event streams keep their watchers while inactive sources are evicte
       signal: controller.signal,
     });
     expect(stream.status).toBe(200);
+    // Retain the stream as a browser client would; GC can cancel an unreferenced response.
+    const reader = stream.body!.getReader();
+    readers.push(reader);
+    expect((await reader.read()).done).toBe(false);
   };
   try {
     await openEvents(repo);
@@ -391,6 +396,7 @@ test("active event streams keep their watchers while inactive sources are evicte
     expect(stopped).toHaveLength(stopCount);
   } finally {
     for (const controller of controllers) controller.abort();
+    await Promise.allSettled(readers.map((reader) => reader.cancel()));
   }
 });
 

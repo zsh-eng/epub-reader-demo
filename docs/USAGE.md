@@ -12,11 +12,11 @@ npm run build
 node dist/cli.js /path/to/repository
 ```
 
-The command starts a local server and opens a private browser URL. Keep the terminal open. Use `Ctrl+C` to stop it.
+The command starts a local server on port **4173** and opens a private browser URL. Use `--port` to choose another port; med reports an error if that port is occupied. Keep the terminal open. Use `Ctrl+C` to stop it.
 
 ```sh
-# Keep a stable origin for saved browser preferences.
-node dist/cli.js /path/to/repository --port 4173
+# Choose another fixed local port.
+node dist/cli.js /path/to/repository --port 4174
 
 # Print the URL without opening the browser.
 node dist/cli.js /path/to/repository --no-open
@@ -39,6 +39,14 @@ Use **Open branch** (`+`) to search the registered repositories' branches and wo
 Opening the launch URL starts with only the selected branch or worktree tab. Open additional tabs from **Open branch**. Branch tabs can belong to different repositories. Repository labels distinguish matching branch names. Each tab keeps its comparison and file navigation for the current browser session. The history, files, content search, and symbols all use that tab's repository and branch or worktree. Content search still reads committed content.
 
 Linked worktrees belong to one repository entry. Separate clones remain separate entries, even when they use the same remote. Repository registration lasts for the local server session; restart with the paths you want to use. Patch and file-pair inputs remain separate launch modes.
+
+### Saved agent reviews
+
+An agent can use the running host to save a commit range or capture working changes, then return a clean local review link. Open the launch URL once in the browser to authorize access. Saved links in that browser then use the same local session.
+
+A saved review opens its first target. Select other repositories or ranges from **Review target**. The saved diff and comment context stay fixed even when agents make more changes. **Copy feedback** includes comments from all targets in that review, with repository paths, revisions, line numbers, selected source, and adjacent lines. **Clear all comments** clears only that review after confirmation. Copying does not clear comments.
+
+Saved reviews and their comments persist in `~/.local/state/med`. Normal branch review notes still end with the host process. See [agent integration](AGENT_INTEGRATION.md) for commands, state settings, limits, and suggested `AGENTS.md` guidance.
 
 ### Indexed branch search
 

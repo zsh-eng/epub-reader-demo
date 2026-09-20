@@ -94,7 +94,7 @@ The port retains review actions, anchors, document projection, geometry, identit
 
 The original proposal considered retaining Hunk's daemon transport and publication protocol. The implemented host uses a smaller direct HTTP contract instead. It does not claim compatibility with Hunk agents, extensions, producer protocols, or publication deltas. The host owns source snapshots and notes. Selection, filtering, scroll, and presentation remain browser-local. There is no shared cursor or cross-client note push.
 
-JJ/Sapling, rich STML, terminal modes, extension execution, branch mutation, merge editing, Zed theme import, note persistence, and native desktop installation remain outside this version.
+JJ/Sapling, rich STML, terminal modes, extension execution, branch mutation, merge editing, Zed theme import, and native desktop installation remain outside this version.
 
 ## Requests, identity, and invalidation
 
@@ -126,7 +126,7 @@ The first request transfers one bounded patch and all file metadata. Initial pat
 
 Full object IDs permit immutable review caching. Symbolic revisions, patches, file pairs, and working changes are re-read. Browser fetches and note loads carry request-generation checks so late responses cannot replace a newer comparison. Note mutations carry an expected revision. The server rejects outdated mutations.
 
-Live note scopes survive review refreshes. Notes on changed files become stale; notes on missing files become orphaned and remain accessible. This version does not infer new line coordinates. Notes live in host memory and end when that process closes.
+Live note scopes survive review refreshes. Notes on changed files become stale; notes on missing files become orphaned and remain accessible. This version does not infer new line coordinates. Normal branch review notes live in host memory and end when that process closes. Saved agent reviews use a separate persistent store.
 
 Immutable context comes from resolved Git objects. Mutable context validates its captured file/index signature before it is returned. File-pair inputs use frozen byte snapshots. Standalone patches do not claim full-source authority. Patch/file inputs use manual refresh. A stale source request fails instead of mixing current contents with an old patch.
 
@@ -161,3 +161,13 @@ The Bun test exposed a real watcher cost: opening watchers across the checkout e
 5. `tests/`, `scripts/`, and `docs/validation/`: behavior, package checks, and reproducible measurements.
 
 [Parallel integration record](docs/IMPLEMENTATION_PLAN.md) and [original audits](docs/audit/) explain the source decisions. Audit files describe their pinned inspection baseline; this file describes the implemented system.
+
+## Saved agent reviews
+
+The CLI uses a stable default port (4173) and private state directory (`~/.local/state/med`). A persistent credential and per-port connection record let `review repos` and `review create` find the running host. The browser exchanges the launch token for a same-origin HttpOnly cookie, then removes the token from the URL. Saved links contain only a review ID. They cannot register repositories.
+
+`src/shared/saved-review.ts` defines a review bundle with one or more repository/comparison targets. The host resolves commit references and captures the patch and supported source bytes before it writes a bundle. Mutable working comparisons are labelled as captured changes. The store keeps comments separate for each target, while feedback export and clear operate on the whole bundle. Revision checks prevent a stale clear from deleting newer comments. Atomic private files and a cross-process write lock protect persistent records.
+
+The browser opens one target at a time. Saved source does not follow watcher events. The normal file browser and commit history remain available; the header shows when the user has left the saved comparison. Feedback export uses captured source, including selected lines and adjacent context. Saved file access requires the repository family to remain registered, but a surviving checkout can replace a removed linked worktree as the session anchor.
+
+See [agent integration](docs/AGENT_INTEGRATION.md) for the CLI contract, repository selection policy, data limits, and user-confirmed `AGENTS.md` guidance.

@@ -9,6 +9,7 @@ A local Git review app for macOS and Omarchy Linux. Review changes, explore bran
 - **Review changes in one view.** Scroll through all changed files. Use split or unified diffs, expand context, wrap lines, and add notes to selected lines.
 - **Explore branches and worktrees.** Switch between branch tabs, browse commit history, and inspect working changes. Read branches without a worktree directly from Git.
 - **Open several repositories.** Use one Open branch picker for all registered repositories. Branch tabs can span repositories; files, history, and search stay scoped to the selected tab.
+- **Review agent work from a link.** Save changes from one or more repositories, add line comments, and copy all feedback back to the agent.
 - **Read full files.** Browse unchanged and untracked files, keep files in tabs, and open historical versions from a diff.
 - **Find code.** Search file names or committed file contents with a code preview. Jump to symbols in a file or across a project. Resume your last search.
 - **See who changed a line.** Toggle gutter blame in a full file to see the author and commit. Hover a label for the date and commit message.
@@ -17,7 +18,7 @@ A local Git review app for macOS and Omarchy Linux. Review changes, explore bran
 
 ![File search with matching paths and a code preview](docs/validation/picker-preview.png)
 
-med runs in your browser with a local server. It does not edit reviewed files, stage changes, switch branches, or run code from the repository. Review notes stay on the local host for the session.
+med runs in your browser with a local server. It does not edit reviewed files, stage changes, switch branches, or run code from the repository. Normal review notes stay on the local host for the session. Saved agent reviews keep captured source and comments across restarts.
 
 ## Get started
 
@@ -38,6 +39,19 @@ node dist/cli.js /path/to/frontend /path/to/backend
 ```
 
 Use **Open branch** (`+`) to select a branch or worktree, or to add and remove repositories for the current session. Removing a repository from med does not delete its files or branches.
+
+### Agent review links
+
+The local server uses port **4173** by default. With med already running, an agent can create a review from exact start and end commits:
+
+```sh
+node dist/cli.js review create --title "Agent changes" \
+  --repo /path/to/repository --base <start-commit> --head <end-commit>
+```
+
+The command prints a clickable review link. Use `--working` instead of `--base` and `--head` to capture current working changes. The review header has **Copy feedback** and **Clear all comments** actions.
+
+See [agent integration](docs/AGENT_INTEGRATION.md) for multi-repository manifests, repository selection, and suggested `AGENTS.md` guidance. Confirm that guidance with the user before adding it to their instructions.
 
 ### Optional search tools
 
