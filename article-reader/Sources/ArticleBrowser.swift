@@ -453,7 +453,7 @@ enum ArticleRouting {
 struct WebSurface: UIViewRepresentable {
   let webView: WKWebView
   let insets: EdgeInsets
-  var isActive = true
+  var isActive: () -> Bool = { true }
   @Binding var nearEnd: Bool
   func makeCoordinator() -> Coordinator { Coordinator(nearEnd: $nearEnd, isActive: isActive) }
   func makeUIView(context: Context) -> WKWebView {
@@ -464,21 +464,25 @@ struct WebSurface: UIViewRepresentable {
   func updateUIView(_ uiView: WKWebView, context: Context) {
     context.coordinator.nearEnd = $nearEnd
     context.coordinator.isActive = isActive
-    uiView.accessibilityElementsHidden = !isActive
+    uiView.accessibilityElementsHidden = !isActive()
     updateInsets(uiView)
+  }
+
+  static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+    if uiView.scrollView.delegate === coordinator { uiView.scrollView.delegate = nil }
   }
 
   /// Different enter/leave distances prevent the prompt's own height from
   /// repeatedly hiding and showing it. Loading a page alone never triggers it.
   final class Coordinator: NSObject, UIScrollViewDelegate {
     var nearEnd: Binding<Bool>
-    var isActive: Bool
-    init(nearEnd: Binding<Bool>, isActive: Bool) {
+    var isActive: () -> Bool
+    init(nearEnd: Binding<Bool>, isActive: @escaping () -> Bool) {
       self.nearEnd = nearEnd
       self.isActive = isActive
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-      guard isActive else { return }
+      guard isActive() else { return }
       guard scrollView.isDragging || scrollView.isDecelerating else { return }
       let bottom =
         scrollView.contentOffset.y + scrollView.bounds.height

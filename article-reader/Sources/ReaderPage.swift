@@ -81,23 +81,26 @@ struct ReaderPage: View {
   private var pageContent: some View {
     ZStack(alignment: .top) {
       GeometryReader { geometry in
-        // Keep both documents mounted so the transition preserves scroll position
-        // and never exposes a newly created, unstyled WKWebView.
+        // SwiftUI retains the outgoing surface only for the crossfade. WebKit's
+        // remote accessibility tree must leave the hierarchy once it is hidden.
+        // The browser still owns both documents and their scroll/history state.
         ZStack {
-          WebSurface(
-            webView: browser.webView, insets: geometry.safeAreaInsets,
-            isActive: !browser.isReader, nearEnd: $nearEnd
-          )
-          .opacity(browser.isReader ? 0 : 1)
-          .allowsHitTesting(!browser.isReader)
-          .accessibilityHidden(browser.isReader)
-          WebSurface(
-            webView: browser.readerView, insets: geometry.safeAreaInsets,
-            isActive: browser.isReader, nearEnd: $nearEnd
-          )
-          .opacity(browser.isReader && browser.readerReady ? 1 : 0)
-          .allowsHitTesting(browser.isReader && browser.readerReady)
-          .accessibilityHidden(!browser.isReader || !browser.readerReady)
+          if browser.isReader {
+            WebSurface(
+              webView: browser.readerView, insets: geometry.safeAreaInsets,
+              isActive: { browser.isReader && browser.readerReady }, nearEnd: $nearEnd
+            )
+            .opacity(browser.readerReady ? 1 : 0)
+            .allowsHitTesting(browser.readerReady)
+            .accessibilityHidden(!browser.readerReady)
+            .transition(.opacity)
+          } else {
+            WebSurface(
+              webView: browser.webView, insets: geometry.safeAreaInsets,
+              isActive: { !browser.isReader }, nearEnd: $nearEnd
+            )
+            .transition(.opacity)
+          }
         }
         .animation(
           .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.22),
