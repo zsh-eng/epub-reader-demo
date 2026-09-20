@@ -1028,7 +1028,7 @@ export function App({
     { id: "changes", label: "Return to Changes", run: () => fileWorkspace.select("changes") },
     {
       id: "blame",
-      label: blameEnabled ? "Hide Git blame" : "Show Git blame for selected lines",
+      label: blameEnabled ? "Hide Git blame" : "Show Git blame in the gutter",
       shortcut: "⌥ B",
       disabled: !activeFile || fileState.file?.kind !== "text",
       run: () => setBlameEnabled((value) => !value),

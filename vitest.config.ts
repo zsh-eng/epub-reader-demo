@@ -16,7 +16,9 @@ export default defineConfig({
       },
       {
         plugins: [stylex.vite({ useCSSLayers: true }), react()],
-        optimizeDeps: { include: ["@base-ui/react/combobox", "@base-ui/react/tabs"] },
+        optimizeDeps: {
+          include: ["@base-ui/react/combobox", "@base-ui/react/tabs", "@base-ui/react/tooltip"],
+        },
         test: {
           name: "browser",
           include: ["tests/browser/**/*.test.ts", "tests/browser/**/*.test.tsx"],

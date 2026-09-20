@@ -260,7 +260,7 @@ test("native wheel input scrolls a full file and restored previews stay scrollab
   expect(document.documentElement.scrollTop).toBe(0);
 });
 
-test("Git blame is requested on demand and stale files hide attribution", async () => {
+test("Git blame preloads, retains the cache across toggles, and hides stale attribution", async () => {
   const load = vi.fn<BlameLoader>(
     async (file: BrowseRead, startLine: number): Promise<BrowseBlame> => ({
       source: file.source,
@@ -280,15 +280,60 @@ test("Git blame is requested on demand and stale files hide attribution", async 
   );
   render(<FullFileView {...props} file={base} loadBlame={load} />);
   await expect.element(page.getByRole("button", { name: "Toggle Git blame" })).toBeVisible();
-  expect(load).not.toHaveBeenCalled();
+  await expect.poll(() => load.mock.calls.length).toBe(1);
   await page.getByRole("button", { name: "Toggle Git blame" }).click();
   await expect.element(page.getByText("Mira")).toBeVisible();
   expect(load.mock.calls[0]?.slice(0, 2)).toEqual([base, 1]);
+  await page.getByRole("button", { name: "Toggle Git blame" }).click();
+  await expect.element(page.getByText("Mira")).not.toBeInTheDocument();
+  await page.getByRole("button", { name: "Toggle Git blame" }).click();
+  await expect.element(page.getByText("Mira")).toBeVisible();
+  expect(load).toHaveBeenCalledTimes(1);
   root!.render(<FullFileView {...props} file={base} loadBlame={load} stale />);
   await expect
     .element(page.getByText("Refresh the file before reading its line history."))
     .toBeVisible();
   expect(mount!.textContent).not.toContain("Mira");
+});
+
+test("blame uses Base UI tooltips that update between lines and dismiss on Escape", async () => {
+  const load: BlameLoader = async (file) => ({
+    source: file.source,
+    path: file.path,
+    identity: file.identity,
+    truncated: false,
+    lines: [1, 2].map((line) => ({
+      line,
+      commit: "a".repeat(40),
+      author: "Mira",
+      date: "2026-09-20",
+      summary: `Change for line ${line}`,
+    })),
+  });
+  render(<FullFileView {...props} file={base} loadBlame={load} blameEnabled />);
+  const first = page.getByLabelText(/^Line 1: aaaaaaaa/);
+  const second = page.getByLabelText(/^Line 2: aaaaaaaa/);
+  await expect.element(first).toBeVisible();
+  expect(first.element().hasAttribute("title")).toBe(false);
+  await first.hover();
+  await expect
+    .poll(() => document.querySelector('[role="tooltip"]')?.textContent)
+    .toContain("Change for line 1");
+  await second.hover();
+  await expect
+    .poll(() => document.querySelector('[role="tooltip"]')?.textContent)
+    .toContain("Change for line 2");
+  await userEvent.keyboard("{Escape}");
+  await expect.element(page.getByRole("tooltip")).not.toBeInTheDocument();
+});
+
+test("picker previews do not start background blame", async () => {
+  const load = vi.fn<BlameLoader>();
+  render(<FullFileView {...props} file={base} loadBlame={load} compact />);
+  await expect.poll(() => lines()?.length).toBeGreaterThan(0);
+  // Let the background scheduler run if it was accidentally enabled.
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  expect(load).not.toHaveBeenCalled();
 });
 
 test("a late Git blame result cannot replace another file's line history", async () => {
@@ -336,34 +381,66 @@ test("a late Git blame result cannot replace another file's line history", async
   expect(mount!.textContent).not.toContain("Wrong file author");
 });
 
-test("selecting a Pierre line number updates the bounded blame request", async () => {
-  const load = vi.fn<BlameLoader>(async (file, startLine) => ({
+test("blame follows virtualized rows in the left gutter with bounded reads", async () => {
+  const load = vi.fn<BlameLoader>(async (file, start, end) => ({
     source: file.source,
     path: file.path,
     identity: file.identity,
-    lines: [
-      {
-        line: startLine,
-        commit: "a".repeat(40),
-        author: "Mira",
-        date: "",
-        summary: `History of line ${startLine}`,
-      },
-    ],
     truncated: false,
+    lines: Array.from({ length: end - start + 1 }, (_, i) => ({
+      line: start + i,
+      commit: "a".repeat(40),
+      author: "Mira",
+      date: "2026-09-20",
+      summary: `History of line ${start + i}`,
+    })),
   }));
   render(
     <FullFileView
       {...props}
-      file={{ ...base, text: "one\ntwo\nthree\nfour\n" }}
+      file={{ ...base, plain: true, text: "one\n".repeat(40000) }}
       loadBlame={load}
       blameEnabled
+      vimEnabled
     />,
   );
-  await expect.element(page.getByText("History of line 1")).toBeVisible();
-  await page.getByText("3", { exact: true }).click();
-  await expect.element(page.getByText("History of line 3")).toBeVisible();
-  expect(load.mock.calls.at(-1)?.slice(1, 3)).toEqual([3, 3]);
+  const pane = page.getByRole("textbox", { name: "File navigation" });
+  const attribution = () =>
+    document
+      .querySelector("diffs-container")
+      ?.shadowRoot?.querySelector<HTMLElement>('[data-med-blame="1"]');
+  await expect
+    .poll(() =>
+      attribution()?.querySelector("[data-med-blame-trigger]")?.getAttribute("aria-label"),
+    )
+    .toContain("History of line 1");
+  const row = document
+    .querySelector("diffs-container")!
+    .shadowRoot!.querySelector<HTMLElement>('[data-line="1"]')!;
+  expect(attribution()!.getBoundingClientRect().right).toBeLessThan(
+    row.getBoundingClientRect().left,
+  );
+  await userEvent.keyboard("39000G");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "39000");
+  await expect
+    .poll(() =>
+      document
+        .querySelector("diffs-container")
+        ?.shadowRoot?.querySelector('[data-med-blame="39000"]')
+        ?.querySelector("[data-med-blame-trigger]")
+        ?.getAttribute("aria-label"),
+    )
+    .toContain("History of line 39000");
+  await page.getByLabelText(/^Line 39000: aaaaaaaa/).hover();
+  await expect
+    .poll(() => document.querySelector('[role="tooltip"]')?.textContent)
+    .toContain("History of line 39000");
+  expect(load.mock.calls.every(([, start, end]) => end - start < 200)).toBe(true);
+  expect(load.mock.calls.length).toBeLessThan(6);
+  expect(
+    document.querySelector("diffs-container")!.shadowRoot!.querySelectorAll("[data-med-blame]")
+      .length,
+  ).toBeLessThan(250);
 });
 
 test("the current Vim search match has a distinct range through n, N and Escape", async () => {

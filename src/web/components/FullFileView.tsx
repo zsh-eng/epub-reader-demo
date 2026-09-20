@@ -7,17 +7,15 @@ import {
 } from "@pierre/diffs/react";
 import {
   useCallback,
-  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
 } from "react";
-import type { CodeViewLineSelection } from "@pierre/diffs";
 import type { BrowseRead } from "../../shared/browse";
-import type { BrowseBlame } from "../../shared/inspect";
 import type { BlameLoader } from "../data/blame";
 import { tokens, ui } from "../theme.stylex";
 import { useTheme } from "../themes";
@@ -26,6 +24,8 @@ import { Icon } from "./Icon";
 import { useFileVim, type FileNavigationCommand } from "../data/use-file-vim";
 import { pierreFile } from "../data/file-prefetch";
 import { createSearchHighlights } from "../data/search-highlights";
+import { BlameTooltips } from "./BlameTooltips";
+import { createBlameGutter } from "../data/blame-gutter";
 
 export interface FileSymbolPreview {
   preview(line: number, column: number | undefined, name: string, selectLine?: boolean): void;
@@ -172,52 +172,25 @@ export function FullFileView({
   useLayoutEffect(() => () => highlights.dispose(), [highlights]);
   const [localBlameEnabled, setLocalBlameEnabled] = useState(false);
   const blameOpen = !compact && (blameEnabled ?? localBlameEnabled);
-  const [selection, setSelection] = useState<CodeViewLineSelection | null>(null);
-  const [blame, setBlame] = useState<{
-    key: string;
-    result?: BrowseBlame;
-    error?: string;
-  }>({ key: "" });
-  const selectedRange = selection?.id === file?.identity ? selection?.range : undefined;
-  const startLine = selectedRange
-    ? Math.min(selectedRange.start, selectedRange.end)
-    : Math.max(1, line ?? 1);
-  const selectedEndLine = selectedRange
-    ? Math.max(selectedRange.start, selectedRange.end)
-    : startLine;
-  const endLine = Math.min(selectedEndLine, startLine + 199);
-  const blameKey = file
-    ? JSON.stringify([file.source, file.path, file.identity, startLine, endLine])
-    : "";
+  const [blameNotice, setBlameNotice] = useState<{
+    file: BrowseRead | null;
+    message: string;
+  } | null>(null);
   const canBlame = !!loadBlame && file?.kind === "text" && !stale && !loading && !error;
-  const currentBlame = blame.key === blameKey ? blame : undefined;
+  const gutter = useMemo(
+    () =>
+      createBlameGutter(file, loadBlame, !compact && canBlame, (message) =>
+        setBlameNotice({ file, message }),
+      ),
+    [file, loadBlame, compact, canBlame],
+  );
+  useLayoutEffect(() => () => gutter.dispose(), [gutter]);
+  useLayoutEffect(() => gutter.setVisible(blameOpen), [gutter, blameOpen]);
+  const blameCells = useSyncExternalStore(gutter.subscribe, gutter.getSnapshot);
   const setBlameOpen = (open: boolean) => {
     setLocalBlameEnabled(open);
     onBlameEnabledChange?.(open);
   };
-  useEffect(() => {
-    if (!blameOpen || !canBlame || !file || !loadBlame) return;
-    const controller = new AbortController();
-    // Delay a little so a drag over line numbers does not start a Git process
-    // for each pointer event. Every response is tied to these exact file bytes.
-    const timer = setTimeout(() => {
-      void loadBlame(file, startLine, endLine, controller.signal)
-        .then((result) => {
-          if (!controller.signal.aborted) setBlame({ key: blameKey, result });
-        })
-        .catch((cause: unknown) => {
-          if (!controller.signal.aborted)
-            setBlame({
-              key: blameKey,
-              error: cause instanceof Error ? cause.message : "Cannot read line history.",
-            });
-        });
-    }, 100);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [blameOpen, canBlame, file, loadBlame, startLine, endLine, blameKey]);
   const plain = !!file?.plain;
   const items = useMemo<CodeViewItem<undefined>[]>(() => {
     if (file?.kind !== "text" || typeof file.text !== "string") return [];
@@ -238,6 +211,8 @@ export function FullFileView({
       overflow: "scroll",
       disableFileHeader: true,
       enableLineSelection: true,
+      // Keep hover and gutter dragging active immediately after keyboard scrolling.
+      pointerEventsOnScroll: true,
       tokenizeMaxLineLength: 1000,
       unsafeCSS: `[data-line] { tab-size: 2; }
         ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }
@@ -245,8 +220,18 @@ export function FullFileView({
         ::highlight(${visualName}) { background-color: color-mix(in srgb, ${active.palette.accent} 45%, transparent); color: ${active.palette.text}; }
         [data-vim-visual-line] { background: color-mix(in srgb, ${active.palette.accent} 45%, transparent) !important; }
         [data-vim-visual-empty] { position: relative; }
+        ${
+          blameOpen && canBlame
+            ? `[data-column-number] { padding-left: 196px; }
+        [data-med-blame] { position: absolute; left: 8px; top: 0; width: 176px; height: 100%; display: flex; align-items: baseline; gap: 8px; font-family: var(--diffs-header-font-family); font-size: 10px; text-align: left; color: ${active.palette.muted}; user-select: none; overflow: hidden; white-space: nowrap; }
+        [data-med-blame-trigger] { display: flex; align-items: baseline; gap: 8px; width: 100%; height: 100%; }
+        [data-med-blame-trigger] > :first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+        [data-med-blame-trigger] > :last-child { color: ${active.palette.faint}; }`
+            : ""
+        }
         [data-vim-visual-empty]::before { content: ""; position: absolute; width: 1ch; height: 100%; background: color-mix(in srgb, ${active.palette.accent} 45%, transparent); pointer-events: none; }`,
       onPostRender(node, _instance, phase) {
+        gutter.update(node, phase);
         vimRender.current(node, phase);
         if (phase === "unmount") highlights.dispose();
         else
@@ -254,7 +239,7 @@ export function FullFileView({
       },
       layout: { gap: 0, paddingTop: 8, paddingBottom: 16 },
     }),
-    [active, highlightId, highlights, visualName, activeSearchName],
+    [active, highlightId, highlights, visualName, activeSearchName, gutter, blameOpen, canBlame],
   );
   useLayoutEffect(() => {
     if (!file || !items.length || loading) return;
@@ -349,6 +334,11 @@ export function FullFileView({
           </button>
         </div>
       )}
+      {blameOpen && (stale || (blameNotice?.file === file && blameNotice.message)) && (
+        <div role="status" {...stylex.props(styles.banner)}>
+          {stale ? "Refresh the file before reading its line history." : blameNotice?.message}
+        </div>
+      )}
       {error ? (
         <div role="alert" {...stylex.props(styles.notice)}>
           {error}
@@ -385,7 +375,6 @@ export function FullFileView({
                 items={items}
                 options={options}
                 onScroll={onScrollPosition}
-                onSelectedLinesChange={setSelection}
                 className={stylex.props(styles.code).className}
                 style={
                   {
@@ -507,56 +496,7 @@ export function FullFileView({
           </span>
         </div>
       )}
-      {blameOpen && file?.kind === "text" && (
-        <aside aria-label="Git blame" {...stylex.props(styles.blame)}>
-          <div {...stylex.props(styles.blameHeading)}>
-            <Icon name="history" size={14} />
-            <strong>Line history</strong>
-            <span {...stylex.props(styles.detail)}>
-              {startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}–${endLine}`}
-            </span>
-            <span {...stylex.props(styles.blameHint)}>Select line numbers to inspect.</span>
-            <button
-              {...stylex.props(ui.button, ui.iconButton)}
-              aria-label="Close Git blame"
-              onClick={() => setBlameOpen(false)}
-            >
-              <Icon name="close" size={14} />
-            </button>
-          </div>
-          {stale ? (
-            <p role="status">Refresh the file before reading its line history.</p>
-          ) : currentBlame?.error ? (
-            <p role="alert">{currentBlame.error}</p>
-          ) : !currentBlame?.result ? (
-            <p role="status">Loading line history…</p>
-          ) : (
-            <>
-              {currentBlame.result.reason && <p role="status">{currentBlame.result.reason}</p>}
-              {currentBlame.result.lines.map((entry) => (
-                <div key={entry.line} {...stylex.props(styles.blameRow)}>
-                  <span {...stylex.props(styles.lineNumber)}>L{entry.line}</span>
-                  <code {...stylex.props(styles.commit)} title={entry.commit}>
-                    {/^[0]+$/.test(entry.commit) ? "Uncommitted" : entry.commit.slice(0, 8)}
-                  </code>
-                  <span {...stylex.props(styles.author)} title={entry.author}>
-                    {entry.author}
-                  </span>
-                  <span {...stylex.props(styles.summary)} title={entry.summary}>
-                    {entry.summary}
-                  </span>
-                  <time {...stylex.props(styles.detail)} dateTime={entry.date}>
-                    {entry.date.slice(0, 10)}
-                  </time>
-                </div>
-              ))}
-              {(selectedEndLine > endLine || currentBlame.result.truncated) && (
-                <p role="status">Showing at most 200 selected lines.</p>
-              )}
-            </>
-          )}
-        </aside>
-      )}
+      <BlameTooltips cells={blameCells} />
     </section>
   );
 }
@@ -653,31 +593,6 @@ const styles = stylex.create({
     overflow: "auto",
     scrollbarWidth: "thin",
     overscrollBehavior: "contain",
-  },
-  blame: {
-    flexShrink: 0,
-    maxHeight: 180,
-    overflow: "auto",
-    paddingInline: 12,
-    paddingBlock: 8,
-    borderTopWidth: 1,
-    borderTopStyle: "solid",
-    borderTopColor: tokens.border,
-    backgroundColor: tokens.panel,
-    fontSize: 11,
-  },
-  blameHeading: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 },
-  blameHint: { flex: "1", color: tokens.faint, textAlign: "right" },
-  blameRow: { display: "flex", alignItems: "baseline", gap: 12, paddingBlock: 4 },
-  lineNumber: { color: tokens.faint, fontFamily: tokens.code, minWidth: 40 },
-  commit: { color: tokens.accent, fontFamily: tokens.code, minWidth: 75 },
-  author: { maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  summary: {
-    flex: "1",
-    minWidth: 30,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
   },
   notice: { padding: 28, color: tokens.muted, lineHeight: 1.7 },
   detail: { color: tokens.faint, overflowWrap: "anywhere" },
