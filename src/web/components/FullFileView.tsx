@@ -24,6 +24,7 @@ import { useTheme } from "../themes";
 import "../pierre-theme";
 import { Icon } from "./Icon";
 import { useFileVim, type FileNavigationCommand } from "../data/use-file-vim";
+import { pierreFile } from "../data/file-prefetch";
 import { createSearchHighlights } from "../data/search-highlights";
 
 export interface FileSymbolPreview {
@@ -217,18 +218,10 @@ export function FullFileView({
       {
         id: file.identity,
         type: "file",
-        file: {
-          name: file.path,
-          contents: file.text,
-          cacheKey: `${JSON.stringify(file.source)}:${file.identity}:${plain ? "plain" : "syntax"}`,
-          // FileRenderer's isFilePlainText path skips highlightFileAST even with a
-          // worker pool. forcePlainText is a lower-level renderer option, not a
-          // CodeView option. lang=text is the supported CodeView entry point.
-          ...(plain ? { lang: "text" as const } : {}),
-        },
+        file: pierreFile(file),
       },
     ];
-  }, [file, plain]);
+  }, [file]);
   const options = useMemo<CodeViewReactOptions<undefined, undefined>>(
     () => ({
       theme: active.pierreTheme,

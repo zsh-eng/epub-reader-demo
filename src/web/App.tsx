@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import {
   CodeView,
+  useWorkerPool,
   type CodeViewHandle,
   type CodeViewItem,
   type CodeViewReactOptions,
@@ -29,6 +30,8 @@ import { SymbolPicker } from "./components/SymbolPicker";
 import { FullFileView, type BeginFileSymbolPreview } from "./components/FullFileView";
 import { FileViewTabs } from "./components/FileViewTabs";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
+
+import { createFilePrefetch } from "./data/file-prefetch";
 
 type Annotation = { note?: Note; draft?: NoteTarget };
 type Selection = {
@@ -97,7 +100,8 @@ export function App({
   );
   const [blameEnabled, setBlameEnabled] = useState(false);
   const [branchPickerOpen, setBranchPickerOpen] = useState(false);
-  const [browseApi] = useState(
+  const workerPool = useWorkerPool();
+  const [rawBrowseApi] = useState(
     () =>
       providedBrowseApi ??
       createBrowseApi(
@@ -105,6 +109,9 @@ export function App({
         new URLSearchParams(location.hash.slice(1)).get("token") ?? "",
       ),
   );
+  const [prefetch] = useState(() => createFilePrefetch(rawBrowseApi));
+  const browseApi = prefetch.api;
+  useEffect(() => () => prefetch.dispose(), [prefetch]);
   const [fileWorkspace] = useState(() => createFileWorkspace(browseApi));
   const [loadBlame] = useState(
     () =>
@@ -141,8 +148,20 @@ export function App({
     { api: browseApi },
   );
   useEffect(() => {
+    prefetch.invalidate();
     fileWorkspace.invalidate();
-  }, [fileWorkspace, state.sourceRevision]);
+  }, [fileWorkspace, prefetch, state.sourceRevision]);
+  const prefetchFile = useCallback(
+    (path: string) => {
+      if (browseSource)
+        prefetch.prefetch(
+          browseSource,
+          path,
+          workerPool ? (file) => workerPool.primeFileHighlightCache(file) : undefined,
+        );
+    },
+    [browseSource, prefetch, workerPool],
+  );
   const activeFile = fileState.tabs.find((tab) => tab.id === fileState.active);
   const openSymbols = useCallback((mode: "file" | "project") => {
     setSymbolMode(mode);
@@ -1017,6 +1036,8 @@ export function App({
           <button
             role="link"
             {...stylex.props(styles.fileLink)}
+            onPointerEnter={() => prefetchFile(file.path)}
+            onFocus={() => prefetchFile(file.path)}
             onClick={() => openWorkingFile(file.path)}
           >
             {file.path}
@@ -1150,6 +1171,7 @@ export function App({
               filter={state.filter}
               onFilter={(value) => controller.setFilter(value)}
               onSelect={reveal}
+              onPrefetch={prefetchFile}
               onOpen={
                 browseSource
                   ? (id) => {
@@ -1522,6 +1544,8 @@ export function App({
                         <button
                           role="link"
                           {...stylex.props(styles.fileLink)}
+                          onPointerEnter={() => prefetchFile(path)}
+                          onFocus={() => prefetchFile(path)}
                           onClick={() => openWorkingFile(path)}
                           title={`Open full file · ${path}`}
                         >
@@ -1639,6 +1663,7 @@ export function App({
               {...repositoryFiles}
               sourceLabel={sourceLabel}
               selectedPath={activeFile?.path ?? selectedFile?.path ?? null}
+              onPrefetch={prefetchFile}
               onPreview={(path) => openWorkingFile(path, false)}
               onPin={(path) => openWorkingFile(path, true)}
               onIgnoredChange={repositoryFiles.setIgnored}

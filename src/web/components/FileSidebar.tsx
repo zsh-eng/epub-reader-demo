@@ -14,6 +14,7 @@ export function FileSidebar({
   onFilter,
   onSelect,
   onOpen,
+  onPrefetch,
   filterRef,
 }: {
   files: ParsedReviewFile[];
@@ -23,6 +24,7 @@ export function FileSidebar({
   onFilter(value: string): void;
   onSelect(id: string): void;
   onOpen?(id: string): void;
+  onPrefetch?(path: string): void;
   filterRef: React.RefObject<HTMLInputElement | null>;
 }) {
   const latest = useRef({ files, selected, onSelect });
@@ -98,6 +100,14 @@ export function FileSidebar({
       </div>
       <FileTree
         model={model}
+        onPointerOver={(event) => {
+          const row = event.nativeEvent
+            .composedPath()
+            .find((node) => node instanceof HTMLElement && node.dataset.itemType === "file") as
+            | HTMLElement
+            | undefined;
+          if (row?.dataset.itemPath) onPrefetch?.(row.dataset.itemPath);
+        }}
         onDoubleClick={(event) => {
           const row = event.nativeEvent
             .composedPath()

@@ -219,6 +219,18 @@ async function mountApp(
 }
 
 describe("graphical review", () => {
+  test("hovering a full-file link shares the read with opening it", async () => {
+    const { fileRequests } = await mountApp();
+    const link = page.getByRole("link", { name: "src/alpha.ts", exact: true });
+    await link.hover();
+    await expect.poll(() => fileRequests.length).toBe(1);
+    await link.click();
+    await expect
+      .element(page.getByRole("textbox", { name: "File content", exact: true }))
+      .toBeVisible();
+    expect(fileRequests).toHaveLength(1);
+  });
+
   test("symbol shortcuts open file and project palettes and project selection opens the indexed commit", async () => {
     const { fileRequests } = await mountApp({ branches: true });
     await page.getByRole("treeitem", { name: /alpha.ts/ }).dblClick();

@@ -14,6 +14,7 @@ export interface RepositoryFilesProps {
   selectedPath: string | null;
   onPreview(path: string): void;
   onPin(path: string): void;
+  onPrefetch?(path: string): void;
   ignored: boolean;
   onIgnoredChange(value: boolean): void;
   onRefresh(): void;
@@ -30,6 +31,7 @@ export function RepositoryFiles(props: RepositoryFilesProps) {
     selectedPath,
     onPreview,
     onPin,
+    onPrefetch,
     ignored,
     onIgnoredChange,
     onRefresh,
@@ -126,6 +128,14 @@ export function RepositoryFiles(props: RepositoryFilesProps) {
       {!loading && !error && (
         <FileTree
           model={model}
+          onPointerOver={(event) => {
+            const row = event.nativeEvent
+              .composedPath()
+              .find((node) => node instanceof HTMLElement && node.dataset.itemType === "file") as
+              | HTMLElement
+              | undefined;
+            if (row?.dataset.itemPath) onPrefetch?.(row.dataset.itemPath);
+          }}
           aria-label="Files"
           className={stylex.props(styles.tree).className}
           onDoubleClick={pinSelected}
