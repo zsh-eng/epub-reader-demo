@@ -2,10 +2,10 @@
 
 Work in `/Users/admin/epub-reader-demo`, branch `main`. User authorized overnight
 implementation, subagents, focused commits, and sync. Keep existing Reader data
-safe. The hourly work phase is complete. `arctic-overnight-development` now
-retains an 08:00 Singapore morning-summary follow-up in task
-`01a0bd82-63d5-78d1-9c86-73aba44a3fa2`. Deliver that summary on 21 September,
-then pause the automation. Do not restart implementation without new user input.
+safe. The hourly work phase is complete. The user woke early on 21 September
+and requested the summary immediately. `arctic-overnight-development` has been
+deleted through the automation tool; no scheduled follow-up remains. Do not
+restart implementation without new user input.
 Keep routine automation notifications quiet. Do not claim device/deployment checks
 that were not run.
 
@@ -27,8 +27,8 @@ that were not run.
 ## Ownership / next run
 
 All overnight agents are idle and their completed changes are committed. The
-independent fixes and bounded regression sweep are complete. The next scheduled
-action is the morning summary, then pause. Live sync activation remains blocked
+independent fixes and bounded regression sweep are complete. The user requested
+the summary early and the scheduled task was removed. Live sync activation remains blocked
 on explicit approval. The separate uncached publisher extraction limitation is
 measured below; no speculative early-DOM change was shipped. Do not repeat
 passing checks or invent new features merely to keep the automation busy.
