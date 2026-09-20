@@ -13,8 +13,8 @@ extension EnvironmentValues {
   }
 }
 
-/// One clock owns the card's travelling light, its handoff, and the tag reveals.
-/// Anchors keep the light connected to pills even when text wraps onto another row.
+/// Restore the original continuous gradient. Its soft border fades into matching
+/// pill outlines before their labels appear; no geometry or racing line segments.
 struct ConnectedTagReveal<Content: View>: View {
   var isProcessing: Bool
   var tags: [String]
@@ -26,28 +26,34 @@ struct ConnectedTagReveal<Content: View>: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var started = Date()
   @State private var completion: Date?
-  @State private var completionPhase = 0.0
   @State private var settled = false
   @State private var acknowledged: Result?
 
   var body: some View {
     TimelineView(
       .animation(
-        minimumInterval: 1.0 / 30, paused: settled || reduceMotion || scenePhase != .active)
+        minimumInterval: 1.0 / 60, paused: settled || reduceMotion || scenePhase != .active)
     ) { timeline in
       let elapsed = completion.map { timeline.date.timeIntervalSince($0) } ?? -1
-      let progress = TagRevealProgress(elapsed: elapsed, immediate: reduceMotion || settled)
+      let phase =
+        timeline.date.timeIntervalSince(started).truncatingRemainder(dividingBy: 2.4) / 2.4
+      let progress = TagRevealProgress(
+        elapsed: elapsed, phase: phase,
+        immediate: reduceMotion || settled || scenePhase != .active)
       content()
         .environment(\.tagRevealProgress, progress)
-        .overlayPreferenceValue(TagRevealAnchors.self) { anchors in
-          GeometryReader { geometry in
-            let frames = anchors.mapValues { geometry[$0] }
-            Canvas { context, size in
-              guard !settled, !reduceMotion else { return }
-              drawLight(
-                in: &context, size: size, frames: frames, now: timeline.date, elapsed: elapsed)
-            }
-          }.allowsHitTesting(false).accessibilityHidden(true)
+        .overlay {
+          if !settled, scenePhase == .active {
+            let gradient = tagBeamGradient(phase: reduceMotion ? 0.2 : phase)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+              .strokeBorder(gradient, lineWidth: 2)
+              .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                  .strokeBorder(gradient, lineWidth: 4).blur(radius: 5)
+              }
+              .opacity(reduceMotion || elapsed < 0 ? 1 : max(0, 1 - elapsed / 0.65))
+              .allowsHitTesting(false).accessibilityHidden(true)
+          }
         }
     }
     .task(
@@ -55,8 +61,8 @@ struct ConnectedTagReveal<Content: View>: View {
         tags: tags, processing: isProcessing, replay: replayID, reduced: reduceMotion,
         active: scenePhase == .active)
     ) {
-      // A completion receipt means the result was visible. Backgrounding cancels
-      // the reveal; returning active restarts it before acknowledging the tags.
+      // The view can display results immediately while inactive, but a receipt
+      // is issued only after the foreground reveal has actually finished.
       guard scenePhase == .active else { return }
       let result = Result(tags: tags, replay: replayID)
       if !isProcessing, acknowledged == result {
@@ -81,18 +87,16 @@ struct ConnectedTagReveal<Content: View>: View {
         return
       }
       settled = false
-      let now = Date()
-      completionPhase = now.timeIntervalSince(started).truncatingRemainder(dividingBy: 2.4) / 2.4
-      completion = now
+      completion = Date()
       do {
         let lastArrival = TagRevealProgress.arrival(for: tags.count - 1)
-        try await Task.sleep(for: .seconds(lastArrival + 0.18))
+        try await Task.sleep(for: .seconds(lastArrival + 0.32))
         acknowledged = result
         onRevealed()
-        try await Task.sleep(for: .milliseconds(650))
+        try await Task.sleep(for: .milliseconds(500))
         settled = true
       } catch {
-        // Dismissal or replay cancels the receipt as well as the visual sequence.
+        // Dismissal, backgrounding, or replay cancels acknowledgement.
       }
     }
   }
@@ -109,101 +113,42 @@ struct ConnectedTagReveal<Content: View>: View {
     var reduced: Bool
     var active: Bool
   }
+}
 
-  private func drawLight(
-    in context: inout GraphicsContext, size: CGSize, frames: [Int: CGRect], now: Date,
-    elapsed: Double
-  ) {
-    let rect = CGRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
-    let radius = min(cornerRadius, min(rect.width, rect.height) / 2)
-    let border = borderPath(in: rect, radius: radius)
-    if elapsed < 0.24 {
-      let phase =
-        elapsed < 0
-        ? now.timeIntervalSince(started).truncatingRemainder(dividingBy: 2.4) / 2.4
-        : completionPhase + (1 - completionPhase)
-          * UnitCurve.easeOut.value(at: min(1, elapsed / 0.24))
-      var glow = context
-      glow.addFilter(.shadow(color: ArcticBrand.accent.opacity(0.45), radius: 4))
-      for piece in 0..<16 {
-        let end = (phase - Double(piece) * 0.006 + 1).truncatingRemainder(dividingBy: 1)
-        let start = max(0, end - 0.008)
-        glow.stroke(
-          border.trimmedPath(from: start, to: end),
-          with: .color(ArcticBrand.accent.opacity(1 - Double(piece) / 16)),
-          style: StrokeStyle(lineWidth: 2, lineCap: .round))
-      }
-    }
-    guard elapsed >= 0.24 else { return }
-    for index in frames.keys.sorted() {
-      guard let target = frames[index] else { continue }
-      let arrival = TagRevealProgress.arrival(for: index)
-      let departure = index == 0 ? 0.24 : arrival - 0.12
-      let travel = min(1, max(0, (elapsed - departure) / (arrival - departure)))
-      let fade = max(0, 1 - max(0, elapsed - arrival) / 0.22)
-      guard travel > 0, fade > 0 else { continue }
-      let origin: CGPoint
-      let destination: CGPoint
-      if let previous = frames[index - 1] {
-        let sameRow = abs(previous.midY - target.midY) < 4
-        origin =
-          sameRow
-          ? CGPoint(x: previous.maxX, y: previous.midY)
-          : CGPoint(x: previous.midX, y: previous.maxY)
-        destination =
-          sameRow
-          ? CGPoint(x: target.minX, y: target.midY) : CGPoint(x: target.midX, y: target.minY)
-      } else {
-        origin = CGPoint(x: rect.minX, y: rect.maxY - radius)
-        destination = CGPoint(x: target.minX, y: target.midY)
-      }
-      var connection = Path()
-      connection.move(to: origin)
-      connection.addQuadCurve(to: destination, control: CGPoint(x: origin.x, y: destination.y))
-      let visible = connection.trimmedPath(from: max(0, travel - 0.65), to: travel)
-      var glow = context
-      glow.addFilter(.shadow(color: ArcticBrand.accent.opacity(fade * 0.5), radius: 4))
-      glow.stroke(
-        visible, with: .color(ArcticBrand.accent.opacity(fade)),
-        style: StrokeStyle(lineWidth: 2, lineCap: .round))
-    }
-  }
-
-  /// Start/end at the lower left, beside the tag row, for a continuous handoff.
-  private func borderPath(in rect: CGRect, radius: CGFloat) -> Path {
-    Path { path in
-      path.move(to: CGPoint(x: rect.minX, y: rect.maxY - radius))
-      path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + radius))
-      path.addQuadCurve(
-        to: CGPoint(x: rect.minX + radius, y: rect.minY),
-        control: CGPoint(x: rect.minX, y: rect.minY))
-      path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
-      path.addQuadCurve(
-        to: CGPoint(x: rect.maxX, y: rect.minY + radius),
-        control: CGPoint(x: rect.maxX, y: rect.minY))
-      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
-      path.addQuadCurve(
-        to: CGPoint(x: rect.maxX - radius, y: rect.maxY),
-        control: CGPoint(x: rect.maxX, y: rect.maxY))
-      path.addLine(to: CGPoint(x: rect.minX + radius, y: rect.maxY))
-      path.addQuadCurve(
-        to: CGPoint(x: rect.minX, y: rect.maxY - radius),
-        control: CGPoint(x: rect.minX, y: rect.maxY))
-    }
-  }
+/// Keep the same stops and glow as the original Arctic border beam.
+private func tagBeamGradient(phase: Double) -> AngularGradient {
+  AngularGradient(
+    stops: [
+      .init(color: .clear, location: 0),
+      .init(color: .clear, location: 0.65),
+      .init(color: .primary.opacity(0.12), location: 0.76),
+      .init(color: ArcticBrand.accent.opacity(0.8), location: 0.9),
+      .init(color: .primary, location: 0.97),
+      .init(color: .clear, location: 1),
+    ], center: .center, angle: .degrees(phase * 360))
 }
 
 private struct TagRevealProgress {
   var elapsed: Double = -1
+  var phase = 0.0
   var immediate = true
-  static func arrival(for index: Int) -> Double { 0.44 + Double(index) * 0.12 }
-  func opacity(for index: Int) -> Double {
-    if immediate { return 1 }
-    return UnitCurve.easeOut.value(at: min(1, max(0, (elapsed - Self.arrival(for: index)) / 0.18)))
+  static func arrival(for index: Int) -> Double { 0.2 + Double(index) * 0.1 }
+
+  func shellOpacity(for index: Int) -> Double {
+    immediate ? 1 : ramp(elapsed - Self.arrival(for: index), duration: 0.12)
   }
+
+  func labelOpacity(for index: Int) -> Double {
+    immediate ? 1 : ramp(elapsed - Self.arrival(for: index) - 0.12, duration: 0.2)
+  }
+
   func glow(for index: Int) -> Double {
     guard !immediate, elapsed >= Self.arrival(for: index) else { return 0 }
-    return max(0, 1 - (elapsed - Self.arrival(for: index)) / 0.65)
+    return max(0, 1 - (elapsed - Self.arrival(for: index)) / 0.8)
+  }
+
+  private func ramp(_ elapsed: Double, duration: Double) -> Double {
+    UnitCurve.easeOut.value(at: min(1, max(0, elapsed / duration)))
   }
 }
 
@@ -216,14 +161,8 @@ extension EnvironmentValues {
     set { self[TagRevealProgressKey.self] = newValue }
   }
 }
-private struct TagRevealAnchors: PreferenceKey {
-  static var defaultValue: [Int: Anchor<CGRect>] { [:] }
-  static func reduce(value: inout [Int: Anchor<CGRect>], nextValue: () -> [Int: Anchor<CGRect>]) {
-    value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-  }
-}
 
-/// A result pill receives light from the container before its label appears.
+/// The pill's matching gradient appears before its label and settles to a normal tag.
 struct TagRevealPill: View {
   var name: String
   var index: Int
@@ -231,19 +170,22 @@ struct TagRevealPill: View {
   @Environment(\.tagRevealProgress) private var progress
 
   var body: some View {
-    let opacity = progress.opacity(for: index)
+    let labelOpacity = progress.labelOpacity(for: index)
     let glow = progress.glow(for: index)
     Text(name)
       .font(compact ? .system(size: 10, weight: .medium) : .subheadline.weight(.medium))
+      .opacity(labelOpacity)
       .padding(.horizontal, compact ? 9 : 12).padding(.vertical, compact ? 6 : 8)
       .background(Color(uiColor: .tertiarySystemBackground), in: Capsule())
       .overlay {
-        Capsule().strokeBorder(ArcticBrand.accent.opacity(glow), lineWidth: 1.5)
-          .shadow(color: ArcticBrand.accent.opacity(glow * 0.4), radius: 4)
+        Capsule().strokeBorder(tagBeamGradient(phase: progress.phase), lineWidth: 1.5)
+          .background {
+            Capsule().strokeBorder(ArcticBrand.accent.opacity(0.3), lineWidth: 3)
+              .blur(radius: 3)
+          }
+          .opacity(glow)
       }
-      .anchorPreference(key: TagRevealAnchors.self, value: .bounds) { [index: $0] }
-      .opacity(opacity)
-      .scaleEffect(0.97 + 0.03 * opacity)
-      .accessibilityHidden(opacity < 1)
+      .opacity(progress.shellOpacity(for: index))
+      .accessibilityHidden(labelOpacity < 1)
   }
 }

@@ -136,6 +136,7 @@ private final class ShareSaveModel: ObservableObject {
   @Published var isVisible = false
   @Published var hostIsActive = true
   @Published var tagNames: [String]?
+  @Published var tagFeedbackPresented = false
   @Published var message: String?
   @Published var error: String?
   var heightDidChange: ((CGFloat) -> Void)?
@@ -146,6 +147,7 @@ private final class ShareSaveModel: ObservableObject {
   private let metadataProvider = LPMetadataProvider()
   private var linkTask: Task<Void, Never>?
   private var previewTask: Task<Void, Never>?
+  private var thumbnailTask: Task<Void, Never>?
   private var taggingTask: Task<Void, Never>?
   private var imageLoadProgress: Progress?
   private var pendingTaggingResult: SharedTaggingResult?
@@ -202,6 +204,15 @@ private final class ShareSaveModel: ObservableObject {
       let candidate = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
       if !candidate.isEmpty && candidate != url.absoluteString { title = candidate }
       guard let provider = metadata.imageProvider else { return }
+      // A slow image provider must not hold up title-based classification.
+      thumbnailTask = Task { await loadThumbnail(from: provider) }
+    } catch {
+      // A publisher can refuse previews. The original URL remains saveable.
+    }
+  }
+
+  private func loadThumbnail(from provider: NSItemProvider) async {
+    do {
       let data: Data? = try await withCheckedThrowingContinuation { continuation in
         imageLoadProgress = provider.loadDataRepresentation(
           forTypeIdentifier: UTType.image.identifier
@@ -226,7 +237,7 @@ private final class ShareSaveModel: ObservableObject {
       else { return }
       image = UIImage(cgImage: thumbnail)
     } catch {
-      // A publisher can refuse previews. The original URL remains saveable.
+      // Preview artwork is optional; title-based tagging can already proceed.
     }
   }
 
@@ -257,6 +268,13 @@ private final class ShareSaveModel: ObservableObject {
       isSaved = true
       error = nil
       UIAccessibility.post(notification: .announcement, argument: "Saved to Arctic")
+      #if DEBUG
+        if url.host == "fixture.example" {
+          isTagging = true
+          taggingTask = Task { await classifyFixture(transfer) }
+          return
+        }
+      #endif
       guard TaggingPreferences.enabled else { return }
       guard !TaggingPreferences.credentialFailure else {
         message = "Update your API key in Arctic to add tags."
@@ -289,24 +307,7 @@ private final class ShareSaveModel: ObservableObject {
       guard TaggingPreferences.enabled,
         TaggingPreferences.credentialRevision == credentialRevision
       else { return }
-      // Publish once to a different directory. The app may already have imported
-      // the save request; this completion must never recreate that request.
-      let result = SharedTaggingResult(
-        id: transfer.id, url: transfer.url, title: title, subtitle: nil,
-        tagNames: tags,
-        inputFingerprint: ArticleTagCatalog.identity(title: title, description: ""),
-        categoryVersion: ArticleTagCatalog.version, feedbackPresented: false)
-      if tags.isEmpty {
-        try SharedInbox.saveTaggingResult(result)
-      } else {
-        // Publish the receipt only after the chips enter the visible sheet.
-        // If the extension exits first, the app can finish the saved article.
-        pendingTaggingResult = result
-      }
-      tagNames = tags
-      UIAccessibility.post(
-        notification: .announcement,
-        argument: tags.isEmpty ? "No matching tags" : "Added tags: " + tags.joined(separator: ", "))
+      try finishClassification(tags, title: title, transfer: transfer)
     } catch is CancellationError {
       // The main app resumes pending work from the durable save request.
     } catch JevError.invalidKey {
@@ -319,12 +320,54 @@ private final class ShareSaveModel: ObservableObject {
     }
   }
 
+  private func finishClassification(
+    _ tags: [String], title: String, transfer: SharedArticleTransfer
+  ) throws {
+    // Keep the save request immutable. The separate completion receipt is emitted
+    // only when the result has appeared; early dismissal leaves work for the app.
+    let result = SharedTaggingResult(
+      id: transfer.id, url: transfer.url, title: title, subtitle: nil,
+      tagNames: tags,
+      inputFingerprint: ArticleTagCatalog.identity(title: title, description: ""),
+      categoryVersion: ArticleTagCatalog.version, feedbackPresented: false)
+    if tags.isEmpty {
+      try SharedInbox.saveTaggingResult(result)
+    } else {
+      pendingTaggingResult = result
+    }
+    tagNames = tags
+    UIAccessibility.post(
+      notification: .announcement,
+      argument: tags.isEmpty ? "No matching tags" : "Added tags: " + tags.joined(separator: ", "))
+  }
+
+  #if DEBUG
+    /// Exercise the actual extension's save, reveal, and receipt without a secret,
+    /// network call, or changing the user's tagging preferences.
+    private func classifyFixture(_ transfer: SharedArticleTransfer) async {
+      defer { isTagging = false }
+      do {
+        await previewTask?.value
+        try Task.checkCancellation()
+        try await Task.sleep(for: .milliseconds(650))
+        try finishClassification(
+          ["Attention & wonder", "Life & meaning"],
+          title: title ?? "The quiet art of paying attention", transfer: transfer)
+      } catch is CancellationError {
+        // Closing the fixture cancels it just like a real classification.
+      } catch {
+        self.error = "Could not keep the fixture tags."
+      }
+    }
+  #endif
+
   func presentTagFeedback() {
     guard var result = pendingTaggingResult else { return }
     result.feedbackPresented = true
     do {
       try SharedInbox.saveTaggingResult(result)
       pendingTaggingResult = nil
+      tagFeedbackPresented = true
     } catch { self.error = "Could not keep these tags. Arctic will try again." }
   }
 
@@ -332,6 +375,7 @@ private final class ShareSaveModel: ObservableObject {
     isVisible = false
     linkTask?.cancel()
     previewTask?.cancel()
+    thumbnailTask?.cancel()
     taggingTask?.cancel()
     imageLoadProgress?.cancel()
     metadataProvider.cancel()
@@ -464,7 +508,9 @@ private struct ShareSaveView: View {
       Color(uiColor: .secondarySystemBackground),
       in: RoundedRectangle(cornerRadius: 20, style: .continuous)
     )
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier("share-added-tags")
+    .accessibilityValue(model.tagFeedbackPresented ? "presented" : "revealing")
   }
 
   private var footer: some View {
