@@ -46,7 +46,7 @@ enum ArticleFolder: Hashable {
     case .downloaded: "Saved articles appear here once their Reader view is stored on this device."
     case .tag: "Add this tag to a saved article to find it here."
     case .saved:
-      "Share an article to Articles, or copy a link and return here. Start with one story."
+      "Share to Arctic, or open a copied link."
     }
   }
 }

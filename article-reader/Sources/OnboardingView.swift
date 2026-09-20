@@ -16,13 +16,14 @@ struct OnboardingView: View {
     VStack(spacing: 0) {
       header
       ScrollView {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 24) {
+          heading
           illustration
             .frame(maxWidth: .infinity)
           pageContent
         }
         .padding(.horizontal, 28)
-        .padding(.top, 8)
+        .padding(.top, 24)
         .padding(.bottom, 16)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
@@ -34,14 +35,17 @@ struct OnboardingView: View {
     }
     .background(ReaderTheme.background)
     .foregroundStyle(ReaderTheme.foreground)
-    .tint(ReaderTheme.foreground)
+    .tint(ArcticBrand.accent)
     .onDisappear { credentials.cancel() }
   }
 
   private var header: some View {
     HStack {
-      Label("Articles", systemImage: "text.book.closed")
-        .font(.headline)
+      HStack(spacing: 8) {
+        ArcticMark().frame(width: 26, height: 26)
+        Text("Arctic").font(.headline)
+      }
+      .accessibilityElement(children: .combine)
       Spacer()
       Text("\(page + 1) / 3")
         .font(.subheadline.monospacedDigit())
@@ -63,59 +67,39 @@ struct OnboardingView: View {
   @ViewBuilder private var pageContent: some View {
     switch page {
     case 0:
-      heading("KEEP WHAT MOVES YOU", "A good read.\nA place to keep it.")
-      Text("Save articles from Safari and other apps. Read them here when you’re ready.")
+      Text("Share → Arctic → Save")
+        .font(.subheadline)
         .foregroundStyle(.secondary)
-      VStack(spacing: 12) {
-        instruction(number: "1", text: "Tap the Share button.", symbol: "square.and.arrow.up")
-        instruction(number: "2", text: "Choose Articles, then Save.", symbol: "text.book.closed")
-      }
-      Text("Can’t see Articles? Swipe to More in the app row. Add Articles to your favourites.")
-        .font(.footnote).foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity)
     case 1:
-      heading("FOLLOW YOUR CURIOSITY", "Copy a link.\nPick up here.")
-      Text(
-        "Copy an article link and return to Articles. Open it to take a look, or save it for later."
-      )
-      .foregroundStyle(.secondary)
-      VStack(alignment: .leading, spacing: 12) {
-        Text("For fewer paste prompts")
-          .font(.headline)
-        Text("Settings → Apps → Articles → Paste from Other Apps → Allow")
-          .font(.subheadline)
-          .fixedSize(horizontal: false, vertical: true)
+      VStack(alignment: .leading, spacing: 10) {
         Button {
           guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
           UIApplication.shared.open(url)
         } label: {
-          Label("Open Settings", systemImage: "arrow.up.forward")
-            .font(.subheadline.weight(.semibold))
-            .padding(.vertical, 8)
+          HStack {
+            Text("Open Settings").font(.subheadline.weight(.semibold))
+            Spacer()
+            Image(systemName: "arrow.up.forward")
+          }
+          .padding(16)
+          .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 16))
         }
         .accessibilityIdentifier("onboarding-open-settings")
+        Text("Appears after your first paste permission prompt.")
+          .font(.caption).foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
-      .padding(20)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 20))
-      Text(
-        "This option may appear only after the first paste permission prompt. You can also paste a link yourself."
-      )
-      .font(.footnote).foregroundStyle(.secondary)
     default:
-      heading("A LITTLE AUTOMAGIC", "Save the story.\nWe’ll find its place.")
-      Text(
-        "Jev adds tags to saved articles. Change or remove them at any time."
-      )
-      .foregroundStyle(.secondary)
       VStack(alignment: .leading, spacing: 12) {
         JevKeyField(key: $credentials.key)
           .accessibilityIdentifier("onboarding-key")
-        Text("Optional · Your own Jev API key")
-          .font(.caption).foregroundStyle(.secondary)
-        Link(
-          "Get a key from TypeSafe", destination: URL(string: "https://console.typesafe.ai/keys")!
-        )
-        .font(.subheadline.weight(.medium))
+        HStack {
+          Text("Optional").foregroundStyle(.secondary)
+          Spacer()
+          Link("Get a key", destination: URL(string: "https://console.typesafe.ai/keys")!)
+        }
+        .font(.caption)
         JevPrivacyNote()
         if let error = credentials.error {
           Text(error).font(.subheadline).accessibilityIdentifier("onboarding-key-error")
@@ -129,7 +113,7 @@ struct OnboardingView: View {
       HStack(spacing: 5) {
         ForEach(0..<3) { index in
           Capsule()
-            .fill(index == page ? ReaderTheme.foreground : ReaderTheme.border.opacity(0.35))
+            .fill(index == page ? ArcticBrand.accent : ReaderTheme.border.opacity(0.35))
             .frame(width: index == page ? 24 : 6, height: 6)
         }
       }
@@ -156,22 +140,22 @@ struct OnboardingView: View {
           }
         } label: {
           HStack(spacing: 10) {
-            if credentials.isSaving { ProgressView().tint(ReaderTheme.background) }
+            if credentials.isSaving { ProgressView().tint(ArcticBrand.onAccent) }
             Text(
               page < 2
-                ? "Continue" : credentials.isSaving ? "Checking key…" : "Enable automatic tags"
+                ? "Continue" : credentials.isSaving ? "Checking key…" : "Enable tags"
             )
             .font(.headline)
           }
           .frame(maxWidth: .infinity, minHeight: 52)
-          .foregroundStyle(ReaderTheme.background)
-          .background(ReaderTheme.foreground, in: Capsule())
+          .foregroundStyle(ArcticBrand.onAccent)
+          .background(ArcticBrand.accent, in: Capsule())
           .opacity(page == 2 && credentials.key.isEmpty ? 0.4 : 1)
         }
         .disabled(page == 2 && (credentials.trimmedKey.isEmpty || credentials.isSaving))
         .accessibilityIdentifier(page == 2 ? "onboarding-finish" : "onboarding-next")
       }
-      Button(page == 2 ? "Skip for now" : "Set up later") {
+      Button("Skip for now") {
         credentials.cancel()
         onFinish()
       }
@@ -192,27 +176,14 @@ struct OnboardingView: View {
     if reduceMotion { page = value } else { withAnimation(transition) { page = value } }
   }
 
-  private func heading(_ eyebrow: String, _ title: String) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text(eyebrow)
-        .font(.caption2.weight(.semibold)).tracking(2)
-        .foregroundStyle(.secondary)
-      Text(title)
-        .font(.system(.largeTitle, design: .serif, weight: .medium))
-        .tracking(-0.8)
-        .fixedSize(horizontal: false, vertical: true)
-        .accessibilityAddTraits(.isHeader)
-    }
+  private var heading: some View {
+    Text(["Keep a good read.", "Open copied links.", "A little automagic."][page])
+      .font(.system(.largeTitle, design: .rounded, weight: .semibold))
+      .tracking(-0.8)
+      .fixedSize(horizontal: false, vertical: true)
+      .accessibilityAddTraits(.isHeader)
   }
 
-  private func instruction(number: String, text: String, symbol: String) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: 14) {
-      Text(number).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-      Text(text).font(.subheadline.weight(.medium))
-      Spacer(minLength: 4)
-      Image(systemName: symbol).accessibilityHidden(true)
-    }
-  }
 }
 
 /// The same configuration remains available after onboarding, including key removal.
@@ -294,7 +265,7 @@ struct TaggingSettingsView: View {
       }
       .onDisappear { credentials.cancel() }
     }
-    .tint(ReaderTheme.foreground)
+    .tint(ArcticBrand.accent)
   }
 }
 
@@ -315,7 +286,7 @@ private struct JevPrivacyNote: View {
   var body: some View {
     Label {
       Text(
-        "Your key stays in the iOS Keychain. TypeSafe receives saved article titles and descriptions, not full text."
+        "Key stored in Keychain. Saved titles and descriptions go to Jev."
       )
       .fixedSize(horizontal: false, vertical: true)
     } icon: {

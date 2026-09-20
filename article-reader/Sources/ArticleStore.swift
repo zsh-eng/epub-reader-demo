@@ -32,6 +32,8 @@ struct ArticleTaggingState: Codable {
   var automatic: [String] = []
   var manual: [String] = []
   var rejected: [String] = []
+  /// A shared save already acknowledged in the extension stays quiet after metadata refresh.
+  var sharedFeedbackTransferID: UUID?
 }
 
 struct TaggingNotice: Identifiable {
@@ -75,12 +77,31 @@ struct TaggingNotice: Identifiable {
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-store") {
         try? FileManager.default.removeItem(at: fileURL)
         try? FileManager.default.removeItem(at: downloads)
+        #if DEBUG
+          try TestMode.resetSharedFixtures()
+        #endif
       }
       if FileManager.default.fileExists(atPath: fileURL.path) {
         articles = try JSONDecoder().decode([SavedArticle].self, from: Data(contentsOf: fileURL))
       }
       try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true)
       #if DEBUG
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-store"),
+          ProcessInfo.processInfo.arguments.contains("-test-shared-tags")
+        {
+          let url = URL(string: "https://fixture.example/story")!
+          let presented = ProcessInfo.processInfo.arguments.contains("-test-shared-tags-presented")
+          let transfer = try SharedInbox.save(url, title: presented ? "A title from Safari" : nil)
+          if presented {
+            try SharedInbox.saveTaggingResult(
+              SharedTaggingResult(
+                id: transfer.id, url: url, title: "A title from Safari", subtitle: nil,
+                tagNames: ["Learning & writing"],
+                inputFingerprint: ArticleTagCatalog.identity(
+                  title: "A title from Safari", description: ""),
+                categoryVersion: ArticleTagCatalog.version, feedbackPresented: true))
+          }
+        }
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-stage-import") {
           let fixture = Bundle.main.url(
             forResource: "Reading List", withExtension: "html", subdirectory: "Fixtures")!
@@ -247,25 +268,34 @@ struct TaggingNotice: Identifiable {
         let result = try JSONDecoder().decode(
           SharedTaggingResult.self, from: Data(contentsOf: file))
         if TestMode.enabled && result.url.host != "fixture.example" { continue }
-        if taggingAllowed, result.categoryVersion == ArticleTagCatalog.version,
-          let index = articles.firstIndex(where: {
-            $0.sharedTransferID == result.id && $0.url == result.url && $0.saved
-          })
-        {
+        if let index = articles.firstIndex(where: {
+          $0.sharedTransferID == result.id && $0.url == result.url && $0.saved
+        }) {
           var updated = articles
           if updated[index].title == result.url.host { updated[index].title = result.title }
           if updated[index].subtitle.isEmpty { updated[index].subtitle = result.subtitle ?? "" }
           var state = updated[index].tagging ?? ArticleTaggingState()
+          if result.feedbackPresented == true {
+            state.sharedFeedbackTransferID = result.id
+          }
+          updated[index].tagging = state
+          try commit(updated)
           let identity = ArticleTagCatalog.identity(
             title: updated[index].title, description: updated[index].subtitle)
-          if identity == result.inputFingerprint && state.completedIdentity != identity {
-            state.pendingIdentity = identity
-            updated[index].tagging = state
-            try commit(updated)
+          // Keep a newer main-app result, but retain the extension's receipt even
+          // when Safari and the fetched page supplied different metadata.
+          if taggingAllowed, result.categoryVersion == ArticleTagCatalog.version,
+            state.completedIdentity != identity
+          {
             let knownTags = Set(ArticleTagCatalog.all.map(\.name))
-            try applyTags(
-              result.tagNames.filter { knownTags.contains($0) },
-              to: updated[index].id, identity: identity, generation: state.generation)
+            try mergeTags(
+              result.tagNames.filter { knownTags.contains($0) }, at: index,
+              identity: result.inputFingerprint)
+          }
+          if result.feedbackPresented == true,
+            taggingNotice?.articleID == updated[index].id
+          {
+            taggingNotice = nil
           }
         }
         try FileManager.default.removeItem(at: file)
@@ -384,6 +414,7 @@ struct TaggingNotice: Identifiable {
     for index in updated.indices where updated[index].saved {
       var state = updated[index].tagging ?? ArticleTaggingState()
       state.completedIdentity = nil
+      state.sharedFeedbackTransferID = nil
       state.generation = UUID()
       updated[index].tagging = state
     }
@@ -490,6 +521,12 @@ struct TaggingNotice: Identifiable {
         == ArticleTagCatalog.identity(
           title: articles[index].title, description: articles[index].subtitle)
     else { return }
+    try mergeTags(tags, at: index, identity: identity)
+  }
+
+  /// Shared results can use an earlier metadata identity. Retain that identity so
+  /// the queue can improve the tags, while the durable receipt prevents a repeat prompt.
+  private func mergeTags(_ tags: [String], at index: Int, identity: String) throws {
     var updated = articles
     var state = updated[index].tagging ?? ArticleTaggingState()
     let existing = Set(updated[index].tagNames)
@@ -505,8 +542,12 @@ struct TaggingNotice: Identifiable {
     try commit(updated)
     if !TestMode.enabled { TaggingPreferences.lastError = nil }
     let added = Array(result.subtracting(existing)).sorted()
-    if !added.isEmpty {
-      taggingNotice = TaggingNotice(articleID: id, title: updated[index].title, tags: added)
+    let presentedInExtension =
+      updated[index].sharedTransferID != nil
+      && state.sharedFeedbackTransferID == updated[index].sharedTransferID
+    if !added.isEmpty && !presentedInExtension {
+      taggingNotice = TaggingNotice(
+        articleID: updated[index].id, title: updated[index].title, tags: added)
     }
   }
 
@@ -641,6 +682,24 @@ struct ArticlePreview: Sendable {
 }
 
 enum TestMode {
+  #if DEBUG
+    /// Failed share tests must not leave a saved fixture for the next test. Never
+    /// remove real shared links or results from the simulator's App Group.
+    static func resetSharedFixtures() throws {
+      for directory in [try SharedInbox.directory(), try SharedInbox.taggingResultsDirectory()] {
+        let files = try FileManager.default.contentsOfDirectory(
+          at: directory, includingPropertiesForKeys: nil)
+        for file in files where file.pathExtension == "json" {
+          let data = try Data(contentsOf: file)
+          let transfer = try? SharedInbox.decodeTransfer(from: data)
+          let result = try? JSONDecoder().decode(SharedTaggingResult.self, from: data)
+          if (transfer?.url ?? result?.url)?.host == "fixture.example" {
+            try FileManager.default.removeItem(at: file)
+          }
+        }
+      }
+    }
+  #endif
   static var enabled: Bool {
     #if DEBUG
       ProcessInfo.processInfo.arguments.contains("-ui-testing")

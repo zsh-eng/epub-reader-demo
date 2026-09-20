@@ -11,9 +11,7 @@ struct TaggingFeedback: View {
 
   var body: some View {
     HStack(alignment: .top, spacing: 12) {
-      Image(systemName: "sparkles").font(.title3).padding(.top, 2)
       VStack(alignment: .leading, spacing: 5) {
-        Text("Tagged for you").font(.subheadline.weight(.semibold))
         Text(title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         Text(tags.joined(separator: " · ")).font(.subheadline).lineLimit(3)
         Button("Edit tags", action: edit).font(.subheadline.weight(.semibold))

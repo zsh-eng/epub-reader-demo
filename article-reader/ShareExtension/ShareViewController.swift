@@ -125,6 +125,7 @@ private final class ShareSaveModel: ObservableObject {
   private var previewTask: Task<Void, Never>?
   private var taggingTask: Task<Void, Never>?
   private var imageLoadProgress: Progress?
+  private var pendingTaggingResult: SharedTaggingResult?
 
   init(context: NSExtensionContext) {
     self.context = context
@@ -232,10 +233,10 @@ private final class ShareSaveModel: ObservableObject {
       let transfer = try SharedInbox.save(url, title: title)
       isSaved = true
       error = nil
-      UIAccessibility.post(notification: .announcement, argument: "Saved to Articles")
+      UIAccessibility.post(notification: .announcement, argument: "Saved to Arctic")
       guard TaggingPreferences.enabled else { return }
       guard !TaggingPreferences.credentialFailure else {
-        message = "Update your API key in Articles to add tags."
+        message = "Update your API key in Arctic to add tags."
         return
       }
       isTagging = true
@@ -248,7 +249,7 @@ private final class ShareSaveModel: ObservableObject {
     let credentialRevision = TaggingPreferences.credentialRevision
     do {
       guard let key = try JevKeychain.read(), !key.isEmpty else {
-        message = "Add your Jev API key in Articles to turn on automatic tags."
+        message = "Add your Jev API key in Arctic to turn on automatic tags."
         return
       }
       await previewTask?.value
@@ -257,7 +258,7 @@ private final class ShareSaveModel: ObservableObject {
         TaggingPreferences.credentialRevision == credentialRevision
       else { return }
       guard let title else {
-        message = "Tags will be added when you open Articles."
+        message = "Tags will be added when you open Arctic."
         return
       }
       let tags = try await JevClient.classify(title: title, description: "", apiKey: key)
@@ -267,12 +268,18 @@ private final class ShareSaveModel: ObservableObject {
       else { return }
       // Publish once to a different directory. The app may already have imported
       // the save request; this completion must never recreate that request.
-      try SharedInbox.saveTaggingResult(
-        SharedTaggingResult(
-          id: transfer.id, url: transfer.url, title: title, subtitle: nil,
-          tagNames: tags,
-          inputFingerprint: ArticleTagCatalog.identity(title: title, description: ""),
-          categoryVersion: ArticleTagCatalog.version))
+      let result = SharedTaggingResult(
+        id: transfer.id, url: transfer.url, title: title, subtitle: nil,
+        tagNames: tags,
+        inputFingerprint: ArticleTagCatalog.identity(title: title, description: ""),
+        categoryVersion: ArticleTagCatalog.version, feedbackPresented: false)
+      if tags.isEmpty {
+        try SharedInbox.saveTaggingResult(result)
+      } else {
+        // Publish the receipt only after the chips enter the visible sheet.
+        // If the extension exits first, the app can finish the saved article.
+        pendingTaggingResult = result
+      }
       tagNames = tags
       UIAccessibility.post(
         notification: .announcement,
@@ -283,10 +290,19 @@ private final class ShareSaveModel: ObservableObject {
       guard TaggingPreferences.credentialRevision == credentialRevision else { return }
       TaggingPreferences.credentialFailure = true
       TaggingPreferences.lastError = JevError.invalidKey.localizedDescription
-      message = "Your article is saved. Update your API key in Articles to add tags."
+      message = "Your article is saved. Update your API key in Arctic to add tags."
     } catch {
-      message = "Your article is saved. Tags can finish when you open Articles."
+      message = "Your article is saved. Tags can finish when you open Arctic."
     }
+  }
+
+  func presentTagFeedback() {
+    guard var result = pendingTaggingResult else { return }
+    result.feedbackPresented = true
+    do {
+      try SharedInbox.saveTaggingResult(result)
+      pendingTaggingResult = nil
+    } catch { self.error = "Could not keep these tags. Arctic will try again." }
   }
 
   func cancelWork() {
@@ -317,22 +333,13 @@ private struct ShareSaveView: View {
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
           Label(
-            model.isSaved ? "Saved to Articles" : "Save to Articles",
+            model.isSaved ? "Saved to Arctic" : "Save to Arctic",
             systemImage: model.isSaved ? "checkmark.circle.fill" : "tray.and.arrow.down"
           )
           .font(.headline)
-          .foregroundStyle(model.isSaved ? Color.accentColor : Color.primary)
+          .foregroundStyle(model.isSaved ? ArcticBrand.accent : Color.primary)
           articleCard
-          if model.isTagging {
-            HStack(spacing: 10) {
-              ProgressView().controlSize(.small)
-              Text("Adding your tags…").font(.subheadline)
-            }
-            .foregroundStyle(.secondary)
-            .transition(.opacity)
-            .accessibilityIdentifier("share-tagging")
-          }
-          if let tags = model.tagNames {
+          if let tags = model.tagNames, !tags.isEmpty {
             tagResult(tags).transition(reveal)
           }
           if let message = model.message {
@@ -405,6 +412,8 @@ private struct ShareSaveView: View {
     }
     .background(Color(uiColor: .secondarySystemBackground))
     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    .tagBeam(active: model.isTagging, cornerRadius: 22)
+    .accessibilityValue(model.isTagging ? "Adding tags" : "")
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
@@ -412,16 +421,13 @@ private struct ShareSaveView: View {
   }
 
   private func tagResult(_ tags: [String]) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Label(
-        tags.isEmpty ? "No matching tags" : "A little more organised",
-        systemImage: "sparkles"
-      )
-      .font(.subheadline.weight(.semibold))
-      if !tags.isEmpty {
-        Text(tags.joined(separator: " · "))
-          .font(.subheadline)
-          .fixedSize(horizontal: false, vertical: true)
+    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 8) {
+      ForEach(tags, id: \.self) { tag in
+        Text(tag)
+          .font(.subheadline.weight(.medium))
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .background(Color(uiColor: .tertiarySystemBackground), in: Capsule())
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -433,7 +439,7 @@ private struct ShareSaveView: View {
     .tagBeam(active: completionGlowing, cornerRadius: 20)
     .accessibilityIdentifier("share-added-tags")
     .task(id: tags) {
-      guard !tags.isEmpty else { return }
+      model.presentTagFeedback()
       completionGlowing = true
       do { try await Task.sleep(for: .seconds(2.4)) } catch { return }
       withAnimation(.easeOut(duration: 0.2)) { completionGlowing = false }
@@ -475,9 +481,9 @@ private struct ShareActionButtonStyle: ButtonStyle {
     configuration.label
       .font(.body.weight(.semibold))
       .frame(maxWidth: .infinity, minHeight: 54)
-      .foregroundStyle(primary ? Color(uiColor: .systemBackground) : Color.primary)
+      .foregroundStyle(primary ? ArcticBrand.onAccent : Color.primary)
       .background(
-        primary ? Color(uiColor: .label) : Color(uiColor: .secondarySystemBackground), in: Capsule()
+        primary ? ArcticBrand.accent : Color(uiColor: .secondarySystemBackground), in: Capsule()
       )
       .overlay { Capsule().strokeBorder(Color.primary.opacity(primary ? 0 : 0.12), lineWidth: 1) }
       .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.7 : 1)

@@ -52,7 +52,6 @@ struct ClipboardBanner: View {
   let url: URL
   let preview: ArticlePreview?
   let open: () -> Void
-  let save: () -> Void
   let dismiss: () -> Void
   var body: some View {
     HStack(spacing: 12) {
@@ -72,9 +71,6 @@ struct ClipboardBanner: View {
       Button("Open", action: open).font(ReaderTheme.sans(14, weight: .semibold))
         .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
         .accessibilityIdentifier("open-copied-link")
-      Button("Save", action: save).font(ReaderTheme.sans(14, weight: .semibold))
-        .frame(minWidth: 44, minHeight: 44)
-        .accessibilityIdentifier("save-copied-link")
       Button("Dismiss", systemImage: "xmark", action: dismiss).labelStyle(.iconOnly)
         .frame(width: 36, height: 44).accessibilityIdentifier("dismiss-copied-link")
     }

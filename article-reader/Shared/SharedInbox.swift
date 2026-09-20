@@ -26,6 +26,8 @@ struct SharedTaggingResult: Codable {
   var tagNames: [String]
   var inputFingerprint: String
   var categoryVersion: Int
+  /// Set only when the extension has displayed this result. Older events have no receipt.
+  var feedbackPresented: Bool?
 }
 
 enum SharedInbox {

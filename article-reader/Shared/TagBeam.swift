@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A moving highlight follows the border only while a tagging state is active.
-/// Uses the current tint and native label colour; Reduce Motion keeps a static edge.
+/// Uses the Arctic accent and native label colour; Reduce Motion keeps a static edge.
 private struct TagBeam: ViewModifier {
   let active: Bool
   let cornerRadius: CGFloat
@@ -23,7 +23,7 @@ private struct TagBeam: ViewModifier {
               .init(color: .clear, location: 0),
               .init(color: .clear, location: 0.65),
               .init(color: .primary.opacity(0.12), location: 0.76),
-              .init(color: .accentColor.opacity(0.8), location: 0.9),
+              .init(color: ArcticBrand.accent.opacity(0.8), location: 0.9),
               .init(color: .primary, location: 0.97),
               .init(color: .clear, location: 1),
             ], center: .center, angle: .degrees(phase * 360))

@@ -25,6 +25,40 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertFalse(app.buttons["onboarding-next"].exists)
   }
 
+  @MainActor func testDemonstrationsCompleteAndReplay() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-test-onboarding", "-reset-onboarding"]
+    app.launch()
+    let share = app.otherElements["onboarding-share-demo"]
+    XCTAssertTrue(share.waitForExistence(timeout: 10))
+    waitForDemo(share, value: "saved")
+    capture(app, "arctic-share-demo-complete")
+    app.buttons["onboarding-replay-share"].tap()
+    XCTAssertNotEqual(share.value as? String, "saved")
+    waitForDemo(share, value: "saved")
+    app.buttons["onboarding-next"].tap()
+    let paste = app.otherElements["onboarding-paste-demo"]
+    XCTAssertTrue(paste.waitForExistence(timeout: 5))
+    waitForDemo(paste, value: "allowed")
+    capture(app, "arctic-settings-demo-complete")
+    app.buttons["onboarding-open-settings"].tap()
+    let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+    XCTAssertTrue(settings.wait(for: .runningForeground, timeout: 5))
+    capture(settings, "arctic-system-settings-reference")
+    app.activate()
+    app.buttons["onboarding-next"].tap()
+    let tags = app.otherElements["onboarding-tags-demo"]
+    XCTAssertTrue(tags.waitForExistence(timeout: 5))
+    waitForDemo(tags, value: "tagged")
+    capture(app, "arctic-tags-demo-complete")
+  }
+
+  @MainActor private func waitForDemo(_ element: XCUIElement, value: String) {
+    let finished = expectation(
+      for: NSPredicate(format: "value == %@", value), evaluatedWith: element)
+    wait(for: [finished], timeout: 8)
+  }
+
   @MainActor func testReplayTutorialFromLibrary() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store"]
@@ -37,15 +71,17 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
   }
 
-  @MainActor func testDirectSaveStartsTagging() {
+  @MainActor func testPasteOffersOnlyOpen() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-test-tagging", "-test-clipboard"]
     app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
     app.launch()
-    XCTAssertTrue(app.buttons["save-copied-link"].waitForExistence(timeout: 10))
-    app.buttons["save-copied-link"].tap()
-    XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["save-copied-link"].exists)
+    app.buttons["open-copied-link"].tap()
+    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["reader-save"].value as? String, "Not saved")
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
   }
 
   @MainActor func testDarkOnboardingAndLargeText() {

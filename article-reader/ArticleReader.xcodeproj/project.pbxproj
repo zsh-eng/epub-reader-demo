@@ -37,6 +37,9 @@
 		A47B570ED105F4A6AF8686AB /* Sources/TaggingFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65321670A496A9E91891C729; };
 		F81AAC2FFA4C7815EFD9149A /* Tests/ArticleOnboardingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5779CC5745091D0E858F9385; };
 		55D4734A40FDC1796310CFA3 /* Tests/ArticleTaggingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB5DC4BC6003C9D4D88F740A; };
+		FCC2E43BE251870F6604B9CB /* Shared/ArcticBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E326710A7D6E0839A4FFD3E; };
+		AE2306DE25C1E0BCFFFC485D /* Shared/ArcticBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E326710A7D6E0839A4FFD3E; };
+		7435FA9169AC7863BE1D4E17 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4545F5318A0046043187F2EB; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,6 +102,8 @@
 		65321670A496A9E91891C729 /* Sources/TaggingFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/TaggingFeedback.swift; sourceTree = "<group>"; };
 		5779CC5745091D0E858F9385 /* Tests/ArticleOnboardingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ArticleOnboardingUITests.swift; sourceTree = "<group>"; };
 		DB5DC4BC6003C9D4D88F740A /* Tests/ArticleTaggingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ArticleTaggingUITests.swift; sourceTree = "<group>"; };
+		6E326710A7D6E0839A4FFD3E /* Shared/ArcticBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/ArcticBrand.swift; sourceTree = "<group>"; };
+		4545F5318A0046043187F2EB /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +135,8 @@
 		B28B7AF69320201D1CF206EB = {
 			isa = PBXGroup;
 			children = (
+				4545F5318A0046043187F2EB /* Resources/Assets.xcassets */,
+				6E326710A7D6E0839A4FFD3E /* Shared/ArcticBrand.swift */,
 				DB5DC4BC6003C9D4D88F740A /* Tests/ArticleTaggingUITests.swift */,
 				5779CC5745091D0E858F9385 /* Tests/ArticleOnboardingUITests.swift */,
 				65321670A496A9E91891C729 /* Sources/TaggingFeedback.swift */,
@@ -270,6 +277,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7435FA9169AC7863BE1D4E17 /* Resources/Assets.xcassets in Resources */,
 				F980534EB990FC023D1FAD4B /* Resources/Fonts in Resources */,
 				A00000000000000000000002 /* THIRD_PARTY_NOTICES.txt in Resources */,
 				4C47C3DB8D16BF935EEAD44A /* Resources/reader.css in Resources */,
@@ -300,6 +308,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FCC2E43BE251870F6604B9CB /* Shared/ArcticBrand.swift in Sources */,
 				0DCA564A9C7F5507DCEBC369 /* Shared/ArticleTagging.swift in Sources */,
 				6D37B755E2F086821F21CFDA /* Shared/TagBeam.swift in Sources */,
 				9C0756650A472EF050BC1620 /* Shared/SharedInbox.swift in Sources */,
@@ -321,6 +330,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AE2306DE25C1E0BCFFFC485D /* Shared/ArcticBrand.swift in Sources */,
 				A47B570ED105F4A6AF8686AB /* Sources/TaggingFeedback.swift in Sources */,
 				F2C5ECCD58964F85A6840623 /* Sources/OnboardingIllustrations.swift in Sources */,
 				FF871BE3F2D0BCEB2E70AC6D /* Sources/OnboardingView.swift in Sources */,
@@ -383,7 +393,8 @@
 				DEVELOPMENT_TEAM = PG4255U5YA;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Articles;
+				INFOPLIST_KEY_CFBundleDisplayName = Arctic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -456,7 +467,8 @@
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Articles;
+				INFOPLIST_KEY_CFBundleDisplayName = Arctic;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

@@ -41,7 +41,10 @@ final class ArticleTaggingUITests: XCTestCase {
 
   @MainActor func testDeleteDuringTaggingCannotRestoreArticle() {
     let app = launchTagging()
-    app.buttons["save-copied-link"].tap()
+    app.buttons["open-copied-link"].tap()
+    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 10))
+    app.buttons["reader-save"].tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
     waitForQueue("tagging", in: app)
     let card = app.buttons["article-story"]
     XCTAssertTrue(card.waitForExistence(timeout: 5))
@@ -62,7 +65,10 @@ final class ArticleTaggingUITests: XCTestCase {
 
   @MainActor func testNetworkFailureResumesOnForeground() {
     let app = launchTagging(failure: true)
-    app.buttons["save-copied-link"].tap()
+    app.buttons["open-copied-link"].tap()
+    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 10))
+    app.buttons["reader-save"].tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
     waitForQueue("tagging", in: app)
     waitForQueue("idle", in: app)
     XCTAssertTrue(app.buttons["article-story"].exists)
@@ -79,6 +85,43 @@ final class ArticleTaggingUITests: XCTestCase {
     app.launch()
     XCTAssertTrue(app.buttons["folder-tag-Engineering"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+  }
+
+  /// A Safari result can precede richer page metadata. Both the shared result and
+  /// the later classification must remain quiet once the extension displayed tags.
+  @MainActor func testSharedTagsDoNotRepeatAfterMetadataRefreshOrRelaunch() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-test-tagging", "-test-tagging-held",
+      "-test-shared-tags", "-test-shared-tags-presented",
+    ]
+    app.launch()
+    waitForQueue("tagging", in: app)
+    XCTAssertTrue(app.buttons["folder-tag-Learning & writing"].exists)
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+    releaseResponse(in: app)
+    waitForQueue("idle", in: app)
+    XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-test-tagging"]
+    app.launch()
+    XCTAssertTrue(app.buttons["folder-tag-Engineering"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+  }
+
+  @MainActor func testUnfinishedSharedTagsShowMainAppFeedback() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-test-tagging", "-test-tagging-held", "-test-shared-tags",
+    ]
+    app.launch()
+    waitForQueue("tagging", in: app)
+    releaseResponse(in: app)
+    waitForQueue("idle", in: app)
+    XCTAssertTrue(app.buttons["edit-automatic-tags"].exists)
+    XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
   }
 
   @MainActor private func launchTagging(failure: Bool = false) -> XCUIApplication {

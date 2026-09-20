@@ -135,7 +135,7 @@ struct LibraryView: View {
   var body: some View {
     NavigationStack {
       page
-        .padding(.top, 8)
+        .padding(.top, searching ? 0 : 8)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -176,7 +176,7 @@ struct LibraryView: View {
       }
     #endif
     .background(ReaderTheme.background)
-    .foregroundStyle(ReaderTheme.foreground).tint(ReaderTheme.foreground)
+    .foregroundStyle(ReaderTheme.foreground).tint(ArcticBrand.accent)
     .onOpenURL { url in
       guard url.scheme == "articles", url.host == "open",
         let value = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(
@@ -273,6 +273,14 @@ struct LibraryView: View {
         .opacity(selected == nil && !searching ? 1 : 0)
         .allowsHitTesting(selected == nil && !searching)
         .accessibilityHidden(selected != nil || searching)
+      if searching && selected == nil {
+        HStack {
+          searchSummary
+          Spacer()
+        }
+        .padding(.horizontal, 24)
+        .transition(.opacity)
+      }
       if let selected {
         ReaderNavigationBar(browser: selected, store: store) { self.selected = nil }
           .foregroundStyle(palette.foreground).tint(palette.foreground)
@@ -316,7 +324,7 @@ struct LibraryView: View {
       }
       .readerGlass().accessibilityLabel("Sort and filter")
       .accessibilityHidden(searching)
-    }.overlay { Text("Articles").font(.headline) }
+    }.overlay { Text("Arctic").font(.headline) }
       .padding(.horizontal, 16)
   }
 
@@ -359,7 +367,7 @@ struct LibraryView: View {
         ScrollView {
           VStack(spacing: 0) {
             Color.clear.frame(height: 0).id("search-top")
-            searchResults.padding(.top, 18)
+            searchResults
           }
         }
         .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
@@ -374,14 +382,6 @@ struct LibraryView: View {
         ClipboardBanner(url: url, preview: clipboard.preview) {
           selected = browsers.open(url, store: store)
           clipboard.dismiss()
-        } save: {
-          do {
-            try store.add(url.absoluteString, preview: clipboard.preview)
-            clipboard.dismiss()
-            query = ""
-            searching = false
-            folder = .saved
-          } catch { store.errorMessage = error.localizedDescription }
         } dismiss: {
           clipboard.dismiss()
         }
@@ -483,15 +483,18 @@ struct LibraryView: View {
     }.padding(.horizontal, compact ? 8 : 16).padding(.bottom, 20)
   }
 
+  private var searchSummary: some View {
+    Text(
+      query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ? "SEARCH \(folder.title.uppercased())"
+        : "\(matches.count) \(matches.count == 1 ? "RESULT" : "RESULTS")"
+    )
+    .font(.footnote.weight(.medium)).foregroundStyle(ReaderTheme.muted)
+    .accessibilityIdentifier("search-summary")
+  }
+
   private var searchResults: some View {
     LazyVStack(alignment: .leading, spacing: 0) {
-      Text(
-        query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-          ? "SEARCH \(folder.title.uppercased())"
-          : "\(matches.count) \(matches.count == 1 ? "RESULT" : "RESULTS")"
-      )
-      .font(.footnote.weight(.medium)).foregroundStyle(ReaderTheme.muted)
-      .padding(.horizontal, 16).padding(.bottom, 6)
       if matches.isEmpty {
         VStack(spacing: 10) {
           Image(systemName: "magnifyingglass").font(.system(size: 26, weight: .light))

@@ -258,8 +258,13 @@ final class ArticleReaderUITests: XCTestCase {
     app.launch()
     app.launchEnvironment = [:]
     XCTAssertTrue(
-      app.buttons["save-copied-link"].waitForExistence(timeout: 10), app.debugDescription)
-    app.buttons["save-copied-link"].tap()
+      app.buttons["open-copied-link"].waitForExistence(timeout: 10), app.debugDescription)
+    XCTAssertFalse(app.buttons["save-copied-link"].exists)
+    app.buttons["open-copied-link"].tap()
+    let bookmark = app.buttons["reader-save"]
+    XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+    if bookmark.value as? String == "Not saved" { bookmark.tap() }
+    app.navigationBars.buttons.element(boundBy: 0).tap()
 
   }
 
@@ -280,6 +285,7 @@ final class ArticleReaderUITests: XCTestCase {
     search.typeText("QUIET")
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["article-next"].exists)
+    XCTAssertLessThan(app.staticTexts["search-summary"].frame.minY, app.frame.height * 0.12)
     capture(app, "05-search-results")
     app.buttons["article-story"].tap()
     XCTAssertTrue(app.buttons["reader-toggle"].waitForExistence(timeout: 5))
@@ -400,7 +406,7 @@ final class ArticleReaderUITests: XCTestCase {
     if !file.waitForExistence(timeout: 2) {
       let localFiles = app.cells.containing(.staticText, identifier: "On My iPhone").firstMatch
       if localFiles.waitForExistence(timeout: 2) { localFiles.tap() }
-      let articlesFolder = app.cells.matching(NSPredicate(format: "label BEGINSWITH 'Articles'"))
+      let articlesFolder = app.cells.matching(NSPredicate(format: "label BEGINSWITH 'Arctic'"))
         .firstMatch
       XCTAssertTrue(articlesFolder.waitForExistence(timeout: 5), app.debugDescription)
       articlesFolder.tap()
@@ -566,7 +572,7 @@ final class ArticleReaderUITests: XCTestCase {
     app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture"]
     app.launch()
     app.buttons["share-fixture"].tap()
-    let articles = app.cells["Articles"]
+    let articles = app.cells["Arctic"]
     if !articles.waitForExistence(timeout: 3) {
       let more = app.cells["More"]
       XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
@@ -590,6 +596,9 @@ final class ArticleReaderUITests: XCTestCase {
     let done = app.buttons["share-done"]
     XCTAssertTrue(done.waitForExistence(timeout: 5))
     done.tap()
+    // Match the real Safari flow: finish sharing, then foreground Arctic.
+    XCUIDevice.shared.press(.home)
+    app.activate()
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10), app.debugDescription)
     app.terminate()
     app.launchArguments = ["-ui-testing"]

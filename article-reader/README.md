@@ -1,4 +1,4 @@
-# Articles — Swift tracer bullet
+# Arctic — native article reader
 
 Open `ArticleReader.xcodeproj`, select the **ArticleReader** scheme and an iPhone
 simulator, then Run. Requires Xcode 26+ and iOS 17+. For a physical iPhone, select
@@ -6,8 +6,8 @@ the same signing team for **ArticleReader** and **ArticleShare**, then register/
 enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 `ArticleReader.entitlements`. The simulator build can use ad-hoc signing.
 
-- First launch offers three optional setup pages: Share, paste permission, and Jev automatic tagging. Replay them from **Sort → Getting started**.
-- Copy an HTTP(S) link and enter Articles. Choose **Open** or **Save** in the clipboard banner above Search.
+- First launch offers three optional setup pages: Share, paste permission, and Jev automatic tagging. Replay them from **Sort and filter → Getting started**.
+- Copy an HTTP(S) link and enter Arctic. Choose **Open** in the clipboard banner above Search, then use the Reader bookmark to save.
 - Cards use an inset Open Graph image, a source badge at the upper left, and a
   material caption at the bottom. A one-line title can include one subtitle line;
   longer titles use the caption space alone. Links without images use a compact
@@ -83,31 +83,31 @@ associated-domain file.
 
 ## Two quick entry paths
 
-- **Share → Articles → Save:** the extension first shows the link, then reveals
+- **Share → Arctic → Save:** the extension first shows the link, then reveals
   its title and image in an expanding sheet. Cancel and Save stay at the bottom;
   saving never waits for a publisher. Save writes an immutable local inbox event
   before optional Jev tagging starts. Done is available immediately. A separate
   immutable completion event carries tags, so dismissal cannot lose the saved link
   or race with the main app consuming it. The app resumes incomplete work on entry.
-- **Copy link → open Articles:** on app activation, detect a probable web URL,
-  then read it through the normal iOS paste-permission flow. A small Open/Save/Dismiss
+- **Copy link → open Arctic:** on app activation, detect a probable web URL,
+  then read it through the normal iOS paste-permission flow. A small Open/Dismiss
   banner appears immediately. Metadata is fetched first; the banner shows its title
   and thumbnail as they arrive. The image is cached before the copied page starts
   its background preload. Paste, save and preload share one metadata request.
   Tapping Open takes priority and does not wait for the preview. Open uses that
-  prepared browser; Open records History; Save writes to the inbox; Dismiss does neither. Each clipboard
+  prepared browser; Open records History; the Reader bookmark saves the link; Dismiss does neither. Each clipboard
   change is checked once, including across launches. Non-link text is ignored.
 
 Automatic clipboard reading can cause iOS to ask **Allow Paste**. If access is
-denied, no page can preload; share the link to Articles instead.
+denied, no page can preload; share the link to Arctic instead.
 Allow Paste in the prompt is not a permanent grant. For ongoing access, choose
-**Settings → Apps → Articles → Paste from Other Apps → Allow**.
+**Settings → Apps → Arctic → Paste from Other Apps → Allow**.
 The app does not bypass the OS permission or change the clipboard. Preloading
 visits the copied URL (and Unwall where configured) before Open is tapped.
 
 ## Automatic tags and onboarding
 
-Onboarding uses native illustrations that follow the system appearance. Page two
+Onboarding uses three concise, replayable native demonstrations: sharing from Safari, choosing Allow in Settings, and tags appearing on a saved card. The demonstrations follow the system appearance and use a completed static scene with Reduce Motion. Arctic uses a glacier-blue accent and separate light/dark ice-shelf app icons. Page two
 opens the app's Settings page; it cannot grant or inspect iOS paste permission.
 The paste setting may appear only after the first cross-app paste prompt. All
 pages can be skipped, including key setup, without blocking local reading.
@@ -131,7 +131,7 @@ merged into the latest record; deletion, unsave, new metadata, key replacement,
 and explicit re-tagging invalidate stale work. Network failures leave work pending
 until a later foreground activation. Invalid credentials pause the queue and show
 an error in Automatic tags. Tag completion has a finite border-beam highlight and
-an Edit tags action. Reduce Motion uses static/fade feedback.
+an Edit tags action. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
 
 Simulator tests use separate article files and fixture classifications, never a
 real Jev key or request. `-test-onboarding -reset-onboarding` exercises first run;
