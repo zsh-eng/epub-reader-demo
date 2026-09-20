@@ -42,7 +42,7 @@ export default function MobileReviewCarousel({
       if (!api) return;
       api.scrollTo(0, true);
     },
-    [card, api],
+    [card.id, api],
   );
 
   useEffect(

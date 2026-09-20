@@ -1,3 +1,5 @@
+import { reviewSession } from "./session";
+import MemoryDB from "@/lib/db/memory";
 import { CardContentFormValues } from "@/lib/form-schema";
 import {
   updateBookmarkedClientSide,
@@ -15,6 +17,7 @@ export async function handleCardDelete(reviewCard?: CardWithMetadata) {
   if (!reviewCard) return;
   const previousDeleted = reviewCard.deleted;
   await updateDeletedClientSide(reviewCard.id, true);
+  reviewSession.advance(reviewCard.id);
   toast("Card deleted", {
     icon: <Trash className="size-4" />,
     action: {
@@ -30,6 +33,7 @@ export async function handleCardSuspend(reviewCard?: CardWithMetadata) {
   if (!reviewCard) return;
   const tenMinutesFromNow = new Date(Date.now() + 10 * 60 * 1000);
   await updateSuspendedClientSide(reviewCard.id, tenMinutesFromNow);
+  reviewSession.advance(reviewCard.id);
   navigator?.vibrate?.(VibrationPattern.buttonTap);
   toast("Skipped for 10 minutes", {
     icon: <ChevronsRight className="size-4" />,
@@ -40,6 +44,7 @@ export async function handleCardBury(reviewCard?: CardWithMetadata) {
   if (!reviewCard) return;
   const previousSuspended = reviewCard.suspended ?? new Date(0);
   await updateSuspendedClientSide(reviewCard.id, MAX_DATE);
+  reviewSession.advance(reviewCard.id);
   navigator?.vibrate?.(VibrationPattern.buttonTap);
   toast("You won't see this card again", {
     icon: <EyeOff className="size-4" />,
@@ -66,6 +71,8 @@ export async function handleCardSave(
 ) {
   if (!reviewCard) return;
   await updateBookmarkedClientSide(reviewCard.id, bookmarked);
+  const updated = MemoryDB.getCardById(reviewCard.id);
+  if (updated) reviewSession.refresh(updated);
   if (bookmarked) {
     navigator?.vibrate?.(VibrationPattern.successConfirm);
     toast("Saved", {
@@ -88,5 +95,7 @@ export async function handleCardEdit(
 
   if (hasChanged) {
     await updateCardContentOperation(reviewCard.id, values.front, values.back);
+    const updated = MemoryDB.getCardById(reviewCard.id);
+    if (updated) reviewSession.refresh(updated);
   }
 }

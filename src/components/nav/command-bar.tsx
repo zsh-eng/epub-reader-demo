@@ -1,6 +1,6 @@
 import { useReviewActionTarget } from "@/components/hooks/use-review-action-target";
 import EditFlashcardResponsive from "@/components/card-actions/edit-flashcard-responsive";
-import { useCards, useDecks, useReviewCards } from "@/components/hooks/query";
+import { useCards, useDecks, useCurrentCard } from "@/components/hooks/query";
 import {
   CommandDialog,
   CommandEmpty,
@@ -140,8 +140,7 @@ export default function CommandBar() {
 
   const decks = useDecks();
   const navigate = useNavigate();
-  const reviewCards = useReviewCards();
-  const nextReviewCard = reviewCards?.[0];
+  const nextReviewCard = useCurrentCard();
 
   const { target, capture, getTarget } = useReviewActionTarget(
     useCards(),

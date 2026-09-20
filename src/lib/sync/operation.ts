@@ -1,3 +1,4 @@
+import { reviewSession } from "@/lib/review/session";
 import { broadcastRecordsChanged } from "./broadcast";
 import { STATE_NAME_TO_NUMBER, STATE_NUMBER_TO_NAME } from "@/lib/card-mapping";
 import MemoryDB, { UndoGrade, memoryReady } from "@/lib/db/memory";
@@ -216,6 +217,7 @@ export async function gradeCardOperation(
   await persistFormOperations(allOperations);
   MemoryDB.pushUndoGrade(undo);
   MemoryDB.notify();
+  reviewSession.advance(card.id);
 }
 
 type UndoGradeResult = {
@@ -302,6 +304,7 @@ export async function undoGradeCard(): Promise<UndoGradeResult> {
   MemoryDB.popUndoGrade();
   MemoryDB.notify();
 
+  reviewSession.restore(MemoryDB.getCardById(undo.cardId));
   return { applied: true };
 }
 

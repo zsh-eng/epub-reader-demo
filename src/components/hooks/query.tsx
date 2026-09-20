@@ -1,3 +1,4 @@
+import { reviewSession } from "@/lib/review/session";
 import { useClock } from "./use-clock";
 import MemoryDB from "@/lib/db/memory";
 import { useSyncExternalStore } from "react";
@@ -61,8 +62,10 @@ export function useCardsForDeck(deckId: string) {
 }
 
 export function useCurrentCard() {
-  const cards = useReviewCards();
-  return cards[0];
+  return useSyncExternalStore(
+    reviewSession.subscribe,
+    reviewSession.getSnapshot,
+  );
 }
 
 export function useUndoStack() {

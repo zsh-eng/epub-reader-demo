@@ -1,10 +1,16 @@
+import { reviewSession } from "@/lib/review/session";
+import { toast } from "sonner";
 import { useReviewActionTarget } from "@/components/hooks/use-review-action-target";
 import EditFlashcardResponsive from "@/components/card-actions/edit-flashcard-responsive";
 import CardCountBadges from "@/components/card-count-badges";
 import CurrentCardBadge from "@/components/current-card-badge";
 import FlashcardContent from "@/components/flashcard-content";
 import { useActiveStartTime } from "@/components/hooks/inactivity";
-import { useCards, useReviewCards } from "@/components/hooks/query";
+import {
+  useCards,
+  useReviewCards,
+  useCurrentCard,
+} from "@/components/hooks/query";
 import CachedImagesContainer from "@/components/images/cached-images-container";
 import ActionsDropdownMenu from "@/components/review/actions-dropdown-menu";
 import DeleteFlashcardDialog from "@/components/review/delete-flashcard-dialog";
@@ -25,7 +31,7 @@ import {
 import { gradeCardOperation } from "@/lib/sync/operation";
 import { cn } from "@/lib/utils";
 import { useMediaQuery } from "@uidotdev/usehooks";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Grade } from "ts-fsrs";
 
 export default function ReviewRoute() {
@@ -33,7 +39,19 @@ export default function ReviewRoute() {
   const noCardsCreatedYet = allCards.length === 0;
 
   const reviewCards = useReviewCards();
-  const nextReviewCard = reviewCards?.[0];
+  const selected = useCurrentCard();
+  const nextReviewCard = selected ?? reviewCards[0];
+  useLayoutEffect(() => {
+    reviewSession.start();
+    return () => reviewSession.stop();
+  }, []);
+  useLayoutEffect(() => {
+    if (!reviewSession.getSnapshot() && nextReviewCard)
+      reviewSession.select(nextReviewCard);
+  }, [nextReviewCard]);
+  const grading = useRef(false);
+  const unavailable =
+    !!nextReviewCard && !allCards.some((card) => card.id === nextReviewCard.id);
 
   const { target, capture, getTarget } = useReviewActionTarget(
     allCards,
@@ -52,8 +70,15 @@ export default function ReviewRoute() {
   }
 
   async function handleGrade(grade: Grade) {
-    if (!nextReviewCard) return;
-    await gradeCardOperation(nextReviewCard, grade, Date.now() - start);
+    if (!nextReviewCard || unavailable || grading.current) return;
+    grading.current = true;
+    try {
+      await gradeCardOperation(nextReviewCard, grade, Date.now() - start);
+    } catch {
+      toast.error("Could not save your review. Please try again.");
+    } finally {
+      grading.current = false;
+    }
   }
 
   async function handleDelete() {
@@ -177,7 +202,18 @@ export default function ReviewRoute() {
         </div>
       </DesktopActionsContextMenu>
 
-      {!isMobile && (
+      {unavailable && (
+        <div role="status" className="col-span-12 p-4">
+          This card is no longer available.
+          <button
+            className="ml-4 underline"
+            onClick={() => reviewSession.select()}
+          >
+            Next card
+          </button>
+        </div>
+      )}
+      {!isMobile && !unavailable && (
         <div className="col-span-12 mx-auto w-max mb-4 px-4 pb-2">
           {nextReviewCard && (
             <DesktopGradeButtons
@@ -189,7 +225,7 @@ export default function ReviewRoute() {
         </div>
       )}
       <div className="col-span-12 mt-0">
-        {nextReviewCard && isMobile && (
+        {nextReviewCard && isMobile && !unavailable && (
           <MobileGradeButtons key={nextReviewCard.id} onGrade={handleGrade} />
         )}
       </div>

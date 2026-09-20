@@ -7,7 +7,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CardContentFormValues } from "@/lib/form-schema";
-import { updateCardContentOperation } from "@/lib/sync/operation";
+import { handleCardEdit } from "@/lib/review/actions";
 import { PencilIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -16,17 +16,12 @@ export default function EditFlashcardAction() {
   const [open, setOpen] = useState(false);
 
   const handleEdit = async (values: CardContentFormValues) => {
-    const hasChanged =
-      currentCard.front !== values.front || currentCard.back !== values.back;
-    if (hasChanged) {
-      await updateCardContentOperation(
-        currentCard.id,
-        values.front,
-        values.back,
-      );
-    }
+    if (!currentCard) return;
+    await handleCardEdit(values, currentCard);
     setOpen(false);
   };
+
+  if (!currentCard) return null;
 
   return (
     <div>
