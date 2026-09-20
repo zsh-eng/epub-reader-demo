@@ -8,6 +8,7 @@ A local Git review app for macOS and Omarchy Linux. Review changes, explore bran
 
 - **Review changes in one view.** Scroll through all changed files. Use split or unified diffs, expand context, wrap lines, and add notes to selected lines.
 - **Explore branches and worktrees.** Switch between branch tabs, browse commit history, and inspect working changes. Read branches without a worktree directly from Git.
+- **Open several repositories.** Use one Open branch picker for all registered repositories. Branch tabs can span repositories; files, history, and search stay scoped to the selected tab.
 - **Read full files.** Browse unchanged and untracked files, keep files in tabs, and open historical versions from a diff.
 - **Find code.** Search file names or committed file contents with a code preview. Jump to symbols in a file or across a project. Resume your last search.
 - **See who changed a line.** Toggle gutter blame in a full file to see the author and commit. Hover a label for the date and commit message.
@@ -29,6 +30,14 @@ node dist/cli.js /path/to/repository
 ```
 
 The command opens the app in your browser. Keep the terminal open; press `Ctrl+C` to stop it. The npm package is not published yet.
+
+Pass several repository paths to open them in one app:
+
+```sh
+node dist/cli.js /path/to/frontend /path/to/backend
+```
+
+Use **Open branch** (`+`) to select a branch or worktree, or to add and remove repositories for the current session. Removing a repository from med does not delete its files or branches.
 
 ### Optional search tools
 

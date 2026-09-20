@@ -31,6 +31,16 @@ The graph shows the selected worktree's HEAD ancestry, or the selected branch's 
 
 Branch tabs map local refs to worktrees discovered by Git. An attached branch opens its working changes. A branch without a worktree opens its committed snapshot and hides working-copy controls. A stale worktree mapping falls back to the branch snapshot. Detached worktrees remain selectable. No tab action runs checkout or switch.
 
+### Multiple repositories
+
+One host can register several local repositories. Open branch groups their branches and worktrees in one picker; branch tabs can span repositories. There is no separate repository navigation screen. The selected tab controls history, reviews, files, search, and symbols.
+
+A repository family is identified by the canonical Git common directory. Linked worktrees share its opaque registry ID; separate clones have separate IDs. The Git command directory remains a checkout path. Browser tab identities combine the repository ID with a branch name or detached worktree path. File sources retain their exact repository path and, for committed content, object ID.
+
+The host validates registered paths before reads and routes search to the owning repository's service. Discovery replaces worktree membership so removed paths do not remain authorized. Removing a registration revokes its sources and review IDs and releases its watchers and search service. Registration and removal never change reviewed files or Git branches.
+
+Inactive browser tabs retain bounded navigation records. They do not mount separate review renderers. Switching cancels old requests, restores navigation, and reloads mutable content; request generations reject late responses. File navigation is retained for up to 32 workspaces, with up to 12 file tabs each, while only the active file retains loaded bytes in the workspace store.
+
 Base UI supplies tabs and the searchable theme dialog. Theme selection previews the whole application; Enter saves locally, and dismissal restores the saved theme. Semantic CSS variables connect StyleX, Pierre Trees, and the diff theme. Geist fonts and a selected set of Lucide SVG paths ship locally. No runtime dependency was added for these controls. See [theme sources](upstream/THEMES.md).
 
 ## Boundaries and dependencies

@@ -26,6 +26,20 @@ To have an agent set it up, give it this instruction:
 
 > Set up med from this checkout for macOS or Omarchy. Check Git and Node, install the project dependencies, build it, and open it against my chosen repository. Set up the optional Zoekt search helper if Go is available. Report the local URL and any missing prerequisite. Do not run code from the repository being reviewed.
 
+### Multiple repositories
+
+```sh
+node dist/cli.js /path/to/frontend /path/to/backend
+# Development:
+npm run dev -- /path/to/frontend /path/to/backend
+```
+
+Use **Open branch** (`+`) to search the registered repositories' branches and worktrees. The picker shows repository groups and worktree paths. Add another repository by entering its local path in the picker. Remove a repository there to close its views and release its resources; this does not delete files or Git branches.
+
+Branch tabs can belong to different repositories. Repository labels distinguish matching branch names. Each tab keeps its comparison and file navigation for the current browser session. The history, files, content search, and symbols all use that tab's repository and branch or worktree. Content search still reads committed content.
+
+Linked worktrees belong to one repository entry. Separate clones remain separate entries, even when they use the same remote. Repository registration lasts for the local server session; restart with the paths you want to use. Patch and file-pair inputs remain separate launch modes.
+
 ### Indexed branch search
 
 Set up the optional [Zoekt](https://github.com/sourcegraph/zoekt) search helper once. This command builds pinned binaries and saves them in the user cache:
@@ -37,9 +51,9 @@ node dist/cli.js --setup-search
 
 Setup needs Go. If it is missing, install it with `brew install go` on macOS or `sudo pacman -S go` on Omarchy, then repeat the command. Normal use needs only the compiled binaries, not Go. There is no Docker container, system service, or Git hook to install.
 
-Start med as usual. It uses the helper when installed and builds indexes in the background. **Content search reads committed branch content** and opens results from the exact commit shown in the picker. Unsaved, uncommitted, and untracked content is not included. The file-name picker and Files sidebar still browse the current worktree.
+Start med as usual. The first content or project-symbol search starts that repository's search service and builds its index in the background when the helper is installed. Listing repositories does not start indexing. **Content search reads committed branch content** and opens results from the exact commit shown in the picker. Unsaved, uncommitted, and untracked content is not included. The file-name picker and Files sidebar still browse the current worktree.
 
-med checks branch commit IDs when repository watchers report changes, with a 10-second poll as a backup. New commits trigger incremental index builds. Adding or deleting an indexed branch triggers a full rebuild. Builds are serialized per repository. Up to 64 local branch tips are indexed, with branches used by worktrees given priority.
+Active search services check branch commit IDs when repository watchers report changes, with a 10-second poll as a backup. New commits trigger incremental index builds. Adding or deleting an indexed branch triggers a full rebuild. Index builds share one queue across repositories. Up to 64 local branch tips are indexed per repository, with branches used by worktrees given priority. At most four search services remain active; an idle service can close and restart when needed. Its disk cache remains available.
 
 If the helper is missing, the index is rebuilding, or indexing fails, search falls back to Git against the same committed content. Historical commits outside the index also use Git. You can use the app during the initial build.
 
