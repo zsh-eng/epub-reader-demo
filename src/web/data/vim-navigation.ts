@@ -20,6 +20,7 @@ export type VimMotion = {
   wordSearch?: string;
   lineCommand?: true;
   copy?: true;
+  definition?: string;
 };
 export type VisualMode = "character" | "line";
 export interface VisualRange {
@@ -132,6 +133,15 @@ export class VimNavigation {
   }
   get offset() {
     return this.starts[this.line]! + this.column;
+  }
+  wordAtCursor() {
+    const text = this.lines[this.line]!;
+    let start = this.column,
+      end = this.column;
+    if (!keyword.test(text[start] ?? "")) return "";
+    while (start > 0 && keyword.test(text[start - 1]!)) start--;
+    while (end < text.length && keyword.test(text[end]!)) end++;
+    return text.slice(start, end);
   }
   get endColumn() {
     return this.columns().at(-1)!;
@@ -285,6 +295,7 @@ export class VimNavigation {
     }
     if (prefix === "g") {
       if (key === "g") this.jump(explicit ? n - 1 : 0);
+      if (key === "d") return { handled: true, definition: this.wordAtCursor() };
       return { handled: true };
     }
     if (prefix === "z") {

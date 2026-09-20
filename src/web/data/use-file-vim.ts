@@ -13,6 +13,7 @@ import {
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import VimSearchWorker from "./vim-search.worker?worker";
 import { createVisualSelection } from "./visual-selection";
+import { createActiveSearchHighlight } from "./active-search-highlight";
 import { MAX_VIM_MATCHES, VimNavigation, type VisualMode } from "./vim-navigation";
 
 type SearchResult = { identity: string; message: string; query: string; wholeWord: boolean };
@@ -36,6 +37,7 @@ export function useFileVim({
   line,
   column,
   onNavigationReady,
+  onDefinition,
 }: {
   text: string;
   identity: string;
@@ -44,11 +46,17 @@ export function useFileVim({
   line?: number;
   column?: number;
   onNavigationReady?: (command: FileNavigationCommand | null) => void;
+  onDefinition?: (name: string) => void;
 }) {
   const model = useMemo(() => new VimNavigation(text, identity), [text, identity]);
   const commandFile = useMemo(() => ({ identity: model.identity }), [model]);
   const visualName = `med-visual-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const visualPainter = useMemo(() => createVisualSelection(visualName), [visualName]);
+  const activeSearchName = `${visualName}-search-current`;
+  const activeSearch = useMemo(
+    () => createActiveSearchHighlight(activeSearchName),
+    [activeSearchName],
+  );
   const [visualState, setVisualState] = useState<{
     model: VimNavigation;
     mode: VisualMode | null;
@@ -88,6 +96,12 @@ export function useFileVim({
   const restoreScroll = useRef<number | null>(null);
   const session = useRef<SearchSession | null>(null);
   const [highlightsVisible, setHighlightsVisible] = useState(true);
+  const showSearch = useRef(true);
+  useLayoutEffect(() => {
+    showSearch.current = highlightsVisible;
+    currentPaint.current();
+    return () => activeSearch.dispose();
+  }, [highlightsVisible, activeSearch, model]);
   const [searchState, setSearch] = useState<{
     identity: string;
     direction: 1 | -1;
@@ -120,6 +134,7 @@ export function useFileVim({
         setVisualState(lastVisual.current);
       }
       visualPainter.update(host.current, model, enabled);
+      activeSearch.update(host.current, model, showSearch.current);
       container.dataset.vimLine = String(model.line + 1);
       container.dataset.vimColumn = String(model.column + 1);
       if (!align && !active.current) {
@@ -226,7 +241,7 @@ export function useFileVim({
       element.dataset.vimColumn = String(model.column + 1);
       element.hidden = false;
     },
-    [identity, model, viewer, enabled, visualPainter],
+    [identity, model, viewer, enabled, visualPainter, activeSearch],
   );
   useLayoutEffect(() => {
     currentPaint.current = paint;
@@ -350,6 +365,7 @@ export function useFileVim({
         else beginSearch(result.search);
       }
       if (result.lineCommand) beginLineCommand();
+      if (result.definition !== undefined) onDefinition?.(result.definition);
       if (result.handled && !result.copy) {
         cancelCopies();
         setCopyState(null);
@@ -357,7 +373,16 @@ export function useFileVim({
       if (result.copy) void copySelection();
       if (result.handled) paint(result.align ?? "nearest");
     },
-    [model, paint, runSearch, beginSearch, beginLineCommand, copySelection, cancelCopies],
+    [
+      model,
+      paint,
+      runSearch,
+      beginSearch,
+      beginLineCommand,
+      copySelection,
+      cancelCopies,
+      onDefinition,
+    ],
   );
   useLayoutEffect(() => {
     active.current = enabled && document.activeElement === pane.current;
@@ -444,6 +469,7 @@ export function useFileVim({
       else beginSearch(result.search);
     }
     if (result.lineCommand) beginLineCommand();
+    if (result.definition !== undefined) onDefinition?.(result.definition);
     if (result.copy) void copySelection();
     else {
       cancelCopies();
@@ -485,6 +511,7 @@ export function useFileVim({
     [model, paint, cancelCopies],
   );
   return {
+    activeSearchName,
     visualName,
     visualMode,
     onCopy,

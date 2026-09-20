@@ -33,6 +33,8 @@ import { createBlameLoader, type BlameLoader } from "./data/blame";
 
 import { createFilePrefetch } from "./data/file-prefetch";
 import { createRenderDiagnostics } from "./data/render-diagnostics";
+import { findDefinitions } from "./data/definitions";
+import type { SymbolSearch } from "../shared/symbols";
 
 type Annotation = { note?: Note; draft?: NoteTarget };
 type Selection = {
@@ -82,7 +84,7 @@ export function App({
   );
   const [symbolMode, setSymbolMode] = useState<"file" | "project">("file");
   const [vimEnabled, setVimEnabled] = useState(
-    () => readPreference("vim", "off", ["on", "off"]) === "on",
+    () => readPreference("vim", "on", ["on", "off"]) === "on",
   );
   useEffect(() => {
     try {
@@ -165,6 +167,72 @@ export function App({
     [browseSource, prefetch, workerPool],
   );
   const activeFile = fileState.tabs.find((tab) => tab.id === fileState.active);
+  const definitionScope = JSON.stringify([
+    fileState.file?.source,
+    fileState.file?.path,
+    fileState.file?.identity,
+    state.sourceRevision,
+  ]);
+  const [definitionState, setDefinitionState] = useState<{
+    scope: string;
+    result: SymbolSearch;
+  } | null>(null);
+  const definitions = definitionState?.scope === definitionScope ? definitionState.result : null;
+  const setDefinitions = useCallback(
+    (result: SymbolSearch | null) =>
+      setDefinitionState(result ? { scope: definitionScope, result } : null),
+    [definitionScope],
+  );
+  const definitionRequest = useRef<AbortController | null>(null);
+  useEffect(() => {
+    return () => definitionRequest.current?.abort();
+  }, [fileState.file, state.sourceRevision]);
+  const goToDefinition = useCallback(
+    (name: string) => {
+      const file = fileState.file;
+      if (!file || file.kind !== "text" || !name) return;
+      definitionRequest.current?.abort();
+      const request = new AbortController();
+      definitionRequest.current = request;
+      void findDefinitions(browseApi, file, name, request.signal)
+        .then((result) => {
+          if (request.signal.aborted || fileWorkspace.getSnapshot().file !== file) return;
+          const target = result.matches[0];
+          const source = result.resultSource ?? result.source;
+          if (target && result.matches.length === 1 && !result.truncated && !result.unavailable) {
+            if (
+              target.path === file.path &&
+              sourceKey(source) === sourceKey(file.source) &&
+              beginFilePreview
+            ) {
+              const preview = beginFilePreview();
+              preview.preview(target.line, target.column, target.name, false);
+              preview.finish(true);
+            } else
+              fileWorkspace.open(
+                target.path,
+                true,
+                target.line,
+                source,
+                source.kind === "commit" ? `Commit ${source.oid.slice(0, 8)}` : sourceLabel,
+                target.column,
+              );
+          } else setDefinitions(result);
+        })
+        .catch((error: unknown) => {
+          if (!request.signal.aborted && fileWorkspace.getSnapshot().file === file)
+            setDefinitions({
+              source: file.source,
+              query: name,
+              engine: "ctags",
+              matches: [],
+              truncated: false,
+              unavailable: error instanceof Error ? error.message : "Cannot find definition.",
+            });
+        });
+    },
+    [browseApi, fileState.file, beginFilePreview, fileWorkspace, sourceLabel, setDefinitions],
+  );
   const openSymbols = useCallback((mode: "file" | "project") => {
     setSymbolMode(mode);
     setSymbolPickerOpen(true);
@@ -781,6 +849,7 @@ export function App({
     });
   };
   const fileMotions: [string, string, string, boolean?][] = [
+    ["definition", "Go to definition", "gd"],
     ["visual-character", "Select characters in file", "v"],
     ["visual-line", "Select whole lines in file", "V"],
     ["visual-yank", "Copy Vim selection", "y"],
@@ -1165,6 +1234,29 @@ export function App({
         />
       )}
       <ThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} />
+      {definitions && (
+        <SymbolPicker
+          open
+          mode="project"
+          definitionResult={definitions}
+          source={definitions.source}
+          sourceLabel={sourceLabel}
+          api={browseApi}
+          onOpenChange={(open) => {
+            if (!open) setDefinitions(null);
+          }}
+          onOpen={(path, line, source, column) =>
+            fileWorkspace.open(
+              path,
+              true,
+              line,
+              source,
+              source.kind === "commit" ? `Commit ${source.oid.slice(0, 8)}` : sourceLabel,
+              column,
+            )
+          }
+        />
+      )}
       <SymbolPicker
         sidebarWidth={sidebarVisible ? sidebarWidth : 316}
         beginFilePreview={beginFilePreview}
@@ -1725,6 +1817,7 @@ export function App({
                 column={activeFile.column}
                 vimEnabled={vimEnabled}
                 onNavigationReady={onNavigationReady}
+                onDefinition={goToDefinition}
                 onSymbolPreviewReady={onSymbolPreviewReady}
                 onRefresh={() => void fileWorkspace.refresh()}
                 onClose={() => fileWorkspace.close(activeFile.id)}

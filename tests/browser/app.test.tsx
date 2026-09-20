@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { useState } from "react";
 import { flushSync } from "react-dom";
@@ -41,11 +41,13 @@ const commits = [
 let root: Root | undefined;
 let mount: HTMLDivElement | undefined;
 
+beforeEach(() => localStorage.removeItem("med:vim"));
 afterEach(() => {
   root?.unmount();
   mount?.remove();
   root = undefined;
   mount = undefined;
+  localStorage.removeItem("med:vim");
 });
 
 function response(comparison: Comparison): ReviewResponse {
@@ -226,9 +228,36 @@ describe("graphical review", () => {
     await expect.poll(() => fileRequests.length).toBe(1);
     await link.click();
     await expect
-      .element(page.getByRole("textbox", { name: "File content", exact: true }))
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
       .toBeVisible();
     expect(fileRequests).toHaveLength(1);
+  });
+
+  test("a fresh launch opens files with a visible Vim cursor and keyboard focus", async () => {
+    await mountApp();
+    await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();
+    const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+    await expect.poll(() => document.activeElement).toBe(pane.element());
+    const caret = document.querySelector<HTMLElement>("[data-file-pane=main] [data-vim-caret]")!;
+    await expect.element(caret).toBeVisible();
+    expect(caret.getBoundingClientRect().width).toBeGreaterThan(5);
+    await userEvent.keyboard("j");
+    await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+    await expect.element(caret).toBeVisible();
+    await expect.element(caret).toHaveAttribute("data-vim-line", "2");
+  });
+
+  test("an explicit Vim opt-out is preserved", async () => {
+    localStorage.setItem("med:vim", "off");
+    await mountApp();
+    await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();
+    await expect
+      .element(page.getByRole("textbox", { name: "File content", exact: true }))
+      .toBeVisible();
+    await expect
+      .element(document.querySelector<HTMLElement>("[data-file-pane=main] [data-vim-caret]")!)
+      .not.toBeVisible();
+    expect(localStorage.getItem("med:vim")).toBe("off");
   });
 
   test("symbol shortcuts open file and project palettes and project selection opens the indexed commit", async () => {
@@ -475,6 +504,17 @@ describe("graphical review", () => {
     await expect.element(page.getByText("1 / 2 hunks", { exact: true })).toBeVisible();
     await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
     await expect.element(page.getByText("2 / 2 hunks", { exact: true })).toBeVisible();
+  });
+
+  test("gd uses ctags to jump to a declaration in the current file", async () => {
+    await mountApp();
+    await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();
+    const pane = page.getByRole("textbox", { name: "File navigation" });
+    await expect.poll(() => document.activeElement).toBe(pane.element());
+    await userEvent.keyboard("2Gwwgd");
+    await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+    await expect.element(pane).toHaveAttribute("data-vim-column", "14");
+    await expect.poll(() => document.activeElement).toBe(pane.element());
   });
 
   test("shift-click selects an inclusive commit range and a plain click resets it", async () => {

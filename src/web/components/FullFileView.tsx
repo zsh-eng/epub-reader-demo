@@ -28,7 +28,7 @@ import { pierreFile } from "../data/file-prefetch";
 import { createSearchHighlights } from "../data/search-highlights";
 
 export interface FileSymbolPreview {
-  preview(line: number, column: number | undefined, name: string): void;
+  preview(line: number, column: number | undefined, name: string, selectLine?: boolean): void;
   finish(accept: boolean): void;
 }
 export type BeginFileSymbolPreview = () => FileSymbolPreview;
@@ -45,6 +45,7 @@ export interface FullFileViewProps {
   vimEnabled?: boolean;
   onSymbolPreviewReady?(begin: BeginFileSymbolPreview | null): void;
   onNavigationReady?(command: FileNavigationCommand | null): void;
+  onDefinition?(name: string): void;
   highlightQuery?: string;
   compact?: boolean;
   initialScrollTop?: number;
@@ -77,6 +78,7 @@ export function FullFileView({
   column,
   vimEnabled = false,
   onNavigationReady,
+  onDefinition,
   onSymbolPreviewReady,
   highlightQuery = "",
   compact = false,
@@ -101,6 +103,7 @@ export function FullFileView({
     line,
     column,
     onNavigationReady,
+    onDefinition,
   });
   const [symbolHighlight, setSymbolHighlight] = useState<string | null>(null);
   const beginSymbolPreview = useCallback<BeginFileSymbolPreview>(() => {
@@ -109,12 +112,16 @@ export function FullFileView({
     const scrollTop = instance?.getScrollTop() ?? 0;
     const selected = instance?.getSelectedLines() ?? null;
     return {
-      preview(target, targetColumn, name) {
+      preview(target, targetColumn, name, selectLine = true) {
         vim.position.jump(target, targetColumn);
-        instance?.setSelectedLines({
-          id: file?.identity ?? "",
-          range: { start: target, end: target },
-        });
+        instance?.setSelectedLines(
+          selectLine
+            ? {
+                id: file?.identity ?? "",
+                range: { start: target, end: target },
+              }
+            : null,
+        );
         instance?.render(true);
         setSymbolHighlight(name);
       },
@@ -223,6 +230,7 @@ export function FullFileView({
     ];
   }, [file]);
   const visualName = vim.visualName;
+  const activeSearchName = vim.activeSearchName;
   const options = useMemo<CodeViewReactOptions<undefined, undefined>>(
     () => ({
       theme: active.pierreTheme,
@@ -233,6 +241,7 @@ export function FullFileView({
       tokenizeMaxLineLength: 1000,
       unsafeCSS: `[data-line] { tab-size: 2; }
         ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }
+        ::highlight(${activeSearchName}) { background-color: ${active.palette.accent}; color: ${active.palette.canvas}; text-decoration: underline; }
         ::highlight(${visualName}) { background-color: color-mix(in srgb, ${active.palette.accent} 45%, transparent); color: ${active.palette.text}; }
         [data-vim-visual-line] { background: color-mix(in srgb, ${active.palette.accent} 45%, transparent) !important; }
         [data-vim-visual-empty] { position: relative; }
@@ -245,7 +254,7 @@ export function FullFileView({
       },
       layout: { gap: 0, paddingTop: 8, paddingBottom: 16 },
     }),
-    [active, highlightId, highlights, visualName],
+    [active, highlightId, highlights, visualName, activeSearchName],
   );
   useLayoutEffect(() => {
     if (!file || !items.length || loading) return;

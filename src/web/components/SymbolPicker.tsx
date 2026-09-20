@@ -26,6 +26,7 @@ export interface SymbolPickerProps {
   api: BrowseApi;
   sidebarWidth?: number;
   beginFilePreview?: BeginFileSymbolPreview;
+  definitionResult?: SymbolSearch;
   onOpen(path: string, line: number, source: BrowseSource, column?: number): void;
 }
 
@@ -61,6 +62,7 @@ function SymbolPickerContents({
   api,
   onOpen,
   beginFilePreview,
+  definitionResult,
   sidebarWidth = 300,
   initialQuery,
   onQueryChange,
@@ -89,7 +91,8 @@ function SymbolPickerContents({
     result?: SymbolSearch;
     error?: string;
   }>({ key: "" });
-  const enabled = !!source && !!api.symbols && (mode === "file" ? !!path : !!query.trim());
+  const enabled =
+    !definitionResult && !!source && !!api.symbols && (mode === "file" ? !!path : !!query.trim());
   useEffect(() => {
     if (!enabled || !sourceKey || !api.symbols) return;
     const [kind, repo, oid] = JSON.parse(sourceKey) as ["worktree" | "commit", string, string?];
@@ -116,19 +119,22 @@ function SymbolPickerContents({
     return () => controller.abort();
   }, [api, enabled, sourceKey, mode, path, identity, requestQuery, requestKey]);
   const busy = enabled && state.key !== requestKey;
-  const displayed = enabled ? state.result : undefined;
-  const failure = state.key === requestKey ? (state.error ?? state.result?.unavailable) : null;
+  const displayed = definitionResult ?? (enabled ? state.result : undefined);
+  const failure =
+    definitionResult?.unavailable ??
+    (state.key === requestKey ? (state.error ?? state.result?.unavailable) : null);
   const results = useMemo(
     () =>
-      mode === "file"
+      mode === "file" || definitionResult
         ? findSymbols(displayed?.matches ?? [], query)
         : (displayed?.matches ?? []).slice(0, 100),
-    [displayed, mode, query],
+    [displayed, mode, query, definitionResult],
   );
   const chosen = results.find((match) => symbolMatchId(match) === selected) ?? results[0];
   // Project locations are bound to the resolved commit returned by the index.
-  const resultSource =
-    mode === "project"
+  const resultSource = definitionResult
+    ? (definitionResult.resultSource ?? definitionResult.source)
+    : mode === "project"
       ? displayed?.resultSource?.kind === "commit"
         ? displayed.resultSource
         : undefined
@@ -207,7 +213,9 @@ function SymbolPickerContents({
             )}
           >
             <div {...stylex.props(styles.heading)}>
-              <Dialog.Title {...stylex.props(styles.title)}>Find symbol</Dialog.Title>
+              <Dialog.Title {...stylex.props(styles.title)}>
+                {definitionResult ? "Go to definition" : "Find symbol"}
+              </Dialog.Title>
               <span {...stylex.props(styles.scope)} title={sourceLabel}>
                 {sourceLabel}
               </span>
@@ -247,7 +255,13 @@ function SymbolPickerContents({
                 ref={inputRef}
                 onFocus={(event) => event.currentTarget.select()}
                 maxLength={256}
-                aria-label={mode === "file" ? "Find symbol in file" : "Find symbol in project"}
+                aria-label={
+                  definitionResult
+                    ? "Filter definitions"
+                    : mode === "file"
+                      ? "Find symbol in file"
+                      : "Find symbol in project"
+                }
                 placeholder={
                   mode === "file" ? "Search symbols in this file…" : "Search committed symbols…"
                 }
@@ -261,9 +275,11 @@ function SymbolPickerContents({
               />
             </div>
             <p {...stylex.props(styles.notice)}>
-              {mode === "file"
-                ? (path ?? "Open a file to search its symbols.")
-                : `Committed files · uncommitted changes excluded${resultSource?.kind === "commit" ? ` · ${resultSource.oid.slice(0, 8)}` : ""}`}
+              {definitionResult
+                ? `Ctags declarations · ${resultSource?.kind === "commit" ? `Commit ${resultSource.oid.slice(0, 8)}` : "Current file"}`
+                : mode === "file"
+                  ? (path ?? "Open a file to search its symbols.")
+                  : `Committed files · uncommitted changes excluded${resultSource?.kind === "commit" ? ` · ${resultSource.oid.slice(0, 8)}` : ""}`}
             </p>
             <div {...stylex.props(styles.body)}>
               <div {...stylex.props(styles.results)} aria-busy={busy}>
@@ -280,15 +296,17 @@ function SymbolPickerContents({
                     {!busy && (
                       <Combobox.Empty>
                         <div {...stylex.props(styles.message)}>
-                          {!source
-                            ? "Select a repository."
-                            : !api.symbols
-                              ? "Symbol search is unavailable."
-                              : mode === "file" && !path
-                                ? "Open a file to search its symbols."
-                                : mode === "project" && !query.trim()
-                                  ? "Type a symbol name to search the selected commit."
-                                  : "No matching symbols."}
+                          {definitionResult
+                            ? `No declaration named “${definitionResult.query}” was found.`
+                            : !source
+                              ? "Select a repository."
+                              : !api.symbols
+                                ? "Symbol search is unavailable."
+                                : mode === "file" && !path
+                                  ? "Open a file to search its symbols."
+                                  : mode === "project" && !query.trim()
+                                    ? "Type a symbol name to search the selected commit."
+                                    : "No matching symbols."}
                         </div>
                       </Combobox.Empty>
                     )}

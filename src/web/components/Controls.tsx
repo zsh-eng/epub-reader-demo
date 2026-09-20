@@ -164,9 +164,9 @@ export function CommandDialog({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const resultList = useRef<HTMLDivElement>(null);
-  const results = commands
-    .filter((command) => command.label.toLowerCase().includes(query.toLowerCase()))
-    .slice(0, 50);
+  const results = commands.filter((command) =>
+    command.label.toLowerCase().includes(query.toLowerCase()),
+  );
   useEffect(() => {
     resultList.current
       ?.querySelector('[aria-selected="true"]')

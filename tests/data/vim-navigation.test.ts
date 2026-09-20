@@ -221,3 +221,14 @@ test("visual selections include blank lines and survive paragraph and counted mo
   keys(empty, "v");
   expect(empty.visualRange).toMatchObject({ start: 0, end: 0 });
 });
+
+test("gd requests the identifier under the cursor without moving it", () => {
+  const model = new VimNavigation("call(target_name);\n");
+  model.jump(0, 8);
+  model.key("g");
+  expect(model.key("d")).toEqual({ handled: true, definition: "target_name" });
+  expect(model.column).toBe(8);
+  model.jump(0, 4);
+  model.key("g");
+  expect(model.key("d").definition).toBe("");
+});

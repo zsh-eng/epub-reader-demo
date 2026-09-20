@@ -366,6 +366,32 @@ test("selecting a Pierre line number updates the bounded blame request", async (
   expect(load.mock.calls.at(-1)?.slice(1, 3)).toEqual([3, 3]);
 });
 
+test("the current Vim search match has a distinct range through n, N and Escape", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, text: "needle one needle\nneedle two\n" }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation" });
+  await expect.element(pane).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("/needle");
+  const active = () => [...CSS.highlights.keys()].find((key) => key.endsWith("-search-current"));
+  await expect.poll(active).toBeTruthy();
+  const range = () => [...CSS.highlights.get(active()!)!][0]! as Range;
+  expect(range().toString()).toBe("needle");
+  await userEvent.keyboard("{Enter}");
+  const first = range().getBoundingClientRect().toJSON();
+  await userEvent.keyboard("n");
+  await expect.poll(() => range().getBoundingClientRect().toJSON()).not.toEqual(first);
+  await userEvent.keyboard("N");
+  await expect.poll(() => range().getBoundingClientRect().toJSON()).toEqual(first);
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(active).toBeUndefined();
+});
+
 test("changing file identity refreshes contents and commit labels remain explicit", async () => {
   render(<FullFileView {...props} file={base} />);
   await expect

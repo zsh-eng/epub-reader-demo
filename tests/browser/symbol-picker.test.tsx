@@ -188,3 +188,22 @@ test("a source switch discards an outstanding symbol request", async () => {
   expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
   expect(onOpen).not.toHaveBeenCalled();
 });
+
+test("ambiguous definitions use the indexed snapshot and need an explicit choice", async () => {
+  const api = baseApi();
+  const onOpen = vi.fn<SymbolPickerProps["onOpen"]>();
+  render(
+    <Harness
+      mode="project"
+      api={api}
+      onOpen={onOpen}
+      definitionResult={response({ resultSource: commit, query: "example", path: undefined })}
+    />,
+  );
+  await expect.element(page.getByRole("dialog", { name: "Go to definition" })).toBeVisible();
+  expect(onOpen).not.toHaveBeenCalled();
+  expect(api.symbols).not.toHaveBeenCalled();
+  await page.getByRole("combobox", { name: "Filter definitions" }).fill("80");
+  await userEvent.keyboard("{Enter}");
+  expect(onOpen).toHaveBeenCalledWith("main.ts", 80, commit, 10);
+});
