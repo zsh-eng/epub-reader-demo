@@ -22,6 +22,7 @@ struct SavedArticle: Identifiable, Codable {
   var downloadedAt: Date?
   var tagging: ArticleTaggingState?
   var sharedTransferID: UUID?
+  var importBatchID: UUID?
   var saved: Bool { isSaved != false }
   var tagNames: [String] { tags ?? [] }
 }
@@ -38,6 +39,16 @@ struct ArticleTaggingState: Codable {
   var sharedFeedbackTransferID: UUID?
 }
 
+struct ImportSummary: Identifiable {
+  let id = UUID()
+  let total: Int
+  let duplicates: Int
+  var previewsReady = 0
+  var previewFailures = 0
+  var tagged = 0
+  var tagCounts: [String: Int] = [:]
+}
+
 struct TaggingNotice: Identifiable {
   let id = UUID()
   let articleID: UUID
@@ -49,8 +60,28 @@ struct TaggingNotice: Identifiable {
 /// file, so listing links never loads article bodies or embedded header images.
 @MainActor @Observable final class ArticleStore {
   private(set) var articles: [SavedArticle] = []
+  private(set) var libraryRevision = 0
   var errorMessage: String?
   private(set) var taggingNotice: TaggingNotice?
+  private(set) var importSummary: ImportSummary?
+  private var currentImportIDs = Set<UUID>()
+  private var persistenceTask: Task<Void, Never>?
+  private var importTaggedIDs = Set<UUID>()
+  private var importPreparedIDs = Set<UUID>()
+  private var previewQueue: [URL] = []
+  private var previewWorkers: [URL: Task<Void, Never>] = [:]
+  private var pendingPreviews: [UUID: Result<ArticlePreview, Error>] = [:]
+  private var previewCommitTask: Task<Void, Never>?
+  private var priorityPreviewURLs: [URL] = []
+  var isImportWorking: Bool {
+    guard let summary = importSummary else { return false }
+    if summary.previewsReady < summary.total,
+      !previewQueue.isEmpty || !previewWorkers.isEmpty || !pendingPreviews.isEmpty
+    {
+      return true
+    }
+    return taggingTask != nil && summary.tagged < summary.total - summary.previewFailures
+  }
   private var taggingTask: Task<Void, Never>?
   private var taggingDeferred = Set<UUID>()
   private var taggingWaitingForForeground = false
@@ -120,6 +151,17 @@ struct TaggingNotice: Identifiable {
             try Data(html.utf8).write(to: downloadFile(article.id))
             articles.append(article)
           }
+          try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)
+        }
+      #endif
+      #if DEBUG
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-seed-long-list"),
+          articles.isEmpty
+        {
+          let anchors = (0..<1000).map { index in
+            "<a href='https://fixture.example/import-\(index)' add_date='\(1_700_000_000 + index)'>Imported story \(String(format: "%04d", index))</a>"
+          }.joined()
+          articles = try ReadingListImport.parse("<html><body>\(anchors)</body></html>")
           try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)
         }
       #endif
@@ -379,8 +421,8 @@ struct TaggingNotice: Identifiable {
 
   private func downloadFile(_ id: UUID) -> URL { downloads.appending(path: "\(id).html") }
 
-  /// Import the HTML reading-list export without executing it. Commit all links
-  /// together, then fetch previews one at a time so large lists do not flood sites.
+  /// Import is one local transaction. Network work starts after the new list is
+  /// visible, with at most three metadata requests and no eager image downloads.
   func importReadingList(from url: URL) async throws -> String {
     let granted = url.startAccessingSecurityScopedResource()
     defer { if granted { url.stopAccessingSecurityScopedResource() } }
@@ -391,34 +433,103 @@ struct TaggingNotice: Identifiable {
       }
       return try ReadingListImport.parse(html)
     }.value
+    let merged = ReadingListImport.merge(entries, into: articles)
+    guard !merged.added.isEmpty else { return "All \(entries.count) links are already saved." }
+    try commit(merged.articles)
+    currentImportIDs = Set(merged.added.map(\.id))
+    importTaggedIDs.removeAll()
+    importPreparedIDs.removeAll()
+    importSummary = ImportSummary(total: merged.added.count, duplicates: merged.duplicates)
+    let newestFirst = merged.added.enumerated().sorted {
+      let lhs = $0.element.savedAt ?? .distantPast
+      let rhs = $1.element.savedAt ?? .distantPast
+      return lhs == rhs ? $0.offset < $1.offset : lhs > rhs
+    }.map(\.element.url)
+    enqueuePreviews(newestFirst)
+    return "Added \(merged.added.count) \(merged.added.count == 1 ? "link" : "links")."
+      + (merged.duplicates > 0
+        ? " Skipped \(merged.duplicates) \(merged.duplicates == 1 ? "duplicate" : "duplicates")."
+        : "")
+  }
+
+  func dismissImportSummary() { importSummary = nil }
+
+  /// The library supplies visible rows followed by nearby rows. Reprioritizing
+  /// queued metadata never cancels useful requests already in flight.
+  func prioritizePreviews(_ urls: [URL]) {
+    priorityPreviewURLs = urls
+    enqueuePreviews(urls)
+  }
+
+  private func enqueuePreviews(_ urls: [URL]) {
+    let eligible = Set(
+      articles.filter {
+        $0.taggingText == nil && !$0.previewFailed && pendingPreviews[$0.id] == nil
+      }.map(\.url))
+    var seen = Set<URL>()
+    previewQueue = (priorityPreviewURLs + urls + previewQueue).filter {
+      eligible.contains($0) && previewWorkers[$0] == nil && seen.insert($0).inserted
+    }
+    startPreviewWorkers()
+  }
+
+  private func startPreviewWorkers() {
+    while previewWorkers.count < 3, !previewQueue.isEmpty {
+      let url = previewQueue.removeFirst()
+      guard let article = articles.first(where: { $0.url == url && $0.taggingText == nil })
+      else { continue }
+      previewWorkers[url] = Task { [weak self] in
+        let result: Result<ArticlePreview, Error>
+        do { result = .success(try await ArticlePreviewCache.shared.load(url)) } catch {
+          result = .failure(error)
+        }
+        guard let self else { return }
+        self.pendingPreviews[article.id] = result
+        self.previewWorkers[url] = nil
+        self.startPreviewWorkers()
+        self.schedulePreviewCommit()
+      }
+    }
+  }
+
+  private func schedulePreviewCommit() {
+    guard previewCommitTask == nil else { return }
+    previewCommitTask = Task { [weak self] in
+      // Nearby requests often complete together. Publish their metadata once,
+      // instead of serializing a long library and invalidating rows per result.
+      do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
+      guard let self else { return }
+      self.previewCommitTask = nil
+      self.flushPreviews()
+    }
+  }
+
+  private func flushPreviews() {
+    let results = pendingPreviews
+    pendingPreviews.removeAll()
+    guard !results.isEmpty else { return }
     var updated = articles
-    var added: [SavedArticle] = []
-    for entry in entries {
-      if let index = updated.firstIndex(where: { $0.url == entry.url }) {
-        guard !updated[index].saved else { continue }
-        updated[index].isSaved = true
-        updated[index].savedAt = Date()
-        added.append(updated[index])
-      } else {
-        var entry = entry
-        entry.savedAt = Date()
-        updated.insert(entry, at: 0)
-        added.append(entry)
+    for index in updated.indices {
+      guard let result = results[updated[index].id] else { continue }
+      switch result {
+      case .success(let preview): preview.apply(to: &updated[index])
+      case .failure:
+        updated[index].previewFailed = true
+        if currentImportIDs.contains(updated[index].id),
+          !importPreparedIDs.contains(updated[index].id)
+        {
+          importSummary?.previewFailures += 1
+        }
+      }
+      if currentImportIDs.contains(updated[index].id) {
+        importPreparedIDs.insert(updated[index].id)
       }
     }
-    guard !added.isEmpty else { return "All \(entries.count) links are already saved." }
-    try commit(updated)
-    scheduleTagging()
-    Task {
-      for article in added {
-        guard articles.contains(where: { $0.id == article.id }) else { continue }
-        await refreshPreview(article, reload: false)
-      }
-    }
-    let duplicates = entries.count - added.count
-    return "Added \(added.count) \(added.count == 1 ? "link" : "links")."
-      + (duplicates > 0
-        ? " Skipped \(duplicates) \(duplicates == 1 ? "duplicate" : "duplicates")." : "")
+    do {
+      try commit(updated, deferred: true)
+      importSummary?.previewsReady = importPreparedIDs.count
+      scheduleTagging()
+    } catch { errorMessage = "Could not save preview metadata: \(error.localizedDescription)" }
   }
 
   func refreshPreview(_ article: SavedArticle, reload: Bool = true) async {
@@ -429,9 +540,6 @@ struct TaggingNotice: Identifiable {
       preview.apply(to: &updated[index])
       try commit(updated)
       scheduleTagging()
-      for url in [preview.imageURL, preview.faviconURL].compactMap({ $0 }) {
-        await ThumbnailCache.shared.load(url)
-      }
     } catch {
       guard let index = articles.firstIndex(where: { $0.id == article.id }) else { return }
       var updated = articles
@@ -450,6 +558,9 @@ struct TaggingNotice: Identifiable {
   func resumeTagging() {
     taggingDeferred.removeAll()
     taggingWaitingForForeground = false
+    if taggingAllowed {
+      enqueuePreviews(articles.filter { $0.saved && $0.taggingText == nil }.map(\.url))
+    }
     scheduleTagging()
   }
 
@@ -597,7 +708,7 @@ struct TaggingNotice: Identifiable {
           }
           var updated = self.articles
           updated[index].tagging = state
-          try self.commit(updated)
+          try self.commit(updated, deferred: article.importBatchID != nil)
           let tags = try await self.requestTags(
             title: article.title, description: article.taggingDescription,
             credentialRevision: credentialRevision)
@@ -625,7 +736,9 @@ struct TaggingNotice: Identifiable {
 
   private func nextTaggingArticle() -> SavedArticle? {
     articles.first { article in
-      guard article.saved, !taggingDeferred.contains(article.id) else { return false }
+      guard article.saved, !taggingDeferred.contains(article.id),
+        article.importBatchID == nil || article.taggingText != nil
+      else { return false }
       return article.tagging?.completedIdentity
         != ArticleTagCatalog.identity(
           title: article.title, description: article.taggingDescription)
@@ -659,22 +772,41 @@ struct TaggingNotice: Identifiable {
     state.pendingIdentity = nil
     updated[index].tagging = state
     updated[index].tags = Array(result).sorted()
-    try commit(updated)
+    try commit(updated, deferred: updated[index].importBatchID != nil)
     if !TestMode.enabled { TaggingPreferences.lastError = nil }
     let added = Array(result.subtracting(existing)).sorted()
     let presentedInExtension =
       updated[index].sharedTransferID != nil
       && state.sharedFeedbackTransferID == updated[index].sharedTransferID
-    if !added.isEmpty && !presentedInExtension {
+    if updated[index].importBatchID != nil {
+      if currentImportIDs.contains(updated[index].id),
+        importTaggedIDs.insert(updated[index].id).inserted
+      {
+        importSummary?.tagged = importTaggedIDs.count
+        for tag in result { importSummary?.tagCounts[tag, default: 0] += 1 }
+      }
+    } else if !added.isEmpty && !presentedInExtension {
       taggingNotice = TaggingNotice(
         articleID: updated[index].id, title: updated[index].title, tags: added)
     }
   }
 
-  private func commit(_ updated: [SavedArticle]) throws {
-    try JSONEncoder().encode(updated).write(to: fileURL, options: .atomic)
+  /// User actions remain durable before returning. Regenerable metadata and
+  /// import tags share one short trailing write; any user action flushes them too.
+  private func commit(_ updated: [SavedArticle], deferred: Bool = false) throws {
+    if !deferred {
+      try JSONEncoder().encode(updated).write(to: fileURL, options: .atomic)
+      persistenceTask?.cancel()
+      persistenceTask = nil
+    } else if persistenceTask == nil {
+      persistenceTask = Task { [weak self] in
+        do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+        self?.flushPendingWrites()
+      }
+    }
     let removed = Set(articles.map(\.id)).subtracting(updated.map(\.id))
     articles = updated
+    libraryRevision += 1
     if let notice = taggingNotice,
       !updated.contains(where: { $0.id == notice.articleID && $0.saved })
     {
@@ -682,6 +814,20 @@ struct TaggingNotice: Identifiable {
     }
     for id in removed { try? FileManager.default.removeItem(at: downloadFile(id)) }
   }
+
+  /// Flush when leaving the foreground so a suspended app has no pending batch.
+  func flushPendingWrites() {
+    previewCommitTask?.cancel()
+    previewCommitTask = nil
+    flushPreviews()
+    guard persistenceTask != nil else { return }
+    persistenceTask?.cancel()
+    persistenceTask = nil
+    do { try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic) } catch {
+      errorMessage = "Could not save article changes: \(error.localizedDescription)"
+    }
+  }
+
 }
 
 enum ReadingListImport {
@@ -694,7 +840,12 @@ enum ReadingListImport {
         let host = url.host, host.contains(".")
       else { return nil }
       let title = try anchor.text().trimmingCharacters(in: .whitespacesAndNewlines)
-      return SavedArticle(url: url, title: title.isEmpty ? host : title)
+      var article = SavedArticle(url: url, title: title.isEmpty ? host : title)
+      let timestamp = try anchor.attr("add_date")
+      if let seconds = Double(timestamp), seconds.isFinite, seconds > 0 {
+        article.savedAt = Date(timeIntervalSince1970: seconds)
+      }
+      return article
     }
     guard !entries.isEmpty else {
       throw ArticleError.message(
@@ -703,6 +854,40 @@ enum ReadingListImport {
     }
     return entries
   }
+
+  /// A URL index makes merging linear in the list size. Existing saved dates
+  /// win; newly saved items use Chrome's date, with import time only as fallback.
+  static func merge(_ entries: [SavedArticle], into existing: [SavedArticle], now: Date = Date())
+    -> (articles: [SavedArticle], added: [SavedArticle], duplicates: Int)
+  {
+    var updated = existing
+    var indices: [URL: Int] = [:]
+    for (index, article) in existing.enumerated() { indices[article.url] = index }
+    var inserted: [SavedArticle] = []
+    var added: [SavedArticle] = []
+    var seen = Set<URL>()
+    let batchID = UUID()
+    for entry in entries {
+      guard seen.insert(entry.url).inserted else { continue }
+      if let index = indices[entry.url] {
+        guard !updated[index].saved else { continue }
+        updated[index].isSaved = true
+        updated[index].isArchived = false
+        updated[index].importBatchID = batchID
+        updated[index].savedAt = entry.savedAt ?? now
+        added.append(updated[index])
+      } else {
+        var article = entry
+        article.isSaved = true
+        article.importBatchID = batchID
+        article.savedAt = article.savedAt ?? now
+        inserted.append(article)
+        added.append(article)
+      }
+    }
+    return (inserted + updated, added, entries.count - added.count)
+  }
+
 }
 
 enum ArticleError: LocalizedError {
