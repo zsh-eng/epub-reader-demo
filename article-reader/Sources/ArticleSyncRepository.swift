@@ -15,7 +15,8 @@ enum ArticleSyncScope: Equatable, Sendable {
       case .account(let server, let id):
         guard var origin = URLComponents(url: server, resolvingAgainstBaseURL: false),
           origin.scheme?.lowercased() == "https", let host = origin.host, !host.isEmpty,
-          origin.user == nil, origin.password == nil, !id.isEmpty
+          origin.user == nil, origin.password == nil, !id.isEmpty,
+          origin.query == nil, origin.fragment == nil, origin.path.isEmpty || origin.path == "/"
         else { throw ArticleSyncError.invalidScope }
         origin.scheme = "https"
         origin.host = host.lowercased()
@@ -38,6 +39,28 @@ enum ArticleSyncError: Error, Equatable {
 /// and explicit tag edits. Credentials, cached-file paths and pending requests
 /// never enter these records.
 enum ArticleSyncCodec {
+  struct LocalState: Codable {
+    let id: UUID
+    let url: URL
+    let previewFailed: Bool
+    let downloadedAt: Date?
+    let sharedTransferID: UUID?
+    let feedbackTransferID: UUID?
+    let imageFileURL: URL?
+    let faviconFileURL: URL?
+
+    init(_ article: SavedArticle) {
+      id = article.id
+      url = article.url
+      previewFailed = article.previewFailed
+      downloadedAt = article.downloadedAt
+      sharedTransferID = article.sharedTransferID
+      feedbackTransferID = article.tagging?.sharedFeedbackTransferID
+      imageFileURL = article.imageURL?.isFileURL == true ? article.imageURL : nil
+      faviconFileURL = article.faviconURL?.isFileURL == true ? article.faviconURL : nil
+    }
+  }
+
   struct Metadata: Codable {
     let url: URL
     let title: String
@@ -84,7 +107,11 @@ enum ArticleSyncCodec {
   }
 
   static func hash(_ value: String) -> String {
-    SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+    let digits = Array("0123456789abcdef".utf8)
+    let bytes = SHA256.hash(data: Data(value.utf8)).flatMap { byte in
+      [digits[Int(byte >> 4)], digits[Int(byte & 0x0f)]]
+    }
+    return String(decoding: bytes, as: UTF8.self)
   }
 
   static func identity(_ url: URL) throws -> String { try hash(canonicalURL(url).absoluteString) }
@@ -223,33 +250,97 @@ enum ArticleSyncCodec {
     }
   }
 
+  static func project(_ journal: JournalSnapshot) throws -> [SavedArticle] {
+    var overlays: [SavedArticle] = []
+    for (id, encoded) in journal.localValues {
+      let state = try JSONDecoder().decode(LocalState.self, from: Data(encoded.utf8))
+      guard try identity(state.url) == id else { throw ArticleSyncError.invalidValue }
+      var article = SavedArticle(id: state.id, url: state.url, title: "")
+      article.previewFailed = state.previewFailed
+      article.downloadedAt = state.downloadedAt
+      article.sharedTransferID = state.sharedTransferID
+      var tagging = ArticleTaggingState()
+      tagging.sharedFeedbackTransferID = state.feedbackTransferID
+      article.tagging = tagging
+      article.imageURL = state.imageFileURL
+      article.faviconURL = state.faviconFileURL
+      overlays.append(article)
+    }
+    return try project(journal.rows, retaining: overlays)
+  }
+
+  static func transaction(replacing journal: JournalSnapshot, with articles: [SavedArticle]) throws
+    -> JournalMutation
+  {
+    var localValues = journal.localValues
+    var seen = Set<String>()
+    for article in articles {
+      let id = try identity(article.url)
+      guard seen.insert(id).inserted else { continue }
+      localValues[id] = try encode(LocalState(article))
+    }
+    for article in try project(journal.rows) {
+      let id = try identity(article.url)
+      if !seen.contains(id) { localValues[id] = nil }
+    }
+    return JournalMutation(
+      mutations: try mutations(replacing: journal.rows, with: articles), localValues: localValues)
+  }
+
   static func mutations(replacing rows: [String: SyncRecord], with articles: [SavedArticle]) throws
     -> [LocalMutation]
   {
-    var previous: [String: String] = [:]
-    for article in try project(rows) {
-      previous.merge(try self.values(article)) { first, _ in first }
+    let previous = try project(rows)
+    let previousByURL = Dictionary(uniqueKeysWithValues: previous.map { ($0.url, $0) })
+    var seen = Set<URL>()
+    var mutations: [LocalMutation] = []
+    for article in articles {
+      let url = try canonicalURL(article.url)
+      guard seen.insert(url).inserted else { continue }
+      let before = previousByURL[url]
+      // Most edits affect one article. Compare domain values before allocating
+      // JSON and hashing every family of every unchanged article.
+      if let before, try sameSyncedValues(before, article) { continue }
+      let previousValues = try before.map(values) ?? [:]
+      for (key, value) in try values(article) where previousValues[key] != value {
+        mutations.append(LocalMutation(key: key, value: value))
+      }
     }
-    var values: [String: String] = [:]
-    // Canonical duplicates collapse to the first source article deterministically.
-    var seen = Set<String>()
-    for article in articles where try seen.insert(identity(article.url)).inserted {
-      values.merge(try self.values(article)) { first, _ in first }
-    }
-    // Only changed families become local edits. Partial pull pages and missing
-    // sibling records must not be filled, deleted or re-uploaded by an unrelated edit.
-    var mutations = values.compactMap { key, value -> LocalMutation? in
-      guard previous[key] != value else { return nil }
-      return LocalMutation(key: key, value: value)
-    }
-    for key in previous.keys where values[key] == nil {
-      guard let record = rows[key], !record.isDeleted else { continue }
-      mutations.append(LocalMutation(key: key, value: record.value, isDeleted: true))
+    // Only complete, visible articles can be removed by a domain edit. Partial
+    // pull groups stay untouched until their remaining families arrive.
+    for article in previous where !seen.contains(article.url) {
+      let id = try identity(article.url)
+      for family in ["article", "library", "tags"] {
+        let key = family + "/" + id
+        guard let record = rows[key], !record.isDeleted else { continue }
+        mutations.append(LocalMutation(key: key, value: record.value, isDeleted: true))
+      }
     }
     return mutations.sorted { $0.key < $1.key }
   }
+
+  private static func sameSyncedValues(_ lhs: SavedArticle, _ rhs: SavedArticle) throws -> Bool {
+    guard lhs.title == rhs.title, lhs.subtitle == rhs.subtitle,
+      lhs.taggingText == rhs.taggingText,
+      sharedImageURL(lhs.imageURL) == sharedImageURL(rhs.imageURL),
+      sharedImageURL(lhs.faviconURL) == sharedImageURL(rhs.faviconURL),
+      lhs.saved == rhs.saved, (lhs.isArchived == true) == (rhs.isArchived == true),
+      (lhs.isRead == true) == (rhs.isRead == true), lhs.savedAt == rhs.savedAt,
+      lhs.lastVisitedAt == rhs.lastVisitedAt, lhs.importBatchID == rhs.importBatchID,
+      lhs.tagNames.sorted() == rhs.tagNames.sorted(),
+      (lhs.tagging?.automatic ?? []).sorted() == (rhs.tagging?.automatic ?? []).sorted(),
+      (lhs.tagging?.manual ?? lhs.tagNames).sorted()
+        == (rhs.tagging?.manual ?? rhs.tagNames).sorted(),
+      (lhs.tagging?.rejected ?? []).sorted() == (rhs.tagging?.rejected ?? []).sorted(),
+      lhs.tagging?.completedIdentity == rhs.tagging?.completedIdentity
+    else { return false }
+    let lhsGeneration = try lhs.tagging?.generation ?? localID(identity(lhs.url))
+    let rhsGeneration = try rhs.tagging?.generation ?? localID(identity(rhs.url))
+    return lhsGeneration == rhsGeneration
+  }
 }
 
+/// Staged integration: ArticleStore does not use this repository yet.
 /// This journal is authoritative: domain records and the outbox are persisted
 /// together before a mutation returns. The legacy JSON is only an import source.
 /// The app must keep one repository per scope, and guard UI publication with its
@@ -284,27 +375,26 @@ actor ArticleSyncRepository {
     // File existence is the migration marker. The complete source and its outbox
     // become durable in one replacement; a crash before that replacement retries.
     if !exists {
-      let mutations = try ArticleSyncCodec.mutations(
-        replacing: [:], with: legacyLocalArticles ?? [])
-      try await store.commit(mutations)
+      _ = try await store.transaction { journal in
+        try ArticleSyncCodec.transaction(replacing: journal, with: legacyLocalArticles ?? [])
+      }
     }
     return ArticleSyncRepository(scope: scope, directory: directory, store: store)
   }
 
-  func snapshot(retaining local: [SavedArticle] = []) async throws -> [SavedArticle] {
-    try ArticleSyncCodec.project(await store.snapshot(), retaining: local)
+  func snapshot() async throws -> [SavedArticle] {
+    try ArticleSyncCodec.project(await store.snapshotState())
   }
 
   func transaction(
-    retaining local: [SavedArticle] = [],
     _ edit: @Sendable (inout [SavedArticle]) throws -> Void
   ) async throws -> [SavedArticle] {
-    let rows = try await store.update { rows in
-      var articles = try ArticleSyncCodec.project(rows, retaining: local)
+    let journal = try await store.transaction { journal in
+      var articles = try ArticleSyncCodec.project(journal)
       try edit(&articles)
-      return try ArticleSyncCodec.mutations(replacing: rows, with: articles)
+      return try ArticleSyncCodec.transaction(replacing: journal, with: articles)
     }
-    return try ArticleSyncCodec.project(rows, retaining: local)
+    return try ArticleSyncCodec.project(journal)
   }
 
   /// Explicit account import copies only missing identities. A tombstone counts

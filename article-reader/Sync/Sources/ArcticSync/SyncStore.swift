@@ -13,6 +13,21 @@ public struct LocalMutation: Sendable {
   }
 }
 
+/// Local-only state shares the domain transaction but never enters the wire log.
+public struct JournalSnapshot: Sendable {
+  public let rows: [String: SyncRecord]
+  public let localValues: [String: String]
+}
+
+public struct JournalMutation: Sendable {
+  public let mutations: [LocalMutation]
+  public let localValues: [String: String]
+  public init(mutations: [LocalMutation], localValues: [String: String]) {
+    self.mutations = mutations
+    self.localValues = localValues
+  }
+}
+
 /// One actor owns each account's durable rows, versions, outbox and cursor.
 /// Domain updates and their upload intent are one atomic file replacement.
 /// Callers must keep one store instance per file and keep account files separate.
@@ -24,6 +39,7 @@ public actor SyncStore {
     var cursor: Int64 = 0
     var rows: [String: SyncRecord] = [:]
     var pending: [String: SyncChange] = [:]
+    var localValues: [String: String]?
   }
   private let file: URL
   private var state: State
@@ -43,11 +59,29 @@ public actor SyncStore {
     }
   }
   public func snapshot() -> [String: SyncRecord] { state.rows }
+  public func snapshotState() -> JournalSnapshot {
+    JournalSnapshot(rows: state.rows, localValues: state.localValues ?? [:])
+  }
+
+  public func transaction(
+    _ transform: @Sendable (JournalSnapshot) throws -> JournalMutation,
+    now: Date = Date()
+  ) throws -> JournalSnapshot {
+    let update = try transform(snapshotState())
+    var next = try applying(update.mutations, now: now)
+    next.localValues = update.localValues
+    try persist(next)
+    return snapshotState()
+  }
   public var pendingCount: Int { state.pending.count }
   public var cursor: Int64 { state.cursor }
 
   /// Import batches produce one file write. A failed write publishes no in-memory change.
   public func commit(_ mutations: [LocalMutation], now: Date = Date()) throws {
+    try persist(applying(mutations, now: now))
+  }
+
+  private func applying(_ mutations: [LocalMutation], now: Date) throws -> State {
     var next = state
     let millis = Int64(now.timeIntervalSince1970 * 1000)
     for mutation in mutations {
@@ -69,7 +103,7 @@ public actor SyncStore {
       next.rows[change.key] = SyncRecord(change: change, deviceId: next.deviceID, serverSeq: 0)
       next.pending[change.key] = change
     }
-    try persist(next)
+    return next
   }
 
   /// Domain read-modify-write runs without actor suspension. Concurrent local

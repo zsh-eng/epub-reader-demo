@@ -185,3 +185,60 @@ private actor DomainRemote: SyncRemote {
   #expect(await a.pendingCount == 0)
   #expect(await b.pendingCount == 0)
 }
+
+@Test func localReceiptsAndCachedFieldsShareDomainCommitButNeverUpload() async throws {
+  let directory = root()
+  defer { try? FileManager.default.removeItem(at: directory) }
+  var original = article()
+  original.downloadedAt = Date(timeIntervalSince1970: 1_700_000_500)
+  original.sharedTransferID = UUID()
+  original.imageURL = URL(filePath: "/private/fixture.png")
+  var state = ArticleTaggingState()
+  state.sharedFeedbackTransferID = original.sharedTransferID
+  original.tagging = state
+  let local = try await ArticleSyncRepository.open(
+    root: directory, scope: .local, legacyLocalArticles: [original])
+  let snapshot = try await local.snapshot()
+  #expect(snapshot[0].id == original.id)
+  #expect(snapshot[0].downloadedAt == original.downloadedAt)
+  #expect(snapshot[0].tagging?.sharedFeedbackTransferID == original.sharedTransferID)
+  let restored = try await ArticleSyncRepository.open(root: directory, scope: .local)
+  #expect(try await restored.snapshot()[0].imageURL == original.imageURL)
+  #expect(try await restored.snapshot()[0].downloadedAt == original.downloadedAt)
+  let account = try await ArticleSyncRepository.open(
+    root: directory, scope: .account(server: server, id: "alice"))
+  let copied = try await account.importLocalArticles(snapshot)
+  #expect(copied[0].downloadedAt == nil)
+  #expect(copied[0].sharedTransferID == nil)
+  #expect(copied[0].imageURL == nil)
+  #expect(copied[0].tagging?.sharedFeedbackTransferID == nil)
+  await #expect(throws: ArticleSyncError.localProfileCannotSync) {
+    try await local.sync(using: DomainRemote())
+  }
+}
+
+@Test func thousandArticleMigrationKeepsDatesAndOneArticleEdit() async throws {
+  let directory = root()
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let articles = (0..<1000).map { index in
+    var value = article("batch-\(index)")
+    value.savedAt = Date(timeIntervalSince1970: Double(1_700_000_000 + index))
+    return value
+  }
+  let started = ContinuousClock.now
+  let repository = try await ArticleSyncRepository.open(
+    root: directory, scope: .local, legacyLocalArticles: articles)
+  let migrated = ContinuousClock.now
+  let updated = try await repository.transaction { values in
+    let index = values.firstIndex { $0.url.lastPathComponent == "batch-500" }!
+    values[index].isArchived = true
+  }
+  let edited = ContinuousClock.now
+  #expect(updated.count == 1000)
+  #expect(updated.filter { $0.isArchived == true }.count == 1)
+  #expect(updated.first?.savedAt?.timeIntervalSince1970 == 1_700_000_999)
+  #expect(await repository.pendingCount == 3000)
+  print(
+    "Domain journal, Mac debug: 1,000-row migration \(started.duration(to: migrated)); one edit \(migrated.duration(to: edited))"
+  )
+}
