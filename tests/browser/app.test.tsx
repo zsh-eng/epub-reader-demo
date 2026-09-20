@@ -847,6 +847,68 @@ describe("graphical review", () => {
       .not.toBeInTheDocument();
   });
 
+  test("replaces a saved draft before completion and preserves a newer draft", async () => {
+    await page.viewport(1280, 800);
+    const { controller } = await mountApp();
+    const mutateNote = controller.mutateNote;
+    let completeSave!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      completeSave = resolve;
+    });
+    controller.mutateNote = async (mutation) => {
+      await mutateNote(mutation);
+      await completion;
+    };
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Find in diff");
+    await page.getByRole("option", { name: /Find in diff contents/ }).click();
+    await page.getByRole("textbox", { name: "Find in diff contents" }).fill("after");
+    await page.getByRole("button", { name: "Next match" }).click();
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("First saved comment");
+    try {
+      await page.getByRole("button", { name: "Save note", exact: true }).click();
+      await expect.poll(() => controller.getSnapshot().notes?.notes.length).toBe(1);
+      // The promise is still pending: the published note must replace its composer,
+      // rather than add another card that briefly doubles the annotation height.
+      await expect.element(page.getByText("First saved comment", { exact: true })).toBeVisible();
+      await expect
+        .element(page.getByRole("textbox", { name: "Review note text" }))
+        .not.toBeInTheDocument();
+      await page.getByRole("button", { name: "Add note", exact: true }).click();
+      await page.getByRole("textbox", { name: "Review note text" }).fill("A newer draft");
+      completeSave();
+      await completion;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      await expect
+        .element(page.getByRole("textbox", { name: "Review note text" }))
+        .toHaveValue("A newer draft");
+    } finally {
+      completeSave();
+    }
+  });
+
+  test("keeps an unsaved draft when its save fails", async () => {
+    await page.viewport(1280, 800);
+    const { controller } = await mountApp();
+    controller.mutateNote = async () => {
+      throw new Error("Cannot save this comment");
+    };
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Find in diff");
+    await page.getByRole("option", { name: /Find in diff contents/ }).click();
+    await page.getByRole("textbox", { name: "Find in diff contents" }).fill("after");
+    await page.getByRole("button", { name: "Next match" }).click();
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Keep my draft");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect.element(page.getByRole("alert")).toHaveTextContent("Cannot save this comment");
+    await expect
+      .element(page.getByRole("textbox", { name: "Review note text" }))
+      .toHaveValue("Keep my draft");
+    expect(controller.getSnapshot().notes?.notes).toHaveLength(0);
+  });
+
   test("advances each keyboard event when a navigation burst is batched", async () => {
     const manyCommits = Array.from({ length: 30 }, (_, index) => ({
       ...commits[0],

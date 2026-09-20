@@ -173,8 +173,15 @@ try {
   await page
     .getByRole("textbox", { name: "Review note text" })
     .fill("Frontend feedback from the browser");
+  if (process.env.MED_VALIDATION_SCREENSHOT)
+    await page.screenshot({ path: process.env.MED_VALIDATION_SCREENSHOT + ".draft.png" });
   await page.getByRole("button", { name: "Save note", exact: true }).click();
-  await page.getByText("Frontend feedback from the browser", { exact: true }).waitFor();
+  await page
+    .getByRole("article")
+    .getByText("Frontend feedback from the browser", { exact: true })
+    .waitFor();
+  if (process.env.MED_VALIDATION_SCREENSHOT)
+    await page.screenshot({ path: process.env.MED_VALIDATION_SCREENSHOT + ".saved.png" });
   const second = saved.targets[1];
   await api(`/api/reviews/${id}/targets/${second.id}/notes`, {
     expectedRevision: 0,
@@ -195,6 +202,14 @@ try {
   );
   const clipboard = await page.evaluate(() => navigator.clipboard.readText());
   for (const expected of [
+    "# Diff comments:",
+    "## User Comment 1",
+    "## User Comment 2",
+    "File: same.ts",
+    "Side: R",
+    "Lines: 2",
+    "Diff hunk:",
+    "Comment:",
     "Frontend feedback from the browser",
     "Backend feedback across repositories",
     "frontendAfter",
@@ -221,7 +236,10 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("2"),
   );
-  await page.getByText("Frontend feedback from the browser", { exact: true }).waitFor();
+  await page
+    .getByRole("article")
+    .getByText("Frontend feedback from the browser", { exact: true })
+    .waitFor();
   await header.getByRole("combobox", { name: "Review target" }).selectOption(second.id);
   await page.getByText("Backend feedback across repositories", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Clear all comments", exact: true }).click();

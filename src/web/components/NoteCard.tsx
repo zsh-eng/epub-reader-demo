@@ -2,7 +2,6 @@ import * as stylex from "@stylexjs/stylex";
 import { useEffect, useRef, useState } from "react";
 import type { Note, NoteInput, NoteMutation } from "../../shared/protocol";
 import { tokens, ui } from "../theme.stylex";
-import { Icon } from "./Icon";
 
 export interface NoteTarget {
   path: string;
@@ -12,7 +11,25 @@ export interface NoteTarget {
 }
 
 function lineLabel(target: NoteTarget) {
-  return `${target.side === "old" ? "Old" : "New"} · L${target.line}${target.endLine && target.endLine !== target.line ? `–${target.endLine}` : ""}`;
+  const side = target.side === "old" ? "L" : "R";
+  return target.endLine && target.endLine !== target.line
+    ? `lines ${side}${target.line} to ${side}${target.endLine}`
+    : `line ${side}${target.line}`;
+}
+
+function CommentHeading({ target, reply = false }: { target: NoteTarget; reply?: boolean }) {
+  return (
+    <div {...stylex.props(styles.heading)}>
+      <span aria-hidden="true" {...stylex.props(styles.avatar)}>
+        Y
+      </span>
+      <span>You</span>
+      <span {...stylex.props(ui.grow)} />
+      <span {...stylex.props(styles.location)}>
+        {reply ? "Reply" : `Local comment on ${lineLabel(target)}`}
+      </span>
+    </div>
+  );
 }
 
 function CommentEditor({
@@ -58,28 +75,33 @@ function CommentEditor({
         void submit();
       }}
     >
-      <textarea
-        ref={input}
-        value={text}
-        readOnly={saving}
-        rows={2}
-        aria-label={label}
-        placeholder={label === "Reply text" ? "Write a reply…" : "Leave a comment…"}
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-            void submit();
-          }
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            if (!inFlight.current) onCancel();
-          }
-        }}
-        {...stylex.props(styles.textarea)}
-      />
+      <div {...stylex.props(styles.editorBody)}>
+        <div aria-hidden="true" {...stylex.props(styles.content, styles.mirror)}>
+          {text + "\n"}
+        </div>
+        <textarea
+          ref={input}
+          value={text}
+          readOnly={saving}
+          rows={1}
+          aria-label={label}
+          placeholder={label === "Reply text" ? "Write a reply…" : "Leave a comment…"}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+              event.preventDefault();
+              event.stopPropagation();
+              void submit();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              if (!inFlight.current) onCancel();
+            }
+          }}
+          {...stylex.props(styles.content, styles.textarea)}
+        />
+      </div>
       {error && (
         <p role="alert" {...stylex.props(styles.error)}>
           {error}
@@ -122,14 +144,7 @@ export function NoteComposer({
 }) {
   return (
     <div {...stylex.props(styles.card, !!parentId && styles.embedded)}>
-      {!parentId && (
-        <div {...stylex.props(styles.heading)}>
-          <Icon name="note" size={13} />
-          <span>Comment</span>
-          <span {...stylex.props(ui.grow)} />
-          <span {...stylex.props(styles.location)}>{lineLabel(target)}</span>
-        </div>
-      )}
+      <CommentHeading target={target} reply={!!parentId} />
       <CommentEditor
         label={parentId ? "Reply text" : "Review note text"}
         submitLabel={parentId ? "Reply" : "Save note"}
@@ -143,10 +158,12 @@ export function NoteComposer({
 function ThreadMessage({
   note,
   reply = false,
+  onReply,
   onMutate,
 }: {
   note: Note;
   reply?: boolean;
+  onReply?: () => void;
   onMutate(mutation: NoteMutation): Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
@@ -169,35 +186,7 @@ function ThreadMessage({
   };
   return (
     <div {...stylex.props(reply && styles.reply)}>
-      <div {...stylex.props(styles.heading)}>
-        <span {...stylex.props(styles.author)}>You</span>
-        {reply ? (
-          <span {...stylex.props(styles.location)}>replied</span>
-        ) : (
-          <span {...stylex.props(styles.location)}>{lineLabel(note)}</span>
-        )}
-        <span {...stylex.props(ui.grow)} />
-        <button
-          type="button"
-          {...stylex.props(ui.button, styles.iconButton)}
-          title={reply ? "Edit reply" : "Edit comment"}
-          aria-label={reply ? "Edit reply" : "Edit"}
-          disabled={removing || editing}
-          onClick={() => setEditing(true)}
-        >
-          <Icon name="edit" size={12} />
-        </button>
-        <button
-          type="button"
-          {...stylex.props(ui.button, styles.iconButton)}
-          title={reply ? "Delete reply" : "Delete comment"}
-          aria-label={reply ? "Delete reply" : "Delete review note"}
-          disabled={removing || editing}
-          onClick={() => void remove()}
-        >
-          <Icon name="trash" size={12} />
-        </button>
-      </div>
+      <CommentHeading target={note} reply={reply} />
       {note.resolution && note.resolution !== "active" && (
         <p {...stylex.props(styles.stale)}>
           {note.resolution === "orphaned"
@@ -214,7 +203,39 @@ function ThreadMessage({
           onCancel={() => setEditing(false)}
         />
       ) : (
-        <p {...stylex.props(styles.body)}>{note.text}</p>
+        <>
+          <p {...stylex.props(styles.content)}>{note.text}</p>
+          <div {...stylex.props(styles.actions)}>
+            <span {...stylex.props(ui.grow)} />
+            {onReply && (
+              <button
+                type="button"
+                {...stylex.props(ui.button, styles.smallButton)}
+                onClick={onReply}
+              >
+                Reply
+              </button>
+            )}
+            <button
+              type="button"
+              {...stylex.props(ui.button, styles.smallButton)}
+              aria-label={reply ? "Edit reply" : "Edit"}
+              disabled={removing}
+              onClick={() => setEditing(true)}
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              {...stylex.props(ui.button, styles.smallButton)}
+              aria-label={reply ? "Delete reply" : "Delete review note"}
+              disabled={removing}
+              onClick={() => void remove()}
+            >
+              {removing ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </>
       )}
       {error && (
         <p role="alert" {...stylex.props(styles.error)}>
@@ -235,28 +256,47 @@ export function NoteCard({
   onMutate(mutation: NoteMutation): Promise<void>;
 }) {
   const [replying, setReplying] = useState(false);
+  const [pendingReply, setPendingReply] = useState<{
+    text: string;
+    previousIds: Set<string>;
+  } | null>(null);
+  const replySaved =
+    pendingReply &&
+    replies.some(
+      (reply) => !pendingReply.previousIds.has(reply.id) && reply.text === pendingReply.text,
+    );
   return (
     <article aria-label={`Comment thread at ${lineLabel(note)}`} {...stylex.props(styles.card)}>
-      <ThreadMessage key={note.id} note={note} onMutate={onMutate} />
+      <ThreadMessage
+        key={note.id}
+        note={note}
+        onMutate={onMutate}
+        onReply={replying ? undefined : () => setReplying(true)}
+      />
       {replies.map((reply) => (
         <ThreadMessage key={reply.id} note={reply} reply onMutate={onMutate} />
       ))}
-      {replying ? (
+      {replying && !replySaved && (
         <NoteComposer
           target={note}
           parentId={note.id}
-          onSave={(reply) => onMutate({ type: "add", note: reply })}
-          onCancel={() => setReplying(false)}
+          onSave={async (reply) => {
+            setPendingReply({
+              text: reply.text,
+              previousIds: new Set(replies.map((item) => item.id)),
+            });
+            try {
+              await onMutate({ type: "add", note: reply });
+            } catch (error) {
+              setPendingReply(null);
+              throw error;
+            }
+          }}
+          onCancel={() => {
+            setPendingReply(null);
+            setReplying(false);
+          }}
         />
-      ) : (
-        <button
-          type="button"
-          {...stylex.props(ui.button, styles.replyButton)}
-          onClick={() => setReplying(true)}
-        >
-          <Icon name="reply" size={12} />
-          Reply
-        </button>
       )}
     </article>
   );
@@ -267,77 +307,98 @@ const styles = stylex.create({
     boxSizing: "border-box",
     marginBlock: 8,
     marginInline: 10,
-    maxWidth: 660,
-    paddingBlock: 9,
-    paddingInline: 12,
+    maxWidth: 760,
+    padding: 16,
     borderWidth: 1,
     borderStyle: "solid",
-    borderColor: tokens.border,
-    borderRadius: 7,
+    borderColor: { default: tokens.border, ":focus-within": tokens.muted },
+    borderRadius: 12,
     color: tokens.text,
     backgroundColor: tokens.panel,
     fontFamily: tokens.ui,
-    fontSize: 12,
+    fontSize: 13,
   },
   embedded: {
     borderWidth: 0,
     borderTopWidth: 1,
     borderRadius: 0,
     margin: 0,
-    marginTop: 8,
+    marginTop: 12,
     paddingInline: 0,
     paddingBottom: 0,
   },
   heading: {
     display: "flex",
     alignItems: "center",
-    gap: 7,
-    minHeight: 22,
-    fontSize: 11,
+    gap: 10,
+    minHeight: 28,
     color: tokens.muted,
   },
-  author: { color: tokens.text, fontWeight: 600 },
-  location: { color: tokens.muted, fontSize: 10 },
-  textarea: {
-    width: "100%",
+  avatar: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 28,
+    flexShrink: 0,
+    borderRadius: "50%",
+    color: tokens.canvas,
+    backgroundColor: tokens.muted,
+    fontSize: 11,
+  },
+  location: { color: tokens.muted, fontSize: 12, textAlign: "right" },
+  // Use identical text geometry for drafts, edits, and saved comments.
+  content: {
     boxSizing: "border-box",
-    resize: "vertical",
-    minHeight: 58,
-    maxHeight: 260,
-    paddingBlock: 8,
+    minWidth: 0,
+    width: "100%",
+    minHeight: 76,
+    margin: 0,
+    paddingBlock: 14,
     paddingInline: 0,
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    fontFamily: tokens.ui,
+    fontSize: 13,
+    fontWeight: 400,
+    lineHeight: "22px",
+    letterSpacing: "normal",
+  },
+  editorBody: { display: "grid" },
+  mirror: { gridRowStart: 1, gridColumnStart: 1, visibility: "hidden", pointerEvents: "none" },
+  textarea: {
+    gridRowStart: 1,
+    gridColumnStart: 1,
+    height: "100%",
+    resize: "none",
+    overflow: "hidden",
     borderWidth: 0,
     borderRadius: 0,
     backgroundColor: "transparent",
     color: tokens.text,
-    fontFamily: tokens.ui,
-    fontSize: 12,
-    lineHeight: 1.65,
-    outline: { default: "none", ":focus-visible": `1px solid ${tokens.border}` },
-    outlineOffset: 3,
+    outline: "none",
   },
-  actions: { display: "flex", alignItems: "center", gap: 5, marginTop: 4 },
+  actions: { display: "flex", alignItems: "center", gap: 6, minHeight: 30 },
   hint: { fontSize: 10, color: tokens.faint },
-  smallButton: { minHeight: 25, paddingBlock: 2, fontSize: 11 },
+  smallButton: { minHeight: 30, paddingBlock: 3, fontSize: 12 },
   submit: {
-    minHeight: 25,
-    paddingBlock: 2,
-    paddingInline: 10,
-    fontSize: 11,
-    fontWeight: 500,
-    color: tokens.accent,
-    backgroundColor: { default: tokens.selected, ":hover": tokens.hover },
+    minHeight: 30,
+    paddingBlock: 3,
+    paddingInline: 14,
+    borderRadius: 9,
+    fontSize: 12,
+    fontWeight: 600,
+    color: tokens.canvas,
+    backgroundColor: tokens.text,
+    opacity: { default: 1, ":hover": 0.85, ":disabled": 0.45 },
   },
-  iconButton: { minHeight: 22, width: 22, padding: 3, opacity: { default: 0.7, ":hover": 1 } },
-  body: { whiteSpace: "pre-wrap", overflowWrap: "anywhere", lineHeight: 1.65, marginBlock: 5 },
   reply: {
-    marginTop: 8,
-    paddingTop: 7,
+    marginTop: 12,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopStyle: "solid",
     borderTopColor: tokens.border,
   },
-  replyButton: { minHeight: 24, paddingInline: 0, paddingBlock: 2, marginTop: 3, fontSize: 11 },
   stale: { color: tokens.warning, fontSize: 11, lineHeight: 1.6, marginBlock: 5 },
   error: { color: tokens.red, fontSize: 11, marginBlock: 5 },
 });

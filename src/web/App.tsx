@@ -9,7 +9,7 @@ import {
   type FileDiffMetadata,
 } from "@pierre/diffs/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { Comparison, Note } from "../shared/protocol";
+import type { Comparison, Note, NoteInput } from "../shared/protocol";
 import { useReviewController, type ReviewController } from "./data/controller";
 import { tokens, ui } from "./theme.stylex";
 import { ActionMenu, ChoiceSelect, CommandDialog, type ReviewCommand } from "./components/Controls";
@@ -295,6 +295,12 @@ export function App({
   const [findIndex, setFindIndex] = useState(0);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [draft, setDraft] = useState<NoteTarget | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<{
+    target: NoteTarget;
+    reviewId: string | undefined;
+    note: NoteInput;
+    existingIds: Set<string>;
+  } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [contextError, setContextError] = useState<string | null>(null);
@@ -375,6 +381,23 @@ export function App({
   const files = state.visibleFiles;
   const fileInfoById = useMemo(() => new Map(files.map((file) => [file.id, file.info])), [files]);
   const notes = state.notes?.notes ?? emptyNotes;
+  const submitted = pendingDraft;
+  // The controller publishes the saved note before its save promise completes.
+  // Replace that draft in the same render so the diff never reserves two cards.
+  const draftSaved =
+    submitted?.target === draft &&
+    submitted.reviewId === state.review?.id &&
+    notes.some(
+      (note) =>
+        !submitted.existingIds.has(note.id) &&
+        !note.parentId &&
+        note.path === submitted.note.path &&
+        note.side === submitted.note.side &&
+        note.line === submitted.note.line &&
+        (note.endLine ?? note.line) === (submitted.note.endLine ?? submitted.note.line) &&
+        note.text === submitted.note.text,
+    );
+  const visibleDraft = draftSaved ? null : draft;
   const selectedFile = files.find((file) => file.id === state.selectedFileId);
 
   useEffect(() => {
@@ -420,7 +443,7 @@ export function App({
     state.review?.id,
     state.notes?.revision,
     showNotes,
-    draft,
+    visibleDraft,
     [...collapsed],
   ]);
   const [itemVersion, setItemVersion] = useState({ key: itemKey, files, value: 0 });
@@ -447,11 +470,11 @@ export function App({
               metadata: { note },
             }))
         : [];
-      if (draft?.path === file.path)
+      if (visibleDraft?.path === file.path)
         annotations.push({
-          side: draft.side === "old" ? "deletions" : "additions",
-          lineNumber: draft.line,
-          metadata: { draft },
+          side: visibleDraft.side === "old" ? "deletions" : "additions",
+          lineNumber: visibleDraft.line,
+          metadata: { draft: visibleDraft },
         });
       return [
         {
@@ -464,7 +487,7 @@ export function App({
         },
       ];
     });
-  }, [files, notes, showNotes, draft, collapsed, currentVersion]);
+  }, [files, notes, showNotes, visibleDraft, collapsed, currentVersion]);
 
   useEffect(() => {
     diagnostics.record("comparison", {
@@ -1846,8 +1869,28 @@ export function App({
                     annotation.metadata?.draft ? (
                       <NoteComposer
                         target={annotation.metadata.draft}
-                        onSave={(note) => controller.mutateNote({ type: "add", note })}
-                        onCancel={() => setDraft(null)}
+                        onSave={async (note) => {
+                          const submission = {
+                            target: annotation.metadata!.draft!,
+                            reviewId: state.review?.id,
+                            note,
+                            existingIds: new Set(notes.map((entry) => entry.id)),
+                          };
+                          setPendingDraft(submission);
+                          try {
+                            await controller.mutateNote({ type: "add", note });
+                          } catch (error) {
+                            setPendingDraft((current) => (current === submission ? null : current));
+                            throw error;
+                          }
+                        }}
+                        onCancel={() => {
+                          const target = annotation.metadata!.draft!;
+                          setDraft((current) => (current === target ? null : current));
+                          setPendingDraft((current) =>
+                            current?.target === target ? null : current,
+                          );
+                        }}
                       />
                     ) : annotation.metadata?.note ? (
                       <NoteCard

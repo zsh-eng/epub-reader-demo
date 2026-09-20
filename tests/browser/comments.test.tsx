@@ -50,7 +50,9 @@ test("comment keyboard save retains failed text and blocks repeated submission",
       }}
     />,
   );
-  await expect.element(page.getByText("New · L1557–1560", { exact: true })).toBeVisible();
+  await expect
+    .element(page.getByText("Local comment on lines R1557 to R1560", { exact: true }))
+    .toBeVisible();
   await page.getByRole("textbox", { name: "Review note text" }).fill("Keep this feedback");
   await page.getByRole("button", { name: "Save note" }).click();
   await expect.element(page.getByRole("alert")).toHaveTextContent("Storage unavailable");
@@ -166,4 +168,70 @@ test("Pierre gutter comment action does not cover a four-digit line number", asy
   );
   await page.getByRole("button", { name: "Add note to line" }).click();
   expect(clicked).toBe(1);
+});
+
+test("comment cards keep their height when saving and editing wrapped text", async () => {
+  function Comment() {
+    const [saved, setSaved] = useState<Note | null>(null);
+    return saved ? (
+      <NoteCard
+        note={saved}
+        replies={[]}
+        onMutate={async (mutation) => {
+          if (mutation.type === "edit") setSaved({ ...saved, text: mutation.text });
+        }}
+      />
+    ) : (
+      <NoteComposer
+        target={target}
+        onSave={async (input) => setSaved({ ...note, ...input })}
+        onCancel={() => {}}
+      />
+    );
+  }
+  render(<Comment />);
+  mount!.style.width = "480px";
+  const text =
+    "Keep the repository and selected range with each comment. ".repeat(5) +
+    "\nInclude the captured source, too.";
+  await page.getByRole("textbox", { name: "Review note text" }).fill(text);
+  const draftHeight = mount!.getBoundingClientRect().height;
+  const input = mount!.querySelector("textarea")!;
+  expect(input.scrollHeight).toBeLessThanOrEqual(input.clientHeight + 1);
+  await page.getByRole("button", { name: "Save note" }).click();
+  await expect.element(page.getByRole("article")).toBeVisible();
+  expect(Math.abs(mount!.getBoundingClientRect().height - draftHeight)).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect.element(page.getByRole("textbox", { name: "Edit note text" })).toHaveValue(text);
+  expect(Math.abs(mount!.getBoundingClientRect().height - draftHeight)).toBeLessThanOrEqual(1);
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  expect(Math.abs(mount!.getBoundingClientRect().height - draftHeight)).toBeLessThanOrEqual(1);
+});
+
+test("a saved reply replaces its composer while the save promise is still pending", async () => {
+  let finish: (() => void) | undefined;
+  function Thread() {
+    const [replies, setReplies] = useState<Note[]>([]);
+    return (
+      <NoteCard
+        note={note}
+        replies={replies}
+        onMutate={async (mutation) => {
+          if (mutation.type !== "add") return;
+          setReplies([{ ...note, ...mutation.note, id: "reply" }]);
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+        }}
+      />
+    );
+  }
+  render(<Thread />);
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await page.getByRole("textbox", { name: "Reply text" }).fill("Keep this reply");
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect.element(page.getByRole("textbox", { name: "Reply text" })).not.toBeInTheDocument();
+  await expect.element(page.getByText("Keep this reply", { exact: true })).toBeVisible();
+  finish?.();
+  await expect.element(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
 });
