@@ -7,7 +7,7 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 `ArticleReader.entitlements`. The simulator build can use ad-hoc signing.
 
 - First launch offers three optional setup pages: Share, paste permission, and Jev automatic tagging. Replay them from **Sort and filter → Getting started**.
-- Copy an HTTP(S) link and enter Arctic. Choose **Open** in the clipboard banner above Search, then use the Reader bookmark to save.
+- Copy an HTTP(S) link and enter Arctic. Choose **Save** or **Open** in the clipboard banner above Search. Already-saved links offer only Open.
 - Cards use an inset Open Graph image, a source badge at the upper left, and a
   material caption at the bottom. A one-line title can include one subtitle line;
   longer titles use at most two balanced lines with an ellipsis and no subtitle. Links without images use a compact
@@ -102,9 +102,11 @@ associated-domain file.
   immutable completion event carries tags, so dismissal cannot lose the saved link
   or race with the main app consuming it. The app resumes incomplete work on entry.
 - **Copy link → open Arctic:** on app activation, detect a probable web URL,
-  then read it through the normal iOS paste-permission flow. A small Open/Dismiss
-  banner appears immediately. Metadata is fetched first; the banner shows its title
-  and thumbnail as they arrive. The image is cached before the copied page starts
+  then read it through the normal iOS paste-permission flow. A small clipboard
+  banner appears immediately. Pasted URLs have all query parameters removed, while
+  keeping their path and fragment. Unsaved links offer Save and Open; saved links
+  offer only Open. Save adds the link without opening Reader.
+  The banner shows its title and thumbnail as they arrive. The image is cached before the copied page starts
   its background preload. Paste, save and preload share one metadata request.
   Tapping Open takes priority and does not wait for the preview. Open uses that
   prepared browser; Open records History; the Reader bookmark saves the link; Dismiss does neither. Each clipboard

@@ -462,7 +462,17 @@ struct LibraryView: View {
     .scrollDismissesKeyboard(.interactively)
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if let url = clipboard.url, !searching, !selecting {
-        ClipboardBanner(url: url, preview: clipboard.preview) {
+        ClipboardBanner(
+          url: url, preview: clipboard.preview,
+          isSaved: store.articles.contains { $0.url == url && $0.saved }
+        ) {
+          do {
+            try store.add(url.absoluteString, preview: clipboard.preview)
+            clipboard.dismiss()
+          } catch {
+            store.errorMessage = error.localizedDescription
+          }
+        } open: {
           selected = browsers.open(url, store: store)
           clipboard.dismiss()
         } dismiss: {

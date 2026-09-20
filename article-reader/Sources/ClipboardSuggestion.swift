@@ -31,7 +31,12 @@ import UIKit
     guard patterns?.contains(.probableWebURL) == true, pasteboard.changeCount == change,
       let text = pasteboard.string, pasteboard.changeCount == change
     else { return }
-    url = SharedInbox.webURL(text)
+    guard let link = SharedInbox.webURL(text),
+      var components = URLComponents(url: link, resolvingAgainstBaseURL: false)
+    else { return }
+    // Use the same cleaned URL for the preview, preload, save, and open paths.
+    components.query = nil
+    url = components.url
   }
 
   func preparePreview() async {
@@ -51,6 +56,8 @@ import UIKit
 struct ClipboardBanner: View {
   let url: URL
   let preview: ArticlePreview?
+  let isSaved: Bool
+  let save: () -> Void
   let open: () -> Void
   let dismiss: () -> Void
   var body: some View {
@@ -65,9 +72,15 @@ struct ClipboardBanner: View {
         Text(preview?.title ?? "Copied link").font(ReaderTheme.sans(14, weight: .medium))
           .lineLimit(2).accessibilityIdentifier("clipboard-preview-title")
         Text(url.host ?? "Article").font(ReaderTheme.sans(12)).foregroundStyle(ReaderTheme.muted)
-          .lineLimit(1)
+          .lineLimit(1).accessibilityLabel(url.absoluteString)
+          .accessibilityIdentifier("clipboard-link")
       }
       Spacer()
+      if !isSaved {
+        Button("Save", action: save).font(ReaderTheme.sans(14, weight: .semibold))
+          .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+          .accessibilityIdentifier("save-copied-link")
+      }
       Button("Open", action: open).font(ReaderTheme.sans(14, weight: .semibold))
         .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
         .accessibilityIdentifier("open-copied-link")

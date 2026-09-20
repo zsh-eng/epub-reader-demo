@@ -282,7 +282,7 @@ final class ArticleReaderUITests: XCTestCase {
     app.launchEnvironment = [:]
     XCTAssertTrue(
       app.buttons["open-copied-link"].waitForExistence(timeout: 10), app.debugDescription)
-    XCTAssertFalse(app.buttons["save-copied-link"].exists)
+    XCTAssertTrue(app.buttons["save-copied-link"].exists)
     app.buttons["open-copied-link"].tap()
     let bookmark = app.buttons["reader-save"]
     XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
@@ -570,6 +570,50 @@ final class ArticleReaderUITests: XCTestCase {
     app.launchEnvironment = [:]
     app.launch()
     XCTAssertFalse(app.buttons["open-copied-link"].exists)
+  }
+
+  @MainActor func testPastedLinkStripsQueryAndOffersSaveOnlyWhenUnsaved() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard"]
+    app.launchEnvironment["TEST_CLIPBOARD"] =
+      "https://fixture.example/story?utm_source=first&ref=mail#section"
+    app.launch()
+    let save = app.buttons["save-copied-link"]
+    let open = app.buttons["open-copied-link"]
+    XCTAssertTrue(save.waitForExistence(timeout: 10))
+    XCTAssertTrue(open.exists)
+    XCTAssertEqual(app.staticTexts["clipboard-link"].label, "https://fixture.example/story#section")
+    capture(app, "clipboard-save-and-open")
+    save.tap()
+    XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["reader-toggle"].exists)
+
+    // A different query must resolve to the persisted saved article after restart.
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-test-clipboard"]
+    app.launchEnvironment["TEST_CLIPBOARD"] =
+      "https://fixture.example/story?utm_source=second#section"
+    app.launch()
+    XCTAssertTrue(open.waitForExistence(timeout: 10))
+    XCTAssertFalse(save.exists)
+    XCTAssertEqual(app.buttons.matching(identifier: "article-story").count, 1)
+    capture(app, "clipboard-saved-open-only")
+    open.tap()
+    let bookmark = app.buttons["reader-save"]
+    XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
+    XCTAssertEqual(bookmark.value as? String, "Saved")
+    bookmark.tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+
+    // Keeping a link in history does not count as saving it.
+    app.terminate()
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story?another=value#section"
+    app.launch()
+    XCTAssertTrue(save.waitForExistence(timeout: 10))
+    XCTAssertTrue(open.exists)
+    save.tap()
+    XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons.matching(identifier: "article-story").count, 1)
   }
 
   @MainActor func testNonURLClipboardDoesNotOfferOpen() throws {
