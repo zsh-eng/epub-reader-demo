@@ -3,6 +3,35 @@ import XCTest
 final class ReaderPerformanceUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
+  @MainActor func testSlowPublisherPreloadsCancelBeforeStartingMore() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-long-list",
+      "-hold-publisher-image", "-test-preloading",
+    ]
+    app.launch()
+    let started = app.staticTexts["publisher-loads-started"]
+    // At least a second pair must start, proving slow rows do not block the
+    // viewport forever. Requests stay held until WebKit cancels them.
+    let progressed = expectation(
+      for: NSPredicate { _, _ in (Int(started.label) ?? 0) >= 4 }, evaluatedWith: started)
+    wait(for: [progressed], timeout: 30)
+    let active = app.staticTexts["publisher-loads-active"]
+    let bounded = expectation(
+      for: NSPredicate { _, _ in (Int(active.label) ?? 99) <= 2 }, evaluatedWith: active)
+    wait(for: [bounded], timeout: 3)
+    capture(app, "bounded-slow-publisher-preloads")
+    // An expired speculative page must open as a new foreground load, never
+    // reuse a stopped document with a permanently disabled Reader action.
+    let requested = app.staticTexts["preload-requested"].label
+    let firstPath = requested.split(separator: ",").first.map(String.init) ?? "missing"
+    let first = app.buttons["article-" + firstPath]
+    XCTAssertTrue(first.exists)
+    first.tap()
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "cold")
+    XCTAssertTrue(app.webViews.staticTexts["Publisher navigation"].waitForExistence(timeout: 5))
+  }
+
   @MainActor func testBackgroundReleasesNeighborsAndPreservesOpenReader() {
     let app = XCUIApplication()
     app.launchArguments = [

@@ -97,15 +97,42 @@ enum ArticleRouting {
 }
 
 #if DEBUG
+  @MainActor @Observable final class PublisherLoadProbe {
+    static let shared = PublisherLoadProbe()
+    var started = 0
+    private final class WeakHandler {
+      weak var value: ReaderHeldImage?
+      init(_ value: ReaderHeldImage) { self.value = value }
+    }
+    private var handlers: [WeakHandler] = []
+    var active: Int { handlers.reduce(0) { $0 + ($1.value?.publisherTaskCount ?? 0) } }
+
+    fileprivate func register(_ handler: ReaderHeldImage) {
+      handlers.removeAll { $0.value == nil }
+      if !handlers.contains(where: { $0.value === handler }) {
+        handlers.append(WeakHandler(handler))
+      }
+      started += 1
+    }
+  }
+
   /// A held subresource lets UI tests distinguish DOM readiness from the load event.
   @MainActor private final class ReaderHeldImage: NSObject, WKURLSchemeHandler {
+    private var publisherTasks = Set<ObjectIdentifier>()
+    var publisherTaskCount: Int { publisherTasks.count }
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+      if urlSchemeTask.request.url?.host == "publisher-held" {
+        publisherTasks.insert(ObjectIdentifier(urlSchemeTask))
+        PublisherLoadProbe.shared.register(self)
+      }
       urlSchemeTask.didReceive(
         URLResponse(
           url: urlSchemeTask.request.url!, mimeType: "image/png", expectedContentLength: -1,
           textEncodingName: nil))
     }
-    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+      publisherTasks.remove(ObjectIdentifier(urlSchemeTask))
+    }
   }
 #endif
 
@@ -126,6 +153,8 @@ enum ArticleRouting {
         if TestMode.enabled {
           return renderedAppearance
             + (testArtworkHeld ? ", artwork held" : "")
+            + (ProcessInfo.processInfo.arguments.contains("-hold-publisher-image")
+              && webView.isLoading ? ", publisher resource pending" : "")
             + (ProcessInfo.processInfo.arguments.contains("-hold-reader-body-image")
               && readerView.isLoading ? ", resource load pending" : "")
         }
@@ -173,7 +202,13 @@ enum ArticleRouting {
     cacheIdentity = url
     downloadURL = url
     self.store = store
-    webView = WKWebView(frame: .zero)
+    let websiteConfiguration = WKWebViewConfiguration()
+    #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-hold-publisher-image") {
+        websiteConfiguration.setURLSchemeHandler(ReaderHeldImage(), forURLScheme: "arctic-test")
+      }
+    #endif
+    webView = WKWebView(frame: .zero, configuration: websiteConfiguration)
     let configuration = WKWebViewConfiguration()
     configuration.defaultWebpagePreferences.allowsContentJavaScript = false
     configuration.websiteDataStore = .nonPersistent()
@@ -273,6 +308,20 @@ enum ArticleRouting {
       return
     }
     if let fixture = TestMode.fixture(for: url) {
+      #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-hold-publisher-image"),
+          let html = try? String(contentsOf: fixture, encoding: .utf8)
+        {
+          // A never-finishing image outside the article distinguishes publisher
+          // DOM readiness from didFinish without delaying Reader's own resources.
+          webView.loadHTMLString(
+            html.replacingOccurrences(
+              of: "</body>",
+              with: "<img src='arctic-test://publisher-held' width='1' height='1' alt=''></body>"),
+            baseURL: fixture)
+          return
+        }
+      #endif
       webView.loadFileURL(fixture, allowingReadAccessTo: fixture.deletingLastPathComponent())
     } else {
       webView.load(URLRequest(url: ArticleRouting.automatic(url)))
@@ -996,9 +1045,11 @@ struct WebSurface: UIViewRepresentable {
     trim()
     let local = warmURLs.filter { store.downloadedFile(for: $0) != nil }
     let ordered = local + warmURLs.filter { !local.contains($0) }
-    var pending: [(ArticleBrowser, Date)] = browsers.values.filter {
-      !$0.readerReady && $0.errorMessage == nil
-    }.map { ($0, Date()) }
+    var pending: [(url: URL, browser: ArticleBrowser, began: Date)] = browsers.compactMap {
+      url, browser in
+      guard url != active, !browser.readerReady, browser.errorMessage == nil else { return nil }
+      return (url, browser, Date())
+    }
     for url in ordered {
       guard !Task.isCancelled, version == preloadVersion else { return }
       if let browser = browsers[url], browser.cacheIdentity == url,
@@ -1006,11 +1057,18 @@ struct WebSurface: UIViewRepresentable {
       {
         continue
       }
-      // A timeout releases a queue slot, not the document. Slow publishers must
-      // not prevent another visible row from preparing.
+      // Retire a stalled speculative document before opening its slot. Merely
+      // forgetting its deadline leaves every old publisher request running.
+      // A later tap starts a fresh foreground load without this time limit.
       while pending.count >= 2 {
-        pending.removeAll {
-          $0.0.readerReady || $0.0.errorMessage != nil || Date().timeIntervalSince($0.1) > 8
+        guard !Task.isCancelled, version == preloadVersion else { return }
+        pending.removeAll { item in
+          if item.browser.readerReady || item.browser.errorMessage != nil { return true }
+          guard Date().timeIntervalSince(item.began) > 8 else { return false }
+          guard item.url != active, browsers[item.url] === item.browser else { return true }
+          item.browser.stop()
+          browsers.removeValue(forKey: item.url)
+          return true
         }
         if pending.count < 2 { break }
         do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
@@ -1026,7 +1084,7 @@ struct WebSurface: UIViewRepresentable {
       let browser = ArticleBrowser(
         url: url, store: store, downloadedFile: store.downloadedFile(for: url))
       browsers[url] = browser
-      pending.append((browser, Date()))
+      pending.append((url, browser, Date()))
       await Task.yield()
     }
   }

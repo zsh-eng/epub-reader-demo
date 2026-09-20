@@ -175,6 +175,16 @@ struct LibraryView: View {
             .accessibilityIdentifier("preload-requested")
             Text(browsers.readyReaderURLs.map(\.lastPathComponent).joined(separator: ","))
             .accessibilityIdentifier("preload-ready")
+            if ProcessInfo.processInfo.arguments.contains("-hold-publisher-image") {
+              Text(String(PublisherLoadProbe.shared.started))
+              .accessibilityIdentifier("publisher-loads-started")
+              // WebKit can retire a handler without a final stop callback.
+              // Poll weak owners, rather than treating missing callbacks as leaks.
+              TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                Text(String(PublisherLoadProbe.shared.active))
+                .accessibilityIdentifier("publisher-loads-active")
+              }
+            }
             Text(String(backgroundBrowserCount))
             .accessibilityIdentifier("background-browser-count")
             Text(browsers.lastOpenState)

@@ -152,3 +152,36 @@ performance validation. Do not imply the tests prove iPhone responsiveness.
   Use a deterministic held-resource native fixture to measure before changing
   that policy. Avoid clearing prepared HTML or breaking Website mode merely to
   enforce an incidental request count. All agents are idle.
+
+## 00:41 heartbeat — stalled publisher preparation
+
+- Confirmed the separate uncached extraction limitation with a held publisher
+  image: Reader remained disabled beyond 20 seconds in
+  `/tmp/arctic-publisher-before.xcresult`. No early-DOM extraction was shipped:
+  dynamic pages can pass the extractor's minimum length with partial text, and
+  wrapper/iframe pages may not yet contain the article. A future change needs
+  partial-content, final-load retry and stale-navigation tests before activation.
+- Fixed the queue timeout path instead: stop and remove an expired speculative
+  browser before opening its preparation slot. The active/last opened Reader
+  is exempt; tapping an expired row starts a fresh foreground load. Recheck
+  queue version/cancellation inside the suspended loop before retiring anything.
+- The native fixture holds a publisher image indefinitely. Its probe uses weak
+  live handler owners. A global starts-minus-stop counter was inaccurate:
+  WebKit can discard a handler without calling its public stop callback when
+  the Cocoa view is gone. No blank-document teardown change was retained.
+  Primary evidence: WebKit Source/WebKit/UIProcess/Cocoa/WebURLSchemeHandlerCocoa.mm
+  and Source/WebKit/UIProcess/WebURLSchemeHandler.cpp in the WebKit GitHub repo.
+- This bounds stalled speculative documents, not all image requests or the
+  user's foreground page. The final two requests may stay pending; normal
+  viewport eviction/background release still owns their lifetime.
+- `/tmp/arctic-publisher-live-owners.xcresult`: three native checks pass:
+  held publishers progress to another pair while live held owners stay at two;
+  tapping the expired first row starts a cold working Website; cached viewport
+  preparation/search still reuses HTML; background/resume preserves Reader.
+  Redirect/save/offline identity also passed in the intermediate suite; its
+  unrelated held-resource counter failure was fixed as described above.
+  Build, strict Swift formatting and diff whitespace checks pass.
+- No sync activation, migration, deployment, API credentials or real user
+  content were involved. All agents are idle. The remaining uncached extraction
+  delay is measured and documented above; do not claim it was fixed by bounding
+  the speculative queue or change it without the dynamic-content regressions.
