@@ -24,7 +24,7 @@ const { values, positionals } = parseArgs({
 });
 if (values.help) {
   console.log(
-    "Usage: med-diff [repository] [--port <port>] [--no-open]\n       med-diff --patch <path|-> [--no-open]\n       med-diff --files <old> <new> [--no-open]\n       med-diff --setup-search\n\nOpen a local, read-only review. Use --patch - to read a patch from stdin.\nSetup search builds pinned Zoekt binaries once; it requires Go during setup only.",
+    "Usage: med-diff [repository ...] [--port <port>] [--no-open]\n       med-diff --patch <path|-> [--no-open]\n       med-diff --files <old> <new> [--no-open]\n       med-diff --setup-search\n\nOpen a local, read-only review. Use --patch - to read a patch from stdin.\nSetup search builds pinned Zoekt binaries once; it requires Go during setup only.",
   );
 } else if (values["setup-search"]) {
   console.log("Setting up pinned Zoekt search tools…");
@@ -69,6 +69,7 @@ if (values.help) {
   };
   const host = await startHost({
     repo: initialComparison ? process.cwd() : resolve(positionals[0] ?? process.cwd()),
+    ...(!initialComparison ? { repos: positionals.slice(1).map((path) => resolve(path)) } : {}),
     ...(port !== undefined ? { port } : {}),
     ...(initialComparison ? { initialComparison } : {}),
     allowedInputPaths,
