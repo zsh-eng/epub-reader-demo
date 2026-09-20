@@ -1,6 +1,6 @@
 # Read-only visual selection and copying
 
-Implemented for full-file views. Enable Vim navigation from the command palette.
+Implemented for full-file views. Vim navigation is enabled by default; the command palette can toggle it.
 
 | Command                         | Result                                                                                               |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- |

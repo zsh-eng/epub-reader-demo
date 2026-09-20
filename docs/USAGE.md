@@ -71,7 +71,11 @@ The executable uses Node, including when launched through `bunx`. The package se
 2. Select a changed path to move to it in the diff stream. Double-click the path to open its current file in the selected worktree.
 3. Use the top branch tabs or `+` to select another branch. A branch with a worktree opens that directory; a branch without one opens committed content.
 4. Use the file picker or right Files sidebar to open unchanged files. A preview does not replace your current review until you open it.
-5. Select text lines in a full file and toggle blame for their history. Open the command palette to change theme or find other actions.
+5. Toggle blame in a full file to show author and commit details beside the line numbers. Visible lines preload in the background after a file opens. Toggling blame reuses this cache. Hover a label for 250 ms to see the date and commit message; move to nearby labels for immediate updates. Open the command palette to change theme or find other actions.
+
+Drag the gutter **+** across lines to start a note for the whole range. You can also drag over line numbers, or click the first number and Shift-click the last number on the same diff side, then click **Add note**. The saved comment keeps the full range.
+
+Shift-click another commit to select an inclusive range. The comparison runs from the oldest selected commit's first parent to the newest selected commit. A root commit uses the empty tree. This compares endpoint snapshots; it does not add individual patches across merged branches. Shift+Up/Down extends the selection; a plain click resets it.
 
 | Action                            | macOS        | Omarchy Linux             |
 | --------------------------------- | ------------ | ------------------------- |
@@ -84,7 +88,7 @@ The executable uses Node, including when launched through `bunx`. The package se
 | Toggle left / right sidebar       | `⌘B` / `⌘⇧B` | `Ctrl+B` / `Ctrl+Shift+B` |
 | Resume search                     | `⌥R`         | `Alt+R`                   |
 | Keep preview tab                  | `⌥P`         | `Alt+P`                   |
-| Toggle selected-line blame        | `⌥B`         | `Alt+B`                   |
+| Toggle gutter blame               | `⌥B`         | `Alt+B`                   |
 | Close current file                | `⌥W`         | `Alt+W`                   |
 | Close all files in this workspace | `⌥⇧W`        | `Alt+Shift+W`             |
 | Close other files                 | `⌥⇧O`        | `Alt+Shift+O`             |
@@ -99,14 +103,15 @@ In-file symbol search (`⌘O`) opens a narrow palette over the left sidebar. Arr
 
 Symbol extraction uses Universal Ctags. Install it with `brew install universal-ctags` on macOS or `sudo pacman -S ctags` on Omarchy. The project index and individual file extraction share this binary. Project symbols require the optional Zoekt setup above. After updating from a text-only search build, run `node dist/cli.js --setup-search` again to install the updated helper. Existing text-only indexes rebuild when symbol extraction is enabled. Language coverage follows the installed Ctags parsers: Universal Ctags 6.2.1 covers TypeScript and C/C++, but does not include a Zig parser. Text search still works for Zig.
 
-Use the command palette to **Enable Vim navigation in files**. This preference is saved. Files take keyboard focus when opened, ready for normal-mode navigation:
+Vim navigation is enabled by default. Use the command palette to disable or enable it. This preference is saved for the current browser address. Files take keyboard focus when opened, ready for normal-mode navigation:
 
 - `h j k l`, `w b e`, `0 ^ $`, and counts such as `10j`.
+- `gd` finds declarations for the identifier at the cursor. It first checks the current file with Universal Ctags, then the ctags-backed project index. Multiple candidates open a picker; project results open their indexed commit. Ctags does not resolve types or imports like an LSP.
 - `gg`, `G`, `42G`, `{` / `}` for paragraphs, and `Ctrl+D` / `Ctrl+U` for half pages.
 - `f` / `F` / `t` / `T` followed by a character, `;` / `,` to repeat, and `Shift+A` to move to the end of the line.
 - `:123` then Enter to jump to line 123. Escape cancels; a number past the end goes to the last line.
 - `zz` / `zt` / `zb` to place the current line at the middle / top / bottom of the view. These keep the cursor column. `zt` and `zb` leave four lines of space from the edge.
-- `/` / `?` for live forward/backward file search, `n` / `N` for matches, and `*` / `#` for the word at the cursor. Lowercase queries ignore case; uppercase letters enable case-sensitive matching. Enter accepts the preview. Escape cancels a preview and clears highlights; in normal mode it clears highlights while keeping the search.
+- `/` / `?` for live forward/backward file search, `n` / `N` for matches, and `*` / `#` for the word at the cursor. Lowercase queries ignore case; uppercase letters enable case-sensitive matching. The current match uses the theme accent and an underline; other matches use the search color. Enter accepts the preview. Escape cancels a preview and clears highlights; in normal mode it clears highlights while keeping the search.
 
 The file remains read-only. While a Vim file pane has focus, `?` searches backward; `⌘K` / `Ctrl+K` still opens commands. Palettes and text inputs keep their normal keyboard behavior. Symbol search does not require Vim mode.
 
@@ -137,6 +142,7 @@ History follows the selected worktree's HEAD ancestry. Shallow clones can lack t
 
 This is a browser app backed by a local server. Native desktop packaging, shared persistent review notes, and complete Hunk feature parity are not implemented.
 
+- [Search, definitions, commit ranges, and gutter blame](validation/REVIEW_NAVIGATION.md)
 - [Hover prefetch, compact UI, and render diagnostics](validation/HOVER_AND_RENDERING.md)
 - [Navigation validation and screenshots](validation/NAVIGATION.md)
 - [Zoekt benchmark: setup cost, search latency, and reproducible harness](validation/ZOEKT.md)

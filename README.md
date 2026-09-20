@@ -10,8 +10,8 @@ A local Git review app for macOS and Omarchy Linux. Review changes, explore bran
 - **Explore branches and worktrees.** Switch between branch tabs, browse commit history, and inspect working changes. Read branches without a worktree directly from Git.
 - **Read full files.** Browse unchanged and untracked files, keep files in tabs, and open historical versions from a diff.
 - **Find code.** Search file names or committed file contents with a code preview. Jump to symbols in a file or across a project. Resume your last search.
-- **See who changed a line.** Select lines in a full file to see the author, commit, date, and commit message.
-- **Use the keyboard.** Open the command palette, find shortcuts, or enable Vim navigation for movement, search, and text selection.
+- **See who changed a line.** Toggle gutter blame in a full file to see the author and commit. Hover a label for the date and commit message.
+- **Use the keyboard.** Open the command palette, find shortcuts, or use Vim navigation for movement, search, and text selection.
 - **Choose a theme.** Preview Vitesse, Rosé Pine, Tokyo Night, and Graphite themes before applying one.
 
 ![File search with matching paths and a code preview](docs/validation/picker-preview.png)
@@ -50,7 +50,7 @@ On Linux, use `Ctrl` in place of `⌘`.
 | Symbols in the project     | `⌘⇧O`    |
 | All commands and shortcuts | `?`      |
 
-Enable Vim navigation from the command palette. In a focused Vim file view, `?` searches backward; use `⌘K` to open commands.
+Vim navigation is enabled by default; the command palette can toggle it. In a focused Vim file view, `?` searches backward; use `⌘K` to open commands.
 
 See the [usage guide](docs/USAGE.md) for all shortcuts, search setup, patch and file inputs, and limits.
 
