@@ -163,6 +163,9 @@ struct LibraryView: View {
           HStack {
             Text(store.isTagging ? "tagging" : "idle")
             .accessibilityIdentifier("tagging-test-state")
+            Text(String(store.taggingRequestCount)).accessibilityIdentifier("tagging-request-count")
+            Text(String(store.preparedTaggingCount)).accessibilityIdentifier(
+              "tagging-prepared-count")
             if ProcessInfo.processInfo.arguments.contains("-test-tagging-held") {
               Button("Finish tagging") { store.finishFixtureTagging() }
               .disabled(!store.isFixtureTaggingHeld)
@@ -211,7 +214,13 @@ struct LibraryView: View {
     .onChange(of: store.allTags) { _, tags in
       if case .tag(let name) = folder, !tags.contains(name) { folder = .saved }
     }
-    .task(id: clipboard.url) { await clipboard.preparePreview() }
+    .task(id: clipboard.url) {
+      await clipboard.preparePreview()
+      guard !Task.isCancelled, let url = clipboard.url, let preview = clipboard.preview else {
+        return
+      }
+      store.prepareTagging(url: url, preview: preview)
+    }
     .task(id: preloadURLs) { await browsers.preload(preloadURLs, store: store) }
     .onReceive(
       NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)

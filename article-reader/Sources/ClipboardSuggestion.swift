@@ -71,6 +71,7 @@ struct ClipboardBanner: View {
       VStack(alignment: .leading, spacing: 3) {
         Text(preview?.title ?? "Copied link").font(ReaderTheme.sans(14, weight: .medium))
           .lineLimit(2).accessibilityIdentifier("clipboard-preview-title")
+          .accessibilityValue(TestMode.enabled ? (preview?.taggingText ?? "") : "")
         Text(url.host ?? "Article").font(ReaderTheme.sans(12)).foregroundStyle(ReaderTheme.muted)
           .lineLimit(1).accessibilityLabel(url.absoluteString)
           .accessibilityIdentifier("clipboard-link")

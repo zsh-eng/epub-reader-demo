@@ -7,6 +7,8 @@ struct SavedArticle: Identifiable, Codable {
   let url: URL
   var title: String
   var subtitle = ""
+  var taggingText: String?
+  var taggingDescription: String { taggingText ?? subtitle }
   var imageURL: URL?
   var faviconURL: URL?
   var previewFailed = false
@@ -53,16 +55,29 @@ struct TaggingNotice: Identifiable {
   private var taggingDeferred = Set<UUID>()
   private var taggingWaitingForForeground = false
   private var fixtureTaggingFailed = false
-  private var fixtureTaggingContinuation: CheckedContinuation<Void, Never>?
-  var isTagging: Bool { taggingTask != nil }
-  var isFixtureTaggingHeld: Bool { fixtureTaggingContinuation != nil }
+  private var fixtureTaggingContinuations: [CheckedContinuation<Void, Never>] = []
+  // Preview requests are memory-only. Save reuses the same request and remains
+  // the only point that can persist a link or its automatic tags.
+  private struct PreparedTagging {
+    let id = UUID()
+    let task: Task<[String], Error>
+  }
+  private var preparedTagging: [String: PreparedTagging] = [:]
+  private var preparedOrder: [String] = []
+  private var speculativeRequests = 0
+  #if DEBUG
+    private(set) var taggingRequestCount = 0
+    private(set) var preparedTaggingCount = 0
+  #endif
+  var isTagging: Bool { taggingTask != nil || speculativeRequests > 0 }
+  var isFixtureTaggingHeld: Bool { !fixtureTaggingContinuations.isEmpty }
 
   /// UI tests release an in-flight response only after the edit under test.
   func finishFixtureTagging() {
     guard fixtureTagging else { return }
-    let continuation = fixtureTaggingContinuation
-    fixtureTaggingContinuation = nil
-    continuation?.resume()
+    let continuations = fixtureTaggingContinuations
+    fixtureTaggingContinuations.removeAll()
+    continuations.forEach { $0.resume() }
   }
   private let fileURL: URL
   private let downloads: URL
@@ -280,6 +295,7 @@ struct TaggingNotice: Identifiable {
         if let subtitle = transfer.subtitle, updated[index].subtitle.isEmpty {
           updated[index].subtitle = subtitle
         }
+        if let text = transfer.taggingText { updated[index].taggingText = text }
         try commit(updated)
         let article = updated[index]
         Task { await refreshPreview(article) }
@@ -297,6 +313,7 @@ struct TaggingNotice: Identifiable {
           var updated = articles
           if updated[index].title == result.url.host { updated[index].title = result.title }
           if updated[index].subtitle.isEmpty { updated[index].subtitle = result.subtitle ?? "" }
+          if let text = result.taggingText { updated[index].taggingText = text }
           var state = updated[index].tagging ?? ArticleTaggingState()
           if result.feedbackPresented == true {
             state.sharedFeedbackTransferID = result.id
@@ -304,7 +321,7 @@ struct TaggingNotice: Identifiable {
           updated[index].tagging = state
           try commit(updated)
           let identity = ArticleTagCatalog.identity(
-            title: updated[index].title, description: updated[index].subtitle)
+            title: updated[index].title, description: updated[index].taggingDescription)
           // Keep a newer main-app result, but retain the extension's receipt even
           // when Safari and the fetched page supplied different metadata.
           if taggingAllowed, result.categoryVersion == ArticleTagCatalog.version,
@@ -433,6 +450,8 @@ struct TaggingNotice: Identifiable {
   }
 
   func retagSavedArticles() {
+    preparedTagging.removeAll()
+    preparedOrder.removeAll()
     var updated = articles
     for index in updated.indices where updated[index].saved {
       var state = updated[index].tagging ?? ArticleTaggingState()
@@ -458,17 +477,115 @@ struct TaggingNotice: Identifiable {
     return TaggingPreferences.enabled && !TaggingPreferences.credentialFailure
   }
 
+  /// Start once metadata is ready, before Save. Dismissal can discard the UI
+  /// without writing a link; an eventual Save can still reuse this bounded work.
+  func prepareTagging(url: URL, preview: ArticlePreview) {
+    guard taggingAllowed, !articles.contains(where: { $0.url == url && $0.saved }) else { return }
+    let revision = TestMode.enabled ? "" : TaggingPreferences.credentialRevision
+    speculativeRequests += 1
+    Task { [weak self] in
+      guard let self else { return }
+      defer { self.speculativeRequests -= 1 }
+      do {
+        _ = try await self.requestTags(
+          title: preview.title, description: preview.taggingText, credentialRevision: revision)
+      } catch {
+        guard self.taggingAllowed,
+          TestMode.enabled || revision == TaggingPreferences.credentialRevision
+        else { return }
+        if !TestMode.enabled, case JevError.invalidKey = error {
+          TaggingPreferences.credentialFailure = true
+        }
+        if !TestMode.enabled { TaggingPreferences.lastError = error.localizedDescription }
+      }
+    }
+  }
+
+  private func requestTags(title: String, description: String, credentialRevision: String)
+    async throws -> [String]
+  {
+    let identity = ArticleTagCatalog.identity(title: title, description: description)
+    let key = credentialRevision + ":" + identity
+    if let entry = preparedTagging[key] { return try await entry.task.value }
+    let task = Task<[String], Error> {
+      guard self.taggingAllowed,
+        TestMode.enabled || credentialRevision == TaggingPreferences.credentialRevision
+      else { throw CancellationError() }
+      #if DEBUG
+        self.taggingRequestCount += 1
+      #endif
+      if self.fixtureTagging {
+        // Exercise the same shared request and durable result path without a key.
+        if ProcessInfo.processInfo.arguments.contains("-test-tagging-held") {
+          await withCheckedContinuation { self.fixtureTaggingContinuations.append($0) }
+        }
+        if ProcessInfo.processInfo.arguments.contains("-test-tagging-delayed") {
+          try await Task.sleep(for: .seconds(5))
+        }
+        if ProcessInfo.processInfo.arguments.contains("-test-tagging-failure")
+          && !self.fixtureTaggingFailed
+        {
+          self.fixtureTaggingFailed = true
+          throw URLError(.notConnectedToInternet)
+        }
+        await Task.yield()
+        return ["Engineering", "Design & craft"]
+      }
+      guard let apiKey = try JevKeychain.read() else {
+        throw ArticleError.message("Add your Jev API key in Settings to start tagging.")
+      }
+      return try await JevClient.classify(title: title, description: description, apiKey: apiKey)
+    }
+    let entry = PreparedTagging(task: task)
+    preparedTagging[key] = entry
+    preparedOrder.append(key)
+    if preparedOrder.count > 8 { preparedTagging[preparedOrder.removeFirst()] = nil }
+    do {
+      let tags = try await task.value
+      guard taggingAllowed,
+        TestMode.enabled || credentialRevision == TaggingPreferences.credentialRevision
+      else {
+        throw CancellationError()
+      }
+      #if DEBUG
+        preparedTaggingCount += 1
+      #endif
+      return tags
+    } catch {
+      if preparedTagging[key]?.id == entry.id {
+        preparedTagging[key] = nil
+        preparedOrder.removeAll { $0 == key }
+      }
+      throw error
+    }
+  }
+
   private func scheduleTagging() {
     guard taggingAllowed, !taggingWaitingForForeground, taggingTask == nil else { return }
     taggingTask = Task { [weak self] in
       guard let self else { return }
       defer { self.taggingTask = nil }
-      while self.taggingAllowed, let article = self.nextTaggingArticle() {
+      while self.taggingAllowed, var article = self.nextTaggingArticle() {
         let credentialRevision = TestMode.enabled ? "" : TaggingPreferences.credentialRevision
         do {
+          // Even an imported title is not enough context. A Save that beats the
+          // preview joins its fetch before submitting anything to Jev.
+          if article.taggingText == nil {
+            let preview = try await ArticlePreviewCache.shared.load(article.url)
+            guard let index = self.articles.firstIndex(where: { $0.id == article.id && $0.saved })
+            else { continue }
+            var updated = self.articles
+            preview.apply(to: &updated[index])
+            try self.commit(updated)
+            article = updated[index]
+          }
+          guard self.taggingAllowed else { return }
+          if !TestMode.enabled && credentialRevision != TaggingPreferences.credentialRevision {
+            continue
+          }
           var state = article.tagging ?? ArticleTaggingState()
           let identity = ArticleTagCatalog.identity(
-            title: article.title, description: article.subtitle)
+            title: article.title, description: article.taggingDescription)
           let generation = state.generation
           state.pendingIdentity = identity
           guard let index = self.articles.firstIndex(where: { $0.id == article.id }) else {
@@ -477,31 +594,9 @@ struct TaggingNotice: Identifiable {
           var updated = self.articles
           updated[index].tagging = state
           try self.commit(updated)
-          let tags: [String]
-          if self.fixtureTagging {
-            // Exercise the real durable result path without keys or network in UI tests.
-            if ProcessInfo.processInfo.arguments.contains("-test-tagging-held") {
-              await withCheckedContinuation { self.fixtureTaggingContinuation = $0 }
-            }
-            if ProcessInfo.processInfo.arguments.contains("-test-tagging-delayed") {
-              try await Task.sleep(for: .seconds(5))
-            }
-            if ProcessInfo.processInfo.arguments.contains("-test-tagging-failure")
-              && !self.fixtureTaggingFailed
-            {
-              self.fixtureTaggingFailed = true
-              throw URLError(.notConnectedToInternet)
-            }
-            await Task.yield()
-            tags = ["Engineering", "Design & craft"]
-          } else {
-            guard let key = try JevKeychain.read() else {
-              TaggingPreferences.lastError = "Add your Jev API key in Settings to start tagging."
-              return
-            }
-            tags = try await JevClient.classify(
-              title: article.title, description: article.subtitle, apiKey: key)
-          }
+          let tags = try await self.requestTags(
+            title: article.title, description: article.taggingDescription,
+            credentialRevision: credentialRevision)
           guard self.taggingAllowed else { return }
           if !TestMode.enabled && credentialRevision != TaggingPreferences.credentialRevision {
             continue
@@ -527,11 +622,9 @@ struct TaggingNotice: Identifiable {
   private func nextTaggingArticle() -> SavedArticle? {
     articles.first { article in
       guard article.saved, !taggingDeferred.contains(article.id) else { return false }
-      // Wait for the preview unless it failed or an import supplied a real title.
-      guard article.title != article.url.host || article.previewFailed else { return false }
       return article.tagging?.completedIdentity
         != ArticleTagCatalog.identity(
-          title: article.title, description: article.subtitle)
+          title: article.title, description: article.taggingDescription)
     }
   }
 
@@ -542,7 +635,7 @@ struct TaggingNotice: Identifiable {
       articles[index].tagging?.generation == generation,
       identity
         == ArticleTagCatalog.identity(
-          title: articles[index].title, description: articles[index].subtitle)
+          title: articles[index].title, description: articles[index].taggingDescription)
     else { return }
     try mergeTags(tags, at: index, identity: identity)
   }
@@ -640,12 +733,14 @@ actor ArticlePreviewCache {
 struct ArticlePreview: Sendable {
   let title: String
   let subtitle: String
+  let taggingText: String
   let imageURL: URL?
   let faviconURL: URL?
 
   func apply(to article: inout SavedArticle) {
     article.title = title
     article.subtitle = subtitle
+    article.taggingText = taggingText
     article.imageURL = imageURL
     article.faviconURL = faviconURL
     article.previewFailed = false
@@ -671,36 +766,10 @@ struct ArticlePreview: Sendable {
       html = text
       baseURL = response.url ?? url
     }
-    let document = try SwiftSoup.parse(html)
-    func meta(_ names: [String]) throws -> String {
-      for name in names {
-        let value =
-          try document.select("meta[property='\(name)'], meta[name='\(name)']").first()?.attr(
-            "content") ?? ""
-        if !value.isEmpty { return value }
-      }
-      return ""
-    }
-    let headline = try meta(["og:title", "twitter:title"])
-    let fallbackTitle = try document.title()
-    let image = try meta(["og:image", "twitter:image"])
-    let imageURL = image.isEmpty ? nil : URL(string: image, relativeTo: baseURL)?.absoluteURL
-    let iconElement = try document.select("link[rel][href]").first { element in
-      let roles = try element.attr("rel").lowercased().split(whereSeparator: \.isWhitespace)
-      return roles.contains("icon") || roles.contains("apple-touch-icon")
-    }
-    let icon = try iconElement?.attr("href") ?? ""
-    let favicon = icon.isEmpty ? nil : URL(string: icon, relativeTo: baseURL)?.absoluteURL
+    let metadata = try ArticleMetadata.parse(html, baseURL: baseURL)
     return Self(
-      title: headline.isEmpty ? (fallbackTitle.isEmpty ? url.host! : fallbackTitle) : headline,
-      subtitle: try meta(["og:description", "description", "twitter:description"]),
-      imageURL: imageURL.flatMap {
-        ["https", "http", "file"].contains($0.scheme ?? "") ? $0 : nil
-      },
-      faviconURL: favicon.flatMap {
-        ["https", "http", "file"].contains($0.scheme ?? "") ? $0 : nil
-      }
-    )
+      title: metadata.title, subtitle: metadata.description, taggingText: metadata.taggingText,
+      imageURL: metadata.imageURL, faviconURL: metadata.faviconURL)
   }
 }
 
