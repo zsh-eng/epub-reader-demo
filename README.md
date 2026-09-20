@@ -49,7 +49,7 @@ node dist/cli.js review create --title "Agent changes" \
   --repo /path/to/repository --base <start-commit> --head <end-commit>
 ```
 
-The command prints a clickable review link. Use `--working` instead of `--base` and `--head` to capture current working changes. The compact review bar has **Copy comments**. Its **Review** menu contains details and **Clear all comments**.
+The command prints a clickable review link. Use `--working` instead of `--base` and `--head` to capture current working changes. The compact review bar has **Copy comments** and **Clear** side by side. A checkmark confirms a successful copy. The **Review** menu contains the review details.
 
 See [agent integration](docs/AGENT_INTEGRATION.md) for multi-repository manifests, repository selection, and suggested `AGENTS.md` guidance. Confirm that guidance with the user before adding it to their instructions.
 

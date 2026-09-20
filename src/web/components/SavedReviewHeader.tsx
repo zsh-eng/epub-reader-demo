@@ -23,6 +23,7 @@ export function SavedReviewHeader({
   const saved = state.savedReview!;
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState<{ count: number } | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [clearRevision, setClearRevision] = useState<number | null>(null);
   const repositoryCount = new Set(saved.targets.map((entry) => entry.repositoryId)).size;
@@ -33,12 +34,19 @@ export function SavedReviewHeader({
     const timer = setTimeout(() => setNotice(null), 4000);
     return () => clearTimeout(timer);
   }, [notice]);
-  const run = async (action: () => Promise<string>) => {
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(null), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const run = async (action: () => Promise<string | void>) => {
     setBusy(true);
     setNotice(null);
     try {
-      setNotice({ text: await action(), error: false });
+      const text = await action();
+      if (text) setNotice({ text, error: false });
     } catch (error) {
+      setCopied(null);
       setNotice({
         text: error instanceof Error ? error.message : "The request failed.",
         error: true,
@@ -53,13 +61,9 @@ export function SavedReviewHeader({
         open={detailsOpen}
         onOpenChange={(open) => {
           setDetailsOpen(open);
-          if (!open) setClearRevision(null);
         }}
       >
-        <Popover.Trigger
-          {...stylex.props(ui.button, styles.fixed)}
-          aria-label="Review details and actions"
-        >
+        <Popover.Trigger {...stylex.props(ui.button, styles.fixed)} aria-label="Review details">
           <span {...stylex.props(styles.desktop)}>Review</span>
           <Icon name="note" size={14} />
           <Icon name="chevron" size={10} />
@@ -95,45 +99,6 @@ export function SavedReviewHeader({
                     : "Browsing outside the saved comparison."}{" "}
                   Only comments on the saved comparison are copied.
                 </p>
-              )}
-              {clearRevision === null ? (
-                <button
-                  {...stylex.props(ui.button)}
-                  disabled={busy || saved.commentCount === 0}
-                  onClick={() => setClearRevision(saved.revision)}
-                >
-                  <Icon name="trash" size={14} />
-                  Clear all comments
-                </button>
-              ) : (
-                <div role="alert">
-                  <p {...stylex.props(styles.detailText)}>
-                    Clear all comments across every target in this review?
-                  </p>
-                  <div {...stylex.props(ui.row)}>
-                    <button
-                      {...stylex.props(ui.button)}
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          await controller.clearSavedComments(clearRevision);
-                          setClearRevision(null);
-                          setDetailsOpen(false);
-                          return "Comments cleared";
-                        })
-                      }
-                    >
-                      Confirm clear
-                    </button>
-                    <button
-                      {...stylex.props(ui.button)}
-                      disabled={busy}
-                      onClick={() => setClearRevision(null)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
               )}
             </Popover.Popup>
           </Popover.Positioner>
@@ -174,19 +139,74 @@ export function SavedReviewHeader({
       <button
         {...stylex.props(ui.button, styles.fixed)}
         aria-label="Copy comments"
-        title={`Copy ${saved.commentCount} comments from all targets in this review`}
+        data-copied={copied !== null}
         disabled={busy || saved.commentCount === 0}
         onClick={() =>
           void run(async () => {
             const comments = await controller.copyFeedback();
-            return `Copied ${comments.count} ${comments.count === 1 ? "comment" : "comments"}`;
+            setCopied({ count: comments.count });
           })
         }
       >
-        <Icon name="copy" size={14} />
+        <CopyCommentsIcon copied={copied !== null} />
         <span {...stylex.props(styles.desktop)}>Copy comments</span>
         <span>{saved.commentCount}</span>
       </button>
+      <Popover.Root
+        open={clearRevision !== null}
+        onOpenChange={(open) => setClearRevision(open ? saved.revision : null)}
+      >
+        <Popover.Trigger
+          {...stylex.props(ui.button, styles.fixed)}
+          aria-label="Clear all comments"
+          disabled={busy || saved.commentCount === 0}
+        >
+          <Icon name="trash" size={14} />
+          <span {...stylex.props(styles.desktop)}>Clear</span>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner
+            align="end"
+            sideOffset={5}
+            {...stylex.props(styles.positioner, ui.instant)}
+          >
+            <Popover.Popup {...stylex.props(ui.popup, styles.details, ui.instant)}>
+              <Popover.Title {...stylex.props(styles.title)}>Clear all comments?</Popover.Title>
+              <div role="alert">
+                <p {...stylex.props(styles.detailText)}>
+                  Clear all comments across every target in this review?
+                </p>
+                <div {...stylex.props(ui.row)}>
+                  <button
+                    {...stylex.props(ui.button)}
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await controller.clearSavedComments(clearRevision!);
+                        setClearRevision(null);
+                        setCopied(null);
+                        return "Comments cleared";
+                      })
+                    }
+                  >
+                    Confirm clear
+                  </button>
+                  <button
+                    {...stylex.props(ui.button)}
+                    disabled={busy}
+                    onClick={() => setClearRevision(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+      <span aria-live="polite" {...stylex.props(styles.srOnly)}>
+        {copied ? `Copied ${copied.count} ${copied.count === 1 ? "comment" : "comments"}` : ""}
+      </span>
       {notice && (
         <div role={notice.error ? "alert" : "status"} {...stylex.props(ui.popup, styles.notice)}>
           <span>{notice.text}</span>
@@ -205,7 +225,65 @@ export function SavedReviewHeader({
   );
 }
 
+/** Both shapes stay mounted so the SVG can transition in place without a layout change. */
+function CopyCommentsIcon({ copied }: { copied: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...stylex.props(styles.copyIcon)}
+    >
+      <g {...stylex.props(styles.copyShape, copied && styles.copyHidden)}>
+        <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+        <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+      </g>
+      <path
+        d="m4 12 5 5 11-11"
+        pathLength="1"
+        {...stylex.props(styles.checkShape, copied && styles.checkVisible)}
+      />
+    </svg>
+  );
+}
+
 const styles = stylex.create({
+  copyIcon: { flexShrink: 0 },
+  copyShape: {
+    opacity: 1,
+    transform: "scale(1)",
+    transformOrigin: "12px 12px",
+    transitionProperty: "opacity, transform",
+    transitionTimingFunction: "ease-in-out",
+    transitionDuration: { default: "180ms", "@media (prefers-reduced-motion: reduce)": "0ms" },
+  },
+  copyHidden: { opacity: 0, transform: "scale(0.85)" },
+  checkShape: {
+    opacity: 0,
+    strokeDasharray: "1",
+    strokeDashoffset: "1",
+    transitionProperty: "opacity, stroke-dashoffset",
+    transitionTimingFunction: "ease-in-out",
+    transitionDuration: { default: "220ms", "@media (prefers-reduced-motion: reduce)": "0ms" },
+  },
+  checkVisible: { opacity: 1, strokeDashoffset: "0" },
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: "hidden",
+    clipPath: "inset(50%)",
+    whiteSpace: "nowrap",
+    borderWidth: 0,
+  },
   header: {
     position: "relative",
     display: "flex",

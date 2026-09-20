@@ -188,7 +188,11 @@ try {
     document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("2"),
   );
   await header.getByRole("button", { name: "Copy comments", exact: true }).click();
-  await header.getByText("Copied 2 comments", { exact: true }).waitFor();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('button[aria-label="Copy comments"]')?.getAttribute("data-copied") ===
+      "true",
+  );
   const clipboard = await page.evaluate(() => navigator.clipboard.readText());
   for (const expected of [
     "Frontend feedback from the browser",
@@ -220,7 +224,6 @@ try {
   await page.getByText("Frontend feedback from the browser", { exact: true }).waitFor();
   await header.getByRole("combobox", { name: "Review target" }).selectOption(second.id);
   await page.getByText("Backend feedback across repositories", { exact: true }).waitFor();
-  await header.getByRole("button", { name: "Review details and actions", exact: true }).click();
   await page.getByRole("button", { name: "Clear all comments", exact: true }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   assert.equal((await api(`/api/reviews/${id}/feedback`)).count, 2);

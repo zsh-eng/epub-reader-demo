@@ -112,7 +112,7 @@ test("review header distinguishes ranges on the same branch and returns from fil
   await page.getByRole("button", { name: "Return to review" }).click();
   expect(returned()).toBe(1);
   await page.getByRole("combobox", { name: "Review target" }).selectOptions("three");
-  await page.getByRole("button", { name: "Review details and actions" }).click();
+  await page.getByRole("button", { name: "Review details" }).click();
   await expect.element(page.getByText(/Captured working changes/)).toBeVisible();
 });
 
@@ -123,12 +123,22 @@ test("copy includes all review targets and clear requires an explicit scoped con
   expect(height).toBeLessThanOrEqual(36);
   await page.getByRole("button", { name: "Copy comments" }).click();
   expect(copy).toHaveBeenCalledOnce();
-  await expect.element(page.getByRole("status")).toHaveTextContent("Copied 6 comments");
-  expect(header.getBoundingClientRect().height).toBe(height);
+  const copyButton = document.querySelector<HTMLButtonElement>('[aria-label="Copy comments"]')!;
+  expect(copyButton.hasAttribute("title")).toBe(false);
   await expect
-    .element(page.getByRole("button", { name: "Clear all comments" }))
-    .not.toBeInTheDocument();
-  await page.getByRole("button", { name: "Review details and actions" }).click();
+    .element(page.getByRole("button", { name: "Copy comments" }))
+    .toHaveAttribute("data-copied", "true");
+  expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("Copied 6 comments");
+  expect(document.querySelector('[role="status"]')).toBeNull();
+  const clearButton = document.querySelector<HTMLButtonElement>(
+    '[aria-label="Clear all comments"]',
+  )!;
+  expect(clearButton.getBoundingClientRect().left).toBeGreaterThan(
+    copyButton.getBoundingClientRect().right,
+  );
+  expect(clearButton.getBoundingClientRect().top).toBe(copyButton.getBoundingClientRect().top);
+  expect(header.getBoundingClientRect().height).toBe(height);
+
   await page.getByRole("button", { name: "Clear all comments" }).click();
   expect(clear).not.toHaveBeenCalled();
   await expect.element(page.getByRole("alert")).toBeVisible();
@@ -142,4 +152,20 @@ test("copy includes all review targets and clear requires an explicit scoped con
   expect(clear).toHaveBeenCalledWith(7);
   expect(header.getBoundingClientRect().height).toBe(height);
   await expect.element(page.getByRole("status")).toHaveTextContent("Comments cleared");
+});
+
+test("copy success resets in place and failed clipboard writes never show a check", async () => {
+  const { copy } = await setup();
+  const button = page.getByRole("button", { name: "Copy comments" });
+  const element = document.querySelector<HTMLButtonElement>('[aria-label="Copy comments"]')!;
+  const width = element.getBoundingClientRect().width;
+  await button.click();
+  await expect.element(button).toHaveAttribute("data-copied", "true");
+  expect(element.getBoundingClientRect().width).toBe(width);
+  await expect.poll(() => element.dataset.copied, { timeout: 4000 }).toBe("false");
+  expect(element.getBoundingClientRect().width).toBe(width);
+  copy.mockRejectedValueOnce(new Error("Clipboard unavailable"));
+  await button.click();
+  await expect.element(page.getByRole("alert")).toHaveTextContent("Clipboard unavailable");
+  await expect.element(button).toHaveAttribute("data-copied", "false");
 });

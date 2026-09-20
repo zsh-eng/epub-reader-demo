@@ -90,9 +90,9 @@ A manifest accepts commit, range, working, staged, and unstaged comparisons. Pat
 
 A link opens its first target. The compact review bar shows a target selector when the review has more than one target, including different comparisons on the same branch. Open **Review** for the full title, repository path, comparison, and capture time. The normal history and file browser remain available. Use **Return to review** to restore the captured comparison after browsing elsewhere. Working files shown in the file browser remain live; the saved diff and its expanded context are captured content.
 
-Add comments to lines or line ranges in the saved diff. **Copy comments** collects comments from all targets in that review, including inactive targets. The text contains repository and worktree paths, comparison endpoints, file names, before/after side, selected line numbers, nearby captured source lines, and replies. Copying does not delete comments. Paste the text into the agent that should handle it.
+Add comments to lines or line ranges in the saved diff. **Copy comments** collects comments from all targets in that review, including inactive targets. The text contains repository and worktree paths, comparison endpoints, file names, before/after side, selected line numbers, nearby captured source lines, and replies. After a successful copy, the copy icon changes to a checkmark briefly. Copying does not delete comments. Paste the text into the agent that should handle it.
 
-Open **Review**, then use **Clear all comments** and **Confirm clear**, to remove comments from this review across its targets. Other saved reviews are unchanged. If comments changed after the confirmation was opened, med rejects the stale clear request. Clearing comments does not delete the captured review or change source files.
+Use **Clear** next to **Copy comments**, then **Confirm clear**, to remove comments from this review across its targets. Other saved reviews are unchanged. If comments changed after the confirmation was opened, med rejects the stale clear request. Clearing comments does not delete the captured review or change source files.
 
 After an agent revises the code, create a new review link for the new comparison. The previous link and comments retain their original context.
 
