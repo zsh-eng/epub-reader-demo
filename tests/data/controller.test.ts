@@ -445,7 +445,24 @@ describe("notes and source ownership", () => {
       notes: async (id, init) => {
         if (init?.method === "POST")
           return json({ error: { message: "Notes changed. Retry." } }, 409);
-        return json({ reviewId: id, revision: count++, notes: [] } satisfies NoteState);
+        return json({
+          reviewId: id,
+          revision: count++,
+          notes:
+            count === 1
+              ? [
+                  {
+                    id: "deleted",
+                    path: "a.ts",
+                    side: "new",
+                    line: 1,
+                    text: "Old",
+                    createdAt: "now",
+                    updatedAt: "now",
+                  },
+                ]
+              : [],
+        } satisfies NoteState);
       },
     });
     await controller.initialize();
@@ -455,6 +472,207 @@ describe("notes and source ownership", () => {
     );
     expect(controller.getSnapshot().notes?.revision).toBe(1);
     expect(controller.getSnapshot().notesError).toBe("Notes changed. Retry.");
+    controller.dispose();
+  });
+
+  test("publishes comments immediately and serializes edits and replies using confirmed IDs", async () => {
+    const responses = [deferred<Response>(), deferred<Response>(), deferred<Response>()];
+    let sent = 0;
+    const { controller, calls } = fixture({
+      notes: async (id, init) =>
+        init?.method === "POST"
+          ? responses[sent++].promise
+          : json({ reviewId: id, revision: 3, notes: [] }),
+    });
+    await controller.initialize();
+    await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+    const input = { path: "a.ts", side: "new" as const, line: 1, text: "First" };
+    const add = controller.mutateNote({ type: "add", note: input });
+    const temporaryId = controller.getSnapshot().notes!.notes[0].id;
+    const edit = controller.mutateNote({ type: "edit", id: temporaryId, text: "Edited" });
+    const reply = controller.mutateNote({
+      type: "add",
+      note: { ...input, parentId: temporaryId, text: "Reply" },
+    });
+    expect(controller.getSnapshot().notes!.notes.map((note) => note.text)).toEqual([
+      "Edited",
+      "Reply",
+    ]);
+    expect(sent).toBe(1);
+    const original = { ...input, id: "confirmed", createdAt: "now", updatedAt: "now" };
+    responses[0].resolve(json({ reviewId: "working", revision: 4, notes: [original] }));
+    await add;
+    await vi.waitFor(() => expect(sent).toBe(2));
+    const posts = () =>
+      calls
+        .filter((call) => call.init?.method === "POST" && call.url === "/api/notes")
+        .map((call) => JSON.parse(String(call.init?.body)));
+    expect(posts()[1]).toMatchObject({
+      expectedRevision: 4,
+      mutation: { id: "confirmed", text: "Edited" },
+    });
+    expect(controller.getSnapshot().notes!.notes[1].parentId).toBe("confirmed");
+    const edited = { ...original, text: "Edited" };
+    responses[1].resolve(json({ reviewId: "working", revision: 5, notes: [edited] }));
+    await edit;
+    await vi.waitFor(() => expect(sent).toBe(3));
+    expect(posts()[2]).toMatchObject({
+      expectedRevision: 5,
+      mutation: { note: { parentId: "confirmed" } },
+    });
+    responses[2].resolve(
+      json({
+        reviewId: "working",
+        revision: 6,
+        notes: [edited, { ...original, id: "reply", parentId: "confirmed", text: "Reply" }],
+      }),
+    );
+    await reply;
+    expect(controller.getSnapshot().notes!.notes.map((note) => note.id)).toEqual([
+      "confirmed",
+      "reply",
+    ]);
+    controller.dispose();
+  });
+
+  test("rejects invalid text and parent removal before changing the visible comments", async () => {
+    const note = {
+      id: "parent",
+      path: "a.ts",
+      side: "new" as const,
+      line: 1,
+      text: "Parent",
+      createdAt: "now",
+      updatedAt: "now",
+    };
+    const reply = { ...note, id: "reply", parentId: "parent", text: "Reply" };
+    const { controller, calls } = fixture({
+      notes: async (id) => json({ reviewId: id, revision: 0, notes: [note, reply] }),
+    });
+    await controller.initialize();
+    await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+    await expect(controller.mutateNote({ type: "remove", id: "parent" })).rejects.toThrow(
+      "Remove replies",
+    );
+    await expect(controller.mutateNote({ type: "edit", id: "reply", text: " " })).rejects.toThrow(
+      "contain text",
+    );
+    expect(controller.getSnapshot().notes?.notes).toEqual([note, reply]);
+    expect(calls.some((call) => call.url === "/api/notes" && call.init?.method === "POST")).toBe(
+      false,
+    );
+    controller.dispose();
+  });
+
+  test("failed deletion restores its comment without losing a later independent edit", async () => {
+    const removeResponse = deferred<Response>();
+    const editResponse = deferred<Response>();
+    const original = {
+      id: "one",
+      path: "a.ts",
+      side: "new" as const,
+      line: 1,
+      text: "One",
+      createdAt: "now",
+      updatedAt: "now",
+    };
+    const two = { ...original, id: "two", text: "Two" };
+    const reply = { ...original, id: "reply", parentId: "one", text: "Reply" };
+    const { controller } = fixture({
+      notes: async (id, init) =>
+        init?.method === "POST"
+          ? JSON.parse(String(init.body)).mutation.type === "remove"
+            ? removeResponse.promise
+            : editResponse.promise
+          : json({ reviewId: id, revision: 0, notes: [original, reply, two] }),
+    });
+    await controller.initialize();
+    await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+    const remove = controller.mutateNote({ type: "remove", id: "reply" });
+    const rejected = remove.catch((error: unknown) => error);
+    expect(controller.getSnapshot().notes!.notes.map((note) => note.id)).toEqual(["one", "two"]);
+    const edit = controller.mutateNote({ type: "edit", id: "two", text: "Updated" });
+    removeResponse.resolve(json({ error: { message: "Offline" } }, 503));
+    expect(await rejected).toEqual(expect.objectContaining({ message: "Offline" }));
+    expect(controller.getSnapshot().notes!.notes.map((note) => note.text)).toEqual([
+      "One",
+      "Reply",
+      "Updated",
+    ]);
+    expect(controller.getSnapshot().notesError).toBe("Offline");
+    editResponse.resolve(
+      json({
+        reviewId: "working",
+        revision: 1,
+        notes: [original, reply, { ...two, text: "Updated" }],
+      }),
+    );
+    await edit;
+    expect(controller.getSnapshot().notes!.notes.map((note) => note.text)).toEqual([
+      "One",
+      "Reply",
+      "Updated",
+    ]);
+    controller.dispose();
+  });
+
+  test("failed add keeps its text recoverable after navigation and rejects dependent replies", async () => {
+    const late = deferred<Response>();
+    const { controller, calls } = fixture({
+      notes: async (id, init) =>
+        init?.method === "POST" ? late.promise : json({ reviewId: id, revision: 0, notes: [] }),
+    });
+    await controller.initialize();
+    await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+    const input = { path: "a.ts", side: "new" as const, line: 1, text: "Do not lose this" };
+    const add = controller.mutateNote({ type: "add", note: input });
+    const temporaryId = controller.getSnapshot().notes!.notes[0].id;
+    const reply = controller.mutateNote({
+      type: "add",
+      note: { ...input, parentId: temporaryId, text: "Keep reply too" },
+    });
+    const settled = Promise.allSettled([add, reply]);
+    await controller.selectComparison({ kind: "commit", commit: B });
+    await vi.waitFor(() => expect(controller.getSnapshot().notes?.reviewId).toBe(B));
+    late.resolve(json({ error: { message: "Offline" } }, 503));
+    expect((await settled).every((entry) => entry.status === "rejected")).toBe(true);
+    expect(controller.getSnapshot().notes?.notes).toEqual([]);
+    expect(controller.getSnapshot().notesError).toContain("Keep reply too");
+    expect(controller.getSnapshot().notesError).toContain("Do not lose this");
+    expect(
+      calls.filter((call) => call.url === "/api/notes" && call.init?.method === "POST"),
+    ).toHaveLength(1);
+    controller.dispose();
+  });
+
+  test("keeps failed text when an in-progress navigation finishes after the failure", async () => {
+    const writeResponse = deferred<Response>();
+    const reviewResponse = deferred<Response>();
+    const { controller } = fixture({
+      review: async (comparison) =>
+        comparison.kind === "commit" ? reviewResponse.promise : json(response(comparison)),
+      notes: async (id, init) =>
+        init?.method === "POST"
+          ? writeResponse.promise
+          : json({ reviewId: id, revision: 0, notes: [] }),
+    });
+    await controller.initialize();
+    await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+    const writing = controller
+      .mutateNote({
+        type: "add",
+        note: { path: "a.ts", side: "new", line: 1, text: "Keep this during navigation" },
+      })
+      .catch((error: unknown) => error);
+    const navigating = controller.selectComparison({ kind: "commit", commit: B });
+    writeResponse.resolve(json({ error: { message: "Offline" } }, 503));
+    await writing;
+    expect(controller.getSnapshot().notesError).toContain("Keep this during navigation");
+    reviewResponse.resolve(json(response({ kind: "commit", commit: B })));
+    await navigating;
+    await vi.waitFor(() => expect(controller.getSnapshot().notes?.reviewId).toBe(B));
+    expect(controller.getSnapshot().notesError).toContain("Keep this during navigation");
+    expect(controller.getSnapshot().notes?.notes).toEqual([]);
     controller.dispose();
   });
 

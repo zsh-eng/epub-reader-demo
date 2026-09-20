@@ -59,6 +59,7 @@ function fixture({
     commentCount: 3,
     targets,
   };
+  const noteRevisions = [1, 2, 0];
   const repositories = missing
     ? []
     : ["/one", "/two"].map((repo, index) => ({
@@ -119,9 +120,17 @@ function fixture({
           old: "before",
           new: "after",
         });
-      if (init?.method === "POST")
+      if (init?.method === "POST") {
+        if (body.expectedRevision !== noteRevisions[index])
+          return Response.json({ error: { message: "Wrong target revision" } }, { status: 409 });
+        noteRevisions[index] += 1;
         saved = { ...saved, revision: saved.revision + 1, commentCount: saved.commentCount + 1 };
-      return Response.json({ reviewId: review(index).id, revision: saved.revision, notes: [] });
+      }
+      return Response.json({
+        reviewId: review(index).id,
+        revision: noteRevisions[index],
+        notes: [],
+      });
     }
     if (url.pathname === "/api/reviews/saved/feedback")
       return Response.json({
@@ -136,6 +145,7 @@ function fixture({
           { error: { message: "Comments changed. Reload and try again." } },
           { status: 409 },
         );
+      for (let index = 0; index < noteRevisions.length; index++) noteRevisions[index] += 1;
       saved = { ...saved, revision: saved.revision + 1, commentCount: 0 };
       return Response.json(saved);
     }
@@ -157,6 +167,7 @@ function fixture({
     repositories,
     targets,
     updateSaved: (patch: Partial<SavedReview>) => {
+      if (patch.revision !== undefined) noteRevisions[0] += patch.revision - saved.revision;
       saved = { ...saved, ...patch };
     },
   };
@@ -281,11 +292,11 @@ describe("saved review navigation", () => {
     const clearing = controller.clearSavedComments(4);
     await vi.waitFor(() => expect(clearStarted).toBe(true));
     await controller.selectSavedTarget("t2");
-    await vi.waitFor(() => expect(controller.getSnapshot().notes?.revision).toBe(4));
+    await vi.waitFor(() => expect(controller.getSnapshot().notes?.revision).toBe(2));
     release();
     await clearing;
     expect(controller.getSnapshot().notes?.reviewId).toBe("review-t2");
-    expect(controller.getSnapshot().notes?.revision).toBe(5);
+    expect(controller.getSnapshot().notes?.revision).toBe(3);
     expect(controller.getSnapshot().savedReview?.commentCount).toBe(0);
     controller.dispose();
   });
@@ -300,7 +311,7 @@ describe("saved review navigation", () => {
       updateSaved({ revision: 5, commentCount: 8 });
       windowEvents.dispatchEvent(new Event("focus"));
       await vi.waitFor(() => expect(controller.getSnapshot().savedReview?.commentCount).toBe(8));
-      await vi.waitFor(() => expect(controller.getSnapshot().notes?.revision).toBe(5));
+      await vi.waitFor(() => expect(controller.getSnapshot().notes?.revision).toBe(2));
     } finally {
       controller.dispose();
       vi.unstubAllGlobals();
@@ -322,10 +333,185 @@ describe("saved review navigation", () => {
       type: "add",
       note: { path: "file.ts", side: "new", line: 1, text: "Fix" },
     });
-    expect(controller.getSnapshot().notes?.revision).toBe(5);
+    expect(controller.getSnapshot().notes?.revision).toBe(2);
     expect(controller.getSnapshot().notesError).toBeNull();
     controller.dispose();
   });
+  test("keeps optimistic counts during target changes and uses independent target revisions", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let firstPending = true;
+    const { controller, calls } = fixture({
+      intercept: async (url, init) => {
+        if (url.pathname.endsWith("/t1/notes") && init?.method === "POST" && firstPending) {
+          firstPending = false;
+          await held;
+        }
+        return undefined;
+      },
+    });
+    await controller.initialize();
+    await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+    const note = { path: "file.ts", side: "new" as const, line: 1, text: "First" };
+    const first = controller.mutateNote({ type: "add", note });
+    expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+    expect(controller.getSnapshot().notes?.notes[0].text).toBe("First");
+    await controller.selectSavedTarget("t2");
+    await vi.waitFor(() => expect(controller.getSnapshot().notes?.reviewId).toBe("review-t2"));
+    expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+    const second = controller.mutateNote({ type: "add", note: { ...note, text: "Second" } });
+    expect(controller.getSnapshot().savedReview?.commentCount).toBe(5);
+    expect(controller.getSnapshot().notes?.notes.map((entry) => entry.text)).toEqual(["Second"]);
+    release();
+    await Promise.all([first, second]);
+    await vi.waitFor(() => expect(controller.getSnapshot().savedReview?.revision).toBe(6));
+    expect(controller.getSnapshot().savedReview?.commentCount).toBe(5);
+    expect(calls.find((call) => call.path.endsWith("/t2/notes") && call.body)?.body).toMatchObject({
+      expectedRevision: 2,
+    });
+    expect(controller.getSnapshot().notes?.reviewId).toBe("review-t2");
+    controller.dispose();
+  });
+
+  test("does not apply metadata fetched before a new optimistic comment", async () => {
+    const events = new EventTarget();
+    vi.stubGlobal("window", events);
+    vi.stubGlobal("document", new EventTarget());
+    let releaseMetadata!: (response: Response) => void;
+    const metadata = new Promise<Response>((resolve) => {
+      releaseMetadata = resolve;
+    });
+    let releaseWrite!: () => void;
+    const writing = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    let interceptMetadata = false;
+    let metadataStarted = false;
+    const { controller } = fixture({
+      intercept: async (url, init) => {
+        if (url.pathname === "/api/reviews/saved" && interceptMetadata) {
+          interceptMetadata = false;
+          metadataStarted = true;
+          return metadata;
+        }
+        if (url.pathname.endsWith("/notes") && init?.method === "POST") await writing;
+        return undefined;
+      },
+    });
+    try {
+      await controller.initialize();
+      await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+      const oldMetadata = controller.getSnapshot().savedReview;
+      interceptMetadata = true;
+      events.dispatchEvent(new Event("focus"));
+      await vi.waitFor(() => expect(metadataStarted).toBe(true));
+      const adding = controller.mutateNote({
+        type: "add",
+        note: { path: "file.ts", side: "new", line: 1, text: "Pending" },
+      });
+      expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+      releaseMetadata(Response.json(oldMetadata));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+      expect(controller.getSnapshot().notes?.notes[0].text).toBe("Pending");
+      releaseWrite();
+      await adding;
+      await vi.waitFor(() => expect(controller.getSnapshot().savedReview?.revision).toBe(5));
+    } finally {
+      controller.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("a copy response does not overwrite a comment added during the clipboard request", async () => {
+    let releaseCopy!: () => void;
+    const copying = new Promise<void>((resolve) => {
+      releaseCopy = resolve;
+    });
+    let releaseWrite!: () => void;
+    const writing = new Promise<void>((resolve) => {
+      releaseWrite = resolve;
+    });
+    let copyStarted = false;
+    const { controller } = fixture({
+      intercept: async (url, init) => {
+        if (url.pathname.endsWith("/feedback")) {
+          copyStarted = true;
+          await copying;
+          return Response.json({
+            text: "Earlier snapshot",
+            count: 3,
+            repositoryCount: 2,
+            revision: 4,
+          });
+        }
+        if (url.pathname.endsWith("/notes") && init?.method === "POST") await writing;
+        return undefined;
+      },
+    });
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        writeText: vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+      },
+    });
+    try {
+      await controller.initialize();
+      await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+      const copied = controller.copyFeedback();
+      await vi.waitFor(() => expect(copyStarted).toBe(true));
+      const added = controller.mutateNote({
+        type: "add",
+        note: { path: "file.ts", side: "new", line: 1, text: "New comment" },
+      });
+      expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+      releaseCopy();
+      await copied;
+      expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+      releaseWrite();
+      await added;
+    } finally {
+      controller.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("copy waits for a pending comment to be persisted", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { controller, calls } = fixture({
+      intercept: async (url, init) => {
+        if (url.pathname.endsWith("/notes") && init?.method === "POST") await held;
+        return undefined;
+      },
+    });
+    vi.stubGlobal("navigator", {
+      clipboard: {
+        writeText: vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined),
+      },
+    });
+    try {
+      await controller.initialize();
+      await vi.waitFor(() => expect(controller.getSnapshot().notes).not.toBeNull());
+      const adding = controller.mutateNote({
+        type: "add",
+        note: { path: "file.ts", side: "new", line: 1, text: "Include this" },
+      });
+      const copying = controller.copyFeedback();
+      await Promise.resolve();
+      expect(calls.some((call) => call.path.endsWith("/feedback"))).toBe(false);
+      release();
+      await adding;
+      expect((await copying).count).toBe(4);
+    } finally {
+      controller.dispose();
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("a worktree deleted after discovery falls back without replacing the saved comparison", async () => {
     const { controller, targets, repositories } = fixture({
       intercept: async (url) =>

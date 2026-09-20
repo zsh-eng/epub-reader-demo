@@ -7,6 +7,10 @@ import {
   type SavedReviewTarget,
 } from "../../shared/saved-review";
 import { comparisonKey } from "../../shared/protocol";
+import {
+  validateReviewNoteRemoval,
+  validateReviewNoteText,
+} from "../../shared/hunk/noteValidation";
 import { useSyncExternalStore } from "react";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type {
@@ -184,6 +188,8 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     metrics: null,
     semantic: null,
   };
+  // Keep failed write text available if a pending navigation finishes afterward.
+  let noteWriteRecovery: string | null = null;
   let hasRepositoryCatalogue = false;
   let catalogueGeneration = 0;
   let catalogueAbort: AbortController | undefined;
@@ -252,10 +258,15 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
   }
   async function refreshSavedMetadata() {
     const id = snapshot.savedReview?.id;
-    if (!id || disposed) return;
+    // The saved review has its own revision and count. Refresh only after local
+    // writes settle, and discard a response if another write started meanwhile.
+    if (!id || disposed || writingNotes) return;
+    const writeEpoch = noteWriteEpoch;
     const savedReview = await api.json(`/api/reviews/${encodeURIComponent(id)}`, savedReviewSchema);
     if (
       !disposed &&
+      !writingNotes &&
+      writeEpoch === noteWriteEpoch &&
       snapshot.savedReview?.id === id &&
       savedReview.revision >= snapshot.savedReview.revision
     ) {
@@ -290,13 +301,20 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       );
       if (!isCurrent(generation) || snapshot.review?.id !== reviewId) return;
       if (notes.reviewId !== reviewId) throw new Error("Notes belong to a different review.");
-      if (snapshot.notes?.reviewId === notes.reviewId && snapshot.notes.revision > notes.revision)
-        return;
-      update({
-        notes,
-        notesError: null,
-        semantic: snapshot.semantic ? projectAuthoritativeNotes(snapshot.semantic, notes) : null,
-      });
+      const queue = noteQueues.get(noteQueueKey(reviewId));
+      if (queue) {
+        if (!queue.pending.length && notes.revision >= queue.authoritative.revision)
+          queue.authoritative = notes;
+        publishNotes(queue);
+      } else {
+        if (snapshot.notes?.reviewId === notes.reviewId && snapshot.notes.revision > notes.revision)
+          return;
+        update({
+          notes,
+          notesError: noteWriteRecovery,
+          semantic: snapshot.semantic ? projectAuthoritativeNotes(snapshot.semantic, notes) : null,
+        });
+      }
     } catch (error) {
       if (isCurrent(generation) && snapshot.review?.id === reviewId)
         update({ notesError: message(error) });
@@ -353,7 +371,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       selectedFileId,
       semantic: reconciled,
       notes: sameReview ? snapshot.notes : null,
-      notesError: null,
+      notesError: noteWriteRecovery,
       status: "ready",
       error: null,
       metrics,
@@ -627,7 +645,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       visibleFiles: [],
       semantic: null,
       notes: null,
-      notesError: null,
+      notesError: noteWriteRecovery,
       comparison: { kind: "working" },
       filter: "",
       selectedFileId: null,
@@ -800,7 +818,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       visibleFiles: [],
       semantic: null,
       notes: null,
-      notesError: null,
+      notesError: noteWriteRecovery,
       selectedFileId: null,
       filter: "",
     });
@@ -1052,38 +1070,250 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     return promise;
   }
 
+  interface NoteWrite {
+    mutation: NoteMutation;
+    temporaryId?: string;
+    createdAt: string;
+    resolve(): void;
+    reject(error: unknown): void;
+  }
+  interface NoteQueue {
+    key: string;
+    url: string;
+    savedId?: string;
+    reviewId: string;
+    authoritative: NoteState;
+    pending: NoteWrite[];
+    ids: Map<string, string>;
+    failedIds: Set<string>;
+  }
+  // Keep server revisions separate from the visible projection. Each target owns its
+  // revision; one write queue preserves action order and resolves temporary IDs.
+  const noteQueues = new Map<string, NoteQueue>();
+  const noteWrites: { queue: NoteQueue; write: NoteWrite }[] = [];
+  let writingNotes = false;
+  let noteWriteEpoch = 0;
+  const noteIdleWaiters: (() => void)[] = [];
+  const waitForNoteWrites = () =>
+    writingNotes
+      ? new Promise<void>((resolve) => noteIdleWaiters.push(resolve))
+      : Promise.resolve();
+  let temporaryNoteId = 0;
+  function noteQueueKey(reviewId: string, url = savedTargetUrl() ?? "/api/notes") {
+    return `${url}:${reviewId}`;
+  }
+  function resolvedMutation(queue: NoteQueue, mutation: NoteMutation): NoteMutation {
+    const resolve = (id: string) => queue.ids.get(id) ?? id;
+    return mutation.type === "add"
+      ? {
+          ...mutation,
+          note: {
+            ...mutation.note,
+            ...(mutation.note.parentId ? { parentId: resolve(mutation.note.parentId) } : {}),
+          },
+        }
+      : { ...mutation, id: resolve(mutation.id) };
+  }
+  function projectedNotes(queue: NoteQueue): NoteState {
+    let notes = queue.authoritative.notes;
+    for (const write of queue.pending) {
+      const mutation = resolvedMutation(queue, write.mutation);
+      if (mutation.type === "add") {
+        if (mutation.note.parentId && !notes.some((note) => note.id === mutation.note.parentId))
+          continue;
+        notes = [
+          ...notes,
+          {
+            ...mutation.note,
+            id: write.temporaryId!,
+            createdAt: write.createdAt,
+            updatedAt: write.createdAt,
+          },
+        ];
+      } else if (mutation.type === "edit") {
+        notes = notes.map((note) =>
+          note.id === mutation.id
+            ? { ...note, text: mutation.text, updatedAt: write.createdAt }
+            : note,
+        );
+      } else {
+        notes = notes.filter((note) => note.id !== mutation.id);
+      }
+    }
+    return {
+      ...queue.authoritative,
+      notes,
+      revision: queue.authoritative.revision + queue.pending.length,
+    };
+  }
+  function publishNotes(queue: NoteQueue, error: string | null = snapshot.notesError) {
+    if (
+      disposed ||
+      snapshot.review?.id !== queue.reviewId ||
+      noteQueueKey(queue.reviewId) !== queue.key
+    )
+      return;
+    const notes = projectedNotes(queue);
+    update({
+      notes,
+      notesError: error,
+      semantic: snapshot.semantic ? projectAuthoritativeNotes(snapshot.semantic, notes) : null,
+    });
+  }
+  async function drainNoteWrites() {
+    if (writingNotes) return;
+    writingNotes = true;
+    try {
+      while (noteWrites.length) {
+        const { queue, write } = noteWrites[0];
+        try {
+          const mutation = resolvedMutation(queue, write.mutation);
+          const dependency = mutation.type === "add" ? mutation.note.parentId : mutation.id;
+          if (dependency && queue.failedIds.has(dependency))
+            throw new Error("The original comment was not saved. Retry that comment first.");
+          const beforeIds = new Set(queue.authoritative.notes.map((note) => note.id));
+          const notes = await api.json(
+            queue.url.endsWith("/notes") ? queue.url : `${queue.url}/notes`,
+            notesSchema,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                reviewId: queue.reviewId,
+                expectedRevision: queue.authoritative.revision,
+                mutation,
+              }),
+            },
+          );
+          if (notes.reviewId !== queue.reviewId)
+            throw new Error("Notes belong to a different review.");
+          if (write.temporaryId && mutation.type === "add") {
+            const added = notes.notes.find(
+              (note) =>
+                !beforeIds.has(note.id) &&
+                note.path === mutation.note.path &&
+                note.side === mutation.note.side &&
+                note.line === mutation.note.line &&
+                note.endLine === mutation.note.endLine &&
+                note.text === mutation.note.text &&
+                note.parentId === mutation.note.parentId,
+            );
+            if (added) queue.ids.set(write.temporaryId, added.id);
+          }
+          if (notes.revision >= queue.authoritative.revision) queue.authoritative = notes;
+          queue.pending.shift();
+          publishNotes(queue);
+          write.resolve();
+        } catch (error) {
+          const previousCount = projectedNotes(queue).notes.length;
+          queue.pending.shift();
+          if (write.temporaryId) queue.failedIds.add(write.temporaryId);
+          const nextCount = projectedNotes(queue).notes.length;
+          if (queue.savedId && snapshot.savedReview?.id === queue.savedId)
+            update({
+              savedReview: {
+                ...snapshot.savedReview,
+                commentCount: Math.max(
+                  0,
+                  snapshot.savedReview.commentCount + nextCount - previousCount,
+                ),
+              },
+            });
+          if (error instanceof HttpError && error.status === 409) {
+            try {
+              const notes = await api.json(
+                queue.url === "/api/notes"
+                  ? `/api/notes?${query({ reviewId: queue.reviewId })}`
+                  : `${queue.url}/notes`,
+                notesSchema,
+              );
+              if (
+                notes.reviewId === queue.reviewId &&
+                notes.revision >= queue.authoritative.revision
+              )
+                queue.authoritative = notes;
+            } catch {
+              /* Keep the last confirmed state if reconciliation is unavailable. */
+            }
+          }
+          const unsavedText =
+            write.mutation.type === "add"
+              ? write.mutation.note.text
+              : write.mutation.type === "edit"
+                ? write.mutation.text
+                : null;
+          const failedMutation = resolvedMutation(queue, write.mutation);
+          const failedPath =
+            failedMutation.type === "add"
+              ? failedMutation.note.path
+              : queue.authoritative.notes.find((note) => note.id === failedMutation.id)?.path;
+          const failure = unsavedText
+            ? `Comment was not saved (${failedPath ?? queue.reviewId}). ${message(error)} Unsaved comment: ${unsavedText}`
+            : message(error);
+          noteWriteRecovery = noteWriteRecovery ? `${noteWriteRecovery}\n${failure}` : failure;
+          publishNotes(queue, noteWriteRecovery);
+          if (snapshot.review?.id !== queue.reviewId || noteQueueKey(queue.reviewId) !== queue.key)
+            update({ notesError: noteWriteRecovery });
+          write.reject(error);
+        } finally {
+          noteWrites.shift();
+        }
+      }
+    } finally {
+      writingNotes = false;
+      for (const resolve of noteIdleWaiters.splice(0)) resolve();
+      if (snapshot.savedReview) void refreshSavedMetadata().catch(() => {});
+    }
+  }
   async function mutateNote(mutation: NoteMutation): Promise<void> {
     const review = snapshot.review;
     const current = snapshot.notes;
     if (!review || !current || current.reviewId !== review.id || snapshot.status !== "ready")
       throw new Error("Wait for notes to load.");
-    const generation = reviewGeneration;
-    try {
-      const savedUrl = savedTargetUrl();
-      const notes = await api.json(savedUrl ? `${savedUrl}/notes` : "/api/notes", notesSchema, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewId: review.id, expectedRevision: current.revision, mutation }),
-        signal: reviewAbort?.signal,
-      });
-      // The note write is authoritative even if the metadata refresh is unavailable.
-      if (savedUrl) await refreshSavedMetadata().catch(() => {});
-      if (!isCurrent(generation)) return;
-      if (notes.reviewId !== review.id) throw new Error("Notes belong to a different review.");
-      if (snapshot.notes && notes.revision < snapshot.notes.revision) return;
-      update({
-        notes,
-        notesError: null,
-        semantic: snapshot.semantic ? projectAuthoritativeNotes(snapshot.semantic, notes) : null,
-      });
-    } catch (error) {
-      if (isCurrent(generation)) {
-        if (error instanceof HttpError && error.status === 409)
-          await loadNotes(review.id, generation);
-        if (isCurrent(generation)) update({ notesError: message(error) });
-      }
-      throw error;
+    if (mutation.type === "remove") validateReviewNoteRemoval(mutation.id, current.notes);
+    else validateReviewNoteText(mutation.type === "add" ? mutation.note.text : mutation.text);
+    const url = savedTargetUrl() ?? "/api/notes";
+    const key = noteQueueKey(review.id, url);
+    let queue = noteQueues.get(key);
+    if (!queue) {
+      queue = {
+        key,
+        url,
+        savedId: snapshot.savedView ? snapshot.savedReview?.id : undefined,
+        reviewId: review.id,
+        authoritative: current,
+        pending: [],
+        ids: new Map(),
+        failedIds: new Set(),
+      };
+      noteQueues.set(key, queue);
     }
+    const activeQueue = queue;
+    noteWriteEpoch += 1;
+    noteWriteRecovery = null;
+    return new Promise<void>((resolve, reject) => {
+      const write: NoteWrite = {
+        mutation,
+        temporaryId: mutation.type === "add" ? `optimistic-note-${++temporaryNoteId}` : undefined,
+        createdAt: new Date().toISOString(),
+        resolve,
+        reject,
+      };
+      const before = projectedNotes(activeQueue).notes.length;
+      activeQueue.pending.push(write);
+      const delta = projectedNotes(activeQueue).notes.length - before;
+      if (activeQueue.savedId && snapshot.savedReview?.id === activeQueue.savedId) {
+        update({
+          savedReview: {
+            ...snapshot.savedReview,
+            commentCount: snapshot.savedReview.commentCount + delta,
+          },
+        });
+      }
+      publishNotes(activeQueue, null);
+      noteWrites.push({ queue: activeQueue, write });
+      void drainNoteWrites();
+    });
   }
 
   if (savedReviewId && typeof window !== "undefined") {
@@ -1129,14 +1359,18 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     returnToSavedReview: () =>
       snapshot.savedTargetId ? selectSavedTarget(snapshot.savedTargetId) : Promise.resolve(),
     async copyFeedback() {
+      await waitForNoteWrites();
       const saved = snapshot.savedReview;
       if (!saved) throw new Error("Open a saved review first.");
+      const writeEpoch = noteWriteEpoch;
       const feedback = await api.json(
         `/api/reviews/${encodeURIComponent(saved.id)}/feedback`,
         savedFeedbackSchema,
       );
       await navigator.clipboard.writeText(feedback.text);
       if (
+        !writingNotes &&
+        writeEpoch === noteWriteEpoch &&
         snapshot.savedReview?.id === saved.id &&
         feedback.revision >= snapshot.savedReview.revision
       )
@@ -1150,6 +1384,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       return feedback;
     },
     async clearSavedComments(expectedRevision) {
+      await waitForNoteWrites();
       const saved = snapshot.savedReview;
       if (!saved) return;
       try {

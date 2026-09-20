@@ -235,3 +235,97 @@ test("a saved reply replaces its composer while the save promise is still pendin
   finish?.();
   await expect.element(page.getByRole("button", { name: "Reply", exact: true })).toBeVisible();
 });
+
+test("failed optimistic edits reopen the submitted text and failed deletes restore the card", async () => {
+  let fail: ((error: Error) => void) | undefined;
+  function Thread() {
+    const [parent, setParent] = useState<Note | null>(note);
+    const [error, setError] = useState("");
+    return (
+      <>
+        {error && <p role="status">{error}</p>}
+        {parent && (
+          <NoteCard
+            note={parent}
+            replies={[]}
+            onMutate={async (mutation) => {
+              if (mutation.type === "edit") setParent({ ...note, text: mutation.text });
+              if (mutation.type === "remove") setParent(null);
+              try {
+                await new Promise<void>((_resolve, reject) => {
+                  fail = reject;
+                });
+              } catch (cause) {
+                setParent(note);
+                setError("Could not persist comment");
+                throw cause;
+              }
+            }}
+          />
+        )}
+      </>
+    );
+  }
+  render(<Thread />);
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("textbox", { name: "Edit note text" }).fill("Keep this revision");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect
+    .element(page.getByRole("textbox", { name: "Edit note text" }))
+    .not.toBeInTheDocument();
+  await expect.element(page.getByText("Keep this revision", { exact: true })).toBeVisible();
+  fail?.(new Error("Storage unavailable"));
+  await expect
+    .element(page.getByRole("textbox", { name: "Edit note text" }))
+    .toHaveValue("Keep this revision");
+  await expect.element(page.getByRole("alert")).toHaveTextContent("Storage unavailable");
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Delete review note" }).click();
+  await expect.element(page.getByRole("article")).not.toBeInTheDocument();
+  fail?.(new Error("Storage unavailable"));
+  await expect.element(page.getByRole("article")).toBeVisible();
+  await expect.element(page.getByText(note.text, { exact: true })).toBeVisible();
+});
+
+test("failed optimistic replies reopen their text without blocking a newer reply", async () => {
+  let fail: ((error: Error) => void) | undefined;
+  function Thread() {
+    const [replies, setReplies] = useState<Note[]>([]);
+    return (
+      <NoteCard
+        note={note}
+        replies={replies}
+        onMutate={async (mutation) => {
+          if (mutation.type !== "add") return;
+          setReplies([{ ...note, ...mutation.note, id: "reply" }]);
+          try {
+            await new Promise<void>((_resolve, reject) => {
+              fail = reject;
+            });
+          } catch (cause) {
+            setReplies([]);
+            throw cause;
+          }
+        }}
+      />
+    );
+  }
+  render(<Thread />);
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await page.getByRole("textbox", { name: "Reply text" }).fill("Keep the failed reply");
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect.element(page.getByRole("textbox", { name: "Reply text" })).not.toBeInTheDocument();
+  fail?.(new Error("Storage unavailable"));
+  await expect
+    .element(page.getByRole("textbox", { name: "Reply text" }))
+    .toHaveValue("Keep the failed reply");
+  await expect.element(page.getByRole("alert")).toHaveTextContent("Storage unavailable");
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await expect.element(page.getByRole("textbox", { name: "Reply text" })).not.toBeInTheDocument();
+  await page.getByRole("button", { name: "Reply", exact: true }).click();
+  await page.getByRole("textbox", { name: "Reply text" }).fill("A newer reply draft");
+  fail?.(new Error("Storage unavailable"));
+  await expect
+    .element(page.getByRole("textbox", { name: "Reply text" }))
+    .toHaveValue("A newer reply draft");
+});

@@ -78,6 +78,7 @@ async function mountApp(
     metadataFile?: boolean;
     branches?: boolean;
     savedReview?: boolean;
+    noteMutation?: () => Promise<Response | undefined>;
   } = {},
 ) {
   initializeTheme();
@@ -243,6 +244,8 @@ async function mountApp(
     }
     if (url.pathname === "/api/notes") {
       if (init?.method === "POST") {
+        const response = await options.noteMutation?.();
+        if (response) return response;
         const body = JSON.parse(String(init.body));
         if (body.mutation.type === "add")
           notes = [
@@ -737,6 +740,62 @@ describe("graphical review", () => {
       .toHaveAttribute("aria-selected", "false");
   });
 
+  test("dismisses selected lines with the draft and moves an open composer to a new range", async () => {
+    await page.viewport(1280, 800);
+    await mountApp();
+    await page.getByRole("button", { name: "Split", exact: true }).click();
+    const number = (value: string) =>
+      page
+        .getByText(value, { exact: true })
+        .all()
+        .find((locator) => {
+          const element = locator.element();
+          return (
+            element.getRootNode() === document.querySelector("diffs-container")?.shadowRoot &&
+            element.closest("[data-column-number]")?.closest("[data-additions]")
+          );
+        })!;
+    await expect.poll(() => Boolean(number("2"))).toBe(true);
+    await number("1").click();
+    await number("2").click({ modifiers: ["Shift"] });
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Old range draft");
+    // Editing inside the card keeps the diff selection.
+    await expect.element(page.getByText("L1–2 selected", { exact: true })).toBeVisible();
+    await number("2").click();
+    await expect.element(page.getByRole("textbox", { name: "Review note text" })).toHaveValue("");
+    await expect.element(page.getByText("Local comment on line R2", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect
+      .element(page.getByRole("button", { name: "Clear line selection" }))
+      .not.toBeInTheDocument();
+    await expect
+      .poll(
+        () =>
+          document
+            .querySelector("diffs-container")
+            ?.shadowRoot?.querySelectorAll("[data-selected-line]").length,
+      )
+      .toBe(0);
+    await number("1").click();
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Escape this draft");
+    await userEvent.keyboard("{Escape}");
+    await expect
+      .element(page.getByRole("button", { name: "Clear line selection" }))
+      .not.toBeInTheDocument();
+    await number("1").click();
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Click away");
+    await page.getByRole("button", { name: "Split", exact: true }).click();
+    await expect
+      .element(page.getByRole("textbox", { name: "Review note text" }))
+      .not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "Clear line selection" }))
+      .not.toBeInTheDocument();
+  });
+
   test("shift-selecting line numbers keeps the full range when adding a note", async () => {
     await page.viewport(1280, 800);
     const { controller } = await mountApp();
@@ -885,6 +944,41 @@ describe("graphical review", () => {
         .toHaveValue("A newer draft");
     } finally {
       completeSave();
+    }
+  });
+
+  test("restores draft text after an optimistic comment is rejected", async () => {
+    await page.viewport(1280, 800);
+    let rejectSave!: (response: Response) => void;
+    const result = new Promise<Response>((resolve) => {
+      rejectSave = resolve;
+    });
+    const { controller } = await mountApp({ noteMutation: () => result });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    await page.getByRole("combobox", { name: "Search commands" }).fill("Find in diff");
+    await page.getByRole("option", { name: /Find in diff contents/ }).click();
+    await page.getByRole("textbox", { name: "Find in diff contents" }).fill("after");
+    await page.getByRole("button", { name: "Next match" }).click();
+    await page.getByRole("button", { name: "Add note", exact: true }).click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Recover this comment");
+    try {
+      await page.getByRole("button", { name: "Save note", exact: true }).click();
+      await expect.poll(() => controller.getSnapshot().notes?.notes.length).toBe(1);
+      await expect
+        .element(page.getByRole("textbox", { name: "Review note text" }))
+        .not.toBeInTheDocument();
+      await expect.element(page.getByText("Recover this comment", { exact: true })).toBeVisible();
+      rejectSave(Response.json({ error: { message: "Storage is full" } }, { status: 500 }));
+      await expect
+        .element(page.getByRole("textbox", { name: "Review note text" }))
+        .toHaveValue("Recover this comment");
+      await expect
+        .element(page.getByRole("button", { name: "Clear line selection" }))
+        .toBeVisible();
+      await expect.poll(() => controller.getSnapshot().notes?.notes.length).toBe(0);
+      await expect.element(page.getByText("Storage is full", { exact: true })).toBeVisible();
+    } finally {
+      rejectSave(Response.json({ error: { message: "Storage is full" } }, { status: 500 }));
     }
   });
 

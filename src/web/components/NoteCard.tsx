@@ -35,12 +35,16 @@ function CommentHeading({ target, reply = false }: { target: NoteTarget; reply?:
 function CommentEditor({
   label,
   initialText = "",
+  initialError = "",
+  closeOnSave = true,
   submitLabel,
   onSave,
   onCancel,
 }: {
   label: string;
   initialText?: string;
+  initialError?: string;
+  closeOnSave?: boolean;
   submitLabel: string;
   onSave(text: string): Promise<void>;
   onCancel(): void;
@@ -49,7 +53,8 @@ function CommentEditor({
   const inFlight = useRef(false);
   const [text, setText] = useState(initialText);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const visibleError = error ?? initialError;
   useEffect(() => {
     input.current?.focus({ preventScroll: true });
   }, []);
@@ -60,7 +65,7 @@ function CommentEditor({
     setError("");
     try {
       await onSave(text.trim());
-      onCancel();
+      if (closeOnSave) onCancel();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not save comment");
     } finally {
@@ -102,9 +107,9 @@ function CommentEditor({
           {...stylex.props(styles.content, styles.textarea)}
         />
       </div>
-      {error && (
+      {visibleError && (
         <p role="alert" {...stylex.props(styles.error)}>
-          {error}
+          {visibleError}
         </p>
       )}
       <div {...stylex.props(styles.actions)}>
@@ -112,19 +117,22 @@ function CommentEditor({
         <span {...stylex.props(ui.grow)} />
         <button
           type="button"
-          {...stylex.props(ui.button, styles.smallButton)}
-          disabled={saving}
-          onClick={onCancel}
+          {...stylex.props(ui.button, ui.pressable, styles.smallButton)}
+          aria-disabled={saving}
+          onClick={() => {
+            if (!inFlight.current) onCancel();
+          }}
         >
           Cancel
         </button>
         <button
           type="submit"
-          {...stylex.props(ui.button, styles.submit)}
-          disabled={!text.trim() || saving}
+          {...stylex.props(ui.button, ui.pressable, styles.submit)}
+          disabled={!text.trim()}
+          aria-disabled={saving || !text.trim()}
           aria-label={submitLabel}
         >
-          {saving ? "Saving…" : submitLabel === "Save note" ? "Comment" : submitLabel}
+          {submitLabel === "Save note" ? "Comment" : submitLabel}
         </button>
       </div>
     </form>
@@ -134,20 +142,29 @@ function CommentEditor({
 export function NoteComposer({
   target,
   parentId,
+  initialText,
+  initialError,
+  closeOnSave,
   onSave,
   onCancel,
 }: {
   target: NoteTarget;
   parentId?: string;
+  initialText?: string;
+  initialError?: string;
+  closeOnSave?: boolean;
   onSave(note: NoteInput): Promise<void>;
   onCancel(): void;
 }) {
   return (
-    <div {...stylex.props(styles.card, !!parentId && styles.embedded)}>
+    <div data-comment-card {...stylex.props(styles.card, !!parentId && styles.embedded)}>
       <CommentHeading target={target} reply={!!parentId} />
       <CommentEditor
         label={parentId ? "Reply text" : "Review note text"}
         submitLabel={parentId ? "Reply" : "Save note"}
+        initialText={initialText}
+        initialError={initialError}
+        closeOnSave={closeOnSave}
         onSave={(text) => onSave({ ...target, text, ...(parentId ? { parentId } : {}) })}
         onCancel={onCancel}
       />
@@ -167,13 +184,13 @@ function ThreadMessage({
   onMutate(mutation: NoteMutation): Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
-  const [removing, setRemoving] = useState(false);
+  const [editText, setEditText] = useState(note.text);
+  const editSession = useRef(0);
   const removeInFlight = useRef(false);
   const [error, setError] = useState("");
   const remove = async () => {
     if (removeInFlight.current) return;
     removeInFlight.current = true;
-    setRemoving(true);
     setError("");
     try {
       await onMutate({ type: "remove", id: note.id });
@@ -181,7 +198,6 @@ function ThreadMessage({
       setError(cause instanceof Error ? cause.message : "Could not delete comment");
     } finally {
       removeInFlight.current = false;
-      setRemoving(false);
     }
   };
   return (
@@ -197,10 +213,28 @@ function ThreadMessage({
       {editing ? (
         <CommentEditor
           label={reply ? "Edit reply text" : "Edit note text"}
-          initialText={note.text}
+          initialText={editText}
           submitLabel="Save"
-          onSave={(text) => onMutate({ type: "edit", id: note.id, text })}
-          onCancel={() => setEditing(false)}
+          closeOnSave={false}
+          onSave={async (text) => {
+            const session = editSession.current;
+            setEditing(false);
+            setError("");
+            try {
+              await onMutate({ type: "edit", id: note.id, text });
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : "Could not save comment");
+              if (editSession.current === session) {
+                setEditText(text);
+                setEditing(true);
+              }
+              throw cause;
+            }
+          }}
+          onCancel={() => {
+            setEditing(false);
+            editSession.current++;
+          }}
         />
       ) : (
         <>
@@ -210,7 +244,7 @@ function ThreadMessage({
             {onReply && (
               <button
                 type="button"
-                {...stylex.props(ui.button, styles.smallButton)}
+                {...stylex.props(ui.button, ui.pressable, styles.smallButton)}
                 onClick={onReply}
               >
                 Reply
@@ -218,21 +252,23 @@ function ThreadMessage({
             )}
             <button
               type="button"
-              {...stylex.props(ui.button, styles.smallButton)}
+              {...stylex.props(ui.button, ui.pressable, styles.smallButton)}
               aria-label={reply ? "Edit reply" : "Edit"}
-              disabled={removing}
-              onClick={() => setEditing(true)}
+              onClick={() => {
+                editSession.current++;
+                setEditText(note.text);
+                setEditing(true);
+              }}
             >
               Edit
             </button>
             <button
               type="button"
-              {...stylex.props(ui.button, styles.smallButton)}
+              {...stylex.props(ui.button, ui.pressable, styles.smallButton)}
               aria-label={reply ? "Delete reply" : "Delete review note"}
-              disabled={removing}
               onClick={() => void remove()}
             >
-              {removing ? "Deleting…" : "Delete"}
+              Delete
             </button>
           </div>
         </>
@@ -256,44 +292,56 @@ export function NoteCard({
   onMutate(mutation: NoteMutation): Promise<void>;
 }) {
   const [replying, setReplying] = useState(false);
-  const [pendingReply, setPendingReply] = useState<{
-    text: string;
-    previousIds: Set<string>;
-  } | null>(null);
-  const replySaved =
-    pendingReply &&
-    replies.some(
-      (reply) => !pendingReply.previousIds.has(reply.id) && reply.text === pendingReply.text,
-    );
+  const [replyText, setReplyText] = useState("");
+  const [replyError, setReplyError] = useState("");
+  const replySession = useRef(0);
   return (
-    <article aria-label={`Comment thread at ${lineLabel(note)}`} {...stylex.props(styles.card)}>
+    <article
+      data-comment-card
+      aria-label={`Comment thread at ${lineLabel(note)}`}
+      {...stylex.props(styles.card)}
+    >
       <ThreadMessage
         key={note.id}
         note={note}
         onMutate={onMutate}
-        onReply={replying ? undefined : () => setReplying(true)}
+        onReply={
+          replying
+            ? undefined
+            : () => {
+                replySession.current++;
+                setReplyText("");
+                setReplyError("");
+                setReplying(true);
+              }
+        }
       />
       {replies.map((reply) => (
         <ThreadMessage key={reply.id} note={reply} reply onMutate={onMutate} />
       ))}
-      {replying && !replySaved && (
+      {replying && (
         <NoteComposer
           target={note}
           parentId={note.id}
+          initialText={replyText}
+          initialError={replyError}
+          closeOnSave={false}
           onSave={async (reply) => {
-            setPendingReply({
-              text: reply.text,
-              previousIds: new Set(replies.map((item) => item.id)),
-            });
+            const session = replySession.current;
+            setReplying(false);
             try {
               await onMutate({ type: "add", note: reply });
             } catch (error) {
-              setPendingReply(null);
+              if (replySession.current === session) {
+                setReplyText(reply.text);
+                setReplyError(error instanceof Error ? error.message : "Could not save reply");
+                setReplying(true);
+              }
               throw error;
             }
           }}
           onCancel={() => {
-            setPendingReply(null);
+            replySession.current++;
             setReplying(false);
           }}
         />

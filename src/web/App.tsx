@@ -8,7 +8,15 @@ import {
   type DiffLineAnnotation,
   type FileDiffMetadata,
 } from "@pierre/diffs/react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type { Comparison, Note, NoteInput } from "../shared/protocol";
 import { useReviewController, type ReviewController } from "./data/controller";
 import { tokens, ui } from "./theme.stylex";
@@ -295,12 +303,44 @@ export function App({
   const [findIndex, setFindIndex] = useState(0);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [draft, setDraft] = useState<NoteTarget | null>(null);
+  const draftRef = useRef(draft);
+  useLayoutEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
   const [pendingDraft, setPendingDraft] = useState<{
     target: NoteTarget;
     reviewId: string | undefined;
     note: NoteInput;
     existingIds: Set<string>;
+    error?: string;
   } | null>(null);
+  const clearLineSelection = useCallback(() => {
+    setSelection(null);
+    setDraft(null);
+    setPendingDraft(null);
+  }, []);
+  useEffect(() => {
+    const pointerdown = (event: PointerEvent) => {
+      // Gutter drags finish before moving a composer. Changing its height during
+      // the drag would move the line under the pointer. Slotted comments and the
+      // selection toolbar also keep their current selection while being used.
+      if (
+        event
+          .composedPath()
+          .some(
+            (node) =>
+              node instanceof Element &&
+              node.matches(
+                "[data-column-number], [data-utility-button], [data-comment-card], [data-line-selection-controls]",
+              ),
+          )
+      )
+        return;
+      clearLineSelection();
+    };
+    window.addEventListener("pointerdown", pointerdown, true);
+    return () => window.removeEventListener("pointerdown", pointerdown, true);
+  }, [clearLineSelection]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [sidebarWidth, setSidebarWidth] = useState(300);
   const [contextError, setContextError] = useState<string | null>(null);
@@ -444,13 +484,14 @@ export function App({
     state.notes?.revision,
     showNotes,
     visibleDraft,
+    pendingDraft?.error,
     [...collapsed],
   ]);
-  const [itemVersion, setItemVersion] = useState({ key: itemKey, files, value: 0 });
+  const [itemVersion, setItemVersion] = useState({ key: itemKey, files, notes, value: 0 });
   let currentVersion = itemVersion.value;
-  if (itemVersion.key !== itemKey || itemVersion.files !== files) {
+  if (itemVersion.key !== itemKey || itemVersion.files !== files || itemVersion.notes !== notes) {
     currentVersion++;
-    setItemVersion({ key: itemKey, files, value: currentVersion });
+    setItemVersion({ key: itemKey, files, notes, value: currentVersion });
   }
   const items = useMemo<CodeViewItem<Annotation>[]>(() => {
     return files.flatMap((file) => {
@@ -533,6 +574,28 @@ export function App({
           ?.querySelector("[data-utility-button]")
           ?.setAttribute("aria-label", "Add note to line");
       },
+      onLineSelectionEnd(range, context) {
+        if (!draft || context.type !== "diff") return;
+        if (!range || (range.endSide && range.side !== range.endSide)) {
+          setDraft(null);
+          return;
+        }
+        const target: NoteTarget = {
+          path: context.item.fileDiff.name,
+          side: range.side === "deletions" ? "old" : "new",
+          line: Math.min(range.start, range.end),
+          endLine: Math.max(range.start, range.end),
+        };
+        if (
+          target.path !== draft.path ||
+          target.side !== draft.side ||
+          target.line !== draft.line ||
+          target.endLine !== (draft.endLine ?? draft.line)
+        ) {
+          setPendingDraft(null);
+          setDraft(target);
+        }
+      },
       onGutterUtilityClick(range, context) {
         if (context.type !== "diff") return;
         if (range.endSide && range.side !== range.endSide) {
@@ -611,7 +674,7 @@ export function App({
         );
       },
     }),
-    [controller, theme, activeTheme.pierreTheme, mode, wrap, reviewId, diagnostics],
+    [controller, theme, activeTheme.pierreTheme, mode, wrap, reviewId, diagnostics, draft],
   );
 
   const hits = useMemo(() => {
@@ -1758,7 +1821,7 @@ export function App({
                 </div>
               ))}
               {selection && (
-                <div {...stylex.props(styles.selectionbar)}>
+                <div data-line-selection-controls {...stylex.props(styles.selectionbar)}>
                   <span {...stylex.props(ui.mono)}>
                     L{selection.range.start}
                     {selection.range.end !== selection.range.start
@@ -1774,7 +1837,7 @@ export function App({
                   <button
                     {...stylex.props(ui.button, ui.iconButton)}
                     aria-label="Clear line selection"
-                    onClick={() => setSelection(null)}
+                    onClick={clearLineSelection}
                   >
                     <Icon name="close" size={12} />
                   </button>
@@ -1868,7 +1931,18 @@ export function App({
                   renderAnnotation={(annotation) =>
                     annotation.metadata?.draft ? (
                       <NoteComposer
+                        key={JSON.stringify(annotation.metadata.draft)}
                         target={annotation.metadata.draft}
+                        initialText={
+                          pendingDraft?.target === annotation.metadata.draft
+                            ? pendingDraft.note.text
+                            : undefined
+                        }
+                        initialError={
+                          pendingDraft?.target === annotation.metadata.draft
+                            ? pendingDraft.error
+                            : undefined
+                        }
                         onSave={async (note) => {
                           const submission = {
                             target: annotation.metadata!.draft!,
@@ -1880,13 +1954,26 @@ export function App({
                           try {
                             await controller.mutateNote({ type: "add", note });
                           } catch (error) {
-                            setPendingDraft((current) => (current === submission ? null : current));
+                            setPendingDraft((current) =>
+                              current === submission
+                                ? {
+                                    ...submission,
+                                    error:
+                                      error instanceof Error
+                                        ? error.message
+                                        : "Could not save comment",
+                                  }
+                                : current,
+                            );
                             throw error;
                           }
                         }}
                         onCancel={() => {
                           const target = annotation.metadata!.draft!;
-                          setDraft((current) => (current === target ? null : current));
+                          if (draftRef.current === target) {
+                            setDraft(null);
+                            setSelection(null);
+                          }
                           setPendingDraft((current) =>
                             current?.target === target ? null : current,
                           );
