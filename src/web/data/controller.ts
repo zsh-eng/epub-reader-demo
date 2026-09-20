@@ -1,3 +1,11 @@
+import { readBrowserToken } from "./auth";
+import {
+  savedReviewSchema,
+  savedFeedbackSchema,
+  type SavedReview,
+  type SavedFeedback,
+  type SavedReviewTarget,
+} from "../../shared/saved-review";
 import { comparisonKey } from "../../shared/protocol";
 import { useSyncExternalStore } from "react";
 import type { FileDiffMetadata } from "@pierre/diffs";
@@ -40,6 +48,9 @@ import { readServerEvents } from "./sse";
 
 export type { ParsedReviewFile } from "../../shared/review";
 export interface ReviewControllerSnapshot {
+  savedReview: SavedReview | null;
+  savedTargetId: string | null;
+  savedView: boolean;
   session: Session | null;
   repositories: RegisteredRepository[];
   activeRepositoryId: string | null;
@@ -69,6 +80,7 @@ export interface ReviewControllerSnapshot {
 
 export interface ReviewControllerOptions {
   token?: string;
+  savedReviewId?: string;
   fetch?: typeof fetch;
   parsePatch?: (patch: string) => Promise<FileDiffMetadata[]>;
   cacheBytes?: number;
@@ -79,6 +91,10 @@ export interface ReviewController {
   getSnapshot(): ReviewControllerSnapshot;
   subscribe(listener: () => void): () => void;
   initialize(): Promise<void>;
+  selectSavedTarget(id: string): Promise<void>;
+  returnToSavedReview(): Promise<void>;
+  copyFeedback(): Promise<SavedFeedback>;
+  clearSavedComments(expectedRevision: number): Promise<void>;
   selectComparison(comparison: Comparison): Promise<void>;
   refresh(): Promise<void>;
   loadMoreHistory(): Promise<void>;
@@ -115,11 +131,12 @@ function query(values: Record<string, string>): string {
 }
 
 export function createReviewController(options: ReviewControllerOptions = {}): ReviewController {
-  const token =
-    options.token ??
+  const token = options.token ?? readBrowserToken();
+  const savedReviewId =
+    options.savedReviewId ??
     (typeof location === "undefined"
-      ? ""
-      : (new URLSearchParams(location.hash.slice(1)).get("token") ?? ""));
+      ? undefined
+      : /^\/review\/([^/]+)\/?$/.exec(location.pathname)?.[1]);
   const api = createApi(options.fetch ?? globalThis.fetch.bind(globalThis), token);
   const parse =
     options.parsePatch ??
@@ -138,6 +155,9 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
   });
   const listeners = new Set<() => void>();
   let snapshot: ReviewControllerSnapshot = {
+    savedReview: null,
+    savedTargetId: null,
+    savedView: false,
     session: null,
     repositories: [],
     activeRepositoryId: null,
@@ -225,11 +245,49 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     sourceRequests.clear();
   };
 
+  function savedTargetUrl() {
+    return snapshot.savedView && snapshot.savedReview && snapshot.savedTargetId
+      ? `/api/reviews/${encodeURIComponent(snapshot.savedReview.id)}/targets/${encodeURIComponent(snapshot.savedTargetId)}`
+      : null;
+  }
+  async function refreshSavedMetadata() {
+    const id = snapshot.savedReview?.id;
+    if (!id || disposed) return;
+    const savedReview = await api.json(`/api/reviews/${encodeURIComponent(id)}`, savedReviewSchema);
+    if (
+      !disposed &&
+      snapshot.savedReview?.id === id &&
+      savedReview.revision >= snapshot.savedReview.revision
+    ) {
+      const changed = savedReview.revision > snapshot.savedReview.revision;
+      update({ savedReview });
+      if (changed && snapshot.savedView && snapshot.review)
+        await loadNotes(snapshot.review.id, reviewGeneration);
+    }
+  }
+  let savedRefresh: Promise<void> | undefined;
+  const refreshSavedOnFocus = () => {
+    if (disposed || !snapshot.savedReview || savedRefresh) return;
+    savedRefresh = refreshSavedMetadata()
+      .catch(() => {})
+      .finally(() => {
+        savedRefresh = undefined;
+      });
+  };
+  const refreshSavedOnVisibility = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible")
+      refreshSavedOnFocus();
+  };
+
   async function loadNotes(reviewId: string, generation: number): Promise<void> {
     try {
-      const notes = await api.json(`/api/notes?${query({ reviewId })}`, notesSchema, {
-        signal: reviewAbort?.signal,
-      });
+      const notes = await api.json(
+        savedTargetUrl() ? `${savedTargetUrl()}/notes` : `/api/notes?${query({ reviewId })}`,
+        notesSchema,
+        {
+          signal: reviewAbort?.signal,
+        },
+      );
       if (!isCurrent(generation) || snapshot.review?.id !== reviewId) return;
       if (notes.reviewId !== reviewId) throw new Error("Notes belong to a different review.");
       if (snapshot.notes?.reviewId === notes.reviewId && snapshot.notes.revision > notes.revision)
@@ -320,6 +378,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       });
       return;
     }
+    update({ savedView: false });
     const generation = ++reviewGeneration;
     reviewAbort?.abort();
     reviewAbort = new AbortController();
@@ -466,6 +525,15 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
           ?.branches ?? [],
       branchesError: null,
     });
+    if (
+      (removedActive || snapshot.activeRepositoryId === null) &&
+      snapshot.savedView &&
+      snapshot.savedReview &&
+      snapshot.savedTargetId
+    ) {
+      await selectSavedTarget(snapshot.savedTargetId);
+      return;
+    }
     if (removedActive || snapshot.activeRepositoryId === null) {
       const nextRepository = repositories[0];
       if (nextRepository) await openWorkspace(nextRepository.path, undefined, nextRepository.id);
@@ -572,6 +640,8 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
   }
 
   async function refresh(): Promise<void> {
+    if (snapshot.savedView && snapshot.savedTargetId)
+      return selectSavedTarget(snapshot.savedTargetId);
     update({ sourceRevision: snapshot.sourceRevision + 1 });
     await Promise.all([
       selectComparison(snapshot.comparison, true),
@@ -638,7 +708,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
                 update({ sourceRevision: snapshot.sourceRevision + 1 });
                 void loadHistory(true);
                 void loadBranches(true);
-                if (!immutableComparison(snapshot.comparison))
+                if (!snapshot.savedView && !immutableComparison(snapshot.comparison))
                   void selectComparison(snapshot.comparison, true);
               }, 150);
             }
@@ -688,6 +758,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     path?: string,
     branch?: Branch,
     repositoryId?: string,
+    savedTarget?: SavedReviewTarget,
   ): Promise<void> {
     if (disposed) return;
     rememberTarget();
@@ -707,6 +778,8 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     historyCursor = null;
     update({
       session: null,
+      savedView: Boolean(savedTarget),
+      ...(savedTarget ? { savedTargetId: savedTarget.id } : {}),
       activeRepositoryId: repositoryId ?? snapshot.activeRepositoryId,
       branches: repositoryId
         ? (snapshot.repositories.find((entry) => entry.id === repositoryId)?.branches ?? [])
@@ -771,10 +844,11 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
             kind: "working" as const,
           });
       const comparison =
-        saved &&
+        savedTarget?.comparison ??
+        (saved &&
         !(branchSnapshot && ["working", "staged", "unstaged"].includes(saved.comparison.kind))
           ? saved.comparison
-          : initialComparison;
+          : initialComparison);
       update({
         session,
         repositories,
@@ -787,9 +861,38 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
         historyRef: branchSnapshot ? `refs/heads/${branch.name}` : null,
       });
       startEvents();
-      await Promise.all([selectComparison(comparison), loadHistory(true), loadBranches()]);
+      await Promise.all([
+        savedTarget ? loadSavedTarget(savedTarget) : selectComparison(comparison),
+        loadHistory(true),
+        loadBranches(),
+      ]);
     } catch (error) {
       if (disposed || generation !== workspaceGeneration) return;
+      if (savedTarget && path) {
+        // A linked worktree can disappear after discovery. Recheck the family and
+        // use its surviving checkout for navigation; the saved diff stays unchanged.
+        try {
+          const result = await api.json("/api/repositories", repositoriesSchema, {
+            signal: sessionAbort.signal,
+          });
+          if (disposed || generation !== workspaceGeneration) return;
+          const surviving = result.repositories.find(
+            (entry) => entry.id === savedTarget.repositoryId,
+          );
+          update({ repositories: result.repositories });
+          if (surviving && surviving.path !== path) {
+            await openWorkspace(
+              surviving.path,
+              surviving.branches.find((entry) => entry.name === savedTarget.branch),
+              surviving.id,
+              savedTarget,
+            );
+            return;
+          }
+        } catch {
+          if (disposed || generation !== workspaceGeneration) return;
+        }
+      }
       // An empty registry has no default session. Its catalogue remains available
       // so a fresh browser can show the normal Add repository action.
       if (!path && error instanceof HttpError && error.status === 403) {
@@ -807,8 +910,79 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
           return;
         }
       }
-      update({ status: "error", error: message(error) });
+      update({
+        status: "error",
+        error:
+          savedReviewId && error instanceof HttpError && error.status === 401
+            ? "Open the launch link shown by med to authorize this browser, then return to this review link."
+            : message(error),
+      });
     }
+  }
+
+  async function loadSavedTarget(target: SavedReviewTarget): Promise<void> {
+    const saved = snapshot.savedReview;
+    if (!saved || disposed) return;
+    const generation = ++reviewGeneration;
+    reviewAbort?.abort();
+    reviewAbort = new AbortController();
+    cancelSources();
+    update({
+      savedView: true,
+      savedTargetId: target.id,
+      comparison: target.comparison,
+      status: "loading",
+      error: null,
+    });
+    const start = performance.now();
+    try {
+      const response = await api.json(
+        `/api/reviews/${encodeURIComponent(saved.id)}/targets/${encodeURIComponent(target.id)}/review`,
+        reviewSchema,
+        { signal: reviewAbort.signal },
+      );
+      if (!isCurrent(generation)) return;
+      if (
+        response.repo !== target.repo ||
+        response.base !== target.base ||
+        response.head !== target.head ||
+        comparisonKey(response.comparison) !== comparisonKey(target.comparison)
+      )
+        throw new Error("The saved comparison does not match this review target.");
+      const parseStart = performance.now();
+      const parsed = await parse(response.patch);
+      if (!isCurrent(generation)) return;
+      const { files, document } = projectResponse(response, parsed);
+      publishReview({ response, files, document }, generation, {
+        requestMs: parseStart - start,
+        parseMs: performance.now() - parseStart,
+        cacheHit: false,
+      });
+    } catch (error) {
+      if (isCurrent(generation)) update({ status: "error", error: message(error) });
+    }
+  }
+
+  async function selectSavedTarget(id: string): Promise<void> {
+    const target = snapshot.savedReview?.targets.find((entry) => entry.id === id);
+    if (!target || disposed) return;
+    const repository = snapshot.repositories.find((entry) => entry.id === target.repositoryId);
+    if (!repository) {
+      clearWorkspace();
+      update({
+        savedTargetId: id,
+        savedView: true,
+        status: "error",
+        error: `Repository unavailable: ${target.repo}. Add this repository in Open branch, then select this review target again.`,
+      });
+      return;
+    }
+    const branch = repository.branches.find((entry) => entry.name === target.branch);
+    const checkout = repository.worktrees.some((worktree) => worktree.path === target.repo)
+      ? target.repo
+      : repository.path;
+    await openWorkspace(checkout, branch, target.repositoryId, target);
+    if (!disposed && snapshot.savedTargetId === id) await refreshSavedMetadata().catch(() => {});
   }
 
   async function loadSources(path: string): Promise<SourceResponse> {
@@ -844,9 +1018,15 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     const abort = new AbortController();
     setSourceStatus({ kind: "loading" });
     const promise = api
-      .json(`/api/source?${query({ reviewId: review.id, path })}`, sourceSchema, {
-        signal: abort.signal,
-      })
+      .json(
+        savedTargetUrl()
+          ? `${savedTargetUrl()}/source?${query({ path })}`
+          : `/api/source?${query({ reviewId: review.id, path })}`,
+        sourceSchema,
+        {
+          signal: abort.signal,
+        },
+      )
       .then((source) => {
         if (!isCurrent(generation)) throw new DOMException("The review changed.", "AbortError");
         if (source.reviewId !== review.id || source.path !== path)
@@ -879,12 +1059,15 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       throw new Error("Wait for notes to load.");
     const generation = reviewGeneration;
     try {
-      const notes = await api.json("/api/notes", notesSchema, {
+      const savedUrl = savedTargetUrl();
+      const notes = await api.json(savedUrl ? `${savedUrl}/notes` : "/api/notes", notesSchema, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reviewId: review.id, expectedRevision: current.revision, mutation }),
         signal: reviewAbort?.signal,
       });
+      // The note write is authoritative even if the metadata refresh is unavailable.
+      if (savedUrl) await refreshSavedMetadata().catch(() => {});
       if (!isCurrent(generation)) return;
       if (notes.reviewId !== review.id) throw new Error("Notes belong to a different review.");
       if (snapshot.notes && notes.revision < snapshot.notes.revision) return;
@@ -903,6 +1086,11 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     }
   }
 
+  if (savedReviewId && typeof window !== "undefined") {
+    window.addEventListener("focus", refreshSavedOnFocus);
+    document.addEventListener("visibilitychange", refreshSavedOnVisibility);
+  }
+
   return {
     getSnapshot: () => snapshot,
     subscribe(listener) {
@@ -911,7 +1099,79 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
         listeners.delete(listener);
       };
     },
-    initialize: () => openWorkspace(),
+    async initialize() {
+      if (!savedReviewId) return openWorkspace();
+      update({ status: "loading" });
+      try {
+        const savedReview = await api.json(
+          `/api/reviews/${encodeURIComponent(savedReviewId)}`,
+          savedReviewSchema,
+        );
+        if (disposed) return;
+        update({ savedReview });
+        const result = await api.json("/api/repositories", repositoriesSchema);
+        if (disposed) return;
+        hasRepositoryCatalogue = true;
+        update({ repositories: result.repositories });
+        if (!savedReview.targets[0]) throw new Error("This review has no targets.");
+        await selectSavedTarget(savedReview.targets[0].id);
+      } catch (error) {
+        update({
+          status: "error",
+          error:
+            error instanceof HttpError && error.status === 401
+              ? "Open the launch link shown by med to authorize this browser, then return to this review link."
+              : message(error),
+        });
+      }
+    },
+    selectSavedTarget,
+    returnToSavedReview: () =>
+      snapshot.savedTargetId ? selectSavedTarget(snapshot.savedTargetId) : Promise.resolve(),
+    async copyFeedback() {
+      const saved = snapshot.savedReview;
+      if (!saved) throw new Error("Open a saved review first.");
+      const feedback = await api.json(
+        `/api/reviews/${encodeURIComponent(saved.id)}/feedback`,
+        savedFeedbackSchema,
+      );
+      await navigator.clipboard.writeText(feedback.text);
+      if (
+        snapshot.savedReview?.id === saved.id &&
+        feedback.revision >= snapshot.savedReview.revision
+      )
+        update({
+          savedReview: {
+            ...snapshot.savedReview,
+            revision: feedback.revision,
+            commentCount: feedback.count,
+          },
+        });
+      return feedback;
+    },
+    async clearSavedComments(expectedRevision) {
+      const saved = snapshot.savedReview;
+      if (!saved) return;
+      try {
+        const cleared = await api.json(
+          `/api/reviews/${encodeURIComponent(saved.id)}/clear`,
+          savedReviewSchema,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ expectedRevision }),
+          },
+        );
+        if (disposed || snapshot.savedReview?.id !== saved.id) return;
+        if (cleared.revision >= snapshot.savedReview.revision) update({ savedReview: cleared });
+        // Clearing spans all targets, including one selected while the request was pending.
+        if (snapshot.savedView && snapshot.review)
+          await loadNotes(snapshot.review.id, reviewGeneration);
+      } catch (error) {
+        await refreshSavedMetadata();
+        throw error;
+      }
+    },
     selectWorktree(path, repositoryId) {
       if (snapshot.session?.repository.git === false) {
         update({ error: "Worktrees are not available for this input." });
@@ -974,6 +1234,10 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     },
     dispose() {
       disposed = true;
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", refreshSavedOnFocus);
+        document.removeEventListener("visibilitychange", refreshSavedOnVisibility);
+      }
       ++catalogueGeneration;
       catalogueAbort?.abort();
       navigation.clear();

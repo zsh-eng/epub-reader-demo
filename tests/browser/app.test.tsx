@@ -72,7 +72,13 @@ function response(comparison: Comparison): ReviewResponse {
 }
 
 async function mountApp(
-  options: { inputOnly?: boolean; notes?: Note[]; metadataFile?: boolean; branches?: boolean } = {},
+  options: {
+    inputOnly?: boolean;
+    notes?: Note[];
+    metadataFile?: boolean;
+    branches?: boolean;
+    savedReview?: boolean;
+  } = {},
 ) {
   initializeTheme();
   themeController.commit("graphite-dark");
@@ -80,8 +86,57 @@ async function mountApp(
   const fileRequests: { source: BrowseSource; path: string }[] = [];
   let notes = options.notes ?? [];
   let revision = 0;
+  const savedTargets = ["/test/repo", "/test/feature"].map((repo, index) => ({
+    id: `target-${index}`,
+    repositoryId: `repo-${index}`,
+    repo,
+    branch: index ? "feature" : "main",
+    label: `Captured ${index}`,
+    comparison: { kind: "working" as const },
+    base: secondCommit,
+    head: "working",
+    captured: true,
+  }));
+  const savedRepositories = savedTargets.map((target) => ({
+    id: target.repositoryId,
+    path: target.repo,
+    name: target.repo.split("/").at(-1)!,
+    branches: [
+      { name: target.branch, head: firstCommit, worktreePath: target.repo, current: true },
+    ],
+    worktrees: [{ path: target.repo, head: firstCommit, branch: target.branch }],
+  }));
   const fetcher: typeof fetch = async (input, init) => {
     const url = new URL(String(input), "http://localhost");
+    if (options.savedReview) {
+      if (url.pathname === "/api/reviews/saved")
+        return Response.json({
+          id: "saved",
+          title: "Agent review",
+          createdAt: "2026-09-20T00:00:00Z",
+          revision: 0,
+          commentCount: 0,
+          targets: savedTargets,
+        });
+      if (url.pathname === "/api/repositories")
+        return Response.json({ repositories: savedRepositories });
+      if (url.pathname === "/api/branches")
+        return Response.json(
+          savedRepositories.find((entry) => entry.path === url.searchParams.get("repo"))
+            ?.branches ?? [],
+        );
+      const savedRoute = /^\/api\/reviews\/saved\/targets\/target-([01])\/(review|notes)$/.exec(
+        url.pathname,
+      );
+      if (savedRoute) {
+        const target = savedTargets[Number(savedRoute[1])];
+        return Response.json(
+          savedRoute[2] === "notes"
+            ? { reviewId: target.id, revision: 0, notes: [] }
+            : { ...response(target.comparison), id: target.id, repo: target.repo },
+        );
+      }
+    }
     if (url.pathname === "/api/browse/list") {
       const { source } = JSON.parse(String(init?.body));
       return Response.json({
@@ -134,6 +189,12 @@ async function mountApp(
     if (url.pathname === "/api/session")
       return Response.json({
         protocol: 1,
+        ...(options.savedReview
+          ? {
+              repositories: savedRepositories,
+              repositoryId: url.searchParams.get("repo") === "/test/feature" ? "repo-1" : "repo-0",
+            }
+          : {}),
         repository: {
           path: url.searchParams.get("repo") ?? "/test/repo",
           name: "review-fixture",
@@ -206,7 +267,11 @@ async function mountApp(
     }
     throw new Error(`Unexpected request: ${url.pathname}`);
   };
-  const controller = createReviewController({ fetch: fetcher, events: false });
+  const controller = createReviewController({
+    fetch: fetcher,
+    events: false,
+    savedReviewId: options.savedReview ? "saved" : undefined,
+  });
   mount = document.createElement("div");
   document.body.append(mount);
   root = createRoot(mount);
@@ -227,6 +292,39 @@ async function openBranch(name: string) {
 }
 
 describe("graphical review", () => {
+  test("saved review return and target selection restore Changes after live file browsing", async () => {
+    const { controller } = await mountApp({ savedReview: true, branches: true });
+    await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();
+    await expect
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByText(/Browsing files · Working files/)).toBeVisible();
+    await expect.element(page.getByText(/Captured working changes/)).not.toBeInTheDocument();
+    await page.getByRole("button", { name: "Return to review changes" }).click();
+    await expect
+      .element(page.getByRole("tab", { name: "Changes", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+    await expect.element(page.getByText(/Captured working changes/)).toBeVisible();
+
+    // Retain an active file in both workspaces, then return to a target whose
+    // stored file navigation would otherwise hide its saved comparison.
+    await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();
+    await openBranch("feature");
+    await page.getByRole("link", { name: "src/beta.ts", exact: true }).click();
+    await expect
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
+      .toBeVisible();
+    await page.getByRole("combobox", { name: "Review target" }).selectOptions("target-0");
+    await expect.poll(() => controller.getSnapshot().review?.id).toBe("target-0");
+    await expect
+      .element(page.getByRole("tab", { name: "Changes", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+    await page.getByRole("combobox", { name: "Review target" }).selectOptions("target-1");
+    await expect.poll(() => controller.getSnapshot().review?.id).toBe("target-1");
+    await expect
+      .element(page.getByRole("tab", { name: "Changes", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+  });
   test("hovering a full-file link shares the read with opening it", async () => {
     const { fileRequests } = await mountApp();
     const link = page.getByRole("link", { name: "src/alpha.ts", exact: true });

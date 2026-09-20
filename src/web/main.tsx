@@ -4,6 +4,7 @@ import PierreWorker from "@pierre/diffs/worker/worker.js?worker";
 import { initializeTheme, themeController } from "./themes";
 import { App } from "./App";
 import { PierreThemeSync } from "./pierre-theme";
+import { authorizeBrowser } from "./data/auth";
 import { createReviewController } from "./data/controller";
 import { createPatchParser } from "./workers/client";
 import "./reset.css";
@@ -16,6 +17,7 @@ if (import.meta.env.DEV) {
   document.head.append(css);
 }
 
+await authorizeBrowser().catch(() => {});
 initializeTheme();
 const parser = createPatchParser();
 const controller = createReviewController({ parsePatch: parser.parse });

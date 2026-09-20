@@ -29,6 +29,8 @@ import { FilePicker } from "./components/FilePicker";
 import { SymbolPicker } from "./components/SymbolPicker";
 import { FullFileView, type BeginFileSymbolPreview } from "./components/FullFileView";
 import { FileViewTabs } from "./components/FileViewTabs";
+import { readBrowserToken } from "./data/auth";
+import { SavedReviewHeader } from "./components/SavedReviewHeader";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
 
 import { createFilePrefetch } from "./data/file-prefetch";
@@ -108,11 +110,7 @@ export function App({
   const [diagnostics] = useState(createRenderDiagnostics);
   const [rawBrowseApi] = useState(
     () =>
-      providedBrowseApi ??
-      createBrowseApi(
-        globalThis.fetch.bind(globalThis),
-        new URLSearchParams(location.hash.slice(1)).get("token") ?? "",
-      ),
+      providedBrowseApi ?? createBrowseApi(globalThis.fetch.bind(globalThis), readBrowserToken()),
   );
   const [prefetch] = useState(() => createFilePrefetch(rawBrowseApi));
   const browseApi = prefetch.api;
@@ -121,10 +119,7 @@ export function App({
   const [loadBlame] = useState(
     () =>
       providedBlameLoader ??
-      createBlameLoader(
-        globalThis.fetch.bind(globalThis),
-        new URLSearchParams(location.hash.slice(1)).get("token") ?? "",
-      ),
+      createBlameLoader(globalThis.fetch.bind(globalThis), readBrowserToken()),
   );
   const fileState = useFileWorkspace(fileWorkspace);
   const branchHead = state.branches.find((branch) => branch.name === state.activeBranch)?.head;
@@ -146,9 +141,27 @@ export function App({
     browseSource?.kind === "commit"
       ? `Commit ${browseSource.oid.slice(0, 7)} · ${state.activeBranch ?? "snapshot"}`
       : `Working files · ${state.activeBranch ?? "detached worktree"}`;
+  const pendingSavedChanges = useRef<string | null>(null);
   useEffect(() => {
     fileWorkspace.configure(workspaceKey, browseSource, sourceLabel);
-  }, [fileWorkspace, workspaceKey, browseSource, sourceLabel]);
+    if (
+      pendingSavedChanges.current &&
+      state.savedView &&
+      state.status === "ready" &&
+      state.savedTargetId === pendingSavedChanges.current
+    ) {
+      fileWorkspace.select("changes");
+      pendingSavedChanges.current = null;
+    }
+  }, [
+    fileWorkspace,
+    workspaceKey,
+    browseSource,
+    sourceLabel,
+    state.savedView,
+    state.savedTargetId,
+    state.status,
+  ]);
   useEffect(() => () => fileWorkspace.dispose(), [fileWorkspace]);
   const repositoryFiles = useBrowseFiles(
     browseSource,
@@ -1283,6 +1296,24 @@ export function App({
       data-file-count={state.files.length}
       data-active-file={activeFile?.path ?? ""}
     >
+      {state.savedReview && (
+        <SavedReviewHeader
+          controller={controller}
+          state={state}
+          browsing={fileState.active !== "changes"}
+          browsingSourceLabel={activeFile?.sourceLabel ?? sourceLabel}
+          onReturn={() => {
+            pendingSavedChanges.current = state.savedTargetId;
+            fileWorkspace.select("changes");
+            void controller.returnToSavedReview();
+          }}
+          onTarget={(id) => {
+            pendingSavedChanges.current = id;
+            fileWorkspace.select("changes");
+            void controller.selectSavedTarget(id);
+          }}
+        />
+      )}
       {branchTabs}
       <ThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} />
       {definitions && (
