@@ -68,7 +68,10 @@ export function SavedReviewHeader({
           setDetailsOpen(open);
         }}
       >
-        <Popover.Trigger {...stylex.props(ui.button, styles.fixed)} aria-label="Review details">
+        <Popover.Trigger
+          {...stylex.props(ui.button, ui.pressable, styles.fixed)}
+          aria-label="Review details"
+        >
           <span {...stylex.props(styles.desktop)}>Review</span>
           <Icon name="note" size={14} />
           <Icon name="chevron" size={10} />
@@ -143,7 +146,7 @@ export function SavedReviewHeader({
       )}
       {/* During copy, handlers block actions without native disabled dimming both buttons. */}
       <button
-        {...stylex.props(ui.button, styles.fixed)}
+        {...stylex.props(ui.button, ui.pressable, styles.fixed)}
         aria-label="Copy comments"
         data-copied={copied !== null}
         disabled={operation === "clear" || saved.commentCount === 0}
@@ -167,7 +170,7 @@ export function SavedReviewHeader({
         }}
       >
         <Popover.Trigger
-          {...stylex.props(ui.button, styles.fixed)}
+          {...stylex.props(ui.button, ui.pressable, styles.fixed)}
           aria-label="Clear all comments"
           disabled={operation === "clear" || saved.commentCount === 0}
           aria-disabled={busy || saved.commentCount === 0}

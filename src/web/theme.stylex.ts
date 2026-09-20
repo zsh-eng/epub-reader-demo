@@ -48,6 +48,12 @@ export const ui = stylex.create({
     outlineOffset: -2,
     opacity: { default: 1, ":disabled": 0.4 },
   },
+  pressable: {
+    transform: { default: "scale(1)", ":active:not(:disabled)": "scale(0.96)" },
+    transitionProperty: "transform",
+    transitionDuration: { default: "90ms", "@media (prefers-reduced-motion: reduce)": "0ms" },
+    transitionTimingFunction: "ease-out",
+  },
   active: { color: tokens.accent, backgroundColor: tokens.selected },
   strong: { color: tokens.text },
   primary: {

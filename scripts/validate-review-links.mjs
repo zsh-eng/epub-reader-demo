@@ -194,7 +194,16 @@ try {
   await page.waitForFunction(() =>
     document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("2"),
   );
-  await header.getByRole("button", { name: "Copy comments", exact: true }).click();
+  const copyButton = header.getByRole("button", { name: "Copy comments", exact: true });
+  await copyButton.hover();
+  const restingCopyWidth = (await copyButton.boundingBox()).width;
+  await page.mouse.down();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('button[aria-label="Copy comments"]');
+    return button && new DOMMatrix(getComputedStyle(button).transform).a < 0.97;
+  });
+  assert.ok((await copyButton.boundingBox()).width < restingCopyWidth * 0.97);
+  await page.mouse.up();
   await page.waitForFunction(
     () =>
       document.querySelector('button[aria-label="Copy comments"]')?.getAttribute("data-copied") ===
