@@ -117,6 +117,7 @@ struct TaggingNotice: Identifiable {
     var updated = articles
     updated.insert(article, at: 0)
     try commit(updated)
+    scheduleTagging()
     Task { await refreshPreview(article) }
   }
 

@@ -25,6 +25,29 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertFalse(app.buttons["onboarding-next"].exists)
   }
 
+  @MainActor func testReplayTutorialFromLibrary() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store"]
+    app.launch()
+    XCTAssertTrue(app.buttons["Sort and filter"].waitForExistence(timeout: 10))
+    app.buttons["Sort and filter"].tap()
+    app.buttons["Getting started"].tap()
+    XCTAssertTrue(app.buttons["onboarding-next"].waitForExistence(timeout: 5))
+    app.buttons["onboarding-skip"].tap()
+    XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
+  }
+
+  @MainActor func testDirectSaveStartsTagging() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-tagging", "-test-clipboard"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    XCTAssertTrue(app.buttons["save-copied-link"].waitForExistence(timeout: 10))
+    app.buttons["save-copied-link"].tap()
+    XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
+  }
+
   @MainActor func testDarkOnboardingAndLargeText() {
     let app = XCUIApplication()
     app.launchArguments = [

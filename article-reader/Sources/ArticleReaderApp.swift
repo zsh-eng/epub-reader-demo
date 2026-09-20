@@ -161,8 +161,11 @@ struct LibraryView: View {
           }.font(.caption2).padding(4).background(.thinMaterial)
         }
       }
-      .sheet(isPresented: $testSharing, onDismiss: { store.importSharedLinks() }) {
-        FixtureShareSheet()
+      .sheet(isPresented: $testSharing) {
+        FixtureShareSheet {
+          testSharing = false
+          store.importSharedLinks()
+        }
       }
     #endif
     .background(ReaderTheme.background)
@@ -511,9 +514,14 @@ struct LibraryView: View {
 #if DEBUG
   /// Exercises the real Share extension with a local fixture URL in UI tests.
   private struct FixtureShareSheet: UIViewControllerRepresentable {
+    var onComplete: () -> Void
+
     func makeUIViewController(context: Context) -> UIActivityViewController {
-      UIActivityViewController(
+      let controller = UIActivityViewController(
         activityItems: [URL(string: "https://fixture.example/story")!], applicationActivities: nil)
+      // UIKit can finish the activity without updating the SwiftUI sheet binding.
+      controller.completionWithItemsHandler = { _, _, _, _ in onComplete() }
+      return controller
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
   }
