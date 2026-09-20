@@ -1,40 +1,55 @@
 # Read-only visual selection and copying
 
-Scope assessment after adding `:<line>`. Visual mode is not implemented in this change.
+Implemented for full-file views. Enable Vim navigation from the command palette.
 
-## Recommendation
+| Command                         | Result                                                                                               |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `v`                             | Start character selection. Press again to leave it.                                                  |
+| `Shift+V`                       | Start whole-line selection. Press again to leave it.                                                 |
+| `v` / `Shift+V` while selecting | Change the selection mode and keep the anchor.                                                       |
+| Existing motions and counts     | Move the active end, including words, paragraphs, search, and file jumps.                            |
+| `o`                             | Move the other end of the selection.                                                                 |
+| `y`                             | Copy to the system clipboard. After success, leave visual mode and return to the start of the range. |
+| `⌘C` / `Ctrl+C`                 | Copy the selection and keep visual mode active.                                                      |
+| Escape                          | Clear the selection and keep the cursor position.                                                    |
 
-Add whole-line selection first (`V`), then character selection (`v`). Both can use the current Vim model and Pierre viewer. No editor replacement, server endpoint, or new dependency is needed for this scope.
+Files remain read-only. Rectangular selection, editing operators, text objects, registers, macros, and multibuffer selections are outside this scope.
 
-| Step               | Difficulty    | User behavior                                                                                    |
-| ------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
-| Whole lines        | Low           | `V`, existing motions and counts, `y` to copy, Escape to leave selection                         |
-| Characters         | Moderate      | `v`, inclusive character ranges across lines, `o` to move the other end                          |
-| Rectangular blocks | Higher; defer | `Ctrl+V`, screen-column rectangles, tabs, wide characters, short lines and browser key conflicts |
+## Implementation
 
-The command conventions follow [Neovim visual mode](https://neovim.io/doc/user/visual.html). This remains a read-only subset: delete/change/insert operators, text objects, registers, macros, and multi-file selections are outside the first two steps. `gv` can follow later.
+`vim-navigation.ts` stores the anchor and cursor in the loaded text model. Character endpoints include complete graphemes, including emoji and combining characters. Linewise copying includes existing line terminators; it does not add a missing final newline. Copy uses source text, so unmounted rows and gutter numbers do not affect the result.
 
-## Existing support
+`visual-selection.ts` uses CSS Highlight ranges for character selections. This reuses the same browser primitive as search highlighting. Ranges follow horizontal scrolling without a separate rectangle overlay or changes to syntax-token nodes. Only mounted rows are visited. Whole-line selection uses row background attributes; an empty character-selected line gets a one-cell marker. Both use the current cursor color at 45% opacity. This avoids changing Pierre's line selection, which also controls Git blame.
 
-- `src/web/data/vim-navigation.ts` already owns the loaded text, line start offsets, grapheme boundaries, cursor, preferred column, and motion counts. Add an anchor and a selection mode to that model; retain one cursor.
-- The installed Pierre 1.4.3 `CodeView` has `setSelectedLines`, `getSelectedLines`, and `clearSelectedLines`. Its public `SelectedLineRange` has line endpoints, not character endpoints. This fits `V` directly. Use `notify: false` when painting a Vim selection so arrow-key movement does not start Git blame requests through the existing selection callback.
-- `src/web/data/search-highlights.ts` already paints CSS ranges inside Pierre's mounted shadow DOM. A separate visual-selection highlighter can reuse the text-node mapping approach. It should receive source offsets, not run a text search.
-- Pierre also exposes editor selection APIs, but those require an editor instance. The current viewer uses its read-only rendering path. Turning on the editor only to select text adds integration work that this feature does not require.
+The painter refreshes after virtualized rendering and cursor movement. A file/source change, refreshed text, disabling Vim, or a file-symbol preview clears visual selection. Search input and ordinary palettes keep their normal key handling. Clipboard failures retain the selection and report an error. Late clipboard results cannot move a different file or revive a canceled selection.
 
-## State, rendering, and copy
+## Validation
 
-Store the anchor and cursor in the text model, keyed to the displayed file identity. Extend the current motion handler. Exiting the file, refreshing its bytes, or changing sources clears the selection. Typing in palettes and prompts must not change it; a symbol jump should end visual mode before previewing another location.
+- Pure tests cover forward/reversed ranges, mode switching, endpoints, paragraphs, counts, CRLF, missing final newlines, empty lines, tabs, emoji, and combining characters.
+- Browser tests copy character and line selections across 40,000 lines, verify bounded mounted rows, and check cancellation, file changes, platform copy events, and clipboard failures.
+- Real production clipboard writes were checked with `y` and `⌘C` in Chromium on macOS. The prior clipboard was restored. Safari and Linux clipboard behavior were not tested in this run.
 
-For `V`, map the normalized line endpoints to Pierre's line selection. For `v`, paint only the range portions that intersect mounted rows; rebuild those ranges after Pierre renders or scrolls. Empty selected lines need a visible marker because a zero-length text range has no area. Keep visual selection separate from search highlighting, with a clear precedence when both cover the same characters.
+[Character selection screenshot](validation/visual-character.png) · [Line selection screenshot](validation/visual-line.png) · [Clipboard check](validation/visual-clipboard.json)
 
-Copy from the loaded source string, not `window.getSelection()` or mounted DOM text. This preserves content from unmounted lines and excludes gutter numbers. Keep the original line endings and include each selected line's existing terminator for linewise copy. Character selection includes the complete final grapheme. No server read is needed.
+The full browser suite passed 86 tests. All 16 Vim model tests passed, along with type checking, lint, formatting, and the production build.
 
-`y` writes to the system clipboard and exits visual mode after success. Support the usual platform Copy shortcut through the focused file's copy event as well. If a clipboard write fails, retain selection and show an error; do not report a successful copy. The [Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText) is asynchronous and can reject writes. Escape clears the visual selection and keeps the current cursor position.
+## Performance
 
-## Cost and verification
+[Measured data](validation/visual-selection-benchmark.json), Chromium headless, 40 samples per scenario. Key handler timings exclude frame presentation and clipboard work. Frame timings observe when the visible caret reaches the requested position, not when the display presents it.
 
-Selection bookkeeping needs only two endpoints; it does not grow with selected line count. Rendering work should track mounted rows and token nodes. Copy cost grows with selected bytes, and must be measured separately from navigation. Existing file-size limits still apply. These are design expectations, not measured results for an implemented visual mode.
+| Scenario                                            | Key handler p95 | Observed frame p95 | Mounted rows |
+| --------------------------------------------------- | --------------- | ------------------ | ------------ |
+| Character selection, local movement in 40,000 lines | 0.7 ms          | 17.6 ms            | 28           |
+| Character selection, jumps across 40,000 lines      | 0.3 ms          | 44.2 ms            | 21           |
+| Line selection, jumps across 40,000 lines           | 0.4 ms          | 43.8 ms            | 21           |
+| Character selection in a 100,000-character line     | 1.2 ms          | 16.9 ms            | 3            |
 
-Test forward and reversed selections, counts, paragraphs, blank lines, CRLF, missing final newlines, tabs, emoji and combining characters. Add browser checks for selection through unmounted lines, horizontal scrolling, source switches, Escape, search overlap, copy shortcuts and rejected clipboard writes. Measure key-handler and frame timing on the existing 40,000-line and long-line fixtures, and verify the mounted-row count stays bounded. Validate real clipboard writes in Chromium and the macOS browser used for the app before claiming cross-browser support.
+Selection state has two endpoints. Painting cost follows mounted rows and token nodes. Copy cost follows selected text size.
 
-Implementation order: model and exact copy ranges → line-selection adapter and `V` → character highlight adapter and `v` → clipboard/focus integration → browser and performance validation. The pure range tests and character highlighter can be built independently after the model contract is fixed.
+Reproduce the benchmark after installing dependencies:
+
+```sh
+npm run test:browser -- tests/browser/full-file.test.tsx -t 'benchmark: visual' --reporter=default --reporter=./scripts/visual-benchmark-reporter.mjs
+```
+
+Review order: text ranges in `src/web/data/vim-navigation.ts` → mounted-range painting in `src/web/data/visual-selection.ts` → input and clipboard integration in `src/web/data/use-file-vim.ts` → styles and status in `src/web/components/FullFileView.tsx` → pure and browser tests.

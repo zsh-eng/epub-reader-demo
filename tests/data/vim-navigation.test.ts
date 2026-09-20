@@ -161,3 +161,63 @@ test("colon opens a line command and line addresses are bounded and validated", 
   expect(colon.key(":").lineCommand).toBeUndefined();
   expect(colon.column).toBe(1);
 });
+
+test("visual character selections are inclusive, reversible, and grapheme-safe", () => {
+  const model = new VimNavigation("a🙂e\u0301\nnext\n");
+  keys(model, "lv");
+  expect(model.selectedText()).toBe("🙂");
+  keys(model, "l");
+  expect(model.selectedText()).toBe("🙂e\u0301");
+  keys(model, "oh");
+  expect(model.selectedText()).toBe("a🙂e\u0301");
+  keys(model, "G$");
+  expect(model.selectedText()).toBe("e\u0301\nnext");
+  expect(model.key("y")).toEqual({ handled: true, copy: true });
+  expect(model.visual).not.toBeNull();
+  model.key("Escape");
+  expect(model.visualRange).toBeNull();
+});
+
+test("visual line selections preserve CRLF and a missing final newline", () => {
+  const model = new VimNavigation("one\r\n\r\n\tthree");
+  keys(model, "Vj");
+  expect(model.selectedText()).toBe("one\r\n\r\n");
+  keys(model, "G");
+  expect(model.selectedText()).toBe(model.text);
+  keys(model, "o");
+  expect(model.selectedText()).toBe(model.text);
+  keys(model, "j");
+  expect(model.selectedText()).toBe("\r\n\tthree");
+  model.key("Escape");
+  keys(model, "GV");
+  expect(model.selectedText()).toBe("\tthree");
+});
+
+test("visual modes switch without resetting the anchor; repeated mode exits", () => {
+  const model = new VimNavigation("abcd\nefgh\n");
+  keys(model, "lvjl");
+  expect(model.selectedText()).toBe("bcd\nefg");
+  keys(model, "V");
+  expect(model.selectedText()).toBe(model.text);
+  keys(model, "v");
+  expect(model.selectedText()).toBe("bcd\nefg");
+  keys(model, "v");
+  expect(model.visual).toBeNull();
+  keys(model, "fV"); // A find target is not a mode switch.
+  expect(model.visual).toBeNull();
+});
+
+test("visual selections include blank lines and survive paragraph and counted motions", () => {
+  const model = new VimNavigation("first\n\nlast\n");
+  keys(model, "jv");
+  expect(model.selectedText()).toBe("\n");
+  keys(model, "k$");
+  expect(model.selectedText()).toBe("t\n\n");
+  model.key("Escape");
+  keys(model, "ggV2}");
+  expect(model.selectedText()).toBe(model.text);
+  expect(new VimNavigation("").selectedText()).toBe("");
+  const empty = new VimNavigation("");
+  keys(empty, "v");
+  expect(empty.visualRange).toMatchObject({ start: 0, end: 0 });
+});

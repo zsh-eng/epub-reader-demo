@@ -1,0 +1,47 @@
+{
+  "measuredAt": "2026-09-20T06:20:20.001Z",
+  "browser": "Chromium headless through Vitest browser",
+  "method": "Synthetic keydown handler time; then animation frames until the visible caret matches the logical cursor. Frame observations, not presentation timestamps. No clipboard timings included.",
+  "results": [
+    {
+      "scenario": "character-local-40k",
+      "samples": 40,
+      "handlerP50Ms": 0.3999999985098839,
+      "handlerP95Ms": 0.7000000029802322,
+      "frameP50Ms": 16.800000000745058,
+      "frameP95Ms": 17.600000001490116,
+      "mountedRows": 28,
+      "ranges": 1
+    },
+    {
+      "scenario": "character-far-40k",
+      "samples": 40,
+      "handlerP50Ms": 0.19999999925494194,
+      "handlerP95Ms": 0.30000000074505806,
+      "frameP50Ms": 29.800000000745058,
+      "frameP95Ms": 44.19999999925494,
+      "mountedRows": 21,
+      "ranges": 20
+    },
+    {
+      "scenario": "line-far-40k",
+      "samples": 40,
+      "handlerP50Ms": 0.30000000074505806,
+      "handlerP95Ms": 0.3999999985098839,
+      "frameP50Ms": 25.799999997019768,
+      "frameP95Ms": 43.80000000074506,
+      "mountedRows": 21,
+      "ranges": 0
+    },
+    {
+      "scenario": "character-100k-line",
+      "samples": 40,
+      "handlerP50Ms": 1.1000000014901161,
+      "handlerP95Ms": 1.199999999254942,
+      "frameP50Ms": 16.800000000745058,
+      "frameP95Ms": 16.900000002235174,
+      "mountedRows": 3,
+      "ranges": 1
+    }
+  ]
+}

@@ -1,16 +1,19 @@
 import {
   useCallback,
+  useId,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type KeyboardEvent,
+  type ClipboardEvent,
   type RefObject,
 } from "react";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import VimSearchWorker from "./vim-search.worker?worker";
-import { MAX_VIM_MATCHES, VimNavigation } from "./vim-navigation";
+import { createVisualSelection } from "./visual-selection";
+import { MAX_VIM_MATCHES, VimNavigation, type VisualMode } from "./vim-navigation";
 
 type SearchResult = { identity: string; message: string; query: string; wholeWord: boolean };
 type SearchSession = {
@@ -43,6 +46,34 @@ export function useFileVim({
   onNavigationReady?: (command: FileNavigationCommand | null) => void;
 }) {
   const model = useMemo(() => new VimNavigation(text, identity), [text, identity]);
+  const commandFile = useMemo(() => ({ identity: model.identity }), [model]);
+  const visualName = `med-visual-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const visualPainter = useMemo(() => createVisualSelection(visualName), [visualName]);
+  const [visualState, setVisualState] = useState<{
+    model: VimNavigation;
+    mode: VisualMode | null;
+  } | null>(null);
+  const lastVisual = useRef<typeof visualState>(null);
+  const visualMode = enabled && visualState?.model === model ? visualState.mode : null;
+  const [copyState, setCopyState] = useState<{
+    file: typeof commandFile;
+    message: string;
+    error: boolean;
+  } | null>(null);
+  const latestModel = useRef(model);
+  const copyRequest = useRef(0);
+  const cancelCopies = useCallback(() => {
+    ++copyRequest.current;
+  }, []);
+  useLayoutEffect(() => {
+    latestModel.current = model;
+    ++copyRequest.current;
+    if (!enabled) model.clearVisual();
+    return () => {
+      cancelCopies();
+      visualPainter.dispose();
+    };
+  }, [model, enabled, visualPainter, cancelCopies]);
   const pane = useRef<HTMLDivElement>(null);
   const caret = useRef<HTMLSpanElement>(null);
   const host = useRef<HTMLElement | null>(null);
@@ -63,7 +94,6 @@ export function useFileVim({
     query: string;
   } | null>(null);
   const search = searchState?.identity === model.identity ? searchState : null;
-  const commandFile = useMemo(() => ({ identity: model.identity }), [model]);
   const [commandState, setCommandState] = useState<{
     file: typeof commandFile;
     value: string;
@@ -83,6 +113,13 @@ export function useFileVim({
       const element = caret.current,
         container = pane.current;
       if (!element || !container) return;
+      const mode = enabled ? (model.visual?.mode ?? null) : null;
+      container.dataset.vimMode = mode ?? "normal";
+      if (lastVisual.current?.model !== model || lastVisual.current.mode !== mode) {
+        lastVisual.current = { model, mode };
+        setVisualState(lastVisual.current);
+      }
+      visualPainter.update(host.current, model, enabled);
       container.dataset.vimLine = String(model.line + 1);
       container.dataset.vimColumn = String(model.column + 1);
       if (!align && !active.current) {
@@ -189,7 +226,7 @@ export function useFileVim({
       element.dataset.vimColumn = String(model.column + 1);
       element.hidden = false;
     },
-    [identity, model, viewer],
+    [identity, model, viewer, enabled, visualPainter],
   );
   useLayoutEffect(() => {
     currentPaint.current = paint;
@@ -260,6 +297,41 @@ export function useFileVim({
     commandScroll.current = viewer.current?.getInstance()?.getScrollTop() ?? 0;
     setCommandState({ file: commandFile, value: "", error: "" });
   }, [commandFile, viewer]);
+  const copySelection = useCallback(async () => {
+    const range = model.visualRange;
+    if (!range) return;
+    const selection = model.visual;
+    const id = ++copyRequest.current;
+    try {
+      await navigator.clipboard.writeText(model.selectedText());
+      if (latestModel.current !== model || id !== copyRequest.current) return;
+      const current = model.visualRange;
+      if (
+        selection === model.visual &&
+        current?.start === range.start &&
+        current.end === range.end
+      ) {
+        model.clearVisual();
+        model.jumpOffset(range.start);
+        paint("nearest");
+      }
+      setCopyState({ file: commandFile, message: "Copied selection", error: false });
+    } catch {
+      if (latestModel.current === model && id === copyRequest.current)
+        setCopyState({
+          file: commandFile,
+          message: "Could not copy. Selection kept; use ⌘C / Ctrl+C or retry y.",
+          error: true,
+        });
+    }
+  }, [model, paint, commandFile]);
+  const onCopy = (event: ClipboardEvent<HTMLDivElement>) => {
+    if (!enabled || !model.visual || !event.clipboardData) return;
+    cancelCopies();
+    event.clipboardData.setData("text/plain", model.selectedText());
+    event.preventDefault();
+    setCopyState({ file: commandFile, message: "Copied selection", error: false });
+  };
   const command = useCallback<FileNavigationCommand>(
     (key, control = false) => {
       active.current = true;
@@ -278,9 +350,14 @@ export function useFileVim({
         else beginSearch(result.search);
       }
       if (result.lineCommand) beginLineCommand();
+      if (result.handled && !result.copy) {
+        cancelCopies();
+        setCopyState(null);
+      }
+      if (result.copy) void copySelection();
       if (result.handled) paint(result.align ?? "nearest");
     },
-    [model, paint, runSearch, beginSearch, beginLineCommand],
+    [model, paint, runSearch, beginSearch, beginLineCommand, copySelection, cancelCopies],
   );
   useLayoutEffect(() => {
     active.current = enabled && document.activeElement === pane.current;
@@ -314,9 +391,11 @@ export function useFileVim({
     return stopSearchWorker;
   }, [model, stopSearchWorker]);
   useLayoutEffect(() => {
+    cancelCopies();
+    model.clearVisual();
     model.jump((line ?? 1) - 1, (column ?? 1) - 1);
     paint();
-  }, [model, line, column, paint]);
+  }, [model, line, column, paint, cancelCopies]);
   useEffect(() => {
     const element = pane.current;
     if (!element) return;
@@ -343,6 +422,9 @@ export function useFileVim({
       ++request.current;
       setHighlightsVisible(false);
       model.key("Escape");
+      cancelCopies();
+      setCopyState(null);
+      paint();
       event.preventDefault();
       return;
     }
@@ -362,11 +444,19 @@ export function useFileVim({
       else beginSearch(result.search);
     }
     if (result.lineCommand) beginLineCommand();
+    if (result.copy) void copySelection();
+    else {
+      cancelCopies();
+      setCopyState(null);
+    }
     paint(result.align ?? "nearest");
   };
   const position = useMemo(
     () => ({
       capture() {
+        cancelCopies();
+        model.clearVisual();
+        paint();
         return {
           line: model.line,
           column: model.column,
@@ -386,13 +476,20 @@ export function useFileVim({
         paint();
       },
       jump(line: number, column = 1) {
+        cancelCopies();
+        model.clearVisual();
         model.jump(line - 1, column - 1);
         paint("center");
       },
     }),
-    [model, paint],
+    [model, paint, cancelCopies],
   );
   return {
+    visualName,
+    visualMode,
+    onCopy,
+    copyMessage: copyState?.file === commandFile ? copyState.message : "",
+    copyError: copyState?.file === commandFile && copyState.error,
     position,
     pane,
     caret,
@@ -493,6 +590,8 @@ export function useFileVim({
         range.setEnd(position.offsetNode, position.offset);
         column = range.toString().length;
       }
+      cancelCopies();
+      model.clearVisual();
       model.jump(Number(row.dataset.line) - 1, column);
       active.current = true;
       pane.current?.focus({ preventScroll: true });

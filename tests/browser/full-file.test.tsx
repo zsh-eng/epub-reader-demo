@@ -97,8 +97,8 @@ test("large plain files remain virtualized and never enter worker syntax highlig
       <Probe />
     </WorkerPoolContextProvider>,
   );
+  await expect.poll(() => pool?.isInitialized(), { timeout: 5000 }).toBe(true);
   await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
-  await expect.poll(() => pool?.isInitialized()).toBe(true);
   expect(lines()!.length).toBeLessThan(300);
   expect(highlight).not.toHaveBeenCalled();
   await expect
@@ -937,4 +937,232 @@ test("a colon prompt belongs only to the displayed file", async () => {
     .toHaveAttribute("data-vim-line", "1");
   flushSync(() => root!.render(<FullFileView {...props} file={base} vimEnabled />));
   await expect.element(input).not.toBeInTheDocument();
+});
+
+function visualRanges() {
+  return [...CSS.highlights].filter(([name]) => name.startsWith("med-visual-"));
+}
+
+test("v paints inclusive characters, V paints lines, and y copies exact source text", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, text: "a🙂e\u0301\r\n\r\nlast" }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("lvl");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "character");
+  expect(
+    visualRanges().flatMap(([, highlight]) =>
+      [...highlight].map((range) => (range as Range).toString()),
+    ),
+  ).toEqual(["🙂e\u0301"]);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[0]?.[0]).toBe("🙂e\u0301");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+  expect(visualRanges()).toHaveLength(0);
+  await userEvent.keyboard("Vj");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "line");
+  expect(
+    document
+      .querySelector("diffs-container")
+      ?.shadowRoot?.querySelectorAll("[data-vim-visual-line]").length,
+  ).toBe(2);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[1]?.[0]).toBe("a🙂e\u0301\r\n\r\n");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+});
+
+test("visual copy crosses unmounted lines without growing the rendered DOM", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const text = Array.from({ length: 40000 }, (_, i) => `line ${i + 1}\n`).join("");
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, identity: "visual-large", text }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("VG");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "40000");
+  await expect
+    .poll(() =>
+      document
+        .querySelector("diffs-container")
+        ?.shadowRoot?.querySelector('[data-line="40000"][data-vim-visual-line]'),
+    )
+    .toBeTruthy();
+  expect(lines()!.length).toBeLessThan(300);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[0]?.[0]).toBe(text);
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await userEvent.keyboard("vG$");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "40000");
+  expect(visualRanges().reduce((sum, [, h]) => sum + h.size, 0)).toBeLessThan(300);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[1]?.[0]).toBe(text.slice(0, -1));
+});
+
+test("empty visual lines have a marker and Escape preserves the cursor", async () => {
+  render(
+    <FullFileView {...props} file={{ ...base, plain: true, text: "one\n\nthree\n" }} vimEnabled />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("jv");
+  expect(
+    document
+      .querySelector("diffs-container")
+      ?.shadowRoot?.querySelector('[data-line="2"][data-vim-visual-empty]'),
+  ).toBeTruthy();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "2");
+  expect(
+    document.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-vim-visual-empty]"),
+  ).toBeNull();
+});
+
+test("clipboard failure retains selection; platform copy uses source text", async () => {
+  vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(new Error("Denied"));
+  render(
+    <FullFileView {...props} file={{ ...base, plain: true, text: "one\ntwo\n" }} vimEnabled />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("Vjy");
+  await expect
+    .element(page.getByRole("alert"))
+    .toHaveTextContent("Could not copy. Selection kept; use ⌘C / Ctrl+C or retry y.");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "line");
+  const clipboardData = new DataTransfer();
+  const event = new ClipboardEvent("copy", { clipboardData, bubbles: true, cancelable: true });
+  pane.element().dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(true);
+  expect(clipboardData.getData("text/plain")).toBe("one\ntwo\n");
+});
+
+test("a file switch clears visual ranges and a late clipboard result cannot move the new file", async () => {
+  let finish!: () => void;
+  vi.spyOn(navigator.clipboard, "writeText").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<FullFileView {...props} file={{ ...base, plain: true }} vimEnabled />);
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("vly");
+  flushSync(() =>
+    root!.render(
+      <FullFileView
+        {...props}
+        file={{ ...base, identity: "visual-next", plain: true }}
+        vimEnabled
+      />,
+    ),
+  );
+  finish();
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  expect(visualRanges()).toHaveLength(0);
+});
+
+test("benchmark: visual ranges stay bounded on 40k lines and long lines", async ({ annotate }) => {
+  const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const percentile = (samples: number[], p: number) =>
+    [...samples].sort((a, b) => a - b)[Math.floor((samples.length - 1) * p)]!;
+  const results = [];
+  const text = Array.from({ length: 40000 }, (_, i) => `export const value${i} = ${i};\n`).join("");
+  for (const scenario of [
+    { name: "character-local-40k", text, mode: "v", keys: ["j", "k", "w", "b"] },
+    { name: "character-far-40k", text, mode: "v", keys: ["G", "g", "g"] },
+    { name: "line-far-40k", text, mode: "V", keys: ["G", "g", "g"] },
+    {
+      name: "character-100k-line",
+      text: `${"word ".repeat(20000)}\nend\n`,
+      mode: "v",
+      keys: ["$", "0", "w", "b"],
+    },
+  ]) {
+    const file = { ...base, identity: scenario.name, plain: true, text: scenario.text };
+    if (!root) render(<FullFileView {...props} file={file} vimEnabled />);
+    else flushSync(() => root!.render(<FullFileView {...props} file={file} vimEnabled />));
+    await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+    const pane = page.getByRole("textbox", { name: "File navigation", exact: true }).element();
+    pane.focus();
+    const key = (value: string) =>
+      pane.dispatchEvent(
+        new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }),
+      );
+    key(scenario.mode);
+    const handlers: number[] = [],
+      frames: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      await frame();
+      const start = performance.now();
+      key(scenario.keys[i % scenario.keys.length]!);
+      handlers.push(performance.now() - start);
+      await frame();
+      const cursor = document.querySelector<HTMLElement>("[data-vim-caret]")!;
+      for (
+        let attempt = 0;
+        attempt < 20 &&
+        (cursor.hidden ||
+          cursor.dataset.vimLine !== pane.dataset.vimLine ||
+          cursor.dataset.vimColumn !== pane.dataset.vimColumn);
+        attempt++
+      )
+        await frame();
+      expect(cursor.hidden).toBe(false);
+      expect(cursor.dataset.vimLine).toBe(pane.dataset.vimLine);
+      expect(cursor.dataset.vimColumn).toBe(pane.dataset.vimColumn);
+      frames.push(performance.now() - start);
+    }
+    const mountedRows = lines()!.length;
+    const ranges = visualRanges().reduce((sum, [, h]) => sum + h.size, 0);
+    expect(mountedRows).toBeLessThan(300);
+    expect(ranges).toBeLessThanOrEqual(mountedRows);
+    results.push({
+      scenario: scenario.name,
+      samples: handlers.length,
+      handlerP50Ms: percentile(handlers, 0.5),
+      handlerP95Ms: percentile(handlers, 0.95),
+      frameP50Ms: percentile(frames, 0.5),
+      frameP95Ms: percentile(frames, 0.95),
+      mountedRows,
+      ranges,
+    });
+  }
+  await annotate(`VISUAL_BENCHMARK ${JSON.stringify(results)}`, "benchmark", {
+    contentType: "application/json",
+    body: JSON.stringify(results, null, 2),
+    bodyEncoding: "utf-8",
+  });
+}, 30000);
+
+test("Escape during a pending yank prevents a late failure from restoring visual status", async () => {
+  let fail!: (error: Error) => void;
+  vi.spyOn(navigator.clipboard, "writeText").mockImplementation(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  render(<FullFileView {...props} file={{ ...base, plain: true }} vimEnabled />);
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("vly{Escape}");
+  fail(new Error("Denied"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+  expect(visualRanges()).toHaveLength(0);
+  expect(mount!.textContent).not.toContain("Selection kept");
 });

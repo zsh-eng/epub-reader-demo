@@ -19,7 +19,16 @@ export type VimMotion = {
   search?: 1 | -1;
   wordSearch?: string;
   lineCommand?: true;
+  copy?: true;
 };
+export type VisualMode = "character" | "line";
+export interface VisualRange {
+  mode: VisualMode;
+  start: number;
+  end: number;
+  startLine: number;
+  endLine: number;
+}
 export class VimNavigation {
   readonly lines: string[];
   readonly starts: number[] = [];
@@ -32,6 +41,43 @@ export class VimNavigation {
   query = "";
   direction: 1 | -1 = 1;
   matches: number[] = [];
+  visual: { mode: VisualMode; line: number; column: number } | null = null;
+  get visualRange(): VisualRange | null {
+    if (!this.visual) return null;
+    const anchor = this.starts[this.visual.line]! + this.visual.column;
+    const forward = anchor <= this.offset;
+    const startLine = forward ? this.visual.line : this.line;
+    const endLine = forward ? this.line : this.visual.line;
+    if (this.visual.mode === "line")
+      return {
+        mode: "line",
+        startLine,
+        endLine,
+        start: this.starts[startLine]!,
+        end: this.starts[endLine + 1] ?? this.text.length,
+      };
+    const column = forward ? this.column : this.visual.column;
+    const columns = this.geometry(endLine).columns;
+    const length =
+      (columns[floorIndex(columns, column) + 1] ?? this.lines[endLine]!.length) - column;
+    return {
+      mode: "character",
+      startLine,
+      endLine,
+      start: Math.min(anchor, this.offset),
+      end: length
+        ? this.starts[endLine]! + column + length
+        : (this.starts[endLine + 1] ?? this.text.length),
+    };
+  }
+  selectedText() {
+    const range = this.visualRange;
+    return range ? this.text.slice(range.start, range.end) : "";
+  }
+  clearVisual() {
+    this.visual = null;
+  }
+
   private boundaries = new Map<number, { columns: number[]; display: number[] }>();
   constructor(
     readonly text: string,
@@ -204,6 +250,7 @@ export class VimNavigation {
   }
   key(key: string, control = false, halfPage = 10): VimMotion {
     if (key === "Escape") {
+      this.clearVisual();
       this.count = "";
       this.prefix = "";
       return { handled: true };
@@ -246,6 +293,22 @@ export class VimNavigation {
       if (align && explicit) this.jump(n - 1, this.desired, true);
       return { handled: true, ...(align ? { align } : {}) };
     }
+    if (key === "v" || key === "V") {
+      const mode = key === "v" ? "character" : "line";
+      if (this.visual?.mode === mode) this.clearVisual();
+      else
+        this.visual = this.visual
+          ? { ...this.visual, mode }
+          : { mode, line: this.line, column: this.column };
+      return { handled: true };
+    }
+    if (this.visual && key === "y") return { handled: true, copy: true };
+    if (this.visual && key === "o") {
+      const anchor = this.visual;
+      this.visual = { mode: anchor.mode, line: this.line, column: this.column };
+      this.jump(anchor.line, anchor.column);
+      return { handled: true };
+    }
     if (key === "j" || key === "k")
       this.jump(this.line + (key === "j" ? n : -n), this.desired, true);
     else if (key === "h" || key === "l") {
@@ -264,8 +327,10 @@ export class VimNavigation {
       this.jump(this.line, this.endColumn);
       this.desired = Infinity;
     } else if (key === "G") this.jump(explicit ? n - 1 : this.lines.length - 1);
-    else if (key === ":") return { handled: true, lineCommand: true };
-    else if (key === "{" || key === "}") {
+    else if (key === ":") {
+      this.clearVisual();
+      return { handled: true, lineCommand: true };
+    } else if (key === "{" || key === "}") {
       const direction = key === "}" ? 1 : -1;
       let line = this.line;
       for (let i = 0; i < n; i++) {

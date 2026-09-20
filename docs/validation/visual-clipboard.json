@@ -1,0 +1,7 @@
+{
+  "production": true,
+  "browser": "Chromium headless on macOS",
+  "yank": true,
+  "platformCopy": true,
+  "errors": []
+}

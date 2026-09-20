@@ -756,6 +756,10 @@ export function App({
     });
   };
   const fileMotions: [string, string, string, boolean?][] = [
+    ["visual-character", "Select characters in file", "v"],
+    ["visual-line", "Select whole lines in file", "V"],
+    ["visual-yank", "Copy Vim selection", "y"],
+    ["visual-other-end", "Move other end of Vim selection", "o"],
     ["left", "Move left in file", "h"],
     ["down", "Move down in file", "j"],
     ["up", "Move up in file", "k"],

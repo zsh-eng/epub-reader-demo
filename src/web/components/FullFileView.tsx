@@ -222,6 +222,7 @@ export function FullFileView({
       },
     ];
   }, [file]);
+  const visualName = vim.visualName;
   const options = useMemo<CodeViewReactOptions<undefined, undefined>>(
     () => ({
       theme: active.pierreTheme,
@@ -230,7 +231,12 @@ export function FullFileView({
       disableFileHeader: true,
       enableLineSelection: true,
       tokenizeMaxLineLength: 1000,
-      unsafeCSS: `[data-line] { tab-size: 2; } ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }`,
+      unsafeCSS: `[data-line] { tab-size: 2; }
+        ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }
+        ::highlight(${visualName}) { background-color: color-mix(in srgb, ${active.palette.accent} 45%, transparent); color: ${active.palette.text}; }
+        [data-vim-visual-line] { background: color-mix(in srgb, ${active.palette.accent} 45%, transparent) !important; }
+        [data-vim-visual-empty] { position: relative; }
+        [data-vim-visual-empty]::before { content: ""; position: absolute; width: 1ch; height: 100%; background: color-mix(in srgb, ${active.palette.accent} 45%, transparent); pointer-events: none; }`,
       onPostRender(node, _instance, phase) {
         vimRender.current(node, phase);
         if (phase === "unmount") highlights.dispose();
@@ -239,7 +245,7 @@ export function FullFileView({
       },
       layout: { gap: 0, paddingTop: 8, paddingBottom: 16 },
     }),
-    [active, highlightId, highlights],
+    [active, highlightId, highlights, visualName],
   );
   useLayoutEffect(() => {
     if (!file || !items.length || loading) return;
@@ -359,6 +365,7 @@ export function FullFileView({
               aria-multiline="true"
               aria-label={vimEnabled ? "File navigation" : "File content"}
               onKeyDown={vim.keyDown}
+              onCopy={vim.onCopy}
               onFocus={vim.onFocus}
               onBlur={vim.onBlur}
               onClick={vim.onClick}
@@ -474,8 +481,21 @@ export function FullFileView({
       )}
       {(vimEnabled || vim.message) && !compact && (
         <div {...stylex.props(styles.vimStatus)}>
-          {vimEnabled ? (vim.commandLine ? "COMMAND · " : "NORMAL · ") : ""}
-          {vim.message || "Read-only navigation"}
+          {vimEnabled
+            ? vim.commandLine
+              ? "COMMAND · "
+              : vim.visualMode === "line"
+                ? "VISUAL LINE · "
+                : vim.visualMode
+                  ? "VISUAL · "
+                  : "NORMAL · "
+            : ""}
+          <span role={vim.copyError ? "alert" : undefined}>
+            {vim.copyMessage ||
+              (vim.visualMode
+                ? "y to copy · Esc to cancel"
+                : vim.message || "Read-only navigation")}
+          </span>
         </div>
       )}
       {blameOpen && file?.kind === "text" && (
