@@ -548,7 +548,7 @@ const styles = stylex.create({
     display: "flex",
     alignItems: "center",
     gap: 8,
-    minHeight: 40,
+    minHeight: 32,
     flexShrink: 0,
     paddingInline: 12,
     borderBottomWidth: 1,
