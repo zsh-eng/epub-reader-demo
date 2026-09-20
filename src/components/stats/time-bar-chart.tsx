@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { format, startOfMonth, startOfWeek } from "date-fns";
 import * as React from "react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 import { ReviewLog, State } from "ts-fsrs";
@@ -59,25 +60,96 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 const RANGES = {
-  "1M": 1,
-  "3M": 3,
-  "1Y": 12,
+  "1M": {
+    months: 1,
+    bucket: "day",
+  },
+  "3M": {
+    months: 3,
+    bucket: "week",
+  },
+  "1Y": {
+    months: 12,
+    bucket: "month",
+  },
 } as const;
+
+type RangeKey = keyof typeof RANGES;
+type Bucket = (typeof RANGES)[RangeKey]["bucket"];
+
+type ChartDatum = {
+  date: string;
+  new: number;
+  learning: number;
+  relearning: number;
+  review: number;
+};
+
+function getBucketStart(date: Date, bucket: Bucket) {
+  if (bucket === "week") {
+    return startOfWeek(date, { weekStartsOn: 1 });
+  }
+
+  if (bucket === "month") {
+    return startOfMonth(date);
+  }
+
+  return date;
+}
+
+function getBucketKey(date: Date, bucket: Bucket) {
+  const bucketStart = getBucketStart(studyDayDate(studyDayKey(date)), bucket);
+
+  if (bucket === "month") {
+    return format(bucketStart, "yyyy-MM-01");
+  }
+
+  return format(bucketStart, "yyyy-MM-dd");
+}
+
+function parseBucketDate(value: string) {
+  return studyDayDate(value);
+}
+
+function formatBucketLabel(value: string, bucket: Bucket) {
+  const date = parseBucketDate(value);
+
+  if (bucket === "month") {
+    return format(date, "MMM yyyy");
+  }
+
+  return format(date, "MMM d");
+}
+
+function formatTooltipLabel(value: string, bucket: Bucket) {
+  const date = parseBucketDate(value);
+
+  if (bucket === "month") {
+    return format(date, "MMMM yyyy");
+  }
+
+  if (bucket === "week") {
+    return `Week of ${format(date, "MMM d, yyyy")}`;
+  }
+
+  return format(date, "MMM d, yyyy");
+}
 
 export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
   const clock = useStatisticsClock();
-  const [selectedRange, setSelectedRange] =
-    React.useState<keyof typeof RANGES>("1M");
+  const [selectedRange, setSelectedRange] = React.useState<RangeKey>("1M");
 
   const chartData = React.useMemo(() => {
     const today = studyDayKey(clock);
-    const monthsAgo = addStudyMonths(today, -RANGES[selectedRange]);
+    const range = RANGES[selectedRange];
+    const monthsAgo = addStudyMonths(today, -range.months);
 
-    const dailyDurations = reviewLogs
+    const durations = reviewLogs
       .filter((log) => isInStudyRange(log.review, monthsAgo, today))
       .reduce(
         (acc, log) => {
-          const date = studyDayKey(log.review);
+          const date = getBucketKey(new Date(log.review), range.bucket);
+
           if (!acc[date]) {
             acc[date] = {
               date,
@@ -100,22 +172,15 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
 
           return acc;
         },
-        {} as Record<
-          string,
-          {
-            date: string;
-            new: number;
-            learning: number;
-            relearning: number;
-            review: number;
-          }
-        >,
+        {} as Record<string, ChartDatum>,
       );
 
-    return Object.values(dailyDurations).sort((a, b) =>
+    return Object.values(durations).sort((a, b) =>
       a.date.localeCompare(b.date),
     );
   }, [reviewLogs, selectedRange, clock]);
+
+  const bucket = RANGES[selectedRange].bucket;
 
   return (
     <Card>
@@ -128,7 +193,7 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
           <Select
             value={selectedRange}
             onValueChange={(value: string) =>
-              setSelectedRange(value as keyof typeof RANGES)
+              setSelectedRange(value as RangeKey)
             }
           >
             <SelectTrigger className="w-[180px]">
@@ -151,22 +216,14 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
               tickLine={false}
               tickMargin={10}
               axisLine={false}
-              tickFormatter={(value) =>
-                studyDayDate(value).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                })
-              }
+              minTickGap={24}
+              tickFormatter={(value) => formatBucketLabel(value, bucket)}
             />
             <ChartTooltip
               content={
                 <ChartTooltipContent
                   labelFormatter={(value) =>
-                    studyDayDate(value).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })
+                    formatTooltipLabel(value as string, bucket)
                   }
                   formatter={(value, name) =>
                     `${capitalise(name as string)}: ${(
