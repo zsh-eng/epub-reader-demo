@@ -1,7 +1,33 @@
 import Foundation
 
-/// The extension writes one atomic file per share. The app deletes a file only
-/// after its own library commit succeeds; the two processes never edit one JSON file.
+/// A durable save request. The extension publishes this once; only the main app
+/// removes it after a successful library commit.
+struct SharedArticleTransfer: Codable {
+  var id: UUID
+  var url: URL
+  var title: String?
+  var subtitle: String?
+
+  init(id: UUID = UUID(), url: URL, title: String? = nil, subtitle: String? = nil) {
+    self.id = id
+    self.url = url
+    self.title = title
+    self.subtitle = subtitle
+  }
+}
+
+/// Tag completion is a separate immutable event. Updating the original save file
+/// would race with the main app importing and removing it.
+struct SharedTaggingResult: Codable {
+  var id: UUID
+  var url: URL
+  var title: String
+  var subtitle: String?
+  var tagNames: [String]
+  var inputFingerprint: String
+  var categoryVersion: Int
+}
+
 enum SharedInbox {
   static let group = "group.com.zsheng.ArticleReader"
 
@@ -14,20 +40,41 @@ enum SharedInbox {
     return url
   }
 
-  static func directory() throws -> URL {
+  static func directory() throws -> URL { try directory(named: "IncomingLinks") }
+  static func taggingResultsDirectory() throws -> URL { try directory(named: "IncomingTagResults") }
+
+  private static func directory(named name: String) throws -> URL {
     guard let root = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
-    else {
-      throw InboxError.unavailable
-    }
-    let directory = root.appending(path: "IncomingLinks", directoryHint: .isDirectory)
+    else { throw InboxError.unavailable }
+    let directory = root.appending(path: name, directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     return directory
   }
 
-  static func save(_ url: URL) throws {
+  @discardableResult
+  static func save(_ url: URL, title: String? = nil, subtitle: String? = nil) throws
+    -> SharedArticleTransfer
+  {
     guard webURL(url.absoluteString) != nil else { throw InboxError.invalidLink }
-    let file = try directory().appending(path: UUID().uuidString + ".json")
-    try JSONEncoder().encode(url).write(to: file, options: .atomic)
+    let transfer = SharedArticleTransfer(url: url, title: title, subtitle: subtitle)
+    let file = try directory().appending(path: transfer.id.uuidString + ".json")
+    try JSONEncoder().encode(transfer).write(to: file, options: .atomic)
+    return transfer
+  }
+
+  static func saveTaggingResult(_ result: SharedTaggingResult) throws {
+    let file = try taggingResultsDirectory().appending(path: result.id.uuidString + ".json")
+    try JSONEncoder().encode(result).write(to: file, options: .atomic)
+  }
+
+  /// Accept old URL-only inbox entries that were queued before this version.
+  static func decodeTransfer(from data: Data, fileID: UUID = UUID()) throws -> SharedArticleTransfer
+  {
+    let decoder = JSONDecoder()
+    if let transfer = try? decoder.decode(SharedArticleTransfer.self, from: data) {
+      return transfer
+    }
+    return SharedArticleTransfer(id: fileID, url: try decoder.decode(URL.self, from: data))
   }
 
   enum InboxError: LocalizedError {

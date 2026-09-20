@@ -26,12 +26,57 @@ struct ArticleReaderApp: App {
     WindowGroup {
       Group {
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-dark-ui") {
-          LibraryView(store: store).preferredColorScheme(.dark)
+          ArticleRootView(store: store).preferredColorScheme(.dark)
         } else {
-          LibraryView(store: store)
+          ArticleRootView(store: store)
         }
       }
       .font(ReaderTheme.sans(16))
+      .transformEnvironment(\.dynamicTypeSize) { value in
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-large-type") {
+          value = .accessibility2
+        }
+      }
+      .transformEnvironment(\.articleReduceMotion) { value in
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reduce-motion") {
+          value = true
+        }
+      }
+    }
+  }
+}
+
+/// Do not read the clipboard or preload pages behind first-run onboarding.
+private struct ArticleRootView: View {
+  let store: ArticleStore
+  @State private var completed: Bool
+
+  private static var completionKey: String {
+    TestMode.enabled ? "test-onboarding-completed" : "onboarding-completed"
+  }
+
+  init(store: ArticleStore) {
+    self.store = store
+    if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-onboarding") {
+      UserDefaults.standard.removeObject(forKey: Self.completionKey)
+    }
+    _completed = State(initialValue: UserDefaults.standard.bool(forKey: Self.completionKey))
+  }
+
+  private var needsOnboarding: Bool {
+    !completed
+      && (!TestMode.enabled || ProcessInfo.processInfo.arguments.contains("-test-onboarding"))
+  }
+
+  var body: some View {
+    if needsOnboarding {
+      OnboardingView {
+        UserDefaults.standard.set(true, forKey: Self.completionKey)
+        completed = true
+        store.resumeTagging()
+      }
+    } else {
+      LibraryView(store: store)
     }
   }
 }
@@ -45,6 +90,8 @@ struct LibraryView: View {
   @Bindable var store: ArticleStore
   @State private var selected: ArticleBrowser?
   @State private var choosingImport = false
+  @State private var showingTaggingSettings = false
+  @State private var showingOnboarding = false
   @State private var editingTags: SavedArticle?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var query = ""
@@ -101,6 +148,13 @@ struct LibraryView: View {
           Button("Share fixture") { testSharing = true }.accessibilityIdentifier("share-fixture")
         }
       }
+      .overlay(alignment: .bottomTrailing) {
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-tagging") {
+          Text(store.isTagging ? "tagging" : "idle")
+          .font(.caption2).padding(4).background(.thinMaterial)
+          .accessibilityIdentifier("tagging-test-state")
+        }
+      }
       .sheet(isPresented: $testSharing, onDismiss: { store.importSharedLinks() }) {
         FixtureShareSheet()
       }
@@ -120,6 +174,7 @@ struct LibraryView: View {
     .task(id: scenePhase) {
       guard scenePhase == .active else { return }
       store.importSharedLinks()
+      store.resumeTagging()
       await clipboard.check()
     }
     .onChange(of: store.allTags) { _, tags in
@@ -128,6 +183,27 @@ struct LibraryView: View {
     .task(id: preloadURLs) { browsers.preload(preloadURLs, store: store) }
     .onChange(of: store.articles.filter(\.saved).map(\.id)) { _, _ in
       browsers.persistExtractions(in: store)
+    }
+    .overlay(alignment: .top) {
+      if let notice = store.taggingNotice {
+        TaggingFeedback(title: notice.title, tags: notice.tags) {
+          editingTags = store.articles.first { $0.id == notice.articleID && $0.saved }
+          store.dismissTaggingNotice()
+        } dismiss: {
+          store.dismissTaggingNotice()
+        }
+        .id(notice.id).padding(.horizontal, 16).padding(.top, 60)
+        .transition(.opacity)
+      }
+    }
+    .sheet(isPresented: $showingTaggingSettings) {
+      TaggingSettingsView { store.resumeTagging() }
+    }
+    .fullScreenCover(isPresented: $showingOnboarding) {
+      OnboardingView {
+        showingOnboarding = false
+        store.resumeTagging()
+      }
     }
     .sheet(item: $editingTags) { article in
       ArticleTagsSheet(article: article, store: store)
@@ -189,6 +265,14 @@ struct LibraryView: View {
         Button("Import Chrome reading list", systemImage: "square.and.arrow.down") {
           choosingImport = true
         }.accessibilityIdentifier("import-reading-list")
+        Divider()
+        Button("Automatic tags", systemImage: "sparkles") { showingTaggingSettings = true }
+          .accessibilityIdentifier("automatic-tag-settings")
+        Button("Tag existing articles", systemImage: "tag") { store.retagSavedArticles() }
+          .disabled(!TaggingPreferences.enabled)
+          .accessibilityIdentifier("tag-existing-articles")
+        Button("Getting started", systemImage: "book.closed") { showingOnboarding = true }
+          .accessibilityIdentifier("show-onboarding")
       } label: {
         Image(systemName: "line.3.horizontal.decrease").frame(width: 44, height: 44)
       }

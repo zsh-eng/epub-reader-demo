@@ -518,6 +518,9 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertLessThan(app.otherElements["share-content"].frame.height, 400)
     capture(app, "08-share-extension")
     save.tap()
+    let done = app.buttons["share-done"]
+    XCTAssertTrue(done.waitForExistence(timeout: 5))
+    done.tap()
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10), app.debugDescription)
     app.terminate()
     app.launchArguments = ["-ui-testing"]
