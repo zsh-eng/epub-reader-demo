@@ -816,7 +816,8 @@ export function App({
 
   const gitAvailable = state.session?.repository.git !== false;
   const workingAvailable = gitAvailable && !state.historyRef;
-  const openWorkingFile = (path: string, pinned = true) => fileWorkspace.open(path, pinned);
+  const openWorkingFile = (path: string, pinned = true, background = false) =>
+    fileWorkspace.open(path, { pinned, background });
   const openVersion = (path: string, side: "old" | "new") => {
     const review = state.review;
     if (!review) return;
@@ -1193,7 +1194,7 @@ export function App({
             {...stylex.props(styles.fileLink)}
             onPointerEnter={() => prefetchFile(file.path)}
             onFocus={() => prefetchFile(file.path)}
-            onClick={() => openWorkingFile(file.path)}
+            onClick={(event) => openWorkingFile(file.path, true, event.metaKey || event.ctrlKey)}
           >
             {file.path}
           </button>
@@ -1367,9 +1368,9 @@ export function App({
               onPrefetch={prefetchFile}
               onOpen={
                 browseSource
-                  ? (id) => {
+                  ? (id, background) => {
                       const file = files.find((item) => item.id === id);
-                      if (file) openWorkingFile(file.path);
+                      if (file) openWorkingFile(file.path, true, background);
                     }
                   : undefined
               }
@@ -1740,7 +1741,9 @@ export function App({
                           {...stylex.props(styles.fileLink)}
                           onPointerEnter={() => prefetchFile(path)}
                           onFocus={() => prefetchFile(path)}
-                          onClick={() => openWorkingFile(path)}
+                          onClick={(event) =>
+                            openWorkingFile(path, true, event.metaKey || event.ctrlKey)
+                          }
                           title={`Open full file · ${path}`}
                         >
                           {path}

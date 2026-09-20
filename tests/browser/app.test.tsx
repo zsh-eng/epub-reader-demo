@@ -233,6 +233,34 @@ describe("graphical review", () => {
     expect(fileRequests).toHaveLength(1);
   });
 
+  test("Command-click opens pinned background tabs from diff filenames and the changes tree", async () => {
+    const { controller } = await mountApp();
+    await page
+      .getByRole("link", { name: "src/alpha.ts", exact: true })
+      .click({ modifiers: ["Meta"] });
+    await expect
+      .element(page.getByRole("tab", { name: "alpha.ts", exact: true }))
+      .toHaveAttribute("aria-selected", "false");
+    await expect
+      .element(page.getByRole("tab", { name: "Changes", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+    const selected = controller.getSnapshot().selectedFileId;
+    await page.getByRole("treeitem", { name: /beta.ts/ }).click({ modifiers: ["Meta"] });
+    await expect
+      .element(page.getByRole("tab", { name: "beta.ts", exact: true }))
+      .toHaveAttribute("aria-selected", "false");
+    await expect
+      .element(page.getByRole("tab", { name: "Changes", exact: true }))
+      .toHaveAttribute("aria-selected", "true");
+    expect(controller.getSnapshot().selectedFileId).toBe(selected);
+    await page.getByRole("tab", { name: "alpha.ts", exact: true }).click();
+    await expect
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
+      .toBeVisible();
+    await expect
+      .poll(() => document.activeElement)
+      .toBe(page.getByRole("textbox", { name: "File navigation", exact: true }).element());
+  });
   test("a fresh launch opens files with a visible Vim cursor and keyboard focus", async () => {
     await mountApp();
     await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();

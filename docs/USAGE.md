@@ -97,6 +97,8 @@ Close actions preserve the Changes tab and other workspaces. Desktop or browser 
 
 ## Symbols and Vim navigation
 
+Command-click a diff filename or a file in the Changes list to open a pinned background tab without leaving Changes. Use Ctrl-click on Linux. Closing the active file selects the file to its right, then its left; Changes is selected only when no files remain.
+
 ![In-file symbol palette with a live jump in the current file](validation/symbol-navigation.png)
 
 In-file symbol search (`⌘O`) opens a narrow palette over the left sidebar. Arrow keys jump in the current file and highlight the symbol name. Enter keeps that position; Escape restores the original cursor and scroll position. Project symbol search (`⌘⇧O`) keeps a separate file preview and searches the selected repository’s indexed commit. Both palettes retain and select the last query.

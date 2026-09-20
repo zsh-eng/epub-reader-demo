@@ -110,6 +110,30 @@ describe("file workspace", () => {
     expect(pending).toHaveLength(reads);
     workspace.dispose();
   });
+  test("background opens pin tabs without changing selection, replacing previews, or cancelling reads", async () => {
+    const { workspace, pending } = fixture();
+    workspace.configure("first", A, "First");
+    workspace.open("one.ts", { background: true });
+    expect(workspace.getSnapshot().active).toBe("changes");
+    expect(pending).toHaveLength(0);
+    workspace.open("preview.ts");
+    const active = workspace.getSnapshot().active;
+    workspace.open("two.ts", { background: true });
+    expect(workspace.getSnapshot().active).toBe(active);
+    expect(workspace.getSnapshot().tabs.map((tab) => [tab.path, tab.pinned])).toEqual([
+      ["one.ts", true],
+      ["preview.ts", false],
+      ["two.ts", true],
+    ]);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]!.signal!.aborted).toBe(false);
+    pending[0]!.resolve(result(A, "preview.ts"));
+    await settle();
+    workspace.open("one.ts", { background: true });
+    expect(workspace.getSnapshot().tabs).toHaveLength(3);
+    expect(workspace.getSnapshot().file?.path).toBe("preview.ts");
+    workspace.dispose();
+  });
   test("restores tabs by worktree and rejects late bytes from the previous scope", async () => {
     const { workspace, pending } = fixture();
     workspace.configure("first", A, "First");

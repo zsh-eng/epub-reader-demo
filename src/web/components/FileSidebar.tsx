@@ -23,7 +23,7 @@ export function FileSidebar({
   filter: string;
   onFilter(value: string): void;
   onSelect(id: string): void;
-  onOpen?(id: string): void;
+  onOpen?(id: string, background?: boolean): void;
   onPrefetch?(path: string): void;
   filterRef: React.RefObject<HTMLInputElement | null>;
 }) {
@@ -100,6 +100,30 @@ export function FileSidebar({
       </div>
       <FileTree
         model={model}
+        onPointerDownCapture={(event) => {
+          if (!onOpen || (!event.metaKey && !event.ctrlKey)) return;
+          if (
+            !event.nativeEvent
+              .composedPath()
+              .some((node) => node instanceof HTMLElement && node.dataset.itemType === "file")
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+        }}
+        onClickCapture={(event) => {
+          if (!onOpen || (!event.metaKey && !event.ctrlKey)) return;
+          const row = event.nativeEvent
+            .composedPath()
+            .find((node) => node instanceof HTMLElement && node.dataset.itemType === "file") as
+            | HTMLElement
+            | undefined;
+          const file = files.find((item) => item.path === row?.dataset.itemPath);
+          if (!file) return;
+          event.preventDefault();
+          event.stopPropagation();
+          onOpen(file.id, true);
+        }}
         onPointerOver={(event) => {
           const row = event.nativeEvent
             .composedPath()

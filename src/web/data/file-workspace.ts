@@ -126,13 +126,15 @@ export function createFileWorkspace(api: BrowseApi) {
     },
     open(
       path: string,
-      pinned = false,
+      options: boolean | { pinned?: boolean; background?: boolean } = false,
       line?: number,
       source = snapshot.source,
       label = snapshot.sourceLabel,
       column?: number,
     ) {
       if (!source || disposed) return;
+      const background = typeof options === "object" && options.background === true;
+      const pinned = background || (typeof options === "boolean" ? options : !!options.pinned);
       const id = `${sourceKey(source)}:${path}`;
       const existing = snapshot.tabs.find((tab) => tab.id === id);
       let tabs: OpenFileTab[];
@@ -143,7 +145,7 @@ export function createFileWorkspace(api: BrowseApi) {
             : tab,
         );
       else {
-        tabs = snapshot.tabs.filter((tab) => tab.pinned);
+        tabs = snapshot.tabs.filter((tab) => background || tab.pinned);
         if (tabs.length >= 12) {
           publish({ error: "Close a file tab before opening another (12-tab limit)." });
           return;
@@ -159,7 +161,7 @@ export function createFileWorkspace(api: BrowseApi) {
       }
       publish({
         tabs,
-        active: id,
+        ...(!background ? { active: id } : {}),
         ...(snapshot.source && sourceKey(source) === sourceKey(snapshot.source)
           ? {
               recentPaths: [path, ...snapshot.recentPaths.filter((item) => item !== path)].slice(
@@ -169,7 +171,7 @@ export function createFileWorkspace(api: BrowseApi) {
             }
           : {}),
       });
-      void load();
+      if (!background) void load();
     },
     select(id: string) {
       if (id !== "changes" && !snapshot.tabs.some((tab) => tab.id === id)) return;
