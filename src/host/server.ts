@@ -1,12 +1,14 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, realpath, stat } from "node:fs/promises";
-import { basename, dirname, extname, resolve, relative, isAbsolute } from "node:path";
+import { mkdtemp, readFile, realpath, rm, stat } from "node:fs/promises";
+import { basename, dirname, extname, resolve, relative, isAbsolute, join } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
   notesRequestSchema,
+  noteMutationSchema,
   reviewRequestSchema,
   type ChangeEvent,
   type Comparison,
@@ -27,6 +29,9 @@ import { symbolSearchRequestSchema } from "../shared/symbols";
 import { FileSymbolService } from "./search/symbols";
 import { type SearchOptions } from "./search/service";
 import { RepositoryRegistry } from "./repository/registry";
+import { SavedReviewStore } from "./saved-reviews";
+import { savedReviewCreateSchema } from "../shared/saved-review";
+import { getPersistentToken, publishConnection } from "./runtime/connection";
 
 export interface StartHostOptions {
   repo: string;
@@ -38,6 +43,7 @@ export interface StartHostOptions {
   allowedInputPaths?: readonly string[];
   onClose?: () => Promise<void>;
   search?: SearchOptions;
+  stateDir?: string;
 }
 export interface RunningHost {
   url: string;
@@ -103,13 +109,19 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       git: false,
     };
   }
-  const token = randomBytes(32).toString("base64url");
+  const token = options.stateDir
+    ? await getPersistentToken(options.stateDir)
+    : randomBytes(32).toString("base64url");
   const tokenDigest = createHash("sha256").update(token).digest();
   const reviews = new ReviewService(
     new Set((options.allowedInputPaths ?? []).map((path) => resolve(path))),
   );
   const notes = new NoteService(reviews);
   const symbols = new FileSymbolService();
+  const temporaryState = options.stateDir
+    ? undefined
+    : await mkdtemp(join(tmpdir(), "med-reviews-"));
+  const savedReviews = new SavedReviewStore(join(options.stateDir ?? temporaryState!, "reviews"));
 
   const watchers = new Map<string, Promise<() => Promise<void>>>();
   const watcherModes = new Map<string, boolean>();
@@ -265,7 +277,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       await requireRepo(reviews.get(id).response.repo);
       return id;
     };
-    const send = (body: unknown) => {
+    const assertRequestAccess = () => {
       abort.signal.throwIfAborted();
       if ([...ownershipChecks].some((valid) => !valid()))
         throw new HostError(
@@ -273,6 +285,9 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           "This repository was removed during the request.",
           403,
         );
+    };
+    const send = (body: unknown) => {
+      assertRequestAccess();
       json(response, 200, body);
     };
     request.once("aborted", () => abort.abort());
@@ -291,9 +306,23 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
             "Use the same local origin for API requests.",
             403,
           );
-        const provided = request.headers.authorization?.replace(/^Bearer /, "") ?? "";
+        const bearer = request.headers.authorization?.replace(/^Bearer /, "");
+        const cookie = request.headers.cookie
+          ?.split(";")
+          .map((entry) => entry.trim())
+          .find((entry) => entry.startsWith(`med_session_${port}=`))
+          ?.slice(`med_session_${port}=`.length);
+        const provided = bearer ?? (url.pathname === "/api/auth" ? "" : cookie) ?? "";
         if (!timingSafeEqual(tokenDigest, createHash("sha256").update(provided).digest()))
           throw new HostError("unauthorized", "Open the launch URL with its access token.", 401);
+        if (url.pathname === "/api/auth" && request.method === "POST") {
+          response.setHeader(
+            "Set-Cookie",
+            `med_session_${port}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000`,
+          );
+          send({ authenticated: true });
+          return;
+        }
         if (url.pathname === "/api/events" && request.method === "GET") {
           const eventRepo = await requireRepo(url.searchParams.get("repo"));
           if (streams.size >= 8)
@@ -316,6 +345,151 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           throw new HostError("busy", "The host is processing other requests. Retry shortly.", 503);
         expensiveRequests++;
         try {
+          if (url.pathname === "/api/reviews" && request.method === "POST") {
+            if (repository.git === false)
+              throw new HostError(
+                "git-required",
+                "Start med with Git repositories to create a review.",
+                422,
+              );
+            const input = savedReviewCreateSchema.parse(await readBody(request));
+            send(
+              await savedReviews.create(
+                input,
+                async (target) => {
+                  const repo = await requireRepo(target.repo);
+                  const owner = await registry.require(repo, abort.signal);
+                  const info = await resolveRepository(repo, abort.signal);
+                  const review = await reviews.load(
+                    { repo, comparison: target.comparison },
+                    abort.signal,
+                  );
+                  if (review.files.length > 500)
+                    throw new HostError(
+                      "saved-review-too-large",
+                      "Narrow this review to at most 500 changed files per target.",
+                      413,
+                    );
+                  const sources = [];
+                  let sourceBytes = Buffer.byteLength(review.patch);
+                  for (const file of review.files) {
+                    if (file.binary || file.tooLarge) continue;
+                    try {
+                      const source = await reviews.sources(review.id, file.path, abort.signal);
+                      sourceBytes += Buffer.byteLength(source.old) + Buffer.byteLength(source.new);
+                      if (sourceBytes > 24 * 1024 * 1024)
+                        throw new HostError(
+                          "saved-review-too-large",
+                          "Narrow this review; captured source exceeds 24 MiB per target.",
+                          413,
+                        );
+                      sources.push(source);
+                    } catch (error) {
+                      if (
+                        error instanceof HostError &&
+                        ["unsupported-source", "source-unavailable", "binary-source"].includes(
+                          error.code,
+                        )
+                      )
+                        continue;
+                      throw error;
+                    }
+                  }
+                  abort.signal.throwIfAborted();
+                  if (!owner.valid())
+                    throw new HostError(
+                      "repository-not-allowed",
+                      "The repository was removed during capture.",
+                      403,
+                    );
+                  return {
+                    repositoryId: owner.repository.id,
+                    repo,
+                    branch: info.branch === "Detached HEAD" ? null : info.branch,
+                    review,
+                    sources,
+                  };
+                },
+                assertRequestAccess,
+              ),
+            );
+            return;
+          }
+          const savedRoute =
+            /^\/api\/reviews\/([^/]+)(?:\/targets\/([^/]+)\/(review|source|notes)|\/(feedback|clear))?$/.exec(
+              url.pathname,
+            );
+          if (savedRoute) {
+            const [, id, targetId, targetAction, action] = savedRoute;
+            const bundle = await savedReviews.get(id!);
+            // Saved data does not grant access to an unregistered repository family.
+            const relevant = targetId
+              ? bundle.targets.filter((target) => target.id === targetId)
+              : !action && request.method === "GET"
+                ? []
+                : bundle.targets;
+            if (targetId && !relevant.length)
+              throw new HostError("target-not-found", "This review target does not exist.", 404);
+            for (const target of relevant) {
+              const entry = registry.snapshot().find((entry) => entry.id === target.repositoryId);
+              if (!entry)
+                throw new HostError(
+                  "repository-unavailable",
+                  `Register the repository for ${target.repo} to open this saved review.`,
+                  409,
+                );
+              const available = await requireRepo(entry.path);
+              const owner = await registry.require(available, abort.signal);
+              if (owner.repository.id !== target.repositoryId)
+                throw new HostError(
+                  "repository-changed",
+                  "This saved review belongs to another repository.",
+                  409,
+                );
+            }
+            if (request.method === "GET") {
+              if (targetAction === "review") send(await savedReviews.review(id!, targetId!));
+              else if (targetAction === "source")
+                send(await savedReviews.source(id!, targetId!, url.searchParams.get("path") ?? ""));
+              else if (targetAction === "notes") send(await savedReviews.notes(id!, targetId!));
+              else if (action === "feedback") send(await savedReviews.feedback(id!));
+              else if (!action) send(bundle);
+              else throw new HostError("method-not-allowed", "Use POST to clear comments.", 405);
+              return;
+            }
+            if (request.method === "POST" && targetAction === "notes") {
+              const input = z
+                .object({
+                  expectedRevision: z.number().int().nonnegative(),
+                  mutation: noteMutationSchema,
+                })
+                .parse(await readBody(request));
+              assertRequestAccess();
+              send(
+                await savedReviews.mutate(
+                  id!,
+                  targetId!,
+                  input.expectedRevision,
+                  input.mutation,
+                  assertRequestAccess,
+                ),
+              );
+              return;
+            }
+            if (request.method === "POST" && action === "clear") {
+              const input = z
+                .object({ expectedRevision: z.number().int().nonnegative() })
+                .parse(await readBody(request));
+              assertRequestAccess();
+              send(await savedReviews.clear(id!, input.expectedRevision, assertRequestAccess));
+              return;
+            }
+            throw new HostError(
+              "method-not-allowed",
+              "This saved review action is not supported.",
+              405,
+            );
+          }
           if (url.pathname === "/api/session" && request.method === "GET") {
             send(await session(await requireRepo(url.searchParams.get("repo")), abort.signal));
             return;
@@ -497,7 +671,8 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       } catch {
         throw new HostError("invalid-path", "This URL path is not valid.");
       }
-      const file = resolve(webRoot, `.${path === "/" ? "/index.html" : path}`);
+      const appRoute = path === "/" || /^\/review\/[a-zA-Z0-9_-]+$/.test(path);
+      const file = resolve(webRoot, `.${appRoute ? "/index.html" : path}`);
       const rel = relative(webRoot, file);
       if (rel.startsWith("..") || isAbsolute(rel))
         throw new HostError("invalid-path", "This asset path is not valid.", 403);
@@ -507,7 +682,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
         if (!info.isFile() || info.size > 32 * 1024 * 1024) throw new Error("not an asset");
         data = await readFile(file);
       } catch {
-        if (path === "/") {
+        if (appRoute) {
           response.writeHead(200, { "content-type": "text/html; charset=utf-8" });
           response.end(
             "<!doctype html><title>Med host</title><p>The review host is ready. Build the web application to serve its interface.</p>",
@@ -519,9 +694,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       response.writeHead(200, {
         "content-type": MIME[extname(file)] ?? "application/octet-stream",
         "cache-control":
-          path === "/" || path.endsWith(".html")
-            ? "no-store"
-            : "public, max-age=31536000, immutable",
+          appRoute || path.endsWith(".html") ? "no-store" : "public, max-age=31536000, immutable",
         "x-content-type-options": "nosniff",
         "referrer-policy": "no-referrer",
         "content-security-policy":
@@ -576,6 +749,14 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   if (!address || typeof address === "string")
     throw new Error("The local server did not open a TCP port.");
   port = address.port;
+  const clearConnection = options.stateDir
+    ? await publishConnection(options.stateDir, {
+        origin: `http://127.0.0.1:${port}`,
+        token,
+        pid: process.pid,
+        version: 1,
+      })
+    : undefined;
   if (options.open) {
     const command =
       process.platform === "darwin"
@@ -613,6 +794,8 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       await registry.close();
       reviews.clear();
       notes.clear();
+      await clearConnection?.();
+      if (temporaryState) await rm(temporaryState, { recursive: true, force: true });
       await new Promise<void>((resolvePromise) => {
         server.close(() => resolvePromise());
         server.closeAllConnections();
