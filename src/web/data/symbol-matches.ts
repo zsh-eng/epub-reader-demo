@@ -27,13 +27,28 @@ function scoreSymbol(symbol: SymbolMatch, query: string): number {
 }
 
 /** Bound both sorting work and mounted rows, even for generated files with many declarations. */
-export function findSymbols(matches: SymbolMatch[], query: string, limit = 100): SymbolMatch[] {
+export function findSymbols(
+  matches: SymbolMatch[],
+  query: string,
+  limit = 100,
+  near?: { line: number; column: number },
+): SymbolMatch[] {
   const text = query.trim();
-  const best: { match: SymbolMatch; score: number }[] = [];
+  type Candidate = { match: SymbolMatch; score: number };
+  const compare = (a: Candidate, b: Candidate) =>
+    b.score - a.score ||
+    (near
+      ? Math.abs(a.match.line - near.line) - Math.abs(b.match.line - near.line) ||
+        Math.abs((a.match.column ?? 1) - near.column) -
+          Math.abs((b.match.column ?? 1) - near.column)
+      : 0);
+  const best: Candidate[] = [];
   for (const match of matches) {
     const score = scoreSymbol(match, text);
-    if (score === -Infinity || (best.length === limit && score <= best[limit - 1]!.score)) continue;
-    let index = best.findIndex((candidate) => candidate.score < score);
+    const candidate = { match, score };
+    if (score === -Infinity || (best.length === limit && compare(candidate, best[limit - 1]!) >= 0))
+      continue;
+    let index = best.findIndex((item) => compare(candidate, item) < 0);
     if (index < 0) index = best.length;
     best.splice(index, 0, { match, score });
     if (best.length > limit) best.pop();

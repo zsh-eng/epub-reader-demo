@@ -83,6 +83,7 @@ function SymbolPickerContents({
   const [selected, setSelected] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const sourceKey = source ? browseSourceKey(source) : "";
   const requestQuery = mode === "file" ? "" : query;
   const requestKey = JSON.stringify([sourceKey, mode, path, identity, requestQuery, refresh]);
@@ -90,6 +91,7 @@ function SymbolPickerContents({
     key: string;
     result?: SymbolSearch;
     error?: string;
+    origin?: FileSymbolPreview["origin"];
   }>({ key: "" });
   const enabled =
     !definitionResult && !!source && !!api.symbols && (mode === "file" ? !!path : !!query.trim());
@@ -107,7 +109,8 @@ function SymbolPickerContents({
         controller.signal,
       )
       .then((result) => {
-        if (!controller.signal.aborted) setState({ key: requestKey, result });
+        if (!controller.signal.aborted)
+          setState({ key: requestKey, result, origin: session.current?.origin });
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted)
@@ -123,14 +126,25 @@ function SymbolPickerContents({
   const failure =
     definitionResult?.unavailable ??
     (state.key === requestKey ? (state.error ?? state.result?.unavailable) : null);
+  // The preview session captures the imperative cursor before the symbol
+  // request resolves. Use that fixed origin when the async results arrive.
+  const origin = state.origin;
   const results = useMemo(
     () =>
       mode === "file" || definitionResult
-        ? findSymbols(displayed?.matches ?? [], query)
+        ? findSymbols(displayed?.matches ?? [], query, 100, mode === "file" ? origin : undefined)
         : (displayed?.matches ?? []).slice(0, 100),
-    [displayed, mode, query, definitionResult],
+    [displayed, mode, query, definitionResult, origin],
   );
   const chosen = results.find((match) => symbolMatchId(match) === selected) ?? results[0];
+  const chosenIndex = chosen ? results.indexOf(chosen) : -1;
+  useLayoutEffect(() => {
+    const option = listRef.current?.querySelectorAll<HTMLElement>('[role="option"]')[chosenIndex];
+    if (option) {
+      inputRef.current?.setAttribute("aria-activedescendant", option.id);
+      option.scrollIntoView({ block: "nearest" });
+    } else inputRef.current?.removeAttribute("aria-activedescendant");
+  }, [chosenIndex, results]);
   // Project locations are bound to the resolved commit returned by the index.
   const resultSource = definitionResult
     ? (definitionResult.resultSource ?? definitionResult.source)
@@ -178,7 +192,7 @@ function SymbolPickerContents({
       onOpenChange={onOpenChange}
       items={results}
       filter={null}
-      value={null}
+      value={chosen ?? null}
       inputValue={query}
       onInputValueChange={(value, details) => {
         if (details.reason !== "input-change" && details.reason !== "input-clear") return;
@@ -187,9 +201,8 @@ function SymbolPickerContents({
         setSelected(null);
       }}
       itemToStringLabel={(match) => match.name}
-      autoHighlight
-      onItemHighlighted={(match) => {
-        if (match) setSelected(symbolMatchId(match));
+      onItemHighlighted={(match, details) => {
+        if (match && details.reason === "pointer") setSelected(symbolMatchId(match));
       }}
       onValueChange={(match) => {
         if (match) choose(match);
@@ -266,7 +279,21 @@ function SymbolPickerContents({
                   mode === "file" ? "Search symbols in this file…" : "Search committed symbols…"
                 }
                 onKeyDown={(event) => {
-                  if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                  if (event.nativeEvent.isComposing) return;
+                  // Include the initial nearest result in keyboard navigation,
+                  // even before the user types a query.
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    event.preventBaseUIHandler();
+                    const next =
+                      results[
+                        (chosenIndex + (event.key === "ArrowDown" ? 1 : -1) + results.length) %
+                          results.length
+                      ];
+                    if (next) setSelected(symbolMatchId(next));
+                    return;
+                  }
+                  if (event.key !== "Enter") return;
                   event.preventDefault();
                   event.preventBaseUIHandler();
                   if (chosen) choose(chosen);
@@ -310,18 +337,19 @@ function SymbolPickerContents({
                         </div>
                       </Combobox.Empty>
                     )}
-                    <Combobox.List aria-label="Symbols" {...stylex.props(styles.list)}>
+                    <Combobox.List
+                      ref={listRef}
+                      aria-label="Symbols"
+                      {...stylex.props(styles.list)}
+                    >
                       {(match: SymbolMatch) => (
                         <Combobox.Item
                           key={symbolMatchId(match)}
                           value={match}
                           disabled={busy || !!previewChanged}
-                          className={(state) =>
-                            stylex.props(
-                              styles.item,
-                              (state.highlighted || (!selected && chosen === match)) &&
-                                styles.highlighted,
-                            ).className
+                          className={() =>
+                            stylex.props(styles.item, chosen === match && styles.highlighted)
+                              .className
                           }
                         >
                           <span {...stylex.props(styles.itemText)}>

@@ -207,3 +207,31 @@ test("ambiguous definitions use the indexed snapshot and need an explicit choice
   await userEvent.keyboard("{Enter}");
   expect(onOpen).toHaveBeenCalledWith("main.ts", 80, commit, 10);
 });
+
+test("file symbols start near the captured cursor and do not rerank as previews move", async () => {
+  const preview = vi.fn<(line: number, column: number | undefined, name: string) => void>();
+  const finish = vi.fn<(accept: boolean) => void>();
+  const onOpen = vi.fn<SymbolPickerProps["onOpen"]>();
+  render(
+    <Harness
+      api={baseApi()}
+      onOpen={onOpen}
+      beginFilePreview={() => ({
+        origin: { line: 76, column: 1 },
+        preview,
+        finish,
+      })}
+    />,
+  );
+  const nearest = page.getByRole("option", { name: "example80 function Line 80" });
+  await expect.element(nearest).toHaveAttribute("aria-selected", "true");
+  await expect
+    .element(page.getByRole("combobox", { name: "Find symbol in file" }))
+    .toHaveAttribute("aria-activedescendant", nearest.element().id);
+  await expect.poll(() => preview.mock.calls.at(-1)).toEqual([80, 10, "example80"]);
+  await userEvent.keyboard("{ArrowDown}");
+  await expect.poll(() => preview.mock.calls.at(-1)).toEqual([10, 10, "example10"]);
+  await userEvent.keyboard("{Escape}");
+  expect(finish).toHaveBeenCalledWith(false);
+  expect(onOpen).not.toHaveBeenCalled();
+});

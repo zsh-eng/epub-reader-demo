@@ -83,7 +83,13 @@ async function mountFile(vim = false, beforeRead?: () => Promise<void>) {
         query,
         engine: "ctags",
         truncated: false,
-        matches: [{ path: "main.ts", line: 80, column: 14, name: "example80", kind: "constant" }],
+        matches: [10, 80].map((line) => ({
+          path: "main.ts",
+          line,
+          column: 14,
+          name: `example${line}`,
+          kind: "constant",
+        })),
       });
     }
     if (url.pathname === "/api/browse/list") {
@@ -169,10 +175,10 @@ test("symbol palette previews in the current file and Escape restores cursor and
     includeHidden: true,
   });
   (pane.element() as HTMLElement).focus();
-  focusedKey("4");
+  focusedKey("7");
   focusedKey("2");
   focusedKey("G");
-  await expect.element(pane).toHaveAttribute("data-vim-line", "42");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "72");
   const scroller = [...pane.element().querySelectorAll("div")].find(
     (node) => getComputedStyle(node).overflowY === "auto",
   )!;
@@ -190,7 +196,7 @@ test("symbol palette previews in the current file and Escape restores cursor and
   ).toBe(true);
   await userEvent.keyboard("{Escape}");
   await expect.element(page.getByRole("dialog", { name: "Find symbol" })).not.toBeInTheDocument();
-  await expect.element(pane).toHaveAttribute("data-vim-line", "42");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "72");
   await expect.poll(() => scroller.scrollTop).toBe(scrollTop);
   await expect.poll(() => document.activeElement).toBe(pane.element());
 });

@@ -28,6 +28,7 @@ import { BlameTooltips } from "./BlameTooltips";
 import { createBlameGutter } from "../data/blame-gutter";
 
 export interface FileSymbolPreview {
+  readonly origin?: { line: number; column: number };
   preview(line: number, column: number | undefined, name: string, selectLine?: boolean): void;
   finish(accept: boolean): void;
 }
@@ -112,6 +113,7 @@ export function FullFileView({
     const scrollTop = instance?.getScrollTop() ?? 0;
     const selected = instance?.getSelectedLines() ?? null;
     return {
+      origin: { line: origin.line + 1, column: origin.column + 1 },
       preview(target, targetColumn, name, selectLine = true) {
         vim.position.jump(target, targetColumn);
         instance?.setSelectedLines(

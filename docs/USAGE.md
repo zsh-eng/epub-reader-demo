@@ -101,7 +101,7 @@ Command-click a diff filename or a file in the Changes list to open a pinned bac
 
 ![In-file symbol palette with a live jump in the current file](validation/symbol-navigation.png)
 
-In-file symbol search (`⌘O`) opens a narrow palette over the left sidebar. Arrow keys jump in the current file and highlight the symbol name. Enter keeps that position; Escape restores the original cursor and scroll position. Project symbol search (`⌘⇧O`) keeps a separate file preview and searches the selected repository’s indexed commit. Both palettes retain and select the last query.
+In-file symbol search (`⌘O`) opens a narrow palette over the left sidebar. It starts with the symbol nearest to the cursor. Typed matches keep name relevance first, then use cursor distance to break ties. Arrow keys jump in the current file and highlight the symbol name. Enter keeps that position; Escape restores the original cursor and scroll position. Project symbol search (`⌘⇧O`) keeps a separate file preview and searches the selected repository’s indexed commit. Both palettes retain and select the last query.
 
 Symbol extraction uses Universal Ctags. Install it with `brew install universal-ctags` on macOS or `sudo pacman -S ctags` on Omarchy. The project index and individual file extraction share this binary. Project symbols require the optional Zoekt setup above. After updating from a text-only search build, run `node dist/cli.js --setup-search` again to install the updated helper. Existing text-only indexes rebuild when symbol extraction is enabled. Language coverage follows the installed Ctags parsers: Universal Ctags 6.2.1 covers TypeScript and C/C++, but does not include a Zig parser. Text search still works for Zig.
 
