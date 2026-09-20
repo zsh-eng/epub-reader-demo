@@ -50,3 +50,28 @@ test('uses only the declared author image from structured metadata', async () =>
   expect(result.authorImage).toBe('https://fixture.example/portrait.png');
   await page.close();
 });
+
+test('preserves Unicode punctuation and selectable text through extraction', async () => {
+  const page = await browser.newPage();
+  const sentence = '“Slow down,” she said — café, naïve, 日本語. Keep every character intact.';
+  const html = readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/unicode.html'), 'utf8');
+  await page.route('https://fixture.example/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: html }));
+  await page.goto('https://fixture.example/unicode');
+  await page.evaluate(script);
+  const result = await page.evaluate(() => (globalThis as any).extractArticle());
+  expect(result.content).toContain(sentence);
+  const css = readFileSync(resolve(import.meta.dir, '../Resources/reader.css'), 'utf8');
+  await page.setContent(`<meta charset="utf-8"><style>${css}</style><main><article id="reader-content">${result.content}</article></main>`);
+  const selected = await page.evaluate(sentence => {
+    const paragraph = [...document.querySelectorAll('p')].find(node => node.textContent === sentence)!;
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return { text: selection.toString(), selectable: getComputedStyle(paragraph).userSelect };
+  }, sentence);
+  expect(selected.text).toBe(sentence);
+  expect(selected.selectable).not.toBe('none');
+  await page.close();
+});
