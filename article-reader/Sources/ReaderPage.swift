@@ -30,6 +30,9 @@ struct ReaderPage: View {
 
   var body: some View {
     readingPage
+      .sheet(item: $browser.annotationPresentation) { presentation in
+        ReaderAnnotations(browser: browser, presentation: presentation)
+      }
       .onAppear {
         updateAppearance()
         store.visit(browser.sourceURL)
@@ -276,6 +279,16 @@ struct ReaderNavigationBar: View {
       // UIKit owns the Back button and its interactive pop gesture.
       Color.clear.frame(width: 44, height: 44).allowsHitTesting(false)
       Spacer()
+      Button {
+        browser.annotationPresentation = AnnotationPresentation()
+      } label: {
+        Image(systemName: "text.bubble").frame(width: 44, height: 44)
+      }
+      .readerGlass()
+      .accessibilityLabel("Notes")
+      .accessibilityIdentifier("reader-notes")
+      .accessibilityValue("\(browser.annotations.count) passages")
+      .disabled(!browser.readerReady)
       Menu {
         Button("Archive article", systemImage: "archivebox") {
           guard let article else { return }
@@ -295,7 +308,7 @@ struct ReaderNavigationBar: View {
     }
     .overlay {
       Text(browser.sourceURL.host ?? "Article").font(.headline).lineLimit(1)
-        .padding(.horizontal, 62).allowsHitTesting(false)
+        .padding(.horizontal, 108).allowsHitTesting(false)
     }
     .padding(.horizontal, 16)
   }

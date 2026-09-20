@@ -41,6 +41,23 @@ enum ArticleRouting {
 /// Copy uses the selected plain text directly, including on cached documents.
 @MainActor private final class ReaderWebView: WKWebView {
   private var copyRequest = 0
+  var annotate: ((Bool) -> Void)?
+
+  override func buildMenu(with builder: UIMenuBuilder) {
+    super.buildMenu(with: builder)
+    let actions = UIMenu(
+      options: .displayInline,
+      children: [
+        UIAction(title: "Highlight", image: UIImage(systemName: "highlighter")) { [weak self] _ in
+          self?.annotate?(false)
+        },
+        UIAction(title: "Add note", image: UIImage(systemName: "square.and.pencil")) {
+          [weak self] _ in
+          self?.annotate?(true)
+        },
+      ])
+    builder.insertSibling(actions, afterMenu: .standardEdit)
+  }
 
   override func target(forAction action: Selector, withSender sender: Any?) -> Any? {
     if action == #selector(copy(_:)) { return self }
@@ -73,6 +90,9 @@ enum ArticleRouting {
 @MainActor @Observable final class ArticleBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
   let webView: WKWebView
   let readerView: WKWebView
+  var annotationPresentation: AnnotationPresentation?
+  var unmatchedAnnotations: Set<String> = []
+  var annotations: [ReaderAnnotation] { AnnotationStore.shared.annotations(for: libraryURL) }
   var isReader = false
   var readerReady = false
   var appearanceDescription = ""
@@ -112,6 +132,9 @@ enum ArticleRouting {
     webView.uiDelegate = self
     webView.allowsBackForwardNavigationGestures = true
     readerView.navigationDelegate = self
+    (readerView as? ReaderWebView)?.annotate = { [weak self] withNote in
+      self?.annotateSelection(withNote: withNote)
+    }
     for view in [webView, readerView] {
       view.isOpaque = false
       view.backgroundColor = .systemBackground
@@ -350,6 +373,7 @@ enum ArticleRouting {
         guard let self, version == self.pageVersion, navigation === self.readerNavigation else {
           return
         }
+        self.installAnnotations()
         self.readerReady = true
         self.isExtracting = false
         if self.wantsReader { self.isReader = true }
@@ -464,6 +488,8 @@ enum ArticleRouting {
         root.style.setProperty('--reader-padding', o.padding + 'px');
         root.style.setProperty('--reader-leading', o.leading);
         root.style.setProperty('--reader-font', o.family);
+        root.style.setProperty('--annotation-fill', o.theme === 'Ink' || o.theme === 'Night'
+          ? 'rgba(115,209,242,.24)' : 'rgba(33,125,181,.18)');
         await document.fonts.ready;
         const text = document.querySelector('#reader-content p') || document.getElementById('reader-content');
         const style = getComputedStyle(text);
@@ -477,6 +503,63 @@ enum ArticleRouting {
       }
       completion?()
     }
+  }
+
+  /// App-only scripts keep publisher JavaScript disabled and never alter cached HTML.
+  private func installAnnotations() {
+    guard let url = Bundle.main.url(forResource: "annotations", withExtension: "js"),
+      let script = try? String(contentsOf: url, encoding: .utf8)
+    else { return }
+    readerView.evaluateJavaScript(script, in: nil, in: .defaultClient) { [weak self] result in
+      guard case .success = result else { return }
+      self?.refreshAnnotations()
+    }
+  }
+
+  func refreshAnnotations() {
+    guard let data = try? JSONEncoder().encode(annotations),
+      let json = String(data: data, encoding: .utf8)
+    else { return }
+    readerView.callAsyncJavaScript(
+      "return globalThis.arcticAnnotations?.render(JSON.parse(records)) || [];",
+      arguments: ["records": json], in: nil, in: .defaultClient
+    ) { [weak self] result in
+      if case .success(let value) = result, let ids = value as? [String] {
+        self?.unmatchedAnnotations = Set(ids)
+      }
+    }
+  }
+
+  private func annotateSelection(withNote: Bool) {
+    guard isReader, readerReady else { return }
+    let url = libraryURL
+    let version = pageVersion
+    readerView.evaluateJavaScript(
+      "globalThis.arcticAnnotations?.selection()", in: nil, in: .defaultClient
+    ) { [weak self] result in
+      guard let self, self.pageVersion == version, self.libraryURL == url,
+        case .success(let value) = result, let selection = value as? [String: Any],
+        let data = try? JSONSerialization.data(withJSONObject: selection),
+        let quote = try? JSONDecoder().decode(ReaderQuote.self, from: data)
+      else { return }
+      do {
+        let annotation = try AnnotationStore.shared.highlight(quote, in: url)
+        self.readerView.evaluateJavaScript(
+          "window.getSelection().removeAllRanges()", in: nil, in: .defaultClient
+        ) { _ in }
+        self.refreshAnnotations()
+        UISelectionFeedbackGenerator().selectionChanged()
+        if withNote { self.annotationPresentation = AnnotationPresentation(editing: annotation.id) }
+      } catch { self.errorMessage = "Could not save passage: " + error.localizedDescription }
+    }
+  }
+
+  func revealAnnotation(_ id: UUID) {
+    showReader()
+    readerView.callAsyncJavaScript(
+      "return globalThis.arcticAnnotations?.reveal(id) || false;",
+      arguments: ["id": id.uuidString], in: nil, in: .defaultClient
+    ) { _ in }
   }
 
   func stop() {

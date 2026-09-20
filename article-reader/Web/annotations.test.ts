@@ -1,0 +1,74 @@
+import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { chromium, type Browser, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+let browser: Browser;
+beforeAll(async () => { browser = await chromium.launch(); });
+afterAll(async () => { await browser?.close(); });
+const script = readFileSync(resolve(import.meta.dir, '../Resources/annotations.js'), 'utf8');
+const fixture = '<article id="reader-content"><p>Before “café” — 日本語 and a <em>quiet thought</em>.</p><p>Another quiet thought stays here.</p></article>';
+async function page() {
+  const page = await browser.newPage();
+  await page.setContent(fixture);
+  await page.evaluate(script);
+  return page;
+}
+async function select(page: Page, selector: string) {
+  return page.evaluate(selector => {
+    const range = document.createRange();
+    range.selectNodeContents(document.querySelector(selector)!);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    return (globalThis as any).arcticAnnotations.selection();
+  }, selector);
+}
+const record = (quote: unknown, id = 'one') => ({ id, quote, isHighlighted: true });
+
+test('captures exact native selection across inline elements without changing document text', async () => {
+  const p = await page();
+  const quote = await select(p, 'p');
+  expect(quote.exact).toBe('Before “café” — 日本語 and a quiet thought.');
+  const before = await p.locator('article').innerHTML();
+  const missing = await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(quote)]);
+  expect(missing).toEqual([]);
+  expect(await p.locator('article').innerHTML()).toBe(before);
+  expect(await p.evaluate(() => [...CSS.highlights.get('arctic-preserved')!].map(range => range.toString()))).toEqual([quote.exact]);
+  await p.close();
+});
+
+test('context relocates repeated quotes and leaves ambiguous changed passages unresolved', async () => {
+  const p = await page();
+  const quote = await select(p, 'em');
+  await p.evaluate(() => document.querySelector('article')!.prepend(document.createTextNode('A new preface. ')));
+  expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(quote)])).toEqual([]);
+  await p.locator('article').evaluate(node => node.innerHTML = '<p>New quiet thought here.</p><p>New quiet thought there.</p>');
+  expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(quote)])).toEqual(['one']);
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('one'))).toBe(false);
+  await p.close();
+});
+
+test('17.0 fallback merges overlapping marks and removes them without text or markup loss', async () => {
+  const p = await page();
+  const paragraph = await select(p, 'p');
+  const phrase = await select(p, 'em');
+  const before = await p.locator('article').innerHTML();
+  await p.evaluate(() => { (globalThis as any).Highlight = undefined; });
+  expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(paragraph), record(phrase, 'two')])).toEqual([]);
+  expect(await p.locator('mark[data-arctic-highlight]').count()).toBe(3);
+  expect(await p.locator('article').textContent()).toBe(paragraph.exact + 'Another quiet thought stays here.');
+  await p.evaluate(() => (globalThis as any).arcticAnnotations.render([]));
+  expect(await p.locator('article').innerHTML()).toBe(before);
+  await p.close();
+});
+
+test('non-highlight notes remain revealable, empty and outside selections cannot be saved', async () => {
+  const p = await page();
+  const quote = await select(p, 'em');
+  expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [{ ...record(quote), isHighlighted: false }])).toEqual([]);
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-preserved')!.size)).toBe(0);
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('one'))).toBe(true);
+  await p.evaluate(() => window.getSelection()!.removeAllRanges());
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.selection())).toBeNull();
+  await p.close();
+});
