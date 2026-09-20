@@ -57,6 +57,9 @@ enum ArticleRouting {
   var currentURL: URL
   @ObservationIgnored private var observations: [NSKeyValueObservation] = []
   @ObservationIgnored private var pageVersion = 0
+  @ObservationIgnored private var readerNavigation: WKNavigation?
+  @ObservationIgnored private var websiteNavigation: WKNavigation?
+  @ObservationIgnored private var websiteReady = false
   @ObservationIgnored private var bypassRouting = false
   private(set) var isOpeningWebsite = false
   @ObservationIgnored private var extraction: (url: URL, html: String)?
@@ -103,11 +106,13 @@ enum ArticleRouting {
       },
     ]
     if let downloadedFile {
+      isExtracting = true
       isLoading = false
       hasLoaded = true
       wantsReader = true
       isReader = true
-      readerView.loadFileURL(downloadedFile, allowingReadAccessTo: downloadedFile)
+      readerNavigation = readerView.loadFileURL(
+        downloadedFile, allowingReadAccessTo: downloadedFile)
     } else {
       loadWebsite(url)
     }
@@ -131,27 +136,27 @@ enum ArticleRouting {
 
   func back() {
     guard webView.canGoBack else { return }
-    isReader = false
+    selectWebsite()
     webView.goBack()
   }
   func forward() {
     guard webView.canGoForward else { return }
-    isReader = false
+    selectWebsite()
     webView.goForward()
   }
   func reload() {
-    isReader = false
+    selectWebsite()
     if webView.url == nil { loadWebsite(sourceURL) } else { webView.reload() }
   }
 
   func openOriginal() {
-    isReader = false
+    selectWebsite()
     bypassRouting = true
     webView.load(URLRequest(url: sourceURL))
   }
 
   func openUnwall() {
-    isReader = false
+    selectWebsite()
     bypassRouting = false
     webView.load(URLRequest(url: ArticleRouting.unwall(sourceURL)))
   }
@@ -159,7 +164,7 @@ enum ArticleRouting {
   func toggleReader() {
     if isReader {
       wantsReader = false
-      if webView.url == nil {
+      if !websiteReady {
         // A downloaded article opens without a publisher request. Keep its
         // rendered HTML visible until the user-requested website has loaded.
         isOpeningWebsite = true
@@ -169,12 +174,23 @@ enum ArticleRouting {
       }
       return
     }
+    showReader()
+  }
+
+  /// Reuse prepared HTML and its scroll position when reopening a saved article.
+  func showReader() {
     wantsReader = true
     if readerReady {
       isReader = true
       return
     }
     prepareReader()
+  }
+
+  private func selectWebsite() {
+    wantsReader = false
+    isOpeningWebsite = false
+    isReader = false
   }
 
   /// Prepare the cleaned page before a tap, without changing the visible mode.
@@ -227,7 +243,7 @@ enum ArticleRouting {
           """
         extraction = (downloadURL, html)
         persistExtraction(in: store)
-        readerView.loadHTMLString(html, baseURL: nil)
+        readerNavigation = readerView.loadHTMLString(html, baseURL: nil)
       } catch {
         guard version == pageVersion else { return }
         isExtracting = false
@@ -246,11 +262,14 @@ enum ArticleRouting {
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     guard webView === self.webView else { return }
+    websiteNavigation = navigation
+    websiteReady = false
     // This initial website load belongs to the same downloaded article. Its
     // cached document remains valid and visible while the website prepares.
     if isOpeningWebsite { return }
     pageVersion += 1
     extraction = nil
+    readerNavigation = nil
     readerView.stopLoading()
     hasLoaded = false
     readerReady = false
@@ -260,7 +279,9 @@ enum ArticleRouting {
   }
 
   func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-    guard webView === self.webView, let url = webView.url else { return }
+    guard webView === self.webView, navigation === websiteNavigation, let url = webView.url else {
+      return
+    }
     if TestMode.enabled && url.isFileURL {
       currentURL = URL(
         string: "https://fixture.example/" + url.deletingPathExtension().lastPathComponent)!
@@ -275,15 +296,20 @@ enum ArticleRouting {
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     if webView === readerView {
+      guard navigation === readerNavigation else { return }
       let version = pageVersion
       applyAppearance { [weak self] in
-        guard let self, version == self.pageVersion else { return }
+        guard let self, version == self.pageVersion, navigation === self.readerNavigation else {
+          return
+        }
         self.readerReady = true
         self.isExtracting = false
         if self.wantsReader { self.isReader = true }
       }
       return
     }
+    guard navigation === websiteNavigation else { return }
+    websiteReady = true
     hasLoaded = true
     if isOpeningWebsite {
       isOpeningWebsite = false
@@ -297,16 +323,23 @@ enum ArticleRouting {
     _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
     withError error: Error
   ) {
-    report(error)
+    report(error, from: webView, navigation: navigation)
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-    report(error)
+    report(error, from: webView, navigation: navigation)
   }
 
-  private func report(_ error: Error) {
+  private func report(_ error: Error, from view: WKWebView, navigation: WKNavigation?) {
     guard (error as NSError).code != NSURLErrorCancelled else { return }
-    isOpeningWebsite = false
+    if view === webView {
+      guard navigation === websiteNavigation else { return }
+      websiteReady = false
+      isOpeningWebsite = false
+    } else {
+      guard navigation === readerNavigation else { return }
+      isExtracting = false
+    }
     errorMessage = error.localizedDescription
   }
 
@@ -328,7 +361,7 @@ enum ArticleRouting {
     }
     if webView === readerView, ["https", "http"].contains(url.scheme ?? "") {
       decisionHandler(.cancel)
-      isReader = false
+      selectWebsite()
       if bypassRouting { self.webView.load(URLRequest(url: url)) } else { loadWebsite(url) }
       return
     }
@@ -400,6 +433,9 @@ enum ArticleRouting {
 
   func stop() {
     pageVersion += 1
+    readerNavigation = nil
+    websiteNavigation = nil
+    isOpeningWebsite = false
     webView.stopLoading()
     readerView.stopLoading()
   }
@@ -474,18 +510,16 @@ struct WebSurface: UIViewRepresentable {
   func open(_ url: URL, store: ArticleStore) -> ArticleBrowser {
     active = url
     trim()
-    if let file = store.downloadedFile(for: url) {
-      let browser = ArticleBrowser(url: url, store: store, downloadedFile: file)
-      browsers[url]?.stop()
-      browsers[url] = browser
-      return browser
+    let file = store.downloadedFile(for: url)
+    if let browser = browsers[url], browser.sourceURL == ArticleRouting.original(url) {
+      if file == nil { return browser }
+      if browser.readerReady || browser.isReader {
+        browser.showReader()
+        return browser
+      }
     }
-    if let browser = browsers[url],
-      browser.sourceURL == ArticleRouting.original(url)
-    {
-      return browser
-    }
-    let browser = ArticleBrowser(url: url, store: store)
+    browsers[url]?.stop()
+    let browser = ArticleBrowser(url: url, store: store, downloadedFile: file)
     browsers[url] = browser
     return browser
   }
