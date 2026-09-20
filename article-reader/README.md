@@ -97,8 +97,10 @@ associated-domain file.
 
 - **Share → Arctic → Save:** the extension first shows the link, then reveals
   its title and image in an expanding sheet. Cancel and Save stay at the bottom;
-  saving never waits for a publisher. Save writes an immutable local inbox event
-  before optional Jev tagging starts. Done is available immediately. A separate
+  saving never waits for a publisher. With automatic tagging enabled, rich metadata
+  and Jev classification start while the preview is open, before Save. Save writes
+  an immutable local inbox event and reuses the running request or completed tags.
+  Cancel discards the unsaved result. Done is available immediately. A separate
   immutable completion event carries tags, so dismissal cannot lose the saved link
   or race with the main app consuming it. The app resumes incomplete work on entry.
 - **Copy link → open Arctic:** on app activation, detect a probable web URL,
@@ -108,6 +110,9 @@ associated-domain file.
   offer only Open. Save adds the link without opening Reader.
   The banner shows its title and thumbnail as they arrive. The image is cached before the copied page starts
   its background preload. Paste, save and preload share one metadata request.
+  With tagging enabled, the preview also starts Jev before Save. Its bounded
+  in-memory result cache shares requests with the saved queue; Dismiss never
+  creates an article or persists tags.
   Tapping Open takes priority and does not wait for the preview. Open uses that
   prepared browser; Open records History; the Reader bookmark saves the link; Dismiss does neither. Each clipboard
   change is checked once, including across launches. Non-link text is ignored.
@@ -133,11 +138,18 @@ pages can be skipped, including key setup, without blocking local reading.
 **Sort → Automatic tags** verifies, replaces, or removes a user's Jev API key.
 The key stays in the shared iOS Keychain with device-only accessibility; both app
 and extension need the shared keychain-access-group entitlement when signing.
-The share extension starts classification when the title is ready; thumbnail
-loading does not block tags. No developer key is bundled. Enabling tagging sends saved article titles and
-metadata descriptions directly to TypeSafe over HTTPS. Full article bodies and
-browsing-only history are not sent. The extension uses a title when no description
-is available. **Sort → Tag existing articles** runs the same saved-only queue.
+Both entry paths start classification as soon as rich metadata is ready; thumbnail
+loading does not block tags. No developer key is bundled. Enabling tagging sends
+previewed links’ titles and metadata descriptions directly to TypeSafe over HTTPS,
+including before Save. Missing, short, or title-like descriptions gain a cleaned
+article excerpt; this context is capped at 2,500 characters and stays separate
+from the displayed subtitle. The excerpt uses article/main paragraphs, with a
+body-paragraph fallback; it is not the full Defuddle document. A blocked HTML fetch
+in the extension can fall back to the available Link Presentation title.
+**Sort → Tag existing articles** runs the same saved queue. Prepared main-app
+requests are keyed by input and credential revision, capped at eight entries,
+and never persist an unsaved article. Changing the key or enabled setting
+invalidates reuse of earlier requests.
 
 `Shared/ArticleTagging.swift` defines 12 fixed categories and makes one request
 with independent yes/no questions. The initial threshold of 0.75 is provisional,
@@ -151,7 +163,7 @@ and explicit re-tagging invalidate stale work. Network failures leave work pendi
 until a later foreground activation. Invalid credentials pause the queue and show
 an error in Automatic tags. Tag completion uses the original soft gradient border, which hands its glow to
 the tag outlines before their labels appear, and
-an Edit tags action. The card and pills share one animation clock. A share receipt is recorded only after those tags have appeared. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
+an Edit tags action. The card and pills share one animation clock. A presented share receipt is recorded only after those tags have appeared. Closing a saved share early keeps completed tags with an unpresented receipt. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
 
 Simulator tests use separate article files and fixture classifications, never a
 real Jev key or request. `-test-onboarding -reset-onboarding` exercises first run;

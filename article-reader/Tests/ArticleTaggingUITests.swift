@@ -70,6 +70,7 @@ final class ArticleTaggingUITests: XCTestCase {
     app.buttons["reader-save"].tap()
     app.navigationBars.buttons.element(boundBy: 0).tap()
     waitForQueue("tagging", in: app)
+    releaseResponse(in: app)
     waitForQueue("idle", in: app)
     XCTAssertTrue(app.buttons["article-story"].exists)
     XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
@@ -77,6 +78,8 @@ final class ArticleTaggingUITests: XCTestCase {
 
     XCUIDevice.shared.press(.home)
     app.activate()
+    waitForQueue("tagging", in: app)
+    releaseResponse(in: app)
     XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 15))
     XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
     app.terminate()
@@ -124,11 +127,73 @@ final class ArticleTaggingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
   }
 
+  @MainActor func testPastePreparesTagsBeforeSaveAndReusesOneRequest() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-test-tagging"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    let prepared = app.staticTexts["tagging-prepared-count"]
+    expectation(for: NSPredicate(format: "label == '1'"), evaluatedWith: prepared)
+    waitForExpectations(timeout: 15)
+    XCTAssertEqual(app.staticTexts["tagging-request-count"].label, "1")
+    let context = app.staticTexts["clipboard-preview-title"].value as? String ?? ""
+    XCTAssertTrue(context.contains("On walking slowly"))
+    XCTAssertTrue(context.contains("There is a particular pleasure"))
+    XCTAssertFalse(context.contains("Publisher navigation"))
+    XCTAssertFalse(app.buttons["article-story"].exists)
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+    app.buttons["save-copied-link"].tap()
+    XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["folder-tag-Engineering"].exists)
+    XCTAssertEqual(app.staticTexts["tagging-request-count"].label, "1")
+    app.terminate()
+    app.launchArguments = ["-ui-testing"]
+    app.launchEnvironment = [:]
+    app.launch()
+    XCTAssertTrue(app.buttons["folder-tag-Engineering"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+  }
+
+  @MainActor func testPasteOpenReusesTagsWhenSavedInReader() {
+    let app = launchTagging()
+    app.buttons["open-copied-link"].tap()
+    let save = app.buttons["reader-save"]
+    XCTAssertTrue(save.waitForExistence(timeout: 10))
+    XCTAssertEqual(save.value as? String, "Not saved")
+    releaseResponse(in: app)
+    waitForQueue("idle", in: app)
+    XCTAssertEqual(app.staticTexts["tagging-request-count"].label, "1")
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+    save.tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.staticTexts["tagging-request-count"].label, "1")
+  }
+
+  @MainActor func testDismissPreparedPasteDoesNotSaveTagsOrArticle() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-test-tagging"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    expectation(
+      for: NSPredicate(format: "label == '1'"),
+      evaluatedWith: app.staticTexts["tagging-prepared-count"])
+    waitForExpectations(timeout: 15)
+    app.buttons["dismiss-copied-link"].tap()
+    XCTAssertFalse(app.buttons["article-story"].exists)
+    XCTAssertFalse(app.buttons["folder-tag-Engineering"].exists)
+    app.terminate()
+    app.launchArguments = ["-ui-testing"]
+    app.launchEnvironment = [:]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Your next good read."].waitForExistence(timeout: 5))
+  }
+
   @MainActor private func launchTagging(failure: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ui-testing", "-reset-store", "-test-clipboard", "-test-tagging",
-      failure ? "-test-tagging-delayed" : "-test-tagging-held",
+      "-test-tagging-held",
     ]
     if failure { app.launchArguments.append("-test-tagging-failure") }
     app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"

@@ -482,6 +482,12 @@ struct LibraryView: View {
             store.errorMessage = error.localizedDescription
           }
         } open: {
+          // Opening dismisses the banner and cancels its task. Finish preparing
+          // this explicit pasted link so a later Reader Save reuses the result.
+          Task {
+            guard let preview = try? await ArticlePreviewCache.shared.load(url) else { return }
+            store.prepareTagging(url: url, preview: preview)
+          }
           selected = browsers.open(url, store: store)
           clipboard.dismiss()
         } dismiss: {
@@ -692,7 +698,13 @@ struct LibraryView: View {
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
       let controller = UIActivityViewController(
-        activityItems: [URL(string: "https://fixture.example/story")!], applicationActivities: nil)
+        activityItems: [
+          URL(
+            string: "https://fixture.example/story"
+              + (ProcessInfo.processInfo.arguments.contains("-share-wait-context")
+                ? "?wait_for_save" : ""))!
+        ],
+        applicationActivities: nil)
       // UIKit can finish the activity without updating the SwiftUI sheet binding.
       controller.completionWithItemsHandler = { _, _, _, _ in onComplete() }
       return controller

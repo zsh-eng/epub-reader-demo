@@ -7,12 +7,17 @@ struct SharedArticleTransfer: Codable {
   var url: URL
   var title: String?
   var subtitle: String?
+  var taggingText: String?
 
-  init(id: UUID = UUID(), url: URL, title: String? = nil, subtitle: String? = nil) {
+  init(
+    id: UUID = UUID(), url: URL, title: String? = nil, subtitle: String? = nil,
+    taggingText: String? = nil
+  ) {
     self.id = id
     self.url = url
     self.title = title
     self.subtitle = subtitle
+    self.taggingText = taggingText
   }
 }
 
@@ -23,6 +28,7 @@ struct SharedTaggingResult: Codable {
   var url: URL
   var title: String
   var subtitle: String?
+  var taggingText: String?
   var tagNames: [String]
   var inputFingerprint: String
   var categoryVersion: Int
@@ -54,11 +60,14 @@ enum SharedInbox {
   }
 
   @discardableResult
-  static func save(_ url: URL, title: String? = nil, subtitle: String? = nil) throws
+  static func save(
+    _ url: URL, title: String? = nil, subtitle: String? = nil, taggingText: String? = nil
+  ) throws
     -> SharedArticleTransfer
   {
     guard webURL(url.absoluteString) != nil else { throw InboxError.invalidLink }
-    let transfer = SharedArticleTransfer(url: url, title: title, subtitle: subtitle)
+    let transfer = SharedArticleTransfer(
+      url: url, title: title, subtitle: subtitle, taggingText: taggingText)
     let file = try directory().appending(path: transfer.id.uuidString + ".json")
     try JSONEncoder().encode(transfer).write(to: file, options: .atomic)
     return transfer

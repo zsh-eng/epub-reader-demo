@@ -648,18 +648,7 @@ final class ArticleReaderUITests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture", "-test-tagging"]
     app.launch()
-    app.buttons["share-fixture"].tap()
-    let articles = app.cells["Arctic"]
-    if !articles.waitForExistence(timeout: 3) {
-      let more = app.cells["More"]
-      XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
-      more.tap()
-    }
-    XCTAssertTrue(articles.waitForExistence(timeout: 5), app.debugDescription)
-    articles.tap()
-    let save = app.buttons["share-save"]
-    XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
-    waitEnabled(save)
+    let save = openShareFixture(app)
     let footerY = save.frame.midY
     let previewTitle = app.staticTexts["share-preview-title"]
     XCTAssertTrue(previewTitle.waitForExistence(timeout: 5))
@@ -668,6 +657,9 @@ final class ArticleReaderUITests: XCTestCase {
     wait(for: [revealed], timeout: 5)
     XCTAssertEqual(save.frame.midY, footerY, accuracy: 2)
     XCTAssertLessThan(previewTitle.frame.maxY, save.frame.minY)
+    expectation(for: NSPredicate(format: "value == 'ready'"), evaluatedWith: save)
+    waitForExpectations(timeout: 10)
+    XCTAssertFalse(app.staticTexts["Attention & wonder"].exists)
     capture(app, "08-share-extension")
     save.tap()
     let done = app.buttons["share-done"]
@@ -688,6 +680,61 @@ final class ArticleReaderUITests: XCTestCase {
     app.launchArguments = ["-ui-testing"]
     app.launch()
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 5))
+  }
+
+  @MainActor private func openShareFixture(_ app: XCUIApplication) -> XCUIElement {
+    app.buttons["share-fixture"].tap()
+    let articles = app.cells["Arctic"]
+    if !articles.waitForExistence(timeout: 3) {
+      let more = app.cells["More"]
+      XCTAssertTrue(more.waitForExistence(timeout: 5), app.debugDescription)
+      more.tap()
+    }
+    XCTAssertTrue(articles.waitForExistence(timeout: 5), app.debugDescription)
+    articles.tap()
+    let save = app.buttons["share-save"]
+    XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
+    waitEnabled(save)
+    return save
+  }
+
+  @MainActor func testCancelPreparedShareDoesNotSaveTagsOrArticle() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture", "-test-tagging"]
+    app.launch()
+    let save = openShareFixture(app)
+    expectation(for: NSPredicate(format: "value == 'ready'"), evaluatedWith: save)
+    waitForExpectations(timeout: 10)
+    XCTAssertFalse(app.staticTexts["Attention & wonder"].exists)
+    app.buttons["share-cancel"].tap()
+    XCUIDevice.shared.press(.home)
+    app.activate()
+    XCTAssertTrue(app.staticTexts["Your next good read."].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["article-story"].exists)
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+    app.terminate()
+    app.launchArguments = ["-ui-testing"]
+    app.launch()
+    XCTAssertTrue(app.staticTexts["Your next good read."].waitForExistence(timeout: 5))
+  }
+
+  @MainActor func testShareSaveBeforeMetadataStillFinishesTags() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-share-fixture", "-test-tagging", "-share-wait-context",
+    ]
+    app.launch()
+    let save = openShareFixture(app)
+    XCTAssertEqual(save.value as? String, "idle")
+    save.tap()
+    let tags = app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch
+    expectation(for: NSPredicate(format: "value == 'presented'"), evaluatedWith: tags)
+    waitForExpectations(timeout: 15)
+    app.buttons["share-done"].tap()
+    XCUIDevice.shared.press(.home)
+    app.activate()
+    XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
   }
 
   @MainActor func testViewportPreparesCachedReadersBeforeTap() {

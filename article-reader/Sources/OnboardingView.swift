@@ -309,7 +309,7 @@ private struct JevPrivacyNote: View {
         .accessibilityLabel("What is sent to Jev")
         .popover(isPresented: $showsDetails) {
           Text(
-            "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
+            "When you share or paste a link, its title, description, and sometimes a short excerpt go to Jev before you save. Tags are kept only if you save. Your API key stays in Keychain on this device."
           )
           .font(.subheadline).lineLimit(nil)
           .frame(width: 260, alignment: .leading)
@@ -320,7 +320,7 @@ private struct JevPrivacyNote: View {
       }
       .font(.caption).foregroundStyle(.secondary)
     } else {
-      Text("Key stored in Keychain. Saved titles and descriptions go to Jev.")
+      Text("Key stored in Keychain. Link previews and short excerpts go to Jev before saving.")
         .font(.footnote).foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
     }

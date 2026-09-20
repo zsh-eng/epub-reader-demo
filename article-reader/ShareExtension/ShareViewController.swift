@@ -134,6 +134,7 @@ private final class ShareSaveModel: ObservableObject {
   @Published var image: UIImage?
   @Published var isSaved = false
   @Published var isTagging = false
+  @Published private(set) var isLoadingContext = false
   @Published private(set) var taggingState = "idle"
   @Published var isVisible = false
   @Published var hostIsActive = true
@@ -179,6 +180,10 @@ private final class ShareSaveModel: ObservableObject {
     #endif
   }
 
+  var isPreparingSavedTags: Bool {
+    isSaved && (isTagging || (isLoadingContext && (isFixture || TaggingPreferences.enabled)))
+  }
+
   private func accepts(_ revision: String) -> Bool {
     isFixture
       || (TaggingPreferences.enabled && !TaggingPreferences.credentialFailure
@@ -213,6 +218,7 @@ private final class ShareSaveModel: ObservableObject {
         guard let url = SharedInbox.webURL(text) else { continue }
         self.url = url
         previewTask = Task { await loadPreview(for: url) }
+        isLoadingContext = true
         metadataTask = Task { await loadTaggingContext(for: url) }
         return
       }
@@ -246,9 +252,14 @@ private final class ShareSaveModel: ObservableObject {
   }
 
   private func loadTaggingContext(for url: URL) async {
+    defer { isLoadingContext = false }
     do {
       #if DEBUG
         if isFixture {
+          // Hold context until Save to test the real early-save path deterministically.
+          if url.query == "wait_for_save" {
+            while !isSaved { try await Task.sleep(for: .milliseconds(50)) }
+          }
           try await Task.sleep(for: .milliseconds(250))
           try Task.checkCancellation()
           taggingContext = TaggingContext(
@@ -456,7 +467,7 @@ private final class ShareSaveModel: ObservableObject {
       do {
         try SharedInbox.saveTaggingResult(result)
         pendingTaggingResult = nil
-      } catch { error = "Could not keep these tags. Arctic will try again." }
+      } catch { self.error = "Could not keep these tags. Arctic will try again." }
     }
     isVisible = false
     linkTask?.cancel()
@@ -493,7 +504,7 @@ private struct ShareSaveView: View {
           .font(.headline)
           .foregroundStyle(model.isSaved ? ArcticBrand.accent : Color.primary)
           ConnectedTagReveal(
-            isProcessing: model.isSaved && model.isTagging, tags: model.tagNames ?? [],
+            isProcessing: model.isPreparingSavedTags, tags: model.tagNames ?? [],
             cornerRadius: 22,
             onRevealed: model.presentTagFeedback
           ) {
