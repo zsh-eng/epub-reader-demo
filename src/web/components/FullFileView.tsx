@@ -414,6 +414,41 @@ export function FullFileView({
       ) : (
         <div {...stylex.props(styles.notice)}>Choose a file to preview.</div>
       )}
+      {vim.commandLine && (
+        <form
+          {...stylex.props(styles.search)}
+          onSubmit={(event) => {
+            event.preventDefault();
+            vim.submitCommandLine();
+          }}
+        >
+          <span>:</span>
+          <input
+            ref={(element) => element?.focus()}
+            aria-label="Go to line"
+            aria-invalid={!!vim.commandLine.error}
+            placeholder="Line number"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={16}
+            value={vim.commandLine.value}
+            {...stylex.props(styles.searchInput)}
+            onChange={(event) => vim.updateCommandLine(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                vim.cancelCommandLine();
+              }
+            }}
+          />
+          {vim.commandLine.error && <span role="alert">{vim.commandLine.error}</span>}
+          <kbd>Enter</kbd>
+          <span>go</span>
+          <kbd>Esc</kbd>
+          <span>cancel</span>
+        </form>
+      )}
       {vim.search && (
         <form
           {...stylex.props(styles.search)}
@@ -446,7 +481,7 @@ export function FullFileView({
       )}
       {(vimEnabled || vim.message) && !compact && (
         <div {...stylex.props(styles.vimStatus)}>
-          {vimEnabled ? "NORMAL · " : ""}
+          {vimEnabled ? (vim.commandLine ? "COMMAND · " : "NORMAL · ") : ""}
           {vim.message || "Read-only navigation"}
         </div>
       )}

@@ -702,6 +702,7 @@ export function App({
     ["paragraph-next", "Next paragraph in file", "}"],
     ["file-start", "Start of file", "gg"],
     ["file-end", "End of file", "G"],
+    ["line-jump", "Go to line in file", ":"],
     ["page-down", "Half page down in file", "d", true],
     ["page-up", "Half page up in file", "u", true],
     ["center", "Center file cursor", "zz"],
@@ -721,6 +722,7 @@ export function App({
   const commands: ReviewCommand[] = [
     {
       id: "find-file-text",
+      managesFocus: true,
       label: "Find text in current file",
       shortcut: "⌘ F",
       disabled: !activeFile || fileState.file?.kind !== "text",
@@ -728,6 +730,7 @@ export function App({
     },
     {
       id: "find-file-backward",
+      managesFocus: true,
       label: "Search current file backward",
       shortcut: "?",
       disabled: !activeFile || fileState.file?.kind !== "text",
@@ -735,6 +738,7 @@ export function App({
     },
     ...fileMotions.map(([id, label, keys, control]) => ({
       id: `vim-${id}`,
+      managesFocus: true,
       label,
       shortcut: control ? `Ctrl ${keys.toUpperCase()}` : keys,
       disabled: !activeFile || fileState.file?.kind !== "text",

@@ -52,6 +52,8 @@ export function useFileVim({
   const worker = useRef<Worker | null>(null);
   const request = useRef(0);
   const restoreFocus = useRef(false);
+  const restoreAlignment = useRef<"center" | "nearest">("nearest");
+  const commandScroll = useRef(0);
   const restoreScroll = useRef<number | null>(null);
   const session = useRef<SearchSession | null>(null);
   const [highlightsVisible, setHighlightsVisible] = useState(true);
@@ -61,6 +63,13 @@ export function useFileVim({
     query: string;
   } | null>(null);
   const search = searchState?.identity === model.identity ? searchState : null;
+  const commandFile = useMemo(() => ({ identity: model.identity }), [model]);
+  const [commandState, setCommandState] = useState<{
+    file: typeof commandFile;
+    value: string;
+    error: string;
+  } | null>(null);
+  const commandLine = commandState?.file === commandFile ? commandState : null;
   const [result, setResult] = useState<SearchResult>({
     identity: "",
     message: "",
@@ -218,6 +227,7 @@ export function useFileVim({
   );
   const beginSearch = useCallback(
     (direction: 1 | -1) => {
+      setCommandState(null);
       ++request.current;
       session.current = {
         line: model.line,
@@ -243,6 +253,13 @@ export function useFileVim({
       ?.scrollTo({ type: "position", position: origin.scrollTop, behavior: "instant" });
     paint();
   };
+  const beginLineCommand = useCallback(() => {
+    ++request.current;
+    session.current = null;
+    setSearch(null);
+    commandScroll.current = viewer.current?.getInstance()?.getScrollTop() ?? 0;
+    setCommandState({ file: commandFile, value: "", error: "" });
+  }, [commandFile, viewer]);
   const command = useCallback<FileNavigationCommand>(
     (key, control = false) => {
       active.current = true;
@@ -260,16 +277,17 @@ export function useFileVim({
         if (result.wordSearch) runSearch(result.wordSearch, result.search, true);
         else beginSearch(result.search);
       }
+      if (result.lineCommand) beginLineCommand();
       if (result.handled) paint(result.align ?? "nearest");
     },
-    [model, paint, runSearch, beginSearch],
+    [model, paint, runSearch, beginSearch, beginLineCommand],
   );
   useLayoutEffect(() => {
     active.current = enabled && document.activeElement === pane.current;
     paint();
   }, [enabled, paint]);
   useLayoutEffect(() => {
-    if (search || !restoreFocus.current) return;
+    if (search || commandLine || !restoreFocus.current) return;
     restoreFocus.current = false;
     pane.current?.focus({ preventScroll: true });
     active.current = enabled;
@@ -279,8 +297,9 @@ export function useFileVim({
         ?.scrollTo({ type: "position", position: restoreScroll.current, behavior: "instant" });
       restoreScroll.current = null;
       paint();
-    } else paint("nearest");
-  }, [search, enabled, paint, viewer]);
+    } else paint(restoreAlignment.current);
+    restoreAlignment.current = "nearest";
+  }, [search, commandLine, enabled, paint, viewer]);
   useEffect(() => {
     onNavigationReady?.(command);
     return () => onNavigationReady?.(null);
@@ -342,6 +361,7 @@ export function useFileVim({
       if (result.wordSearch) runSearch(result.wordSearch, result.search, true);
       else beginSearch(result.search);
     }
+    if (result.lineCommand) beginLineCommand();
     paint(result.align ?? "nearest");
   };
   const position = useMemo(
@@ -377,6 +397,27 @@ export function useFileVim({
     pane,
     caret,
     search,
+    commandLine,
+    updateCommandLine(value: string) {
+      setCommandState({ file: commandFile, value, error: "" });
+    },
+    submitCommandLine() {
+      if (!commandLine) return;
+      const outcome = model.goToLine(commandLine.value);
+      if (outcome === "invalid") {
+        setCommandState({ ...commandLine, error: "Enter a positive whole line number." });
+        return;
+      }
+      if (outcome === "moved") restoreAlignment.current = "center";
+      else restoreScroll.current = commandScroll.current;
+      restoreFocus.current = true;
+      setCommandState(null);
+    },
+    cancelCommandLine() {
+      restoreScroll.current = commandScroll.current;
+      restoreFocus.current = true;
+      setCommandState(null);
+    },
     updateSearch(query: string) {
       if (!search) return;
       setSearch({ identity: model.identity, direction: search.direction, query });

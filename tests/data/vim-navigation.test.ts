@@ -142,3 +142,22 @@ test("z motions align the current line, retain its column, and accept a line cou
   keys(model, "k");
   expect(model.line).toBe(1);
 });
+
+test("colon opens a line command and line addresses are bounded and validated", () => {
+  const model = new VimNavigation("one\ntwo\nthree\n");
+  expect(model.key(":")).toEqual({ handled: true, lineCommand: true });
+  expect(model.goToLine(" 2 ")).toBe("moved");
+  expect([model.line, model.column]).toEqual([1, 0]);
+  for (const value of ["0", "-1", "1.5", "1e2", "2x", "w", "9007199254740992"]) {
+    expect(model.goToLine(value)).toBe("invalid");
+    expect(model.line).toBe(1);
+  }
+  expect(model.goToLine(" ")).toBe("empty");
+  expect(model.line).toBe(1);
+  expect(model.goToLine("999")).toBe("moved");
+  expect(model.line).toBe(2);
+  const colon = new VimNavigation("a:b");
+  colon.key("f");
+  expect(colon.key(":").lineCommand).toBeUndefined();
+  expect(colon.column).toBe(1);
+});

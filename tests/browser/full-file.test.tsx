@@ -846,3 +846,95 @@ test("a pending file keeps its requested name and footer position", async () => 
   expect(mount!.textContent).not.toContain("File preview");
   expect(Math.abs(footer.getBoundingClientRect().top - top)).toBeLessThan(1);
 });
+
+test("colon jumps to a line on Enter, restores focus, and keeps the file virtualized", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, identity: "colon-large", text: "abcdef\n".repeat(40000) }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard(":");
+  const input = page.getByRole("textbox", { name: "Go to line", exact: true });
+  await expect.element(input).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(input.element());
+  await input.fill("39000");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await userEvent.keyboard("{Enter}");
+  await expect.element(input).not.toBeInTheDocument();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await expect.element(pane).toHaveAttribute("data-vim-line", "39000");
+  await expect
+    .poll(() =>
+      document.querySelector("diffs-container")?.shadowRoot?.querySelector('[data-line="39000"]'),
+    )
+    .toBeTruthy();
+  expect(lines()!.length).toBeLessThan(300);
+  await userEvent.keyboard("j");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "39001");
+});
+
+test("colon rejects invalid commands and Escape leaves cursor and scroll unchanged", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, identity: "colon-cancel", text: "abcdef\n".repeat(500) }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("200Gllzz");
+  const scroller = [...pane.element().querySelectorAll("div")].find(
+    (node) => getComputedStyle(node).overflowY === "auto",
+  )!;
+  await expect.poll(() => scroller.scrollTop).toBeGreaterThan(0);
+  const before = scroller.scrollTop;
+  await userEvent.keyboard(":");
+  const input = page.getByRole("textbox", { name: "Go to line", exact: true });
+  await input.fill("w");
+  await userEvent.keyboard("{Enter}");
+  await expect.element(input).toHaveAttribute("aria-invalid", "true");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "200");
+  await expect.element(pane).toHaveAttribute("data-vim-column", "3");
+  await input.fill("12");
+  await expect.element(input).toHaveAttribute("aria-invalid", "false");
+  await userEvent.keyboard("{Escape}");
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await expect.element(pane).toHaveAttribute("data-vim-line", "200");
+  await expect.element(pane).toHaveAttribute("data-vim-column", "3");
+  await expect.poll(() => scroller.scrollTop).toBe(before);
+  await userEvent.keyboard(":{Enter}");
+  await expect.element(input).not.toBeInTheDocument();
+  await expect.element(pane).toHaveAttribute("data-vim-line", "200");
+  await userEvent.keyboard(":");
+  await input.fill("99999");
+  await userEvent.keyboard("{Enter}");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "500");
+});
+
+test("a colon prompt belongs only to the displayed file", async () => {
+  render(<FullFileView {...props} file={base} vimEnabled />);
+  await expect.element(page.getByRole("textbox", { name: "File navigation" })).toBeVisible();
+  await userEvent.keyboard(":");
+  const input = page.getByRole("textbox", { name: "Go to line", exact: true });
+  await input.fill("10");
+  flushSync(() =>
+    root!.render(
+      <FullFileView
+        {...props}
+        file={{ ...base, identity: "next-colon-file", path: "next.ts" }}
+        vimEnabled
+      />,
+    ),
+  );
+  await expect.element(input).not.toBeInTheDocument();
+  await expect
+    .element(page.getByRole("textbox", { name: "File navigation" }))
+    .toHaveAttribute("data-vim-line", "1");
+  flushSync(() => root!.render(<FullFileView {...props} file={base} vimEnabled />));
+  await expect.element(input).not.toBeInTheDocument();
+});

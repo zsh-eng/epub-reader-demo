@@ -18,6 +18,7 @@ export type VimMotion = {
   align?: "start" | "center" | "end";
   search?: 1 | -1;
   wordSearch?: string;
+  lineCommand?: true;
 };
 export class VimNavigation {
   readonly lines: string[];
@@ -112,6 +113,14 @@ export class VimNavigation {
     }
     const line = Math.max(0, lo - 1);
     this.jump(line, offset - this.starts[line]!);
+  }
+  goToLine(input: string): "empty" | "invalid" | "moved" {
+    const value = input.trim();
+    if (!value) return "empty";
+    const line = Number(value);
+    if (!/^\d+$/.test(value) || !Number.isSafeInteger(line) || line < 1) return "invalid";
+    this.jump(line - 1);
+    return "moved";
   }
   restoreSearch(state: {
     line: number;
@@ -255,6 +264,7 @@ export class VimNavigation {
       this.jump(this.line, this.endColumn);
       this.desired = Infinity;
     } else if (key === "G") this.jump(explicit ? n - 1 : this.lines.length - 1);
+    else if (key === ":") return { handled: true, lineCommand: true };
     else if (key === "{" || key === "}") {
       const direction = key === "}" ? 1 : -1;
       let line = this.line;

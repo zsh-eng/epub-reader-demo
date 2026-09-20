@@ -121,6 +121,7 @@ Use the command palette to **Enable Vim navigation in files**. This preference i
 - `h j k l`, `w b e`, `0 ^ $`, and counts such as `10j`.
 - `gg`, `G`, `42G`, `{` / `}` for paragraphs, and `Ctrl+D` / `Ctrl+U` for half pages.
 - `f` / `F` / `t` / `T` followed by a character, `;` / `,` to repeat, and `Shift+A` to move to the end of the line.
+- `:123` then Enter to jump to line 123. Escape cancels; a number past the end goes to the last line.
 - `zz` / `zt` / `zb` to place the current line at the middle / top / bottom of the view. These keep the cursor column. `zt` and `zb` leave four lines of space from the edge.
 - `/` / `?` for live forward/backward file search, `n` / `N` for matches, and `*` / `#` for the word at the cursor. Lowercase queries ignore case; uppercase letters enable case-sensitive matching. Enter accepts the preview. Escape cancels a preview and clears highlights; in normal mode it clears highlights while keeping the search.
 

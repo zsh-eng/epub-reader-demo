@@ -13,6 +13,7 @@ export interface Choice {
   description?: string;
 }
 export interface ReviewCommand {
+  managesFocus?: boolean;
   id: string;
   label: string;
   shortcut?: string;
@@ -159,6 +160,7 @@ export function CommandDialog({
   commands: ReviewCommand[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const commandManagesFocus = useRef(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const resultList = useRef<HTMLDivElement>(null);
@@ -173,6 +175,7 @@ export function CommandDialog({
   const run = (index: number) => {
     const command = results[index];
     if (command && !command.disabled) {
+      commandManagesFocus.current = !!command.managesFocus;
       onOpenChange(false);
       setActive(0);
       command.run();
@@ -191,7 +194,11 @@ export function CommandDialog({
       <Dialog.Portal>
         <Dialog.Backdrop {...stylex.props(styles.backdrop, ui.instant)} />
         <Dialog.Popup
-          initialFocus={() => focusPaletteInput(inputRef.current)}
+          initialFocus={() => {
+            commandManagesFocus.current = false;
+            return focusPaletteInput(inputRef.current);
+          }}
+          finalFocus={() => !commandManagesFocus.current}
           {...stylex.props(styles.dialog, ui.instant)}
         >
           <Dialog.Title {...stylex.props(styles.commandTitle)}>{title}</Dialog.Title>

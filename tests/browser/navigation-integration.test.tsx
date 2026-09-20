@@ -273,3 +273,18 @@ test("opening a file shows the selected path before the read completes", async (
   expect(Math.abs(status.element().getBoundingClientRect().top - before)).toBeLessThan(1);
   await expect.poll(() => document.activeElement?.getAttribute("data-file-pane")).toBe("main");
 });
+
+test("Go to line is available from the command palette and focuses its prompt", async () => {
+  await mountFile();
+  shortcut("k");
+  await page.getByRole("combobox", { name: "Search commands" }).fill("Go to line in file");
+  await page.getByRole("option", { name: "Go to line in file :", exact: true }).click();
+  const input = page.getByRole("textbox", { name: "Go to line", exact: true });
+  await expect.element(input).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(input.element());
+  await input.fill("80");
+  await userEvent.keyboard("{Enter}");
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+});
