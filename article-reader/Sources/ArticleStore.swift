@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftSoup
 
-struct SavedArticle: Identifiable, Codable {
+struct SavedArticle: Identifiable, Codable, Sendable {
   var id = UUID()
   let url: URL
   var title: String
@@ -28,7 +28,7 @@ struct SavedArticle: Identifiable, Codable {
 }
 
 /// Codable state lives in the same atomic record as the saved link and its tags.
-struct ArticleTaggingState: Codable {
+struct ArticleTaggingState: Codable, Sendable {
   var generation = UUID()
   var pendingIdentity: String?
   var completedIdentity: String?

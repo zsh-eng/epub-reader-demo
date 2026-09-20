@@ -72,6 +72,16 @@ public actor SyncStore {
     try persist(next)
   }
 
+  /// Domain read-modify-write runs without actor suspension. Concurrent local
+  /// edits and pulled rows cannot slip between the read and its durable outbox.
+  public func update(
+    _ transform: @Sendable ([String: SyncRecord]) throws -> [LocalMutation],
+    now: Date = Date()
+  ) throws -> [String: SyncRecord] {
+    try commit(transform(state.rows), now: now)
+    return state.rows
+  }
+
   /// Pull first, then send a fixed outbox snapshot. New edits during network awaits
   /// remain pending. The caller schedules another pass for those later edits.
   public func sync(using remote: any SyncRemote) async throws {
