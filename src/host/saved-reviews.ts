@@ -43,6 +43,7 @@ const MAX_RECORD_BYTES = 64 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
 const MAX_REVIEWS = 128;
 const MAX_NOTES = 500;
+const MAX_FEEDBACK_BYTES = 8 * 1024 * 1024;
 const text = z.string();
 const natural = z.number().int().nonnegative();
 const responseSchema = z.object({
@@ -532,19 +533,36 @@ export class SavedReviewStore {
   ): Promise<{ text: string; count: number; repositoryCount: number; revision: number }> {
     return this.serial(async () => {
       const record = await this.read(id);
-      const output = [
+      const output: string[] = [];
+      let outputBytes = 0;
+      const checkBytes = (bytes: number) => {
+        if (bytes > MAX_FEEDBACK_BYTES)
+          throw new HostError(
+            "saved-feedback-too-large",
+            "Feedback exceeds the 8 MiB export limit. Narrow selected line ranges or remove some comments, then copy again. No feedback was copied or truncated.",
+            413,
+          );
+      };
+      const appendText = (...parts: string[]) => {
+        for (const part of parts) {
+          outputBytes += Buffer.byteLength(part) + (output.length ? 1 : 0);
+          checkBytes(outputBytes);
+          output.push(part);
+        }
+      };
+      appendText(
         `Review: ${record.saved.title}`,
         `Review ID: ${id}`,
         `Captured: ${record.saved.createdAt}`,
         "",
-      ];
+      );
       const repositories = new Set<string>();
       let index = 0;
       for (const target of record.captures) {
         if (!target.notes.notes.length) continue;
         const info = record.saved.targets.find((item) => item.id === target.targetId)!;
         repositories.add(info.repositoryId);
-        output.push(
+        appendText(
           `Repository: ${info.repo}`,
           `Repository ID: ${info.repositoryId}`,
           `Worktree: ${info.repo}`,
@@ -560,37 +578,42 @@ export class SavedReviewStore {
           const file = target.review.files.find((item) => item.path === note.path)!;
           const path = note.side === "old" ? (file.previousPath ?? note.path) : note.path;
           const end = note.endLine ?? note.line;
-          output.push(
+          appendText(
             `${parentNumber ? `Reply ${number} to comment ${parentNumber}` : `Comment ${number}`} (${note.id})`,
             `File: ${path}`,
             `Side: ${note.side === "old" ? "before" : "after"}`,
             `Selected lines: ${note.line}–${end}`,
           );
-          if (file.previousPath) output.push(`Rename: ${file.previousPath} → ${file.path}`);
+          if (file.previousPath) appendText(`Rename: ${file.previousPath} → ${file.path}`);
           const source = target.sources.find((item) => item.path === note.path);
           if (source) {
             const lines = source[note.side].split("\n");
             if (lines.at(-1) === "") lines.pop();
             const from = Math.max(1, note.line - 3);
             const to = Math.min(lines.length, end + 3);
-            const snippet = lines
-              .slice(from - 1, to)
-              .map((line, offset) => {
-                const position = from + offset;
-                return `${position >= note.line && position <= end ? ">" : " "} ${position} | ${line}`;
-              })
-              .join("\n");
-            const longest = Math.max(2, ...(snippet.match(/`+/g) ?? []).map((run) => run.length));
+            const snippetLines: string[] = [];
+            let snippetBytes = 0;
+            let longest = 2;
+            for (let position = from; position <= to; position++) {
+              const line = lines[position - 1]!;
+              const rendered = `${position >= note.line && position <= end ? ">" : " "} ${position} | ${line}`;
+              snippetBytes += Buffer.byteLength(rendered) + (snippetLines.length ? 1 : 0);
+              checkBytes(outputBytes + snippetBytes);
+              snippetLines.push(rendered);
+              for (const match of line.matchAll(/`+/g))
+                longest = Math.max(longest, match[0].length);
+            }
+            const snippet = snippetLines.join("\n");
             const fence = "`".repeat(longest + 1);
-            output.push("", fence, snippet, fence);
-          } else output.push("", "Source context was not captured for this file.");
-          output.push("", "Feedback:", note.text, "");
+            appendText("", fence, snippet, fence);
+          } else appendText("", "Source context was not captured for this file.");
+          appendText("", "Feedback:", note.text, "");
           for (const reply of target.notes.notes.filter((item) => item.parentId === note.id))
             append(reply, number);
         };
         for (const note of target.notes.notes.filter((item) => !item.parentId)) append(note);
       }
-      if (!index) output.push("No comments.");
+      if (!index) appendText("No comments.");
       return {
         text: output.join("\n"),
         count: index,

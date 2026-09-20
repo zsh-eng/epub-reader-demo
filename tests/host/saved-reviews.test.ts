@@ -316,6 +316,47 @@ describe("saved reviews", () => {
     expect(exported.text).toContain("> 6 | f");
   });
 
+  it("bounds repeated source context by UTF-8 bytes without truncating or changing comments", async () => {
+    const store = new SavedReviewStore(directory);
+    const content = "é".repeat(768 * 1024);
+    const saved = await store.create(input, async () => capture("/repo/a", `${content}\n`));
+    const target = saved.targets[0];
+    for (let revision = 0; revision < 6; revision++) {
+      await store.mutate(saved.id, target.id, revision, {
+        type: "add",
+        note: { path: "new.ts", side: "new", line: 1, text: `Feedback ${revision}` },
+      });
+    }
+    await expect(store.feedback(saved.id)).rejects.toMatchObject({
+      code: "saved-feedback-too-large",
+      status: 413,
+    });
+    const notes = await store.notes(saved.id, target.id);
+    expect(notes.notes).toHaveLength(6);
+    await store.mutate(saved.id, target.id, 6, { type: "remove", id: notes.notes[5].id });
+    await store.mutate(saved.id, target.id, 7, { type: "remove", id: notes.notes[4].id });
+    const feedback = await store.feedback(saved.id);
+    expect(feedback.count).toBe(4);
+    expect(Buffer.byteLength(feedback.text)).toBeLessThan(8 * 1024 * 1024);
+    expect(feedback.text.split(content)).toHaveLength(5);
+  });
+
+  it("exports source with many backtick runs without exceeding the function argument limit", async () => {
+    const store = new SavedReviewStore(directory);
+    const content = `${"`x".repeat(150_000)}\n\`\`\`\n`;
+    const saved = await store.create(input, async () => capture("/repo/a", content));
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, {
+      type: "add",
+      note: { path: "new.ts", side: "new", line: 1, endLine: 2, text: "Check generated content" },
+    });
+    const feedback = await store.feedback(saved.id);
+    expect(feedback.count).toBe(1);
+    expect(feedback.text).toContain("\n````\n> 1 | `x");
+    expect(feedback.text).toContain("\n> 2 | ```\n````\n");
+    expect(feedback.text.match(/`x/g)).toHaveLength(150_000);
+  });
+
   it("rejects path traversal, corrupt records, and invalid note ranges without changing data", async () => {
     const store = new SavedReviewStore(directory);
     await expect(store.get("../../secret")).rejects.toMatchObject({ code: "invalid-saved-review" });
