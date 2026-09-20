@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { useState } from "react";
 import { FileDiff } from "@pierre/diffs/react";
 import { parsePatchFiles } from "@pierre/diffs";
-import { GutterNoteButton, NoteCard, NoteComposer } from "../../src/web/components/NoteCard";
+import { NoteCard, NoteComposer } from "../../src/web/components/NoteCard";
 import type { Note, NoteInput, NoteMutation } from "../../src/shared/protocol";
 
 let root: Root | undefined;
@@ -135,8 +135,20 @@ test("Pierre gutter comment action does not cover a four-digit line number", asy
   render(
     <FileDiff
       fileDiff={fileDiff}
-      options={{ enableGutterUtility: true, diffStyle: "split", themeType: "dark" }}
-      renderGutterUtility={() => <GutterNoteButton onClick={() => clicked++} />}
+      options={{
+        enableGutterUtility: true,
+        diffStyle: "split",
+        themeType: "dark",
+        unsafeCSS: "[data-utility-button]::before { inset: 0; }",
+        onGutterUtilityClick: () => {
+          clicked++;
+        },
+        onLineEnter({ numberElement }) {
+          (numberElement.getRootNode() as ShadowRoot)
+            .querySelector("[data-utility-button]")
+            ?.setAttribute("aria-label", "Add note to line");
+        },
+      }}
     />,
   );
   await page.getByText("newValue", { exact: true }).hover();
@@ -145,7 +157,9 @@ test("Pierre gutter comment action does not cover a four-digit line number", asy
   const line = host.shadowRoot!.querySelector(
     '[data-additions] [data-column-number][data-line-type="change-addition"] [data-line-number-content]',
   )!;
-  const button = document.querySelector<HTMLButtonElement>('[aria-label="Add note to line"]')!;
+  const button = host.shadowRoot!.querySelector<HTMLButtonElement>(
+    '[aria-label="Add note to line"]',
+  )!;
   expect(line.textContent).toBe("1557");
   expect(button.getBoundingClientRect().left).toBeGreaterThanOrEqual(
     line.getBoundingClientRect().right - 1,

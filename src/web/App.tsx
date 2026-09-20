@@ -15,7 +15,7 @@ import { tokens, ui } from "./theme.stylex";
 import { ActionMenu, ChoiceSelect, CommandDialog, type ReviewCommand } from "./components/Controls";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { FileSidebar } from "./components/FileSidebar";
-import { GutterNoteButton, NoteCard, NoteComposer, type NoteTarget } from "./components/NoteCard";
+import { NoteCard, NoteComposer, type NoteTarget } from "./components/NoteCard";
 import { Icon } from "./components/Icon";
 import "./pierre-theme";
 import { useTheme } from "./themes";
@@ -393,7 +393,29 @@ export function App({
       lineDiffType: "word-alt",
       stickyHeaders: true,
       enableLineSelection: true,
+      // Keep hover and gutter dragging active immediately after keyboard scrolling.
+      pointerEventsOnScroll: true,
       enableGutterUtility: true,
+      unsafeCSS: "[data-utility-button]::before { inset: 0; }",
+      onLineEnter(_line, context) {
+        context.element?.shadowRoot
+          ?.querySelector("[data-utility-button]")
+          ?.setAttribute("aria-label", "Add note to line");
+      },
+      onGutterUtilityClick(range, context) {
+        if (context.type !== "diff") return;
+        if (range.endSide && range.side !== range.endSide) {
+          setContextError("Select lines on one side to add a note.");
+          return;
+        }
+        setShowNotes(true);
+        setDraft({
+          path: context.item.fileDiff.name,
+          side: range.side === "deletions" ? "old" : "new",
+          line: Math.min(range.start, range.end),
+          endLine: Math.max(range.start, range.end),
+        });
+      },
       hunkSeparators: "line-info",
       layout: { gap: 0, paddingTop: 0, paddingBottom: 0 },
       loadDiffFiles: async (metadata: FileDiffMetadata) => {
@@ -428,6 +450,9 @@ export function App({
         }
       },
       onPostRender: (node, instance, phase) => {
+        node.shadowRoot
+          ?.querySelector("[data-utility-button]")
+          ?.setAttribute("aria-label", "Add note to line");
         const rendered = "fileDiff" in instance ? instance.fileDiff : undefined;
         if (phase !== "unmount")
           diagnostics.rendered(
@@ -1653,21 +1678,6 @@ export function App({
                       />
                     ) : null
                   }
-                  renderGutterUtility={(getHoveredLine, item) => (
-                    <GutterNoteButton
-                      onClick={() => {
-                        const line = getHoveredLine();
-                        if (line && item.type === "diff") {
-                          setShowNotes(true);
-                          setDraft({
-                            path: item.fileDiff.name,
-                            side: "side" in line && line.side === "deletions" ? "old" : "new",
-                            line: line.lineNumber,
-                          });
-                        }
-                      }}
-                    />
-                  )}
                   renderCodeViewFooter={() =>
                     skipped.length ? (
                       renderMetadataRows()

@@ -15,21 +15,6 @@ function lineLabel(target: NoteTarget) {
   return `${target.side === "old" ? "Old" : "New"} · L${target.line}${target.endLine && target.endLine !== target.line ? `–${target.endLine}` : ""}`;
 }
 
-/** Match Pierre's native utility geometry; toolbar button sizes cover line numbers. */
-export function GutterNoteButton({ onClick }: { onClick(): void }) {
-  return (
-    <button
-      type="button"
-      {...stylex.props(styles.gutterButton)}
-      onClick={onClick}
-      aria-label="Add note to line"
-      title="Add comment"
-    >
-      <Icon name="plus" size={13} />
-    </button>
-  );
-}
-
 function CommentEditor({
   label,
   initialText = "",
@@ -355,26 +340,4 @@ const styles = stylex.create({
   replyButton: { minHeight: 24, paddingInline: 0, paddingBlock: 2, marginTop: 3, fontSize: 11 },
   stale: { color: tokens.warning, fontSize: 11, lineHeight: 1.6, marginBlock: 5 },
   error: { color: tokens.red, fontSize: 11, marginBlock: 5 },
-  gutterButton: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-    zIndex: 4,
-    width: "1lh",
-    height: "1lh",
-    padding: 0,
-    marginRight: "calc(-1lh + 1ch)",
-    fontFamily: tokens.code,
-    fontSize: "var(--diffs-font-size, 12px)",
-    lineHeight: "var(--diffs-line-height, 20px)",
-    borderWidth: 0,
-    borderRadius: 4,
-    color: tokens.canvas,
-    backgroundColor: tokens.accent,
-    cursor: "pointer",
-    touchAction: "none",
-    outline: { default: "none", ":focus-visible": `2px solid ${tokens.accent}` },
-    outlineOffset: 2,
-  },
 });

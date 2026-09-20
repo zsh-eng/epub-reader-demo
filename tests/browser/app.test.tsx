@@ -503,6 +503,87 @@ describe("graphical review", () => {
       .toHaveAttribute("aria-selected", "false");
   });
 
+  test("shift-selecting line numbers keeps the full range when adding a note", async () => {
+    await page.viewport(1280, 800);
+    const { controller } = await mountApp();
+    await page.getByRole("button", { name: "Split", exact: true }).click();
+    await expect
+      .poll(
+        () =>
+          document
+            .querySelector("diffs-container")
+            ?.shadowRoot?.querySelectorAll("[data-additions] [data-column-number]").length,
+      )
+      .toBeGreaterThanOrEqual(2);
+    const host = document.querySelector("diffs-container")!;
+    const numbers = host.shadowRoot!.querySelectorAll<HTMLElement>(
+      "[data-additions] [data-column-number]",
+    );
+    // Pierre exposes each split side as a number column.
+    expect(numbers.length).toBeGreaterThanOrEqual(2);
+    const number = (value: string) =>
+      page
+        .getByText(value, { exact: true })
+        .all()
+        .find((locator) => {
+          const element = locator.element();
+          return (
+            element.getRootNode() === host.shadowRoot &&
+            element.closest("[data-column-number]")?.closest("[data-additions]")
+          );
+        })!;
+    await number("1").click();
+    await number("2").click({ modifiers: ["Shift"] });
+    await expect.element(page.getByText("L1–2 selected", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Add note to line", exact: true }).first().click();
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Both lines");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect
+      .poll(() => controller.getSnapshot().notes?.notes[0])
+      .toMatchObject({ line: 1, endLine: 2, side: "new", text: "Both lines" });
+  });
+
+  test("dragging the gutter plus opens a note for the full range", async () => {
+    await page.viewport(1280, 800);
+    const { controller } = await mountApp();
+    await page.getByRole("button", { name: "Split", exact: true }).click();
+    await expect
+      .poll(
+        () =>
+          document
+            .querySelector("diffs-container")
+            ?.shadowRoot?.querySelectorAll("[data-additions] [data-column-number]").length,
+      )
+      .toBeGreaterThanOrEqual(2);
+    const host = document.querySelector("diffs-container")!;
+    const numbers = host.shadowRoot!.querySelectorAll<HTMLElement>(
+      "[data-additions] [data-column-number]",
+    );
+    // Pierre exposes each split side as a number column.
+    expect(numbers.length).toBeGreaterThanOrEqual(2);
+    const number = (value: string) =>
+      page
+        .getByText(value, { exact: true })
+        .all()
+        .find((locator) => {
+          const element = locator.element();
+          return (
+            element.getRootNode() === host.shadowRoot &&
+            element.closest("[data-column-number]")?.closest("[data-additions]")
+          );
+        })!;
+    await number("1").hover();
+    await userEvent.dragAndDrop(
+      page.getByRole("button", { name: "Add note to line", exact: true }).first(),
+      number("2"),
+    );
+    await page.getByRole("textbox", { name: "Review note text" }).fill("Both lines");
+    await page.getByRole("button", { name: "Save note", exact: true }).click();
+    await expect
+      .poll(() => controller.getSnapshot().notes?.notes[0])
+      .toMatchObject({ line: 1, endLine: 2, side: "new", text: "Both lines" });
+  });
+
   test("creates and deletes an inline note without retaining an old annotation portal", async () => {
     const { controller } = await mountApp();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
