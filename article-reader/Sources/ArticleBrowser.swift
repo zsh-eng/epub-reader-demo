@@ -162,6 +162,7 @@ enum ArticleRouting {
   @ObservationIgnored private var persistenceTask: Task<Void, Never>?
   @ObservationIgnored private var readerDocumentToken = ""
   @ObservationIgnored private var preparingReaderAppearance = false
+  @ObservationIgnored private var appearanceVersion = 0
   @ObservationIgnored private var extraction: (url: URL, html: String)?
   @ObservationIgnored private weak var store: ArticleStore?
   @ObservationIgnored private var downloadURL: URL
@@ -176,6 +177,7 @@ enum ArticleRouting {
     let configuration = WKWebViewConfiguration()
     configuration.defaultWebpagePreferences.allowsContentJavaScript = false
     configuration.websiteDataStore = .nonPersistent()
+    configuration.setURLSchemeHandler(ReaderFontScheme(), forURLScheme: "arctic-font")
     #if DEBUG
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-hold-reader-body-image") {
         configuration.setURLSchemeHandler(ReaderHeldImage(), forURLScheme: "arctic-test")
@@ -434,7 +436,7 @@ enum ArticleRouting {
       """ : ""
     return """
       <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src data:;">
+      <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src data: arctic-font:;">
       <title>\(title)</title><style>\(css)</style></head><body><main>
       <header><div class="source">\(escape(host))</div><h1>\(title)</h1>\(description)\(byline)</header>\(hero)
       <article id="reader-content">\(article["content"] ?? "")</article></main></body></html>
@@ -746,20 +748,63 @@ enum ArticleRouting {
         root.style.setProperty('--reader-font', o.family);
         root.style.setProperty('--annotation-fill', o.theme === 'Ink' || o.theme === 'Night'
           ? 'rgba(115,209,242,.24)' : 'rgba(33,125,181,.18)');
-        await document.fonts.ready;
         const text = document.querySelector('#reader-content p') || document.getElementById('reader-content');
         const style = getComputedStyle(text);
-        return style.fontFamily + ', ' + style.fontSize + ', ' + o.padding + 'px padding, ' + o.leading + ' spacing, ' + o.theme;
+        return {
+          description: style.fontFamily + ', ' + style.fontSize + ', ' + o.padding + 'px padding, ' + o.leading + ' spacing, ' + o.theme,
+          font: style.fontSize + ' ' + style.fontFamily
+        };
       """
+    appearanceVersion += 1
+    let appearance = appearanceVersion
+    let page = pageVersion
     readerView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .defaultClient) {
       [weak self] result in
+      guard let self, self.appearanceVersion == appearance, self.pageVersion == page else { return }
       switch result {
-      case .success(let value): self?.appearanceDescription = value as? String ?? ""
-      case .failure(let error): self?.appearanceDescription = error.localizedDescription
+      case .success(let value):
+        let details = value as? [String: String] ?? [:]
+        self.appearanceDescription = details["description"] ?? ""
+        // Text readiness ends with applying styles. Font bytes never hold the
+        // document; font-display: swap allows the native fallback immediately.
+        completion?()
+        #if DEBUG
+          if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-reader-fonts"),
+            let font = details["font"], let description = details["description"]
+          {
+            self.verifyReaderFont(
+              font, description: description, appearance: appearance, page: page)
+          }
+        #endif
+      case .failure(let error):
+        self.appearanceDescription = error.localizedDescription
+        completion?()
       }
-      completion?()
     }
   }
+
+  #if DEBUG
+    /// A diagnostic verifies actual FontFace completion, rather than mistaking a
+    /// computed family name for a successfully loaded font. It never gates text.
+    private func verifyReaderFont(_ font: String, description: String, appearance: Int, page: Int) {
+      readerView.callAsyncJavaScript(
+        """
+        const faces = await document.fonts.load(font);
+        return faces.filter(face => face.status === 'loaded').map(face => face.family.replaceAll('"', '').replaceAll("'", '')).join(', ');
+        """, arguments: ["font": font], in: nil, in: .defaultClient
+      ) { [weak self] result in
+        guard let self, self.appearanceVersion == appearance, self.pageVersion == page else {
+          return
+        }
+        switch result {
+        case .success(let value):
+          self.appearanceDescription = description + ", loaded fonts: " + (value as? String ?? "")
+        case .failure(let error):
+          self.appearanceDescription = description + ", font failed: " + error.localizedDescription
+        }
+      }
+    }
+  #endif
 
   /// App-only scripts keep publisher JavaScript disabled and never alter cached HTML.
   private func installAnnotations() {

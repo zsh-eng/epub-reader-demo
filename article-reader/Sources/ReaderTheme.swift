@@ -15,14 +15,8 @@ enum ReaderTheme {
     .system(size: UIFontMetrics(forTextStyle: .body).scaledValue(for: size), weight: weight)
   }
 
-  static let webFonts: String = {
-    [("DM Sans", "DMSans"), ("EB Garamond", "EBGaramond")].map { family, name in
-      let url = Bundle.main.url(forResource: name, withExtension: "ttf", subdirectory: "Fonts")!
-      let data = try! Data(contentsOf: url)
-      return
-        "@font-face { font-family: '\(family)'; font-style: normal; font-weight: 100 900; src: url(data:font/ttf;base64,\(data.base64EncodedString())) format('truetype'); }"
-    }.joined(separator: "\n")
-  }()
+  // HTML refers to the app bundle; it does not repeat 1.4 MB of encoded fonts.
+  static let webFonts = ReaderFontAsset.allCases.map(\.css).joined(separator: "\n")
 }
 
 /// Use the system glass material on iOS 26; retain native material on older iOS.
