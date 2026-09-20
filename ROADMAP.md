@@ -190,11 +190,47 @@ Notetaking flow
 - [x] Make app feel more native to iOS
 - [x] Sync lab
 
+- [x] See highlights
+- [x] Gesture for showing the footer
+- [x] Remove the progressive blur on the themes page
+- [x] Shift the continue reading to the top right
+- [x] Remove animations when choosing chapter - feels sluggish. Add back hover animations for desktop
+- [x] Show time read (day, total?)
+
+- [x] Shift icons in sidebar panel to the right a little bit
+- [x] UI chrome on desktop should not translate in - it should just fade in
+- [x] Improve note-taking flow on desktop (edit + width of input)
+- [x] Fix broken images in the reading status
+- [x] Reading sessions bar
+- [x] More UX improvements for note-taking and editing
+- [x] Find better placement for prompts (the chrome accessories)
+- [x] Jump history - persistent ?
+- [x] Check for recent improvements to pretext and whether they are relevant to us
+- [x] Update toast design and  copy for consistency
+- [x] Add time read for the day / for the book more prominently somewhere?
+
+- [ ] Remove unnecessary sheet items
+- [ ] Improve sheet placement + animations
+
+- [ ] Fix the height of the input field for notebooks on mobile
+- [ ] Remove the sidebar icons entirely? Or improve it in some way
+
+- [ ] Additional UI indicator for highlights with notes
+- [ ] The highlight comment box should be next to the highlight section, not on the right
+
+- [ ] Fix the bug with selecting the right "contents" (prefer what was just clicked first?)
+- [ ] Change the length of the bookmark ribbon + hit radius on mobile
+- [ ] See highlights on mobile?
+- [ ] Change to scrollable mode in the pagination (need think of the UX)
+- [ ] Width of input field can be a bit narrower as well
+- [ ] Improve mobile note-taking UX
+  - [ ] Pinned to the top and scroll down
+- [ ] Search - should search backwards only (spoiler free) if possible
+
 - [ ] Appropriate scrolling for the notebook stuff (pinned input for keyboard, keyboard goes up)
 - [ ] Review what's the policy for figuring out the reading usage (what are the thresholds
       we set, etc.)
 - [ ] Nice, more beautiful sync states - persistent UI for showing the syncing of books, etc.
-- [ ] Add time read for the day / for the book more prominently somewhere?
 - [ ] BUG: Still have bug for freezing when network connection is bad (but not nothing)
 - [ ] Benchmark binary encoding/table IDs against current JSON using representative
       Book/note/highlight data. Gate: compressed bytes, codec time and bundle size
