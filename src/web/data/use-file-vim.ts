@@ -251,6 +251,7 @@ export function useFileVim({
       if (!query) return;
       setHighlightsVisible(true);
       setResult({ identity, query, wholeWord, message: "" });
+      const jumpOrigin = origin ?? { line: model.line, column: model.column };
       const id = ++request.current;
       if (!worker.current) {
         worker.current = new VimSearchWorker();
@@ -263,6 +264,9 @@ export function useFileVim({
         if (origin) model.jump(origin.line, origin.column);
         model.setSearch(query, direction);
         model.setMatches(event.data.matches);
+        // Incremental previews do not replace the jump-back location. An
+        // accepted search may complete after its input has already closed.
+        if (!origin || session.current !== origin) model.rememberJump(jumpOrigin);
         setResult({
           identity,
           query,
@@ -507,6 +511,9 @@ export function useFileVim({
         model.jump(line - 1, column - 1);
         paint("center");
       },
+      accept(origin: { line: number; column: number }) {
+        model.rememberJump(origin);
+      },
     }),
     [model, paint, cancelCopies],
   );
@@ -578,6 +585,7 @@ export function useFileVim({
       }
     },
     submitSearch() {
+      if (session.current) model.rememberJump(session.current);
       if (search) {
         const query = search.query || session.current?.query || "";
         // Accept a completed preview without advancing to the following match.

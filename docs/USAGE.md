@@ -110,6 +110,8 @@ Vim navigation is enabled by default. Use the command palette to disable or enab
 - `h j k l`, `w b e`, `0 ^ $`, and counts such as `10j`.
 - `gd` finds declarations for the identifier at the cursor. It first checks the current file with Universal Ctags, then the ctags-backed project index. Multiple candidates open a picker; project results open their indexed commit. Ctags does not resolve types or imports like an LSP.
 - `gg`, `G`, `42G`, `{` / `}` for paragraphs, and `Ctrl+D` / `Ctrl+U` for half pages.
+- `''` returns to the previous jump's line at its first non-space character; double backtick returns to the exact column. Repeating either swaps between the two locations. Line-number jumps, file/paragraph jumps, search matches, and accepted in-file symbol/definition jumps record the origin. Cancelled previews do not.
+- `ma` through `mz` set local marks; `'a` goes to mark a's line and backtick followed by `a` goes to its exact position. Marks and jump-back are local to the current loaded file snapshot. They reset when the file changes or is reloaded; cross-file jump history and persistent marks are not included.
 - `f` / `F` / `t` / `T` followed by a character, `;` / `,` to repeat, and `Shift+A` to move to the end of the line.
 - `:123` then Enter to jump to line 123. Escape cancels; a number past the end goes to the last line.
 - `zz` / `zt` / `zb` to place the current line at the middle / top / bottom of the view. These keep the cursor column. `zt` and `zb` leave four lines of space from the edge.

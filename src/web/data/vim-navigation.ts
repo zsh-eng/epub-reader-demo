@@ -42,6 +42,8 @@ export class VimNavigation {
   query = "";
   direction: 1 | -1 = 1;
   matches: number[] = [];
+  private marks = new Map<string, { line: number; column: number }>();
+  private previousJump: { line: number; column: number } | undefined;
   visual: { mode: VisualMode; line: number; column: number } | null = null;
   get visualRange(): VisualRange | null {
     if (!this.visual) return null;
@@ -170,12 +172,21 @@ export class VimNavigation {
     const line = Math.max(0, lo - 1);
     this.jump(line, offset - this.starts[line]!);
   }
+  rememberJump(origin: { line: number; column: number }) {
+    if (origin.line !== this.line || origin.column !== this.column)
+      this.previousJump = { line: origin.line, column: origin.column };
+  }
+  private jumpTo(line: number, column = 0, preserve = false) {
+    const origin = { line: this.line, column: this.column };
+    this.jump(line, column, preserve);
+    this.rememberJump(origin);
+  }
   goToLine(input: string): "empty" | "invalid" | "moved" {
     const value = input.trim();
     if (!value) return "empty";
     const line = Number(value);
     if (!/^\d+$/.test(value) || !Number.isSafeInteger(line) || line < 1) return "invalid";
-    this.jump(line - 1);
+    this.jumpTo(line - 1);
     return "moved";
   }
   restoreSearch(state: {
@@ -197,9 +208,9 @@ export class VimNavigation {
   }
   setMatches(matches: Uint32Array) {
     this.matches = Array.from(matches);
-    this.nextMatch();
+    this.nextMatch(this.direction, 1, false);
   }
-  nextMatch(direction = this.direction, count = 1) {
+  nextMatch(direction = this.direction, count = 1, remember = true) {
     if (!this.matches.length) return;
     let lo = 0,
       hi = this.matches.length;
@@ -213,7 +224,9 @@ export class VimNavigation {
     index =
       (((index + direction * (count - 1)) % this.matches.length) + this.matches.length) %
       this.matches.length;
+    const origin = { line: this.line, column: this.column };
     this.jumpOffset(this.matches[index]!);
+    if (remember) this.rememberJump(origin);
   }
   private word(motion: string) {
     let position = this.offset;
@@ -273,11 +286,11 @@ export class VimNavigation {
       this.jump(this.line + (key === "d" ? n : -n), this.desired, true);
       return { handled: true };
     }
-    if (/^[0-9]$/.test(key) && (key !== "0" || this.count) && !/[fFtT]/.test(this.prefix)) {
+    if (/^[0-9]$/.test(key) && (key !== "0" || this.count) && !/[fFtTm'`]/.test(this.prefix)) {
       this.count = (this.count + key).slice(0, 6);
       return { handled: true };
     }
-    if (!this.prefix && ["g", "z", "f", "F", "t", "T"].includes(key)) {
+    if (!this.prefix && ["g", "z", "f", "F", "t", "T", "m", "'", "`"].includes(key)) {
       this.prefix = key;
       return { handled: true };
     }
@@ -286,6 +299,19 @@ export class VimNavigation {
     const prefix = this.prefix;
     this.prefix = "";
     this.count = "";
+    if (prefix === "m") {
+      if (/^[a-z]$/.test(key)) this.marks.set(key, { line: this.line, column: this.column });
+      return { handled: true };
+    }
+    if (prefix === "'" || prefix === "`") {
+      const target = key === "'" || key === "`" ? this.previousJump : this.marks.get(key);
+      if (target)
+        this.jumpTo(
+          target.line,
+          prefix === "`" ? target.column : Math.max(0, this.lines[target.line]!.search(/\S/)),
+        );
+      return { handled: true };
+    }
     if (["f", "F", "t", "T"].includes(prefix)) {
       if (Array.from(key).length === 1) {
         this.find = { key: prefix, char: key };
@@ -294,14 +320,14 @@ export class VimNavigation {
       return { handled: true };
     }
     if (prefix === "g") {
-      if (key === "g") this.jump(explicit ? n - 1 : 0);
+      if (key === "g") this.jumpTo(explicit ? n - 1 : 0);
       if (key === "d") return { handled: true, definition: this.wordAtCursor() };
       return { handled: true };
     }
     if (prefix === "z") {
       const align =
         key === "t" ? "start" : key === "z" ? "center" : key === "b" ? "end" : undefined;
-      if (align && explicit) this.jump(n - 1, this.desired, true);
+      if (align && explicit) this.jumpTo(n - 1, this.desired, true);
       return { handled: true, ...(align ? { align } : {}) };
     }
     if (key === "v" || key === "V") {
@@ -337,7 +363,7 @@ export class VimNavigation {
       this.jump(this.line + (key === "$" ? n - 1 : 0));
       this.jump(this.line, this.endColumn);
       this.desired = Infinity;
-    } else if (key === "G") this.jump(explicit ? n - 1 : this.lines.length - 1);
+    } else if (key === "G") this.jumpTo(explicit ? n - 1 : this.lines.length - 1);
     else if (key === ":") {
       this.clearVisual();
       return { handled: true, lineCommand: true };
@@ -359,7 +385,7 @@ export class VimNavigation {
         )
           line += direction;
       }
-      this.jump(line);
+      this.jumpTo(line);
     } else if (key === ";" || key === ",") {
       if (this.find) {
         const original = this.find.key;

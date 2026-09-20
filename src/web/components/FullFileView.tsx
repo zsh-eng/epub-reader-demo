@@ -129,7 +129,8 @@ export function FullFileView({
       },
       finish(accept) {
         setSymbolHighlight(null);
-        if (!accept) {
+        if (accept) vim.position.accept(origin);
+        else {
           vim.position.restore(origin);
           instance?.setSelectedLines(selected);
           instance?.scrollTo({ type: "position", position: scrollTop, behavior: "instant" });

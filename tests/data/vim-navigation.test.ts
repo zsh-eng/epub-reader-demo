@@ -232,3 +232,56 @@ test("gd requests the identifier under the cursor without moving it", () => {
   model.key("g");
   expect(model.key("d").definition).toBe("");
 });
+
+test("jump-back swaps jump origins while ordinary motions leave them intact", () => {
+  const model = new VimNavigation("zero\n  one word\ntwo\nthree\nfour\nfive\n");
+  model.jump(1, 6);
+  keys(model, "5Gk''");
+  expect([model.line, model.column]).toEqual([1, 2]);
+  keys(model, "''");
+  expect(model.line).toBe(3);
+  model.jump(1, 6);
+  model.goToLine("6");
+  keys(model, "``");
+  expect([model.line, model.column]).toEqual([1, 6]);
+  keys(model, "gg``");
+  expect([model.line, model.column]).toEqual([1, 6]);
+});
+
+test("lowercase marks support linewise and exact jumps without corrupting Unicode columns", () => {
+  const model = new VimNavigation("  a🙂bc\nother\nlast\n");
+  model.jump(0, 5);
+  keys(model, "maG`a");
+  expect([model.line, model.column]).toEqual([0, 5]);
+  keys(model, "G'a");
+  expect([model.line, model.column]).toEqual([0, 2]);
+  keys(model, "Gmzgg'z");
+  expect(model.line).toBe(2);
+  keys(model, "'x");
+  expect(model.line).toBe(2);
+  keys(model, "m");
+  model.key("Escape");
+  keys(model, "gg'z");
+  expect(model.line).toBe(2);
+  const other = new VimNavigation(model.text, "other-snapshot");
+  keys(other, "'z''");
+  expect(other.line).toBe(0);
+});
+
+test("search previews do not overwrite jump-back, but accepted search and match motions do", () => {
+  const model = new VimNavigation("one\nmatch\nthree\nmatch\n");
+  keys(model, "G");
+  const origin = { line: model.line, column: model.column };
+  model.setSearch("match", 1);
+  model.setMatches(new Uint32Array([4, 16]));
+  model.jump(origin.line, origin.column);
+  keys(model, "''");
+  expect(model.line).toBe(0);
+  model.jump(origin.line, origin.column);
+  model.setMatches(new Uint32Array([4, 16]));
+  model.rememberJump(origin);
+  keys(model, "''");
+  expect(model.line).toBe(3);
+  keys(model, "n``");
+  expect(model.line).toBe(3);
+});

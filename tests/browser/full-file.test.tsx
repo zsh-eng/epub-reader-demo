@@ -1269,3 +1269,58 @@ test("Escape during a pending yank prevents a late failure from restoring visual
   expect(visualRanges()).toHaveLength(0);
   expect(mount!.textContent).not.toContain("Selection kept");
 });
+
+test("Vim marks and jump-back cross virtualized regions without mounting the whole file", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, text: "  abcdef\n".repeat(40000) }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("200G5lma39000G''");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "200");
+  await expect.element(pane).toHaveAttribute("data-vim-column", "3");
+  await userEvent.keyboard("``");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "39000");
+  await userEvent.keyboard("`a");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "200");
+  await expect.element(pane).toHaveAttribute("data-vim-column", "6");
+  await expect
+    .poll(() => document.querySelector("[data-vim-caret]")?.getAttribute("data-vim-line"))
+    .toBe("200");
+  expect(lines()!.length).toBeLessThan(250);
+});
+
+test("accepted search and colon jumps update jump-back while cancelled search does not", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{
+        ...base,
+        plain: true,
+        text: Array.from({ length: 100 }, (_, i) => (i === 79 ? "needle" : "abcdef")).join("\n"),
+      }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("20G3l/needle");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  await userEvent.keyboard("{Enter}``");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "20");
+  await expect.element(pane).toHaveAttribute("data-vim-column", "4");
+  await userEvent.keyboard("/needle");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  await userEvent.keyboard("{Escape}");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "20");
+  await userEvent.keyboard("''");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+  await userEvent.keyboard(":50{Enter}''");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "80");
+});

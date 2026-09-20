@@ -199,6 +199,15 @@ test("symbol palette previews in the current file and Escape restores cursor and
   await expect.element(pane).toHaveAttribute("data-vim-line", "72");
   await expect.poll(() => scroller.scrollTop).toBe(scrollTop);
   await expect.poll(() => document.activeElement).toBe(pane.element());
+  await userEvent.keyboard("''");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await userEvent.keyboard("72G");
+  shortcut("o");
+  await expect
+    .element(page.getByRole("option", { name: /example80/ }))
+    .toHaveAttribute("aria-selected", "true");
+  await userEvent.keyboard("{Enter}''");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "72");
 });
 
 test("opening files focuses Vim and a diff filename opens the full file", async () => {

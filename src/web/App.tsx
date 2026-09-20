@@ -853,6 +853,11 @@ export function App({
   };
   const fileMotions: [string, string, string, boolean?][] = [
     ["definition", "Go to definition", "gd"],
+    ["jump-back", "Previous jump line in file", "''"],
+    ["jump-back-exact", "Previous jump position in file", "``"],
+    ["mark-set", "Set local mark (then a–z)", "m"],
+    ["mark-line", "Go to local mark line (then a–z)", "'"],
+    ["mark-position", "Go to local mark position (then a–z)", "`"],
     ["visual-character", "Select characters in file", "v"],
     ["visual-line", "Select whole lines in file", "V"],
     ["visual-yank", "Copy Vim selection", "y"],
