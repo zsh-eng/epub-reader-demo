@@ -422,7 +422,7 @@ final class ArticleReaderUITests: XCTestCase {
 
   @MainActor func testChromeHTMLImport() throws {
     let app = XCUIApplication()
-    app.launchArguments = ["-ui-testing", "-reset-store", "-stage-import"]
+    app.launchArguments = ["-ui-testing", "-reset-store", "-stage-import", "-test-tagging"]
     app.launch()
     app.buttons["Sort and filter"].tap()
     app.buttons["import-reading-list"].tap()
@@ -441,9 +441,15 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(file.waitForExistence(timeout: 5), app.debugDescription)
     file.tap()
     XCTAssertTrue(
-      app.alerts["Reading list imported"].waitForExistence(timeout: 10), app.debugDescription)
-    XCTAssertTrue(app.staticTexts["Added 2 links. Skipped 1 duplicate."].exists)
-    app.buttons["Done"].tap()
+      app.buttons["import-summary-done"].waitForExistence(timeout: 10), app.debugDescription)
+    XCTAssertTrue(app.staticTexts["2"].exists)
+    XCTAssertTrue(app.staticTexts["1 already in your library"].exists, app.debugDescription)
+    let engineering = app.staticTexts["import-tag-Engineering"]
+    XCTAssertTrue(engineering.waitForExistence(timeout: 10), app.debugDescription)
+    XCTAssertTrue(app.staticTexts["· 2 tagged"].waitForExistence(timeout: 10), app.debugDescription)
+    capture(app, "import-summary")
+    app.buttons["import-summary-done"].tap()
+    XCTAssertFalse(app.otherElements["tagging-notice"].exists)
     XCTAssertTrue(app.buttons["article-story"].exists)
     XCTAssertTrue(app.buttons["article-next"].exists)
     app.terminate()
@@ -766,14 +772,45 @@ final class ArticleReaderUITests: XCTestCase {
     expectation(for: NSPredicate(format: "label CONTAINS 'cached-11'"), evaluatedWith: ready)
     waitForExpectations(timeout: 15)
     XCTAssertFalse(requested.label.split(separator: ",").contains("cached-0"))
-    app.buttons["article-cached-11"].tap()
+    let lastCard = app.buttons["article-cached-11"]
+    for _ in 0..<4 where !lastCard.exists || !lastCard.isHittable { app.swipeUp() }
+    XCTAssertTrue(lastCard.isHittable)
+    lastCard.tap()
     XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
     app.navigationBars.buttons.element(boundBy: 0).tap()
     app.searchFields.firstMatch.tap()
-    app.searchFields.firstMatch.typeText("Cached story 07")
+    app.searchFields.firstMatch.typeText("cached-7")
     expectation(for: NSPredicate(format: "label == 'cached-7'"), evaluatedWith: requested)
     waitForExpectations(timeout: 5)
     capture(app, "viewport-preloaded-search")
+  }
+
+  @MainActor func testThousandArticleLibrarySearchAndViewport() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-long-list",
+      "-test-preloading", "-articles-offline",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["article-import-999"].waitForExistence(timeout: 10))
+    let requested = app.staticTexts["preload-requested"]
+    expectation(for: NSPredicate(format: "label CONTAINS 'import-999'"), evaluatedWith: requested)
+    waitForExpectations(timeout: 10)
+    XCTAssertLessThanOrEqual(requested.label.split(separator: ",").count, 10)
+    XCTAssertFalse(requested.label.split(separator: ",").contains("import-0"))
+    for _ in 0..<4 { app.swipeUp() }
+    let search = app.searchFields.firstMatch
+    search.tap()
+    search.typeText("import-217")
+    XCTAssertTrue(app.buttons["article-import-217"].waitForExistence(timeout: 5))
+    expectation(for: NSPredicate(format: "label == 'import-217'"), evaluatedWith: requested)
+    waitForExpectations(timeout: 5)
+    capture(app, "thousand-article-search")
+    app.buttons["close"].tap()
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline"]
+    app.launch()
+    XCTAssertTrue(app.buttons["article-import-999"].waitForExistence(timeout: 5))
   }
 
   @MainActor func testUnicodeAndNativeCopyInReaderAndWebsite() {

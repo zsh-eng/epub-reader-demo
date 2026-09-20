@@ -43,6 +43,11 @@
 		FCC2E43BE251870F6604B9CB /* Shared/ArcticBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E326710A7D6E0839A4FFD3E; };
 		AE2306DE25C1E0BCFFFC485D /* Shared/ArcticBrand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E326710A7D6E0839A4FFD3E; };
 		7435FA9169AC7863BE1D4E17 /* Resources/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4545F5318A0046043187F2EB; };
+		5BF86EF416D56DD5760525E5 /* Sources/AnnotationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AC7E3F6AF5D3349C2B82840; };
+		E8E6F3EAD101B0744972C82F /* Sources/ReaderAnnotations.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2C4040636A8440F5AB50B3E; };
+		5318E6A664FC8619C6F7F2C8 /* Resources/annotations.js in Resources */ = {isa = PBXBuildFile; fileRef = 864C6F1CB9FB13DA8613C8A4; };
+		84495D52545D0C659817B828 /* Tests/AnnotationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D601DAE211C479CFDF0063E1; };
+		F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215E1D8DEDCDE9DD2F568E99; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -108,6 +113,11 @@
 		DB5DC4BC6003C9D4D88F740A /* Tests/ArticleTaggingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ArticleTaggingUITests.swift; sourceTree = "<group>"; };
 		6E326710A7D6E0839A4FFD3E /* Shared/ArcticBrand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/ArcticBrand.swift; sourceTree = "<group>"; };
 		4545F5318A0046043187F2EB /* Resources/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = "<group>"; };
+		3AC7E3F6AF5D3349C2B82840 /* Sources/AnnotationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/AnnotationStore.swift; sourceTree = "<group>"; };
+		E2C4040636A8440F5AB50B3E /* Sources/ReaderAnnotations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ReaderAnnotations.swift; sourceTree = "<group>"; };
+		864C6F1CB9FB13DA8613C8A4 /* Resources/annotations.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/annotations.js; sourceTree = "<group>"; };
+		D601DAE211C479CFDF0063E1 /* Tests/AnnotationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/AnnotationUITests.swift; sourceTree = "<group>"; };
+		215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PreviewImageWorkLimit.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -161,12 +171,17 @@
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
 				AC0000000000000000000002 /* LibraryCards.swift */,
+				215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */,
+				3AC7E3F6AF5D3349C2B82840 /* Sources/AnnotationStore.swift */,
+				E2C4040636A8440F5AB50B3E /* Sources/ReaderAnnotations.swift */,
+				864C6F1CB9FB13DA8613C8A4 /* Resources/annotations.js */,
 				FAA050406DC7C8245063AEDD /* Sources/ArticleStore.swift */,
 				501300FDF518EC91D6BAF584 /* Sources/ReaderPage.swift */,
 				3D271EB184029D0702465C41 /* Resources/reader.css */,
 				F5530DBD3C688941086224CD /* Resources/reader.js */,
 				EE2F7E402A6FC3D835C95F2F /* Resources/unwall-domains.json */,
 				0D915EFA215768CF91F0230D /* Resources/Fixtures */,
+				D601DAE211C479CFDF0063E1 /* Tests/AnnotationUITests.swift */,
 				39719A39DAB06EC51E5CE446 /* Tests/ArticleReaderUITests.swift */,
 				FBDC4F23F93125BBEEAE800C /* Products */,
 			);
@@ -290,6 +305,7 @@
 				F980534EB990FC023D1FAD4B /* Resources/Fonts in Resources */,
 				A00000000000000000000002 /* THIRD_PARTY_NOTICES.txt in Resources */,
 				4C47C3DB8D16BF935EEAD44A /* Resources/reader.css in Resources */,
+				5318E6A664FC8619C6F7F2C8 /* Resources/annotations.js in Resources */,
 				8E87C159A703BA863E2F25DC /* Resources/reader.js in Resources */,
 				80109A1614335DCE440789D7 /* Resources/unwall-domains.json in Resources */,
 				1769157A8AB718CDFBBCACD7 /* Resources/Fixtures in Resources */,
@@ -332,6 +348,7 @@
 			files = (
 				55D4734A40FDC1796310CFA3 /* Tests/ArticleTaggingUITests.swift in Sources */,
 				F81AAC2FFA4C7815EFD9149A /* Tests/ArticleOnboardingUITests.swift in Sources */,
+				84495D52545D0C659817B828 /* Tests/AnnotationUITests.swift in Sources */,
 				D7AA01FA220D01B26420ADDF /* Tests/ArticleReaderUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -355,6 +372,9 @@
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,
+				F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */,
+				5BF86EF416D56DD5760525E5 /* Sources/AnnotationStore.swift in Sources */,
+				E8E6F3EAD101B0744972C82F /* Sources/ReaderAnnotations.swift in Sources */,
 				3753BC55C93758D0B1748C68 /* Sources/ArticleStore.swift in Sources */,
 				B446FAE6EEDF754A5F085FB3 /* Sources/ReaderPage.swift in Sources */,
 			);

@@ -98,12 +98,14 @@ struct LibraryView: View {
   @State private var query = ""
   @State private var searching = false
   @State private var importReport: String?
+  @State private var showingImportSummary = false
   @State private var folder = ArticleFolder.saved
   @State private var selecting = false
   @State private var selection: Set<UUID> = []
   @State private var sort = "Newest first"
   @State private var confirmDelete = false
   @State private var browsers = BrowserPool()
+  @State private var projection = LibraryProjection()
   @State private var headerHeight: CGFloat = 48
   @State private var libraryViewport: CGRect = .zero
   @State private var searchViewport: CGRect = .zero
@@ -114,21 +116,10 @@ struct LibraryView: View {
   private var matches: [SavedArticle] { matches(in: folder, query: query) }
 
   private func matches(in folder: ArticleFolder, query: String = "") -> [SavedArticle] {
-    let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
-    let filtered = store.articles.filter { article in
-      let text =
-        "\(article.title) \(article.subtitle) \(article.url.absoluteString) \(article.tagNames.joined(separator: " "))"
-      return folder.contains(article) && words.allSatisfy { text.localizedStandardContains($0) }
-    }
-    if sort == "Title" {
-      return filtered.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-    }
-    let ordered = filtered.sorted {
-      let left = folder == .history ? $0.lastVisitedAt : $0.savedAt
-      let right = folder == .history ? $1.lastVisitedAt : $1.savedAt
-      return (left ?? .distantPast) > (right ?? .distantPast)
-    }
-    return sort == "Oldest first" ? ordered.reversed() : ordered
+    projection.rows(
+      articles: store.articles, revision: store.libraryRevision, folder: folder,
+      query: query, sort: sort
+    ).articles
   }
 
   private var searchTransition: Animation {
@@ -183,7 +174,8 @@ struct LibraryView: View {
             .accessibilityIdentifier("preload-ready")
             Text(browsers.lastOpenState)
             .accessibilityIdentifier("reader-open-state")
-          }.font(.caption2).padding(4).background(.thinMaterial)
+          }.font(.system(size: 8)).lineLimit(1).padding(4).background(.thinMaterial)
+          .allowsHitTesting(false)
         }
       }
       .sheet(isPresented: $testSharing) {
@@ -206,7 +198,10 @@ struct LibraryView: View {
       selected = browsers.open(target, store: store)
     }
     .task(id: scenePhase) {
-      guard scenePhase == .active else { return }
+      guard scenePhase == .active else {
+        store.flushPendingWrites()
+        return
+      }
       store.importSharedLinks()
       store.resumeTagging()
       await clipboard.check()
@@ -221,11 +216,15 @@ struct LibraryView: View {
       }
       store.prepareTagging(url: url, preview: preview)
     }
-    .task(id: preloadURLs) { await browsers.preload(preloadURLs, store: store) }
+    .task(id: preloadURLs) {
+      store.prioritizePreviews(preloadURLs)
+      await browsers.preload(preloadURLs, store: store)
+    }
     .onReceive(
       NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
     ) { _ in
       browsers.releaseOffscreen()
+      ThumbnailCache.shared.releaseMemory()
     }
     .onChange(of: store.articles.filter(\.saved).map(\.id)) { _, _ in
       browsers.persistExtractions(in: store)
@@ -256,10 +255,22 @@ struct LibraryView: View {
     }
     .fileImporter(isPresented: $choosingImport, allowedContentTypes: [.html]) { result in
       Task {
-        do { importReport = try await store.importReadingList(from: result.get()) } catch {
+        do {
+          let report = try await store.importReadingList(from: result.get())
+          if store.importSummary != nil {
+            showingImportSummary = true
+          } else {
+            importReport = report
+          }
+        } catch {
           store.errorMessage = error.localizedDescription
         }
       }
+    }
+    .sheet(isPresented: $showingImportSummary) {
+      ImportSummarySheet(store: store)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
     .alert(
       "Reading list imported",
@@ -294,11 +305,14 @@ struct LibraryView: View {
     guard scenePhase == .active, selected == nil, !showingOnboarding,
       !showingTaggingSettings, !choosingImport, editingTags == nil
     else { return [] }
-    let articles = searching ? matches : matches(in: folder)
-    let visibleIndices = articles.indices.filter {
-      visibleRows.contains(
-        PreloadRow(articleID: articles[$0].id, folder: folder, search: searching))
-    }
+    let rows = projection.rows(
+      articles: store.articles, revision: store.libraryRevision, folder: folder,
+      query: searching ? query : "", sort: sort)
+    let articles = rows.articles
+    let visibleIndices = visibleRows.compactMap { row -> Int? in
+      guard row.folder == folder, row.search == searching else { return nil }
+      return rows.indices[row.articleID]
+    }.sorted()
     var urls = visibleIndices.map { articles[$0].url }
     // The paste suggestion has its own URL and may not exist in the library.
     if let copied = clipboard.url, !searching, !urls.contains(copied) { urls.append(copied) }
@@ -470,28 +484,48 @@ struct LibraryView: View {
     .animation(searchTransition, value: searching)
     .scrollDismissesKeyboard(.interactively)
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      if let url = clipboard.url, !searching, !selecting {
-        ClipboardBanner(
-          url: url, preview: clipboard.preview,
-          isSaved: store.articles.contains { $0.url == url && $0.saved }
-        ) {
-          do {
-            try store.add(url.absoluteString, preview: clipboard.preview)
+      VStack(spacing: 0) {
+        if let summary = store.importSummary, !searching, !selecting {
+          HStack(spacing: 10) {
+            Button {
+              showingImportSummary = true
+            } label: {
+              HStack(spacing: 10) {
+                Image(systemName: store.isImportWorking ? "sparkles" : "checkmark.circle")
+                  .foregroundStyle(ArcticBrand.accent)
+                Text("\(summary.total) articles added").font(.subheadline.weight(.medium))
+                Spacer()
+                Image(systemName: "chevron.up").font(.caption.weight(.semibold))
+              }.frame(minHeight: 44)
+            }.accessibilityIdentifier("import-summary-open")
+            Button("Dismiss", systemImage: "xmark") { store.dismissImportSummary() }
+              .labelStyle(.iconOnly).frame(width: 36, height: 44)
+              .accessibilityIdentifier("import-summary-dismiss")
+          }.padding(.horizontal, 16).readerGlass().padding(.horizontal, 20).padding(.bottom, 8)
+        }
+        if let url = clipboard.url, !searching, !selecting {
+          ClipboardBanner(
+            url: url, preview: clipboard.preview,
+            isSaved: store.articles.contains { $0.url == url && $0.saved }
+          ) {
+            do {
+              try store.add(url.absoluteString, preview: clipboard.preview)
+              clipboard.dismiss()
+            } catch {
+              store.errorMessage = error.localizedDescription
+            }
+          } open: {
+            // Opening dismisses the banner and cancels its task. Finish preparing
+            // this explicit pasted link so a later Reader Save reuses the result.
+            Task {
+              guard let preview = try? await ArticlePreviewCache.shared.load(url) else { return }
+              store.prepareTagging(url: url, preview: preview)
+            }
+            selected = browsers.open(url, store: store)
             clipboard.dismiss()
-          } catch {
-            store.errorMessage = error.localizedDescription
+          } dismiss: {
+            clipboard.dismiss()
           }
-        } open: {
-          // Opening dismisses the banner and cancels its task. Finish preparing
-          // this explicit pasted link so a later Reader Save reuses the result.
-          Task {
-            guard let preview = try? await ArticlePreviewCache.shared.load(url) else { return }
-            store.prepareTagging(url: url, preview: preview)
-          }
-          selected = browsers.open(url, store: store)
-          clipboard.dismiss()
-        } dismiss: {
-          clipboard.dismiss()
         }
       }
     }
@@ -712,3 +746,132 @@ struct LibraryView: View {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
   }
 #endif
+
+/// SwiftUI reevaluates the library while rows cross the viewport. Reuse sorted
+/// projections and ID indexes until domain data or the filter actually changes.
+@MainActor private final class LibraryProjection {
+  struct Rows {
+    let articles: [SavedArticle]
+    let indices: [UUID: Int]
+  }
+  private struct Key: Hashable {
+    let folder: ArticleFolder
+    let query: String
+  }
+  private var revision = -1
+  private var sort = ""
+  private var savedOrder: [SavedArticle] = []
+  private var historyOrder: [SavedArticle] = []
+  private var cache: [Key: Rows] = [:]
+
+  func rows(
+    articles: [SavedArticle], revision: Int, folder: ArticleFolder, query: String, sort: String
+  ) -> Rows {
+    if self.revision != revision || self.sort != sort {
+      self.revision = revision
+      self.sort = sort
+      cache.removeAll(keepingCapacity: true)
+      if sort == "Title" {
+        savedOrder = articles.sorted {
+          $0.title.localizedStandardCompare($1.title) == .orderedAscending
+        }
+        historyOrder = savedOrder
+      } else {
+        let oldest = sort == "Oldest first"
+        savedOrder = articles.sorted {
+          let left = $0.savedAt ?? .distantPast
+          let right = $1.savedAt ?? .distantPast
+          return oldest ? left < right : left > right
+        }
+        historyOrder = articles.sorted {
+          let left = $0.lastVisitedAt ?? .distantPast
+          let right = $1.lastVisitedAt ?? .distantPast
+          return oldest ? left < right : left > right
+        }
+      }
+    }
+    let key = Key(folder: folder, query: query)
+    if let rows = cache[key] { return rows }
+    let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+    let rows = (folder == .history ? historyOrder : savedOrder).filter { article in
+      guard folder.contains(article) else { return false }
+      guard !words.isEmpty else { return true }
+      let text =
+        "\(article.title) \(article.subtitle) \(article.url.absoluteString) \(article.tagNames.joined(separator: " "))"
+      return words.allSatisfy { text.localizedStandardContains($0) }
+    }
+    let result = Rows(
+      articles: rows,
+      indices: Dictionary(
+        uniqueKeysWithValues: rows.enumerated().map { ($0.element.id, $0.offset) }))
+    if cache.count >= 24 { cache.removeAll(keepingCapacity: true) }
+    cache[key] = result
+    return result
+  }
+}
+
+/// One batch-level result keeps a large import from producing a stream of toasts.
+private struct ImportSummarySheet: View {
+  let store: ArticleStore
+  @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+  var body: some View {
+    NavigationStack {
+      if let summary = store.importSummary {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 24) {
+            ConnectedTagReveal(isProcessing: store.isImportWorking, tags: []) {
+              VStack(alignment: .leading, spacing: 8) {
+                Text(summary.total, format: .number)
+                  .font(.system(size: 56, weight: .semibold, design: .rounded))
+                Text("Articles added").font(.title3.weight(.medium))
+                HStack(spacing: 6) {
+                  Text("\(summary.previewsReady) checked")
+                  if summary.tagged > 0 { Text("· \(summary.tagged) tagged") }
+                }.font(.subheadline).foregroundStyle(.secondary)
+              }.frame(maxWidth: .infinity, alignment: .leading).padding(24)
+                .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 24))
+            }
+            if !summary.tagCounts.isEmpty {
+              LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], spacing: 10
+              ) {
+                ForEach(summary.tagCounts.keys.sorted(), id: \.self) { tag in
+                  HStack(spacing: 10) {
+                    Text(tag).font(.subheadline.weight(.medium))
+                    Spacer(minLength: 4)
+                    Text(summary.tagCounts[tag]!, format: .number)
+                      .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                      .foregroundStyle(ArcticBrand.accent)
+                      .contentTransition(.numericText())
+                  }.padding(14).frame(maxWidth: .infinity, minHeight: 52)
+                    .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 16))
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("import-tag-" + tag)
+                }
+              }
+            }
+            if summary.duplicates > 0 {
+              Text("\(summary.duplicates) already in your library").font(.footnote).foregroundStyle(
+                .secondary)
+            }
+            if summary.previewFailures > 0 {
+              Text("\(summary.previewFailures) previews unavailable. Your links are saved.")
+                .font(.footnote).foregroundStyle(.secondary)
+            }
+          }.padding(24)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: summary.tagged)
+        }
+        .accessibilityIdentifier("import-summary")
+        .navigationTitle("Your reading list").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Done") { dismiss() }.accessibilityIdentifier("import-summary-done")
+          }
+        }
+      }
+    }
+    .tint(ArcticBrand.accent)
+  }
+}
