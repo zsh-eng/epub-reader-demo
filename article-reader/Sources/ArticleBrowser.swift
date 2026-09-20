@@ -421,7 +421,7 @@ enum ArticleRouting {
         const style = getComputedStyle(text);
         return style.fontFamily + ', ' + style.fontSize + ', ' + o.padding + 'px padding, ' + o.leading + ' spacing, ' + o.theme;
       """
-    readerView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .defaultClient) {
+    readerView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .defaultClient) {
       [weak self] result in
       switch result {
       case .success(let value): self?.appearanceDescription = value as? String ?? ""
