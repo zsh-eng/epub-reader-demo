@@ -105,6 +105,9 @@ struct LibraryView: View {
   @State private var sort = "Newest first"
   @State private var confirmDelete = false
   @State private var browsers = BrowserPool()
+  #if DEBUG
+    @State private var backgroundBrowserCount = -1
+  #endif
   @State private var projection = LibraryProjection()
   @State private var headerHeight: CGFloat = 48
   @State private var libraryViewport: CGRect = .zero
@@ -172,6 +175,8 @@ struct LibraryView: View {
             .accessibilityIdentifier("preload-requested")
             Text(browsers.readyReaderURLs.map(\.lastPathComponent).joined(separator: ","))
             .accessibilityIdentifier("preload-ready")
+            Text(String(backgroundBrowserCount))
+            .accessibilityIdentifier("background-browser-count")
             Text(browsers.lastOpenState)
             .accessibilityIdentifier("reader-open-state")
           }.font(.system(size: 8)).lineLimit(1).padding(4).background(.thinMaterial)
@@ -200,6 +205,14 @@ struct LibraryView: View {
     .task(id: scenePhase) {
       guard scenePhase == .active else {
         store.flushPendingWrites()
+        if scenePhase == .background {
+          // Keep the last opened Reader, but stop speculative documents while
+          // the app is hidden. Transient inactive states keep the warm viewport.
+          browsers.releaseOffscreen()
+          #if DEBUG
+            backgroundBrowserCount = browsers.retainedBrowserCount
+          #endif
+        }
         return
       }
       store.importSharedLinks()

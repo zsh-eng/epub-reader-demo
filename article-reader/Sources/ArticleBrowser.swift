@@ -956,6 +956,9 @@ struct WebSurface: UIViewRepresentable {
   private var warmURLs: [URL] = []
   @ObservationIgnored private var preloadVersion = 0
   private(set) var lastOpenState = ""
+  #if DEBUG
+    var retainedBrowserCount: Int { browsers.count }
+  #endif
   var readyReaderURLs: [URL] {
     browsers.filter { $0.value.readerReady }.map(\.key)
   }

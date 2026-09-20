@@ -3,6 +3,39 @@ import XCTest
 final class ReaderPerformanceUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
+  @MainActor func testBackgroundReleasesNeighborsAndPreservesOpenReader() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-preload-fixtures",
+      "-test-preloading", "-articles-offline",
+    ]
+    app.launch()
+    let ready = app.staticTexts["preload-ready"]
+    let prepared = expectation(
+      for: NSPredicate(format: "label CONTAINS 'cached-0' AND label CONTAINS ','"),
+      evaluatedWith: ready)
+    wait(for: [prepared], timeout: 20)
+    XCUIDevice.shared.press(.home)
+    XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+    app.activate()
+    XCTAssertEqual(app.staticTexts["background-browser-count"].label, "0")
+    let preparedAgain = expectation(
+      for: NSPredicate(format: "label CONTAINS 'cached-0'"), evaluatedWith: ready)
+    wait(for: [preparedAgain], timeout: 20)
+    app.buttons["article-cached-0"].tap()
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
+    let text = app.webViews.staticTexts[
+      "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."]
+    XCTAssertTrue(text.waitForExistence(timeout: 5))
+    XCUIDevice.shared.press(.home)
+    XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+    app.activate()
+    XCTAssertEqual(app.staticTexts["background-browser-count"].label, "1")
+    XCTAssertTrue(text.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["Website"].exists)
+    capture(app, "reader-preserved-after-background")
+  }
+
   @MainActor func testReaderTextDoesNotWaitForArtworkOrBodyImages() {
     let app = XCUIApplication()
     app.launchArguments = [

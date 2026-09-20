@@ -131,3 +131,24 @@ Morning summary must separate shipped local app changes from dormant sync code.
 No production Worker deployment, remote migrations, native account UI, annotation
 sync or durable HTML upload bridge yet. No real Google consent or physical-iPhone
 performance validation. Do not imply the tests prove iPhone responsiveness.
+
+## 23:40 heartbeat — background preload lifecycle
+
+- Reproduced five retained speculative article browsers after Library entered
+  background: `/tmp/arctic-background-before.xcresult` fails with 5 versus 0.
+- Library now calls `releaseOffscreen()` only for `.background`, retaining the
+  last opened Reader. Transient `.inactive` states keep the warm viewport.
+- `/tmp/arctic-background-after.xcresult` passes: no unopened neighbors retained
+  after Library background, viewport prepared again on resume, then exactly one
+  open Reader retained across a second background/resume with readable text.
+  Native build and strict Swift formatting pass. This measures retained document
+  ownership, not operating-system memory reclaimed or physical-device latency.
+- No storage migration or live sync activation attempted.
+- Read-only `viewport_audit` finished. Next profiling candidate: BrowserPool's
+  eight-second preparation timeout releases a queue slot without stopping its
+  publisher load; ten rows can accumulate ten running loads. Also uncached
+  extraction starts from publisher didFinish, so held publisher subresources can
+  delay extraction (the DOM-ready bridge is only on generated Reader HTML).
+  Use a deterministic held-resource native fixture to measure before changing
+  that policy. Avoid clearing prepared HTML or breaking Website mode merely to
+  enforce an incidental request count. All agents are idle.
