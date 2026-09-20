@@ -58,6 +58,7 @@ enum ArticleRouting {
   @ObservationIgnored private var observations: [NSKeyValueObservation] = []
   @ObservationIgnored private var pageVersion = 0
   @ObservationIgnored private var bypassRouting = false
+  private(set) var isOpeningWebsite = false
   @ObservationIgnored private var extraction: (url: URL, html: String)?
   @ObservationIgnored private weak var store: ArticleStore?
   @ObservationIgnored private var downloadURL: URL
@@ -114,6 +115,7 @@ enum ArticleRouting {
 
   private func loadWebsite(_ url: URL) {
     if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-articles-offline") {
+      isOpeningWebsite = false
       errorMessage = "Offline test: website loading is disabled."
       return
     }
@@ -156,9 +158,15 @@ enum ArticleRouting {
 
   func toggleReader() {
     if isReader {
-      isReader = false
       wantsReader = false
-      if webView.url == nil { loadWebsite(sourceURL) }
+      if webView.url == nil {
+        // A downloaded article opens without a publisher request. Keep its
+        // rendered HTML visible until the user-requested website has loaded.
+        isOpeningWebsite = true
+        loadWebsite(sourceURL)
+      } else if !isOpeningWebsite {
+        isReader = false
+      }
       return
     }
     wantsReader = true
@@ -238,6 +246,9 @@ enum ArticleRouting {
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     guard webView === self.webView else { return }
+    // This initial website load belongs to the same downloaded article. Its
+    // cached document remains valid and visible while the website prepares.
+    if isOpeningWebsite { return }
     pageVersion += 1
     extraction = nil
     readerView.stopLoading()
@@ -264,13 +275,21 @@ enum ArticleRouting {
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
     if webView === readerView {
-      readerReady = true
-      isExtracting = false
-      applyAppearance()
-      if wantsReader { isReader = true }
+      let version = pageVersion
+      applyAppearance { [weak self] in
+        guard let self, version == self.pageVersion else { return }
+        self.readerReady = true
+        self.isExtracting = false
+        if self.wantsReader { self.isReader = true }
+      }
       return
     }
     hasLoaded = true
+    if isOpeningWebsite {
+      isOpeningWebsite = false
+      if !wantsReader { isReader = false }
+      return
+    }
     prepareReader()
   }
 
@@ -287,6 +306,7 @@ enum ArticleRouting {
 
   private func report(_ error: Error) {
     guard (error as NSError).code != NSURLErrorCancelled else { return }
+    isOpeningWebsite = false
     errorMessage = error.localizedDescription
   }
 
@@ -333,7 +353,7 @@ enum ArticleRouting {
     return nil
   }
 
-  func applyAppearance() {
+  func applyAppearance(completion: (() -> Void)? = nil) {
     let defaults = UserDefaults.standard
     func setting(_ key: String, fallback: Double, range: ClosedRange<Double>) -> Double {
       let value = defaults.object(forKey: key) == nil ? fallback : defaults.double(forKey: key)
@@ -357,23 +377,24 @@ enum ArticleRouting {
     ]
     let json = String(data: try! JSONSerialization.data(withJSONObject: options), encoding: .utf8)!
     let script = """
-      (() => {
         const o = \(json), root = document.documentElement;
         root.dataset.theme = o.theme;
         root.style.setProperty('--reader-size', o.size + 'px');
         root.style.setProperty('--reader-padding', o.padding + 'px');
         root.style.setProperty('--reader-leading', o.leading);
         root.style.setProperty('--reader-font', o.family);
+        await document.fonts.ready;
         const text = document.querySelector('#reader-content p') || document.getElementById('reader-content');
         const style = getComputedStyle(text);
         return style.fontFamily + ', ' + style.fontSize + ', ' + o.padding + 'px padding, ' + o.leading + ' spacing, ' + o.theme;
-      })()
       """
-    readerView.evaluateJavaScript(script, in: nil, in: .defaultClient) { [weak self] result in
+    readerView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .defaultClient) {
+      [weak self] result in
       switch result {
       case .success(let value): self?.appearanceDescription = value as? String ?? ""
       case .failure(let error): self?.appearanceDescription = error.localizedDescription
       }
+      completion?()
     }
   }
 
@@ -396,8 +417,9 @@ enum ArticleRouting {
 struct WebSurface: UIViewRepresentable {
   let webView: WKWebView
   let insets: EdgeInsets
+  var isActive = true
   @Binding var nearEnd: Bool
-  func makeCoordinator() -> Coordinator { Coordinator(nearEnd: $nearEnd) }
+  func makeCoordinator() -> Coordinator { Coordinator(nearEnd: $nearEnd, isActive: isActive) }
   func makeUIView(context: Context) -> WKWebView {
     webView.scrollView.delegate = context.coordinator
     updateInsets(webView)
@@ -405,6 +427,8 @@ struct WebSurface: UIViewRepresentable {
   }
   func updateUIView(_ uiView: WKWebView, context: Context) {
     context.coordinator.nearEnd = $nearEnd
+    context.coordinator.isActive = isActive
+    uiView.accessibilityElementsHidden = !isActive
     updateInsets(uiView)
   }
 
@@ -412,8 +436,13 @@ struct WebSurface: UIViewRepresentable {
   /// repeatedly hiding and showing it. Loading a page alone never triggers it.
   final class Coordinator: NSObject, UIScrollViewDelegate {
     var nearEnd: Binding<Bool>
-    init(nearEnd: Binding<Bool>) { self.nearEnd = nearEnd }
+    var isActive: Bool
+    init(nearEnd: Binding<Bool>, isActive: Bool) {
+      self.nearEnd = nearEnd
+      self.isActive = isActive
+    }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+      guard isActive else { return }
       guard scrollView.isDragging || scrollView.isDecelerating else { return }
       let bottom =
         scrollView.contentOffset.y + scrollView.bounds.height
@@ -442,10 +471,10 @@ struct WebSurface: UIViewRepresentable {
   private var browsers: [URL: ArticleBrowser] = [:]
   private var active: URL?
   private var warmURLs: [URL] = []
-  func open(_ url: URL, store: ArticleStore, downloaded: Bool = false) -> ArticleBrowser {
+  func open(_ url: URL, store: ArticleStore) -> ArticleBrowser {
     active = url
     trim()
-    if downloaded, let file = store.downloadedFile(for: url) {
+    if let file = store.downloadedFile(for: url) {
       let browser = ArticleBrowser(url: url, store: store, downloadedFile: file)
       browsers[url]?.stop()
       browsers[url] = browser

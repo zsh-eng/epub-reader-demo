@@ -81,15 +81,35 @@ struct ReaderPage: View {
   private var pageContent: some View {
     ZStack(alignment: .top) {
       GeometryReader { geometry in
-        WebSurface(
-          webView: browser.isReader ? browser.readerView : browser.webView,
-          insets: geometry.safeAreaInsets,
-          nearEnd: $nearEnd
+        // Keep both documents mounted so the transition preserves scroll position
+        // and never exposes a newly created, unstyled WKWebView.
+        ZStack {
+          WebSurface(
+            webView: browser.webView, insets: geometry.safeAreaInsets,
+            isActive: !browser.isReader, nearEnd: $nearEnd
+          )
+          .opacity(browser.isReader ? 0 : 1)
+          .allowsHitTesting(!browser.isReader)
+          .accessibilityHidden(browser.isReader)
+          WebSurface(
+            webView: browser.readerView, insets: geometry.safeAreaInsets,
+            isActive: browser.isReader, nearEnd: $nearEnd
+          )
+          .opacity(browser.isReader && browser.readerReady ? 1 : 0)
+          .allowsHitTesting(browser.isReader && browser.readerReady)
+          .accessibilityHidden(!browser.isReader || !browser.readerReady)
+        }
+        .animation(
+          .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.22),
+          value: browser.isReader
         )
-        .id(browser.isReader)
+        .accessibilityIdentifier("reader-document")
+        .accessibilityValue(
+          browser.isReader ? (browser.readerReady ? "Reader" : "Preparing Reader") : "Website"
+        )
         .ignoresSafeArea(.container, edges: .vertical)
       }
-      if browser.isLoading && !browser.isReader {
+      if (browser.isLoading && !browser.isReader) || browser.isOpeningWebsite {
         ProgressView().padding(8).background(.regularMaterial, in: Capsule()).padding(8)
       }
     }
@@ -112,28 +132,30 @@ struct ReaderPage: View {
   }
 
   private var navigationControls: some View {
-    HStack(spacing: 12) {
+    HStack(spacing: 0) {
       Button("Back", systemImage: "chevron.left", action: browser.back)
         .labelStyle(.iconOnly).frame(width: 44, height: 44).disabled(!browser.canGoBack)
         .accessibilityIdentifier("browser-back")
-        .opacity(browser.canGoBack ? 1 : 0.28)
+        .opacity(browser.canGoBack ? 1 : 0.28).frame(maxWidth: .infinity)
       Button("Forward", systemImage: "chevron.right", action: browser.forward)
         .labelStyle(.iconOnly).frame(width: 44, height: 44).disabled(!browser.canGoForward)
         .accessibilityIdentifier("browser-forward")
-        .opacity(browser.canGoForward ? 1 : 0.28)
+        .opacity(browser.canGoForward ? 1 : 0.28).frame(maxWidth: .infinity)
       Button(action: browser.toggleReader) {
         Image(systemName: browser.isReader ? "globe" : "bolt.fill")
           .font(.system(size: 22, weight: .medium, design: .rounded)).frame(width: 44, height: 44)
       }
       .accessibilityLabel(browser.isReader ? "Website" : "Reader")
       .accessibilityIdentifier("reader-toggle")
-      .accessibilityValue(browser.readerReady ? "Ready" : "Preparing").disabled(!browser.hasLoaded)
+      .accessibilityValue(browser.readerReady ? "Ready" : "Preparing")
+      .disabled(!browser.hasLoaded || browser.isOpeningWebsite)
+      .frame(maxWidth: .infinity)
       Button(action: toggleSaved) {
         Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44)
       }
       .accessibilityLabel(isSaved ? "Unsave article" : "Save article")
       .accessibilityValue(isSaved ? "Saved" : "Not saved")
-      .accessibilityIdentifier("reader-save")
+      .accessibilityIdentifier("reader-save").frame(maxWidth: .infinity)
       Button {
         if !browser.isReader { browser.toggleReader() }
         appearance = true
@@ -142,7 +164,10 @@ struct ReaderPage: View {
       }
       .accessibilityLabel("Reader appearance").accessibilityIdentifier("reader-appearance")
       .accessibilityValue(browser.appearanceDescription).disabled(!browser.hasLoaded)
-    }.font(.title3).padding(.horizontal, 16).padding(.vertical, 5).readerGlass()
+      .frame(maxWidth: .infinity)
+    }
+    .font(.title3).padding(.horizontal, 12).padding(.vertical, 5)
+    .frame(maxWidth: 360).readerGlass().padding(.horizontal, 12)
   }
 
   private func toggleSaved() {
@@ -196,9 +221,34 @@ struct ReaderPage: View {
     display: String
   ) -> some View {
     HStack(spacing: 12) {
-      Text(name).font(.subheadline).frame(width: 95, alignment: .leading)
-      Slider(value: value, in: range, step: step).accessibilityLabel(name)
-      Text(display).font(.caption.monospacedDigit()).frame(width: 34, alignment: .trailing)
+      Text(name).font(.subheadline)
+      Spacer(minLength: 8)
+      HStack(spacing: 0) {
+        Button {
+          value.wrappedValue = max(
+            range.lowerBound, ((value.wrappedValue - step) / step).rounded() * step)
+        } label: {
+          Image(systemName: "minus").frame(width: 44, height: 44)
+        }
+        .disabled(value.wrappedValue <= range.lowerBound + 0.001)
+        .accessibilityLabel("Decrease " + name.lowercased())
+        .accessibilityIdentifier(
+          "reader-decrease-" + name.lowercased().replacingOccurrences(of: " ", with: "-"))
+        Text(display).font(.subheadline.monospacedDigit()).frame(width: 44)
+          .accessibilityLabel(name).accessibilityValue(display)
+        Button {
+          value.wrappedValue = min(
+            range.upperBound, ((value.wrappedValue + step) / step).rounded() * step)
+        } label: {
+          Image(systemName: "plus").frame(width: 44, height: 44)
+        }
+        .disabled(value.wrappedValue >= range.upperBound - 0.001)
+        .accessibilityLabel("Increase " + name.lowercased())
+        .accessibilityIdentifier(
+          "reader-increase-" + name.lowercased().replacingOccurrences(of: " ", with: "-"))
+      }
+      .font(.subheadline.weight(.semibold))
+      .background(palette.foreground.opacity(0.06), in: Capsule())
     }
   }
 
