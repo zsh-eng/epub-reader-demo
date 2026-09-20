@@ -242,3 +242,68 @@ private actor DomainRemote: SyncRemote {
     "Domain journal, Mac debug: 1,000-row migration \(started.duration(to: migrated)); one edit \(migrated.duration(to: edited))"
   )
 }
+
+@Test func scopedEditsKeepOtherArticlesAndPrivateFields() async throws {
+  let directory = root()
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let repository = try await ArticleSyncRepository.open(
+    root: directory, scope: .local, legacyLocalArticles: [article(), article("two")])
+  let edited = try await repository.editArticle(at: article().url) { value in
+    value?.isArchived = true
+    value?.downloadedAt = Date(timeIntervalSince1970: 1_700_000_123)
+  }
+  #expect(edited?.isArchived == true)
+  #expect(edited?.downloadedAt?.timeIntervalSince1970 == 1_700_000_123)
+  let other = try await repository.snapshot().first { $0.url.lastPathComponent == "two" }!
+  #expect(other.isArchived == false)
+  _ = try await repository.editArticle(at: article().url) { $0 = nil }
+  let restored = try await ArticleSyncRepository.open(root: directory, scope: .local)
+  #expect(try await restored.snapshot().count == 1)
+  #expect(try await restored.snapshot()[0].url.lastPathComponent == "two")
+  await #expect(throws: ArticleSyncError.invalidValue) {
+    try await repository.editArticle(at: article("two").url) { $0 = article("another") }
+  }
+  #expect(try await repository.snapshot().count == 1)
+  #expect(try await repository.snapshot()[0].url.lastPathComponent == "two")
+}
+
+@Test func concurrentScopedEditsReadLatestState() async throws {
+  let directory = root()
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let initial = article()
+  let repository = try await ArticleSyncRepository.open(
+    root: directory, scope: .local, legacyLocalArticles: [initial])
+  try await withThrowingTaskGroup(of: Void.self) { tasks in
+    for index in 0..<30 {
+      tasks.addTask {
+        _ = try await repository.editArticle(at: initial.url) { value in
+          value?.tags?.append("Tag \(index)")
+        }
+      }
+    }
+    try await tasks.waitForAll()
+  }
+  let snapshot = try await repository.snapshot()
+  #expect(snapshot[0].tagNames.count == 31)
+  #expect(Set(snapshot[0].tagNames).count == 31)
+}
+
+@Test func scopedLibraryEditDoesNotRewriteDifferentlyFormattedRemoteFamilies() async throws {
+  let directory = root()
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let store = try SyncStore(file: directory.appending(path: "journal.json"), accountID: "test")
+  let original = article()
+  let mutations = try ArticleSyncCodec.values(original).map { key, value in
+    let object = try JSONSerialization.jsonObject(with: Data(value.utf8))
+    let reformatted = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted])
+    return LocalMutation(key: key, value: String(decoding: reformatted, as: UTF8.self))
+  }
+  try await store.commit(mutations)
+  let journal = await store.snapshotState()
+  let id = try ArticleSyncCodec.identity(original.url)
+  var projected = try ArticleSyncCodec.article(journal, identity: id)!
+  projected.isArchived = true
+  let changed = try ArticleSyncCodec.articleMutation(journal, identity: id, article: projected)
+  #expect(changed.mutations.count == 1)
+  #expect(changed.mutations[0].key == "library/" + id)
+}

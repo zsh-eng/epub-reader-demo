@@ -1,0 +1,147 @@
+import ArcticSync
+import Foundation
+import Testing
+
+@testable import ArticleSyncBridge
+
+private struct JournalEncoding: Encodable {
+  let accountID: String
+  let deviceID: String
+  let clock: SyncClock
+  let cursor: Int64
+  let rows: [String: SyncRecord]
+  let pending: [String: SyncChange]
+  let localValues: [String: String]?
+}
+
+private func milliseconds(_ duration: Duration) -> Double {
+  let value = duration.components
+  return Double(value.seconds) * 1000 + Double(value.attoseconds) / 1e15
+}
+
+private func measure<T>(_ label: String, _ work: () throws -> T) rethrows -> T {
+  let start = ContinuousClock.now
+  let value = try work()
+  print("  \(label): \(String(format: "%.2f", milliseconds(start.duration(to: .now)))) ms")
+  return value
+}
+
+@Test func profileDormantJournal() async throws {
+  for count in [1000, 10_000] {
+    let directory = FileManager.default.temporaryDirectory.appending(path: "arctic-perf-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let articles = (0..<count).map { index in
+      var value = SavedArticle(
+        url: URL(string: "https://example.com/article-\(index)")!,
+        title: "A considered article \(index)")
+      value.subtitle = "An article about software, ideas and paying attention."
+      value.savedAt = Date(timeIntervalSince1970: Double(1_700_000_000 + index))
+      value.tags = ["Design & craft", "Engineering"]
+      return value
+    }
+    print("PROFILE \(count) articles")
+    let raw = try SyncStore(
+      file: directory.appending(path: "phases.json"), accountID: "performance")
+    let empty = await raw.snapshotState()
+    let initial = try measure("initial codec batch") {
+      try ArticleSyncCodec.transaction(replacing: empty, with: articles)
+    }
+    let initialWrite = ContinuousClock.now
+    _ = try await raw.transaction { _ in initial }
+    print(
+      "  initial journal write: \(String(format: "%.2f", milliseconds(initialWrite.duration(to: .now)))) ms"
+    )
+    let journal = await raw.snapshotState()
+    let projected = try measure("full projection") { try ArticleSyncCodec.project(journal) }
+    _ = try measure("all URL canonicalization + SHA256") {
+      try articles.map { try ArticleSyncCodec.identity($0.url) }
+    }
+    var updated = projected
+    updated[0].isArchived = true
+    let fullMutation = try measure("full edit codec") {
+      try ArticleSyncCodec.transaction(replacing: journal, with: updated)
+    }
+    let id = try ArticleSyncCodec.identity(updated[0].url)
+    let single = try measure("single article projection") {
+      try ArticleSyncCodec.article(journal, identity: id)
+    }
+    #expect(single != nil)
+    let scopedMutation = try measure("single article codec") {
+      try ArticleSyncCodec.articleMutation(journal, identity: id, article: updated[0])
+    }
+    #expect(fullMutation.mutations.count == 1)
+    #expect(scopedMutation.mutations.count == 1)
+    let persisted = ContinuousClock.now
+    _ = try await raw.transaction { _ in scopedMutation }
+    print(
+      "  journal encode + atomic write only: \(String(format: "%.2f", milliseconds(persisted.duration(to: .now)))) ms"
+    )
+    let latest = await raw.snapshotState()
+    let rows = latest.rows
+    let envelope = JournalEncoding(
+      accountID: "performance", deviceID: rows.values.first!.deviceId,
+      clock: rows.values.map(\.hlc).max()!, cursor: 0, rows: rows,
+      pending: rows.mapValues(\.change), localValues: latest.localValues)
+    let encoded = try measure("JSONEncoder equivalent journal envelope") {
+      try JSONEncoder().encode(envelope)
+    }
+    print("  journal size: \(encoded.count) bytes")
+    try measure("atomic file write of encoded bytes") {
+      try encoded.write(to: directory.appending(path: "write-only.json"), options: .atomic)
+    }
+    let repository = try await ArticleSyncRepository.open(
+      root: directory.appending(path: "repository"), scope: .local, legacyLocalArticles: articles)
+    let target = articles[count / 2].url
+    var fullSamples: [Double] = []
+    var scopedSamples: [Double] = []
+    for _ in 0..<3 {
+      let start = ContinuousClock.now
+      _ = try await repository.transaction { values in
+        let index = values.firstIndex { $0.url == target }!
+        values[index].isArchived = !(values[index].isArchived == true)
+      }
+      fullSamples.append(milliseconds(start.duration(to: .now)))
+      let keyStart = ContinuousClock.now
+      _ = try await repository.editArticle(at: target) { value in
+        let archived = value?.isArchived == true
+        value?.isArchived = !archived
+      }
+      scopedSamples.append(milliseconds(keyStart.duration(to: .now)))
+    }
+    print(
+      "  full transaction samples: \(fullSamples.map { String(format: "%.2f", $0) }.joined(separator: ", ")) ms"
+    )
+    print(
+      "  scoped transaction samples: \(scopedSamples.map { String(format: "%.2f", $0) }.joined(separator: ", ")) ms"
+    )
+    // The initial import has a full outbox. Measure a second journal with the
+    // same rows and no pending uploads to expose steady-state encoding cost.
+    let settledRoot = directory.appending(path: "settled")
+    let settledDirectory = settledRoot.appending(path: ArticleSyncCodec.hash("local"))
+    try FileManager.default.createDirectory(at: settledDirectory, withIntermediateDirectories: true)
+    let settledEnvelope = JournalEncoding(
+      accountID: "local", deviceID: envelope.deviceID, clock: envelope.clock, cursor: 0,
+      rows: envelope.rows, pending: [:], localValues: envelope.localValues)
+    let settledBytes = try measure("empty-outbox JSON encoding") {
+      try JSONEncoder().encode(settledEnvelope)
+    }
+    try settledBytes.write(to: settledDirectory.appending(path: "journal.json"), options: .atomic)
+    let settled = try await ArticleSyncRepository.open(root: settledRoot, scope: .local)
+    var settledSamples: [Double] = []
+    for _ in 0..<3 {
+      let start = ContinuousClock.now
+      _ = try await settled.editArticle(at: target) { value in
+        let archived = value?.isArchived == true
+        value?.isArchived = !archived
+      }
+      settledSamples.append(milliseconds(start.duration(to: .now)))
+    }
+    print("  empty-outbox journal size: \(settledBytes.count) bytes")
+    print(
+      "  empty-outbox scoped samples: \(settledSamples.map { String(format: "%.2f", $0) }.joined(separator: ", ")) ms"
+    )
+    let restored = try await ArticleSyncRepository.open(
+      root: directory.appending(path: "repository"), scope: .local)
+    #expect(try await restored.snapshot().count == count)
+  }
+}

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Compile the production repository/model and run focused domain-sync tests."""
+import argparse
 import json
 from pathlib import Path
 import subprocess
 import tempfile
 
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--configuration", choices=["debug", "release"], default="debug")
+parser.add_argument("--performance", action="store_true", help="Run only the 1k/10k performance checks")
+arguments = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 source = (root / "Sources/ArticleStore.swift").read_text()
 models = source[source.index("struct SavedArticle:"):source.index("struct ImportSummary:")]
@@ -23,5 +28,6 @@ with tempfile.TemporaryDirectory(prefix="arctic-domain-check-") as directory:
     )
     (target / "Models.swift").write_text("import Foundation\n" + models)
     (target / "ArticleSyncRepository.swift").write_text((root / "Sources/ArticleSyncRepository.swift").read_text())
-    (tests / "ArticleSyncRepositoryTests.swift").write_text((root / "Tests/ArticleSyncRepositoryTests.swift").read_text())
-    subprocess.run(["swift", "test", "--package-path", str(package)], check=True)
+    test_name = "ArticleSyncPerformanceChecks.swift" if arguments.performance else "ArticleSyncRepositoryTests.swift"
+    (tests / test_name).write_text((root / "Tests" / test_name).read_text())
+    subprocess.run(["swift", "test", "--package-path", str(package), "-c", arguments.configuration], check=True)

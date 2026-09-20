@@ -44,6 +44,7 @@ public actor SyncStore {
   private let file: URL
   private var state: State
   private var syncing = false
+  private var hasPersisted: Bool
   private let validateValue: @Sendable (SyncChange) throws -> Void
   public init(
     file: URL, accountID: String, deviceID: String = UUID().uuidString,
@@ -51,7 +52,8 @@ public actor SyncStore {
   ) throws {
     self.validateValue = validateValue
     self.file = file
-    if FileManager.default.fileExists(atPath: file.path) {
+    hasPersisted = FileManager.default.fileExists(atPath: file.path)
+    if hasPersisted {
       state = try JSONDecoder().decode(State.self, from: Data(contentsOf: file))
       guard state.accountID == accountID else { throw SyncFailure.wrongAccount }
     } else {
@@ -196,11 +198,19 @@ public actor SyncStore {
     }
   }
   private func persist(_ next: State) throws {
+    // A repeated value or an empty pull should not rewrite the entire journal.
+    // The first empty commit still creates the durable migration marker.
+    if hasPersisted, next.clock == state.clock, next.cursor == state.cursor,
+      next.rows == state.rows, next.pending == state.pending, next.localValues == state.localValues
+    {
+      return
+    }
     let data = try JSONEncoder().encode(next)
     try FileManager.default.createDirectory(
       at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
     try data.write(to: file, options: .atomic)
     state = next
+    hasPersisted = true
   }
   private func batches(_ pending: [SyncChange]) throws -> [[SyncChange]] {
     var result: [[SyncChange]] = []

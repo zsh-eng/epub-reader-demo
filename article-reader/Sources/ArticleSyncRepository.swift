@@ -250,23 +250,61 @@ enum ArticleSyncCodec {
     }
   }
 
+  private static func localOverlay(id: String, encoded: String) throws -> SavedArticle {
+    let state = try JSONDecoder().decode(LocalState.self, from: Data(encoded.utf8))
+    guard try identity(state.url) == id else { throw ArticleSyncError.invalidValue }
+    var article = SavedArticle(id: state.id, url: state.url, title: "")
+    article.previewFailed = state.previewFailed
+    article.downloadedAt = state.downloadedAt
+    article.sharedTransferID = state.sharedTransferID
+    var tagging = ArticleTaggingState()
+    tagging.sharedFeedbackTransferID = state.feedbackTransferID
+    article.tagging = tagging
+    article.imageURL = state.imageFileURL
+    article.faviconURL = state.faviconFileURL
+    return article
+  }
+
   static func project(_ journal: JournalSnapshot) throws -> [SavedArticle] {
-    var overlays: [SavedArticle] = []
-    for (id, encoded) in journal.localValues {
-      let state = try JSONDecoder().decode(LocalState.self, from: Data(encoded.utf8))
-      guard try identity(state.url) == id else { throw ArticleSyncError.invalidValue }
-      var article = SavedArticle(id: state.id, url: state.url, title: "")
-      article.previewFailed = state.previewFailed
-      article.downloadedAt = state.downloadedAt
-      article.sharedTransferID = state.sharedTransferID
-      var tagging = ArticleTaggingState()
-      tagging.sharedFeedbackTransferID = state.feedbackTransferID
-      article.tagging = tagging
-      article.imageURL = state.imageFileURL
-      article.faviconURL = state.faviconFileURL
-      overlays.append(article)
-    }
+    let overlays = try journal.localValues.map { try localOverlay(id: $0.key, encoded: $0.value) }
     return try project(journal.rows, retaining: overlays)
+  }
+
+  /// Normal edits need only three domain records and one private value. This
+  /// avoids rebuilding the complete library to change a tag, title or saved flag.
+  static func article(_ journal: JournalSnapshot, identity id: String) throws -> SavedArticle? {
+    var rows: [String: SyncRecord] = [:]
+    for family in ["article", "library", "tags"] {
+      let key = family + "/" + id
+      rows[key] = journal.rows[key]
+    }
+    let overlays = try journal.localValues[id].map { [try localOverlay(id: id, encoded: $0)] } ?? []
+    return try project(rows, retaining: overlays).first
+  }
+
+  static func articleMutation(
+    _ journal: JournalSnapshot, identity id: String, article: SavedArticle?
+  ) throws -> JournalMutation {
+    var localValues = journal.localValues
+    var mutations: [LocalMutation] = []
+    if let article {
+      guard try identity(article.url) == id else { throw ArticleSyncError.invalidValue }
+      let previous = try self.article(journal, identity: id)
+      let previousValues = try previous.map(values) ?? [:]
+      for (key, value) in try values(article) where previousValues[key] != value {
+        mutations.append(LocalMutation(key: key, value: value))
+      }
+      let localValue = try encode(LocalState(article))
+      if localValues[id] != localValue { localValues[id] = localValue }
+    } else {
+      for family in ["article", "library", "tags"] {
+        let key = family + "/" + id
+        guard let record = journal.rows[key], !record.isDeleted else { continue }
+        mutations.append(LocalMutation(key: key, value: record.value, isDeleted: true))
+      }
+      localValues[id] = nil
+    }
+    return JournalMutation(mutations: mutations, localValues: localValues)
   }
 
   static func transaction(replacing journal: JournalSnapshot, with articles: [SavedArticle]) throws
@@ -277,7 +315,8 @@ enum ArticleSyncCodec {
     for article in articles {
       let id = try identity(article.url)
       guard seen.insert(id).inserted else { continue }
-      localValues[id] = try encode(LocalState(article))
+      let localValue = try encode(LocalState(article))
+      if localValues[id] != localValue { localValues[id] = localValue }
     }
     for article in try project(journal.rows) {
       let id = try identity(article.url)
@@ -395,6 +434,20 @@ actor ArticleSyncRepository {
       return try ArticleSyncCodec.transaction(replacing: journal, with: articles)
     }
     return try ArticleSyncCodec.project(journal)
+  }
+
+  /// Use for a single article edit. The callback receives the latest committed
+  /// article and cannot change its canonical URL. Nil removes it with tombstones.
+  func editArticle(
+    at url: URL, _ edit: @Sendable (inout SavedArticle?) throws -> Void
+  ) async throws -> SavedArticle? {
+    let id = try ArticleSyncCodec.identity(url)
+    let journal = try await store.transaction { journal in
+      var article = try ArticleSyncCodec.article(journal, identity: id)
+      try edit(&article)
+      return try ArticleSyncCodec.articleMutation(journal, identity: id, article: article)
+    }
+    return try ArticleSyncCodec.article(journal, identity: id)
   }
 
   /// Explicit account import copies only missing identities. A tombstone counts
