@@ -437,15 +437,31 @@ struct TaggingNotice: Identifiable {
     guard !merged.added.isEmpty else { return "All \(entries.count) links are already saved." }
     try commit(merged.articles)
     currentImportIDs = Set(merged.added.map(\.id))
-    importTaggedIDs.removeAll()
-    importPreparedIDs.removeAll()
-    importSummary = ImportSummary(total: merged.added.count, duplicates: merged.duplicates)
+    importPreparedIDs = Set(
+      merged.added.filter {
+        $0.taggingText != nil || $0.previewFailed
+      }.map(\.id))
+    let completed = merged.added.filter {
+      $0.tagging?.completedIdentity
+        == ArticleTagCatalog.identity(
+          title: $0.title, description: $0.taggingDescription)
+    }
+    importTaggedIDs = Set(completed.map(\.id))
+    var summary = ImportSummary(total: merged.added.count, duplicates: merged.duplicates)
+    summary.previewsReady = importPreparedIDs.count
+    summary.previewFailures = merged.added.filter(\.previewFailed).count
+    summary.tagged = completed.count
+    for article in completed {
+      for tag in article.tagNames { summary.tagCounts[tag, default: 0] += 1 }
+    }
+    importSummary = summary
     let newestFirst = merged.added.enumerated().sorted {
       let lhs = $0.element.savedAt ?? .distantPast
       let rhs = $1.element.savedAt ?? .distantPast
       return lhs == rhs ? $0.offset < $1.offset : lhs > rhs
     }.map(\.element.url)
     enqueuePreviews(newestFirst)
+    scheduleTagging()
     return "Added \(merged.added.count) \(merged.added.count == 1 ? "link" : "links")."
       + (merged.duplicates > 0
         ? " Skipped \(merged.duplicates) \(merged.duplicates == 1 ? "duplicate" : "duplicates")."
