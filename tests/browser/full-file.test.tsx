@@ -1324,3 +1324,76 @@ test("accepted search and colon jumps update jump-back while cancelled search do
   await userEvent.keyboard(":50{Enter}''");
   await expect.element(pane).toHaveAttribute("data-vim-line", "80");
 });
+
+test.each([
+  { plain: true, newline: "\n", name: "plain LF" },
+  { plain: false, newline: "\n", name: "highlighted LF" },
+  { plain: true, newline: "\r\n", name: "plain CRLF" },
+  { plain: false, newline: "\r\n", name: "highlighted CRLF" },
+])("Vim keeps empty lines at column one beside long lines ($name)", async ({ plain, newline }) => {
+  const text = [
+    `const longLine = "${"x".repeat(800)}";`,
+    "",
+    "const shortLine = 1;",
+    "",
+    `const longerLine = "${"y".repeat(1200)}";`,
+    "",
+    "",
+  ].join(newline);
+  render(<FullFileView {...props} file={{ ...base, plain, text }} vimEnabled />);
+  await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true }).element();
+  pane.focus();
+  const key = (value: string) =>
+    pane.dispatchEvent(
+      new KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true }),
+    );
+  const row = (number: number) =>
+    document
+      .querySelector("diffs-container")!
+      .shadowRoot!.querySelector<HTMLElement>(`[data-line="${number}"]`)!;
+  let scroller = row(1).parentElement!;
+  while (
+    !(
+      scroller.scrollWidth > scroller.clientWidth &&
+      /auto|scroll/.test(getComputedStyle(scroller).overflowX)
+    )
+  ) {
+    scroller = scroller.parentElement!;
+  }
+  expect(scroller.scrollWidth).toBeGreaterThan(scroller.clientWidth * 2);
+  const assertEmpty = async (line: number) => {
+    expect(pane.dataset.vimLine).toBe(String(line));
+    expect(pane.dataset.vimColumn).toBe("1");
+    await expect.poll(() => scroller.scrollLeft).toBe(0);
+    await expect
+      .poll(() => {
+        const caret = document.querySelector<HTMLElement>("[data-vim-caret]")!;
+        return (
+          !caret.hidden &&
+          caret.dataset.vimLine === String(line) &&
+          Math.abs(caret.getBoundingClientRect().left - row(line).getBoundingClientRect().left) < 1
+        );
+      })
+      .toBe(true);
+  };
+  key("j");
+  await assertEmpty(2);
+  // The preceding line's last character must still scroll into view normally.
+  key("k");
+  key("$");
+  await expect.poll(() => scroller.scrollLeft).toBeGreaterThan(1000);
+  key("j");
+  await assertEmpty(2);
+  key("j");
+  key("j");
+  await assertEmpty(4);
+  // Check upward movement and the final empty line, too.
+  key("j");
+  key("$");
+  await expect.poll(() => scroller.scrollLeft).toBeGreaterThan(1000);
+  key("k");
+  await assertEmpty(4);
+  key("G");
+  await assertEmpty(6);
+});

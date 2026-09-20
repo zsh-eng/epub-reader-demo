@@ -204,7 +204,14 @@ export function useFileVim({
         offset += node.length;
       }
       const characterBounds = first && last && !emptyLine;
-      let bounds = characterBounds ? range.getBoundingClientRect() : row.getBoundingClientRect();
+      const cursorBounds = () => {
+        if (characterBounds) return range.getBoundingClientRect();
+        const bounds = row.getBoundingClientRect();
+        // Empty rows share the longest line's width. Scroll to their start,
+        // not the far edge of that row; the caret itself still occupies 1ch.
+        return new DOMRect(bounds.left, bounds.top, 0, bounds.height);
+      };
+      let bounds = cursorBounds();
       // Pierre owns a horizontal scroller inside the shadow root. Keep the actual
       // character visible, rather than scrolling the full (potentially wide) row.
       if (align) {
@@ -217,7 +224,7 @@ export function useFileVim({
           const rect = parent.getBoundingClientRect();
           if (bounds.right > rect.right - 12) parent.scrollLeft += bounds.right - rect.right + 12;
           else if (bounds.left < rect.left + 50) parent.scrollLeft -= rect.left + 50 - bounds.left;
-          bounds = characterBounds ? range.getBoundingClientRect() : row.getBoundingClientRect();
+          bounds = cursorBounds();
           break;
         }
       }
