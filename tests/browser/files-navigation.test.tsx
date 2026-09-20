@@ -103,6 +103,50 @@ test("tree click previews, double-click pins, and directory clicks do not open f
   expect(onPin).toHaveBeenCalledTimes(1);
 });
 
+test("a hidden tree retains its scroll position when shown again", async () => {
+  const files: BrowseEntry[] = Array.from({ length: 2000 }, (_, i) => ({
+    path: `file-${i}.ts`,
+    kind: "file",
+  }));
+  function Harness() {
+    const [visible, setVisible] = useState(true);
+    return (
+      <>
+        <button onClick={() => setVisible(!visible)}>Toggle tree</button>
+        <div style={{ width: 300, height: 450, display: visible ? "block" : "none" }}>
+          <RepositoryFiles
+            entries={files}
+            loading={false}
+            error={null}
+            truncated={false}
+            sourceLabel="Test"
+            selectedPath={null}
+            onPreview={() => {}}
+            onPin={() => {}}
+            ignored={false}
+            onIgnoredChange={() => {}}
+            onRefresh={() => {}}
+            onClose={() => {}}
+          />
+        </div>
+      </>
+    );
+  }
+  render(<Harness />);
+  const scroll = () =>
+    document
+      .querySelector("file-tree-container")
+      ?.shadowRoot?.querySelector<HTMLElement>("[data-file-tree-virtualized-scroll]");
+  await expect.poll(() => scroll()?.scrollHeight ?? 0).toBeGreaterThan(1000);
+  scroll()!.scrollTop = 5000;
+  await expect.poll(() => scroll()?.scrollTop).toBe(5000);
+  await page.getByRole("button", { name: "Toggle tree", exact: true }).click();
+  await expect.poll(() => scroll()?.checkVisibility()).toBe(false);
+  await page.getByRole("button", { name: "Toggle tree", exact: true }).click();
+  await expect.poll(() => scroll()?.checkVisibility()).toBe(true);
+  await expect.poll(() => scroll()?.scrollTop).toBe(5000);
+});
+
 test("file lists load on demand and a stale worktree response cannot replace the new scope", async () => {
   const requests: {
     source: BrowseSource;
@@ -146,6 +190,51 @@ test("file lists load on demand and a stale worktree response cannot replace the
     truncated: false,
   });
   await expect.element(page.getByRole("status")).toHaveTextContent("second.ts");
+});
+
+test("file-list cache survives toggles but refreshes for every source input", async () => {
+  const list = vi.fn<BrowseApi["list"]>(async (source, ignored) => ({
+    source,
+    entries: [{ path: `${source.repo.slice(1)}${ignored ? "-ignored" : ""}.ts`, kind: "file" }],
+    truncated: false,
+  }));
+  const api: BrowseApi = { list, read: vi.fn<BrowseApi["read"]>() };
+  function Harness() {
+    const [enabled, setEnabled] = useState(true);
+    const [repo, setRepo] = useState("/first");
+    const [revision, setRevision] = useState(0);
+    const state = useBrowseFiles({ kind: "worktree", repo }, enabled, revision, { api });
+    return (
+      <>
+        <button onClick={() => setEnabled(!enabled)}>Toggle</button>
+        <button onClick={() => setRepo("/second")}>Switch</button>
+        <button onClick={() => setRevision(revision + 1)}>Invalidate</button>
+        <button onClick={() => state.setIgnored(!state.ignored)}>Ignored</button>
+        <button onClick={state.refresh}>Refresh</button>
+        <output>{state.entries.map((entry) => entry.path).join(",")}</output>
+      </>
+    );
+  }
+  render(<Harness />);
+  await expect.element(page.getByRole("status")).toHaveTextContent("first.ts");
+  await page.getByRole("button", { name: "Toggle", exact: true }).click();
+  await page.getByRole("button", { name: "Toggle", exact: true }).click();
+  expect(list).toHaveBeenCalledTimes(1);
+  await page.getByRole("button", { name: "Invalidate", exact: true }).click();
+  await expect.poll(() => list.mock.calls.length).toBe(2);
+  await page.getByRole("button", { name: "Refresh", exact: true }).click();
+  await expect.poll(() => list.mock.calls.length).toBe(3);
+  await page.getByRole("button", { name: "Ignored", exact: true }).click();
+  await expect.element(page.getByRole("status")).toHaveTextContent("first-ignored.ts");
+  expect(list).toHaveBeenCalledTimes(4);
+  await page.getByRole("button", { name: "Toggle", exact: true }).click();
+  await page.getByRole("button", { name: "Invalidate", exact: true }).click();
+  expect(list).toHaveBeenCalledTimes(4);
+  await page.getByRole("button", { name: "Toggle", exact: true }).click();
+  await expect.poll(() => list.mock.calls.length).toBe(5);
+  await page.getByRole("button", { name: "Switch", exact: true }).click();
+  await expect.element(page.getByRole("status")).toHaveTextContent("second-ignored.ts");
+  expect(list).toHaveBeenCalledTimes(6);
 });
 
 test("Enter opens the first match after an async manifest and an empty query result", async () => {

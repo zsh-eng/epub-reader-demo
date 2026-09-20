@@ -401,7 +401,10 @@ describe("graphical review", () => {
         }),
       );
       await expect
-        .poll(() => !!document.querySelector('[aria-label="Workspace files"]'))
+        .poll(
+          () =>
+            document.querySelector('[aria-label="Workspace files"]')?.checkVisibility() ?? false,
+        )
         .toBe(visible);
       expect(document.getElementById("review-sidebar")).not.toBeNull();
     }
@@ -416,6 +419,42 @@ describe("graphical review", () => {
     await expect
       .element(page.getByRole("combobox", { name: "Find file", exact: true }))
       .toBeVisible();
+  });
+  test("files sidebar retains its tree and collapsed folders across toggles", async () => {
+    await page.viewport(1280, 800);
+    await mountApp({ branches: true });
+    const toggle = () =>
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "B",
+          metaKey: true,
+          shiftKey: true,
+          bubbles: true,
+        }),
+      );
+    toggle();
+    const sidebar = page.getByRole("complementary", { name: "Workspace files", exact: true });
+    const folder = sidebar.getByRole("treeitem", { name: "src", exact: true });
+    await expect.element(folder).toHaveAttribute("aria-expanded", "true");
+    await folder.click();
+    await expect.element(folder).toHaveAttribute("aria-expanded", "false");
+    const host = document.querySelector('[aria-label="Workspace files"] file-tree-container');
+    toggle();
+    await expect.poll(() => host?.checkVisibility()).toBe(false);
+    toggle();
+    await expect.poll(() => host?.checkVisibility()).toBe(true);
+    expect(document.querySelector('[aria-label="Workspace files"] file-tree-container')).toBe(host);
+    await expect.element(folder).toHaveAttribute("aria-expanded", "false");
+    await page.getByRole("tab", { name: /feature/ }).click();
+    await expect
+      .element(sidebar.getByRole("treeitem", { name: "feature-only.ts", exact: true }))
+      .toBeVisible();
+    expect(document.querySelector('[aria-label="Workspace files"] file-tree-container')).not.toBe(
+      host,
+    );
+    await expect
+      .element(sidebar.getByRole("treeitem", { name: "alpha.ts", exact: true }))
+      .not.toBeInTheDocument();
   });
   test("switches branch tabs and toggles the sidebar with Command B", async () => {
     const { controller } = await mountApp({ branches: true });

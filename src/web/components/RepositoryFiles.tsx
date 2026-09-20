@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
+import { prepareFileTreeInput } from "@pierre/trees";
 import { FileTree, useFileTree } from "@pierre/trees/react";
-import { useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties } from "react";
 import type { BrowseEntry } from "../../shared/browse";
 import { tokens, ui } from "../theme.stylex";
 import { Icon } from "./Icon";
@@ -42,8 +43,19 @@ export function RepositoryFiles(props: RepositoryFilesProps) {
     latest.current = { entries, onPreview };
   }, [entries, onPreview]);
   const syncing = useRef(false);
+  // Parse and sort once per manifest, not on sidebar toggles or file selection.
+  const preparedInput = useMemo(
+    () =>
+      prepareFileTreeInput(
+        entries.map((entry) =>
+          entry.kind === "directory" ? `${entry.path.replace(/\/$/, "")}/` : entry.path,
+        ),
+      ),
+    [entries],
+  );
+  const appliedInput = useRef(preparedInput);
   const { model } = useFileTree({
-    paths: [],
+    preparedInput,
     initialExpansion: 1,
     flattenEmptyDirectories: true,
     density: "compact",
@@ -58,14 +70,12 @@ export function RepositoryFiles(props: RepositoryFilesProps) {
     },
   });
   useEffect(() => {
+    if (appliedInput.current === preparedInput) return;
     syncing.current = true;
-    model.resetPaths(
-      entries.map((entry) =>
-        entry.kind === "directory" ? `${entry.path.replace(/\/$/, "")}/` : entry.path,
-      ),
-    );
+    model.resetPaths({ preparedInput });
+    appliedInput.current = preparedInput;
     syncing.current = false;
-  }, [entries, model]);
+  }, [preparedInput, model]);
   useEffect(() => {
     if (!selectedPath || model.getSelectedPaths().includes(selectedPath)) return;
     syncing.current = true;

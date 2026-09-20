@@ -4,7 +4,7 @@ import stylex from "@stylexjs/unplugin";
 
 export default defineConfig({
   plugins: [stylex.vite({ useCSSLayers: true }), react()],
-  optimizeDeps: { include: ["@base-ui/react/combobox", "@base-ui/react/tabs"] },
+  optimizeDeps: { include: ["@base-ui/react/combobox", "@base-ui/react/tabs", "@pierre/trees"] },
   worker: { format: "es" },
   build: { outDir: "dist/web", target: "es2022", sourcemap: true },
   server: {

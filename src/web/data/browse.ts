@@ -113,13 +113,18 @@ export function useBrowseFiles(
   const sourceKey = source ? browseSourceKey(source) : "";
   const requestKey = JSON.stringify([sourceKey, ignored, revision, refreshRevision]);
   const [state, setState] = useState<{
+    api: BrowseApi | null;
     key: string;
     entries: BrowseEntry[];
     truncated: boolean;
     error: string | null;
-  }>({ key: "", entries: [], truncated: false, error: null });
+  }>({ api: null, key: "", entries: [], truncated: false, error: null });
+  const current = state.key === requestKey && state.api === api;
+  // Visibility does not invalidate a successful list. Source, revision, ignored
+  // files, and explicit refresh still do; failed requests can retry on reopen.
+  const cached = current && state.error === null;
   useEffect(() => {
-    if (!enabled || !sourceKey) return;
+    if (!enabled || !sourceKey || cached) return;
     const controller = new AbortController();
     const [kind, repo, oid] = JSON.parse(sourceKey) as ["worktree" | "commit", string, string?];
     const requestSource: BrowseSource =
@@ -129,6 +134,7 @@ export function useBrowseFiles(
       .then((result) => {
         if (!controller.signal.aborted)
           setState({
+            api,
             key: requestKey,
             entries: result.entries,
             truncated: result.truncated,
@@ -138,6 +144,7 @@ export function useBrowseFiles(
       .catch((error: unknown) => {
         if (!controller.signal.aborted)
           setState({
+            api,
             key: requestKey,
             entries: [],
             truncated: false,
@@ -145,8 +152,7 @@ export function useBrowseFiles(
           });
       });
     return () => controller.abort();
-  }, [api, sourceKey, ignored, requestKey, enabled]);
-  const current = state.key === requestKey;
+  }, [api, sourceKey, ignored, requestKey, enabled, cached]);
   return {
     entries: current ? state.entries : emptyEntries,
     loading: enabled && !!source && !current,

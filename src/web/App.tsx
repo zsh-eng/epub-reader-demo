@@ -72,6 +72,7 @@ export function App({
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [filesVisible, setFilesVisible] = useState(false);
+  const [filesMounted, setFilesMounted] = useState(false);
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [pickerMode, setPickerMode] = useState<"files" | "content">("files");
   const [pickerResume, setPickerResume] = useState(false);
@@ -253,6 +254,7 @@ export function App({
     setFilePickerOpen(true);
   }, []);
   const showFiles = useCallback(() => {
+    setFilesMounted(true);
     setFilesVisible(true);
     if (window.innerWidth < 1100) setSidebarVisible(false);
   }, []);
@@ -1835,9 +1837,14 @@ export function App({
             )}
           </div>
         </main>
-        {filesVisible && browseSource && (
-          <aside {...stylex.props(styles.filesSidebar)} aria-label="Workspace files">
+        {filesMounted && browseSource && (
+          <aside
+            {...stylex.props(styles.filesSidebar, !filesVisible && styles.hiddenSurface)}
+            aria-label="Workspace files"
+            hidden={!filesVisible}
+          >
             <RepositoryFiles
+              key={JSON.stringify([sourceKey(browseSource), repositoryFiles.ignored])}
               {...repositoryFiles}
               sourceLabel={sourceLabel}
               selectedPath={activeFile?.path ?? selectedFile?.path ?? null}

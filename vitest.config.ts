@@ -17,7 +17,12 @@ export default defineConfig({
       {
         plugins: [stylex.vite({ useCSSLayers: true }), react()],
         optimizeDeps: {
-          include: ["@base-ui/react/combobox", "@base-ui/react/tabs", "@base-ui/react/tooltip"],
+          include: [
+            "@base-ui/react/combobox",
+            "@base-ui/react/tabs",
+            "@base-ui/react/tooltip",
+            "@pierre/trees",
+          ],
         },
         test: {
           name: "browser",
