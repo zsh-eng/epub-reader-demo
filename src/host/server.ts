@@ -13,7 +13,7 @@ import {
   type Repository,
   type Session,
 } from "../shared/protocol";
-import { loadHistory, listBranches, listWorktrees, resolveRepository } from "./repository/history";
+import { loadHistory, resolveRepository } from "./repository/history";
 import { ReviewService } from "./repository/review";
 import { HostError } from "./runtime/errors";
 import { ProcessFailure } from "./runtime/process";
@@ -25,10 +25,12 @@ import { browseBlameRequestSchema, browseSearchRequestSchema } from "../shared/i
 import { blameBrowse } from "./repository/inspect";
 import { symbolSearchRequestSchema } from "../shared/symbols";
 import { FileSymbolService } from "./search/symbols";
-import { ZoektSearchService, type SearchOptions } from "./search/service";
+import { type SearchOptions } from "./search/service";
+import { RepositoryRegistry } from "./repository/registry";
 
 export interface StartHostOptions {
   repo: string;
+  repos?: readonly string[];
   port?: number;
   open?: boolean;
   webRoot?: string;
@@ -108,23 +110,50 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   );
   const notes = new NoteService(reviews);
   const symbols = new FileSymbolService();
-  const search = new ZoektSearchService(repository.path, options.search);
-  const allowed = new Set<string>([repository.path]);
-  allowed.add(resolve(options.repo));
+
   const watchers = new Map<string, Promise<() => Promise<void>>>();
   const watcherModes = new Map<string, boolean>();
   const browseLiveSources = new Set<string>();
-  const streams = new Set<ServerResponse>();
-  const activeRequests = new Set<AbortController>();
+  const retiringWatchers = new Set<Promise<void>>();
+  const retireWatcher = (watcher: Promise<() => Promise<void>>) => {
+    const stopped = watcher.then((stop) => stop()).catch(() => {});
+    retiringWatchers.add(stopped);
+    void stopped.finally(() => retiringWatchers.delete(stopped));
+    return stopped;
+  };
+  const streams = new Map<ServerResponse, string>();
+  const activeRequests = new Map<AbortController, Set<string>>();
   let revision = 0;
   let closing = false;
   let port = 0;
   let expensiveRequests = 0;
   const webRoot = options.webRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), "web");
 
+  const registry = new RepositoryRegistry(options.search, async (id, paths) => {
+    for (const [abort, owners] of activeRequests) if (owners.has(id)) abort.abort();
+    for (const [stream, path] of streams)
+      if (paths.has(path)) {
+        stream.end();
+        streams.delete(stream);
+      }
+    for (const path of paths) {
+      const watcher = watchers.get(path);
+      watchers.delete(path);
+      watcherModes.delete(path);
+      browseLiveSources.delete(path);
+      if (watcher) await retireWatcher(watcher);
+    }
+    reviews.removeRepositories(paths);
+    notes.removeRepositories(paths);
+  });
+  if (repository.git !== false) {
+    await registry.register(repository.path);
+    for (const path of options.repos ?? []) await registry.register(path);
+  }
   const publish = (event: ChangeEvent) => {
     const frame = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
-    for (const stream of streams) {
+    for (const [stream, path] of streams) {
+      if (path !== event.repo) continue;
       if (stream.writableLength > 256 * 1024) {
         stream.destroy();
         streams.delete(stream);
@@ -132,10 +161,32 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
     }
   };
   const observe = (repo: string, live = false) => {
-    if ((watchers.has(repo) && watcherModes.get(repo) === live) || closing) return;
-    if (watchers.size >= 8) return;
+    if (closing) return;
+    if (watchers.has(repo) && watcherModes.get(repo) === live) {
+      const current = watchers.get(repo)!;
+      watchers.delete(repo);
+      watchers.set(repo, current);
+      return;
+    }
+    let evicted: Promise<void> | undefined;
+    if (!watchers.has(repo) && watchers.size >= 8) {
+      const pinned = new Set(streams.values());
+      const oldest = [...watchers.keys()].find((path) => !pinned.has(path));
+      if (!oldest)
+        throw new HostError(
+          "too-many-watchers",
+          "Eight working folders are in use. Close another viewer before opening this source.",
+          503,
+        );
+      const stop = watchers.get(oldest)!;
+      watchers.delete(oldest);
+      watcherModes.delete(oldest);
+      browseLiveSources.delete(oldest);
+      evicted = retireWatcher(stop);
+    }
     const previous = watchers.get(repo);
     const promise = (async () => {
+      await evicted;
       if (previous) {
         try {
           await (
@@ -148,7 +199,8 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       return watchRepository(
         repo,
         () => {
-          search.refresh();
+          if (!registry.owner(repo)) return;
+          registry.refreshSearch(repo);
           publish({ type: "changed", repo, revision: ++revision });
         },
         live,
@@ -169,36 +221,60 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
         protocol: 1,
         repository,
         worktrees: [],
+        repositories: [],
         ...(options.initialComparison ? { initialComparison: options.initialComparison } : {}),
       };
-    const [info, worktrees] = await Promise.all([
-      resolveRepository(repo, signal),
-      listWorktrees(repo, signal),
-    ]);
-    for (const worktree of worktrees) if (!worktree.bare) allowed.add(resolve(worktree.path));
-    // Discovery refreshes must not downgrade an active working-file watcher.
-    if (!watchers.has(info.path)) observe(info.path);
+    await registry.refreshOwner(repo, signal);
+    const repositories = registry.snapshot();
+    const owner = await registry.require(repo, signal);
+    const info = await resolveRepository(repo, signal);
+    observe(info.path, watcherModes.get(info.path) ?? false);
     return {
       protocol: 1,
       repository: { ...info, git: true },
-      worktrees,
-      ...(options.initialComparison ? { initialComparison: options.initialComparison } : {}),
+      repositoryId: owner.repository.id,
+      repositories,
+      worktrees: owner.repository.worktrees,
+      ...(options.initialComparison && repo === repository.path
+        ? { initialComparison: options.initialComparison }
+        : {}),
     };
-  };
-  const requireRepo = (input: string | null) => {
-    const repo = resolve(input ?? repository.path);
-    if (!allowed.has(repo))
-      throw new HostError(
-        "repository-not-allowed",
-        "Choose this repository or one of its listed worktrees.",
-        403,
-      );
-    return repo === resolve(options.repo) ? repository.path : repo;
   };
 
   const server = createServer((request, response) => {
     const abort = new AbortController();
-    activeRequests.add(abort);
+    const owners = new Set<string>();
+    const ownershipChecks = new Set<() => boolean>();
+    activeRequests.set(abort, owners);
+    const requireRepo = async (input: string | null) => {
+      if (repository.git === false) {
+        const path = resolve(input ?? repository.path);
+        if (path !== repository.path && path !== resolve(options.repo))
+          throw new HostError("repository-not-allowed", "Choose the input directory.", 403);
+        return repository.path;
+      }
+      const fallback = registry.owner(repository.path)?.path ?? registry.snapshot()[0]?.path;
+      if (!input && !fallback)
+        throw new HostError("repository-not-allowed", "Add a repository to continue.", 403);
+      const owned = await registry.require(input ?? fallback!, abort.signal);
+      owners.add(owned.repository.id);
+      ownershipChecks.add(owned.valid);
+      return owned.path;
+    };
+    const requireReview = async (id: string) => {
+      await requireRepo(reviews.get(id).response.repo);
+      return id;
+    };
+    const send = (body: unknown) => {
+      abort.signal.throwIfAborted();
+      if ([...ownershipChecks].some((valid) => !valid()))
+        throw new HostError(
+          "repository-not-allowed",
+          "This repository was removed during the request.",
+          403,
+        );
+      json(response, 200, body);
+    };
     request.once("aborted", () => abort.abort());
     response.once("close", () => {
       if (!response.writableEnded) abort.abort();
@@ -219,9 +295,10 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
         if (!timingSafeEqual(tokenDigest, createHash("sha256").update(provided).digest()))
           throw new HostError("unauthorized", "Open the launch URL with its access token.", 401);
         if (url.pathname === "/api/events" && request.method === "GET") {
-          const eventRepo = requireRepo(url.searchParams.get("repo"));
+          const eventRepo = await requireRepo(url.searchParams.get("repo"));
           if (streams.size >= 8)
             throw new HostError("too-many-streams", "Too many review event streams are open.", 503);
+          if (repository.git !== false) observe(eventRepo, watcherModes.get(eventRepo) ?? false);
           response.writeHead(200, {
             "content-type": "text/event-stream",
             "cache-control": "no-store",
@@ -231,96 +308,126 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           response.write(
             `event: ready\ndata: ${JSON.stringify({ type: "ready", repo: eventRepo, revision })}\n\n`,
           );
-          streams.add(response);
+          streams.set(response, eventRepo);
           response.once("close", () => streams.delete(response));
-          return;
-        }
-        if (url.pathname === "/api/session" && request.method === "GET") {
-          json(
-            response,
-            200,
-            await session(requireRepo(url.searchParams.get("repo")), abort.signal),
-          );
-          return;
-        }
-        if (url.pathname === "/api/notes" && request.method === "GET") {
-          json(response, 200, notes.get(url.searchParams.get("reviewId") ?? ""));
           return;
         }
         if (expensiveRequests >= 8)
           throw new HostError("busy", "The host is processing other requests. Retry shortly.", 503);
         expensiveRequests++;
         try {
+          if (url.pathname === "/api/session" && request.method === "GET") {
+            send(await session(await requireRepo(url.searchParams.get("repo")), abort.signal));
+            return;
+          }
+          if (url.pathname === "/api/notes" && request.method === "GET") {
+            send(notes.get(await requireReview(url.searchParams.get("reviewId") ?? "")));
+            return;
+          }
+          if (url.pathname === "/api/repositories") {
+            if (repository.git === false) {
+              if (request.method === "GET") {
+                send({ repositories: [] });
+                return;
+              }
+              throw new HostError(
+                "file-only-session",
+                "Open a Git session to manage repositories.",
+                422,
+              );
+            }
+            if (request.method === "GET") {
+              send({ repositories: await registry.list(abort.signal) });
+              return;
+            }
+            if (request.method === "POST") {
+              const input = z
+                .object({ path: z.string().min(1).max(8192) })
+                .parse(await readBody(request));
+              await registry.register(input.path, abort.signal);
+              send({ repositories: registry.snapshot() });
+              return;
+            }
+            if (request.method === "DELETE") {
+              send({ repositories: await registry.remove(url.searchParams.get("id") ?? "") });
+              return;
+            }
+          }
           if (url.pathname === "/api/browse/list" && request.method === "POST") {
             const input = browseListRequestSchema.parse(await readBody(request));
-            input.source.repo = requireRepo(input.source.repo);
+            input.source.repo = await requireRepo(input.source.repo);
             if (input.source.kind === "worktree") {
               browseLiveSources.add(input.source.repo);
               observe(input.source.repo, true);
             }
-            json(response, 200, await listBrowse(input.source, input.ignored, abort.signal));
+            send(await listBrowse(input.source, input.ignored, abort.signal));
             return;
           }
           if (url.pathname === "/api/browse/read" && request.method === "POST") {
             const input = browseReadRequestSchema.parse(await readBody(request));
-            input.source.repo = requireRepo(input.source.repo);
+            input.source.repo = await requireRepo(input.source.repo);
             if (input.source.kind === "worktree") {
               browseLiveSources.add(input.source.repo);
               observe(input.source.repo, true);
             }
-            json(response, 200, await readBrowse(input.source, input.path, abort.signal));
+            send(await readBrowse(input.source, input.path, abort.signal));
             return;
           }
           if (url.pathname === "/api/browse/symbols" && request.method === "POST") {
             const input = symbolSearchRequestSchema.parse(await readBody(request));
-            input.source.repo = requireRepo(input.source.repo);
-            json(
-              response,
-              200,
+            input.source.repo = await requireRepo(input.source.repo);
+            send(
               input.path
                 ? await symbols.search(input, abort.signal)
-                : await search.symbols(input.source, input.query, abort.signal),
+                : await registry.withSearch(input.source.repo, (search) =>
+                    search.symbols(input.source, input.query, abort.signal),
+                  ),
             );
             return;
           }
           if (url.pathname === "/api/browse/search" && request.method === "POST") {
             const input = browseSearchRequestSchema.parse(await readBody(request));
-            input.source.repo = requireRepo(input.source.repo);
-            json(response, 200, await search.search(input.source, input.query, abort.signal));
+            input.source.repo = await requireRepo(input.source.repo);
+            send(
+              await registry.withSearch(input.source.repo, (search) =>
+                search.search(input.source, input.query, abort.signal),
+              ),
+            );
             return;
           }
           if (url.pathname === "/api/search/status" && request.method === "GET") {
-            json(response, 200, search.status());
+            const repo = await requireRepo(url.searchParams.get("repo"));
+            send(
+              repository.git === false
+                ? { state: "unavailable", message: "This is a file comparison.", branches: [] }
+                : await registry.withSearch(repo, (search) => search.status()),
+            );
             return;
           }
           if (url.pathname === "/api/browse/blame" && request.method === "POST") {
             const input = browseBlameRequestSchema.parse(await readBody(request));
-            input.source.repo = requireRepo(input.source.repo);
-            json(response, 200, await blameBrowse(input, abort.signal));
+            input.source.repo = await requireRepo(input.source.repo);
+            send(await blameBrowse(input, abort.signal));
             return;
           }
           if (url.pathname === "/api/branches" && request.method === "GET") {
-            const repo = requireRepo(url.searchParams.get("repo"));
+            const repo = await requireRepo(url.searchParams.get("repo"));
             if (repository.git === false) {
-              json(response, 200, []);
+              send([]);
               return;
             }
-            const worktrees = await listWorktrees(repo, abort.signal);
-            for (const worktree of worktrees)
-              if (!worktree.bare) allowed.add(resolve(worktree.path));
-            json(response, 200, await listBranches(repo, abort.signal, worktrees));
+            await registry.refreshOwner(repo, abort.signal);
+            send((await registry.require(repo, abort.signal)).repository.branches);
             return;
           }
           if (url.pathname === "/api/history" && request.method === "GET") {
             if (repository.git === false) {
-              json(response, 200, { commits: [], cursor: null, hasMore: false });
+              send({ commits: [], cursor: null, hasMore: false });
               return;
             }
-            json(
-              response,
-              200,
+            send(
               await loadHistory(
-                requireRepo(url.searchParams.get("repo")),
+                await requireRepo(url.searchParams.get("repo")),
                 url.searchParams.get("cursor"),
                 Number(url.searchParams.get("limit") ?? 50),
                 abort.signal,
@@ -331,7 +438,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           }
           if (url.pathname === "/api/review" && request.method === "POST") {
             const input = reviewRequestSchema.parse(await readBody(request));
-            input.repo = requireRepo(input.repo);
+            input.repo = await requireRepo(input.repo);
             if (
               repository.git === false &&
               input.comparison.kind !== "patch" &&
@@ -350,16 +457,15 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
                   input.comparison.kind === "unstaged",
               );
             const review = await reviews.load(input, abort.signal);
+            abort.signal.throwIfAborted();
             notes.adopt(review.id);
-            json(response, 200, review);
+            send(review);
             return;
           }
           if (url.pathname === "/api/source" && request.method === "GET") {
-            json(
-              response,
-              200,
+            send(
               await reviews.sources(
-                url.searchParams.get("reviewId") ?? "",
+                await requireReview(url.searchParams.get("reviewId") ?? ""),
                 url.searchParams.get("path") ?? "",
                 abort.signal,
               ),
@@ -368,11 +474,9 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           }
           if (url.pathname === "/api/notes" && request.method === "POST") {
             const input = notesRequestSchema.parse(await readBody(request));
-            json(
-              response,
-              200,
+            send(
               await notes.mutate(
-                input.reviewId,
+                await requireReview(input.reviewId),
                 input.expectedRevision,
                 input.mutation,
                 abort.signal,
@@ -430,8 +534,10 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
           response.destroy();
           return;
         }
-        const status =
-          error instanceof HostError
+        const cancelled = error instanceof Error && error.name === "AbortError";
+        const status = cancelled
+          ? 499
+          : error instanceof HostError
             ? error.status
             : error instanceof z.ZodError
               ? 400
@@ -442,8 +548,9 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
                     ? 499
                     : 422
                 : 500;
-        const code =
-          error instanceof HostError || error instanceof ProcessFailure
+        const code = cancelled
+          ? "cancelled"
+          : error instanceof HostError || error instanceof ProcessFailure
             ? error.code
             : error instanceof z.ZodError
               ? "invalid-request"
@@ -469,7 +576,6 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   if (!address || typeof address === "string")
     throw new Error("The local server did not open a TCP port.");
   port = address.port;
-  if (repository.git !== false) await search.start();
   if (options.open) {
     const command =
       process.platform === "darwin"
@@ -488,7 +594,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
     child.unref();
   }
   const heartbeat = setInterval(() => {
-    for (const stream of streams) stream.write(": heartbeat\n\n");
+    for (const stream of streams.keys()) stream.write(": heartbeat\n\n");
   }, 15_000);
   heartbeat.unref();
   return {
@@ -499,11 +605,12 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       if (closing) return;
       closing = true;
       clearInterval(heartbeat);
-      for (const abort of activeRequests) abort.abort();
-      for (const stream of streams) stream.end();
+      for (const abort of activeRequests.keys()) abort.abort();
+      for (const stream of streams.keys()) stream.end();
       streams.clear();
       await Promise.allSettled([...watchers.values()].map(async (stop) => (await stop)()));
-      await search.close();
+      await Promise.allSettled(retiringWatchers);
+      await registry.close();
       reviews.clear();
       notes.clear();
       await new Promise<void>((resolvePromise) => {

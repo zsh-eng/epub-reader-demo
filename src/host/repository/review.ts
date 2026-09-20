@@ -777,6 +777,19 @@ export class ReviewService {
     return result;
   }
 
+  removeRepositories(paths: ReadonlySet<string>) {
+    const removed = new Set<string>();
+    this.reviews.deleteWhere((review, id) => {
+      if (!paths.has(review.response.repo)) return false;
+      removed.add(id);
+      return true;
+    });
+    for (const [key, id] of this.immutable) if (removed.has(id)) this.immutable.delete(key);
+    for (const [key, id] of this.immutableRequests)
+      if (removed.has(id)) this.immutableRequests.delete(key);
+    this.sourceCache.deleteWhere((source) => removed.has(source.reviewId));
+  }
+
   clear() {
     this.reviews.clear();
     this.immutable.clear();

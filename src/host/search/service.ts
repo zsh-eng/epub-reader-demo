@@ -48,6 +48,7 @@ export interface SearchOptions {
   cacheRoot?: string;
   pollMs?: number;
   debounceMs?: number;
+  scheduleIndex?: (work: () => Promise<void>, signal: AbortSignal) => Promise<void>;
 }
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 const alias = (name: string) => `med/${hash(name).slice(0, 24)}`;
@@ -254,7 +255,9 @@ export class ZoektSearchService {
     while (this.dirty && !this.closed && this.enabled) {
       this.dirty = false;
       try {
-        await this.reconcile();
+        if (this.options.scheduleIndex)
+          await this.options.scheduleIndex(() => this.reconcile(), this.abort.signal);
+        else await this.reconcile();
       } catch (error) {
         if (!this.closed) {
           this.setState(

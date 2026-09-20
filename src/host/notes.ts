@@ -169,6 +169,11 @@ export class NoteService {
     return next;
   }
 
+  removeRepositories(paths: ReadonlySet<string>) {
+    for (const scope of this.scopes.keys())
+      if (paths.has((JSON.parse(scope) as [string])[0])) this.scopes.delete(scope);
+  }
+
   clear() {
     this.scopes.clear();
   }

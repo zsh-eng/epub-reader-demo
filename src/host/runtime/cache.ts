@@ -36,6 +36,9 @@ export class ByteCache<T> {
       this.entries.delete(key);
     }
   }
+  deleteWhere(predicate: (value: T, key: string) => boolean) {
+    for (const [key, entry] of this.entries) if (predicate(entry.value, key)) this.delete(key);
+  }
   clear() {
     this.entries.clear();
     this.size = 0;

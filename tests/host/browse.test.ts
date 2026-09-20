@@ -189,7 +189,8 @@ test("HTTP browse routes authorize discovered worktrees and reject arbitrary rep
   const origin = `http://127.0.0.1:${host.port}`;
   const call = (route: string, body: unknown) =>
     fetch(`${origin}/api/browse/${route}`, { method: "POST", headers, body: JSON.stringify(body) });
-  expect((await call("list", { source: { kind: "worktree", repo: linked } })).status).toBe(403);
+  // Registration discovers existing linked worktrees before the first session request.
+  expect((await call("list", { source: { kind: "worktree", repo: linked } })).status).toBe(200);
   await fetch(`${origin}/api/session`, { headers });
   const allowed = await call("list", { source: { kind: "worktree", repo: linked } });
   expect(allowed.status).toBe(200);

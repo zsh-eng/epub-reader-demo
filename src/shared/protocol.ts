@@ -51,6 +51,8 @@ export interface Session {
   protocol: 1;
   repository: Repository;
   worktrees: Worktree[];
+  repositoryId?: string;
+  repositories?: RegisteredRepository[];
   initialComparison?: Comparison;
 }
 export interface Branch {
@@ -58,6 +60,15 @@ export interface Branch {
   head: string;
   worktreePath?: string;
   current: boolean;
+}
+/** One local Git repository; linked worktrees share this identity. */
+export interface RegisteredRepository {
+  id: string;
+  path: string;
+  name: string;
+  branches: Branch[];
+  worktrees: Worktree[];
+  error?: string;
 }
 export interface Commit {
   id: string;
