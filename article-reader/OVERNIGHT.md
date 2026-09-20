@@ -185,3 +185,30 @@ performance validation. Do not imply the tests prove iPhone responsiveness.
   content were involved. All agents are idle. The remaining uncached extraction
   delay is measured and documented above; do not claim it was fixed by bounding
   the speculative queue or change it without the dynamic-content regressions.
+
+## 01:42 heartbeat — note editing and current documentation
+
+- Bounded notes audit found and reproduced a data-loss bug: Remove highlight,
+  edit its note, clear the text, then type a replacement. Clearing the last
+  character tombstoned the passage; subsequent edits silently did nothing.
+- `40f9660` separates `updateNote` from explicit `deleteNote`. Empty drafts retain
+  their UUID through disk reload and rewriting. Delete note is available for an
+  empty note-only passage; there is no destructive dismissal cleanup.
+- Focused Swift storage checks pass for replacement after restart, explicit
+  deletion with/without a highlight, empty-draft deletion, stale merge and
+  damaged-record isolation. Agent reviewed the bounded note flow and found no
+  other confirmed defect.
+- Native validation: both existing annotation tests pass in
+  `/tmp/arctic-note-rewrite.xcresult`. The new test initially sent Delete at the
+  initial caret position and therefore did not clear text; it was corrected to
+  use the actual iOS Select All menu. `/tmp/arctic-note-select-all.xcresult` then
+  passed clear/rewrite, offline restart with the same passage UUID/text, and
+  explicit deletion. Build and strict formatting pass.
+- README corrected stale claims of no highlights and sequential import. It now
+  covers dates, batch tags, bounded thumbnails/preloads, bundled fonts, notes,
+  test scope and the dormant sync boundary. Local documentation links verified.
+- No early publisher extraction change was made; its partial-content and stale
+  navigation risks remain documented. No sync activation or deployment.
+- Next run: a bounded regression sweep of existing share/import/annotation
+  behavior is appropriate. Add production changes only for a confirmed defect;
+  do not invent features or retry the blocked storage integration to fill time.

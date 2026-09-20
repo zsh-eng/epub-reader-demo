@@ -44,6 +44,47 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
   }
 
+  @MainActor func testNoteOnlyPassageSurvivesClearingAndRewriting() {
+    let app = openFixture()
+    selectPassage(in: app)
+    tapSelectionAction("Add note", in: app)
+    let editor = app.textViews["annotation-note"]
+    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    editor.tap()
+    let original = "Old thought."
+    editor.typeText(original)
+    app.navigationBars.buttons["Done"].tap()
+    XCTAssertTrue(app.staticTexts[original].waitForExistence(timeout: 5))
+    let passageID = annotationRows(in: app).firstMatch.identifier
+    app.buttons["Passage options"].tap()
+    app.buttons["Remove highlight"].tap()
+    annotationRows(in: app).firstMatch.tap()
+    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    editor.tap()
+    editor.press(forDuration: 1.1)
+    tapSelectionAction("Select All", in: app)
+    editor.typeText(XCUIKeyboardKey.delete.rawValue)
+    // Clearing the final character is an intermediate draft edit, not deletion.
+    XCTAssertTrue(editor.exists)
+    XCTAssertEqual(editor.value as? String ?? "", "")
+    let replacement = "A better thought for tomorrow."
+    editor.typeText(replacement)
+    app.navigationBars.buttons["Done"].tap()
+    XCTAssertTrue(app.staticTexts[replacement].waitForExistence(timeout: 5))
+    capture(app, "rewritten-note-without-highlight")
+
+    reopenOffline(app)
+    let notes = app.buttons["reader-notes"]
+    expectValue("1 passage", on: notes)
+    notes.tap()
+    XCTAssertTrue(app.staticTexts[replacement].waitForExistence(timeout: 5))
+    XCTAssertEqual(annotationRows(in: app).firstMatch.identifier, passageID)
+    app.buttons["Passage options"].tap()
+    XCTAssertFalse(app.buttons["Remove highlight"].exists)
+    app.buttons["Delete note"].tap()
+    XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
+  }
+
   @MainActor func testSelectedTextOpensNativeNoteEditorInDarkMode() {
     let app = openFixture(dark: true)
     selectPassage(in: app)

@@ -50,9 +50,11 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   same WebView, including work still in progress. Local documents prepare first,
   with two preparation slots. Speculative website loads can make requests to
   publishers or Unwall for articles without a downloaded copy. The queue pauses
-  during reading, onboarding, background state, and modal settings. Memory pressure
-  releases offscreen browsers. Metadata remains in memory; opening does not query
-  a remote database.
+  during reading, onboarding, and modal settings. Backgrounding and memory
+  pressure release nearby browsers while retaining the last opened Reader.
+  A stalled speculative publisher is cancelled before its eight-second slot is
+  reused; tapping that row starts a fresh foreground load without this limit.
+  Metadata remains in memory; opening does not query a remote database.
 - **Downloaded** includes saved articles, including archived articles, whose Defuddle
   Reader view has been written to disk. Cached articles open from their styled local
   HTML in any folder, without briefly showing the website. New HTML declares UTF-8;
@@ -60,11 +62,18 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   crossfade while preserving their separate scroll positions. Website loads on demand;
   the cached Reader stays visible until it is ready. Stored text, code and embedded
   header images do not need the website. Appearance controls
-  still work. Inline article media can still require a network connection. Deleting
-  a link removes its stored Reader view; archiving keeps it.
+  still work. The two bundled custom fonts load from a fixed local asset scheme
+  and are no longer copied into each saved HTML file. Reader text does not wait
+  for decorative images or body-image load events. Inline article media can still
+  require a network connection. Deleting a link removes its stored Reader view;
+  archiving keeps it. For uncached pages, extraction still waits for the publisher
+  load event; a stalled publisher resource can delay initial Reader availability.
 - Preview images and favicons share a memory cache and a durable 128 MB disk cache.
   Reader lead images and author portraits use the same cache; images are downsampled
-  to at most 1200 pixels. Oldest-used files are evicted when the limit is reached.
+  to at most 1200 pixels. Thumbnail decoding runs off the main thread, with at
+  most three concurrent image jobs. Requests without consumers are cancelled.
+  Decoded thumbnails have a separate 32 MB memory limit. Oldest-used disk files
+  are evicted when the limit is reached.
 - Code blocks with supported language labels receive bundled highlight.js colouring.
   Unknown languages remain plain code. No remote script is loaded.
 - The page menu provides Archive article, Reload, Open original and Try Unwall.
@@ -78,8 +87,42 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 This app stores link metadata in an atomic JSON file under Application Support,
 with separate HTML files for downloaded Reader views. Download status is committed
 only after the HTML write succeeds. Preview images are reused from local storage.
-No sync, highlights, accounts, or outgoing share controls. Archive is library
-status only. Website cookies use WebKit's persistent store.
+Highlights and notes use separate atomic record files. Archive is library status
+only. Website cookies use WebKit's persistent store. There is no active account
+or cloud sync UI. The staged sync package and Worker routes are described below;
+they do not replace the current local storage path.
+
+## Highlights and notes
+
+Select text in Reader, then choose **Highlight** or **Add note** in the native
+selection menu. The Notes button opens a collection of quoted passages. Tap a
+passage to edit its note, or **Show in article** to return to its position.
+Notes save as you type. Clearing text keeps the passage editable, including
+after a restart; use **Delete note** to remove it explicitly. **Remove highlight**
+keeps an existing note, and **Delete note** keeps an existing highlight.
+
+Passages store their exact text, nearby context and a UTF-16 position hint.
+When regenerated HTML has changed, ambiguous matches remain in Notes with
+**Passage changed** rather than attaching to unrelated text. Removing the final
+highlight/note writes a deletion marker. These records are local; annotation
+sync is not active. A damaged record is kept and reported without preventing
+other records from loading.
+
+## Sync implementation status
+
+`Sync/` contains the staged native protocol, account-scoped journal, authenticated
+transport and Google sign-in helper. `SyncServer/` contains isolated Worker/D1
+routes and release instructions. The main app still uses its existing local JSON
+library. Account UI, the live storage migration, annotation sync and durable HTML
+upload intent are not integrated. No production Worker release or remote Arctic
+migration has been applied as part of this work.
+
+See [release boundaries](SyncServer/README.md) and the
+[measured storage limits and migration proposal](Sync/PERFORMANCE.md) before
+continuing integration. A 10,000-article JSON journal still has excessive write
+cost. Do not activate it as the live library store. The proposed live migration
+requires the explicit approval recorded in `OVERNIGHT.md`. Jev keys stay in the
+device Keychain and are never sync data.
 
 ## Open from another app
 
@@ -179,9 +222,15 @@ shows deterministic metadata; real publisher preview checks remain separate.
 2. Unzip the download and put its reading-list HTML file in Files on the iPhone.
 3. Tap **Sort → Import Chrome reading list** and select the HTML file.
 
-The importer saves HTTP(S) links and their titles, skips duplicates and ignores
-non-web links. Preview metadata loads afterwards, one page at a time. It does not
-import read/unread state or change Chrome. A bookmark HTML export also works;
+The importer saves HTTP(S) links and titles, preserves Chrome's `ADD_DATE` Unix
+seconds, skips duplicates and ignores non-web links. Existing saved dates remain
+unchanged. A history-only link restored to Saved uses its source import date.
+The local import completes before network work starts. Up to three metadata
+requests run concurrently, with visible and nearby rows first; imported images
+load as their cards become visible. The import sheet shows progress and article
+counts for each tag, instead of a separate automatic-tag notice for every link.
+The batch receipt survives a restart. It does not import read/unread state or
+change Chrome. A bookmark HTML export also works;
 choose only the file whose links you want to add. ZIP and JSON are not accepted.
 Availability depends on the Chrome data stored in your Google account.
 
@@ -219,7 +268,9 @@ and menu archiving, browser history, reader switching,
 article-frame extraction, disabled navigation controls, folder swipes, stored Reader
 views across an offline restart, short/long/no-image cards, compact tags, page back navigation,
 search and native-file-picker HTML
-import, clipboard suggestions, and Share extension saving. Clipboard UI tests use
+import dates and aggregate tag counts, clipboard suggestions, Share extension
+saving, highlights and notes, offline fonts, 1,000-row search/scroll behavior,
+background/resume and held-resource preload cancellation. Clipboard UI tests use
 app-written simulator fixture text, so cross-app Allow Paste prompts still need a
 physical-device check. The import test stages a sample HTML file in Documents in debug builds
 only. Screenshots are attached to test
@@ -262,4 +313,6 @@ in `THIRD_PARTY_NOTICES.txt`; bundled font licenses are in `Resources/Fonts`.
 4. `Sources/ArticleBrowser.swift` — WebView lifetime, routing and reader switching.
 5. `Web/reader.js` and `Resources/reader.css` — extraction and reading presentation.
 6. `Sources/ArticleStore.swift` — local persistence, HTML import and preview metadata.
-7. `Tests/ArticleReaderUITests.swift` — complete user sequences.
+7. `Sources/AnnotationStore.swift`, `ReaderAnnotations.swift`, `Resources/annotations.js` — passage persistence, notes and text anchors.
+8. `Tests/ArticleReaderUITests.swift`, `AnnotationUITests.swift`, `ReaderPerformanceUITests.swift` — complete user sequences and controlled resource checks.
+9. `SyncServer/README.md`, `Sync/PERFORMANCE.md` — dormant sync release boundary and measured storage costs.
