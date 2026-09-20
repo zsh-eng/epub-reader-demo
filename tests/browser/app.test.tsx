@@ -298,13 +298,15 @@ describe("graphical review", () => {
     await expect
       .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
       .toBeVisible();
-    await expect.element(page.getByText(/Browsing files · Working files/)).toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Return to review" })).toBeVisible();
     await expect.element(page.getByText(/Captured working changes/)).not.toBeInTheDocument();
-    await page.getByRole("button", { name: "Return to review changes" }).click();
+    await page.getByRole("button", { name: "Return to review" }).click();
     await expect
       .element(page.getByRole("tab", { name: "Changes", exact: true }))
       .toHaveAttribute("aria-selected", "true");
-    await expect.element(page.getByText(/Captured working changes/)).toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Return to review" }))
+      .not.toBeInTheDocument();
 
     // Retain an active file in both workspaces, then return to a target whose
     // stored file navigation would otherwise hide its saved comparison.

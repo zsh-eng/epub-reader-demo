@@ -19,6 +19,7 @@ export default defineConfig({
         optimizeDeps: {
           include: [
             "@base-ui/react/combobox",
+            "@base-ui/react/popover",
             "@base-ui/react/tabs",
             "@base-ui/react/tooltip",
             "@pierre/trees",

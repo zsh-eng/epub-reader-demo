@@ -1,4 +1,4 @@
-# Review links and agent feedback
+# Review links and agent comments
 
 med connects an agent's changes to a local review. A review can contain comparisons from several registered repositories. Its link has no access token. Comments are saved locally and can be copied together as Markdown for any agent.
 
@@ -86,15 +86,15 @@ node /Users/admin/med/dist/cli.js review create --manifest /path/to/review.json
 
 A manifest accepts commit, range, working, staged, and unstaged comparisons. Patch and arbitrary file-pair inputs are not saved-review targets. Use `review create --help` for connection options. Keep generated manifests outside the reviewed changes unless they are intended project files.
 
-## Review and return feedback
+## Review and return comments
 
-A link opens its first target. The review header selects other targets, including different comparisons on the same branch. The normal history and file browser remain available. Use **Return to review changes** to restore the captured comparison after browsing elsewhere. Working files shown in the file browser remain live; the saved diff and its expanded context are captured content.
+A link opens its first target. The compact review bar shows a target selector when the review has more than one target, including different comparisons on the same branch. Open **Review** for the full title, repository path, comparison, and capture time. The normal history and file browser remain available. Use **Return to review** to restore the captured comparison after browsing elsewhere. Working files shown in the file browser remain live; the saved diff and its expanded context are captured content.
 
-Add comments to lines or line ranges in the saved diff. **Copy feedback** collects comments from all targets in that review, including inactive targets. The text contains repository and worktree paths, comparison endpoints, file names, before/after side, selected line numbers, nearby captured source lines, and replies. Copying does not delete comments. Paste the text into the agent that should handle it.
+Add comments to lines or line ranges in the saved diff. **Copy comments** collects comments from all targets in that review, including inactive targets. The text contains repository and worktree paths, comparison endpoints, file names, before/after side, selected line numbers, nearby captured source lines, and replies. Copying does not delete comments. Paste the text into the agent that should handle it.
 
-Use **Clear all comments**, then **Confirm clear**, to remove comments from this review across its targets. Other saved reviews are unchanged. If comments changed after the confirmation was opened, med rejects the stale clear request. Clearing comments does not delete the captured review or change source files.
+Open **Review**, then use **Clear all comments** and **Confirm clear**, to remove comments from this review across its targets. Other saved reviews are unchanged. If comments changed after the confirmation was opened, med rejects the stale clear request. Clearing comments does not delete the captured review or change source files.
 
-After an agent revises the code, create a new review link for the new comparison. The previous link and feedback retain their original context.
+After an agent revises the code, create a new review link for the new comparison. The previous link and comments retain their original context.
 
 ## Suggested AGENTS.md guidance
 
@@ -112,11 +112,11 @@ When handing off code changes, provide a med review link if the user's med host 
 - Use `review create` for one target, or `review create --manifest` for several repositories or comparisons. Include its Markdown link in the final response.
 - Do not commit, switch branches, add unrelated repositories, or edit AGENTS.md just to generate a link. Follow the user's authorization for those actions.
 - If the host is unavailable or a relevant repository is missing, state what is needed. Do not invent a URL or print the host's access token.
-- Treat pasted review feedback as scoped to its named repositories and captured comparison. Check current source before applying it; line numbers may have changed.
+- Treat pasted review comments as scoped to its named repositories and captured comparison. Check current source before applying it; line numbers may have changed.
 ```
 
 ## Limits
 
 Saved reviews are local to the machine running med. A localhost link will not open the same review on another person's computer. Registration is still session-local; saved review records and comments are persistent. Clear comments when they are no longer needed.
 
-One review can contain up to 16 targets. Capture is bounded to 500 changed files and 24 MiB of patch/source content per target. The store permits 64 MiB per saved record, 128 records, 512 MiB total saved data, and 500 comments per review. Feedback export is limited to 8 MiB. It reports an error instead of truncating comments; narrow selected line ranges or remove unneeded comments before copying. A capture limit produces an error; narrow the comparison. Binary or oversized files retain diff metadata but cannot supply text context for comments. There is no automatic deletion of old saved reviews.
+One review can contain up to 16 targets. Capture is bounded to 500 changed files and 24 MiB of patch/source content per target. The store permits 64 MiB per saved record, 128 records, 512 MiB total saved data, and 500 comments per review. Comment export is limited to 8 MiB. It reports an error instead of truncating comments; narrow selected line ranges or remove unneeded comments before copying. A capture limit produces an error; narrow the comparison. Binary or oversized files retain diff metadata but cannot supply text context for comments. There is no automatic deletion of old saved reviews.

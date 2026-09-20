@@ -109,19 +109,26 @@ test("review header distinguishes ranges on the same branch and returns from fil
   await expect
     .element(page.getByRole("option", { name: "frontend · main · b → c" }))
     .toBeInTheDocument();
-  await page.getByRole("button", { name: "Return to review changes" }).click();
+  await page.getByRole("button", { name: "Return to review" }).click();
   expect(returned()).toBe(1);
   await page.getByRole("combobox", { name: "Review target" }).selectOptions("three");
+  await page.getByRole("button", { name: "Review details and actions" }).click();
   await expect.element(page.getByText(/Captured working changes/)).toBeVisible();
 });
 
 test("copy includes all review targets and clear requires an explicit scoped confirmation", async () => {
   const { copy, clear } = await setup();
-  await page.getByRole("button", { name: "Copy feedback" }).click();
+  const header = document.querySelector<HTMLElement>('[aria-label="Saved review"]')!;
+  const height = header.getBoundingClientRect().height;
+  expect(height).toBeLessThanOrEqual(36);
+  await page.getByRole("button", { name: "Copy comments" }).click();
   expect(copy).toHaveBeenCalledOnce();
+  await expect.element(page.getByRole("status")).toHaveTextContent("Copied 6 comments");
+  expect(header.getBoundingClientRect().height).toBe(height);
   await expect
-    .element(page.getByRole("status"))
-    .toHaveTextContent("Copied 6 comments from 2 repositories.");
+    .element(page.getByRole("button", { name: "Clear all comments" }))
+    .not.toBeInTheDocument();
+  await page.getByRole("button", { name: "Review details and actions" }).click();
   await page.getByRole("button", { name: "Clear all comments" }).click();
   expect(clear).not.toHaveBeenCalled();
   await expect.element(page.getByRole("alert")).toBeVisible();
@@ -133,7 +140,6 @@ test("copy includes all review targets and clear requires an explicit scoped con
   await page.getByRole("button", { name: "Clear all comments" }).click();
   await page.getByRole("button", { name: "Confirm clear" }).click();
   expect(clear).toHaveBeenCalledWith(7);
-  await expect
-    .element(page.getByRole("status"))
-    .toHaveTextContent("All comments in this review cleared.");
+  expect(header.getBoundingClientRect().height).toBe(height);
+  await expect.element(page.getByRole("status")).toHaveTextContent("Comments cleared");
 });

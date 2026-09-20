@@ -184,9 +184,11 @@ try {
     },
   });
   await page.reload();
-  await header.getByText("2 repositories · 2 comments", { exact: true }).waitFor();
-  await header.getByRole("button", { name: "Copy feedback", exact: true }).click();
-  await header.getByText("Copied 2 comments from 2 repositories.", { exact: true }).waitFor();
+  await page.waitForFunction(() =>
+    document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("2"),
+  );
+  await header.getByRole("button", { name: "Copy comments", exact: true }).click();
+  await header.getByText("Copied 2 comments", { exact: true }).waitFor();
   const clipboard = await page.evaluate(() => navigator.clipboard.readText());
   for (const expected of [
     "Frontend feedback from the browser",
@@ -212,17 +214,23 @@ try {
   assert.ok(source.new.includes("frontendAfter"));
   assert.ok(!source.new.includes("changedAfterCapture"));
   await page.reload();
-  await header.getByText("2 repositories · 2 comments", { exact: true }).waitFor();
+  await page.waitForFunction(() =>
+    document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("2"),
+  );
   await page.getByText("Frontend feedback from the browser", { exact: true }).waitFor();
   await header.getByRole("combobox", { name: "Review target" }).selectOption(second.id);
   await page.getByText("Backend feedback across repositories", { exact: true }).waitFor();
-  await header.getByRole("button", { name: "Clear all comments", exact: true }).click();
-  await header.getByRole("button", { name: "Cancel", exact: true }).click();
+  await header.getByRole("button", { name: "Review details and actions", exact: true }).click();
+  await page.getByRole("button", { name: "Clear all comments", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
   assert.equal((await api(`/api/reviews/${id}/feedback`)).count, 2);
-  await header.getByRole("button", { name: "Clear all comments", exact: true }).click();
-  await header.getByRole("button", { name: "Confirm clear", exact: true }).click();
-  await header.getByText("All comments in this review cleared.", { exact: true }).waitFor();
-  await header.getByText("2 repositories · 0 comments", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Clear all comments", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm clear", exact: true }).click();
+  await header.getByText("Comments cleared", { exact: true }).waitFor();
+  assert.equal(
+    await header.getByRole("button", { name: "Copy comments", exact: true }).isEnabled(),
+    false,
+  );
   assert.equal((await api(`/api/reviews/${id}/feedback`)).count, 0);
   assert.deepEqual(pageErrors, []);
   if (process.env.MED_VALIDATION_SCREENSHOT)

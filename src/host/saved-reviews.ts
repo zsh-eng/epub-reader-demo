@@ -539,7 +539,7 @@ export class SavedReviewStore {
         if (bytes > MAX_FEEDBACK_BYTES)
           throw new HostError(
             "saved-feedback-too-large",
-            "Feedback exceeds the 8 MiB export limit. Narrow selected line ranges or remove some comments, then copy again. No feedback was copied or truncated.",
+            "Comment export exceeds the 8 MiB export limit. Narrow selected line ranges or remove some comments, then copy again. No comments were copied or truncated.",
             413,
           );
       };
@@ -607,7 +607,7 @@ export class SavedReviewStore {
             const fence = "`".repeat(longest + 1);
             appendText("", fence, snippet, fence);
           } else appendText("", "Source context was not captured for this file.");
-          appendText("", "Feedback:", note.text, "");
+          appendText("", "Comment:", note.text, "");
           for (const reply of target.notes.notes.filter((item) => item.parentId === note.id))
             append(reply, number);
         };
