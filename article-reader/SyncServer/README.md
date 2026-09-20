@@ -2,10 +2,12 @@
 
 ## Current scope
 
-This directory is a tested, mountable backend. `../Sync` is a tested Swift
-package with a durable local record store, HTTP transport and Keychain session
-storage. These pieces are **not yet mounted, deployed or connected to the app**.
-Do not expose a working-sync indicator until the integration below is complete.
+This backend is mounted in `server/index.ts` under `/api/arctic`. `../Sync` is a
+tested Swift package with a durable local record store, HTTP transport and
+Keychain session storage. The new database is created and bound in the default
+Wrangler configuration. **No remote migration or Worker deployment has run yet.**
+The native domain bridge and account UI are separate integration work; do not
+expose a working-sync indicator until the complete flow is verified.
 
 ## Host and authentication
 
@@ -103,11 +105,39 @@ bun test article-reader/SyncServer/routes.test.ts
 swift test --package-path article-reader/Sync --scratch-path /tmp/arctic-sync-build
 ```
 
-Before deployment: complete the native store bridge and account UI, create/bind
-Arctic's D1 database, apply only its migration, test two clients against a local
-Worker with real auth, then test signed-in restore/logout/account switching and
-offline edits on simulator. Root task reviews the deployment diff. Do not create
-accounts or upload the user's library merely to smoke-test an unreviewed backend.
+The host integration test runs actual Better Auth sign-in/sign-out, D1 and R2
+inside local workerd, with HTTPS cookie settings. It confirms that Arctic records
+never enter Reader's database, another account cannot read articles/files, and
+revoked sessions cannot sync. Run it with:
+
+```
+bun run test --run test/server/arctic-sync.test.ts
+```
+
+Resource created 2026-09-20: `arctic-db`, APAC,
+`810925d0-4966-4da9-840b-16e6347e245e`. It is empty on Cloudflare. Existing
+`reader-db` and `epub-reader-books` resources were not migrated or modified.
+The default config binds `ARCTIC_DATABASE` to the new database. HTML uses the
+existing bucket under `arctic/v1/users/<authenticated-user>/<sha256-id>`.
+
+After root review and native integration checks, deployment commands from the
+repository root are:
+
+```
+bunx wrangler d1 migrations apply arctic-db --remote
+bun run build
+bunx wrangler deploy
+```
+
+Use the default configuration, as the existing Reader release workflow does.
+The optional `--env production` block does not declare database/R2 arrays and
+must not be used without separately configuring its non-inherited bindings.
+Do not run Reader's database migration command for this Arctic change.
+Verify the remote migration list, unauthenticated Arctic 401 responses, and
+existing Reader asset/auth health after release. Then verify native sign-in,
+second-device restore, offline edit recovery, logout/account switching, and
+HTML restoration. Do not create real accounts or upload the user's library
+merely to smoke-test an unreviewed backend.
 
 Sources checked 2026-09-20:
 

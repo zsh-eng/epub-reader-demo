@@ -15,9 +15,7 @@ export interface ArticleBucket {
     bytes: ArrayBuffer,
     options: { httpMetadata: { contentType: string } },
   ): Promise<unknown>;
-  get(
-    key: string,
-  ): Promise<{
+  get(key: string): Promise<{
     body: ReadableStream<Uint8Array>;
     size: number;
     httpEtag: string;
@@ -52,7 +50,7 @@ export function createArcticRoutes<E extends Env>(
         maxSize: MAX_ARTICLE_FILE_BYTES,
         onError: (c) => c.json({ error: "Article file is too large" }, 413),
       }),
-      async (c) => {
+      async (c: Context<E, "/files/:id">) => {
         const id = c.req.param("id");
         if (!fileID.test(id)) return c.json({ error: "Invalid file ID" }, 400);
         const bytes = await c.req.arrayBuffer();
@@ -68,24 +66,28 @@ export function createArcticRoutes<E extends Env>(
         return c.json({ id, size: bytes.byteLength });
       },
     )
-    .get("/files/:id", options.requireAuth, async (c) => {
-      const id = c.req.param("id");
-      if (!fileID.test(id)) return c.json({ error: "Invalid file ID" }, 400);
-      const object = await options
-        .getBucket(c)
-        .get(objectKey(options.getIdentity(c).userId, id));
-      if (!object) return c.json({ error: "File not found" }, 404);
-      // Never execute a saved publisher HTML document on the authenticated API origin.
-      return new Response(object.body, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "Content-Disposition": "attachment",
-          "Content-Security-Policy": "sandbox; default-src 'none'",
-          "X-Content-Type-Options": "nosniff",
-          "Cache-Control": "private, no-store",
-          "Content-Length": String(object.size),
-          ETag: object.httpEtag,
-        },
-      });
-    });
+    .get(
+      "/files/:id",
+      options.requireAuth,
+      async (c: Context<E, "/files/:id">) => {
+        const id = c.req.param("id");
+        if (!fileID.test(id)) return c.json({ error: "Invalid file ID" }, 400);
+        const object = await options
+          .getBucket(c)
+          .get(objectKey(options.getIdentity(c).userId, id));
+        if (!object) return c.json({ error: "File not found" }, 404);
+        // Never execute a saved publisher HTML document on the authenticated API origin.
+        return new Response(object.body, {
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "Content-Disposition": "attachment",
+            "Content-Security-Policy": "sandbox; default-src 'none'",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+            "Content-Length": String(object.size),
+            ETag: object.httpEtag,
+          },
+        });
+      },
+    );
 }

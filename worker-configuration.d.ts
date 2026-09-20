@@ -13,6 +13,7 @@ declare namespace Cloudflare {
     BASE_URL: string;
     BOOK_STORAGE: R2Bucket;
     DATABASE: D1Database;
+    ARCTIC_DATABASE: D1Database;
     ASSETS: Fetcher;
   }
 }

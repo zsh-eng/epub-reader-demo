@@ -1,3 +1,4 @@
+import { createArcticRoutes } from "../article-reader/SyncServer/routes";
 import { createSyncHonoRoutes } from "@zsh-eng/local-sync/hono";
 import { createAuth } from "@server/lib/auth";
 import { getDevices } from "@server/lib/devices";
@@ -18,14 +19,16 @@ import { cors } from "hono/cors";
 // Define your environment bindings type
 type Bindings = Env;
 
-const app = new Hono<{
+type AppEnv = {
   Bindings: Bindings;
   Variables: {
     user: User | undefined;
     session: Session | undefined;
     deviceId: string | undefined;
   };
-}>();
+};
+
+const app = new Hono<AppEnv>();
 
 app.use(
   "*",
@@ -208,6 +211,18 @@ const route = app
       return c.json({ error: "Failed to delete file" }, 500);
     }
   })
+  .route(
+    "/arctic",
+    createArcticRoutes<AppEnv>({
+      requireAuth,
+      getIdentity: (c) => ({
+        userId: c.get("user")!.id,
+        deviceId: c.get("deviceId"),
+      }),
+      getDatabase: (c) => c.env.ARCTIC_DATABASE,
+      getBucket: (c) => c.env.BOOK_STORAGE,
+    }),
+  )
   .route(
     "/sync/v2",
     createSyncHonoRoutes({

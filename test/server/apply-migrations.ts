@@ -4,3 +4,5 @@ import { applyD1Migrations, env } from "cloudflare:test";
 // `applyD1Migrations()` only applies migrations that haven't already been
 // applied, therefore it is safe to call this function here.
 await applyD1Migrations(env.DATABASE, env.TEST_MIGRATIONS);
+
+await applyD1Migrations(env.ARCTIC_DATABASE, env.TEST_ARCTIC_MIGRATIONS);

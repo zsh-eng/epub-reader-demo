@@ -1,11 +1,8 @@
 import type { Session, User } from "better-auth/types";
 import type { MiddlewareHandler } from "hono";
 
-type Env = {
-  Bindings: {
-    DATABASE: D1Database;
-    BASE_URL?: string;
-  };
+type AuthEnv = {
+  Bindings: Env;
   Variables: {
     user: User | undefined;
     session: Session | undefined;
@@ -17,7 +14,7 @@ type Env = {
  * Middleware that requires both user authentication and device ID.
  * Returns 401 Unauthorized if either is missing.
  */
-export const requireAuth: MiddlewareHandler<Env> = async (c, next) => {
+export const requireAuth: MiddlewareHandler<AuthEnv> = async (c, next) => {
   const user = c.get("user");
   const deviceId = c.get("deviceId");
 
@@ -29,7 +26,7 @@ export const requireAuth: MiddlewareHandler<Env> = async (c, next) => {
 };
 
 /** Require a signed-in user for routes that do not need a device ID. */
-export const requireUser: MiddlewareHandler<Env> = async (c, next) => {
+export const requireUser: MiddlewareHandler<AuthEnv> = async (c, next) => {
   const user = c.get("user");
 
   if (!user) {

@@ -25,6 +25,12 @@
       "database_id": "b830fea5-d461-4be0-8916-2e01d77c141f",
       "migrations_dir": "./drizzle/",
     },
+    {
+      "binding": "ARCTIC_DATABASE",
+      "database_name": "arctic-db",
+      "database_id": "810925d0-4966-4da9-840b-16e6347e245e",
+      "migrations_dir": "./article-reader/SyncServer/migrations/",
+    },
   ],
   "env": {
     "production": {

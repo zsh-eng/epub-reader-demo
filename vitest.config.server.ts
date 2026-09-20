@@ -9,6 +9,9 @@ export default defineConfig(async () => {
   // Read all migrations in the `migrations` directory
   const migrationsPath = path.join(__dirname, "drizzle");
   const migrations = await readD1Migrations(migrationsPath);
+  const arcticMigrations = await readD1Migrations(
+    path.join(__dirname, "article-reader/SyncServer/migrations"),
+  );
 
   return {
     plugins: [
@@ -19,6 +22,10 @@ export default defineConfig(async () => {
           // setup file
           bindings: {
             TEST_MIGRATIONS: migrations,
+            TEST_ARCTIC_MIGRATIONS: arcticMigrations,
+            // Exercise production cookie attributes while requests stay in workerd.
+            BETTER_AUTH_URL: "https://reader.zsheng.app",
+            BASE_URL: "https://reader.zsheng.app",
           },
         },
       }),
