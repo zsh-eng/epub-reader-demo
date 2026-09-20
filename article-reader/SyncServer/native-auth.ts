@@ -13,6 +13,17 @@ const codeLifetime = 60 * 1000;
 type Flow = { challenge: string; state: string };
 type User = { id: string; email: string };
 type Identity = { user: User; cookie: string };
+type CodeBinding = { codeHash: string; challenge: string; expiresAt: number };
+function authenticatedCodeContext(binding: CodeBinding) {
+  return new TextEncoder().encode(
+    JSON.stringify([
+      "arctic-native-code-v1",
+      binding.codeHash,
+      binding.challenge,
+      binding.expiresAt,
+    ]),
+  );
+}
 export interface NativeAuthOptions<E extends Env> {
   database(c: Context<E>): D1Database;
   secret(c: Context<E>): string;
@@ -53,16 +64,28 @@ async function encryptionKey(secret: string) {
     "decrypt",
   ]);
 }
-async function seal(identity: Identity, secret: string): Promise<string> {
+async function seal(
+  identity: Identity,
+  secret: string,
+  binding: CodeBinding,
+): Promise<string> {
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce },
+    {
+      name: "AES-GCM",
+      iv: nonce,
+      additionalData: authenticatedCodeContext(binding),
+    },
     await encryptionKey(secret),
     new TextEncoder().encode(JSON.stringify(identity)),
   );
   return `${base64url(nonce)}.${base64url(new Uint8Array(ciphertext))}`;
 }
-async function open(payload: string, secret: string): Promise<Identity> {
+async function open(
+  payload: string,
+  secret: string,
+  binding: CodeBinding,
+): Promise<Identity> {
   const decode = (value: string) =>
     Uint8Array.from(
       atob(value.replaceAll("-", "+").replaceAll("_", "/")),
@@ -72,7 +95,11 @@ async function open(payload: string, secret: string): Promise<Identity> {
   if (!nonce || !ciphertext)
     throw new Error("Invalid native authorization payload");
   const bytes = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: decode(nonce) },
+    {
+      name: "AES-GCM",
+      iv: decode(nonce),
+      additionalData: authenticatedCodeContext(binding),
+    },
     await encryptionKey(secret),
     decode(ciphertext),
   );
@@ -186,16 +213,21 @@ export function createNativeAuthRoutes<E extends Env>(
           302,
         );
       const code = randomToken();
+      const binding = {
+        codeHash: await pkceChallenge(code),
+        challenge: flow.challenge,
+        expiresAt: now() + codeLifetime,
+      };
       await options
         .database(c)
         .prepare(
           "INSERT INTO native_auth_codes (code_hash, challenge, payload, expires_at) VALUES (?, ?, ?, ?)",
         )
         .bind(
-          await pkceChallenge(code),
-          flow.challenge,
-          await seal({ user, cookie }, options.secret(c)),
-          now() + codeLifetime,
+          binding.codeHash,
+          binding.challenge,
+          await seal({ user, cookie }, options.secret(c), binding),
+          binding.expiresAt,
         )
         .run();
       return c.redirect(redirect(flow.state, { code }), 302);
@@ -207,6 +239,24 @@ export function createNativeAuthRoutes<E extends Env>(
         : c.json({ error: "Authorization request expired" }, 400);
     })
     .post("/exchange", bodyLimit({ maxSize: 4096 }), async (c: Context<E>) => {
+      // This response installs an authentication cookie. Reject browser form
+      // submissions and foreign origins even when they carry an attacker's own
+      // valid code/verifier. Native URLSession does not need an Origin header.
+      const origin = c.req.header("Origin");
+      if (
+        origin !== undefined &&
+        origin !== new URL(options.origin(c)).origin
+      ) {
+        return c.json({ error: "Origin is not allowed" }, 403);
+      }
+      const contentType = c.req
+        .header("Content-Type")
+        ?.split(";")[0]
+        ?.trim()
+        .toLowerCase();
+      if (contentType !== "application/json") {
+        return c.json({ error: "JSON is required" }, 415);
+      }
       let parsed: unknown;
       try {
         parsed = await c.req.json();
@@ -224,23 +274,35 @@ export function createNativeAuthRoutes<E extends Env>(
         !verifierPattern.test(body.verifier)
       )
         return c.json({ error: "Invalid authorization request" }, 400);
+      const codeHash = await pkceChallenge(body.code);
+      const challenge = await pkceChallenge(body.verifier);
       const row = await options
         .database(c)
         .prepare(
-          "DELETE FROM native_auth_codes WHERE code_hash = ? AND challenge = ? AND expires_at > ? RETURNING payload",
+          "DELETE FROM native_auth_codes WHERE code_hash = ? AND challenge = ? AND expires_at > ? RETURNING payload, expires_at",
         )
-        .bind(
-          await pkceChallenge(body.code),
-          await pkceChallenge(body.verifier),
-          now(),
-        )
-        .first<{ payload: string }>();
+        .bind(codeHash, challenge, now())
+        .first<{ payload: string; expires_at: number }>();
       if (!row)
         return c.json(
           { error: "Authorization code is invalid or expired" },
           400,
         );
-      const identity = await open(row.payload, options.secret(c));
+      let identity: Identity;
+      try {
+        // Bind the ciphertext to this exact one-time code and deadline. A write
+        // to the isolated handshake DB cannot transplant another session payload.
+        identity = await open(row.payload, options.secret(c), {
+          codeHash,
+          challenge,
+          expiresAt: row.expires_at,
+        });
+      } catch {
+        return c.json(
+          { error: "Authorization code is invalid or expired" },
+          400,
+        );
+      }
       const user = await options.authenticate(c, identity.cookie);
       if (!user || user.id !== identity.user.id)
         return c.json({ error: "Session expired" }, 401);

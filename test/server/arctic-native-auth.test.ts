@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { pkceChallenge } from "../../article-reader/SyncServer/native-auth";
 import { createTestUser } from "./helpers";
 
@@ -16,6 +16,17 @@ describe("native Google authorization handshake", () => {
       "testpassword123",
       "Native OAuth",
     );
+  });
+  beforeEach(async () => {
+    // Revocation tests intentionally destroy their session. Each case gets a new
+    // real signed session, independent of the Worker test pool's storage mode.
+    const signedIn = await SELF.fetch(`${origin}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: origin },
+      body: JSON.stringify({ email: user.email, password: user.password }),
+    });
+    expect(signedIn.status).toBe(200);
+    user.sessionCookie = signedIn.headers.get("set-cookie")!.split(";")[0]!;
   });
   async function start() {
     const response = await SELF.fetch(
@@ -148,6 +159,70 @@ describe("native Google authorization handshake", () => {
     expect(callback.searchParams.get("state")).toBe(state);
     expect(callback.searchParams.get("error")).toBe("sign_in_failed");
     expect(callback.searchParams.has("code")).toBe(false);
+  });
+  it("rejects cross-site form login without consuming the native code", async () => {
+    const code = await finish();
+    const body = JSON.stringify({ code, verifier });
+    const crossSite = await SELF.fetch(`${prefix}/exchange`, {
+      method: "POST",
+      headers: {
+        Origin: "https://attacker.example",
+        "Content-Type": "text/plain",
+      },
+      body,
+    });
+    expect(crossSite.status).toBe(403);
+    expect(crossSite.headers.has("set-cookie")).toBe(false);
+    const crossSiteJSON = await SELF.fetch(`${prefix}/exchange`, {
+      method: "POST",
+      headers: {
+        Origin: "https://attacker.example",
+        "Content-Type": "application/json",
+      },
+      body,
+    });
+    expect(crossSiteJSON.status).toBe(403);
+    const plain = await SELF.fetch(`${prefix}/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body,
+    });
+    expect(plain.status).toBe(415);
+    expect((await exchange(code)).status).toBe(200);
+  });
+  it("rejects a ciphertext transplanted into another authorization code", async () => {
+    const victimCode = await finish();
+    const controlledCode = await finish();
+    const victim = await env.ARCTIC_DATABASE.prepare(
+      "SELECT payload FROM native_auth_codes WHERE code_hash = ?",
+    )
+      .bind(await pkceChallenge(victimCode))
+      .first<{ payload: string }>();
+    await env.ARCTIC_DATABASE.prepare(
+      "UPDATE native_auth_codes SET payload = ? WHERE code_hash = ?",
+    )
+      .bind(victim!.payload, await pkceChallenge(controlledCode))
+      .run();
+    expect((await exchange(controlledCode)).status).toBe(400);
+  });
+  it("rejects a stored PKCE challenge changed to an attacker's verifier", async () => {
+    const code = await finish();
+    const attackerVerifier = "a".repeat(43);
+    await env.ARCTIC_DATABASE.prepare(
+      "UPDATE native_auth_codes SET challenge = ? WHERE code_hash = ?",
+    )
+      .bind(await pkceChallenge(attackerVerifier), await pkceChallenge(code))
+      .run();
+    expect((await exchange(code, attackerVerifier)).status).toBe(400);
+  });
+  it("rejects a stored expiry that was extended after code issuance", async () => {
+    const code = await finish();
+    await env.ARCTIC_DATABASE.prepare(
+      "UPDATE native_auth_codes SET expires_at = expires_at + 3600000 WHERE code_hash = ?",
+    )
+      .bind(await pkceChallenge(code))
+      .run();
+    expect((await exchange(code)).status).toBe(400);
   });
   it("rejects malformed requests before storing a handshake", async () => {
     expect(

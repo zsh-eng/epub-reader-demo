@@ -80,12 +80,17 @@ The additional native handshake is:
    `DELETE ... WHERE code_hash = ? AND challenge = ? AND expires_at > ? RETURNING`
    consumes it atomically. Wrong proof does not consume a legitimate code.
    Exchange checks the underlying session again, so intervening logout is honored.
-5. Only the HTTPS exchange response contains the signed session cookie. The
-   response is not cached and the app stores the credential in Keychain.
+5. Exchange requires JSON and rejects a supplied cross-site Origin before
+   consuming a code. This prevents a browser form from installing an attacker's
+   account cookie. Native URLSession may omit Origin. Only the HTTPS exchange
+   response contains the signed session cookie; it is not cached, and the app
+   stores the credential in Keychain.
 
 Migration `0002_native_auth.sql` creates the short-lived flow/code tables in
 Arctic D1. Stored code values are SHA-256 hashes. Session payloads use AES-GCM
 with a key derived from the existing server auth secret and a fresh nonce.
+The code hash, PKCE challenge and expiry are authenticated with the ciphertext.
+Changing these fields or transplanting a payload to another code fails closed.
 Rotating that secret invalidates pending native handshakes. Expired rows are
 cleared when a new flow starts. Browser and native handoff responses use
 `no-store` and `no-referrer`. No token appears in the app callback URL.
