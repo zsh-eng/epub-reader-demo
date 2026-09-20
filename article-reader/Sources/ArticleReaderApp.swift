@@ -105,6 +105,9 @@ struct LibraryView: View {
   @State private var confirmDelete = false
   @State private var browsers = BrowserPool()
   @State private var headerHeight: CGFloat = 48
+  @State private var libraryViewport: CGRect = .zero
+  @State private var searchViewport: CGRect = .zero
+  @State private var visibleRows: Set<PreloadRow> = []
   @AppStorage("reader-palette") private var paletteName = "System"
   private let navigationBarHeight: CGFloat = 44
 
@@ -165,6 +168,16 @@ struct LibraryView: View {
               .disabled(!store.isFixtureTaggingHeld)
               .accessibilityIdentifier("finish-test-tagging")
             }
+          }.font(.caption2).padding(4).background(.thinMaterial)
+        }
+      }
+      .overlay(alignment: .bottomLeading) {
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-preloading") {
+          VStack(alignment: .leading) {
+            Text(preloadURLs.map(\.lastPathComponent).joined(separator: ","))
+            .accessibilityIdentifier("preload-requested")
+            Text(browsers.readyReaderURLs.map(\.lastPathComponent).joined(separator: ","))
+            .accessibilityIdentifier("preload-ready")
           }.font(.caption2).padding(4).background(.thinMaterial)
         }
       }
@@ -254,10 +267,57 @@ struct LibraryView: View {
     }
   }
 
+  /// Preload the rows the user can see, then their nearest two neighbors. Lazy
+  /// stack appearance is not visibility: it includes rows outside the viewport.
   private var preloadURLs: [URL] {
-    let copied = clipboard.url.map { [$0] } ?? []
-    let saved = store.articles.filter { $0.saved && $0.isArchived != true }.map(\.url)
-    return Array((copied + saved.filter { !copied.contains($0) }).prefix(2))
+    guard scenePhase == .active, selected == nil, !showingOnboarding,
+      !showingTaggingSettings, !choosingImport, editingTags == nil
+    else { return [] }
+    let articles = searching ? matches : matches(in: folder)
+    let visibleIndices = articles.indices.filter {
+      visibleRows.contains(
+        PreloadRow(articleID: articles[$0].id, folder: folder, search: searching))
+    }
+    var urls = visibleIndices.map { articles[$0].url }
+    // The paste suggestion has its own URL and may not exist in the library.
+    if let copied = clipboard.url, !searching, !urls.contains(copied) { urls.append(copied) }
+    for distance in 1...2 {
+      for index in visibleIndices {
+        for neighbor in [index - distance, index + distance]
+        where articles.indices.contains(neighbor) {
+          let url = articles[neighbor].url
+          if !urls.contains(url) { urls.append(url) }
+        }
+      }
+    }
+    return Array(urls.prefix(10))
+  }
+
+  private struct PreloadRow: Hashable {
+    let articleID: UUID
+    let folder: ArticleFolder
+    let search: Bool
+  }
+
+  private struct RowVisibility: Equatable {
+    let row: PreloadRow
+    let visible: Bool
+  }
+
+  private func visibility(
+    _ geometry: GeometryProxy, article: SavedArticle, in item: ArticleFolder, search: Bool
+  ) -> RowVisibility {
+    let row = PreloadRow(articleID: article.id, folder: item, search: search)
+    let viewport = search ? searchViewport : libraryViewport
+    let overlap = geometry.frame(in: .global).intersection(viewport)
+    let visible =
+      folder == item && searching == search && !viewport.isEmpty
+      && !overlap.isNull && overlap.width > 1 && overlap.height > 1
+    return RowVisibility(row: row, visible: visible)
+  }
+
+  private func recordVisibility(_ value: RowVisibility) {
+    if value.visible { visibleRows.insert(value.row) } else { visibleRows.remove(value.row) }
   }
 
   private var folderItems: [ArticleFolder] {
@@ -376,6 +436,11 @@ struct LibraryView: View {
             searchResults
           }
         }
+        .onGeometryChange(for: CGRect.self) {
+          $0.frame(in: .global)
+        } action: {
+          searchViewport = $0
+        }
         .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
       }
       .opacity(searching ? 1 : 0)
@@ -438,6 +503,14 @@ struct LibraryView: View {
             headerHeight = $0
           }
       }
+      .onGeometryChange(for: CGRect.self) { geometry in
+        let frame = geometry.frame(in: .global)
+        return CGRect(
+          x: frame.minX, y: frame.minY + headerHeight,
+          width: frame.width, height: max(0, frame.height - headerHeight))
+      } action: {
+        libraryViewport = $0
+      }
     }
   }
 
@@ -481,6 +554,14 @@ struct LibraryView: View {
           }
         }
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: compact ? 16 : 24))
+        .onGeometryChange(for: RowVisibility.self) {
+          visibility($0, article: article, in: item, search: false)
+        } action: {
+          recordVisibility($0)
+        }
+        .onDisappear {
+          visibleRows.remove(PreloadRow(articleID: article.id, folder: item, search: false))
+        }
         if compact {
           Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
             .padding(.leading, 88).padding(.trailing, 16)
@@ -500,7 +581,8 @@ struct LibraryView: View {
   }
 
   private var searchResults: some View {
-    LazyVStack(alignment: .leading, spacing: 0) {
+    let item = folder
+    return LazyVStack(alignment: .leading, spacing: 0) {
       if matches.isEmpty {
         VStack(spacing: 10) {
           Image(systemName: "magnifyingglass").font(.system(size: 26, weight: .light))
@@ -512,6 +594,14 @@ struct LibraryView: View {
       }
       ForEach(matches) { article in
         articleButton(article) { ArticleSearchRow(article: article, query: query) }
+          .onGeometryChange(for: RowVisibility.self) {
+            visibility($0, article: article, in: item, search: true)
+          } action: {
+            recordVisibility($0)
+          }
+          .onDisappear {
+            visibleRows.remove(PreloadRow(articleID: article.id, folder: item, search: true))
+          }
         Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
           .padding(.leading, 88).padding(.trailing, 16)
       }
