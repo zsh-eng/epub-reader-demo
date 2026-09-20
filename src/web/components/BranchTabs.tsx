@@ -1,65 +1,116 @@
 import * as stylex from "@stylexjs/stylex";
 import { Tabs } from "@base-ui/react/tabs";
-import { useMemo, useState } from "react";
-import type { Branch, Worktree } from "../../shared/protocol";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { RegisteredRepository } from "../../shared/protocol";
 import { tokens, ui } from "../theme.stylex";
-import { CommandDialog } from "./Controls";
+import { BranchPicker, type BranchEntry } from "./BranchPicker";
 import { Icon } from "./Icon";
 import { distinctLabels } from "../data/tab-labels";
 
 export function BranchTabs({
-  branches,
-  worktrees,
+  repositories,
+  activeRepositoryId,
   activeBranch,
   repo,
   error,
   onBranch,
   onWorktree,
+  onAddRepository,
+  onRemoveRepository,
+  onRefresh,
   pickerOpen,
   onPickerOpenChange,
 }: {
-  branches: Branch[];
-  worktrees: Worktree[];
+  repositories: RegisteredRepository[];
+  activeRepositoryId: string | null;
   activeBranch: string | null;
   repo?: string;
   error: string | null;
-  onBranch(name: string): void;
-  onWorktree(path: string): void;
+  onBranch(name: string, repositoryId: string): void;
+  onWorktree(path: string, repositoryId: string): void;
+  onAddRepository(path: string): Promise<unknown>;
+  onRemoveRepository(id: string): Promise<unknown>;
+  onRefresh(): Promise<unknown>;
   pickerOpen: boolean;
   onPickerOpenChange(open: boolean): void;
 }) {
   const [opened, setOpened] = useState<string[]>([]);
-  const entries = useMemo(
-    () => [
-      ...branches.map((branch) => ({
-        key: `branch:${branch.name}`,
-        label: branch.name,
-        path: branch.worktreePath,
-        head: branch.head,
-        run: () => onBranch(branch.name),
-      })),
-      ...worktrees
-        .filter((tree) => !tree.bare && (!tree.branch || tree.branch === "Detached HEAD"))
-        .map((tree) => ({
-          key: `tree:${tree.path}`,
-          label: `Detached · ${tree.head.slice(0, 7)}`,
-          path: tree.path,
-          head: tree.head,
-          run: () => onWorktree(tree.path),
+  const initialized = useRef(false);
+  const lastActive = useRef<string | null>(null);
+  const entries = useMemo<BranchEntry[]>(
+    () =>
+      repositories.flatMap((repository) => [
+        ...repository.branches.map((branch) => ({
+          key: JSON.stringify([repository.id, "branch", branch.name]),
+          repositoryId: repository.id,
+          label: branch.name,
+          path: branch.worktreePath,
+          head: branch.head,
+          run: () => onBranch(branch.name, repository.id),
         })),
-    ],
-    [branches, worktrees, onBranch, onWorktree],
+        ...repository.worktrees
+          .filter((tree) => !tree.bare && (!tree.branch || tree.branch === "Detached HEAD"))
+          .map((tree) => ({
+            key: JSON.stringify([repository.id, "worktree", tree.path]),
+            repositoryId: repository.id,
+            label: `Detached · ${tree.head.slice(0, 7)}`,
+            path: tree.path,
+            head: tree.head,
+            run: () => onWorktree(tree.path, repository.id),
+          })),
+      ]),
+    [repositories, onBranch, onWorktree],
   );
-  const active = activeBranch ? `branch:${activeBranch}` : `tree:${repo}`;
-  const labels = distinctLabels(
-    entries.map((entry) => ({ label: entry.label, qualifier: entry.path ?? repo ?? "Repository" })),
+  const active = JSON.stringify([
+    activeRepositoryId,
+    activeBranch ? "branch" : "worktree",
+    activeBranch ?? repo,
+  ]);
+  const repositoryLabels = distinctLabels(
+    repositories.map((repository) => ({
+      label: repository.name,
+      qualifier: repository.path.split("/").slice(0, -1).join("/"),
+    })),
   );
-  const labelFor = (key: string) => labels[entries.findIndex((entry) => entry.key === key)];
-  // Keep existing checkouts visible; other branches can be opened from the picker.
-  const visible = entries.filter(
-    (entry, index) => index < 5 || entry.path || entry.key === active || opened.includes(entry.key),
-  );
-  if (!entries.length && !error) return null;
+  const labelFor = (entry: BranchEntry) => {
+    const index = repositories.findIndex((repository) => repository.id === entry.repositoryId);
+    return repositories.length > 1 ? `${repositoryLabels[index]} / ${entry.label}` : entry.label;
+  };
+  useEffect(() => {
+    const seed = !initialized.current && entries.length > 0;
+    const changed = lastActive.current !== active;
+    if (entries.length) initialized.current = true;
+    lastActive.current = entries.length ? active : null;
+    setOpened((current) => {
+      const available = new Set(entries.map((entry) => entry.key));
+      let next = current.filter((key) => available.has(key));
+      if (seed) {
+        next = entries
+          .filter(
+            (entry, index) =>
+              entry.repositoryId === repositories[0]?.id && (index < 5 || entry.path),
+          )
+          .slice(0, 31)
+          .map((entry) => entry.key);
+      }
+      if (changed && available.has(active) && !next.includes(active) && next.length < 32)
+        next.push(active);
+      return next.length === current.length && next.every((key, index) => key === current[index])
+        ? current
+        : next;
+    });
+  }, [active, entries, repositories]);
+  const visible = opened.flatMap((key) => {
+    const entry = entries.find((candidate) => candidate.key === key);
+    return entry ? [entry] : [];
+  });
+  const close = (entry: BranchEntry) => {
+    if (visible.length <= 1) return;
+    const index = visible.indexOf(entry);
+    const next = visible[index + 1] ?? visible[index - 1];
+    setOpened((current) => current.filter((key) => key !== entry.key));
+    if (entry.key === active && next) next.run();
+  };
   return (
     <div {...stylex.props(styles.row)}>
       <Tabs.Root
@@ -69,27 +120,46 @@ export function BranchTabs({
       >
         <Tabs.List aria-label="Branches and worktrees" {...stylex.props(styles.list)}>
           {visible.map((entry) => (
-            <Tabs.Tab
-              key={entry.key}
-              value={entry.key}
-              aria-controls="review-workspace"
-              title={
-                entry.path
-                  ? `${entry.label}\nWorktree: ${entry.path}`
-                  : `${entry.label}\nCommit ${entry.head.slice(0, 7)} · no worktree`
-              }
-              {...stylex.props(styles.tab, entry.key === active && styles.active)}
-            >
-              <Icon name="branch" size={14} />
-              <span {...stylex.props(styles.name)}>{labelFor(entry.key)}</span>
-              {entry.path && (
-                <span
-                  aria-label="Existing worktree"
-                  title="Existing worktree"
-                  {...stylex.props(styles.dot)}
-                />
-              )}
-            </Tabs.Tab>
+            <div key={entry.key} {...stylex.props(styles.tabGroup)}>
+              <Tabs.Tab
+                value={entry.key}
+                aria-label={labelFor(entry)}
+                aria-controls="review-workspace"
+                onKeyDown={(event) => {
+                  if (event.key === "Delete" || event.key === "Backspace") {
+                    event.preventDefault();
+                    close(entry);
+                  }
+                }}
+                title={
+                  entry.path
+                    ? `${entry.label}\nWorktree: ${entry.path}`
+                    : `${entry.label}\nCommit ${entry.head.slice(0, 7)} · no worktree`
+                }
+                {...stylex.props(styles.tab, entry.key === active && styles.active)}
+              >
+                <Icon name="branch" size={14} />
+                <span {...stylex.props(styles.name)}>{labelFor(entry)}</span>
+                {entry.path && (
+                  <span
+                    aria-label="Existing worktree"
+                    title="Existing worktree"
+                    {...stylex.props(styles.dot)}
+                  />
+                )}
+              </Tabs.Tab>
+              <button
+                type="button"
+                disabled={visible.length <= 1}
+                tabIndex={-1}
+                aria-label={`Close ${labelFor(entry)}`}
+                title={`Close ${labelFor(entry)}`}
+                onClick={() => close(entry)}
+                {...stylex.props(styles.close)}
+              >
+                <Icon name="close" size={11} />
+              </button>
+            </div>
           ))}
         </Tabs.List>
       </Tabs.Root>
@@ -106,21 +176,20 @@ export function BranchTabs({
           Branches unavailable
         </span>
       )}
-      <CommandDialog
-        title="Branches"
-        searchLabel="Search branches"
+      <BranchPicker
+        repositories={repositories}
+        entries={entries}
         open={pickerOpen}
         onOpenChange={onPickerOpenChange}
-        commands={entries.map((entry) => ({
-          id: entry.key,
-          label: labelFor(entry.key) ?? entry.label,
-          run: () => {
-            setOpened((current) =>
-              [...current.filter((key) => key !== entry.key), entry.key].slice(-20),
-            );
-            entry.run();
-          },
-        }))}
+        onAddRepository={onAddRepository}
+        onRemoveRepository={onRemoveRepository}
+        onRefresh={onRefresh}
+        onSelect={(entry) => {
+          if (!opened.includes(entry.key) && opened.length >= 32)
+            return "You have 32 branch tabs open. Close a tab before opening another.";
+          setOpened((current) => (current.includes(entry.key) ? current : [...current, entry.key]));
+          entry.run();
+        }}
       />
     </div>
   );
@@ -136,6 +205,19 @@ const styles = stylex.create({
     borderBottomColor: tokens.border,
     paddingInline: 8,
     gap: 4,
+  },
+  tabGroup: { display: "flex", alignItems: "center", flexShrink: 0 },
+  close: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 18,
+    height: 22,
+    borderWidth: 0,
+    borderRadius: 3,
+    cursor: "pointer",
+    backgroundColor: { default: "transparent", ":hover": tokens.hover },
+    color: tokens.muted,
   },
   root: { minWidth: 0, flex: "1" },
   list: { display: "flex", gap: 2, overflowX: "auto", scrollbarWidth: "thin" },

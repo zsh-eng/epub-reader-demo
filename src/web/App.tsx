@@ -136,7 +136,11 @@ export function App({
     return { kind: "worktree", repo: repository.path };
   }, [state.session?.repository, state.historyRef, branchHead]);
   const workspaceKey = state.session
-    ? `${state.session.repository.path}:${state.activeBranch ?? "detached"}`
+    ? JSON.stringify([
+        state.activeRepositoryId,
+        state.activeBranch ? "branch" : "worktree",
+        state.activeBranch ?? state.session.repository.path,
+      ])
     : "";
   const sourceLabel =
     browseSource?.kind === "commit"
@@ -286,19 +290,41 @@ export function App({
   const [headRef, setHeadRef] = useState("HEAD");
   const [rangeOpen, setRangeOpen] = useState(false);
   const viewer = useRef<CodeViewHandle<Annotation, undefined>>(null);
-  const reviewScroll = useRef(0);
+  const reviewScroll = useRef(new Map<string, number>());
+  const reviewScope = JSON.stringify([state.activeRepositoryId, workspaceKey, state.comparison]);
+  const previousRepositories = useRef(new Set<string>());
+  useEffect(() => {
+    const current = new Set(state.repositories.map((repository) => repository.id));
+    for (const id of previousRepositories.current) {
+      if (current.has(id)) continue;
+      fileWorkspace.forgetRepository(id);
+      for (const scope of reviewScroll.current.keys())
+        if (JSON.parse(scope)[0] === id) reviewScroll.current.delete(scope);
+    }
+    previousRepositories.current = current;
+  }, [fileWorkspace, state.repositories]);
+  const restoringScroll = useRef(true);
+  const reviewId = state.review?.id;
   const explicitReveal = useRef(false);
   useEffect(() => {
     if (fileState.active !== "changes") return;
     if (explicitReveal.current) {
       explicitReveal.current = false;
+      restoringScroll.current = false;
       return;
     }
-    const frame = requestAnimationFrame(() =>
-      viewer.current?.scrollTo({ type: "position", position: reviewScroll.current }),
-    );
-    return () => cancelAnimationFrame(frame);
-  }, [fileState.active]);
+    if (!reviewId) return;
+    restoringScroll.current = true;
+    const position = reviewScroll.current.get(reviewScope) ?? 0;
+    const frame = requestAnimationFrame(() => {
+      viewer.current?.scrollTo({ type: "position", position });
+      restoringScroll.current = false;
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      restoringScroll.current = true;
+    };
+  }, [fileState.active, reviewScope, reviewId]);
   const metadataRows = useRef(new Map<string, HTMLDivElement>());
   const filterRef = useRef<HTMLInputElement>(null);
   const findRef = useRef<HTMLInputElement>(null);
@@ -452,7 +478,6 @@ export function App({
     items,
   ]);
 
-  const reviewId = state.review?.id;
   const options = useMemo<CodeViewReactOptions<Annotation, undefined>>(
     () => ({
       theme: activeTheme.pierreTheme,
@@ -1216,31 +1241,49 @@ export function App({
     </div>
   );
 
+  const branchTabs = gitAvailable && (
+    <BranchTabs
+      repositories={state.repositories}
+      activeRepositoryId={state.activeRepositoryId}
+      activeBranch={state.activeBranch}
+      repo={state.session?.repository.path}
+      error={state.branchesError}
+      onBranch={(name, repositoryId) => void controller.selectBranch(name, repositoryId)}
+      onWorktree={(path, repositoryId) => void controller.selectWorktree(path, repositoryId)}
+      onAddRepository={controller.addRepository}
+      onRemoveRepository={controller.removeRepository}
+      onRefresh={controller.refreshRepositories}
+      pickerOpen={branchPickerOpen}
+      onPickerOpenChange={setBranchPickerOpen}
+    />
+  );
+  if (!state.session && !state.repositories.length && state.status === "idle" && !state.error)
+    return (
+      <div {...stylex.props(styles.app)}>
+        {branchTabs}
+        <div {...stylex.props(styles.emptyRepositories)}>
+          <p>Add a repository to start.</p>
+          <button {...stylex.props(ui.button)} onClick={() => setBranchPickerOpen(true)}>
+            Choose repositories
+          </button>
+        </div>
+      </div>
+    );
+
   return (
     <div
       {...stylex.props(styles.app)}
       data-theme={activeTheme.id}
       data-sidebar-visible={sidebarVisible}
       data-selected-branch={state.activeBranch ?? ""}
+      data-selected-repository={state.activeRepositoryId ?? ""}
       data-selected-commit={loadedCommit}
       data-review-id={state.review?.id ?? ""}
       data-review-status={state.status}
       data-file-count={state.files.length}
       data-active-file={activeFile?.path ?? ""}
     >
-      {gitAvailable && (
-        <BranchTabs
-          branches={state.branches}
-          worktrees={state.session?.worktrees ?? []}
-          activeBranch={state.activeBranch}
-          repo={state.session?.repository.path}
-          error={state.branchesError}
-          onBranch={(name) => void controller.selectBranch(name)}
-          onWorktree={(path) => void controller.selectWorktree(path)}
-          pickerOpen={branchPickerOpen}
-          onPickerOpenChange={setBranchPickerOpen}
-        />
-      )}
+      {branchTabs}
       <ThemePicker open={themePickerOpen} onOpenChange={setThemePickerOpen} />
       {definitions && (
         <SymbolPicker
@@ -1685,10 +1728,15 @@ export function App({
               )}
               {items.length > 0 ? (
                 <CodeView
-                  key={state.review?.id}
+                  key={`${reviewScope}:${state.review?.id}`}
                   ref={viewer}
                   onScroll={(position) => {
-                    if (fileState.active === "changes") reviewScroll.current = position;
+                    if (fileState.active === "changes" && !restoringScroll.current) {
+                      reviewScroll.current.delete(reviewScope);
+                      reviewScroll.current.set(reviewScope, position);
+                      while (reviewScroll.current.size > 256)
+                        reviewScroll.current.delete(reviewScroll.current.keys().next().value!);
+                    }
                   }}
                   items={items}
                   selectedLines={selection}
@@ -1975,6 +2023,16 @@ const styles = stylex.create({
     isolation: "isolate",
   },
   helpButton: { fontSize: 10, minHeight: 20, paddingInline: 7, paddingBlock: 0 },
+  emptyRepositories: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: "1",
+    color: tokens.muted,
+    fontFamily: tokens.ui,
+    fontSize: 13,
+  },
   workspace: { display: "flex", flex: "1", minHeight: 0 },
   reviewSurface: { display: "flex", flexDirection: "column", flex: "1", minHeight: 0, minWidth: 0 },
   hiddenSurface: { display: "none" },
