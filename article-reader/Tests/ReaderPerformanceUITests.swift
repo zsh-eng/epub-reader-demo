@@ -58,6 +58,27 @@ final class ReaderPerformanceUITests: XCTestCase {
     showReader(app)
     XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
     capture(app, "warm-redirected-reader")
+    let bookmark = app.buttons["reader-save"]
+    if bookmark.value as? String == "Not saved" { bookmark.tap() }
+    XCTAssertEqual(bookmark.value as? String, "Saved")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    XCTAssertTrue(app.buttons["article-redirect-story"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["article-story"].exists)
+    app.buttons["folder-history"].tap()
+    XCTAssertTrue(app.buttons["article-redirect-story"].exists)
+    XCTAssertFalse(app.buttons["article-story"].exists)
+
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline"]
+    app.launchEnvironment = [:]
+    app.launch()
+    let card = app.buttons["article-redirect-story"]
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    card.tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    XCTAssertFalse(app.alerts["Could not open article"].exists)
+    capture(app, "redirected-reader-saved-offline")
   }
 
   @MainActor private func showReader(_ app: XCUIApplication) {
