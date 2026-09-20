@@ -1,3 +1,4 @@
+import { createArcticNativeAuthRoutes } from "@server/lib/arctic-native-auth";
 import { createArcticRoutes } from "../article-reader/SyncServer/routes";
 import { createSyncHonoRoutes } from "@zsh-eng/local-sync/hono";
 import { createAuth } from "@server/lib/auth";
@@ -211,6 +212,7 @@ const route = app
       return c.json({ error: "Failed to delete file" }, 500);
     }
   })
+  .route("/arctic/auth", createArcticNativeAuthRoutes())
   .route(
     "/arctic",
     createArcticRoutes<AppEnv>({

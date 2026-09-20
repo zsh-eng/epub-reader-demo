@@ -32,9 +32,75 @@ the credential. Keep a reference to the old account until network work ends.
 Do not reuse an actor, journal path, cursor or outbox for a different account.
 If network sign-out fails, clear the device credential and report that server
 session revocation is pending; do not claim that all devices were signed out.
-Google-only users need a web authentication/code-exchange flow or an account
-password before this initial email/password path is useful. No client secret
+Google users can use the native browser handshake below. No client secret
 belongs in the iOS app. The Jev key is never part of sync.
+
+## Native Google sign-in
+
+`NativeGoogleSignIn` uses `ASWebAuthenticationSession` with an ephemeral browser
+session. Retain the helper while awaiting sign-in and pass the actual presenting
+window. The app integration calls:
+
+```swift
+let helper = NativeGoogleSignIn(anchor: window)
+let identity = try await helper.signIn(server: URL(string: "https://reader.zsheng.app")!)
+try SessionKeychain.save(identity)
+// Only now select this account's repository and show signed-in state.
+```
+
+Keep the returned credential out of URL handlers, UserDefaults, article metadata
+and logs. Cancellation closes the browser or stops the code exchange. A task
+cancellation or a failed Keychain write must not show a connected account.
+
+The fixed native callback is **`articles://auth/callback`**. The existing
+`articles` scheme in `article-reader/Info.plist` already covers it. The helper
+checks the scheme, host, path, one matching random state, and exactly one code.
+It rejects extra state/code duplicates and failed provider responses. Let
+ASWebAuthenticationSession receive this callback; do not parse it as an article
+in a general `.onOpenURL` path.
+
+Google continues to return to the existing **HTTPS** callback:
+`https://reader.zsheng.app/api/auth/callback/google`. This is the redirect URI
+that must be allowed on the existing Google web OAuth client. No separate native
+Google client ID or new custom-scheme Google redirect is required. Better Auth
+still owns Google state, its PKCE, provider validation and account linking.
+
+The additional native handshake is:
+
+1. The app generates independent 32-byte random state and verifier values.
+   It opens `/api/arctic/auth/start?state=...&challenge=...` with the S256
+   challenge; the verifier never enters a URL or the browser.
+2. Start calls the existing Better Auth HTTP handler, preserving its middleware
+   and rate limits. It saves a ten-minute flow in Arctic D1, sets a Secure,
+   HttpOnly, SameSite=Lax flow cookie, and forwards the provider's OAuth cookies.
+3. `/finish` requires that flow cookie and a valid Better Auth session. It
+   consumes the flow, creates a 60-second code, and redirects to the fixed native
+   callback with only code/state. `/failure` returns only state/error.
+4. Native `/exchange` sends the code and verifier over HTTPS. A single
+   `DELETE ... WHERE code_hash = ? AND challenge = ? AND expires_at > ? RETURNING`
+   consumes it atomically. Wrong proof does not consume a legitimate code.
+   Exchange checks the underlying session again, so intervening logout is honored.
+5. Only the HTTPS exchange response contains the signed session cookie. The
+   response is not cached and the app stores the credential in Keychain.
+
+Migration `0002_native_auth.sql` creates the short-lived flow/code tables in
+Arctic D1. Stored code values are SHA-256 hashes. Session payloads use AES-GCM
+with a key derived from the existing server auth secret and a fresh nonce.
+Rotating that secret invalidates pending native handshakes. Expired rows are
+cleared when a new flow starts. Browser and native handoff responses use
+`no-store` and `no-referrer`. No token appears in the app callback URL.
+
+The local integration test exercises real Better Auth Google initiation and
+session validation, then supplies a local authenticated browser fixture in place
+of Google's remote consent/callback. It tests code replay, concurrent exchange,
+wrong verifier, flow cookie binding, expiry, revocation and fixed error callback.
+The Swift tests cover the RFC 7636 S256 vector, random attempt separation and
+callback validation. Actual Google consent and iPhone browser presentation still
+require a device check after the backend is deployed.
+
+```
+bun run test --run test/server/arctic-native-auth.test.ts
+```
 
 ## Native store integration
 
@@ -144,5 +210,7 @@ Sources checked 2026-09-20:
 - [Better Auth cookies](https://better-auth.com/docs/concepts/cookies)
 - [Better Auth bearer support](https://better-auth.com/docs/plugins/bearer)
   (not required for the signed-cookie native transport).
+- [Apple ASWebAuthenticationSession](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession/)
+- [Better Auth OAuth](https://better-auth.com/docs/concepts/oauth)
 - [Apple URLSession cookie storage](https://developer.apple.com/documentation/foundation/urlsessionconfiguration/httpcookiestorage)
 - [Cloudflare R2 Worker bindings](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)

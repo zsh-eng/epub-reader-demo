@@ -60,6 +60,36 @@ public actor HTTPRemote: SyncRemote {
     }
     return ArcticSession(accountID: user.id, email: user.email, server: server, cookie: cookie)
   }
+  /// The only native code exchange endpoint. The single-use code is not a session token.
+  static func exchangeNativeCode(server: URL, code: String, verifier: String) async throws
+    -> ArcticSession
+  {
+    try validateServer(server)
+    let config = URLSessionConfiguration.ephemeral
+    config.httpCookieStorage = nil
+    config.httpShouldSetCookies = false
+    let session = URLSession(configuration: config, delegate: NoRedirects(), delegateQueue: nil)
+    defer { session.invalidateAndCancel() }
+    var request = URLRequest(url: server.appending(path: "api/arctic/auth/exchange"))
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.httpBody = try JSONEncoder().encode(["code": code, "verifier": verifier])
+    let (data, response) = try await session.data(for: request)
+    let http = try checked(response)
+    struct Exchanged: Decodable {
+      struct User: Decodable {
+        let id: String
+        let email: String
+      }
+      let user: User
+    }
+    let user = try JSONDecoder().decode(Exchanged.self, from: data).user
+    guard let cookie = sessionCookie(http, server: server), !user.id.isEmpty else {
+      throw SyncFailure.invalidResponse
+    }
+    return ArcticSession(accountID: user.id, email: user.email, server: server, cookie: cookie)
+  }
+
   public func pull(deviceID: String, cursor: Int64, head: Int64?) async throws -> SyncPull {
     var query = [
       URLQueryItem(name: "cursor", value: String(cursor)),
