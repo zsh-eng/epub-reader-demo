@@ -48,6 +48,9 @@
 		5318E6A664FC8619C6F7F2C8 /* Resources/annotations.js in Resources */ = {isa = PBXBuildFile; fileRef = 864C6F1CB9FB13DA8613C8A4; };
 		84495D52545D0C659817B828 /* Tests/AnnotationUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D601DAE211C479CFDF0063E1; };
 		F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 215E1D8DEDCDE9DD2F568E99; };
+		038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 092EA8ED3C38F268ED5CD960; };
+		ABC000000000000000000003 /* ArcticSync in Frameworks */ = {isa = PBXBuildFile; productRef = ABC000000000000000000002; };
+		C152409799A6DD136ABDE906 /* Tests/ReaderPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDE499DF7195A9AF2D03CBFA; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -118,6 +121,8 @@
 		864C6F1CB9FB13DA8613C8A4 /* Resources/annotations.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/annotations.js; sourceTree = "<group>"; };
 		D601DAE211C479CFDF0063E1 /* Tests/AnnotationUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/AnnotationUITests.swift; sourceTree = "<group>"; };
 		215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PreviewImageWorkLimit.swift; sourceTree = "<group>"; };
+		092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleSyncRepository.swift; sourceTree = "<group>"; };
+		DDE499DF7195A9AF2D03CBFA /* Tests/ReaderPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ReaderPerformanceUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -133,6 +138,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5B47F688E8A0191D55DD50A /* SwiftSoup in Frameworks */,
+				ABC000000000000000000003 /* ArcticSync in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -172,6 +178,7 @@
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
 				AC0000000000000000000002 /* LibraryCards.swift */,
 				215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */,
+				092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */,
 				3AC7E3F6AF5D3349C2B82840 /* Sources/AnnotationStore.swift */,
 				E2C4040636A8440F5AB50B3E /* Sources/ReaderAnnotations.swift */,
 				864C6F1CB9FB13DA8613C8A4 /* Resources/annotations.js */,
@@ -182,6 +189,7 @@
 				EE2F7E402A6FC3D835C95F2F /* Resources/unwall-domains.json */,
 				0D915EFA215768CF91F0230D /* Resources/Fixtures */,
 				D601DAE211C479CFDF0063E1 /* Tests/AnnotationUITests.swift */,
+				DDE499DF7195A9AF2D03CBFA /* Tests/ReaderPerformanceUITests.swift */,
 				39719A39DAB06EC51E5CE446 /* Tests/ArticleReaderUITests.swift */,
 				FBDC4F23F93125BBEEAE800C /* Products */,
 			);
@@ -237,6 +245,7 @@
 			name = ArticleReader;
 			packageProductDependencies = (
 				93AD1EDAFAFA81C496F7C2F3 /* SwiftSoup */,
+				ABC000000000000000000002 /* ArcticSync */,
 			);
 			productName = ArticleReader;
 			productReference = 8BCD5BC4CDFDF0918087C782 /* ArticleReader.app */;
@@ -284,6 +293,7 @@
 			mainGroup = B28B7AF69320201D1CF206EB;
 			packageReferences = (
 				582681C2EAE02B3F3D399C0C /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+				ABC000000000000000000001 /* ArcticSync */,
 			);
 			productRefGroup = FBDC4F23F93125BBEEAE800C /* Products */;
 			projectDirPath = "";
@@ -349,6 +359,7 @@
 				55D4734A40FDC1796310CFA3 /* Tests/ArticleTaggingUITests.swift in Sources */,
 				F81AAC2FFA4C7815EFD9149A /* Tests/ArticleOnboardingUITests.swift in Sources */,
 				84495D52545D0C659817B828 /* Tests/AnnotationUITests.swift in Sources */,
+				C152409799A6DD136ABDE906 /* Tests/ReaderPerformanceUITests.swift in Sources */,
 				D7AA01FA220D01B26420ADDF /* Tests/ArticleReaderUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -373,6 +384,7 @@
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,
 				F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */,
+				038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */,
 				5BF86EF416D56DD5760525E5 /* Sources/AnnotationStore.swift in Sources */,
 				E8E6F3EAD101B0744972C82F /* Sources/ReaderAnnotations.swift in Sources */,
 				3753BC55C93758D0B1748C68 /* Sources/ArticleStore.swift in Sources */,
@@ -607,7 +619,19 @@
 		};
 /* End XCRemoteSwiftPackageReference section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		ABC000000000000000000001 /* ArcticSync */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Sync;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
+		ABC000000000000000000002 /* ArcticSync */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = ABC000000000000000000001;
+			productName = ArcticSync;
+		};
 		AC0000000000000000000014 /* SwiftSoup */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 582681C2EAE02B3F3D399C0C /* XCRemoteSwiftPackageReference "SwiftSoup" */;

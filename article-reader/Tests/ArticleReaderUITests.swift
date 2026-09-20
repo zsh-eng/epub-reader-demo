@@ -773,9 +773,17 @@ final class ArticleReaderUITests: XCTestCase {
     waitForExpectations(timeout: 15)
     XCTAssertFalse(requested.label.split(separator: ",").contains("cached-0"))
     let lastCard = app.buttons["article-cached-11"]
-    for _ in 0..<4 where !lastCard.exists || !lastCard.isHittable { app.swipeUp() }
+    for _ in 0..<6 {
+      if lastCard.exists && lastCard.isHittable
+        && lastCard.frame.midY < app.searchFields.firstMatch.frame.minY - 60
+      {
+        break
+      }
+      app.swipeUp()
+    }
     XCTAssertTrue(lastCard.isHittable)
     lastCard.tap()
+    XCTAssertTrue(app.buttons["reader-notes"].waitForExistence(timeout: 5))
     XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
     app.navigationBars.buttons.element(boundBy: 0).tap()
     app.searchFields.firstMatch.tap()

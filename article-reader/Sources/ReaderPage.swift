@@ -35,11 +35,11 @@ struct ReaderPage: View {
       }
       .onAppear {
         updateAppearance()
-        store.visit(browser.sourceURL)
+        store.visit(browser.libraryURL)
       }
       .onChange(of: browser.committedURL) { _, url in
         nearEnd = false
-        if let url { store.visit(url) }
+        if url != nil { store.visit(browser.libraryURL) }
       }
       .onChange(of: browser.isReader) { _, _ in nearEnd = false }
       .onChange(of: fontSize, updateAppearance)

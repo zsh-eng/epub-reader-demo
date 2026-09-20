@@ -405,11 +405,14 @@ struct TaggingNotice: Identifiable {
   /// Write bytes before advertising a download. Recheck identity after the disk
   /// write so deleting a link during extraction cannot recreate that record.
   func saveReader(_ html: String, for url: URL) async {
-    guard let article = articles.first(where: { $0.url == url && $0.saved }) else { return }
+    guard !Task.isCancelled,
+      let article = articles.first(where: { $0.url == url && $0.saved })
+    else { return }
     let file = downloadFile(article.id)
     do {
       try await Task.detached { try Data(html.utf8).write(to: file, options: .atomic) }.value
-      guard let index = articles.firstIndex(where: { $0.id == article.id }) else {
+      guard !Task.isCancelled else { return }
+      guard let index = articles.firstIndex(where: { $0.id == article.id && $0.saved }) else {
         try? FileManager.default.removeItem(at: file)
         return
       }

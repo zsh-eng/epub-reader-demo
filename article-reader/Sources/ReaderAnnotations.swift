@@ -140,6 +140,7 @@ private struct AnnotationEditor: View {
   let annotation: ReaderAnnotation
   let browser: ArticleBrowser
   @State private var text: String
+  @State private var quoteHeight: CGFloat = 60
   @State private var errorMessage: String?
   @FocusState private var focused: Bool
   @Environment(\.dismiss) private var dismiss
@@ -154,8 +155,13 @@ private struct AnnotationEditor: View {
     VStack(alignment: .leading, spacing: 16) {
       ScrollView {
         AnnotationQuote(quote: annotation.quote.exact).padding(18)
+          .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+          } action: {
+            quoteHeight = $0
+          }
       }
-      .frame(maxHeight: 170)
+      .frame(height: min(170, max(60, quoteHeight)))
       .background(ArcticBrand.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 20))
       ZStack(alignment: .topLeading) {
         if text.isEmpty {
