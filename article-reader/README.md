@@ -6,6 +6,7 @@ the same signing team for **ArticleReader** and **ArticleShare**, then register/
 enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 `ArticleReader.entitlements`. The simulator build can use ad-hoc signing.
 
+- First launch offers three optional setup pages: Share, paste permission, and Jev automatic tagging. Replay them from **Sort → Getting started**.
 - Copy an HTTP(S) link and enter Articles. Choose **Open** or **Save** in the clipboard banner above Search.
 - Wide image cards fade into the adaptive card surface, with title, description,
   favicon and domain below the image. Cards load Open Graph metadata, with standard metadata
@@ -75,10 +76,12 @@ associated-domain file.
 
 ## Two quick entry paths
 
-- **Share → Articles → Save article:** the extension writes the URL to its local
-  shared inbox. On app entry, Articles imports queued links into the library,
-  skips duplicates, and loads previews. An inbox file is removed only after the
-  library write succeeds. No publisher request is needed to save from Share.
+- **Share → Articles → Save:** the extension first shows the link, then reveals
+  its title and image in an expanding sheet. Cancel and Save stay at the bottom;
+  saving never waits for a publisher. Save writes an immutable local inbox event
+  before optional Jev tagging starts. Done is available immediately. A separate
+  immutable completion event carries tags, so dismissal cannot lose the saved link
+  or race with the main app consuming it. The app resumes incomplete work on entry.
 - **Copy link → open Articles:** on app activation, detect a probable web URL,
   then read it through the normal iOS paste-permission flow. A small Open/Save/Dismiss
   banner appears and the copied page takes the first preload slot. Open uses that
@@ -91,6 +94,42 @@ Allow Paste in the prompt is not a permanent grant. For ongoing access, choose
 **Settings → Apps → Articles → Paste from Other Apps → Allow**.
 The app does not bypass the OS permission or change the clipboard. Preloading
 visits the copied URL (and Unwall where configured) before Open is tapped.
+
+## Automatic tags and onboarding
+
+Onboarding uses native illustrations that follow the system appearance. Page two
+opens the app's Settings page; it cannot grant or inspect iOS paste permission.
+The paste setting may appear only after the first cross-app paste prompt. All
+pages can be skipped, including key setup, without blocking local reading.
+
+**Sort → Automatic tags** verifies, replaces, or removes a user's Jev API key.
+The key stays in the shared iOS Keychain with device-only accessibility; both app
+and extension need the shared keychain-access-group entitlement when signing.
+No developer key is bundled. Enabling tagging sends saved article titles and
+metadata descriptions directly to TypeSafe over HTTPS. Full article bodies and
+browsing-only history are not sent. The extension uses a title when no description
+is available. **Sort → Tag existing articles** runs the same saved-only queue.
+
+`Shared/ArticleTagging.swift` defines 12 fixed categories and makes one request
+with independent yes/no questions. The initial threshold of 0.75 is provisional,
+not a measured accuracy guarantee. The model is pinned to `jev-1.13.0`. Tagging
+identity includes the bounded input, category descriptions, model and threshold;
+completed empty results are stored too. Changes in input can trigger a new request.
+
+Manual additions and rejected automatic tags persist across retries. Results are
+merged into the latest record; deletion, unsave, new metadata, key replacement,
+and explicit re-tagging invalidate stale work. Network failures leave work pending
+until a later foreground activation. Invalid credentials pause the queue and show
+an error in Automatic tags. Tag completion has a finite border-beam highlight and
+an Edit tags action. Reduce Motion uses static/fade feedback.
+
+Simulator tests use separate article files and fixture classifications, never a
+real Jev key or request. `-test-onboarding -reset-onboarding` exercises first run;
+`-test-key-success` and `-test-key-failure` exercise setup with in-memory credentials.
+`-test-tagging`, `-test-tagging-delayed`, `-test-tagging-held`, and
+`-test-tagging-failure` cover persistence, controlled in-flight edits, and interrupted
+requests. The DEBUG-only reserved `fixture.example` share preview
+shows deterministic metadata; real publisher preview checks remain separate.
 
 ## Import Chrome's reading list
 

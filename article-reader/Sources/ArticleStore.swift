@@ -51,7 +51,17 @@ struct TaggingNotice: Identifiable {
   private var taggingDeferred = Set<UUID>()
   private var taggingWaitingForForeground = false
   private var fixtureTaggingFailed = false
+  private var fixtureTaggingContinuation: CheckedContinuation<Void, Never>?
   var isTagging: Bool { taggingTask != nil }
+  var isFixtureTaggingHeld: Bool { fixtureTaggingContinuation != nil }
+
+  /// UI tests release an in-flight response only after the edit under test.
+  func finishFixtureTagging() {
+    guard fixtureTagging else { return }
+    let continuation = fixtureTaggingContinuation
+    fixtureTaggingContinuation = nil
+    continuation?.resume()
+  }
   private let fileURL: URL
   private let downloads: URL
 
@@ -417,6 +427,9 @@ struct TaggingNotice: Identifiable {
           let tags: [String]
           if self.fixtureTagging {
             // Exercise the real durable result path without keys or network in UI tests.
+            if ProcessInfo.processInfo.arguments.contains("-test-tagging-held") {
+              await withCheckedContinuation { self.fixtureTaggingContinuation = $0 }
+            }
             if ProcessInfo.processInfo.arguments.contains("-test-tagging-delayed") {
               try await Task.sleep(for: .seconds(5))
             }
@@ -502,6 +515,11 @@ struct TaggingNotice: Identifiable {
     try JSONEncoder().encode(updated).write(to: fileURL, options: .atomic)
     let removed = Set(articles.map(\.id)).subtracting(updated.map(\.id))
     articles = updated
+    if let notice = taggingNotice,
+      !updated.contains(where: { $0.id == notice.articleID && $0.saved })
+    {
+      taggingNotice = nil
+    }
     for id in removed { try? FileManager.default.removeItem(at: downloadFile(id)) }
   }
 }

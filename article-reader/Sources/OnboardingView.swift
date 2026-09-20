@@ -16,19 +16,18 @@ struct OnboardingView: View {
     VStack(spacing: 0) {
       header
       ScrollView {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: 16) {
           illustration
             .frame(maxWidth: .infinity)
           pageContent
         }
         .padding(.horizontal, 28)
-        .padding(.top, 18)
-        .padding(.bottom, 28)
+        .padding(.top, 8)
+        .padding(.bottom, 16)
         .frame(maxWidth: 560)
         .frame(maxWidth: .infinity)
         .id(page)
-        .transition(.opacity)
-        .accessibilityIdentifier("onboarding-page-\(page + 1)")
+        .transition(reduceMotion ? .identity : .opacity)
       }
       .scrollDismissesKeyboard(.interactively)
       footer
@@ -50,7 +49,7 @@ struct OnboardingView: View {
         .accessibilityLabel("Step \(page + 1) of 3")
     }
     .padding(.horizontal, 28)
-    .padding(.vertical, 20)
+    .padding(.vertical, 12)
   }
 
   @ViewBuilder private var illustration: some View {
@@ -65,10 +64,12 @@ struct OnboardingView: View {
     switch page {
     case 0:
       heading("KEEP WHAT MOVES YOU", "A good read.\nA place to keep it.")
-      Text("Find something worth your time? Save it from Safari or another app, then read it here.")
+      Text("Save articles from Safari and other apps. Read them here when you’re ready.")
         .foregroundStyle(.secondary)
-      instruction(number: "1", text: "Tap the Share button.", symbol: "square.and.arrow.up")
-      instruction(number: "2", text: "Choose Articles, then Save.", symbol: "text.book.closed")
+      VStack(spacing: 12) {
+        instruction(number: "1", text: "Tap the Share button.", symbol: "square.and.arrow.up")
+        instruction(number: "2", text: "Choose Articles, then Save.", symbol: "text.book.closed")
+      }
       Text("Can’t see Articles? Swipe to More in the app row. Add Articles to your favourites.")
         .font(.footnote).foregroundStyle(.secondary)
     case 1:
@@ -103,16 +104,18 @@ struct OnboardingView: View {
     default:
       heading("A LITTLE AUTOMAGIC", "Save the story.\nWe’ll find its place.")
       Text(
-        "When you save an article, Jev can add tags like Engineering or Attention & wonder. You can always change them."
+        "Jev adds tags to saved articles. Change or remove them at any time."
       )
       .foregroundStyle(.secondary)
       VStack(alignment: .leading, spacing: 12) {
         JevKeyField(key: $credentials.key)
           .accessibilityIdentifier("onboarding-key")
-        Text("Optional · Bring your own Jev API key")
+        Text("Optional · Your own Jev API key")
           .font(.caption).foregroundStyle(.secondary)
-        Link("Get a key from TypeSafe", destination: URL(string: "https://typesafe.ai")!)
-          .font(.subheadline.weight(.medium))
+        Link(
+          "Get a key from TypeSafe", destination: URL(string: "https://console.typesafe.ai/keys")!
+        )
+        .font(.subheadline.weight(.medium))
         JevPrivacyNote()
         if let error = credentials.error {
           Text(error).font(.subheadline).accessibilityIdentifier("onboarding-key-error")
@@ -122,7 +125,7 @@ struct OnboardingView: View {
   }
 
   private var footer: some View {
-    VStack(spacing: 12) {
+    VStack(spacing: 8) {
       HStack(spacing: 5) {
         ForEach(0..<3) { index in
           Capsule()
@@ -135,7 +138,7 @@ struct OnboardingView: View {
         if page > 0 {
           Button {
             credentials.cancel()
-            withAnimation(transition) { page -= 1 }
+            changePage(to: page - 1)
           } label: {
             Image(systemName: "arrow.left")
               .frame(width: 52, height: 52)
@@ -145,8 +148,10 @@ struct OnboardingView: View {
         }
         Button {
           if page < 2 {
-            withAnimation(transition) { page += 1 }
+            changePage(to: page + 1)
           } else {
+            UIApplication.shared.sendAction(
+              #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             credentials.save(onSuccess: onFinish)
           }
         } label: {
@@ -181,6 +186,10 @@ struct OnboardingView: View {
     .frame(maxWidth: 560)
     .frame(maxWidth: .infinity)
     .background(ReaderTheme.background)
+  }
+
+  private func changePage(to value: Int) {
+    if reduceMotion { page = value } else { withAnimation(transition) { page = value } }
   }
 
   private func heading(_ eyebrow: String, _ title: String) -> some View {
@@ -270,7 +279,7 @@ struct TaggingSettingsView: View {
           }
         }
         Section {
-          Link("Get a Jev API key", destination: URL(string: "https://typesafe.ai")!)
+          Link("Get a Jev API key", destination: URL(string: "https://console.typesafe.ai/keys")!)
         }
       }
       .navigationTitle("Automatic tags")
@@ -306,7 +315,7 @@ private struct JevPrivacyNote: View {
   var body: some View {
     Label {
       Text(
-        "Your key stays in the iOS Keychain. Saved article titles and descriptions are sent to TypeSafe for tagging. Full article text is not sent."
+        "Your key stays in the iOS Keychain. TypeSafe receives saved article titles and descriptions, not full text."
       )
       .fixedSize(horizontal: false, vertical: true)
     } icon: {

@@ -10,52 +10,51 @@ struct ShareOnboardingIllustration: View {
         Spacer()
         Image(systemName: "square.and.arrow.up")
           .font(.system(size: 16, weight: .medium))
-          .padding(8)
+          .padding(5)
           .background(ReaderTheme.foreground.opacity(0.08), in: Circle())
       }
       .foregroundStyle(.secondary)
-      .padding(.horizontal, 20).padding(.vertical, 12)
+      .padding(.horizontal, 20).padding(.vertical, 8)
       Divider().opacity(0.4)
       HStack(alignment: .center, spacing: 16) {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
           Text("ON THE ART OF NOTICING")
             .font(.system(size: 8, weight: .semibold)).tracking(1.6)
             .foregroundStyle(.secondary)
           Text("There is more\nto the everyday.")
-            .font(.system(size: 26, weight: .medium, design: .serif))
+            .font(.system(size: 22, weight: .medium, design: .serif))
             .tracking(-0.8)
           Capsule().fill(ReaderTheme.border.opacity(0.4)).frame(width: 94, height: 3)
-          Capsule().fill(ReaderTheme.border.opacity(0.3)).frame(width: 70, height: 3)
         }
         Spacer(minLength: 0)
         Image(systemName: "sun.horizon")
           .font(.system(size: 44, weight: .ultraLight))
           .foregroundStyle(.secondary)
       }
-      .padding(20)
+      .padding(.horizontal, 20).padding(.vertical, 12)
       HStack(spacing: 18) {
-        VStack(spacing: 7) {
+        VStack(spacing: 5) {
           Image(systemName: "text.book.closed.fill")
-            .font(.system(size: 23))
-            .frame(width: 50, height: 50)
+            .font(.system(size: 20))
+            .frame(width: 38, height: 38)
             .foregroundStyle(ReaderTheme.background)
-            .background(ReaderTheme.foreground, in: RoundedRectangle(cornerRadius: 13))
+            .background(ReaderTheme.foreground, in: RoundedRectangle(cornerRadius: 10))
           Text("Articles").font(.system(size: 10, weight: .medium))
         }
-        VStack(spacing: 7) {
+        VStack(spacing: 5) {
           Image(systemName: "ellipsis")
-            .font(.system(size: 23))
-            .frame(width: 50, height: 50)
-            .background(ReaderTheme.background, in: RoundedRectangle(cornerRadius: 13))
+            .font(.system(size: 20))
+            .frame(width: 38, height: 38)
+            .background(ReaderTheme.background, in: RoundedRectangle(cornerRadius: 10))
           Text("More").font(.system(size: 10)).foregroundStyle(.secondary)
         }
         Spacer()
         Image(systemName: "arrow.turn.down.left")
-          .font(.system(size: 26, weight: .ultraLight))
+          .font(.system(size: 22, weight: .ultraLight))
           .foregroundStyle(.secondary)
           .padding(.trailing, 18)
       }
-      .padding(.horizontal, 20).padding(.vertical, 16)
+      .padding(.horizontal, 20).padding(.vertical, 10)
       .frame(maxWidth: .infinity)
       .background(ReaderTheme.secondary)
     }
@@ -118,8 +117,8 @@ struct TaggingOnboardingIllustration: View {
   @State private var replay = 0
 
   var body: some View {
-    VStack(spacing: 8) {
-      VStack(alignment: .leading, spacing: 12) {
+    VStack(spacing: 4) {
+      VStack(alignment: .leading, spacing: 10) {
         HStack {
           Text("HOW AUTOMATIC TAGS WORK")
             .font(.system(size: 8, weight: .semibold)).tracking(1.3)
@@ -130,8 +129,6 @@ struct TaggingOnboardingIllustration: View {
         Text("How to pay attention.")
           .font(.system(size: 25, weight: .medium, design: .serif))
           .tracking(-0.8)
-        Text("Small ways to see more in the everyday.")
-          .font(.system(size: 12)).foregroundStyle(.secondary)
         Divider().opacity(0.4)
         ZStack(alignment: .leading) {
           Label("Finding its place…", systemImage: "sparkles")
@@ -154,7 +151,7 @@ struct TaggingOnboardingIllustration: View {
       .accessibilityLabel(
         "Example: How to pay attention. Automatic tags: Attention and wonder; Life and meaning.")
       HStack {
-        Text("A preview. No API request.")
+        Text("An example of automatic tags.")
           .font(.caption2).foregroundStyle(.secondary)
         Spacer()
         Button {

@@ -60,7 +60,10 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
     let model = ShareSaveModel(context: context)
     self.model = model
     super.init(rootView: ShareSaveView(model: model))
-    model.heightDidChange = { [weak self] height in self?.resize(to: height) }
+    model.heightDidChange = { [weak self] height in
+      // Resolve detents after SwiftUI finishes the current layout pass.
+      DispatchQueue.main.async { self?.resize(to: height) }
+    }
   }
 
   @MainActor required dynamic init?(coder aDecoder: NSCoder) { fatalError("Use init(context:)") }
@@ -68,6 +71,7 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
   override func viewDidLoad() {
     super.viewDidLoad()
     view.backgroundColor = .systemBackground
+    view.accessibilityIdentifier = "share-content"
     model.start()
   }
 
@@ -83,10 +87,18 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
     guard abs(height - contentHeight) > 1 else { return }
     contentHeight = height
     guard let sheet = sheetPresentationController else { return }
+    let updateDetent = {
+      sheet.detents = [
+        .custom(identifier: .init("save-article")) { context in
+          min(height, context.maximumDetentValue)
+        }
+      ]
+      sheet.selectedDetentIdentifier = .init("save-article")
+    }
     if UIAccessibility.isReduceMotionEnabled {
-      sheet.invalidateDetents()
+      updateDetent()
     } else {
-      sheet.animateChanges { sheet.invalidateDetents() }
+      sheet.animateChanges(updateDetent)
     }
   }
 }
@@ -104,6 +116,8 @@ private final class ShareSaveModel: ObservableObject {
   @Published var message: String?
   @Published var error: String?
   var heightDidChange: ((CGFloat) -> Void)?
+  private var bodyHeight: CGFloat = 0
+  private var footerHeight: CGFloat = 80
 
   private let context: NSExtensionContext
   private let metadataProvider = LPMetadataProvider()
@@ -118,6 +132,16 @@ private final class ShareSaveModel: ObservableObject {
   }
 
   func start() { linkTask = Task { await readLink() } }
+
+  func measureBody(_ height: CGFloat) {
+    bodyHeight = height
+    heightDidChange?(bodyHeight + footerHeight)
+  }
+
+  func measureFooter(_ height: CGFloat) {
+    footerHeight = height
+    heightDidChange?(bodyHeight + footerHeight)
+  }
 
   private func readLink() async {
     let items = context.inputItems as? [NSExtensionItem] ?? []
@@ -282,8 +306,6 @@ private final class ShareSaveModel: ObservableObject {
 private struct ShareSaveView: View {
   @ObservedObject var model: ShareSaveModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var bodyHeight: CGFloat = 0
-  @State private var footerHeight: CGFloat = 0
   @State private var completionGlowing = false
 
   private var reveal: AnyTransition {
@@ -325,17 +347,16 @@ private struct ShareSaveView: View {
         .padding(.top, 28)
         .padding(.bottom, 24)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-          GeometryReader { geometry in
-            Color.clear.preference(key: ShareBodyHeight.self, value: geometry.size.height)
-          }
+        .onGeometryChange(for: CGFloat.self) {
+          $0.size.height
+        } action: {
+          model.measureBody($0)
         }
       }
       .scrollBounceBehavior(.basedOnSize)
       footer
     }
     .background(Color(uiColor: .systemBackground))
-    .accessibilityIdentifier("share-content")
     .animation(
       reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.28, dampingFraction: 1),
       value: model.title
@@ -349,14 +370,6 @@ private struct ShareSaveView: View {
       reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.28, dampingFraction: 1),
       value: model.tagNames
     )
-    .onPreferenceChange(ShareBodyHeight.self) { height in
-      bodyHeight = height
-      model.heightDidChange?(height + footerHeight)
-    }
-    .onPreferenceChange(ShareFooterHeight.self) { height in
-      footerHeight = height
-      model.heightDidChange?(bodyHeight + height)
-    }
   }
 
   private var articleCard: some View {
@@ -446,10 +459,10 @@ private struct ShareSaveView: View {
     .padding(.top, 8)
     .padding(.bottom, 18)
     .background(Color(uiColor: .systemBackground))
-    .background {
-      GeometryReader { geometry in
-        Color.clear.preference(key: ShareFooterHeight.self, value: geometry.size.height)
-      }
+    .onGeometryChange(for: CGFloat.self) {
+      $0.size.height
+    } action: {
+      model.measureFooter($0)
     }
   }
 }
@@ -464,20 +477,10 @@ private struct ShareActionButtonStyle: ButtonStyle {
       .frame(maxWidth: .infinity, minHeight: 54)
       .foregroundStyle(primary ? Color(uiColor: .systemBackground) : Color.primary)
       .background(
-        primary ? Color.primary : Color(uiColor: .secondarySystemBackground), in: Capsule()
+        primary ? Color(uiColor: .label) : Color(uiColor: .secondarySystemBackground), in: Capsule()
       )
       .overlay { Capsule().strokeBorder(Color.primary.opacity(primary ? 0 : 0.12), lineWidth: 1) }
       .opacity(!isEnabled ? 0.4 : configuration.isPressed ? 0.7 : 1)
       .contentShape(Capsule())
   }
-}
-
-private struct ShareBodyHeight: PreferenceKey {
-  static let defaultValue: CGFloat = 0
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
-}
-
-private struct ShareFooterHeight: PreferenceKey {
-  static let defaultValue: CGFloat = 0
-  static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

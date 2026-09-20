@@ -6,7 +6,7 @@ final class ArticleTaggingUITests: XCTestCase {
   /// An unsave during classification must also leave no hidden tags in history.
   /// Re-save with the classifier disabled to inspect the persisted result.
   @MainActor func testUnsaveDuringTaggingDiscardsResult() {
-    let app = launchDelayedTagging()
+    let app = launchTagging()
     app.buttons["open-copied-link"].tap()
     let save = app.buttons["reader-save"]
     XCTAssertTrue(save.waitForExistence(timeout: 10))
@@ -15,6 +15,7 @@ final class ArticleTaggingUITests: XCTestCase {
     save.tap()
     XCTAssertEqual(save.value as? String, "Not saved")
     app.navigationBars.buttons.element(boundBy: 0).tap()
+    releaseResponse(in: app)
     waitForQueue("idle", in: app)
     XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
 
@@ -39,13 +40,14 @@ final class ArticleTaggingUITests: XCTestCase {
   }
 
   @MainActor func testDeleteDuringTaggingCannotRestoreArticle() {
-    let app = launchDelayedTagging()
+    let app = launchTagging()
     app.buttons["save-copied-link"].tap()
     waitForQueue("tagging", in: app)
     let card = app.buttons["article-story"]
     XCTAssertTrue(card.waitForExistence(timeout: 5))
     card.press(forDuration: 1)
     app.buttons["Remove link"].tap()
+    releaseResponse(in: app)
     waitForQueue("idle", in: app)
     XCTAssertFalse(card.exists)
     XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
@@ -59,7 +61,7 @@ final class ArticleTaggingUITests: XCTestCase {
   }
 
   @MainActor func testNetworkFailureResumesOnForeground() {
-    let app = launchDelayedTagging(failure: true)
+    let app = launchTagging(failure: true)
     app.buttons["save-copied-link"].tap()
     waitForQueue("tagging", in: app)
     waitForQueue("idle", in: app)
@@ -79,16 +81,25 @@ final class ArticleTaggingUITests: XCTestCase {
     XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
   }
 
-  @MainActor private func launchDelayedTagging(failure: Bool = false) -> XCUIApplication {
+  @MainActor private func launchTagging(failure: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [
-      "-ui-testing", "-reset-store", "-test-clipboard", "-test-tagging", "-test-tagging-delayed",
+      "-ui-testing", "-reset-store", "-test-clipboard", "-test-tagging",
+      failure ? "-test-tagging-delayed" : "-test-tagging-held",
     ]
     if failure { app.launchArguments.append("-test-tagging-failure") }
     app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
     app.launch()
     XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
     return app
+  }
+
+  @MainActor private func releaseResponse(in app: XCUIApplication) {
+    let release = app.buttons["finish-test-tagging"]
+    XCTAssertTrue(release.waitForExistence(timeout: 5))
+    let held = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: release)
+    wait(for: [held], timeout: 5)
+    release.tap()
   }
 
   @MainActor private func waitForQueue(_ state: String, in app: XCUIApplication) {

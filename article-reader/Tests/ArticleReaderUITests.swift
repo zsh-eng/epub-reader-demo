@@ -515,7 +515,14 @@ final class ArticleReaderUITests: XCTestCase {
     let save = app.buttons["share-save"]
     XCTAssertTrue(save.waitForExistence(timeout: 10), app.debugDescription)
     waitEnabled(save)
-    XCTAssertLessThan(app.otherElements["share-content"].frame.height, 400)
+    let footerY = save.frame.midY
+    let previewTitle = app.staticTexts["share-preview-title"]
+    XCTAssertTrue(previewTitle.waitForExistence(timeout: 5))
+    let revealed = expectation(
+      for: NSPredicate(format: "hittable == true"), evaluatedWith: previewTitle)
+    wait(for: [revealed], timeout: 5)
+    XCTAssertEqual(save.frame.midY, footerY, accuracy: 2)
+    XCTAssertLessThan(previewTitle.frame.maxY, save.frame.minY)
     capture(app, "08-share-extension")
     save.tap()
     let done = app.buttons["share-done"]

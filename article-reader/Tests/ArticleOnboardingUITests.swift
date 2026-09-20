@@ -7,7 +7,7 @@ final class ArticleOnboardingUITests: XCTestCase {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-test-onboarding", "-reset-onboarding", "-reset-store"]
     app.launch()
-    XCTAssertTrue(app.otherElements["onboarding-page-1"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["onboarding-next"].waitForExistence(timeout: 10))
     capture(app, "onboarding-share-light")
     app.buttons["onboarding-next"].tap()
     XCTAssertTrue(app.buttons["onboarding-open-settings"].waitForExistence(timeout: 5))
@@ -34,8 +34,10 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["onboarding-next"].waitForExistence(timeout: 10))
     capture(app, "onboarding-share-dark")
     app.buttons["onboarding-next"].tap()
+    XCTAssertTrue(app.buttons["onboarding-open-settings"].waitForExistence(timeout: 5))
     capture(app, "onboarding-paste-dark")
     app.buttons["onboarding-next"].tap()
+    XCTAssertTrue(app.secureTextFields.firstMatch.waitForExistence(timeout: 5))
     capture(app, "onboarding-tags-dark")
     app.terminate()
     app.launchArguments += ["-large-type"]
@@ -78,6 +80,38 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["folder-tag-Keep"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["folder-tag-Engineering"].exists)
     XCTAssertFalse(app.otherElements["tagging-notice"].exists)
+  }
+
+  @MainActor func testKeySetupFailureAndSuccess() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-test-onboarding", "-reset-onboarding", "-test-key-failure",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["onboarding-next"].waitForExistence(timeout: 10))
+    app.buttons["onboarding-next"].tap()
+    app.buttons["onboarding-next"].tap()
+    let field = app.secureTextFields.firstMatch
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    field.typeText("fixture-invalid-key")
+    app.buttons["onboarding-finish"].tap()
+    XCTAssertTrue(app.staticTexts["onboarding-key-error"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["folder-saved"].exists)
+    app.buttons["onboarding-skip"].tap()
+    XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
+    app.terminate()
+    app.launchArguments = [
+      "-ui-testing", "-test-onboarding", "-reset-onboarding", "-test-key-success",
+    ]
+    app.launch()
+    app.buttons["onboarding-next"].tap()
+    app.buttons["onboarding-next"].tap()
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    field.typeText("fixture-valid-key")
+    app.buttons["onboarding-finish"].tap()
+    XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
   }
 
   @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

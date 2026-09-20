@@ -150,9 +150,15 @@ struct LibraryView: View {
       }
       .overlay(alignment: .bottomTrailing) {
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-tagging") {
-          Text(store.isTagging ? "tagging" : "idle")
-          .font(.caption2).padding(4).background(.thinMaterial)
-          .accessibilityIdentifier("tagging-test-state")
+          HStack {
+            Text(store.isTagging ? "tagging" : "idle")
+            .accessibilityIdentifier("tagging-test-state")
+            if ProcessInfo.processInfo.arguments.contains("-test-tagging-held") {
+              Button("Finish tagging") { store.finishFixtureTagging() }
+              .disabled(!store.isFixtureTaggingHeld)
+              .accessibilityIdentifier("finish-test-tagging")
+            }
+          }.font(.caption2).padding(4).background(.thinMaterial)
         }
       }
       .sheet(isPresented: $testSharing, onDismiss: { store.importSharedLinks() }) {

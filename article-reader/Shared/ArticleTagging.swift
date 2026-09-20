@@ -166,6 +166,7 @@ enum JevError: LocalizedError {
 }
 
 struct JevClient {
+  private static let session = URLSession(configuration: .ephemeral)
   static let model = "jev-1.13.0"
   // Provisional selection threshold. Model probabilities are not measured accuracy.
   static let threshold = 0.75
@@ -218,7 +219,7 @@ struct JevClient {
     request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     request.httpBody = body
-    let (data, response) = try await URLSession.shared.data(for: request)
+    let (data, response) = try await session.data(for: request)
     guard let response = response as? HTTPURLResponse else { throw JevError.invalidResponse }
     if [401, 403].contains(response.statusCode) { throw JevError.invalidKey }
     guard (200..<300).contains(response.statusCode) else {
