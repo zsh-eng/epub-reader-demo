@@ -133,6 +133,55 @@ describe("review request ownership", () => {
     },
   );
 
+  test("comparison identity ignores key order and omitted false flags, but keeps inclusive ranges distinct", async () => {
+    const { controller, calls } = fixture();
+    await controller.initialize();
+    await controller.selectComparison({ head: B, kind: "range", base: A });
+    expect(controller.getSnapshot().status).toBe("ready");
+    const count = calls.length;
+    await controller.selectComparison({ kind: "range", base: A, head: B, includeBase: false });
+    expect(controller.getSnapshot().status).toBe("ready");
+    expect(calls.filter((call) => call.url === "/api/review")).toHaveLength(2);
+    expect(calls.length).toBeGreaterThanOrEqual(count);
+    await controller.selectComparison({ kind: "range", base: A, head: B, includeBase: true });
+    expect(controller.getSnapshot().review?.comparison).toEqual({
+      kind: "range",
+      base: A,
+      head: B,
+      includeBase: true,
+    });
+    expect(calls.filter((call) => call.url === "/api/review")).toHaveLength(3);
+    controller.dispose();
+  });
+
+  test("an inclusive range cannot accept an exclusive response", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { controller } = fixture({
+      review: async (comparison) =>
+        json(
+          response(
+            comparison.kind === "range" ? { ...comparison, includeBase: false } : comparison,
+          ),
+        ),
+    });
+    try {
+      await controller.initialize();
+      await controller.selectComparison({ kind: "range", base: A, head: B, includeBase: true });
+      expect(controller.getSnapshot().error).toContain("different comparison");
+      expect(logged).toHaveBeenCalledWith(
+        "Comparison response mismatch",
+        expect.objectContaining({
+          requested: expect.objectContaining({
+            comparison: expect.objectContaining({ includeBase: true }),
+          }),
+        }),
+      );
+    } finally {
+      controller.dispose();
+      logged.mockRestore();
+    }
+  });
+
   test("respects a declared initial commit in a Git repository", async () => {
     const { controller, calls } = fixture({
       initialComparison: { kind: "commit", commit: A },

@@ -500,21 +500,20 @@ export class ReviewService {
       comparison.kind === "working" ||
       comparison.kind === "unstaged" ||
       comparison.kind === "staged";
-    if (comparison.kind === "commit") {
-      head = await resolveCommit(repo, comparison.commit, signal);
+    const parentOrEmpty = async (commit: string) => {
       // The raw object retains real parents even when a shallow boundary hides them from log.
       const commitObject = (
-        await git(repo, ["cat-file", "commit", head], { signal, maxBytes: 1024 * 1024 })
+        await git(repo, ["cat-file", "commit", commit], { signal, maxBytes: 1024 * 1024 })
       )
         .toString("utf8")
         .split("\n\n", 1)[0]!;
       const parents = [...commitObject.matchAll(/^parent ([0-9a-f]+)$/gm)].map(
         (match) => match[1]!,
       );
-      base = parents[0] ?? (await emptyTree());
+      const parent = parents[0] ?? (await emptyTree());
       if (parents[0]) {
         try {
-          await git(repo, ["cat-file", "-e", `${base}^{tree}`], { signal, maxBytes: 1024 });
+          await git(repo, ["cat-file", "-e", `${parent}^{tree}`], { signal, maxBytes: 1024 });
         } catch {
           signal?.throwIfAborted();
           throw new HostError(
@@ -524,15 +523,25 @@ export class ReviewService {
           );
         }
       }
+      return { parent, root: !parents.length };
+    };
+    if (comparison.kind === "commit") {
+      head = await resolveCommit(repo, comparison.commit, signal);
+      const { parent, root } = await parentOrEmpty(head);
+      base = parent;
       args = [base, head];
-      label = `${head.slice(0, 8)} · ${parents.length ? "first parent" : "root commit"}`;
+      label = `${head.slice(0, 8)} · ${root ? "root commit" : "first parent"}`;
     } else if (comparison.kind === "range") {
       [base, head] = await Promise.all([
         resolveCommit(repo, comparison.base, signal),
         resolveCommit(repo, comparison.head, signal),
       ]);
+      const oldest = base;
+      if (comparison.includeBase) base = (await parentOrEmpty(base)).parent;
       args = [base, head];
-      label = `${base.slice(0, 8)} → ${head.slice(0, 8)}`;
+      label = comparison.includeBase
+        ? `${oldest.slice(0, 8)}…${head.slice(0, 8)} · inclusive`
+        : `${base.slice(0, 8)} → ${head.slice(0, 8)}`;
     } else if (comparison.kind === "unstaged") {
       base = "index";
       head = "worktree";
@@ -561,6 +570,7 @@ export class ReviewService {
         return {
           ...cached.response,
           comparison,
+          label,
           metrics: {
             ...cached.response.metrics,
             cacheHit: true,

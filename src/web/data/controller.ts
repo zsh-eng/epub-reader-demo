@@ -1,3 +1,4 @@
+import { comparisonKey } from "../../shared/protocol";
 import { useSyncExternalStore } from "react";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type {
@@ -276,7 +277,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     reviewAbort = new AbortController();
     cancelSources();
     update({ comparison, status: "loading", error: null });
-    const key = JSON.stringify([repo, comparison]);
+    const key = JSON.stringify([repo, comparisonKey(comparison)]);
     const cached = !force && immutableComparison(comparison) ? reviewCache.get(key) : undefined;
     if (cached) {
       publishReview(cached, generation, { requestMs: 0, parseMs: 0, cacheHit: true });
@@ -293,9 +294,16 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       if (!isCurrent(generation)) return;
       if (
         response.repo !== repo ||
-        JSON.stringify(response.comparison) !== JSON.stringify(comparison)
-      )
-        throw new Error("The server returned a different comparison.");
+        comparisonKey(response.comparison) !== comparisonKey(comparison)
+      ) {
+        console.error("Comparison response mismatch", {
+          requested: { repo, comparison },
+          received: { repo: response.repo, comparison: response.comparison },
+        });
+        throw new Error(
+          "The server returned a different comparison. Restart the server and reload this page if you have just updated the app.",
+        );
+      }
       const parseStart = performance.now();
       const parsed = await parse(response.patch);
       if (!isCurrent(generation)) return;

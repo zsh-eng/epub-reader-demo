@@ -48,10 +48,12 @@ function Graph({ row }: { row: GraphRow }) {
 export function HistoryPanel({
   commits,
   selected,
+  selectedRange,
   loading,
   hasMore,
   error,
   onSelect,
+  onSelectRange,
   onLoadMore,
   onWorking,
   working,
@@ -59,21 +61,38 @@ export function HistoryPanel({
 }: {
   commits: Commit[];
   selected?: string;
+  selectedRange?: { base: string; head: string };
   loading: boolean;
   hasMore: boolean;
   error: string | null;
   onSelect(commit: string): void;
+  onSelectRange?(oldest: string, newest: string): void;
   onLoadMore(): void;
   onWorking(): void;
   working: boolean;
   workingAvailable?: boolean;
 }) {
   const pendingSelection = useRef(selected);
+  const anchor = useRef(selected);
+  const rangeStart = commits.findIndex((commit) => commit.id === selectedRange?.head);
+  const rangeEnd = commits.findIndex((commit) => commit.id === selectedRange?.base);
+  const isSelected = (id: string, index: number) =>
+    selectedRange ? rangeStart >= 0 && index >= rangeStart && index <= rangeEnd : selected === id;
   useLayoutEffect(() => {
-    pendingSelection.current = selected;
-  }, [selected]);
-  const selectCommit = (id: string) => {
+    if (!selectedRange) {
+      pendingSelection.current = selected;
+      anchor.current = selected;
+    }
+  }, [selected, selectedRange]);
+  const selectCommit = (id: string, extend = false) => {
     pendingSelection.current = id;
+    const from = commits.findIndex((commit) => commit.id === anchor.current);
+    const to = commits.findIndex((commit) => commit.id === id);
+    if (extend && onSelectRange && from >= 0 && to >= 0) {
+      onSelectRange(commits[Math.max(from, to)]!.id, commits[Math.min(from, to)]!.id);
+      return;
+    }
+    anchor.current = id;
     onSelect(id);
   };
   const rows = useMemo(() => layoutHistory(commits), [commits]);
@@ -90,12 +109,12 @@ export function HistoryPanel({
   }, []);
   const start = Math.max(0, Math.floor(viewport.top / rowHeight) - 6);
   const end = Math.min(rows.length, Math.ceil((viewport.top + viewport.height) / rowHeight) + 6);
-  const selectRelative = (delta: number) => {
+  const selectRelative = (delta: number, extend: boolean) => {
     const index = commits.findIndex((commit) => commit.id === pendingSelection.current);
     const nextIndex = Math.max(0, Math.min(commits.length - 1, index + delta));
     const next = commits[nextIndex];
     if (next) {
-      selectCommit(next.id);
+      selectCommit(next.id, extend);
       container.current?.scrollTo({
         top: Math.max(0, nextIndex * rowHeight - viewport.height / 2),
       });
@@ -118,6 +137,7 @@ export function HistoryPanel({
           {...stylex.props(styles.working, working && styles.selected)}
           onClick={() => {
             pendingSelection.current = undefined;
+            anchor.current = undefined;
             onWorking();
           }}
           aria-pressed={working}
@@ -134,6 +154,7 @@ export function HistoryPanel({
         tabIndex={0}
         role="listbox"
         aria-label="Commits"
+        aria-multiselectable={!!onSelectRange}
         aria-activedescendant={
           rows.slice(start, end).some((row) => row.commit.id === selected)
             ? `commit-${selected}`
@@ -142,7 +163,7 @@ export function HistoryPanel({
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
-            selectRelative(event.key === "ArrowDown" ? 1 : -1);
+            selectRelative(event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
           }
         }}
         onScroll={(event) => {
@@ -158,12 +179,15 @@ export function HistoryPanel({
               id={`commit-${row.commit.id}`}
               key={row.commit.id}
               role="option"
-              aria-selected={selected === row.commit.id}
+              aria-selected={isSelected(row.commit.id, start + offset)}
               tabIndex={-1}
               title={`${row.commit.subject}\n${row.commit.id}\n${row.commit.author}`}
-              onClick={() => selectCommit(row.commit.id)}
+              onClick={(event) => selectCommit(row.commit.id, event.shiftKey)}
               className={
-                stylex.props(styles.commit, selected === row.commit.id && styles.selected).className
+                stylex.props(
+                  styles.commit,
+                  isSelected(row.commit.id, start + offset) && styles.selected,
+                ).className
               }
               style={{ top: (start + offset) * rowHeight }}
             >

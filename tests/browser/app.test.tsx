@@ -477,6 +477,32 @@ describe("graphical review", () => {
     await expect.element(page.getByText("2 / 2 hunks", { exact: true })).toBeVisible();
   });
 
+  test("shift-click selects an inclusive commit range and a plain click resets it", async () => {
+    const { controller } = await mountApp();
+    const history = page.getByRole("listbox", { name: "Commits" });
+    await history.getByRole("option").nth(0).click();
+    await history
+      .getByRole("option")
+      .nth(1)
+      .click({ modifiers: ["Shift"] });
+    await expect
+      .poll(() => controller.getSnapshot().comparison)
+      .toEqual({ kind: "range", base: secondCommit, head: firstCommit, includeBase: true });
+    await expect
+      .element(history.getByRole("option").nth(0))
+      .toHaveAttribute("aria-selected", "true");
+    await expect
+      .element(history.getByRole("option").nth(1))
+      .toHaveAttribute("aria-selected", "true");
+    await history.getByRole("option").nth(1).click();
+    await expect
+      .poll(() => controller.getSnapshot().comparison)
+      .toEqual({ kind: "commit", commit: secondCommit });
+    await expect
+      .element(history.getByRole("option").nth(0))
+      .toHaveAttribute("aria-selected", "false");
+  });
+
   test("creates and deletes an inline note without retaining an old annotation portal", async () => {
     const { controller } = await mountApp();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));

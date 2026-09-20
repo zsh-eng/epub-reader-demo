@@ -9,6 +9,7 @@ export const comparisonSchema = z.discriminatedUnion("kind", [
     kind: z.literal("range"),
     base: z.string().min(1).max(256),
     head: z.string().min(1).max(256),
+    includeBase: z.boolean().optional(),
   }),
   z.object({ kind: z.literal("patch"), path: z.string().min(1).max(4096) }),
   z.object({
@@ -18,6 +19,15 @@ export const comparisonSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 export type Comparison = z.infer<typeof comparisonSchema>;
+/** Stable wire identity. Object property order and an omitted false flag do not
+ * change the comparison. Inclusive ranges must remain distinct. */
+export function comparisonKey(value: Comparison): string {
+  const parsed = comparisonSchema.parse(value);
+  if (parsed.kind === "range")
+    return JSON.stringify({ ...parsed, includeBase: !!parsed.includeBase });
+  return JSON.stringify(parsed);
+}
+
 export const reviewRequestSchema = z.object({
   repo: z.string().min(1).max(4096),
   comparison: comparisonSchema,

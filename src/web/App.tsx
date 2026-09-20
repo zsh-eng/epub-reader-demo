@@ -1205,8 +1205,14 @@ export function App({
           >
             {gitAvailable && (
               <HistoryPanel
+                key={JSON.stringify([state.session?.repository.path, state.activeBranch])}
                 commits={state.history}
                 selected={state.comparison.kind === "commit" ? state.comparison.commit : undefined}
+                selectedRange={
+                  state.comparison.kind === "range" && state.comparison.includeBase
+                    ? state.comparison
+                    : undefined
+                }
                 working={state.comparison.kind === "working"}
                 workingAvailable={workingAvailable}
                 loading={state.historyLoading}
@@ -1215,6 +1221,15 @@ export function App({
                 onSelect={(commit) => {
                   fileWorkspace.select("changes");
                   void controller.selectComparison({ kind: "commit", commit });
+                }}
+                onSelectRange={(base, head) => {
+                  fileWorkspace.select("changes");
+                  void controller.selectComparison({
+                    kind: "range",
+                    base,
+                    head,
+                    includeBase: true,
+                  });
                 }}
                 onLoadMore={() => void controller.loadMoreHistory()}
                 onWorking={() => {

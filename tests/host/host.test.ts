@@ -160,6 +160,39 @@ describe("Git history and comparisons", () => {
       service.load({ repo, comparison: { kind: "commit", commit: "--output=bad" } }),
     ).rejects.toMatchObject({ code: "invalid-revision" });
   });
+  test("inclusive commit ranges include the oldest change and support root commits", async () => {
+    const repo = await repository();
+    const first = await commit(repo, "one\n", "first");
+    const second = await commit(repo, "two\n", "second");
+    const third = await commit(repo, "three\n", "third");
+    const service = new ReviewService();
+    const inclusive = await service.load({
+      repo,
+      comparison: { kind: "range", base: second, head: third, includeBase: true },
+    });
+    expect(inclusive.base).toBe(first);
+    expect(inclusive.patch).toContain("-one");
+    expect(inclusive.patch).toContain("+three");
+    const ordinary = await service.load({
+      repo,
+      comparison: { kind: "range", base: second, head: third },
+    });
+    expect(ordinary.base).toBe(second);
+    const singleRange = { kind: "range" as const, base: third, head: third, includeBase: true };
+    const samePatch = await service.load({ repo, comparison: singleRange });
+    expect(samePatch.comparison).toEqual(singleRange);
+    expect(samePatch.label).toContain("inclusive");
+    const singleCommit = { kind: "commit" as const, commit: third };
+    const cachedCommit = await service.load({ repo, comparison: singleCommit });
+    expect(cachedCommit.comparison).toEqual(singleCommit);
+    expect(cachedCommit.label).toContain("first parent");
+    const root = await service.load({
+      repo,
+      comparison: { kind: "range", base: first, head: third, includeBase: true },
+    });
+    expect(root.files[0]?.status).toBe("A");
+    expect(root.patch).toContain("+three");
+  });
   test("root commits and unborn worktrees are valid comparisons", async () => {
     const repo = await repository();
     await writeFile(join(repo, "fresh.txt"), "untracked\n");
