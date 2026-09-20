@@ -93,7 +93,7 @@ struct TaggingNotice: Identifiable {
     } catch { errorMessage = "Could not read saved links: \(error.localizedDescription)" }
   }
 
-  func add(_ text: String) throws {
+  func add(_ text: String, preview: ArticlePreview? = nil) throws {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     let candidate = trimmed.contains("://") ? trimmed : "https://" + trimmed
     guard let url = URL(string: candidate),
@@ -107,18 +107,20 @@ struct TaggingNotice: Identifiable {
       updated[index].isSaved = true
       updated[index].isArchived = false
       updated[index].savedAt = Date()
+      preview?.apply(to: &updated[index])
       try commit(updated)
       scheduleTagging()
       return
     }
     var article = SavedArticle(url: url, title: host)
+    preview?.apply(to: &article)
     article.isSaved = true
     article.savedAt = Date()
     var updated = articles
     updated.insert(article, at: 0)
     try commit(updated)
     scheduleTagging()
-    Task { await refreshPreview(article) }
+    if preview == nil { Task { await refreshPreview(article, reload: false) } }
   }
 
   var allTags: [String] {
@@ -169,7 +171,7 @@ struct TaggingNotice: Identifiable {
     do {
       try commit(updated)
       if let article = updated.first(where: { $0.url == url }), article.imageURL == nil {
-        Task { await refreshPreview(article) }
+        Task { await refreshPreview(article, reload: false) }
       }
     } catch { errorMessage = error.localizedDescription }
   }
@@ -336,7 +338,7 @@ struct TaggingNotice: Identifiable {
     Task {
       for article in added {
         guard articles.contains(where: { $0.id == article.id }) else { continue }
-        await refreshPreview(article)
+        await refreshPreview(article, reload: false)
       }
     }
     let duplicates = entries.count - added.count
@@ -345,16 +347,12 @@ struct TaggingNotice: Identifiable {
         ? " Skipped \(duplicates) \(duplicates == 1 ? "duplicate" : "duplicates")." : "")
   }
 
-  func refreshPreview(_ article: SavedArticle) async {
+  func refreshPreview(_ article: SavedArticle, reload: Bool = true) async {
     do {
-      let preview = try await ArticlePreview.fetch(article.url)
+      let preview = try await ArticlePreviewCache.shared.load(article.url, reload: reload)
       guard let index = articles.firstIndex(where: { $0.id == article.id }) else { return }
       var updated = articles
-      updated[index].title = preview.title
-      updated[index].subtitle = preview.subtitle
-      updated[index].imageURL = preview.imageURL
-      updated[index].faviconURL = preview.faviconURL
-      updated[index].previewFailed = false
+      preview.apply(to: &updated[index])
       try commit(updated)
       scheduleTagging()
       for url in [preview.imageURL, preview.faviconURL].compactMap({ $0 }) {
@@ -555,11 +553,39 @@ enum ArticleError: LocalizedError {
   }
 }
 
-struct ArticlePreview {
+/// Paste, save and speculative loading share one metadata request. The cache is
+/// small and process-local; saved metadata and image bytes remain durable.
+actor ArticlePreviewCache {
+  static let shared = ArticlePreviewCache()
+  private var previews: [URL: ArticlePreview] = [:]
+  private var pending: [URL: Task<ArticlePreview, Error>] = [:]
+
+  func load(_ url: URL, reload: Bool = false) async throws -> ArticlePreview {
+    if let task = pending[url] { return try await task.value }
+    if !reload, let preview = previews[url] { return preview }
+    let task = Task { try await ArticlePreview.fetch(url) }
+    pending[url] = task
+    defer { pending[url] = nil }
+    let preview = try await task.value
+    if previews.count >= 32, let first = previews.keys.first { previews[first] = nil }
+    previews[url] = preview
+    return preview
+  }
+}
+
+struct ArticlePreview: Sendable {
   let title: String
   let subtitle: String
   let imageURL: URL?
   let faviconURL: URL?
+
+  func apply(to article: inout SavedArticle) {
+    article.title = title
+    article.subtitle = subtitle
+    article.imageURL = imageURL
+    article.faviconURL = faviconURL
+    article.previewFailed = false
+  }
 
   static func fetch(_ url: URL) async throws -> Self {
     let html: String
@@ -624,8 +650,9 @@ enum TestMode {
   }
   static func fixture(for url: URL) -> URL? {
     guard enabled, url.host == "fixture.example" else { return nil }
+    let name = url.lastPathComponent
     return Bundle.main.url(
-      forResource: url.path == "/frame" ? "frame" : (url.path == "/next" ? "next" : "story"),
+      forResource: ["frame", "next", "short", "long"].contains(name) ? name : "story",
       withExtension: "html",
       subdirectory: "Fixtures")
   }

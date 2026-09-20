@@ -460,10 +460,19 @@ struct WebSurface: UIViewRepresentable {
     browsers[url] = browser
     return browser
   }
-  func preload(_ urls: [URL], store: ArticleStore) {
+  func preload(_ urls: [URL], store: ArticleStore) async {
     warmURLs = Array(urls.prefix(2))
     trim()
     for url in warmURLs where browsers[url] == nil && store.downloadedFile(for: url) == nil {
+      // Preview metadata and decoded cover take priority over speculative WebKit work.
+      if let preview = try? await ArticlePreviewCache.shared.load(url) {
+        for image in [preview.imageURL, preview.faviconURL].compactMap({ $0 }) {
+          await ThumbnailCache.shared.load(image)
+        }
+      }
+      guard !Task.isCancelled else { return }
+      // Open may have created the browser while the preview was loading.
+      guard browsers[url] == nil else { continue }
       // A durable Reader view needs no speculative publisher request.
       browsers[url] = ArticleBrowser(url: url, store: store)
     }

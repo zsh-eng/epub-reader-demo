@@ -83,6 +83,7 @@ private struct ArticleRootView: View {
 
 struct LibraryView: View {
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.colorScheme) private var systemScheme
   @State private var clipboard = ClipboardSuggestion()
   #if DEBUG
     @State private var testSharing = false
@@ -103,7 +104,9 @@ struct LibraryView: View {
   @State private var sort = "Newest first"
   @State private var confirmDelete = false
   @State private var browsers = BrowserPool()
-  @State private var headerHeight: CGFloat = 96
+  @State private var headerHeight: CGFloat = 48
+  @AppStorage("reader-palette") private var paletteName = "System"
+  private let navigationBarHeight: CGFloat = 44
 
   private var matches: [SavedArticle] { matches(in: folder, query: query) }
 
@@ -132,8 +135,11 @@ struct LibraryView: View {
   var body: some View {
     NavigationStack {
       page
-        .navigationTitle("Articles")
-        .toolbar(.hidden, for: .navigationBar)
+        .padding(.top, 8)
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .navigationDestination(
           isPresented: Binding(get: { selected != nil }, set: { if !$0 { selected = nil } })
         ) {
@@ -142,6 +148,7 @@ struct LibraryView: View {
           }
         }
     }
+    .overlay(alignment: .top) { navigationControls }
     #if DEBUG
       .overlay(alignment: .top) {
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-share-fixture") {
@@ -189,7 +196,8 @@ struct LibraryView: View {
     .onChange(of: store.allTags) { _, tags in
       if case .tag(let name) = folder, !tags.contains(name) { folder = .saved }
     }
-    .task(id: preloadURLs) { browsers.preload(preloadURLs, store: store) }
+    .task(id: clipboard.url) { await clipboard.preparePreview() }
+    .task(id: preloadURLs) { await browsers.preload(preloadURLs, store: store) }
     .onChange(of: store.articles.filter(\.saved).map(\.id)) { _, _ in
       browsers.persistExtractions(in: store)
     }
@@ -253,7 +261,28 @@ struct LibraryView: View {
   }
 
   private var folderItems: [ArticleFolder] {
-    [.saved] + store.allTags.map(ArticleFolder.tag) + [.history, .archive, .downloaded]
+    [.saved, .downloaded, .history, .archive] + store.allTags.map(ArticleFolder.tag)
+  }
+
+  /// This bar belongs to the stack, not either sliding page. Only its contents
+  /// crossfade; the native push/pop transition remains responsible for the page.
+  private var navigationControls: some View {
+    let palette = ReadingPalette(rawValue: paletteName) ?? .system
+    return ZStack {
+      libraryControls
+        .opacity(selected == nil && !searching ? 1 : 0)
+        .allowsHitTesting(selected == nil && !searching)
+        .accessibilityHidden(selected != nil || searching)
+      if let selected {
+        ReaderNavigationBar(browser: selected, store: store) { self.selected = nil }
+          .foregroundStyle(palette.foreground).tint(palette.foreground)
+          .transition(.opacity)
+      }
+    }
+    .frame(height: navigationBarHeight)
+    .environment(\.colorScheme, selected == nil ? systemScheme : (palette.scheme ?? systemScheme))
+    .animation(searchTransition, value: selected != nil)
+    .animation(searchTransition, value: searching)
   }
 
   private var libraryControls: some View {
@@ -288,7 +317,7 @@ struct LibraryView: View {
       .readerGlass().accessibilityLabel("Sort and filter")
       .accessibilityHidden(searching)
     }.overlay { Text("Articles").font(.headline) }
-      .padding(.horizontal, 16).padding(.top, 4)
+      .padding(.horizontal, 16)
   }
 
   private var folders: some View {
@@ -319,12 +348,11 @@ struct LibraryView: View {
     }
   }
 
-  /// Keep both layers mounted. A single transition moves the header and inbox
-  /// together; native search owns only the bottom control and keyboard.
+  /// Keep both layers mounted and crossfade in place. Search must not translate
+  /// the folder strip, article list or navigation controls.
   private var page: some View {
     ZStack(alignment: .top) {
       pagedLibrary
-        .offset(y: searching && !reduceMotion ? -120 : 0)
         .opacity(searching ? 0 : 1)
         .allowsHitTesting(!searching).accessibilityHidden(searching)
       ScrollViewReader { proxy in
@@ -343,12 +371,12 @@ struct LibraryView: View {
     .scrollDismissesKeyboard(.interactively)
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if let url = clipboard.url, !searching, !selecting {
-        ClipboardBanner(url: url) {
+        ClipboardBanner(url: url, preview: clipboard.preview) {
           selected = browsers.open(url, store: store)
           clipboard.dismiss()
         } save: {
           do {
-            try store.add(url.absoluteString)
+            try store.add(url.absoluteString, preview: clipboard.preview)
             clipboard.dismiss()
             query = ""
             searching = false
@@ -371,39 +399,44 @@ struct LibraryView: View {
   }
 
   private var pagedLibrary: some View {
-    ZStack(alignment: .top) {
-      TabView(selection: $folder) {
-        ForEach(folderItems, id: \.self) { item in
-          GeometryReader { geometry in
-            Group {
-              if matches(in: item).isEmpty {
-                LibraryEmptyState(folder: item)
-                  .frame(height: max(0, geometry.size.height - headerHeight))
-                  .padding(.top, headerHeight)
-              } else {
-                ScrollView { library(in: item) }
-                  .contentMargins(.top, headerHeight + 8, for: .scrollContent)
-                  .contentMargins(.top, headerHeight, for: .scrollIndicators)
-              }
-            }.accessibilityHidden(searching || folder != item)
+    GeometryReader { viewport in
+      ZStack(alignment: .top) {
+        TabView(selection: $folder) {
+          ForEach(folderItems, id: \.self) { item in
+            GeometryReader { geometry in
+              Group {
+                if matches(in: item).isEmpty {
+                  LibraryEmptyState(folder: item)
+                    .frame(height: max(0, viewport.size.height - headerHeight))
+                    .padding(.top, headerHeight)
+                } else {
+                  ScrollView { library(in: item) }
+                    .contentMargins(.top, headerHeight + 8, for: .scrollContent)
+                    .contentMargins(.top, headerHeight, for: .scrollIndicators)
+                    .contentMargins(
+                      .bottom, max(0, geometry.size.height - viewport.size.height),
+                      for: .scrollContent)
+                }
+              }.accessibilityHidden(searching || folder != item)
+            }
+            .tag(item)
+            .accessibilityIdentifier("library-page-" + item.identifier)
           }
-          .tag(item)
-          .accessibilityIdentifier("library-page-" + item.identifier)
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .ignoresSafeArea(.container, edges: .bottom)
+        libraryHeader.background(.regularMaterial)
+          .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+          } action: {
+            headerHeight = $0
+          }
       }
-      .tabViewStyle(.page(indexDisplayMode: .never))
-      libraryHeader.background(.regularMaterial)
-        .onGeometryChange(for: CGFloat.self) {
-          $0.size.height
-        } action: {
-          headerHeight = $0
-        }
     }
   }
 
   private var libraryHeader: some View {
     VStack(spacing: 0) {
-      libraryControls.accessibilityHidden(searching)
       folders.accessibilityHidden(searching)
       if selecting {
         HStack {
@@ -431,12 +464,23 @@ struct LibraryView: View {
   }
 
   private func library(in item: ArticleFolder) -> some View {
-    LazyVStack(alignment: .leading, spacing: 18) {
+    let compact = item == .history || item == .archive
+    return LazyVStack(alignment: .leading, spacing: compact ? 0 : 18) {
       ForEach(matches(in: item)) { article in
-        articleButton(article) { ArticleCard(article: article) }
-          .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 24))
+        articleButton(article) {
+          if compact {
+            ArticleSearchRow(article: article, query: "")
+          } else {
+            ArticleCard(article: article)
+          }
+        }
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: compact ? 16 : 24))
+        if compact {
+          Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
+            .padding(.leading, 88).padding(.trailing, 16)
+        }
       }
-    }.padding(.horizontal, 16).padding(.bottom, 20)
+    }.padding(.horizontal, compact ? 8 : 16).padding(.bottom, 20)
   }
 
   private var searchResults: some View {

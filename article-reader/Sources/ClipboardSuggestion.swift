@@ -5,6 +5,7 @@ import UIKit
 /// reading the matched URL still uses iOS's normal paste permission prompt.
 @MainActor @Observable final class ClipboardSuggestion {
   var url: URL?
+  private(set) var preview: ArticlePreview?
   private var checking = false
   private let defaults = UserDefaults.standard
   private var key: String { TestMode.enabled ? "test-clipboard-change" : "clipboard-change" }
@@ -20,6 +21,7 @@ import UIKit
       return
     }
     url = nil
+    preview = nil
     // Record before reading: Allow Paste can itself cause a scene transition.
     defaults.set(change, forKey: key)
     let patterns: Set<UIPasteboard.DetectionPattern>? = try? await withCheckedThrowingContinuation {
@@ -32,19 +34,37 @@ import UIKit
     url = SharedInbox.webURL(text)
   }
 
-  func dismiss() { url = nil }
+  func preparePreview() async {
+    preview = nil
+    guard let url else { return }
+    let result = try? await ArticlePreviewCache.shared.load(url)
+    guard !Task.isCancelled, self.url == url else { return }
+    preview = result
+  }
+
+  func dismiss() {
+    url = nil
+    preview = nil
+  }
 }
 
 struct ClipboardBanner: View {
   let url: URL
+  let preview: ArticlePreview?
   let open: () -> Void
   let save: () -> Void
   let dismiss: () -> Void
   var body: some View {
     HStack(spacing: 12) {
-      Image(systemName: "link").font(.title3)
+      if let image = preview?.imageURL {
+        ArticleThumbnail(url: image).frame(width: 38, height: 44)
+          .clipShape(RoundedRectangle(cornerRadius: 7))
+      } else {
+        Image(systemName: "link").font(.title3)
+      }
       VStack(alignment: .leading, spacing: 3) {
-        Text("Copied link").font(ReaderTheme.sans(14, weight: .medium))
+        Text(preview?.title ?? "Copied link").font(ReaderTheme.sans(14, weight: .medium))
+          .lineLimit(2).accessibilityIdentifier("clipboard-preview-title")
         Text(url.host ?? "Article").font(ReaderTheme.sans(12)).foregroundStyle(ReaderTheme.muted)
           .lineLimit(1)
       }

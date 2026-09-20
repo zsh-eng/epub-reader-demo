@@ -3,73 +3,71 @@ import ImageIO
 import SwiftUI
 import UIKit
 
-/// Let the system own focus, keyboard avoidance, and the glass search transition.
-/// This also keeps search focus intact when returning from a reading page.
+/// Keep the native text field mounted from launch. A tap focuses it directly;
+/// it does not need to construct and present a separate search controller.
 struct LibrarySearchChrome: ViewModifier {
   @Binding var query: String
   @Binding var active: Bool
-  @FocusState private var focused: Bool
 
   func body(content: Content) -> some View {
-    if #available(iOS 26.0, *) {
-      content.searchable(text: $query, isPresented: $active, prompt: "Search")
-        .searchPresentationToolbarBehavior(.avoidHidingContent)
-        .toolbar { DefaultToolbarItem(kind: .search, placement: .bottomBar) }
-        .scrollEdgeEffectStyle(.soft, for: .bottom)
-    } else {
-      content.safeAreaInset(edge: .bottom) {
-        LibrarySearch(query: $query, focused: $focused, active: active) {
-          query = ""
-          focused = false
-          active = false
-        }.padding(.horizontal, 20).padding(.vertical, 8).background(.regularMaterial)
-      }
-      .onChange(of: focused) { _, value in if value { active = true } }
+    content.readerBar(edge: .bottom) {
+      HStack(spacing: 10) {
+        NativeArticleSearch(query: $query, active: $active)
+          .frame(height: 50).padding(.horizontal, 12).readerGlass()
+        if active {
+          Button {
+            query = ""
+            active = false
+          } label: {
+            Image(systemName: "xmark").frame(width: 44, height: 44)
+          }.readerGlass().accessibilityLabel("Close search").accessibilityIdentifier("close")
+        }
+      }.padding(.horizontal, 20).padding(.vertical, 8)
     }
   }
 }
 
-struct LibrarySearch: View {
+private struct NativeArticleSearch: UIViewRepresentable {
   @Binding var query: String
-  @FocusState.Binding var focused: Bool
-  let active: Bool
-  let cancel: () -> Void
+  @Binding var active: Bool
 
-  var body: some View {
-    HStack(spacing: 12) {
-      HStack(spacing: 10) {
-        Image(systemName: "magnifyingglass").font(.system(size: 17, weight: .medium))
-          .foregroundStyle(ReaderTheme.muted)
-        TextField(
-          "", text: $query, prompt: Text("Search").foregroundStyle(ReaderTheme.muted)
-        )
-        .font(ReaderTheme.sans(16))
-        .foregroundStyle(ReaderTheme.foreground)
-        .focused($focused)
-        .textInputAutocapitalization(.never).autocorrectionDisabled()
-        .submitLabel(.search)
-        .accessibilityLabel("Search articles").accessibilityIdentifier("article-search")
-        if !query.isEmpty {
-          Button {
-            query = ""
-            focused = true
-          } label: {
-            Image(systemName: "xmark.circle.fill").foregroundStyle(ReaderTheme.muted)
-              .frame(width: 32, height: 44)
-          }
-          .accessibilityLabel("Clear search")
-        }
-      }
-      .padding(.leading, 16).padding(.trailing, query.isEmpty ? 16 : 6)
-      .frame(minHeight: 48)
-      .readerGlass()
-      .overlay(Capsule().stroke(ReaderTheme.border.opacity(focused ? 1 : 0), lineWidth: 1))
-      if active {
-        Button("Cancel", action: cancel).font(ReaderTheme.sans(15, weight: .medium))
-          .transition(.opacity)
-          .accessibilityIdentifier("cancel-search")
-      }
+  func makeCoordinator() -> Coordinator { Coordinator(query: $query, active: $active) }
+  func makeUIView(context: Context) -> UISearchTextField {
+    let field = UISearchTextField()
+    field.placeholder = "Search"
+    field.backgroundColor = .clear
+    field.borderStyle = .none
+    field.font = .preferredFont(forTextStyle: .body)
+    field.adjustsFontForContentSizeCategory = true
+    field.autocapitalizationType = .none
+    field.autocorrectionType = .no
+    field.returnKeyType = .search
+    field.accessibilityIdentifier = "article-search"
+    field.accessibilityTraits.insert(.searchField)
+    field.delegate = context.coordinator
+    field.addTarget(
+      context.coordinator, action: #selector(Coordinator.changed(_:)), for: .editingChanged)
+    return field
+  }
+  func updateUIView(_ field: UISearchTextField, context: Context) {
+    context.coordinator.query = $query
+    context.coordinator.active = $active
+    if field.text != query { field.text = query }
+    if !active && field.isFirstResponder { field.resignFirstResponder() }
+  }
+  final class Coordinator: NSObject, UITextFieldDelegate {
+    var query: Binding<String>
+    var active: Binding<Bool>
+    init(query: Binding<String>, active: Binding<Bool>) {
+      self.query = query
+      self.active = active
     }
+    func textFieldDidBeginEditing(_ textField: UITextField) { active.wrappedValue = true }
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+      textField.resignFirstResponder()
+      return true
+    }
+    @objc func changed(_ field: UITextField) { query.wrappedValue = field.text ?? "" }
   }
 }
 

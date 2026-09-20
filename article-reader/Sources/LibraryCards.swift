@@ -1,8 +1,74 @@
 import SwiftUI
 
+/// The image stays intact. Small material panels keep text readable on any cover.
+struct ArticleCard: View {
+  let article: SavedArticle
+
+  var body: some View {
+    Group {
+      if let image = article.imageURL {
+        ArticleThumbnail(url: image)
+          .aspectRatio(1.65, contentMode: .fit)
+          .overlay(alignment: .topLeading) {
+            source.padding(.horizontal, 10).padding(.vertical, 7)
+              .background(.regularMaterial, in: Capsule()).padding(10)
+          }
+          .overlay(alignment: .bottomLeading) {
+            GeometryReader { geometry in
+              caption(width: geometry.size.width - 40).padding(10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .padding(10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            }
+          }
+          .clipShape(RoundedRectangle(cornerRadius: 18)).padding(6)
+      } else {
+        VStack(alignment: .leading, spacing: 20) {
+          source
+          Text(article.title).font(.title3.weight(.semibold)).lineLimit(4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+          if !article.subtitle.isEmpty {
+            Text(article.subtitle).font(.subheadline).foregroundStyle(ReaderTheme.muted)
+              .lineLimit(2)
+          }
+        }.padding(20)
+      }
+    }
+    .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 24))
+    .contentShape(RoundedRectangle(cornerRadius: 24))
+  }
+
+  private var source: some View {
+    HStack(spacing: 6) {
+      if let favicon = article.faviconURL {
+        ArticleThumbnail(url: favicon, label: "Site icon")
+          .frame(width: 16, height: 16).clipShape(Circle())
+      }
+      Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
+        .font(.caption.weight(.medium)).lineLimit(1)
+    }.foregroundStyle(ReaderTheme.foreground)
+  }
+
+  private func caption(width: CGFloat) -> some View {
+    ViewThatFits(in: .horizontal) {
+      // Only keep the subtitle when the entire title fits on one line.
+      VStack(alignment: .leading, spacing: 4) {
+        Text(article.title).font(.headline).fixedSize(horizontal: true, vertical: false)
+        if !article.subtitle.isEmpty {
+          Text(article.subtitle).font(.subheadline).foregroundStyle(ReaderTheme.muted)
+            .lineLimit(1).accessibilityIdentifier("card-caption-subtitle")
+            .frame(width: width, alignment: .leading)
+        }
+      }
+      Text(article.title).font(.headline).lineLimit(3)
+    }.frame(maxWidth: .infinity, alignment: .leading)
+  }
+}
+
+/// Retained alternative; the library currently uses ArticleCard.
 /// A wide image fades into the card surface. The title remains on an opaque
 /// surface, so its contrast does not depend on the publisher's photograph.
-struct ArticleCard: View {
+struct GradientArticleCard: View {
   let article: SavedArticle
   private let shape = RoundedRectangle(cornerRadius: 24)
 

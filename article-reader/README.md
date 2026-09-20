@@ -8,9 +8,11 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 
 - First launch offers three optional setup pages: Share, paste permission, and Jev automatic tagging. Replay them from **Sort → Getting started**.
 - Copy an HTTP(S) link and enter Articles. Choose **Open** or **Save** in the clipboard banner above Search.
-- Wide image cards fade into the adaptive card surface, with title, description,
-  favicon and domain below the image. Cards load Open Graph metadata, with standard metadata
-  fallbacks. A failed preview does not prevent opening the link.
+- Cards use an inset Open Graph image, a source badge at the upper left, and a
+  material caption at the bottom. A one-line title can include one subtitle line;
+  longer titles use the caption space alone. Links without images use a compact
+  text card. The previous gradient design remains in `GradientArticleCard` as an
+  unused alternative. A failed preview does not prevent opening the link.
 - Tap an article to open a full reading page. Use the native Back button or swipe from the left edge to return.
 - The bottom controls provide Back, Forward, the lightning Reader / Website icon,
   a bookmark toggle to save or unsave, and Aa for Reader appearance. Unsave keeps
@@ -25,17 +27,22 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 - Search titles, descriptions and domains. Results use compact rows with matched
   text highlighted; clearing or cancelling restores the library.
 - **Saved** is the default inbox. The top folder strip switches between Saved,
-  article tags, History, Archive, and Downloaded. Swipe horizontally through these folders. The bottom has only the native search control (iOS 26), with a material search field on older iOS.
+  Downloaded, History, Archive, then article tags. History and Archive use compact
+  search-style rows; Saved, Downloaded and tags retain image cards. Swipe horizontally through these folders. The bottom has one native search field in a glass capsule, with a soft scroll edge on iOS 26 and a material fallback on older iOS. The field stays mounted from launch so the first tap can focus it directly.
 - **History** records each URL you view, most recently viewed first, including links
   followed inside articles. Opening does not save a link. Preloading does not add history.
 - Long-press a saved article to edit **Tags**, archive, or remove it. Archived links
   retain their tags and history. **Move to Saved** restores them to the inbox.
-  Select supports bulk archiving and confirmed deletion.
-- Reader controls use native safe-area bars and soft scroll-edge blur on iOS 26;
-  older systems use translucent material. Library controls and cards move up together while search results crossfade in 180 ms
-  (a 100 ms fade with Reduce Motion). Typing does not trigger this transition.
+  Select supports bulk archiving and confirmed deletion. Tags use a compact sheet
+  that grows with the tag list, up to 360 points.
+- Reader controls use the native navigation bar, safe-area bars and soft scroll-edge
+  blur on iOS 26; older systems use translucent material. The shared title and menu
+  stay outside the sliding page stack and crossfade in place when Reader opens or
+  closes. UIKit owns the Back button and interactive back swipe.
+  Library and search crossfade in place in 180 ms (100 ms with Reduce Motion).
+  Typing does not trigger this transition.
 - The first two non-archived links preload their web pages and extracted Reader
-  views. The last opened page is also retained (at most three browser models).
+  views, after preview metadata and images. The last opened page is also retained (at most three browser models).
   Preloading makes network requests to publishers or Unwall. Saved articles with a
   stored Reader view do not need a speculative publisher request on the next launch.
 - **Downloaded** includes saved articles, including archived articles, whose Defuddle
@@ -84,7 +91,10 @@ associated-domain file.
   or race with the main app consuming it. The app resumes incomplete work on entry.
 - **Copy link → open Articles:** on app activation, detect a probable web URL,
   then read it through the normal iOS paste-permission flow. A small Open/Save/Dismiss
-  banner appears and the copied page takes the first preload slot. Open uses that
+  banner appears immediately. Metadata is fetched first; the banner shows its title
+  and thumbnail as they arrive. The image is cached before the copied page starts
+  its background preload. Paste, save and preload share one metadata request.
+  Tapping Open takes priority and does not wait for the preview. Open uses that
   prepared browser; Open records History; Save writes to the inbox; Dismiss does neither. Each clipboard
   change is checked once, including across launches. Non-link text is ignored.
 
@@ -175,7 +185,8 @@ UI tests use local fixtures and a separate `test-links.json`. They cover preview
 metadata, saving and removal across launches, Reader bookmark toggles, end-of-article
 and menu archiving, browser history, reader switching,
 article-frame extraction, disabled navigation controls, folder swipes, stored Reader
-views across an offline restart, page back navigation, search and native-file-picker HTML
+views across an offline restart, short/long/no-image cards, compact tags, page back navigation,
+search and native-file-picker HTML
 import, clipboard suggestions, and Share extension saving. Clipboard UI tests use
 app-written simulator fixture text, so cross-app Allow Paste prompts still need a
 physical-device check. The import test stages a sample HTML file in Documents in debug builds

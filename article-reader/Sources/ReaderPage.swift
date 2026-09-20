@@ -69,25 +69,10 @@ struct ReaderPage: View {
   private var readingPage: some View {
     pageContent
       .background(palette.background)
-      .navigationTitle(browser.sourceURL.host ?? "Article")
+      .navigationTitle("")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar(.visible, for: .navigationBar)
-      .toolbarBackground(.automatic, for: .navigationBar)
-      .toolbarColorScheme(palette.scheme ?? systemScheme, for: .navigationBar)
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Menu {
-            Button("Archive article", systemImage: "archivebox", action: archive)
-              .disabled(!canArchive).accessibilityIdentifier("reader-archive-menu")
-            Button("Reload", systemImage: "arrow.clockwise", action: browser.reload)
-            Button("Open original", systemImage: "globe", action: browser.openOriginal)
-            Button("Try Unwall", systemImage: "doc.text", action: browser.openUnwall)
-          } label: {
-            Image(systemName: "ellipsis")
-          }
-          .accessibilityLabel("Page options")
-        }
-      }
+      .toolbarBackground(.hidden, for: .navigationBar)
       .readerBar(edge: .bottom) { bottomControls }
       .foregroundStyle(palette.foreground).tint(palette.foreground)
       .preferredColorScheme(palette.scheme)
@@ -130,9 +115,11 @@ struct ReaderPage: View {
     HStack(spacing: 12) {
       Button("Back", systemImage: "chevron.left", action: browser.back)
         .labelStyle(.iconOnly).frame(width: 44, height: 44).disabled(!browser.canGoBack)
+        .accessibilityIdentifier("browser-back")
         .opacity(browser.canGoBack ? 1 : 0.28)
       Button("Forward", systemImage: "chevron.right", action: browser.forward)
         .labelStyle(.iconOnly).frame(width: 44, height: 44).disabled(!browser.canGoForward)
+        .accessibilityIdentifier("browser-forward")
         .opacity(browser.canGoForward ? 1 : 0.28)
       Button(action: browser.toggleReader) {
         Image(systemName: browser.isReader ? "globe" : "bolt.fill")
@@ -218,5 +205,45 @@ struct ReaderPage: View {
   private func updateAppearance() {
     browser.darkAppearance = systemScheme == .dark
     if browser.readerReady { browser.applyAppearance() }
+  }
+}
+
+/// Shared stack chrome stays stationary while the Reader page slides beneath it.
+struct ReaderNavigationBar: View {
+  let browser: ArticleBrowser
+  let store: ArticleStore
+  let close: () -> Void
+  private var article: SavedArticle? {
+    store.articles.first { $0.url == browser.libraryURL }
+      ?? store.articles.first { $0.url == browser.sourceURL }
+  }
+
+  var body: some View {
+    HStack {
+      // UIKit owns the Back button and its interactive pop gesture.
+      Color.clear.frame(width: 44, height: 44).allowsHitTesting(false)
+      Spacer()
+      Menu {
+        Button("Archive article", systemImage: "archivebox") {
+          guard let article else { return }
+          do {
+            try store.archive(article.id)
+            close()
+          } catch { store.errorMessage = error.localizedDescription }
+        }
+        .disabled(article?.saved != true || article?.isArchived == true)
+        .accessibilityIdentifier("reader-archive-menu")
+        Button("Reload", systemImage: "arrow.clockwise", action: browser.reload)
+        Button("Open original", systemImage: "globe", action: browser.openOriginal)
+        Button("Try Unwall", systemImage: "doc.text", action: browser.openUnwall)
+      } label: {
+        Image(systemName: "ellipsis").frame(width: 44, height: 44)
+      }.readerGlass().accessibilityLabel("Page options")
+    }
+    .overlay {
+      Text(browser.sourceURL.host ?? "Article").font(.headline).lineLimit(1)
+        .padding(.horizontal, 62).allowsHitTesting(false)
+    }
+    .padding(.horizontal, 16)
   }
 }

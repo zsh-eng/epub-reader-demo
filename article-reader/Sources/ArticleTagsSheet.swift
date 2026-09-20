@@ -93,8 +93,7 @@ struct ArticleTagsSheet: View {
             .accessibilityValue(selected.contains(tag) ? "Selected" : "Not selected")
             .accessibilityIdentifier("tag-option-\(tag)")
           }
-        } footer: {
-          Text("Tags group your saved articles. Tap a tag to add or remove it.")
+
         }
       }
       .navigationTitle("Tags").navigationBarTitleDisplayMode(.inline)
@@ -110,7 +109,8 @@ struct ArticleTagsSheet: View {
       }
     }
     .tint(ReaderTheme.foreground)
-    .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+    .presentationDetents([.height(min(360, 160 + Double(tags.count) * 44))])
+    .presentationDragIndicator(.visible)
   }
 
   private func addTag() {
