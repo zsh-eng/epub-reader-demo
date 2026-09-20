@@ -602,7 +602,7 @@ final class ArticleReaderUITests: XCTestCase {
 
   @MainActor func testShareExtensionSavesToLibrary() throws {
     let app = XCUIApplication()
-    app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture"]
+    app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture", "-test-tagging"]
     app.launch()
     app.buttons["share-fixture"].tap()
     let articles = app.cells["Arctic"]
@@ -628,15 +628,93 @@ final class ArticleReaderUITests: XCTestCase {
     save.tap()
     let done = app.buttons["share-done"]
     XCTAssertTrue(done.waitForExistence(timeout: 5))
+    let tags = app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch
+    expectation(for: NSPredicate(format: "value == 'presented'"), evaluatedWith: tags)
+    waitForExpectations(timeout: 10)
+    XCTAssertTrue(app.staticTexts["Attention & wonder"].exists)
+    XCTAssertTrue(app.staticTexts["Life & meaning"].exists)
+    capture(app, "share-magic-tags")
     done.tap()
     // Match the real Safari flow: finish sharing, then foreground Arctic.
     XCUIDevice.shared.press(.home)
     app.activate()
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10), app.debugDescription)
+    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
     app.terminate()
     app.launchArguments = ["-ui-testing"]
     app.launch()
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 5))
+  }
+
+  @MainActor func testViewportPreparesCachedReadersBeforeTap() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-preload-fixtures",
+      "-test-preloading", "-articles-offline", "-disable-preloading",
+    ]
+    app.launch()
+    app.buttons["article-cached-0"].tap()
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "cold")
+    let unicode = "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."
+    XCTAssertTrue(app.webViews.staticTexts[unicode].waitForExistence(timeout: 10))
+    capture(app, "legacy-utf8-cached-reader")
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-test-preloading", "-articles-offline"]
+    app.launch()
+    let ready = app.staticTexts["preload-ready"]
+    expectation(for: NSPredicate(format: "label CONTAINS 'cached-0'"), evaluatedWith: ready)
+    waitForExpectations(timeout: 15)
+    let requested = app.staticTexts["preload-requested"]
+    XCTAssertFalse(requested.label.contains("cached-11"))
+    app.buttons["article-cached-0"].tap()
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
+    XCTAssertTrue(app.webViews.staticTexts[unicode].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.alerts["Could not open article"].exists)
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    for _ in 0..<3 { app.swipeUp() }
+    expectation(for: NSPredicate(format: "label CONTAINS 'cached-11'"), evaluatedWith: ready)
+    waitForExpectations(timeout: 15)
+    XCTAssertFalse(requested.label.split(separator: ",").contains("cached-0"))
+    app.buttons["article-cached-11"].tap()
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.searchFields.firstMatch.tap()
+    app.searchFields.firstMatch.typeText("Cached story 07")
+    expectation(for: NSPredicate(format: "label == 'cached-7'"), evaluatedWith: requested)
+    waitForExpectations(timeout: 5)
+    capture(app, "viewport-preloaded-search")
+  }
+
+  @MainActor func testUnicodeAndNativeCopyInReaderAndWebsite() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance"]
+    app.launch()
+    add("https://fixture.example/unicode", to: app)
+    let text = "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."
+    for reader in [true, false] {
+      app.buttons["article-unicode"].tap()
+      showReader(app)
+      if !reader { app.buttons["reader-toggle"].tap() }
+      let paragraph = app.webViews.staticTexts[text].firstMatch
+      XCTAssertTrue(paragraph.waitForExistence(timeout: 10))
+      XCTAssertTrue(paragraph.isHittable)
+      paragraph.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 1.2)
+      let copy = app.menuItems["Copy"]
+      XCTAssertTrue(copy.waitForExistence(timeout: 5), app.debugDescription)
+      capture(app, reader ? "reader-copy-menu" : "website-copy-menu")
+      copy.tap()
+      app.navigationBars.buttons.element(boundBy: 0).tap()
+      let search = app.searchFields.firstMatch
+      search.tap()
+      search.press(forDuration: 1.2)
+      let paste = app.menuItems["Paste"]
+      XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
+      paste.tap()
+      let value = search.value as? String ?? ""
+      XCTAssertFalse(value.isEmpty)
+      XCTAssertTrue(text.localizedCaseInsensitiveContains(value), value)
+      app.buttons["close"].tap()
+    }
   }
 
   /// Opt-in smoke check. Publisher/network failures must not affect the local suite.

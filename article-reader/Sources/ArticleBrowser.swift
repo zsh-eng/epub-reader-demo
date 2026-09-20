@@ -37,6 +37,37 @@ enum ArticleRouting {
   }
 }
 
+/// Keep WebKit's selection and edit menu, but write Reader text through UIKit.
+/// Copy uses the selected plain text directly, including on cached documents.
+@MainActor private final class ReaderWebView: WKWebView {
+  private var copyRequest = 0
+
+  override func target(forAction action: Selector, withSender sender: Any?) -> Any? {
+    if action == #selector(copy(_:)) { return self }
+    return super.target(forAction: action, withSender: sender)
+  }
+
+  override func copy(_ sender: Any?) {
+    copyRequest += 1
+    let request = copyRequest
+    let clipboardVersion = UIPasteboard.general.changeCount
+    // The app's isolated world remains available with publisher scripts disabled.
+    evaluateJavaScript("window.getSelection().toString()", in: nil, in: .defaultClient) {
+      [weak self] result in
+      guard let self, request == self.copyRequest,
+        UIPasteboard.general.changeCount == clipboardVersion
+      else { return }
+      guard case .success(let value) = result, let text = value as? String, !text.isEmpty else {
+        self.copyUsingWebKit(sender)
+        return
+      }
+      UIPasteboard.general.string = text
+    }
+  }
+
+  private func copyUsingWebKit(_ sender: Any?) { super.copy(sender) }
+}
+
 /// Owns both WebViews for one cached article. Reader mode never replaces the live page,
 /// so returning to the website preserves its history, scroll position and forms.
 @MainActor @Observable final class ArticleBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
@@ -65,6 +96,7 @@ enum ArticleRouting {
   @ObservationIgnored private var extraction: (url: URL, html: String)?
   @ObservationIgnored private weak var store: ArticleStore?
   @ObservationIgnored private var downloadURL: URL
+  @ObservationIgnored private var cachedLoadTask: Task<Void, Never>?
 
   init(url: URL, store: ArticleStore, downloadedFile: URL? = nil) {
     currentURL = url
@@ -74,7 +106,7 @@ enum ArticleRouting {
     let configuration = WKWebViewConfiguration()
     configuration.defaultWebpagePreferences.allowsContentJavaScript = false
     configuration.websiteDataStore = .nonPersistent()
-    readerView = WKWebView(frame: .zero, configuration: configuration)
+    readerView = ReaderWebView(frame: .zero, configuration: configuration)
     super.init()
     webView.navigationDelegate = self
     webView.uiDelegate = self
@@ -111,8 +143,24 @@ enum ArticleRouting {
       hasLoaded = true
       wantsReader = true
       isReader = true
-      readerNavigation = readerView.loadFileURL(
-        downloadedFile, allowingReadAccessTo: downloadedFile)
+      let version = pageVersion
+      cachedLoadTask = Task { [weak self] in
+        do {
+          // Existing saved documents predate the charset declaration. Declare
+          // their known encoding at load time instead of letting WebKit guess.
+          let bytes = try await Task.detached {
+            try Data(contentsOf: downloadedFile)
+          }.value
+          guard let self, !Task.isCancelled, version == self.pageVersion else { return }
+          self.readerNavigation = self.readerView.load(
+            bytes, mimeType: "text/html", characterEncodingName: "UTF-8",
+            baseURL: downloadedFile.deletingLastPathComponent())
+        } catch {
+          guard let self, !Task.isCancelled, version == self.pageVersion else { return }
+          self.isExtracting = false
+          self.errorMessage = "Could not open the downloaded article: " + error.localizedDescription
+        }
+      }
     } else {
       loadWebsite(url)
     }
@@ -235,7 +283,7 @@ enum ArticleRouting {
           ? ""
           : "<figure class='hero'><img src='\(hero)' alt=''>\(caption.isEmpty ? "" : "<figcaption>\(caption)</figcaption>")</figure>"
         let html = """
-          <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
+          <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
                 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src data:;">
           <title>\(title)</title><style>\(css)</style></head><body><main>
           <header><div class="source">\(host)</div><h1>\(title)</h1>\(description)\(byline)</header>\(heroHTML)
@@ -433,6 +481,8 @@ enum ArticleRouting {
 
   func stop() {
     pageVersion += 1
+    cachedLoadTask?.cancel()
+    cachedLoadTask = nil
     readerNavigation = nil
     websiteNavigation = nil
     isOpeningWebsite = false
@@ -505,52 +555,108 @@ struct WebSurface: UIViewRepresentable {
   }
 }
 
-/// Keep two speculative pages plus the last opened page. Cache identity is the
-/// requested URL; pages navigated elsewhere are not reused for the old link.
+/// Prepare the viewport and nearby rows before a tap. Cached HTML is loaded and
+/// styled in its retained WebKit view; the last opened browser stays alive too.
+/// Two preparation slots limit new work so scrolling keeps priority.
 @MainActor @Observable final class BrowserPool {
   private var browsers: [URL: ArticleBrowser] = [:]
   private var active: URL?
   private var warmURLs: [URL] = []
+  @ObservationIgnored private var preloadVersion = 0
+  private(set) var lastOpenState = ""
+  var readyReaderURLs: [URL] {
+    browsers.filter { $0.value.readerReady }.map(\.key)
+  }
+
   func open(_ url: URL, store: ArticleStore) -> ArticleBrowser {
+    let began = CFAbsoluteTimeGetCurrent()
     active = url
     trim()
-    let file = store.downloadedFile(for: url)
+    // Reuse the in-flight preparation too. Never replace it with another WebView
+    // just because the user taps before fonts or local HTML have finished loading.
     if let browser = browsers[url], browser.sourceURL == ArticleRouting.original(url) {
-      if file == nil { return browser }
-      if browser.readerReady || browser.isReader {
+      lastOpenState = browser.readerReady ? "prepared" : "preparing"
+      if store.articles.contains(where: { $0.url == url && $0.saved && $0.downloadedAt != nil }) {
         browser.showReader()
-        return browser
       }
+      recordOpen(since: began)
+      return browser
     }
     browsers[url]?.stop()
-    let browser = ArticleBrowser(url: url, store: store, downloadedFile: file)
+    let browser = ArticleBrowser(
+      url: url, store: store, downloadedFile: store.downloadedFile(for: url))
     browsers[url] = browser
+    lastOpenState = "cold"
+    recordOpen(since: began)
     return browser
   }
+
   func preload(_ urls: [URL], store: ArticleStore) async {
-    warmURLs = Array(urls.prefix(2))
+    preloadVersion += 1
+    let version = preloadVersion
+    // Opening Reader cancels the queue; keep its neighbors for an immediate Back.
+    guard !urls.isEmpty else { return }
+    var seen = Set<URL>()
+    warmURLs = Array(urls.filter { seen.insert($0).inserted }.prefix(10))
     trim()
-    for url in warmURLs where browsers[url] == nil && store.downloadedFile(for: url) == nil {
-      // Preview metadata and decoded cover take priority over speculative WebKit work.
-      if let preview = try? await ArticlePreviewCache.shared.load(url) {
-        for image in [preview.imageURL, preview.faviconURL].compactMap({ $0 }) {
-          await ThumbnailCache.shared.load(image)
-        }
+    let local = warmURLs.filter { store.downloadedFile(for: $0) != nil }
+    let ordered = local + warmURLs.filter { !local.contains($0) }
+    var pending: [(ArticleBrowser, Date)] = browsers.values.filter {
+      !$0.readerReady && $0.errorMessage == nil
+    }.map { ($0, Date()) }
+    for url in ordered {
+      guard !Task.isCancelled, version == preloadVersion else { return }
+      if let browser = browsers[url], browser.sourceURL == ArticleRouting.original(url),
+        browser.errorMessage == nil
+      {
+        continue
       }
-      guard !Task.isCancelled else { return }
-      // Open may have created the browser while the preview was loading.
-      guard browsers[url] == nil else { continue }
-      // A durable Reader view needs no speculative publisher request.
-      browsers[url] = ArticleBrowser(url: url, store: store)
+      // A timeout releases a queue slot, not the document. Slow publishers must
+      // not prevent another visible row from preparing.
+      while pending.count >= 2 {
+        pending.removeAll {
+          $0.0.readerReady || $0.0.errorMessage != nil || Date().timeIntervalSince($0.1) > 8
+        }
+        if pending.count < 2 { break }
+        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+      }
+      guard !Task.isCancelled, version == preloadVersion else { return }
+      // A tap can supply the browser while this queue is suspended.
+      if let browser = browsers[url], browser.sourceURL == ArticleRouting.original(url),
+        browser.errorMessage == nil
+      {
+        continue
+      }
+      browsers[url]?.stop()
+      let browser = ArticleBrowser(
+        url: url, store: store, downloadedFile: store.downloadedFile(for: url))
+      browsers[url] = browser
+      pending.append((browser, Date()))
+      await Task.yield()
     }
   }
+
   func persistExtractions(in store: ArticleStore) {
     for browser in browsers.values { browser.persistExtraction(in: store) }
+  }
+  func releaseOffscreen() {
+    preloadVersion += 1
+    warmURLs = []
+    trim()
   }
   private func trim() {
     let keep = Set(warmURLs + (active.map { [$0] } ?? []))
     for key in Array(browsers.keys) where !keep.contains(key) {
       browsers.removeValue(forKey: key)?.stop()
     }
+  }
+  private func recordOpen(since began: CFAbsoluteTime) {
+    #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-preloading") {
+        print(
+          "Arctic open: \(lastOpenState), construction \((CFAbsoluteTimeGetCurrent() - began) * 1000) ms"
+        )
+      }
+    #endif
   }
 }

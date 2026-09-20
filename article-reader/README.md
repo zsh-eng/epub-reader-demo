@@ -24,7 +24,8 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   live Reader appearance controls (five fonts, size, side padding, line spacing,
   and System/White/Paper/Ink/Night palettes). Tap minus or plus for precise steps.
   The article remains visible and scrollable.
-  Aa also enters Reader mode when opened from the publisher's page.
+  Aa also enters Reader mode when opened from the publisher's page. Reader keeps
+  the system text-selection menu; Copy writes the selected plain text through UIKit.
 - Search titles, descriptions and domains. Results use compact rows with matched
   text highlighted. A one-line title allows up to two subtitle lines; longer titles
   use two lines alone. Clearing or cancelling restores the library.
@@ -43,13 +44,19 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   closes. UIKit owns the Back button and interactive back swipe.
   Library and search crossfade in place in 180 ms (100 ms with Reduce Motion).
   Typing does not trigger this transition.
-- The first two non-archived links preload their web pages and extracted Reader
-  views, after preview metadata and images. The last opened page is also retained (at most three browser models).
-  Preloading makes network requests to publishers or Unwall. Saved articles with a
-  stored Reader view do not need a speculative publisher request on the next launch.
+- Visible library/search rows and their two nearest neighbors in each direction
+  preload their Reader documents, with a ten-article window plus the last opened
+  page retained. Cached HTML and fonts prepare before a tap; opening reuses that
+  same WebView, including work still in progress. Local documents prepare first,
+  with two preparation slots. Speculative website loads can make requests to
+  publishers or Unwall for articles without a downloaded copy. The queue pauses
+  during reading, onboarding, background state, and modal settings. Memory pressure
+  releases offscreen browsers. Metadata remains in memory; opening does not query
+  a remote database.
 - **Downloaded** includes saved articles, including archived articles, whose Defuddle
   Reader view has been written to disk. Cached articles open from their styled local
-  HTML in any folder, without briefly showing the website. Reader and Website
+  HTML in any folder, without briefly showing the website. New HTML declares UTF-8;
+  older cached bytes also load as UTF-8, preserving quotes, accents, and CJK text. Reader and Website
   crossfade while preserving their separate scroll positions. Website loads on demand;
   the cached Reader stays visible until it is ready. Stored text, code and embedded
   header images do not need the website. Appearance controls
@@ -124,7 +131,8 @@ pages can be skipped, including key setup, without blocking local reading.
 **Sort → Automatic tags** verifies, replaces, or removes a user's Jev API key.
 The key stays in the shared iOS Keychain with device-only accessibility; both app
 and extension need the shared keychain-access-group entitlement when signing.
-No developer key is bundled. Enabling tagging sends saved article titles and
+The share extension starts classification when the title is ready; thumbnail
+loading does not block tags. No developer key is bundled. Enabling tagging sends saved article titles and
 metadata descriptions directly to TypeSafe over HTTPS. Full article bodies and
 browsing-only history are not sent. The extension uses a title when no description
 is available. **Sort → Tag existing articles** runs the same saved-only queue.
@@ -139,9 +147,9 @@ Manual additions and rejected automatic tags persist across retries. Results are
 merged into the latest record; deletion, unsave, new metadata, key replacement,
 and explicit re-tagging invalidate stale work. Network failures leave work pending
 until a later foreground activation. Invalid credentials pause the queue and show
-an error in Automatic tags. Tag completion has a finite border-beam highlight and
-an Edit tags action. The light leaves the card border and travels into each tag pill
-in order. A share receipt is recorded only after those tags have appeared. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
+an error in Automatic tags. Tag completion uses the original soft gradient border, which hands its glow to
+the tag outlines before their labels appear, and
+an Edit tags action. The card and pills share one animation clock. A share receipt is recorded only after those tags have appeared. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
 
 Simulator tests use separate article files and fixture classifications, never a
 real Jev key or request. `-test-onboarding -reset-onboarding` exercises first run;

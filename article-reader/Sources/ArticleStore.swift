@@ -86,6 +86,29 @@ struct TaggingNotice: Identifiable {
       }
       try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true)
       #if DEBUG
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-seed-preload-fixtures"),
+          articles.isEmpty
+        {
+          let css = try String(
+            contentsOf: Bundle.main.url(forResource: "reader", withExtension: "css")!,
+            encoding: .utf8)
+          for index in 0..<12 {
+            let title = String(format: "Cached story %02d", index)
+            var article = SavedArticle(
+              url: URL(string: "https://fixture.example/cached-\(index)")!, title: title)
+            article.savedAt = Date(timeIntervalSince1970: Double(12 - index))
+            article.downloadedAt = Date()
+            article.tags = index.isMultiple(of: 2) ? ["Even"] : ["Odd"]
+            // Intentionally represents a legacy UTF-8 download without a charset.
+            let html =
+              "<html><head><meta name='viewport' content='width=device-width, initial-scale=1'><style>\(css)</style></head><body><main><header><h1>\(title)</h1></header><article id='reader-content'><p>“Slow down,” she said — café, naïve, 日本語. Keep every character intact.</p></article></main></body></html>"
+            try Data(html.utf8).write(to: downloadFile(article.id))
+            articles.append(article)
+          }
+          try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)
+        }
+      #endif
+      #if DEBUG
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-store"),
           ProcessInfo.processInfo.arguments.contains("-test-shared-tags")
         {
@@ -711,7 +734,7 @@ enum TestMode {
     guard enabled, url.host == "fixture.example" else { return nil }
     let name = url.lastPathComponent
     return Bundle.main.url(
-      forResource: ["frame", "next", "short", "long"].contains(name) ? name : "story",
+      forResource: ["frame", "next", "short", "long", "unicode"].contains(name) ? name : "story",
       withExtension: "html",
       subdirectory: "Fixtures")
   }
