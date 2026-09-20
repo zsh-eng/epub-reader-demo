@@ -2,9 +2,10 @@
 
 Work in `/Users/admin/epub-reader-demo`, branch `main`. User authorized overnight
 implementation, subagents, focused commits, and sync. Keep existing Reader data
-safe. Hourly heartbeat `arctic-overnight-development` is active in task
-`01a0bd82-63d5-78d1-9c86-73aba44a3fa2`. Deliver the morning summary on the first
-run at/after 08:00 Singapore on 21 September, then pause when scoped work is done.
+safe. The hourly work phase is complete. `arctic-overnight-development` now
+retains an 08:00 Singapore morning-summary follow-up in task
+`01a0bd82-63d5-78d1-9c86-73aba44a3fa2`. Deliver that summary on 21 September,
+then pause the automation. Do not restart implementation without new user input.
 Keep routine automation notifications quiet. Do not claim device/deployment checks
 that were not run.
 
@@ -25,13 +26,12 @@ that were not run.
 
 ## Ownership / next run
 
-All three overnight agents finished and committed their work. No agent owns an
-unfinished edit. Root completed final Xcode build after all package changes.
-
-Next useful independent work: profile memory/network work for near-viewport
-WKWebView preloads. Thumbnail scheduling is bounded, but a warm publisher page
-can start its own image requests. Measure before changing it. Keep the existing
-Reader text readiness and offline-font checks. Do not expand scope indefinitely.
+All overnight agents are idle and their completed changes are committed. The
+independent fixes and bounded regression sweep are complete. The next scheduled
+action is the morning summary, then pause. Live sync activation remains blocked
+on explicit approval. The separate uncached publisher extraction limitation is
+measured below; no speculative early-DOM change was shipped. Do not repeat
+passing checks or invent new features merely to keep the automation busy.
 
 ## Approval blocker — do not bypass
 
@@ -212,3 +212,18 @@ performance validation. Do not imply the tests prove iPhone responsiveness.
 - Next run: a bounded regression sweep of existing share/import/annotation
   behavior is appropriate. Add production changes only for a confirmed defect;
   do not invent features or retry the blocked storage integration to fill time.
+
+## 02:44 heartbeat — final entry-flow checks and morning follow-up
+
+- `/tmp/arctic-entry-regressions.xcresult`: three native checks pass on the latest
+  implementation: cancelling a prepared share saves neither article nor tags
+  across restart; pasted query variants preserve the correct Save/Open behavior
+  and one saved identity; Open then Save in Reader reuses prepared tagging.
+- Sync integration README now explicitly requires awaiting transport retirement
+  before clearing/replacing credentials even when remote sign-out fails. This
+  documents the existing lifetime-tested behavior; no sync code was activated.
+- Independent overnight work is complete. The remaining live sync migration
+  needs the specific user approval already requested. Do not infer approval.
+- Updated the existing automation to an 08:00 Singapore morning-summary
+  follow-up. It must report the implementation/validation boundaries and pause
+  after delivering the summary. No further overnight feature work is queued.

@@ -27,7 +27,9 @@ validation. Session renewal cookies replace the Keychain credential. Revoked or
 expired sessions return an error; they do not clear local articles.
 
 The app must save `HTTPRemote.signIn`'s result with `SessionKeychain.save` before
-showing a signed-in state. Call `signOut`, cancel the old transport, then clear
+showing a signed-in state. Call `signOut`, then always await the old transport's
+`cancel()` before clearing or replacing its Keychain credential, including when
+network sign-out fails. Retirement rejects late responses before they can refresh
 the credential. Keep a reference to the old account until network work ends.
 Do not reuse an actor, journal path, cursor or outbox for a different account.
 If network sign-out fails, clear the device credential and report that server
