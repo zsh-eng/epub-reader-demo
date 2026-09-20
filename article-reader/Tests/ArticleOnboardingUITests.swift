@@ -31,10 +31,13 @@ final class ArticleOnboardingUITests: XCTestCase {
     app.launch()
     let share = app.otherElements["onboarding-share-demo"]
     XCTAssertTrue(share.waitForExistence(timeout: 10))
+    XCTAssertGreaterThan(share.frame.height, 390)
+    XCTAssertTrue(share.label.contains("Glacial Longings"))
     waitForDemo(share, value: "saved")
     capture(app, "arctic-share-demo-complete")
     app.buttons["onboarding-replay-share"].tap()
     XCTAssertNotEqual(share.value as? String, "saved")
+    capture(app, "arctic-article-page")
     waitForDemo(share, value: "saved")
     app.buttons["onboarding-next"].tap()
     let paste = app.otherElements["onboarding-paste-demo"]
@@ -50,7 +53,20 @@ final class ArticleOnboardingUITests: XCTestCase {
     let tags = app.otherElements["onboarding-tags-demo"]
     XCTAssertTrue(tags.waitForExistence(timeout: 5))
     waitForDemo(tags, value: "tagged")
+    XCTAssertGreaterThanOrEqual(tags.frame.minX, 24)
+    XCTAssertLessThanOrEqual(tags.frame.maxX, app.frame.width - 24)
+    assertPrivacyFits(in: app)
     capture(app, "arctic-tags-demo-complete")
+  }
+
+  @MainActor private func assertPrivacyFits(in app: XCUIApplication) {
+    let privacy = app.descendants(matching: .any)
+      .matching(identifier: "onboarding-privacy-note").firstMatch
+    let footer = app.descendants(matching: .any)
+      .matching(identifier: "onboarding-footer").firstMatch
+    XCTAssertTrue(privacy.exists)
+    XCTAssertTrue(footer.exists)
+    XCTAssertLessThan(privacy.frame.maxY, footer.frame.minY)
   }
 
   @MainActor private func waitForDemo(_ element: XCUIElement, value: String) {
@@ -97,6 +113,7 @@ final class ArticleOnboardingUITests: XCTestCase {
     capture(app, "onboarding-paste-dark")
     app.buttons["onboarding-next"].tap()
     XCTAssertTrue(app.secureTextFields.firstMatch.waitForExistence(timeout: 5))
+    assertPrivacyFits(in: app)
     capture(app, "onboarding-tags-dark")
     app.terminate()
     app.launchArguments += ["-large-type"]

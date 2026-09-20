@@ -16,7 +16,7 @@ struct OnboardingView: View {
     VStack(spacing: 0) {
       header
       ScrollView {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: page == 2 ? 16 : 24) {
           heading
           illustration
             .frame(maxWidth: .infinity)
@@ -101,6 +101,8 @@ struct OnboardingView: View {
         }
         .font(.caption)
         JevPrivacyNote()
+          .accessibilityElement(children: .combine)
+          .accessibilityIdentifier("onboarding-privacy-note")
         if let error = credentials.error {
           Text(error).font(.subheadline).accessibilityIdentifier("onboarding-key-error")
         }
@@ -170,6 +172,8 @@ struct OnboardingView: View {
     .frame(maxWidth: 560)
     .frame(maxWidth: .infinity)
     .background(ReaderTheme.background)
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("onboarding-footer")
   }
 
   private func changePage(to value: Int) {

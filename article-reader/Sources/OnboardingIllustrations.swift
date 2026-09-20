@@ -20,7 +20,7 @@ struct ShareOnboardingIllustration: View {
             .transition(.opacity)
         }
       }
-      .frame(height: 300)
+      .frame(height: 400)
       .background(Color(uiColor: .systemGroupedBackground))
       .clipShape(RoundedRectangle(cornerRadius: 28))
       .overlay {
@@ -31,7 +31,7 @@ struct ShareOnboardingIllustration: View {
       .accessibilityIdentifier("onboarding-share-demo")
       .accessibilityValue(["safari", "share", "save", "saved"][step])
       .accessibilityLabel(
-        "In Safari, tap Share. Choose Arctic in the app row, then tap Save. If Arctic is missing, choose More to add it."
+        "Glacial Longings by Elizabeth Rush. In Safari, tap Share. Choose Arctic in the app row, then tap Save. If Arctic is missing, choose More to add it."
       )
       IllustrationReplay(id: "share") { replay += 1 }
     }
@@ -43,7 +43,7 @@ struct ShareOnboardingIllustration: View {
       HStack {
         Image(systemName: "text.page")
         Spacer()
-        Label("example.com", systemImage: "lock.fill").font(.system(size: 11))
+        Label(OnboardingArticle.domain, systemImage: "lock.fill").font(.system(size: 11))
         Spacer()
         Image(systemName: "arrow.clockwise")
       }
@@ -51,22 +51,23 @@ struct ShareOnboardingIllustration: View {
       .padding(12)
       .background(.thinMaterial, in: Capsule())
       .padding(12)
-      VStack(alignment: .leading, spacing: 12) {
-        Text("The quiet art of\npaying attention")
-          .font(.system(size: 29, weight: .medium, design: .serif))
+      VStack(alignment: .leading, spacing: 10) {
+        Text(OnboardingArticle.publisher.uppercased())
+          .font(.system(size: 11, weight: .medium, design: .serif))
+          .tracking(1.6)
+          .frame(maxWidth: .infinity)
+          .padding(.bottom, 4)
+        OnboardingArticleImage(height: 155)
+          .clipShape(RoundedRectangle(cornerRadius: 4))
+        Text(OnboardingArticle.title)
+          .font(.system(size: 32, weight: .medium, design: .serif))
           .tracking(-0.8)
-        Text("There is more to the everyday.")
+          .fixedSize(horizontal: false, vertical: true)
+        Text("by " + OnboardingArticle.author)
           .font(.system(size: 12)).foregroundStyle(.secondary)
-        HStack(spacing: 5) {
-          ForEach(0..<7) { index in
-            Capsule().fill(ArcticBrand.accent.opacity(0.08 + Double(index) * 0.025))
-              .frame(height: CGFloat(28 + (index % 4) * 8))
-          }
-        }
-        .frame(height: 55, alignment: .bottom)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
-      .padding(.horizontal, 22)
+      .padding(.horizontal, 18)
       Spacer(minLength: 12)
       HStack {
         Image(systemName: "chevron.left")
@@ -93,14 +94,14 @@ struct ShareOnboardingIllustration: View {
     VStack(spacing: 18) {
       Capsule().fill(.secondary.opacity(0.35)).frame(width: 32, height: 4)
       HStack(spacing: 10) {
-        Image(systemName: "safari")
-          .font(.system(size: 23)).foregroundStyle(ArcticBrand.accent)
+        Image("OnboardingArticle")
+          .resizable().scaledToFill()
           .frame(width: 42, height: 42)
-          .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 10))
+          .clipShape(RoundedRectangle(cornerRadius: 10))
         VStack(alignment: .leading, spacing: 3) {
-          Text("The quiet art of paying attention").font(.system(size: 13, weight: .semibold))
+          Text(OnboardingArticle.title).font(.system(size: 13, weight: .semibold))
             .lineLimit(1)
-          Text("example.com").font(.system(size: 11)).foregroundStyle(.secondary)
+          Text(OnboardingArticle.domain).font(.system(size: 11)).foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
         Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
@@ -156,7 +157,7 @@ struct ShareOnboardingIllustration: View {
             .foregroundStyle(ArcticBrand.accent)
         }
       }
-      DemoArticleCard(showTags: false)
+      DemoArticleCard(showTags: false, reservesTags: false, imageHeight: 120)
       HStack(spacing: 10) {
         if step < 3 {
           Text("Cancel")
@@ -182,7 +183,7 @@ struct ShareOnboardingIllustration: View {
     guard !reduceMotion else { return }
     do {
       for next in 1...3 {
-        try await Task.sleep(for: .milliseconds(next == 1 ? 1100 : 1300))
+        try await Task.sleep(for: .milliseconds(next == 1 ? 2200 : 1300))
         withAnimation(.spring(response: 0.3, dampingFraction: 1)) { step = next }
       }
     } catch {
@@ -221,7 +222,7 @@ struct PasteOnboardingIllustration: View {
         .padding(.horizontal, 16)
         Spacer(minLength: 0)
       }
-      .frame(height: 270)
+      .frame(height: 330)
       .background(Color(uiColor: .systemGroupedBackground))
       .clipShape(RoundedRectangle(cornerRadius: 28))
       .overlay {
@@ -319,7 +320,7 @@ struct TaggingOnboardingIllustration: View {
         .accessibilityIdentifier("onboarding-tags-demo")
         .accessibilityValue(showTags ? "tagged" : "pending")
         .accessibilityLabel(
-          "The quiet art of paying attention. Automatic tags: Attention and wonder; Life and meaning."
+          "Glacial Longings by Elizabeth Rush. Automatic tags: Attention and wonder; Life and meaning."
         )
       IllustrationReplay(id: "tags") { replay += 1 }
     }
@@ -343,33 +344,66 @@ struct TaggingOnboardingIllustration: View {
   }
 }
 
-private struct DemoArticleCard: View {
-  var showTags: Bool
+/// A bundled editorial preview: replay never opens the publisher or uses Jev.
+/// Source and photograph attribution are recorded in THIRD_PARTY_NOTICES.txt.
+private enum OnboardingArticle {
+  static let title = "Glacial Longings"
+  static let author = "Elizabeth Rush"
+  static let publisher = "Emergence Magazine"
+  static let domain = "emergencemagazine.org"
+}
+
+private struct OnboardingArticleImage: View {
+  var height: CGFloat
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    GeometryReader { geometry in
+      Image("OnboardingArticle")
+        .resizable().scaledToFill()
+        .frame(width: geometry.size.width, height: height)
+        .clipped()
+    }
+    .frame(height: height)
+    .accessibilityLabel(
+      "An Antarctic ice shelf beneath a dark sky. Photograph by Elizabeth Rush.")
+  }
+}
+
+private struct DemoArticleCard: View {
+  var showTags: Bool
+  var reservesTags = true
+  var imageHeight: CGFloat = 130
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      OnboardingArticleImage(height: imageHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
       HStack {
-        Text("example.com").font(.system(size: 11)).foregroundStyle(.secondary)
+        Text(OnboardingArticle.domain).font(.system(size: 11)).foregroundStyle(.secondary)
         Spacer()
         Image(systemName: "bookmark.fill")
           .font(.system(size: 12)).foregroundStyle(ArcticBrand.accent)
       }
-      Text("The quiet art of\npaying attention")
+      Text(OnboardingArticle.title)
         .font(.system(size: 28, weight: .medium, design: .serif))
         .tracking(-0.8)
         .fixedSize(horizontal: false, vertical: true)
-      HStack(spacing: 6) {
-        ForEach(["Attention & wonder", "Life & meaning"], id: \.self) { tag in
-          Text(tag)
-            .font(.system(size: 10, weight: .medium))
-            .padding(.horizontal, 9).padding(.vertical, 6)
-            .background(ReaderTheme.background, in: Capsule())
+      Text(OnboardingArticle.author)
+        .font(.system(size: 12)).foregroundStyle(.secondary)
+      if reservesTags {
+        HStack(spacing: 6) {
+          ForEach(["Attention & wonder", "Life & meaning"], id: \.self) { tag in
+            Text(tag)
+              .font(.system(size: 10, weight: .medium))
+              .padding(.horizontal, 9).padding(.vertical, 6)
+              .background(ReaderTheme.background, in: Capsule())
+          }
         }
+        .opacity(showTags ? 1 : 0)
+        .accessibilityHidden(!showTags)
       }
-      .opacity(showTags ? 1 : 0)
-      .accessibilityHidden(!showTags)
     }
-    .padding(22)
+    .padding(18)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(ReaderTheme.secondary, in: RoundedRectangle(cornerRadius: 24))
     .dynamicTypeSize(.medium)

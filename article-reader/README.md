@@ -107,6 +107,8 @@ visits the copied URL (and Unwall where configured) before Open is tapped.
 
 ## Automatic tags and onboarding
 
+Onboarding bundles the real title, byline, and Open Graph photograph from Elizabeth Rush’s [Glacial Longings](https://emergencemagazine.org/essay/glacial-longings/), published by Emergence Magazine. Its taller article, share, and tagging scenes use local assets only; replay does not access the publisher or Jev. The source credit is in `THIRD_PARTY_NOTICES.txt`.
+
 Onboarding uses three concise, replayable native demonstrations: sharing from Safari, choosing Allow in Settings, and tags appearing on a saved card. The demonstrations follow the system appearance and use a completed static scene with Reduce Motion. Arctic uses a glacier-blue accent and separate light/dark ice-shelf app icons. Page two
 opens the app's Settings page; it cannot grant or inspect iOS paste permission.
 The paste setting may appear only after the first cross-app paste prompt. All
