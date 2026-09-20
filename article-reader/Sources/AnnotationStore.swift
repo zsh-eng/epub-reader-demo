@@ -83,9 +83,16 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable {
     else { return }
     record.note = note
     record.updatedAt = Date()
-    if !record.isHighlighted && note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      record.deletedAt = record.updatedAt
-    }
+    // An empty draft is still an editable passage. Only an explicit delete can
+    // remove its identity, including when editing resumes after an app restart.
+    try write(record)
+  }
+
+  func deleteNote(_ id: UUID) throws {
+    guard var record = records.first(where: { $0.id == id && $0.deletedAt == nil }) else { return }
+    record.note = ""
+    record.updatedAt = Date()
+    if !record.isHighlighted { record.deletedAt = record.updatedAt }
     try write(record)
   }
 

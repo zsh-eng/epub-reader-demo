@@ -72,9 +72,9 @@ struct ReaderAnnotations: View {
                       perform { try AnnotationStore.shared.removeHighlight(annotation.id) }
                     }
                   }
-                  if !annotation.note.isEmpty {
+                  if !annotation.note.isEmpty || !annotation.isHighlighted {
                     Button("Delete note", systemImage: "trash", role: .destructive) {
-                      perform { try AnnotationStore.shared.updateNote("", id: annotation.id) }
+                      perform { try AnnotationStore.shared.deleteNote(annotation.id) }
                     }
                   }
                 } label: {
