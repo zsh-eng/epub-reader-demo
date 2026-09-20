@@ -1,0 +1,602 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import {
+  chmod,
+  mkdir,
+  open,
+  readdir,
+  rename,
+  rm,
+  rmdir,
+  stat,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
+import { join } from "node:path";
+import { z } from "zod";
+import {
+  comparisonSchema,
+  noteInputSchema,
+  noteMutationSchema,
+  type Note,
+  type NoteMutation,
+  type NoteState,
+  type ReviewResponse,
+  type SourceResponse,
+} from "../shared/protocol";
+import {
+  validateReviewNoteInput,
+  validateReviewNoteRemoval,
+  validateReviewNoteText,
+} from "../shared/hunk/noteValidation";
+import { HostError } from "./runtime/errors";
+import {
+  savedReviewCreateSchema,
+  type SavedReview,
+  type SavedReviewCreate,
+  type CapturedReviewTarget,
+} from "../shared/saved-review";
+
+const REVIEW_ID = /^r_[a-f0-9]{24}$/;
+const TARGET_ID = /^t_[a-f0-9]{24}$/;
+const MAX_RECORD_BYTES = 64 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 512 * 1024 * 1024;
+const MAX_REVIEWS = 128;
+const MAX_NOTES = 500;
+const text = z.string();
+const natural = z.number().int().nonnegative();
+const responseSchema = z.object({
+  id: text,
+  repo: text,
+  comparison: comparisonSchema,
+  base: text,
+  head: text,
+  label: text,
+  files: z.array(
+    z.object({
+      path: text,
+      previousPath: text.optional(),
+      status: text,
+      additions: natural,
+      deletions: natural,
+      binary: z.boolean(),
+      tooLarge: z.boolean().optional(),
+      untracked: z.boolean().optional(),
+    }),
+  ),
+  patch: text,
+  metrics: z.object({
+    gitMs: z.number(),
+    totalMs: z.number(),
+    patchBytes: natural,
+    cacheHit: z.boolean(),
+  }),
+  warnings: z.array(text),
+});
+const sourceSchema = z.object({ reviewId: text, path: text, old: text, new: text });
+const noteSchema = noteInputSchema.extend({
+  id: text,
+  createdAt: text,
+  updatedAt: text,
+  resolution: z.enum(["active", "stale", "orphaned"]).optional(),
+});
+const targetSchema = z.object({
+  id: z.string().regex(TARGET_ID),
+  repositoryId: text,
+  repo: text,
+  branch: text.nullable(),
+  label: text,
+  comparison: comparisonSchema,
+  base: text,
+  head: text,
+  captured: z.boolean(),
+});
+const savedSchema = z.object({
+  id: z.string().regex(REVIEW_ID),
+  title: text,
+  createdAt: text,
+  revision: natural,
+  commentCount: natural,
+  targets: z.array(targetSchema).min(1).max(16),
+});
+const recordSchema = z.object({
+  version: z.literal(1),
+  saved: savedSchema,
+  captures: z
+    .array(
+      z.object({
+        targetId: z.string().regex(TARGET_ID),
+        review: responseSchema,
+        sources: z.array(sourceSchema),
+        notes: z.object({
+          reviewId: text,
+          revision: natural,
+          notes: z.array(noteSchema).max(MAX_NOTES),
+        }),
+      }),
+    )
+    .min(1)
+    .max(16),
+});
+type SavedRecord = z.infer<typeof recordSchema>;
+
+/** Disk records own frozen sources and notes; live repository services are never consulted. */
+export class SavedReviewStore {
+  private pending: Promise<unknown> = Promise.resolve();
+  constructor(private readonly directory: string) {}
+
+  private serial<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.pending.then(work);
+    this.pending = next.catch(() => undefined);
+    return next;
+  }
+
+  /** Publish a populated lock directory with one atomic rename. A dead owner's
+   * unique file can be removed safely: a successor always has a different name,
+   * and rmdir cannot remove that successor's populated directory. */
+  private async lock(beforeCommit?: () => void): Promise<() => Promise<void>> {
+    await mkdir(this.directory, { recursive: true, mode: 0o700 });
+    await chmod(this.directory, 0o700);
+    const lock = join(this.directory, ".writer-lock");
+    const owner = `owner-${process.pid}-${randomUUID()}`;
+    const candidate = join(this.directory, `.writer-candidate-${randomUUID()}`);
+    await mkdir(candidate, { mode: 0o700 });
+    try {
+      await writeFile(join(candidate, owner), "", { flag: "wx", mode: 0o600 });
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        if (Date.now() >= deadline)
+          throw new HostError(
+            "saved-review-busy",
+            "Another med host is updating saved reviews. Retry shortly.",
+            503,
+          );
+        beforeCommit?.();
+        try {
+          await rename(candidate, lock);
+          return async () => {
+            await unlink(join(lock, owner)).catch(() => undefined);
+            // Another contender may already have installed its populated lock.
+            await rmdir(lock).catch(() => undefined);
+          };
+        } catch (error) {
+          if (!["EEXIST", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? ""))
+            throw error;
+        }
+        let owners: string[];
+        try {
+          owners = await readdir(lock);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+          throw error;
+        }
+        if (owners.length === 1) {
+          const match = /^owner-(\d+)-[a-f0-9-]{36}$/.exec(owners[0]!);
+          if (match) {
+            let dead = false;
+            try {
+              process.kill(Number(match[1]), 0);
+            } catch (error) {
+              dead = (error as NodeJS.ErrnoException).code === "ESRCH";
+            }
+            if (dead) {
+              await unlink(join(lock, owners[0]!)).catch(() => undefined);
+              await rmdir(lock).catch(() => undefined);
+              continue;
+            }
+          }
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+    } finally {
+      await rm(candidate, { recursive: true, force: true });
+    }
+  }
+
+  private writing<T>(work: () => Promise<T>, beforeCommit?: () => void): Promise<T> {
+    return this.serial(async () => {
+      const release = await this.lock(beforeCommit);
+      try {
+        beforeCommit?.();
+        return await work();
+      } finally {
+        await release();
+      }
+    });
+  }
+
+  private file(id: string): string {
+    if (!REVIEW_ID.test(id))
+      throw new HostError("invalid-saved-review", "The review ID is not valid.");
+    return join(this.directory, `${id}.json`);
+  }
+
+  private async read(id: string): Promise<SavedRecord> {
+    const file = this.file(id);
+    let handle;
+    try {
+      handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const info = await handle.stat();
+      if (!info.isFile() || info.size > MAX_RECORD_BYTES) throw new Error("Invalid record size.");
+      const record = recordSchema.parse(JSON.parse(await handle.readFile("utf8")));
+      if (record.saved.id !== id || record.saved.targets.length !== record.captures.length)
+        throw new Error("Record identity does not match.");
+      const ids = new Set(record.saved.targets.map((target) => target.id));
+      if (
+        ids.size !== record.captures.length ||
+        new Set(record.captures.map((item) => item.targetId)).size !== ids.size
+      )
+        throw new Error("Duplicate targets.");
+      for (const capture of record.captures) {
+        const target = record.saved.targets.find((item) => item.id === capture.targetId);
+        if (
+          !target ||
+          target.repo !== capture.review.repo ||
+          capture.notes.reviewId !== capture.review.id ||
+          capture.review.id !== `${id}:${target.id}` ||
+          capture.sources.some((source) => source.reviewId !== capture.review.id)
+        )
+          throw new Error("Capture identity does not match.");
+        const noteIds = new Set(capture.notes.notes.map((note) => note.id));
+        if (noteIds.size !== capture.notes.notes.length) throw new Error("Duplicate notes.");
+        for (const note of capture.notes.notes) {
+          const source = capture.sources.find((item) => item.path === note.path);
+          if (!source) throw new Error("Note source is missing.");
+          validateReviewNoteInput(note, source, capture.notes.notes);
+          const ancestors = new Set([note.id]);
+          let parentId = note.parentId;
+          while (parentId) {
+            if (ancestors.has(parentId)) throw new Error("Note replies form a cycle.");
+            ancestors.add(parentId);
+            parentId = capture.notes.notes.find((item) => item.id === parentId)?.parentId;
+          }
+        }
+      }
+      if (
+        record.saved.commentCount !==
+        record.captures.reduce((sum, capture) => sum + capture.notes.notes.length, 0)
+      )
+        throw new Error("Comment count does not match.");
+      return record;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT")
+        throw new HostError("saved-review-not-found", "This saved review does not exist.", 404);
+      if (error instanceof HostError) throw error;
+      throw new HostError(
+        "saved-review-corrupt",
+        "This saved review could not be read. Its saved file has not been changed.",
+        422,
+      );
+    } finally {
+      await handle?.close();
+    }
+  }
+
+  private async write(record: SavedRecord, beforeCommit?: () => void): Promise<void> {
+    const bytes = JSON.stringify(record);
+    const size = Buffer.byteLength(bytes);
+    if (size > MAX_RECORD_BYTES)
+      throw new HostError(
+        "saved-review-limit",
+        "This review exceeds the 64 MiB snapshot limit.",
+        413,
+      );
+    await mkdir(this.directory, { recursive: true, mode: 0o700 });
+    await chmod(this.directory, 0o700);
+    const filename = `${record.saved.id}.json`;
+    const files = (await readdir(this.directory)).filter((name) =>
+      /^r_[a-f0-9]{24}\.json$/.test(name),
+    );
+    if (!files.includes(filename) && files.length >= MAX_REVIEWS)
+      throw new HostError(
+        "saved-review-limit",
+        "Saved reviews reached the limit of 128 reviews.",
+        413,
+      );
+    let total = size;
+    for (const name of files)
+      if (name !== filename) total += (await stat(join(this.directory, name))).size;
+    if (total > MAX_TOTAL_BYTES)
+      throw new HostError(
+        "saved-review-limit",
+        "Saved reviews exceed the 512 MiB storage limit.",
+        413,
+      );
+    const temporary = join(this.directory, `.${record.saved.id}-${randomUUID()}.tmp`);
+    try {
+      const handle = await open(temporary, "wx", 0o600);
+      try {
+        await handle.writeFile(bytes);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      beforeCommit?.();
+      await rename(temporary, this.file(record.saved.id));
+    } finally {
+      await unlink(temporary).catch(() => undefined);
+    }
+  }
+
+  private target(record: SavedRecord, id: string) {
+    if (!TARGET_ID.test(id))
+      throw new HostError("invalid-saved-target", "The target ID is not valid.");
+    const target = record.captures.find((item) => item.targetId === id);
+    if (!target)
+      throw new HostError(
+        "saved-target-not-found",
+        "This target does not belong to the review.",
+        404,
+      );
+    return target;
+  }
+
+  create(
+    input: SavedReviewCreate,
+    capture: (target: SavedReviewCreate["targets"][number]) => Promise<CapturedReviewTarget>,
+    beforeCommit?: () => void,
+  ): Promise<SavedReview> {
+    return this.writing(async () => {
+      const parsed = savedReviewCreateSchema.safeParse(input);
+      if (!parsed.success) throw new HostError("invalid-saved-review", parsed.error.message);
+      input = parsed.data;
+      const id = `r_${randomBytes(12).toString("hex")}`;
+      const record: SavedRecord = {
+        version: 1,
+        saved: {
+          id,
+          title: input.title.trim(),
+          createdAt: new Date().toISOString(),
+          revision: 0,
+          commentCount: 0,
+          targets: [],
+        },
+        captures: [],
+      };
+      let size = 0;
+      for (const requested of input.targets) {
+        const result = await capture(requested);
+        const targetId = `t_${randomBytes(12).toString("hex")}`;
+        const reviewId = `${id}:${targetId}`;
+        // Freeze symbolic refs after capture. Inclusive range resolution has already
+        // shifted the base to its parent, so do not apply includeBase a second time.
+        const comparison =
+          result.review.comparison.kind === "range"
+            ? {
+                kind: "range" as const,
+                base: result.review.base,
+                head: result.review.head,
+                includeBase: false,
+              }
+            : result.review.comparison.kind === "commit"
+              ? { kind: "commit" as const, commit: result.review.head }
+              : result.review.comparison;
+        const review = responseSchema.parse({
+          ...result.review,
+          comparison,
+          id: reviewId,
+          repo: result.repo,
+        });
+        const sources = result.sources.map((source) => sourceSchema.parse({ ...source, reviewId }));
+        if (
+          new Set(sources.map((source) => source.path)).size !== sources.length ||
+          sources.some((source) => !review.files.some((file) => file.path === source.path))
+        )
+          throw new HostError("invalid-capture", "Captured source paths do not match the review.");
+        size += Buffer.byteLength(JSON.stringify({ review, sources }));
+        if (size > MAX_RECORD_BYTES)
+          throw new HostError(
+            "saved-review-limit",
+            "This review exceeds the 64 MiB snapshot limit.",
+            413,
+          );
+        record.saved.targets.push({
+          id: targetId,
+          repositoryId: result.repositoryId,
+          repo: result.repo,
+          branch: result.branch,
+          label: review.label,
+          comparison: review.comparison,
+          base: review.base,
+          head: review.head,
+          captured: ["working", "staged", "unstaged"].includes(review.comparison.kind),
+        });
+        record.captures.push({
+          targetId,
+          review,
+          sources,
+          notes: { reviewId, revision: 0, notes: [] },
+        });
+      }
+      await this.write(record, beforeCommit);
+      return record.saved;
+    }, beforeCommit);
+  }
+
+  get(id: string): Promise<SavedReview> {
+    return this.serial(async () => (await this.read(id)).saved);
+  }
+  review(id: string, targetId: string): Promise<ReviewResponse> {
+    return this.serial(async () => this.target(await this.read(id), targetId).review);
+  }
+  notes(id: string, targetId: string): Promise<NoteState> {
+    return this.serial(async () => this.target(await this.read(id), targetId).notes);
+  }
+  source(id: string, targetId: string, path: string): Promise<SourceResponse> {
+    return this.serial(async () => {
+      const source = this.target(await this.read(id), targetId).sources.find(
+        (item) => item.path === path,
+      );
+      if (!source)
+        throw new HostError(
+          "saved-source-unavailable",
+          "Full text was not captured for this file. The saved patch remains available.",
+          422,
+        );
+      return source;
+    });
+  }
+
+  mutate(
+    id: string,
+    targetId: string,
+    expectedRevision: number,
+    input: NoteMutation,
+    beforeCommit?: () => void,
+  ): Promise<NoteState> {
+    return this.writing(async () => {
+      const record = await this.read(id);
+      const target = this.target(record, targetId);
+      if (target.notes.revision !== expectedRevision)
+        throw new HostError("stale-notes", "The notes changed. Refresh before retrying.", 409);
+      const notes = target.notes.notes;
+      try {
+        const mutation = noteMutationSchema.parse(input);
+        if (mutation.type === "add") {
+          if (record.saved.commentCount >= MAX_NOTES)
+            throw new HostError(
+              "too-many-notes",
+              "A saved review can contain at most 500 notes.",
+              413,
+            );
+          const source = target.sources.find((item) => item.path === mutation.note.path);
+          const file = target.review.files.find((item) => item.path === mutation.note.path);
+          if (!source || file?.binary || file?.tooLarge)
+            throw new HostError(
+              "saved-source-unavailable",
+              "Comments require captured text for this file.",
+              422,
+            );
+          validateReviewNoteInput(mutation.note, source, notes);
+          const now = new Date().toISOString();
+          notes.push({
+            ...mutation.note,
+            id: randomUUID(),
+            createdAt: now,
+            updatedAt: now,
+            resolution: "active",
+          });
+        } else if (mutation.type === "edit") {
+          validateReviewNoteText(mutation.text);
+          const note = notes.find((item) => item.id === mutation.id);
+          if (!note) throw new HostError("note-not-found", "The note does not exist.", 404);
+          note.text = mutation.text;
+          note.updatedAt = new Date().toISOString();
+        } else {
+          validateReviewNoteRemoval(mutation.id, notes);
+          notes.splice(
+            notes.findIndex((item) => item.id === mutation.id),
+            1,
+          );
+        }
+      } catch (error) {
+        if (error instanceof HostError) throw error;
+        throw new HostError(
+          "invalid-note",
+          error instanceof Error ? error.message : "The note is not valid.",
+        );
+      }
+      target.notes.revision++;
+      record.saved.revision++;
+      record.saved.commentCount = record.captures.reduce(
+        (sum, item) => sum + item.notes.notes.length,
+        0,
+      );
+      await this.write(record, beforeCommit);
+      return target.notes;
+    }, beforeCommit);
+  }
+
+  clear(id: string, expectedRevision: number, beforeCommit?: () => void): Promise<SavedReview> {
+    return this.writing(async () => {
+      const record = await this.read(id);
+      if (record.saved.revision !== expectedRevision)
+        throw new HostError(
+          "stale-notes",
+          "The review changed. Refresh before clearing comments.",
+          409,
+        );
+      for (const target of record.captures) {
+        target.notes.notes = [];
+        target.notes.revision++;
+      }
+      record.saved.commentCount = 0;
+      record.saved.revision++;
+      await this.write(record, beforeCommit);
+      return record.saved;
+    }, beforeCommit);
+  }
+
+  feedback(
+    id: string,
+  ): Promise<{ text: string; count: number; repositoryCount: number; revision: number }> {
+    return this.serial(async () => {
+      const record = await this.read(id);
+      const output = [
+        `Review: ${record.saved.title}`,
+        `Review ID: ${id}`,
+        `Captured: ${record.saved.createdAt}`,
+        "",
+      ];
+      const repositories = new Set<string>();
+      let index = 0;
+      for (const target of record.captures) {
+        if (!target.notes.notes.length) continue;
+        const info = record.saved.targets.find((item) => item.id === target.targetId)!;
+        repositories.add(info.repositoryId);
+        output.push(
+          `Repository: ${info.repo}`,
+          `Repository ID: ${info.repositoryId}`,
+          `Worktree: ${info.repo}`,
+          `Branch: ${info.branch ?? "detached"}`,
+          `Target ID: ${info.id}`,
+          `Comparison: ${info.base} → ${info.head}`,
+          `Comparison kind: ${info.comparison.kind}`,
+          `Captured working state: ${info.captured ? "yes" : "no"}`,
+          "",
+        );
+        const append = (note: Note, parentNumber?: number) => {
+          const number = ++index;
+          const file = target.review.files.find((item) => item.path === note.path)!;
+          const path = note.side === "old" ? (file.previousPath ?? note.path) : note.path;
+          const end = note.endLine ?? note.line;
+          output.push(
+            `${parentNumber ? `Reply ${number} to comment ${parentNumber}` : `Comment ${number}`} (${note.id})`,
+            `File: ${path}`,
+            `Side: ${note.side === "old" ? "before" : "after"}`,
+            `Selected lines: ${note.line}–${end}`,
+          );
+          if (file.previousPath) output.push(`Rename: ${file.previousPath} → ${file.path}`);
+          const source = target.sources.find((item) => item.path === note.path);
+          if (source) {
+            const lines = source[note.side].split("\n");
+            if (lines.at(-1) === "") lines.pop();
+            const from = Math.max(1, note.line - 3);
+            const to = Math.min(lines.length, end + 3);
+            const snippet = lines
+              .slice(from - 1, to)
+              .map((line, offset) => {
+                const position = from + offset;
+                return `${position >= note.line && position <= end ? ">" : " "} ${position} | ${line}`;
+              })
+              .join("\n");
+            const longest = Math.max(2, ...(snippet.match(/`+/g) ?? []).map((run) => run.length));
+            const fence = "`".repeat(longest + 1);
+            output.push("", fence, snippet, fence);
+          } else output.push("", "Source context was not captured for this file.");
+          output.push("", "Feedback:", note.text, "");
+          for (const reply of target.notes.notes.filter((item) => item.parentId === note.id))
+            append(reply, number);
+        };
+        for (const note of target.notes.notes.filter((item) => !item.parentId)) append(note);
+      }
+      if (!index) output.push("No comments.");
+      return {
+        text: output.join("\n"),
+        count: index,
+        repositoryCount: repositories.size,
+        revision: record.saved.revision,
+      };
+    });
+  }
+}

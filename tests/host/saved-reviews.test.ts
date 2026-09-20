@@ -1,0 +1,364 @@
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { SavedReviewStore } from "../../src/host/saved-reviews";
+import type { CapturedReviewTarget, SavedReviewCreate } from "../../src/shared/saved-review";
+
+let directory: string;
+beforeEach(async () => {
+  directory = await mkdtemp(join(tmpdir(), "med-saved-review-"));
+});
+afterEach(async () => {
+  await rm(directory, { recursive: true, force: true });
+});
+const input: SavedReviewCreate = {
+  title: "Agent changes",
+  targets: [{ repo: "/repo/a", comparison: { kind: "working" } }],
+};
+function capture(
+  repo = "/repo/a",
+  contents = "one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine\n",
+): CapturedReviewTarget {
+  return {
+    repo,
+    repositoryId: `family-${repo}`,
+    branch: "main",
+    review: {
+      id: "live-review",
+      repo,
+      comparison: { kind: "working" },
+      base: "base-oid",
+      head: "working",
+      label: "Working changes",
+      files: [
+        {
+          path: "new.ts",
+          previousPath: "old.ts",
+          status: "R",
+          additions: 1,
+          deletions: 1,
+          binary: false,
+        },
+      ],
+      patch: "a frozen patch",
+      metrics: { gitMs: 0, totalMs: 0, patchBytes: 14, cacheHit: false },
+      warnings: [],
+    },
+    sources: [{ reviewId: "live-review", path: "new.ts", old: contents, new: contents }],
+  };
+}
+const note = (text = "Please simplify this.") => ({
+  type: "add" as const,
+  note: { path: "new.ts", side: "new" as const, line: 5, endLine: 6, text },
+});
+
+describe("saved reviews", () => {
+  it("keeps frozen patches, sources and notes after a restart and live edits", async () => {
+    const store = new SavedReviewStore(directory);
+    const live = capture();
+    const saved = await store.create(input, async () => live);
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, note());
+    live.sources[0].new = "different live bytes";
+    live.review.patch = "different live patch";
+    const restarted = new SavedReviewStore(directory);
+    expect((await restarted.review(saved.id, target.id)).patch).toBe("a frozen patch");
+    expect((await restarted.source(saved.id, target.id, "new.ts")).new).toContain("five\nsix");
+    expect((await restarted.notes(saved.id, target.id)).notes[0].text).toBe(
+      "Please simplify this.",
+    );
+    expect(await restarted.get(saved.id)).toMatchObject({ revision: 1, commentCount: 1 });
+    expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    expect((await stat(join(directory, `${saved.id}.json`))).mode & 0o777).toBe(0o600);
+  });
+
+  it("freezes symbolic refs and does not apply an inclusive base twice", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(
+      {
+        title: "Range",
+        targets: [
+          {
+            repo: "/repo/a",
+            comparison: { kind: "range", base: "main", head: "topic", includeBase: true },
+          },
+        ],
+      },
+      async () => {
+        const value = capture();
+        value.review.comparison = { kind: "range", base: "main", head: "topic", includeBase: true };
+        value.review.base = "resolved-parent-of-main";
+        value.review.head = "resolved-topic";
+        return value;
+      },
+    );
+    const target = saved.targets[0];
+    expect(target.captured).toBe(false);
+    expect(target.comparison).toEqual({
+      kind: "range",
+      base: "resolved-parent-of-main",
+      head: "resolved-topic",
+      includeBase: false,
+    });
+    expect((await store.review(saved.id, target.id)).comparison).toEqual(target.comparison);
+  });
+
+  it("clears notes from all targets and counts linked worktrees as one repository", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(
+      {
+        ...input,
+        targets: [...input.targets, { repo: "/repo/a-worktree", comparison: { kind: "working" } }],
+      },
+      async (target) => ({ ...capture(target.repo), repositoryId: "same-family" }),
+    );
+    for (const target of saved.targets) await store.mutate(saved.id, target.id, 0, note());
+    expect(await store.feedback(saved.id)).toMatchObject({ count: 2, repositoryCount: 1 });
+    await store.clear(saved.id, 2);
+    for (const target of saved.targets)
+      expect((await store.notes(saved.id, target.id)).notes).toEqual([]);
+  });
+
+  it("isolates identical paths and live review IDs between targets and bundles", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(
+      {
+        ...input,
+        targets: [...input.targets, { repo: "/repo/b", comparison: { kind: "working" } }],
+      },
+      async (target) => capture(target.repo, `${target.repo}\n2\n3\n4\n5\n6\n`),
+    );
+    const [a, b] = saved.targets;
+    await store.mutate(saved.id, a.id, 0, note("A only"));
+    expect((await store.notes(saved.id, b.id)).notes).toEqual([]);
+    expect((await store.source(saved.id, b.id, "new.ts")).new).toContain("/repo/b");
+    expect((await store.review(saved.id, a.id)).id).not.toBe(
+      (await store.review(saved.id, b.id)).id,
+    );
+    const other = await store.create(input, async () => capture());
+    await expect(store.source(other.id, a.id, "new.ts")).rejects.toMatchObject({ status: 404 });
+    await expect(store.source(saved.id, a.id, "../../secret")).rejects.toMatchObject({
+      status: 422,
+    });
+  });
+
+  it("exports all targets, old-side rename paths, three context lines, and reply hierarchy", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(
+      {
+        ...input,
+        targets: [...input.targets, { repo: "/repo/b", comparison: { kind: "working" } }],
+      },
+      async (target) => capture(target.repo),
+    );
+    const [a, b] = saved.targets;
+    const state = await store.mutate(saved.id, a.id, 0, {
+      ...note(),
+      note: { ...note().note, side: "old" },
+    });
+    await store.mutate(saved.id, a.id, 1, {
+      ...note(),
+      note: { ...note("Reply text").note, parentId: state.notes[0].id },
+    });
+    await store.mutate(saved.id, b.id, 0, note("B feedback"));
+    const feedback = await store.feedback(saved.id);
+    expect(feedback).toMatchObject({ count: 3, repositoryCount: 2, revision: 3 });
+    expect(feedback.text).toContain("File: old.ts\nSide: before\nSelected lines: 5–6");
+    expect(feedback.text).toContain("Rename: old.ts → new.ts");
+    expect(feedback.text).toContain(
+      "  2 | two\n  3 | three\n  4 | four\n> 5 | five\n> 6 | six\n  7 | seven\n  8 | eight\n  9 | nine",
+    );
+    expect(feedback.text).not.toContain("  1 | one");
+    expect(feedback.text).toContain("Reply 2 to comment 1");
+    expect(feedback.text).toContain("Repository: /repo/b");
+    expect(feedback.text).toContain("Comparison: base-oid → working");
+    expect((await store.get(saved.id)).commentCount).toBe(3);
+  });
+
+  it("clears across targets only at the expected bundle revision and invalidates old note writes", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => capture());
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, note());
+    const copied = await store.feedback(saved.id);
+    await store.mutate(saved.id, target.id, 1, note("New comment"));
+    await expect(store.clear(saved.id, copied.revision)).rejects.toMatchObject({ status: 409 });
+    expect((await store.get(saved.id)).commentCount).toBe(2);
+    expect(await store.clear(saved.id, 2)).toMatchObject({ commentCount: 0, revision: 3 });
+    await expect(store.mutate(saved.id, target.id, 2, note())).rejects.toMatchObject({
+      status: 409,
+    });
+    expect((await store.notes(saved.id, target.id)).notes).toEqual([]);
+    expect(await store.feedback(saved.id)).toMatchObject({
+      count: 0,
+      repositoryCount: 0,
+      revision: 3,
+    });
+    expect((await new SavedReviewStore(directory).get(saved.id)).commentCount).toBe(0);
+  });
+
+  it("serializes competing changes and rejects stale revisions", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => capture());
+    const target = saved.targets[0];
+    const results = await Promise.allSettled([
+      store.mutate(saved.id, target.id, 0, note("First")),
+      store.mutate(saved.id, target.id, 0, note("Second")),
+    ]);
+    expect(results.map((result) => result.status)).toEqual(["fulfilled", "rejected"]);
+    expect((await store.get(saved.id)).commentCount).toBe(1);
+  });
+
+  it("serializes separate stores sharing the same directory without losing accepted notes", async () => {
+    const first = new SavedReviewStore(directory);
+    const second = new SavedReviewStore(directory);
+    const saved = await first.create(input, async () => capture());
+    const target = saved.targets[0];
+    const outcomes = await Promise.allSettled([
+      first.mutate(saved.id, target.id, 0, note("First host")),
+      second.mutate(saved.id, target.id, 0, note("Second host")),
+    ]);
+    expect(outcomes.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(outcomes.find((result) => result.status === "rejected")).toMatchObject({
+      reason: { code: "stale-notes", status: 409 },
+    });
+    const accepted = outcomes.find((result) => result.status === "fulfilled");
+    expect((await first.notes(saved.id, target.id)).notes).toEqual(
+      accepted?.status === "fulfilled" ? accepted.value.notes : [],
+    );
+    const clearRace = await Promise.allSettled([
+      first.mutate(saved.id, target.id, 1, note("Concurrent new feedback")),
+      second.clear(saved.id, 1),
+    ]);
+    expect(clearRace.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(clearRace.find((result) => result.status === "rejected")).toMatchObject({
+      reason: { code: "stale-notes" },
+    });
+    expect((await readdir(directory)).filter((name) => name.startsWith(".writer"))).toEqual([]);
+  });
+
+  it("recovers a dead process lock without treating a living owner as stale", async () => {
+    const child = spawnSync(process.execPath, ["-e", ""], { encoding: "utf8" });
+    expect(child.status).toBe(0);
+    const lock = join(directory, ".writer-lock");
+    await mkdir(lock);
+    await writeFile(join(lock, `owner-${child.pid}-00000000-0000-4000-8000-000000000000`), "");
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => capture());
+    expect(saved.targets).toHaveLength(1);
+    await mkdir(lock);
+    const activeOwner = `owner-${process.pid}-00000000-0000-4000-8000-000000000000`;
+    await writeFile(join(lock, activeOwner), "");
+    let checks = 0;
+    await expect(
+      store.clear(saved.id, 0, () => {
+        if (++checks > 2) throw new Error("Request cancelled while waiting");
+      }),
+    ).rejects.toThrow("Request cancelled while waiting");
+    expect(await readdir(lock)).toEqual([activeOwner]);
+    expect((await store.get(saved.id)).revision).toBe(0);
+  });
+
+  it("checks revocation immediately before publishing create, mutation, and clear", async () => {
+    const store = new SavedReviewStore(directory);
+    const revokeAtCommit = () => {
+      let checks = 0;
+      return () => {
+        if (++checks === 3) throw new Error("Repository removed");
+      };
+    };
+    await expect(store.create(input, async () => capture(), revokeAtCommit())).rejects.toThrow(
+      "Repository removed",
+    );
+    expect(await readdir(directory)).toEqual([]);
+    const saved = await store.create(input, async () => capture());
+    const target = saved.targets[0];
+    await expect(store.mutate(saved.id, target.id, 0, note(), revokeAtCommit())).rejects.toThrow(
+      "Repository removed",
+    );
+    expect((await store.get(saved.id)).commentCount).toBe(0);
+    await store.mutate(saved.id, target.id, 0, note("Keep this feedback"));
+    await expect(store.clear(saved.id, 1, revokeAtCommit())).rejects.toThrow("Repository removed");
+    expect((await store.get(saved.id)).commentCount).toBe(1);
+    expect((await store.notes(saved.id, target.id)).notes[0].text).toBe("Keep this feedback");
+    expect((await readdir(directory)).filter((name) => name.startsWith("."))).toEqual([]);
+  });
+
+  it("does not invent context when full text is unavailable", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () => ({ ...capture(), sources: [] }));
+    const target = saved.targets[0];
+    await expect(store.source(saved.id, target.id, "new.ts")).rejects.toMatchObject({
+      code: "saved-source-unavailable",
+    });
+    await expect(store.mutate(saved.id, target.id, 0, note())).rejects.toMatchObject({
+      code: "saved-source-unavailable",
+    });
+    expect((await store.review(saved.id, target.id)).patch).toBe("a frozen patch");
+    expect((await store.get(saved.id)).commentCount).toBe(0);
+  });
+
+  it("uses safe code fences and does not truncate selected lines or feedback", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(input, async () =>
+      capture("/repo/a", "a\n````\nc\nd\ne\nf\n"),
+    );
+    const target = saved.targets[0];
+    await store.mutate(saved.id, target.id, 0, {
+      type: "add",
+      note: { path: "new.ts", side: "new", line: 1, endLine: 6, text: "x".repeat(16000) },
+    });
+    const exported = await store.feedback(saved.id);
+    expect(exported.text).toContain("\n`````\n> 1 | a");
+    expect(exported.text).toContain("x".repeat(16000));
+    expect(exported.text).toContain("> 6 | f");
+  });
+
+  it("rejects path traversal, corrupt records, and invalid note ranges without changing data", async () => {
+    const store = new SavedReviewStore(directory);
+    await expect(store.get("../../secret")).rejects.toMatchObject({ code: "invalid-saved-review" });
+    const saved = await store.create(input, async () => capture());
+    await expect(
+      store.mutate(saved.id, saved.targets[0].id, 0, {
+        type: "add",
+        note: { ...note().note, endLine: 50 },
+      }),
+    ).rejects.toMatchObject({ code: "invalid-note" });
+    expect((await store.get(saved.id)).revision).toBe(0);
+    const path = join(directory, `${saved.id}.json`);
+    await writeFile(path, "broken bytes");
+    await expect(store.get(saved.id)).rejects.toMatchObject({
+      code: "saved-review-corrupt",
+      status: 422,
+    });
+    expect(await readFile(path, "utf8")).toBe("broken bytes");
+  });
+
+  it("keeps reply parents intact and rejects cross-target replies", async () => {
+    const store = new SavedReviewStore(directory);
+    const saved = await store.create(
+      {
+        ...input,
+        targets: [...input.targets, { repo: "/repo/b", comparison: { kind: "working" } }],
+      },
+      async (target) => capture(target.repo),
+    );
+    const [a, b] = saved.targets;
+    const parent = (await store.mutate(saved.id, a.id, 0, note())).notes[0];
+    await expect(
+      store.mutate(saved.id, b.id, 0, {
+        type: "add",
+        note: { ...note().note, parentId: parent.id },
+      }),
+    ).rejects.toMatchObject({ code: "invalid-note" });
+    await store.mutate(saved.id, a.id, 1, {
+      type: "add",
+      note: { ...note().note, parentId: parent.id },
+    });
+    await expect(
+      store.mutate(saved.id, a.id, 2, { type: "remove", id: parent.id }),
+    ).rejects.toMatchObject({ code: "invalid-note" });
+  });
+});
