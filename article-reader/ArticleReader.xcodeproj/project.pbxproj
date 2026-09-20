@@ -28,6 +28,8 @@
 		DC39E13890165933DAD812EA /* ShareExtension/ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CE62A4A578AC07CC19C67B2 /* ShareExtension/ShareViewController.swift */; };
 		E5B47F688E8A0191D55DD50A /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 93AD1EDAFAFA81C496F7C2F3 /* SwiftSoup */; };
 		F980534EB990FC023D1FAD4B /* Resources/Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 2DCCAA44EF6AF66015D5CF7F /* Resources/Fonts */; };
+		6D37B755E2F086821F21CFDA /* Shared/TagBeam.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6434173C4E2B641C704F6E7C; };
+		AAAB2E277B5B009806C21755 /* Shared/TagBeam.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6434173C4E2B641C704F6E7C; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -83,6 +85,7 @@
 		F219C0274590DA45E4BEF1EA /* ArticleReaderUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = ArticleReaderUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5530DBD3C688941086224CD /* Resources/reader.js */ = {isa = PBXFileReference; lastKnownFileType = text; path = Resources/reader.js; sourceTree = "<group>"; };
 		FAA050406DC7C8245063AEDD /* Sources/ArticleStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleStore.swift; sourceTree = "<group>"; };
+		6434173C4E2B641C704F6E7C /* Shared/TagBeam.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/TagBeam.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,6 +117,7 @@
 		B28B7AF69320201D1CF206EB = {
 			isa = PBXGroup;
 			children = (
+				6434173C4E2B641C704F6E7C /* Shared/TagBeam.swift */,
 				D7B3CB2BBAF3B422DA5F0B20 /* Sources/ClipboardSuggestion.swift */,
 				3FAEBC82ABEB810E1AD4D80A /* Shared/SharedInbox.swift */,
 				4CE62A4A578AC07CC19C67B2 /* ShareExtension/ShareViewController.swift */,
@@ -277,6 +281,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6D37B755E2F086821F21CFDA /* Shared/TagBeam.swift in Sources */,
 				9C0756650A472EF050BC1620 /* Shared/SharedInbox.swift in Sources */,
 				DC39E13890165933DAD812EA /* ShareExtension/ShareViewController.swift in Sources */,
 			);
@@ -294,6 +299,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AAAB2E277B5B009806C21755 /* Shared/TagBeam.swift in Sources */,
 				85F213B0B227AC41AB40C3FE /* Sources/ClipboardSuggestion.swift in Sources */,
 				9C91594FF13816DB9ACDF271 /* Shared/SharedInbox.swift in Sources */,
 				21ADEF507F9930F5FDD82263 /* Sources/ArticleTagsSheet.swift in Sources */,
