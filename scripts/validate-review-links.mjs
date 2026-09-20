@@ -163,8 +163,13 @@ try {
   assert.equal(new URL(page.url()).hash, "");
   const header = page.getByRole("region", { name: "Saved review" });
   await header.getByText("Agent handoff validation", { exact: true }).waitFor();
-  await page.getByText("frontendAfter", { exact: true }).first().hover();
-  await page.getByRole("button", { name: "Add note to line", exact: true }).click({ force: true });
+  await page.getByRole("button", { name: "Split", exact: true }).click();
+  // Select the changed line itself. A hover-only gutter button can disappear
+  // when the renderer updates after browser focus or source loading.
+  await page
+    .locator('[data-additions] [data-column-number="2"] [data-line-number-content]')
+    .click();
+  await page.getByRole("button", { name: "Add note", exact: true }).click();
   await page
     .getByRole("textbox", { name: "Review note text" })
     .fill("Frontend feedback from the browser");
