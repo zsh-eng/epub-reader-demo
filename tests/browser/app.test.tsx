@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -457,7 +457,11 @@ describe("graphical review", () => {
     await page.getByRole("option", { name: /Find in diff contents/ }).click();
     await page.getByRole("textbox", { name: "Find in diff contents" }).fill("after");
     await expect.element(page.getByText("1 / 2 hunks", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Next match" }).click();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(page.getByText("2 / 2 hunks", { exact: true })).toBeVisible();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(page.getByText("1 / 2 hunks", { exact: true })).toBeVisible();
+    await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
     await expect.element(page.getByText("2 / 2 hunks", { exact: true })).toBeVisible();
   });
 

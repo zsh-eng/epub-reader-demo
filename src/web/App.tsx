@@ -1354,7 +1354,7 @@ export function App({
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
                         event.preventDefault();
-                        jumpHit(event.shiftKey ? findIndex - 1 : findIndex);
+                        jumpHit(event.shiftKey ? findIndex - 1 : findIndex + 1);
                       }
                       if (event.key === "Escape") {
                         event.stopPropagation();
