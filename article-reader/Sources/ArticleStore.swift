@@ -295,7 +295,9 @@ struct TaggingNotice: Identifiable {
         if let subtitle = transfer.subtitle, updated[index].subtitle.isEmpty {
           updated[index].subtitle = subtitle
         }
-        if let text = transfer.taggingText { updated[index].taggingText = text }
+        if updated[index].taggingText == nil, let text = transfer.taggingText {
+          updated[index].taggingText = text
+        }
         try commit(updated)
         let article = updated[index]
         Task { await refreshPreview(article) }
@@ -313,7 +315,9 @@ struct TaggingNotice: Identifiable {
           var updated = articles
           if updated[index].title == result.url.host { updated[index].title = result.title }
           if updated[index].subtitle.isEmpty { updated[index].subtitle = result.subtitle ?? "" }
-          if let text = result.taggingText { updated[index].taggingText = text }
+          if updated[index].taggingText == nil, let text = result.taggingText {
+            updated[index].taggingText = text
+          }
           var state = updated[index].tagging ?? ArticleTaggingState()
           if result.feedbackPresented == true {
             state.sharedFeedbackTransferID = result.id
