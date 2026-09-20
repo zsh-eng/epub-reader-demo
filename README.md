@@ -2,21 +2,35 @@
 
 A local Git review app for macOS and Omarchy Linux. Review changes, explore branches, and read code without changing your checkout.
 
-![Commit history, changed files, and a continuous split diff](docs/README-main.png)
+Review commits and working changes in a continuous split or unified diff. Expand context, wrap lines, and comment on a line or range.
 
-## What you can do
+![Bun commit history, changed files, and a continuous split diff in Tokyo Night](docs/screenshots/bun-review-tokyo-night.png)
 
-- **Review changes in one view.** Scroll through all changed files. Use split or unified diffs, expand context, wrap lines, and add notes to selected lines.
-- **Explore branches and worktrees.** Switch between branch tabs, browse commit history, and inspect working changes. Read branches without a worktree directly from Git.
-- **Open several repositories.** Use one Open branch picker for all registered repositories. Branch tabs can span repositories; files, history, and search stay scoped to the selected tab.
-- **Review agent work from a link.** Save changes from one or more repositories, add line comments, and copy all comments back to the agent.
-- **Read full files.** Browse unchanged and untracked files, keep files in tabs, and open historical versions from a diff.
-- **Find code.** Search file names or committed file contents with a code preview. Jump to symbols in a file or across a project. Resume your last search.
-- **See who changed a line.** Toggle gutter blame in a full file to see the author and commit. Hover a label for the date and commit message.
-- **Use the keyboard.** Open the command palette, find shortcuts, or use Vim navigation for movement, search, and text selection.
-- **Choose a theme.** Preview Vitesse, Rosé Pine, Tokyo Night, and Graphite themes before applying one.
+_Bun · Tokyo Night_
 
-![File search with matching paths and a code preview](docs/validation/picker-preview.png)
+## Work across repositories
+
+Keep repositories, branches, and worktrees in one window. Each tab has its own history, files, and search scope.
+
+![Open branch picker showing the Bun and med repositories in Vitesse Light](docs/screenshots/repositories-vitesse-light.png)
+
+_Bun and med · Vitesse Light_
+
+## Find and read code
+
+Find files or search committed code with a preview. Open files in tabs, jump to symbols, and inspect line blame. Keyboard shortcuts and Vim navigation are built in.
+
+![Bun file search with matching paths and a code preview in Vitesse Dark](docs/screenshots/bun-search-vitesse-dark.png)
+
+_Bun · Vitesse Dark_
+
+## Review agent changes
+
+Open an agent's review link, leave line comments, then copy comments from all its repositories back to the agent. Comments appear immediately and stay attached to the captured code.
+
+![Saved med review with a multiline comment and Copy comments controls in Rosé Pine Dawn](docs/screenshots/med-comments-rose-pine-dawn.png)
+
+_Example saved review in med · Rosé Pine Dawn_
 
 med runs in your browser with a local server. It does not edit reviewed files, stage changes, switch branches, or run code from the repository. Normal review notes stay on the local host for the session. Saved agent reviews keep captured source and comments across restarts.
 
