@@ -6,12 +6,14 @@ the same signing team for **ArticleReader** and **ArticleShare**, then register/
 enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 `ArticleReader.entitlements`. The simulator build can use ad-hoc signing.
 
-- Copy an HTTP(S) link and enter Articles. Choose **Open** or **Save** in the clipboard banner.
-- Cards load Open Graph title, description and image, with standard metadata
+- Copy an HTTP(S) link and enter Articles. Choose **Open** or **Save** in the clipboard banner above Search.
+- Wide image cards fade into the adaptive card surface, with title, description,
+  favicon and domain below the image. Cards load Open Graph metadata, with standard metadata
   fallbacks. A failed preview does not prevent opening the link.
 - Tap an article to open a full reading page. Use the native Back button or swipe from the left edge to return.
 - The bottom controls provide Back, Forward, the lightning Reader / Website icon,
-  and Aa for Reader appearance.
+  a bookmark toggle to save or unsave, and Aa for Reader appearance. Unsave keeps
+  history, tags and cached Reader content; Remove link deletes the record and copy.
 - The library follows system light/dark mode. Reader defaults to the system font with
   a bold title, optional subtitle/byline/avatar, and lead image before the body.
   Missing metadata is omitted. Reader uses bundled Defuddle and DOMPurify. Website restores
@@ -45,13 +47,18 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   to at most 1200 pixels. Oldest-used files are evicted when the limit is reached.
 - Code blocks with supported language labels receive bundled highlight.js colouring.
   Unknown languages remain plain code. No remote script is loaded.
-- The page menu provides Save to inbox, Reload, Open original and Try Unwall.
+- The page menu provides Archive article, Reload, Open original and Try Unwall.
+  A saved, unarchived article also offers **Archive and close** after you scroll near
+  its end. Both archive actions return to the library only after storage succeeds.
+- Empty folders center a native paper illustration and folder-specific guidance
+  in the available space. Artwork adapts to light/dark mode and hides at constrained
+  heights to preserve readable text. There is no looping decorative animation.
 - Long-press a card to refresh its preview or remove the link.
 
 This app stores link metadata in an atomic JSON file under Application Support,
 with separate HTML files for downloaded Reader views. Download status is committed
 only after the HTML write succeeds. Preview images are reused from local storage.
-No sync, highlights, accounts, or outgoing share/bookmark controls. Archive is library
+No sync, highlights, accounts, or outgoing share controls. Archive is library
 status only. Website cookies use WebKit's persistent store.
 
 ## Open from another app
@@ -126,7 +133,8 @@ xcrun swift-format lint --strict article-reader/Sources/*.swift article-reader/T
 ```
 
 UI tests use local fixtures and a separate `test-links.json`. They cover preview
-metadata, saving and removal across launches, browser history, reader switching,
+metadata, saving and removal across launches, Reader bookmark toggles, end-of-article
+and menu archiving, browser history, reader switching,
 article-frame extraction, disabled navigation controls, folder swipes, stored Reader
 views across an offline restart, page back navigation, search and native-file-picker HTML
 import, clipboard suggestions, and Share extension saving. Clipboard UI tests use
@@ -167,7 +175,7 @@ in `THIRD_PARTY_NOTICES.txt`; bundled font licenses are in `Resources/Fonts`.
 ## Review order
 
 1. `Sources/ReaderTheme.swift` — palette and native/web typography.
-2. `Sources/ArticleReaderApp.swift`, `LibrarySearch.swift`, `ArticleTagsSheet.swift` — library, search and tags.
+2. `Sources/LibraryCards.swift`, `ArticleReaderApp.swift`, `LibrarySearch.swift`, `ArticleTagsSheet.swift` — cards, empty states, library, search and tags.
 3. `Sources/ReaderPage.swift` — pushed reading page and live appearance controls.
 4. `Sources/ArticleBrowser.swift` — WebView lifetime, routing and reader switching.
 5. `Web/reader.js` and `Resources/reader.css` — extraction and reading presentation.

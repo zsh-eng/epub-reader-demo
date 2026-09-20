@@ -32,11 +32,11 @@ enum ArticleFolder: Hashable {
   }
   var emptyTitle: String {
     switch self {
-    case .history: "Your reading trail"
-    case .archive: "Nothing archived"
-    case .downloaded: "Ready for later"
+    case .history: "Every read leaves a trail."
+    case .archive: "A place for finished stories."
+    case .downloaded: "Take a good read with you."
     case .tag: "No articles here"
-    case .saved: "Something worth reading"
+    case .saved: "Your next good read."
     }
   }
   var emptyDescription: String {
@@ -46,7 +46,7 @@ enum ArticleFolder: Hashable {
     case .downloaded: "Saved articles appear here once their Reader view is stored on this device."
     case .tag: "Add this tag to a saved article to find it here."
     case .saved:
-      "Copy a link and return here to open or save it. You can also share a page to Articles."
+      "Share an article to Articles, or copy a link and return here. Start with one story."
     }
   }
 }

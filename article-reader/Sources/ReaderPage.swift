@@ -6,24 +6,100 @@ struct ReaderPage: View {
   let store: ArticleStore
   @State private var browser: ArticleBrowser
   @Environment(\.colorScheme) private var systemScheme
+  @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var appearance = false
+  @State private var nearEnd = false
+  @State private var actionError: String?
   @AppStorage("reader-size") private var fontSize = 20.0
   @AppStorage("reader-font") private var font = "System"
   @AppStorage("reader-padding") private var padding = 18.0
   @AppStorage("reader-leading") private var leading = 1.55
   @AppStorage("reader-palette") private var paletteName = "System"
   private var palette: ReadingPalette { ReadingPalette(rawValue: paletteName) ?? .system }
+  private var article: SavedArticle? {
+    store.articles.first { $0.url == browser.libraryURL }
+      ?? store.articles.first { $0.url == browser.sourceURL }
+  }
+  private var isSaved: Bool { article?.saved == true }
+  private var canArchive: Bool { isSaved && article?.isArchived != true }
   init(browser: ArticleBrowser, store: ArticleStore) {
     _browser = State(initialValue: browser)
     self.store = store
   }
 
   var body: some View {
+    readingPage
+      .onAppear {
+        updateAppearance()
+        store.visit(browser.sourceURL)
+      }
+      .onChange(of: browser.committedURL) { _, url in
+        nearEnd = false
+        if let url { store.visit(url) }
+      }
+      .onChange(of: browser.isReader) { _, _ in nearEnd = false }
+      .onChange(of: fontSize, updateAppearance)
+      .onChange(of: font, updateAppearance)
+      .onChange(of: padding, updateAppearance)
+      .onChange(of: leading, updateAppearance)
+      .onChange(of: paletteName, updateAppearance)
+      .onChange(of: systemScheme, updateAppearance)
+      .alert(
+        "Could not update article",
+        isPresented: Binding(
+          get: { actionError != nil }, set: { if !$0 { actionError = nil } }
+        )
+      ) {
+        Button("OK") { actionError = nil }
+      } message: {
+        Text(actionError ?? "")
+      }
+      .alert(
+        "Could not open article",
+        isPresented: Binding(
+          get: { browser.errorMessage != nil }, set: { if !$0 { browser.errorMessage = nil } })
+      ) {
+        Button("OK", role: .cancel) { browser.errorMessage = nil }
+      } message: {
+        Text(browser.errorMessage ?? "")
+      }
+  }
+
+  private var readingPage: some View {
+    pageContent
+      .background(palette.background)
+      .navigationTitle(browser.sourceURL.host ?? "Article")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar(.visible, for: .navigationBar)
+      .toolbarBackground(.automatic, for: .navigationBar)
+      .toolbarColorScheme(palette.scheme ?? systemScheme, for: .navigationBar)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Menu {
+            Button("Archive article", systemImage: "archivebox", action: archive)
+              .disabled(!canArchive).accessibilityIdentifier("reader-archive-menu")
+            Button("Reload", systemImage: "arrow.clockwise", action: browser.reload)
+            Button("Open original", systemImage: "globe", action: browser.openOriginal)
+            Button("Try Unwall", systemImage: "doc.text", action: browser.openUnwall)
+          } label: {
+            Image(systemName: "ellipsis")
+          }
+          .accessibilityLabel("Page options")
+        }
+      }
+      .readerBar(edge: .bottom) { bottomControls }
+      .foregroundStyle(palette.foreground).tint(palette.foreground)
+      .preferredColorScheme(palette.scheme)
+  }
+
+  private var pageContent: some View {
     ZStack(alignment: .top) {
       GeometryReader { geometry in
         WebSurface(
           webView: browser.isReader ? browser.readerView : browser.webView,
-          insets: geometry.safeAreaInsets
+          insets: geometry.safeAreaInsets,
+          nearEnd: $nearEnd
         )
         .id(browser.isReader)
         .ignoresSafeArea(.container, edges: .vertical)
@@ -32,67 +108,26 @@ struct ReaderPage: View {
         ProgressView().padding(8).background(.regularMaterial, in: Capsule()).padding(8)
       }
     }
-    .background(palette.background)
-    .navigationTitle(browser.sourceURL.host ?? "Article")
-    .navigationBarTitleDisplayMode(.inline)
-    .toolbar(.visible, for: .navigationBar)
-    .toolbarBackground(.automatic, for: .navigationBar)
-    .toolbarColorScheme(palette.scheme ?? systemScheme, for: .navigationBar)
-    .toolbar {
-      ToolbarItem(placement: .topBarTrailing) {
-        Menu {
-          Button("Save to inbox", systemImage: "tray.and.arrow.down") {
-            do {
-              try store.add(browser.sourceURL.absoluteString)
-              browser.persistExtraction(in: store)
-            } catch {
-              store.errorMessage = error.localizedDescription
-            }
-          }
-          .disabled(
-            store.articles.contains {
-              $0.url == browser.sourceURL && $0.saved && $0.isArchived != true
-            })
-          Button("Reload", systemImage: "arrow.clockwise", action: browser.reload)
-          Button("Open original", systemImage: "globe", action: browser.openOriginal)
-          Button("Try Unwall", systemImage: "doc.text", action: browser.openUnwall)
-        } label: {
-          Image(systemName: "ellipsis")
+  }
+
+  private var bottomControls: some View {
+    VStack(spacing: 10) {
+      if !appearance, nearEnd, canArchive {
+        Button(action: archive) {
+          Label("Archive and close", systemImage: "archivebox")
+            .font(.subheadline.weight(.semibold)).padding(.horizontal, 20).frame(height: 44)
         }
-        .accessibilityLabel("Page options")
+        .readerGlass().accessibilityIdentifier("reader-archive-prompt")
+        .transition(reduceMotion ? .opacity : .offset(y: 8).combined(with: .opacity))
       }
-    }
-    .readerBar(edge: .bottom) {
       if appearance { appearanceControls } else { navigationControls.padding(.bottom, 6) }
     }
-    .foregroundStyle(palette.foreground).tint(palette.foreground)
-    .preferredColorScheme(palette.scheme)
-    .onAppear {
-      updateAppearance()
-      store.visit(browser.sourceURL)
-    }
-    .onChange(of: browser.committedURL) { _, url in
-      if let url { store.visit(url) }
-    }
-    .onChange(of: fontSize, updateAppearance)
-    .onChange(of: font, updateAppearance)
-    .onChange(of: padding, updateAppearance)
-    .onChange(of: leading, updateAppearance)
-    .onChange(of: paletteName, updateAppearance)
-    .onChange(of: systemScheme, updateAppearance)
-    .alert(
-      "Could not open article",
-      isPresented: Binding(
-        get: { browser.errorMessage != nil }, set: { if !$0 { browser.errorMessage = nil } })
-    ) {
-      Button("OK", role: .cancel) { browser.errorMessage = nil }
-    } message: {
-      Text(browser.errorMessage ?? "")
-    }
+    .animation(
+      .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.18), value: nearEnd)
   }
 
   private var navigationControls: some View {
-    HStack(spacing: 20) {
+    HStack(spacing: 12) {
       Button("Back", systemImage: "chevron.left", action: browser.back)
         .labelStyle(.iconOnly).frame(width: 44, height: 44).disabled(!browser.canGoBack)
         .opacity(browser.canGoBack ? 1 : 0.28)
@@ -106,6 +141,12 @@ struct ReaderPage: View {
       .accessibilityLabel(browser.isReader ? "Website" : "Reader")
       .accessibilityIdentifier("reader-toggle")
       .accessibilityValue(browser.readerReady ? "Ready" : "Preparing").disabled(!browser.hasLoaded)
+      Button(action: toggleSaved) {
+        Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44)
+      }
+      .accessibilityLabel(isSaved ? "Unsave article" : "Save article")
+      .accessibilityValue(isSaved ? "Saved" : "Not saved")
+      .accessibilityIdentifier("reader-save")
       Button {
         if !browser.isReader { browser.toggleReader() }
         appearance = true
@@ -115,6 +156,21 @@ struct ReaderPage: View {
       .accessibilityLabel("Reader appearance").accessibilityIdentifier("reader-appearance")
       .accessibilityValue(browser.appearanceDescription).disabled(!browser.hasLoaded)
     }.font(.title3).padding(.horizontal, 16).padding(.vertical, 5).readerGlass()
+  }
+
+  private func toggleSaved() {
+    do {
+      try store.setSaved(!isSaved, url: article?.url ?? browser.libraryURL)
+      if isSaved { browser.persistExtraction(in: store) }
+    } catch { actionError = error.localizedDescription }
+  }
+
+  private func archive() {
+    guard canArchive, let article else { return }
+    do {
+      try store.archive(article.id)
+      dismiss()
+    } catch { actionError = error.localizedDescription }
   }
 
   private var appearanceControls: some View {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AC0000000000000000000001 /* LibraryCards.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000002; };
 		1769157A8AB718CDFBBCACD7 /* Resources/Fixtures in Resources */ = {isa = PBXBuildFile; fileRef = 0D915EFA215768CF91F0230D /* Resources/Fixtures */; };
 		21ADEF507F9930F5FDD82263 /* Sources/ArticleTagsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A130218C963B16D9D88BB85 /* Sources/ArticleTagsSheet.swift */; };
 		3753BC55C93758D0B1748C68 /* Sources/ArticleStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAA050406DC7C8245063AEDD /* Sources/ArticleStore.swift */; };
@@ -61,6 +62,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AC0000000000000000000002 /* LibraryCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryCards.swift; sourceTree = "<group>"; };
 		0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleReaderApp.swift; sourceTree = "<group>"; };
 		0D915EFA215768CF91F0230D /* Resources/Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Resources/Fixtures; sourceTree = "<group>"; };
 		2A130218C963B16D9D88BB85 /* Sources/ArticleTagsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleTagsSheet.swift; sourceTree = "<group>"; };
@@ -122,6 +124,7 @@
 				A00000000000000000000001 /* THIRD_PARTY_NOTICES.txt */,
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
+				AC0000000000000000000002 /* LibraryCards.swift */,
 				FAA050406DC7C8245063AEDD /* Sources/ArticleStore.swift */,
 				501300FDF518EC91D6BAF584 /* Sources/ReaderPage.swift */,
 				3D271EB184029D0702465C41 /* Resources/reader.css */,
@@ -298,6 +301,7 @@
 				83547CBCE7341933B72FFB38 /* Sources/ReaderTheme.swift in Sources */,
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
+				AC0000000000000000000001 /* LibraryCards.swift in Sources */,
 				3753BC55C93758D0B1748C68 /* Sources/ArticleStore.swift in Sources */,
 				B446FAE6EEDF754A5F085FB3 /* Sources/ReaderPage.swift in Sources */,
 			);

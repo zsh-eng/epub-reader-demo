@@ -90,6 +90,28 @@ struct SavedArticle: Identifiable, Codable {
     }
   }
 
+  /// Unsave keeps history, tags and the cached Reader copy. Removing the link
+  /// is the separate operation that deletes its stored content.
+  func setSaved(_ saved: Bool, url: URL) throws {
+    if saved {
+      try add(url.absoluteString)
+      return
+    }
+    guard let index = articles.firstIndex(where: { $0.url == url }) else { return }
+    var updated = articles
+    updated[index].isSaved = false
+    updated[index].isArchived = false
+    updated[index].savedAt = nil
+    try commit(updated)
+  }
+
+  func archive(_ id: UUID) throws {
+    guard let index = articles.firstIndex(where: { $0.id == id && $0.saved }) else { return }
+    var updated = articles
+    updated[index].isArchived = true
+    try commit(updated)
+  }
+
   /// Called by the visible Reader only. Speculative browsers never write history.
   func visit(_ url: URL, title: String = "") {
     guard ["http", "https"].contains(url.scheme ?? "") else { return }
@@ -168,7 +190,7 @@ struct SavedArticle: Identifiable, Codable {
     let file = downloadFile(article.id)
     do {
       try await Task.detached { try Data(html.utf8).write(to: file, options: .atomic) }.value
-      guard let index = articles.firstIndex(where: { $0.id == article.id && $0.saved }) else {
+      guard let index = articles.firstIndex(where: { $0.id == article.id }) else {
         try? FileManager.default.removeItem(at: file)
         return
       }

@@ -2,6 +2,65 @@ import XCTest
 
 final class ArticleReaderUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
+
+  @MainActor func testReaderBookmarkAndArchiveAtEnd() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    let open = app.buttons["open-copied-link"]
+    XCTAssertTrue(open.waitForExistence(timeout: 10))
+    XCTAssertLessThan(open.frame.maxY, app.searchFields.firstMatch.frame.minY)
+    let empty = app.staticTexts["Your next good read."]
+    XCTAssertTrue(empty.exists)
+    XCTAssertGreaterThan(empty.frame.midY, app.frame.height * 0.4)
+    XCTAssertLessThan(empty.frame.midY, app.frame.height * 0.65)
+    capture(app, "50-empty-library-and-bottom-paste")
+    open.tap()
+    waitEnabled(app.buttons["reader-toggle"])
+    let save = app.buttons["reader-save"]
+    XCTAssertEqual(save.value as? String, "Not saved")
+    save.tap()
+    XCTAssertEqual(save.value as? String, "Saved")
+    save.tap()
+    XCTAssertEqual(save.value as? String, "Not saved")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    XCTAssertFalse(app.buttons["article-story"].exists)
+    app.buttons["folder-history"].tap()
+    app.buttons["article-story"].tap()
+    save.tap()
+    XCTAssertEqual(save.value as? String, "Saved")
+    app.buttons["reader-toggle"].tap()
+    XCTAssertTrue(app.buttons["Website"].waitForExistence(timeout: 10))
+    let archive = app.buttons["reader-archive-prompt"]
+    XCTAssertFalse(archive.exists)
+    for _ in 0..<8 where !archive.exists { app.webViews.firstMatch.swipeUp() }
+    XCTAssertTrue(archive.waitForExistence(timeout: 5))
+    capture(app, "51-end-of-article-archive")
+    archive.tap()
+    XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["reader-save"].exists)
+    app.buttons["folder-saved"].tap()
+    XCTAssertFalse(app.buttons["article-story"].exists)
+    app.buttons["folder-archive"].tap()
+    XCTAssertTrue(app.buttons["article-story"].exists)
+    app.terminate()
+    app.launchArguments = ["-ui-testing"]
+    app.launchEnvironment = [:]
+    app.launch()
+    app.buttons["folder-archive"].tap()
+    let card = app.buttons["article-story"]
+    XCTAssertTrue(card.waitForExistence(timeout: 5))
+    card.press(forDuration: 1)
+    app.buttons["archive-article"].tap()
+    app.buttons["folder-saved"].tap()
+    card.tap()
+    app.buttons["Page options"].tap()
+    XCTAssertFalse(app.buttons["Save to inbox"].exists)
+    app.buttons["reader-archive-menu"].tap()
+    XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
+    XCTAssertFalse(card.exists)
+  }
   @MainActor
   func testSaveRestartBrowseReadAndRemove() throws {
     let app = XCUIApplication()
@@ -52,10 +111,10 @@ final class ArticleReaderUITests: XCTestCase {
     app.buttons["folder-saved"].tap()
     card.press(forDuration: 1)
     app.buttons["Remove link"].tap()
-    XCTAssertTrue(app.staticTexts["Something worth reading"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Your next good read."].waitForExistence(timeout: 5))
     app.terminate()
     app.launch()
-    XCTAssertTrue(app.staticTexts["Something worth reading"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Your next good read."].waitForExistence(timeout: 5))
   }
 
   @MainActor
@@ -207,7 +266,7 @@ final class ArticleReaderUITests: XCTestCase {
     add("https://fixture.example/story", to: app)
     let card = app.buttons["article-story"]
     XCTAssertTrue(card.waitForExistence(timeout: 10))
-    XCTAssertLessThan(card.frame.height, 145)
+    XCTAssertGreaterThan(card.frame.height, 240)
     card.press(forDuration: 1)
     capture(app, "40-padded-card-preview")
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.85)).tap()
@@ -221,7 +280,7 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(card.exists)
     swipeLibrary(app, left: true)
     XCTAssertTrue(app.buttons["folder-archive"].isSelected)
-    XCTAssertTrue(app.staticTexts["Nothing archived"].exists)
+    XCTAssertTrue(app.staticTexts["A place for finished stories."].exists)
     swipeLibrary(app, left: true)
     XCTAssertTrue(app.buttons["folder-downloaded"].isSelected)
     XCTAssertTrue(card.waitForExistence(timeout: 10))
@@ -245,10 +304,23 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(app.buttons["reader-font"].waitForExistence(timeout: 5))
     capture(app, "42-offline-reader-appearance")
     app.buttons["Done"].tap()
+    // Toggling a saved link must preserve its already downloaded Reader copy.
+    let save = app.buttons["reader-save"]
+    save.tap()
+    XCTAssertEqual(save.value as? String, "Not saved")
+    save.tap()
+    XCTAssertEqual(save.value as? String, "Saved")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    XCTAssertTrue(card.waitForExistence(timeout: 5))
+    app.terminate()
+    app.launch()
+    app.buttons["folder-downloaded"].tap()
+    card.tap()
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].waitForExistence(timeout: 10))
     app.navigationBars.buttons.element(boundBy: 0).tap()
     card.press(forDuration: 1)
     app.buttons["Remove link"].tap()
-    XCTAssertTrue(app.staticTexts["Ready for later"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Take a good read with you."].waitForExistence(timeout: 5))
     app.terminate()
     app.launch()
     app.buttons["folder-downloaded"].tap()

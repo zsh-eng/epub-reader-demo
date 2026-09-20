@@ -248,6 +248,24 @@ struct LibraryView: View {
     }
     .animation(searchTransition, value: searching)
     .scrollDismissesKeyboard(.interactively)
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if let url = clipboard.url, !searching, !selecting {
+        ClipboardBanner(url: url) {
+          selected = browsers.open(url, store: store)
+          clipboard.dismiss()
+        } save: {
+          do {
+            try store.add(url.absoluteString)
+            clipboard.dismiss()
+            query = ""
+            searching = false
+            folder = .saved
+          } catch { store.errorMessage = error.localizedDescription }
+        } dismiss: {
+          clipboard.dismiss()
+        }
+      }
+    }
     .modifier(LibrarySearchChrome(query: $query, active: $searching))
     .confirmationDialog(
       "Delete \(selection.count) links?", isPresented: $confirmDelete, titleVisibility: .visible
@@ -263,12 +281,19 @@ struct LibraryView: View {
     ZStack(alignment: .top) {
       TabView(selection: $folder) {
         ForEach(folderItems, id: \.self) { item in
-          ScrollView {
-            library(in: item)
-              .accessibilityHidden(searching || folder != item)
+          GeometryReader { geometry in
+            Group {
+              if matches(in: item).isEmpty {
+                LibraryEmptyState(folder: item)
+                  .frame(height: max(0, geometry.size.height - headerHeight))
+                  .padding(.top, headerHeight)
+              } else {
+                ScrollView { library(in: item) }
+                  .contentMargins(.top, headerHeight + 8, for: .scrollContent)
+                  .contentMargins(.top, headerHeight, for: .scrollIndicators)
+              }
+            }.accessibilityHidden(searching || folder != item)
           }
-          .contentMargins(.top, headerHeight + 8, for: .scrollContent)
-          .contentMargins(.top, headerHeight, for: .scrollIndicators)
           .tag(item)
           .accessibilityIdentifier("library-page-" + item.identifier)
         }
@@ -287,22 +312,6 @@ struct LibraryView: View {
     VStack(spacing: 0) {
       libraryControls.accessibilityHidden(searching)
       folders.accessibilityHidden(searching)
-      if let url = clipboard.url, !selecting {
-        ClipboardBanner(url: url) {
-          selected = browsers.open(url, store: store)
-          clipboard.dismiss()
-        } save: {
-          do {
-            try store.add(url.absoluteString)
-            clipboard.dismiss()
-            query = ""
-            searching = false
-            folder = .saved
-          } catch { store.errorMessage = error.localizedDescription }
-        } dismiss: {
-          clipboard.dismiss()
-        }
-      }
       if selecting {
         HStack {
           Text("\(selection.count) selected").font(.caption)
@@ -329,49 +338,12 @@ struct LibraryView: View {
   }
 
   private func library(in item: ArticleFolder) -> some View {
-    LazyVStack(alignment: .leading, spacing: 0) {
-      if matches(in: item).isEmpty {
-        ContentUnavailableView {
-          Label(item.emptyTitle, systemImage: item == .history ? "clock" : "text.book.closed")
-        } description: {
-          Text(item.emptyDescription)
-        }
-        .padding(.top, 40)
-      }
+    LazyVStack(alignment: .leading, spacing: 18) {
       ForEach(matches(in: item)) { article in
-        articleButton(article) {
-          HStack(alignment: .center, spacing: 14) {
-            VStack(alignment: .leading, spacing: 8) {
-              Text(article.title).font(.headline).lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
-              HStack(spacing: 6) {
-                if let favicon = article.faviconURL {
-                  ArticleThumbnail(url: favicon, label: "Site icon").frame(width: 16, height: 16)
-                    .clipShape(Circle())
-                }
-                Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
-                  .font(.caption).foregroundStyle(ReaderTheme.muted).lineLimit(1)
-              }
-              if !article.tagNames.isEmpty {
-                Text(article.tagNames.joined(separator: " · "))
-                  .font(.caption2).foregroundStyle(ReaderTheme.muted).lineLimit(1)
-              }
-            }
-            if let image = article.imageURL {
-              ArticleThumbnail(url: image).frame(width: 68, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-            }
-          }
-          // Padding belongs to the pressable card, including its context preview.
-          .padding(16)
-          .background(ReaderTheme.background, in: RoundedRectangle(cornerRadius: 16))
-          .contentShape(RoundedRectangle(cornerRadius: 16))
-        }
-        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 16))
-        Rectangle().fill(ReaderTheme.border).frame(height: 0.5).padding(.horizontal, 16)
+        articleButton(article) { ArticleCard(article: article) }
+          .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 24))
       }
-    }
-    .padding(.horizontal, 4).padding(.bottom, 20)
+    }.padding(.horizontal, 16).padding(.bottom, 20)
   }
 
   private var searchResults: some View {

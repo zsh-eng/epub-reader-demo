@@ -59,7 +59,7 @@ struct ClipboardBanner: View {
         .frame(width: 36, height: 44).accessibilityIdentifier("dismiss-copied-link")
     }
     .padding(.leading, 18).padding(.trailing, 6).padding(.vertical, 8)
-    .readerGlass().padding(.horizontal, 20).padding(.top, 8)
+    .readerGlass().padding(.horizontal, 20).padding(.bottom, 8)
     .accessibilityElement(children: .contain)
   }
 }

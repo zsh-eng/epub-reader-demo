@@ -125,6 +125,7 @@ enum ArticleRouting {
   }
 
   var sourceURL: URL { ArticleRouting.original(currentURL) }
+  var libraryURL: URL { downloadURL }
 
   func back() {
     guard webView.canGoBack else { return }
@@ -395,11 +396,34 @@ enum ArticleRouting {
 struct WebSurface: UIViewRepresentable {
   let webView: WKWebView
   let insets: EdgeInsets
+  @Binding var nearEnd: Bool
+  func makeCoordinator() -> Coordinator { Coordinator(nearEnd: $nearEnd) }
   func makeUIView(context: Context) -> WKWebView {
+    webView.scrollView.delegate = context.coordinator
     updateInsets(webView)
     return webView
   }
-  func updateUIView(_ uiView: WKWebView, context: Context) { updateInsets(uiView) }
+  func updateUIView(_ uiView: WKWebView, context: Context) {
+    context.coordinator.nearEnd = $nearEnd
+    updateInsets(uiView)
+  }
+
+  /// Different enter/leave distances prevent the prompt's own height from
+  /// repeatedly hiding and showing it. Loading a page alone never triggers it.
+  final class Coordinator: NSObject, UIScrollViewDelegate {
+    var nearEnd: Binding<Bool>
+    init(nearEnd: Binding<Bool>) { self.nearEnd = nearEnd }
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+      guard scrollView.isDragging || scrollView.isDecelerating else { return }
+      let bottom =
+        scrollView.contentOffset.y + scrollView.bounds.height
+        - scrollView.adjustedContentInset.bottom
+      let remaining = scrollView.contentSize.height - bottom
+      let next = remaining < (nearEnd.wrappedValue ? 280 : 140)
+      guard next != nearEnd.wrappedValue else { return }
+      nearEnd.wrappedValue = next
+    }
+  }
 
   private func updateInsets(_ view: WKWebView) {
     let scroll = view.scrollView
