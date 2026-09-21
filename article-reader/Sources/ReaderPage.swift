@@ -11,6 +11,7 @@ struct ReaderPage: View {
   @State private var appearance = false
   @State private var nearEnd = false
   @State private var actionError: String?
+  @State private var controlsHeight: CGFloat = 60
   @AppStorage("reader-size") private var fontSize = 20.0
   @AppStorage("reader-font") private var font = "System"
   @AppStorage("reader-padding") private var padding = 18.0
@@ -125,7 +126,22 @@ struct ReaderPage: View {
     }
   }
 
-  private var bottomControls: some View {
+  @ViewBuilder private var bottomControls: some View {
+    if browser.annotationPresentation != nil {
+      // safeAreaBar has a separate native host. Remove its controls during a
+      // modal sheet; an accessibilityHidden modifier alone does not hide them.
+      Color.clear.frame(height: controlsHeight).allowsHitTesting(false).accessibilityHidden(true)
+    } else {
+      interactiveBottomControls
+        .onGeometryChange(for: CGFloat.self) {
+          $0.size.height
+        } action: {
+          controlsHeight = $0
+        }
+    }
+  }
+
+  private var interactiveBottomControls: some View {
     VStack(spacing: 10) {
       if browser.selectedAnnotationID == nil, !appearance, nearEnd, canArchive {
         Button(action: archive) {
@@ -151,8 +167,6 @@ struct ReaderPage: View {
       .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.18), value: nearEnd
     )
     .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), value: browser.selectedAnnotationID)
-    // A modal note sheet owns interaction even while the Reader remains visible.
-    .accessibilityHidden(browser.annotationPresentation != nil)
   }
 
   private var navigationControls: some View {
