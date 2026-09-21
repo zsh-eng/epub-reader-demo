@@ -129,6 +129,14 @@
     },
     render(records, token = '') {
       documentToken = token;
+      // Empty replacement Highlight objects can leave old pixels painted in
+      // WebKit even when their registry size is zero. Invalidate the old ranges
+      // and remove their entries before resolving and registering the new ones.
+      for (const colour of colours) {
+        const name = 'arctic-' + colour;
+        globalThis.CSS?.highlights?.get(name)?.clear();
+        globalThis.CSS?.highlights?.delete(name);
+      }
       unwrap();
       const { nodes, text } = content();
       const ranges = new Map(colours.map(colour => [colour, []])), intervals = [], missing = [];
@@ -147,7 +155,10 @@
         }
       }
       if (globalThis.CSS?.highlights && globalThis.Highlight) {
-        for (const colour of colours) CSS.highlights.set('arctic-' + colour, new Highlight(...ranges.get(colour)));
+        for (const colour of colours) {
+          const painted = ranges.get(colour);
+          if (painted.length) CSS.highlights.set('arctic-' + colour, new Highlight(...painted));
+        }
       } else {
         fallbackMark(nodes, intervals);
         // splitText moves live Range boundaries: rebuild after fallback wrapping.

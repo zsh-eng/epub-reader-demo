@@ -34,6 +34,16 @@ struct ReaderPage: View {
       .sheet(item: $browser.annotationPresentation) { presentation in
         ReaderAnnotations(browser: browser, presentation: presentation)
       }
+      #if DEBUG
+        .overlay(alignment: .topLeading) {
+          if TestMode.enabled
+            && ProcessInfo.processInfo.arguments.contains("-test-annotation-render")
+          {
+            Text(browser.annotationRenderState).font(.system(size: 7))
+            .accessibilityIdentifier("annotation-render-state").allowsHitTesting(false)
+          }
+        }
+      #endif
       .onAppear {
         updateAppearance()
         browser.refreshAnnotations()
@@ -201,21 +211,6 @@ struct ReaderPage: View {
         .labelStyle(.iconOnly).frame(width: 44, height: 44).disabled(!browser.canGoForward)
         .accessibilityIdentifier("browser-forward")
         .opacity(browser.canGoForward ? 1 : 0.28).frame(maxWidth: .infinity)
-      Button(action: browser.toggleReader) {
-        Image(systemName: browser.isReader ? "globe" : "bolt.fill")
-          .font(.system(size: 22, weight: .medium, design: .rounded)).frame(width: 44, height: 44)
-      }
-      .accessibilityLabel(browser.isReader ? "Website" : "Reader")
-      .accessibilityIdentifier("reader-toggle")
-      .accessibilityValue(browser.readerReady ? "Ready" : "Preparing")
-      .disabled(!browser.hasLoaded || browser.isOpeningWebsite)
-      .frame(maxWidth: .infinity)
-      Button(action: toggleSaved) {
-        Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44)
-      }
-      .accessibilityLabel(isSaved ? "Unsave article" : "Save article")
-      .accessibilityValue(isSaved ? "Saved" : "Not saved")
-      .accessibilityIdentifier("reader-save").frame(maxWidth: .infinity)
       Button {
         if !browser.isReader { browser.toggleReader() }
         appearance = true
@@ -224,6 +219,21 @@ struct ReaderPage: View {
       }
       .accessibilityLabel("Reader appearance").accessibilityIdentifier("reader-appearance")
       .accessibilityValue(browser.appearanceDescription).disabled(!browser.hasLoaded)
+      .frame(maxWidth: .infinity)
+      Button(action: toggleSaved) {
+        Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44)
+      }
+      .accessibilityLabel(isSaved ? "Unsave article" : "Save article")
+      .accessibilityValue(isSaved ? "Saved" : "Not saved")
+      .accessibilityIdentifier("reader-save").frame(maxWidth: .infinity)
+      Button(action: browser.toggleReader) {
+        Image(systemName: browser.isReader ? "globe" : "bolt.fill")
+          .font(.system(size: 22, weight: .medium, design: .rounded)).frame(width: 44, height: 44)
+      }
+      .accessibilityLabel(browser.isReader ? "Website" : "Reader")
+      .accessibilityIdentifier("reader-toggle")
+      .accessibilityValue(browser.readerReady ? "Ready" : "Preparing")
+      .disabled(!browser.hasLoaded || browser.isOpeningWebsite)
       .frame(maxWidth: .infinity)
     }
     .font(.title3).padding(.horizontal, 12).padding(.vertical, 5)

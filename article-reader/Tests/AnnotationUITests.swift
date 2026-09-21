@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 final class AnnotationUITests: XCTestCase {
@@ -8,6 +9,7 @@ final class AnnotationUITests: XCTestCase {
     let app = openFixture()
     selectPassage(in: app)
     tapSelectionAction("Highlight", in: app)
+    expectRender("painted=1; marks=0; selected=0", in: app)
     let notes = app.buttons["reader-notes"]
     expectValue("1 passage", on: notes)
     notes.tap()
@@ -31,7 +33,10 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertEqual(annotationRows(in: app).count, 1)
     app.buttons["Passage options"].tap()
     app.buttons["Remove highlight"].tap()
-    XCTAssertTrue(app.staticTexts["Keep this thought for tomorrow."].exists)
+    app.navigationBars.buttons["Done"].tap()
+    expectRender("painted=0; marks=0; selected=0", in: app)
+    notes.tap()
+    XCTAssertTrue(app.staticTexts["Keep this thought for tomorrow."].waitForExistence(timeout: 5))
     XCTAssertEqual(annotationRows(in: app).count, 1)
     app.buttons["Passage options"].tap()
     XCTAssertFalse(app.buttons["Remove highlight"].exists)
@@ -84,6 +89,8 @@ final class AnnotationUITests: XCTestCase {
     app.navigationBars.buttons["Done"].tap()
     XCTAssertTrue(app.buttons["highlight-remove"].waitForExistence(timeout: 5))
     app.buttons["highlight-remove"].tap()
+    expectRender("painted=0; marks=0; selected=0", in: app)
+    capture(app, "highlight-removed-note-preserved-reader")
     expectValue("1 passage", on: app.buttons["reader-notes"])
     app.buttons["reader-notes"].tap()
     XCTAssertTrue(app.staticTexts["The yellow can become rose."].waitForExistence(timeout: 5))
@@ -148,9 +155,117 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertTrue(app.webViews.staticTexts[paragraph].firstMatch.isHittable)
   }
 
+  @MainActor func testLongQuoteKeepsInsetWhileScrollingInMediumNoteSheet() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard",
+      "-test-long-annotation", "-dark-ui",
+    ]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/long"
+    app.launch()
+    let open = app.buttons["open-copied-link"]
+    XCTAssertTrue(open.waitForExistence(timeout: 10))
+    open.tap()
+    let toggle = app.buttons["reader-toggle"]
+    expectation(
+      for: NSPredicate(format: "exists == true AND enabled == true"), evaluatedWith: toggle)
+    waitForExpectations(timeout: 20)
+    if toggle.label == "Reader" { toggle.tap() }
+    let editor = app.textViews["annotation-note"]
+    XCTAssertTrue(editor.waitForExistence(timeout: 15), app.debugDescription)
+    XCTAssertEqual(editor.value as? String, "Keep the whole passage.")
+    XCTAssertGreaterThan(app.navigationBars["Note"].frame.minY, app.frame.height * 0.3)
+    XCTAssertFalse(app.keyboards.firstMatch.exists)
+    let layout = app.staticTexts["annotation-quote-layout"]
+    expectation(
+      for: NSPredicate(format: "label == %@", "top=18; bottom=18; end=false"), evaluatedWith: layout
+    )
+    waitForExpectations(timeout: 5)
+    capture(app, "long-quote-medium-sheet-top-dark")
+    let quote = app.scrollViews["annotation-quote-scroll"]
+    XCTAssertTrue(quote.exists, app.debugDescription)
+    quote.swipeUp()
+    expectation(
+      for: NSPredicate(format: "label == %@", "top=18; bottom=18; end=true"), evaluatedWith: layout)
+    waitForExpectations(timeout: 5)
+    XCTAssertGreaterThan(app.navigationBars["Note"].frame.minY, app.frame.height * 0.3)
+    capture(app, "long-quote-medium-sheet-bottom-dark")
+  }
+
+  @MainActor func testRemoveHighlightClearsReaderPaintImmediately() {
+    let app = openFixture()
+    XCTAssertLessThan(
+      app.buttons["reader-appearance"].frame.midX, app.buttons["reader-save"].frame.midX)
+    XCTAssertGreaterThan(
+      app.buttons["reader-toggle"].frame.midX, app.buttons["reader-save"].frame.midX)
+    selectPassage(in: app)
+    tapSelectionAction("Highlight", in: app)
+    expectRender("painted=1; marks=0; selected=0", in: app)
+    let passageFrame = app.webViews.staticTexts[paragraph].firstMatch.frame
+    let scale = CGFloat(app.screenshot().image.cgImage!.width) / app.frame.width
+    XCTAssertGreaterThan(yellowPixelCount(app.screenshot(), in: passageFrame, scale: scale), 20)
+    capture(app, "highlight-before-removal")
+    app.buttons["highlight-remove"].tap()
+    expectValue("0 passages", on: app.buttons["reader-notes"])
+    expectRender("painted=0; marks=0; selected=0", in: app)
+    XCTAssertEqual(
+      yellowPixelCount(app.screenshot(), in: passageFrame, scale: scale), 0,
+      "WebKit must repaint after removing registered ranges")
+    capture(app, "highlight-after-removal")
+    XCTAssertFalse(app.buttons["highlight-colour-yellow"].exists)
+  }
+
+  /// The registry can be empty while WebKit retains yellow paint. Inspect the
+  /// selected paragraph only; native controls and other article content cannot
+  /// make this check pass or fail.
+  private func yellowPixelCount(_ screenshot: XCUIScreenshot, in frame: CGRect, scale: CGFloat)
+    -> Int
+  {
+    let pixelsFrame = CGRect(
+      x: frame.minX * scale, y: frame.minY * scale,
+      width: frame.width * scale, height: frame.height * scale)
+    guard let image = screenshot.image.cgImage?.cropping(to: pixelsFrame) else { return -1 }
+    let width = image.width
+    let height = image.height
+    var pixels = [UInt8](repeating: 0, count: width * height * 4)
+    return pixels.withUnsafeMutableBytes { bytes in
+      guard
+        let context = CGContext(
+          data: bytes.baseAddress, width: width, height: height, bitsPerComponent: 8,
+          bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )
+      else { return -1 }
+      context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+      let channels = bytes.bindMemory(to: UInt8.self)
+      var count = 0
+      for y in 0..<height {
+        for x in 0..<width {
+          let index = (y * width + x) * 4
+          if channels[index] > 225 && channels[index + 1] > 180
+            && channels[index + 2] < 210
+            && Int(channels[index]) - Int(channels[index + 2]) > 30
+          {
+            count += 1
+          }
+        }
+      }
+      return count
+    }
+  }
+
+  @MainActor private func expectRender(_ value: String, in app: XCUIApplication) {
+    let rendered = app.staticTexts["annotation-render-state"]
+    expectation(for: NSPredicate(format: "label == %@", value), evaluatedWith: rendered)
+    waitForExpectations(timeout: 5)
+  }
+
   @MainActor private func openFixture(dark: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
-    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard"]
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard",
+      "-test-annotation-render",
+    ]
     if dark { app.launchArguments.append("-dark-ui") }
     app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/unicode"
     app.launch()
@@ -166,7 +281,7 @@ final class AnnotationUITests: XCTestCase {
 
   @MainActor private func reopenOffline(_ app: XCUIApplication) {
     app.terminate()
-    app.launchArguments = ["-ui-testing", "-articles-offline"]
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-test-annotation-render"]
     app.launchEnvironment = [:]
     app.launch()
     let card = app.buttons["article-unicode"]

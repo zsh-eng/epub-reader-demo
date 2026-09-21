@@ -185,6 +185,9 @@ enum ArticleRouting {
   var selectedAnnotationID: UUID?
   @ObservationIgnored private var pendingAnnotationReveal: UUID?
   var unmatchedAnnotations: Set<String> = []
+  #if DEBUG
+    var annotationRenderState = "pending"
+  #endif
   var annotations: [ReaderAnnotation] { AnnotationStore.shared.annotations(for: libraryURL) }
   var isReader = false
   var readerReady = false
@@ -964,20 +967,85 @@ enum ArticleRouting {
     readerView.evaluateJavaScript(script, in: nil, in: .defaultClient) { [weak self] result in
       guard case .success = result else { return }
       self?.refreshAnnotations()
+      #if DEBUG
+        self?.prepareLongAnnotationFixture()
+      #endif
     }
   }
+
+  #if DEBUG
+    /// Seed a real quote from bundled HTML to exercise a long scrolling quote
+    /// without relying on platform-dependent native selection handle gestures.
+    private func prepareLongAnnotationFixture() {
+      guard TestMode.enabled,
+        ProcessInfo.processInfo.arguments.contains("-test-long-annotation"), annotations.isEmpty
+      else { return }
+      let token = readerDocumentToken
+      readerView.evaluateJavaScript(
+        """
+        (() => {
+          const paragraph = [...document.querySelectorAll('#reader-content p')]
+            .find(p => p.textContent.startsWith('There is a particular pleasure'));
+          if (!paragraph) return null;
+          const range = document.createRange(); range.selectNodeContents(paragraph);
+          const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+          const quote = globalThis.arcticAnnotations.selection(); selection.removeAllRanges();
+          return quote;
+        })()
+        """, in: nil, in: .defaultClient
+      ) { [weak self] result in
+        guard let self, self.readerDocumentToken == token,
+          case .success(let value) = result, let selection = value as? [String: Any],
+          let data = try? JSONSerialization.data(withJSONObject: selection),
+          let quote = try? JSONDecoder().decode(ReaderQuote.self, from: data)
+        else { return }
+        do {
+          let annotation = try AnnotationStore.shared.highlight(quote, in: self.libraryURL)
+          try AnnotationStore.shared.updateNote("Keep the whole passage.", id: annotation.id)
+          self.refreshAnnotations()
+          self.annotationPresentation = AnnotationPresentation(editing: annotation.id)
+        } catch { self.errorMessage = error.localizedDescription }
+      }
+    }
+  #endif
 
   func refreshAnnotations() {
     guard let data = try? JSONEncoder().encode(annotations),
       let json = String(data: data, encoding: .utf8)
     else { return }
     let token = readerDocumentToken
+    var script = "return globalThis.arcticAnnotations?.render(JSON.parse(records), token) || [];"
+    #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-annotation-render") {
+        // Read the rendered registry, not the native records. A passing storage
+        // assertion alone does not prove that WebKit removed the visible paint.
+        script = """
+          const missing = globalThis.arcticAnnotations?.render(JSON.parse(records), token) || [];
+          let painted = 0;
+          for (const [name, ranges] of (globalThis.CSS?.highlights || [])) {
+            if (name.startsWith('arctic-')) painted += ranges.size;
+          }
+          return { missing, painted, marks: document.querySelectorAll('mark[data-arctic-highlight]').length,
+            selected: window.getSelection()?.toString().length || 0 };
+          """
+      }
+    #endif
     readerView.callAsyncJavaScript(
-      "return globalThis.arcticAnnotations?.render(JSON.parse(records), token) || [];",
-      arguments: ["records": json, "token": token], in: nil, in: .defaultClient
+      script, arguments: ["records": json, "token": token], in: nil, in: .defaultClient
     ) { [weak self] result in
       guard let self, self.readerDocumentToken == token else { return }
-      if case .success(let value) = result, let ids = value as? [String] {
+      var missing: [String]?
+      if case .success(let value) = result { missing = value as? [String] }
+      #if DEBUG
+        if case .success(let value) = result, let rendered = value as? [String: Any] {
+          missing = rendered["missing"] as? [String]
+          self.annotationRenderState =
+            "painted=\(rendered["painted"] ?? "?"); marks=\(rendered["marks"] ?? "?"); selected=\(rendered["selected"] ?? "?")"
+        } else if case .failure(let error) = result {
+          self.annotationRenderState = "error: " + error.localizedDescription
+        }
+      #endif
+      if let ids = missing {
         self.unmatchedAnnotations = Set(ids)
         if let pending = self.pendingAnnotationReveal {
           self.pendingAnnotationReveal = nil

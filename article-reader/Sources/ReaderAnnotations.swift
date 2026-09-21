@@ -156,6 +156,12 @@ struct AnnotationEditor: View {
   var onChange: () -> Void
   @State private var text: String
   @State private var quoteHeight: CGFloat = 60
+  @ScaledMetric(relativeTo: .body) private var maximumQuoteHeight: CGFloat = 110
+  #if DEBUG
+    @State private var quoteViewportFrame: CGRect = .zero
+    @State private var quoteCardFrame: CGRect = .zero
+    @State private var quoteAtEnd = false
+  #endif
   @State private var errorMessage: String?
   @FocusState private var focused: Bool
   @Environment(\.dismiss) private var dismiss
@@ -168,17 +174,39 @@ struct AnnotationEditor: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
+      // Keep the inset outside the clipped viewport. Long passages can scroll,
+      // while the first/last line always has space from the rounded card edge.
       ScrollView {
-        AnnotationQuote(quote: annotation.quote.exact, colour: annotation.highlightColour).padding(
-          18
-        )
-        .onGeometryChange(for: CGFloat.self) {
-          $0.size.height
-        } action: {
-          quoteHeight = $0
-        }
+        AnnotationQuote(quote: annotation.quote.exact, colour: annotation.highlightColour)
+          .onGeometryChange(for: CGFloat.self) {
+            $0.size.height
+          } action: {
+            quoteHeight = $0
+          }
       }
-      .frame(height: min(110, max(60, quoteHeight)))
+      .frame(height: min(maximumQuoteHeight, max(24, quoteHeight)))
+      .scrollBounceBehavior(.basedOnSize)
+      .accessibilityIdentifier("annotation-quote-scroll")
+      #if DEBUG
+        .onGeometryChange(for: CGRect.self) {
+          $0.frame(in: .global)
+        } action: {
+          if TestMode.enabled { quoteViewportFrame = $0 }
+        }
+        .onScrollGeometryChange(for: Bool.self) {
+          $0.contentOffset.y + $0.containerSize.height >= $0.contentSize.height - 1
+        } action: { _, value in
+          if TestMode.enabled { quoteAtEnd = value }
+        }
+      #endif
+      .padding(18)
+      #if DEBUG
+        .onGeometryChange(for: CGRect.self) {
+          $0.frame(in: .global)
+        } action: {
+          if TestMode.enabled { quoteCardFrame = $0 }
+        }
+      #endif
       .background(
         annotation.highlightColour.tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 20))
       ZStack(alignment: .topLeading) {
@@ -195,6 +223,17 @@ struct AnnotationEditor: View {
       }
     }
     .padding(20).background(Color(uiColor: .systemBackground))
+    #if DEBUG
+      .overlay(alignment: .bottomLeading) {
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-long-annotation") {
+          Text(
+            "top=\(Int(quoteViewportFrame.minY - quoteCardFrame.minY)); bottom=\(Int(quoteCardFrame.maxY - quoteViewportFrame.maxY)); end=\(quoteAtEnd)"
+          )
+          .font(.system(size: 7)).accessibilityIdentifier("annotation-quote-layout")
+          .allowsHitTesting(false)
+        }
+      }
+    #endif
     .navigationTitle("Note").navigationBarTitleDisplayMode(.inline)
     .toolbar {
       ToolbarItem(placement: .confirmationAction) {
@@ -206,6 +245,7 @@ struct AnnotationEditor: View {
     }
     .presentationDetents([.medium, .large])
     .presentationDragIndicator(.visible)
+    .presentationContentInteraction(.scrolls)
     .interactiveDismissDisabled(errorMessage != nil)
     .onAppear { focused = text.isEmpty }
     .onChange(of: text) { _, _ in save() }
@@ -260,6 +300,9 @@ struct HighlightToolbar: View {
       if annotation.isHighlighted {
         Button {
           perform { try AnnotationStore.shared.removeHighlight(annotation.id) }
+          browser.readerView.evaluateJavaScript(
+            "window.getSelection()?.removeAllRanges()", in: nil, in: .defaultClient
+          ) { _ in }
           browser.selectedAnnotationID = nil
         } label: {
           Image(systemName: "eraser").frame(width: 44, height: 44)

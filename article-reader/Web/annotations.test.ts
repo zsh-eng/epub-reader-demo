@@ -66,7 +66,7 @@ test('non-highlight notes remain revealable, empty and outside selections cannot
   const p = await page();
   const quote = await select(p, 'em');
   expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [{ ...record(quote), isHighlighted: false }])).toEqual([]);
-  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')!.size)).toBe(0);
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')?.size ?? 0)).toBe(0);
   expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('one'))).toBe(true);
   await p.evaluate(() => window.getSelection()!.removeAllRanges());
   expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.selection())).toBeNull();
@@ -89,7 +89,7 @@ test('recolour updates the painted ranges and tap bridge without changing the ar
   await p.locator('em').click();
   expect(await p.evaluate(() => (globalThis as any).messages)).toEqual([{ id: 'one', token: 'document-one' }]);
   await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'document-one'), [{ ...record(quote), colour: 'rose' }]);
-  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')!.size)).toBe(0);
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')?.size ?? 0)).toBe(0);
   expect(await p.evaluate(() => [...CSS.highlights.get('arctic-rose')!].map(range => range.toString()))).toEqual([quote.exact]);
   expect(await p.locator('article').innerHTML()).toBe(before);
   await p.locator('p').nth(1).click();
@@ -108,5 +108,19 @@ test('fallback retains mixed colours, tap ranges and original text across recolo
   expect(await p.locator('mark mark').count()).toBe(0);
   await p.evaluate(() => (globalThis as any).arcticAnnotations.render([]));
   expect(await p.locator('article').innerHTML()).toBe(before);
+  await p.close();
+});
+
+
+test('removal unregisters paint while keeping a note-only passage revealable', async () => {
+  const p = await page();
+  const quote = await select(p, 'em');
+  await p.evaluate(() => window.getSelection()!.removeAllRanges());
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(quote)]);
+  expect(await p.evaluate(() => CSS.highlights.has('arctic-yellow'))).toBe(true);
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [{ ...record(quote), isHighlighted: false, note: 'Keep this note.' }]);
+  expect(await p.evaluate(() => [...CSS.highlights.keys()].filter(name => name.startsWith('arctic-')))).toEqual([]);
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('one'))).toBe(true);
+  expect(await p.locator('mark[data-arctic-highlight]').count()).toBe(0);
   await p.close();
 });
