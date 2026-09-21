@@ -145,9 +145,9 @@ private final class LibraryFrameMonitor: ObservableObject {
     // calling it a miss. These are estimates, never compositor frame counts.
     let expectedInterval = max(previousInterval, interval)
     let skippedTime = min(window, max(0, displayLink.timestamp - previousTarget))
-    let missed =
-      Int((skippedTime / expectedInterval).rounded())
-      + (now > displayLink.targetTimestamp ? 1 : 0)
+    // Count only completed timestamp gaps. The one-callback delay is intentional:
+    // counting a late current deadline here would count it again in the next gap.
+    let missed = Int((skippedTime / expectedInterval).rounded())
     if count == samples.count {
       head = (head + 1) % samples.count
       count -= 1
