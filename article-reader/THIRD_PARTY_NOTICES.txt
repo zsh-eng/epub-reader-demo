@@ -303,3 +303,7 @@ https://openai.com/index/an-alien-mind/
 The original OG image is bundled in AlienMindReplay.imageset for the native
 article replay. It is not generated artwork. The replay uses a recorded Jev
 result and does not contact OpenAI or Jev.
+
+The article-page image in AlienMindArticlePage.imageset is the user's supplied
+screenshot of the same OpenAI article. It preserves the original publisher
+layout and is displayed at its original aspect ratio in the native replay.

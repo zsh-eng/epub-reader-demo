@@ -99,19 +99,16 @@ private struct ArticleReplayScene: View {
         Image(systemName: "arrow.clockwise")
       }
       .font(.system(size: 12)).padding(12).readerGlass().padding(12)
-      VStack(alignment: .leading, spacing: 22) {
-        Text("OpenAI").font(.system(size: 17, weight: .semibold))
-        Text("September 6, 2026 · Research")
-          .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 14)
-        Text(article.title)
-          .font(.system(size: 36, weight: .medium)).tracking(-1.3)
-        Text("By: \(article.author)\nChief Scientist at OpenAI")
-          .font(.system(size: 12)).foregroundStyle(.secondary)
-        Text(article.description)
-          .font(.system(size: 14)).lineSpacing(4)
+      // Keep the publisher's exact layout and typography. Fit the supplied
+      // screenshot without stretching, aligned to the top of the viewport.
+      GeometryReader { geometry in
+        Image("AlienMindArticlePage")
+          .resizable().scaledToFit()
+          .frame(width: geometry.size.width)
+          .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+          .clipped()
+          .accessibilityHidden(true)
       }
-      .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 22)
-      Spacer(minLength: 16)
       HStack {
         Image(systemName: "chevron.left")
         Spacer()
@@ -127,7 +124,9 @@ private struct ArticleReplayScene: View {
       }
       .font(.system(size: 18)).padding(18).readerGlass().padding(12)
     }
-    .background(ReaderTheme.background)
+    .background(ReadingPalette.night.background)
+    .foregroundStyle(ReadingPalette.night.foreground)
+    .environment(\.colorScheme, .dark)
   }
 
   private var shareSheet: some View {
