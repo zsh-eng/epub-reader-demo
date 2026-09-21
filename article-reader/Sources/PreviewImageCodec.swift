@@ -23,7 +23,7 @@ enum PreviewImageCodec {
 
   static func compact(_ data: Data) -> Data? {
     guard let image = thumbnail(data, pixels: 1200) else { return nil }
-    if hasAlpha(image) { return encode(image, type: UTType.png.identifier, quality: 1) }
+    if hasAlpha(data) { return encode(image, type: UTType.png.identifier, quality: 1) }
     guard let jpeg = encode(image, type: UTType.jpeg.identifier, quality: 0.8) else { return nil }
     // Native HEIC encoding is optional. Keep the smaller successful result;
     // JPEG remains a fast, portable fallback on devices without this encoder.
@@ -36,10 +36,19 @@ enum PreviewImageCodec {
     return jpeg
   }
 
+  /// Display derivatives favour fast native decoding. Encoding HEIC again for
+  /// every small size adds CPU work; the compact master already saves storage.
+  static func displayThumbnail(_ data: Data, pixels: Int) -> Data? {
+    guard let image = thumbnail(data, pixels: pixels) else { return nil }
+    return encode(
+      image, type: hasAlpha(data) ? UTType.png.identifier : UTType.jpeg.identifier,
+      quality: 0.8)
+  }
+
   static func placeholder(_ data: Data) -> Data? {
     guard let image = thumbnail(data, pixels: 24) else { return nil }
     return encode(
-      image, type: hasAlpha(image) ? UTType.png.identifier : UTType.jpeg.identifier,
+      image, type: hasAlpha(data) ? UTType.png.identifier : UTType.jpeg.identifier,
       quality: 0.4)
   }
 
@@ -62,8 +71,13 @@ enum PreviewImageCodec {
   }
 
   private static let encoders = CGImageDestinationCopyTypeIdentifiers() as! [String]
-  private static func hasAlpha(_ image: CGImage) -> Bool {
-    [.first, .last, .premultipliedFirst, .premultipliedLast].contains(image.alphaInfo)
+  private static func hasAlpha(_ data: Data) -> Bool {
+    // An opaque HEIC can decode into an alpha-capable bitmap. Source metadata
+    // distinguishes real transparency from that decoded memory layout.
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+    else { return false }
+    return properties[kCGImagePropertyHasAlpha] as? Bool ?? false
   }
   private static func encode(_ image: CGImage, type: String, quality: Double) -> Data? {
     let result = NSMutableData()

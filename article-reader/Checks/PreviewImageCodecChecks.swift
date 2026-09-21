@@ -27,7 +27,9 @@ import UniformTypeIdentifiers
     )
 
     for pixels in [96, 256, 960] {
-      let decoded = PreviewImageCodec.thumbnail(compact, pixels: pixels)!
+      let persisted = PreviewImageCodec.displayThumbnail(compact, pixels: pixels)!
+      precondition(type(persisted) == UTType.jpeg.identifier)
+      let decoded = PreviewImageCodec.thumbnail(persisted, pixels: 4000)!
       precondition(decoded.width == pixels && decoded.height == pixels * 3 / 4)
       let bytes = decoded.bytesPerRow * decoded.height
       precondition(bytes < compactImage.bytesPerRow * compactImage.height)
@@ -57,6 +59,8 @@ import UniformTypeIdentifiers
     precondition((120...136).contains(Int(sampleBytes[(32 * 64 + 32) * 4 + 3])))
     let alphaPlaceholder = PreviewImageCodec.placeholder(compactAlpha)!
     precondition(type(alphaPlaceholder) == UTType.png.identifier)
+    precondition(
+      type(PreviewImageCodec.displayThumbnail(compactAlpha, pixels: 32)!) == UTType.png.identifier)
 
     let web = PreviewImageCodec.webDataURL(compact)
     precondition(web.hasPrefix("data:image/jpeg;base64,"))
@@ -72,6 +76,7 @@ import UniformTypeIdentifiers
     precondition(PreviewImageCodec.compact(invalid) == nil)
     precondition(PreviewImageCodec.thumbnail(invalid, pixels: 96) == nil)
     precondition(PreviewImageCodec.placeholder(invalid) == nil)
+    precondition(PreviewImageCodec.displayThumbnail(invalid, pixels: 96) == nil)
     precondition(PreviewImageCodec.webDataURL(invalid).isEmpty)
     print(
       "Codec checks passed: size bounds, byte savings, display sizes, alpha, EXIF orientation, placeholder, Reader MIME, invalid input."

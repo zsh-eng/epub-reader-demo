@@ -89,6 +89,7 @@ struct ThumbnailRequest: Hashable, Sendable {
 @MainActor final class ThumbnailCache {
   static let shared = ThumbnailCache()
   private let images = NSCache<NSString, UIImage>()
+  private let previews = NSCache<NSURL, UIImage>()
   private let decoding = PreviewImageWorkLimit(limit: 2)
   private struct Request {
     let task: Task<UIImage?, Never>
@@ -99,6 +100,8 @@ struct ThumbnailRequest: Hashable, Sendable {
   private init() {
     images.countLimit = 96
     images.totalCostLimit = 32 * 1024 * 1024
+    previews.countLimit = 256
+    previews.totalCostLimit = 1024 * 1024
   }
 
   func image(for url: URL?, pixels: Int = 960) -> UIImage? {
@@ -120,7 +123,9 @@ struct ThumbnailRequest: Hashable, Sendable {
     } else {
       let decoding = self.decoding
       task = Task.detached(priority: prefetch ? .utility : .userInitiated) { () -> UIImage? in
-        guard let bytes = await PreviewImageDisk.shared.data(for: url, prefetch: prefetch),
+        guard
+          let bytes = await PreviewImageDisk.shared.thumbnailData(
+            for: url, pixels: pixels, prefetch: prefetch),
           !Task.isCancelled, await decoding.acquire(prefetch: prefetch)
         else { return nil }
         let decoded = Task.isCancelled ? nil : PreviewImageCodec.thumbnail(bytes, pixels: pixels)
@@ -140,6 +145,29 @@ struct ThumbnailRequest: Hashable, Sendable {
       images.setObject(
         image, forKey: key.key,
         cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0)
+    }
+    return image
+  }
+
+  /// Tiny placeholders are decoded once and kept apart from full thumbnails.
+  /// The detached work never creates a network request and cannot publish after cancellation.
+  func placeholder(for url: URL) async -> UIImage? {
+    if let image = previews.object(forKey: url as NSURL) { return image }
+    let task = Task.detached(priority: .userInitiated) { () -> UIImage? in
+      guard !Task.isCancelled, let bytes = await PreviewImageDisk.shared.preview(for: url),
+        !Task.isCancelled, let image = PreviewImageCodec.thumbnail(bytes, pixels: 24)
+      else { return nil }
+      return UIImage(cgImage: image)
+    }
+    let image = await withTaskCancellationHandler {
+      await task.value
+    } onCancel: {
+      task.cancel()
+    }
+    guard !Task.isCancelled else { return nil }
+    if let image {
+      previews.setObject(
+        image, forKey: url as NSURL, cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0)
     }
     return image
   }
@@ -174,7 +202,10 @@ struct ThumbnailRequest: Hashable, Sendable {
     }
   }
 
-  func releaseMemory() { images.removeAllObjects() }
+  func releaseMemory() {
+    images.removeAllObjects()
+    previews.removeAllObjects()
+  }
 }
 
 struct ArticleThumbnail: View {
@@ -185,6 +216,7 @@ struct ArticleThumbnail: View {
   @State private var preview: UIImage?
   @State private var showProgress = false
   @State private var requestID = UUID()
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   var body: some View {
     GeometryReader { geometry in
       Group {
@@ -200,7 +232,10 @@ struct ArticleThumbnail: View {
                 .font(.system(size: 20, weight: .light))
                 .foregroundStyle(ReaderTheme.muted.opacity(0.5))
             }
-            if showProgress && pixels > 96 { ProgressView().controlSize(.small) }
+            if showProgress && pixels > 96 {
+              ThumbnailLoadingArc(reduceMotion: reduceMotion).frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            }
           }.accessibilityLabel("Loading " + label.lowercased())
         }
       }
@@ -228,13 +263,95 @@ struct ArticleThumbnail: View {
         indicator.cancel()
         if requestID == request { showProgress = false }
       }
-      let bytes = await PreviewImageDisk.shared.preview(for: url)
+      let placeholder = await ThumbnailCache.shared.placeholder(for: url)
       guard requestID == request, !Task.isCancelled else { return }
-      if let bytes { preview = UIImage(data: bytes) }
+      preview = placeholder
       let image = await ThumbnailCache.shared.load(url, pixels: pixels)
       guard requestID == request, !Task.isCancelled else { return }
       loadedImage = image
     }
+  }
+}
+
+/// Core Animation owns the repeating arc. SwiftUI gets no per-frame state updates.
+/// Reduced Motion keeps a static partial ring; detachment removes both animations.
+private struct ThumbnailLoadingArc: UIViewRepresentable {
+  var reduceMotion: Bool
+  func makeUIView(context: Context) -> ThumbnailArcView { ThumbnailArcView() }
+  func updateUIView(_ view: ThumbnailArcView, context: Context) {
+    view.setReducedMotion(reduceMotion)
+  }
+  static func dismantleUIView(_ view: ThumbnailArcView, coordinator: ()) { view.stop() }
+}
+
+private final class ThumbnailArcView: UIView {
+  private let arc = CAShapeLayer()
+  private let track = CAShapeLayer()
+  private var reduceMotion = false
+
+  init() {
+    super.init(frame: .zero)
+    isUserInteractionEnabled = false
+    for shape in [track, arc] {
+      shape.fillColor = UIColor.clear.cgColor
+      shape.lineWidth = 2
+      shape.lineCap = .round
+      layer.addSublayer(shape)
+    }
+    arc.strokeEnd = 0.25
+    updateColours()
+    registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) {
+      (view: ThumbnailArcView, _: UITraitCollection) in view.updateColours()
+    }
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let circle = UIBezierPath(ovalIn: bounds.insetBy(dx: 2, dy: 2)).cgPath
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    for shape in [track, arc] {
+      shape.frame = bounds
+      shape.path = circle
+    }
+    CATransaction.commit()
+  }
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    updateAnimation()
+  }
+  func setReducedMotion(_ value: Bool) {
+    guard value != reduceMotion else { return }
+    reduceMotion = value
+    updateAnimation()
+  }
+  func stop() { arc.removeAllAnimations() }
+  private func updateColours() {
+    arc.strokeColor = UIColor.secondaryLabel.resolvedColor(with: traitCollection).cgColor
+    track.strokeColor =
+      UIColor.secondaryLabel.resolvedColor(with: traitCollection).withAlphaComponent(0.15).cgColor
+  }
+  private func updateAnimation() {
+    guard window != nil, !reduceMotion else {
+      stop()
+      return
+    }
+    guard arc.animation(forKey: "rotation") == nil else { return }
+    let rotation = CABasicAnimation(keyPath: "transform.rotation.z")
+    rotation.fromValue = 0
+    rotation.toValue = Double.pi * 2
+    rotation.duration = 1.4
+    rotation.repeatCount = .infinity
+    let length = CABasicAnimation(keyPath: "strokeEnd")
+    length.fromValue = 0.12
+    length.toValue = 0.8
+    length.duration = 0.7
+    length.autoreverses = true
+    length.repeatCount = .infinity
+    length.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+    arc.add(rotation, forKey: "rotation")
+    arc.add(length, forKey: "length")
   }
 }
 
@@ -307,18 +424,34 @@ actor PreviewImageDisk {
   }
   private var pending: [URL: Request] = [:]
   private let work = PreviewImageWorkLimit()
-  private let directory = URL.applicationSupportDirectory.appending(path: "ArticleReader/Images")
+  private let directory: URL
+
+  init(directory: URL = URL.applicationSupportDirectory.appending(path: "ArticleReader/Images")) {
+    self.directory = directory
+  }
   private var lastTrim = Date.distantPast
   private var bytesSinceTrim = 0
 
+  /// Persist only the app's three display sizes. Existing master images remain
+  /// usable offline; derivatives are local, regenerable and share the disk budget.
+  func thumbnailData(for url: URL, pixels: Int, prefetch: Bool = false) async -> Data? {
+    guard [96, 256, 960].contains(pixels) else { return await data(for: url, prefetch: prefetch) }
+    let file = imageFile(for: url).appendingPathExtension("thumb-v1-\(pixels)")
+    if let bytes = read(file) { return bytes }
+    guard !Task.isCancelled, let bytes = await data(for: url, prefetch: prefetch), !Task.isCancelled
+    else { return nil }
+    // Actor serialization bounds derivative encoding to one job. The caller's
+    // URL+size lease already deduplicates this work across visible and prefetched rows.
+    guard let thumbnail = PreviewImageCodec.displayThumbnail(bytes, pixels: pixels),
+      !Task.isCancelled
+    else { return nil }
+    store(thumbnail, at: file)
+    return thumbnail
+  }
+
   func data(for url: URL, prefetch: Bool = false) async -> Data? {
-    let key = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }
-      .joined()
-    let file = directory.appending(path: key + ".image")
-    if let data = try? Data(contentsOf: file) {
-      try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
-      return data
-    }
+    let file = imageFile(for: url)
+    if let data = read(file) { return data }
     if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-images-offline") {
       return nil
     }
@@ -348,18 +481,9 @@ actor PreviewImageDisk {
     guard let bytes else { return nil }
     // Concurrent size variants share one resource; only the first consumer stores it.
     guard !FileManager.default.fileExists(atPath: file.path) else { return bytes }
-    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    try? bytes.write(to: file, options: .atomic)
+    store(bytes, at: file)
     if let tiny = PreviewImageCodec.placeholder(bytes) {
-      try? tiny.write(to: file.appendingPathExtension("preview"), options: .atomic)
-    }
-    // Enumerating and sorting the whole cache for every image made large imports
-    // progressively slower. Check the disk budget once per minute or after another 8 MB is written.
-    bytesSinceTrim += bytes.count
-    if bytesSinceTrim >= 8_000_000 || Date().timeIntervalSince(lastTrim) > 60 {
-      bytesSinceTrim = 0
-      lastTrim = Date()
-      trim()
+      store(tiny, at: file.appendingPathExtension("preview"))
     }
     return bytes
   }
@@ -414,17 +538,46 @@ actor PreviewImageDisk {
   /// A tiny local preview is available after the first download. It does not
   /// start network work or pretend to know colours before seeing the source.
   func preview(for url: URL) -> Data? {
+    let image = imageFile(for: url)
+    let preview = image.appendingPathExtension("preview")
+    if let bytes = read(preview) { return bytes }
+    // Previous app versions cached the compact image but not a tiny placeholder.
+    // Regenerate locally once, including in offline mode; never refetch for a blur.
+    guard !Task.isCancelled, let bytes = read(image),
+      let tiny = PreviewImageCodec.placeholder(bytes), !Task.isCancelled
+    else { return nil }
+    store(tiny, at: preview)
+    return tiny
+  }
+
+  private func imageFile(for url: URL) -> URL {
     let key = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }
       .joined()
-    return try? Data(contentsOf: directory.appending(path: key + ".image.preview"))
+    return directory.appending(path: key + ".image")
+  }
+
+  private func read(_ file: URL) -> Data? {
+    guard let bytes = try? Data(contentsOf: file) else { return nil }
+    try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: file.path)
+    return bytes
+  }
+
+  private func store(_ bytes: Data, at file: URL) {
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    do { try bytes.write(to: file, options: .atomic) } catch { return }
+    // Include derivatives and placeholders in the same 128 MB budget.
+    bytesSinceTrim += bytes.count
+    if bytesSinceTrim >= 8_000_000 || Date().timeIntervalSince(lastTrim) > 60 {
+      bytesSinceTrim = 0
+      lastTrim = Date()
+      trim()
+    }
   }
 
   /// Reader text can use an existing local decoration without waiting for network work.
   func cachedDataURL(for value: String) -> String {
     guard let url = URL(string: value) else { return "" }
-    let key = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }
-      .joined()
-    guard let bytes = try? Data(contentsOf: directory.appending(path: key + ".image")) else {
+    guard let bytes = read(imageFile(for: url)) else {
       return ""
     }
     return PreviewImageCodec.webDataURL(bytes)
