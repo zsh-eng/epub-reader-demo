@@ -154,7 +154,8 @@ struct ThumbnailRequest: Hashable, Sendable {
   func placeholder(for url: URL) async -> UIImage? {
     if let image = previews.object(forKey: url as NSURL) { return image }
     let task = Task.detached(priority: .userInitiated) { () -> UIImage? in
-      guard !Task.isCancelled, let bytes = await PreviewImageDisk.shared.preview(for: url),
+      guard !Task.isCancelled,
+        let bytes = await PreviewImageDisk.shared.preview(for: url, regenerateFromMaster: false),
         !Task.isCancelled, let image = PreviewImageCodec.thumbnail(bytes, pixels: 24)
       else { return nil }
       return UIImage(cgImage: image)
@@ -209,6 +210,10 @@ struct ThumbnailRequest: Hashable, Sendable {
 }
 
 struct ArticleThumbnail: View {
+  private enum LoadedPart {
+    case image(UIImage?)
+    case preview(UIImage?)
+  }
   let url: URL?
   var label = "Article preview"
   var pixels = 960
@@ -263,12 +268,28 @@ struct ArticleThumbnail: View {
         indicator.cancel()
         if requestID == request { showProgress = false }
       }
-      let placeholder = await ThumbnailCache.shared.placeholder(for: url)
-      guard requestID == request, !Task.isCancelled else { return }
-      preview = placeholder
-      let image = await ThumbnailCache.shared.load(url, pixels: pixels)
-      guard requestID == request, !Task.isCancelled else { return }
-      loadedImage = image
+      await withTaskGroup(of: LoadedPart.self) { group in
+        // A blur is optional. Publish the useful image as soon as it is ready,
+        // regardless of the preview's disk or codec work.
+        group.addTask { .image(await ThumbnailCache.shared.load(url, pixels: pixels)) }
+        group.addTask { .preview(await ThumbnailCache.shared.placeholder(for: url)) }
+        for await part in group {
+          guard requestID == request, !Task.isCancelled else {
+            group.cancelAll()
+            return
+          }
+          switch part {
+          case .image(let image):
+            loadedImage = image
+            if image != nil {
+              group.cancelAll()
+              return
+            }
+          case .preview(let image):
+            preview = image
+          }
+        }
+      }
     }
   }
 }
@@ -423,6 +444,22 @@ actor PreviewImageDisk {
     var readers: Set<UUID>
   }
   private var pending: [URL: Request] = [:]
+  private struct EncodedImage: Sendable {
+    var bytes: Data
+    var preview: Data?
+  }
+  private struct TransformRequest {
+    let task: Task<EncodedImage?, Never>
+    var readers: Set<UUID>
+  }
+  private enum Transform: Sendable {
+    case display(Int)
+    case preview
+  }
+  private var pendingTransforms: [URL: TransformRequest] = [:]
+  // A single shared CPU budget covers master, display, preview and web encodes.
+  // The disk actor only reads/writes bytes, never waits inside a synchronous codec.
+  private nonisolated static let transforms = PreviewImageWorkLimit(limit: 2)
   private let work = PreviewImageWorkLimit()
   private let directory: URL
 
@@ -440,13 +477,73 @@ actor PreviewImageDisk {
     if let bytes = read(file) { return bytes }
     guard !Task.isCancelled, let bytes = await data(for: url, prefetch: prefetch), !Task.isCancelled
     else { return nil }
-    // Actor serialization bounds derivative encoding to one job. The caller's
-    // URL+size lease already deduplicates this work across visible and prefetched rows.
-    guard let thumbnail = PreviewImageCodec.displayThumbnail(bytes, pixels: pixels),
-      !Task.isCancelled
-    else { return nil }
-    store(thumbnail, at: file)
-    return thumbnail
+    return await transformed(
+      bytes, using: .display(pixels), at: file,
+      previewAt: imageFile(for: url).appendingPathExtension("preview"), prefetch: prefetch)
+  }
+
+  private func transformed(
+    _ bytes: Data, using transform: Transform, at file: URL, previewAt: URL? = nil,
+    prefetch: Bool = true
+  ) async -> Data? {
+    if let existing = read(file) { return existing }
+    let reader = UUID()
+    let task: Task<EncodedImage?, Never>
+    if var pending = pendingTransforms[file] {
+      pending.readers.insert(reader)
+      pendingTransforms[file] = pending
+      task = pending.task
+    } else {
+      task = Task.detached(priority: .utility) {
+        guard await Self.transforms.acquire(prefetch: prefetch) else { return nil }
+        let encoded: EncodedImage?
+        if Task.isCancelled {
+          encoded = nil
+        } else {
+          switch transform {
+          case .display(let pixels):
+            if let display = PreviewImageCodec.displayThumbnail(bytes, pixels: pixels) {
+              // JPEG/PNG to 24px is cheap; avoid decoding the HEIC master again.
+              encoded = EncodedImage(
+                bytes: display, preview: PreviewImageCodec.placeholder(display))
+            } else {
+              encoded = nil
+            }
+          case .preview:
+            encoded = PreviewImageCodec.placeholder(bytes).map { EncodedImage(bytes: $0) }
+          }
+        }
+        await Self.transforms.release()
+        return Task.isCancelled ? nil : encoded
+      }
+      pendingTransforms[file] = TransformRequest(task: task, readers: [reader])
+    }
+    let result = await withTaskCancellationHandler {
+      await task.value
+    } onCancel: {
+      Task { await self.finishTransform(file, reader: reader) }
+    }
+    finishTransform(file, reader: reader)
+    guard !Task.isCancelled, let result else { return nil }
+    if !FileManager.default.fileExists(atPath: file.path) { store(result.bytes, at: file) }
+    if let previewAt, let preview = result.preview,
+      !FileManager.default.fileExists(atPath: previewAt.path)
+    {
+      store(preview, at: previewAt)
+    }
+    return result.bytes
+  }
+
+  private func finishTransform(_ file: URL, reader: UUID) {
+    guard var request = pendingTransforms[file], request.readers.remove(reader) != nil else {
+      return
+    }
+    if request.readers.isEmpty {
+      request.task.cancel()
+      pendingTransforms[file] = nil
+    } else {
+      pendingTransforms[file] = request
+    }
   }
 
   func data(for url: URL, prefetch: Bool = false) async -> Data? {
@@ -463,9 +560,9 @@ actor PreviewImageDisk {
       task = request.task
     } else {
       let work = self.work
-      task = Task.detached(priority: prefetch ? .utility : .userInitiated) { () -> Data? in
+      task = Task.detached(priority: .utility) { () -> Data? in
         guard await work.acquire(prefetch: prefetch) else { return nil }
-        let bytes = await Self.fetch(url)
+        let bytes = await Self.fetch(url, prefetch: prefetch)
         await work.release()
         return bytes
       }
@@ -482,9 +579,6 @@ actor PreviewImageDisk {
     // Concurrent size variants share one resource; only the first consumer stores it.
     guard !FileManager.default.fileExists(atPath: file.path) else { return bytes }
     store(bytes, at: file)
-    if let tiny = PreviewImageCodec.placeholder(bytes) {
-      store(tiny, at: file.appendingPathExtension("preview"))
-    }
     return bytes
   }
 
@@ -505,7 +599,7 @@ actor PreviewImageDisk {
     return URLSession(configuration: configuration)
   }()
 
-  private nonisolated static func fetch(_ url: URL) async -> Data? {
+  private nonisolated static func fetch(_ url: URL, prefetch: Bool) async -> Data? {
     guard !Task.isCancelled else { return nil }
     let file: URL
     let temporary: Bool
@@ -532,22 +626,28 @@ actor PreviewImageDisk {
       size < 15_000_000,
       let bytes = try? Data(contentsOf: file, options: .mappedIfSafe)
     else { return nil }
-    return PreviewImageCodec.compact(bytes)
+    guard await transforms.acquire(prefetch: prefetch) else { return nil }
+    let compact = Task.isCancelled ? nil : PreviewImageCodec.compact(bytes)
+    await transforms.release()
+    return Task.isCancelled ? nil : compact
   }
 
   /// A tiny local preview is available after the first download. It does not
   /// start network work or pretend to know colours before seeing the source.
-  func preview(for url: URL) -> Data? {
+  func preview(for url: URL, regenerateFromMaster: Bool = true) async -> Data? {
     let image = imageFile(for: url)
     let preview = image.appendingPathExtension("preview")
     if let bytes = read(preview) { return bytes }
-    // Previous app versions cached the compact image but not a tiny placeholder.
-    // Regenerate locally once, including in offline mode; never refetch for a blur.
-    guard !Task.isCancelled, let bytes = read(image),
-      let tiny = PreviewImageCodec.placeholder(bytes), !Task.isCancelled
-    else { return nil }
-    store(tiny, at: preview)
-    return tiny
+    guard !Task.isCancelled else { return nil }
+    // Prefer already decoded-to-display formats. On the first visible load,
+    // the full thumbnail creates its preview; don't compete with a HEIC decode.
+    for pixels in [96, 256, 960] {
+      if let display = read(image.appendingPathExtension("thumb-v1-\(pixels)")) {
+        return await transformed(display, using: .preview, at: preview)
+      }
+    }
+    guard regenerateFromMaster, let bytes = read(image) else { return nil }
+    return await transformed(bytes, using: .preview, at: preview)
   }
 
   private func imageFile(for url: URL) -> URL {
@@ -575,17 +675,31 @@ actor PreviewImageDisk {
   }
 
   /// Reader text can use an existing local decoration without waiting for network work.
-  func cachedDataURL(for value: String) -> String {
+  func cachedDataURL(for value: String) async -> String {
     guard let url = URL(string: value) else { return "" }
     guard let bytes = read(imageFile(for: url)) else {
       return ""
     }
-    return PreviewImageCodec.webDataURL(bytes)
+    return await Self.webDataURL(bytes)
   }
 
   func dataURL(for value: String) async -> String {
     guard let url = URL(string: value), let bytes = await data(for: url) else { return "" }
-    return PreviewImageCodec.webDataURL(bytes)
+    return await Self.webDataURL(bytes)
+  }
+
+  private nonisolated static func webDataURL(_ bytes: Data) async -> String {
+    let task = Task.detached(priority: .utility) {
+      guard await transforms.acquire(prefetch: true) else { return "" }
+      let result = Task.isCancelled ? "" : PreviewImageCodec.webDataURL(bytes)
+      await transforms.release()
+      return Task.isCancelled ? "" : result
+    }
+    return await withTaskCancellationHandler {
+      await task.value
+    } onCancel: {
+      task.cancel()
+    }
   }
 
   private func trim() {
