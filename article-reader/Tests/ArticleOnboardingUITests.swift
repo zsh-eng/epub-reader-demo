@@ -187,7 +187,7 @@ final class ArticleOnboardingUITests: XCTestCase {
     let illustration = app.otherElements["onboarding-tags-demo"]
     waitForDemo(illustration, value: "tagged")
     let illustrationFrame = illustration.frame
-    let field = app.secureTextFields["onboarding-key"]
+    let field = app.secureTextFields.firstMatch
     XCTAssertTrue(field.isHittable)
     field.tap()
     let keyboard = app.keyboards.firstMatch

@@ -112,7 +112,6 @@ struct OnboardingView: View {
       ReaderTheme.background,
       in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
     )
-    .accessibilityIdentifier("onboarding-key-dock")
   }
 
   private var header: some View {
