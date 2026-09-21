@@ -99,19 +99,33 @@ they do not replace the current local storage path.
 
 ## Highlights and notes
 
-Select text in Reader, then choose **Highlight** or **Add note** in the native
-selection menu. The Notes button opens a collection of quoted passages. Tap a
-passage to edit its note, or **Show in article** to return to its position.
-Notes save as you type. Clearing text keeps the passage editable, including
-after a restart; use **Delete note** to remove it explicitly. **Remove highlight**
-keeps an existing note, and **Delete note** keeps an existing highlight.
+The bottom **Add note** button turns the Reader toolbar into a composer. Notes
+can refer to the article without selecting text. **Send** writes the note once;
+Discard removes only the unsent draft. Select text and choose **Add note**, or
+use the highlight toolbar, to include a compact two-line quote with its colour.
+The top Notes button opens the article conversation with full note text. Empty
+conversations open at medium height. Editing uses explicit **Save** and **Cancel**.
+**Remove highlight** keeps an existing note; **Delete note** keeps its highlight.
 
-Passages store their exact text, nearby context and a UTF-16 position hint.
-When regenerated HTML has changed, ambiguous matches remain in Notes with
-**Passage changed** rather than attaching to unrelated text. Removing the final
-highlight/note writes a deletion marker. These records are local; annotation
-sync is not active. A damaged record is kept and reported without preventing
-other records from loading.
+The library notebook includes full notes, short quote previews, search and a
+small source link. Its filter/sort work uses cancellable background snapshots;
+stable IDs and lazy rows keep offscreen note views out of the scrolling path.
+Text entry stays in the small composer view and does not rewrite records or
+invalidate the whole Reader for each keystroke.
+
+Quoted passages store their exact text, nearby context and a UTF-16 position
+hint. Standalone notes omit the quote. When regenerated HTML has changed,
+ambiguous matches stay available without attaching to unrelated text. Removing
+the final highlight/note writes a deletion marker. These records are local;
+annotation sync is not active. A damaged record is kept and reported without
+preventing other records from loading.
+
+## Favourites
+
+Use an article's context menu or Reader's page menu to favourite it. Favourites
+has its own folder and includes archived articles. Within a tag, the star button
+shows matching favourites, including archived ones. Archiving preserves this
+flag; unsaving clears it. Favourite state is independent of the tag catalogue.
 
 ## Sync implementation status
 
@@ -144,12 +158,13 @@ associated-domain file.
 ## Two quick entry paths
 
 - **Share → Arctic → Save:** the extension first shows the link, then reveals
-  its title and image in an expanding sheet. Cancel and Save stay at the bottom;
+  its title and image in reserved space. Completed tags appear above the card,
+  with no empty tag area when there are none. Cancel and Save stay at the bottom;
   saving never waits for a publisher. With automatic tagging enabled, rich metadata
   and Jev classification start while the preview is open, before Save. Save writes
   an immutable local inbox event and reuses the running request or completed tags.
   Cancel discards the unsaved result. Done is available immediately. A separate
-  immutable completion event carries tags, so dismissal cannot lose the saved link
+  completion event carries tags, so dismissal cannot lose the saved link
   or race with the main app consuming it. The app resumes incomplete work on entry.
 - **Copy link → open Arctic:** on app activation, detect a probable web URL,
   then read it through the normal iOS paste-permission flow. A small clipboard
@@ -219,7 +234,7 @@ and explicit re-tagging invalidate stale work. Network failures leave work pendi
 until a later foreground activation. Invalid credentials pause the queue and show
 an error in Automatic tags. Tag completion uses the original soft gradient border, which hands its glow to
 the tag outlines before their labels appear, and
-an Edit tags action. The card and pills share one animation clock. A presented share receipt is recorded only after those tags have appeared. Closing a saved share early keeps completed tags with an unpresented receipt. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
+an Edit tags action. Only the border and pills use the animation clock; card text and images stay outside it. Completed Share tags are written immediately, before the reveal. The receipt is marked presented only after the tags appear. Results already shown in the share extension carry a durable receipt, so importing or refreshing their metadata does not repeat the tag notice. Unfinished shared work still shows feedback when the app finishes. Reduce Motion uses static/fade feedback.
 
 Simulator tests use separate article files and fixture classifications, never a
 real Jev key or request. `-test-onboarding -reset-onboarding` exercises first run;

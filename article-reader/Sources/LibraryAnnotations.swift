@@ -10,8 +10,18 @@ struct LibraryAnnotations: View {
   @State private var filter = PassageFilter.all
   @State private var editing: ReaderAnnotation?
   @State private var errorMessage: String?
+  @State private var matching: [ReaderAnnotation] = []
+  @State private var hasLoaded = false
+  @State private var detent: PresentationDetent
 
-  private enum PassageFilter: String, CaseIterable {
+  init(articles: [SavedArticle], open: @escaping (ReaderAnnotation) -> Void) {
+    self.articles = articles
+    self.open = open
+    let hasNotes = AnnotationStore.shared.records.contains { $0.deletedAt == nil }
+    _detent = State(initialValue: hasNotes ? .large : .medium)
+  }
+
+  private enum PassageFilter: String, CaseIterable, Sendable {
     case all = "All"
     case highlights = "Highlights"
     case notes = "Notes"
@@ -21,32 +31,43 @@ struct LibraryAnnotations: View {
     Dictionary(articles.map { ($0.url, $0.title) }, uniquingKeysWith: { first, _ in first })
   }
 
-  private var passages: [ReaderAnnotation] {
-    let titles = articleTitles
-    let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
-    return AnnotationStore.shared.records.filter { record in
-      guard record.deletedAt == nil else { return false }
-      if filter == .highlights && !record.isHighlighted { return false }
-      if filter == .notes && record.note.isEmpty { return false }
-      guard !search.isEmpty else { return true }
-      return [
-        record.quote.exact, record.note, titles[record.articleURL] ?? "",
-        record.articleURL.host ?? "",
-      ]
-      .contains { $0.localizedStandardContains(search) }
-    }.sorted { $0.updatedAt > $1.updatedAt }
+  /// Filter and sort a snapshot away from scrolling and text layout. Results keep
+  /// the annotation's stable identity; the lazy stack only creates visible rows.
+  private struct NotebookQuery: Equatable, Sendable {
+    var records: [ReaderAnnotation]
+    var titles: [URL: String]
+    var text: String
+    var filter: PassageFilter
+
+    func results() -> [ReaderAnnotation] {
+      records.filter { record in
+        guard !Task.isCancelled, record.deletedAt == nil else { return false }
+        if filter == .highlights && !record.isHighlighted { return false }
+        if filter == .notes && record.note.isEmpty { return false }
+        guard !text.isEmpty else { return true }
+        return [
+          record.quote?.exact ?? "", record.note, titles[record.articleURL] ?? "",
+          record.articleURL.host ?? "",
+        ].contains { $0.localizedStandardContains(text) }
+      }.sorted {
+        if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+        return $0.id.uuidString < $1.id.uuidString
+      }
+    }
   }
 
   var body: some View {
     let titles = articleTitles
-    let matching = passages
+    let request = NotebookQuery(
+      records: AnnotationStore.shared.records, titles: titles,
+      text: query.trimmingCharacters(in: .whitespacesAndNewlines), filter: filter)
     return NavigationStack {
       ScrollView {
         LazyVStack(spacing: 14) {
           if let loadError = AnnotationStore.shared.loadError {
             Text(loadError).font(.caption).foregroundStyle(.secondary)
           }
-          if matching.isEmpty {
+          if hasLoaded && matching.isEmpty {
             emptyState.padding(.top, 24)
           }
           ForEach(matching) { annotation in
@@ -54,6 +75,7 @@ struct LibraryAnnotations: View {
           }
         }.padding(20)
       }
+      .accessibilityIdentifier("notebook-scroll")
       .background(Color(uiColor: .systemGroupedBackground))
       .safeAreaInset(edge: .top, spacing: 0) {
         Picker("Passages", selection: $filter) {
@@ -69,7 +91,20 @@ struct LibraryAnnotations: View {
       }
     }
     .tint(ArcticBrand.accent)
-    .presentationDetents([.large]).presentationDragIndicator(.visible)
+    .task(id: request) {
+      let work = Task.detached(priority: .userInitiated) { request.results() }
+      await withTaskCancellationHandler {
+        let result = await work.value
+        guard !Task.isCancelled else { return }
+        matching = result
+        hasLoaded = true
+      } onCancel: {
+        work.cancel()
+      }
+    }
+    .presentationDetents([.medium, .large], selection: $detent)
+    .presentationDragIndicator(.visible)
+    .presentationContentInteraction(.scrolls)
     .sheet(item: $editing) { annotation in
       NavigationStack { AnnotationEditor(annotation: annotation) }
         .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
@@ -95,7 +130,7 @@ struct LibraryAnnotations: View {
     case .all:
       return ArcticEmptyState(
         kind: .passages, title: "Keep a thought",
-        detail: "Select text in Reader to highlight or add a note.")
+        detail: "Keep a line or leave yourself a note.")
     case .highlights:
       return ArcticEmptyState(
         kind: .highlights, title: "Keep a line.",
@@ -103,7 +138,7 @@ struct LibraryAnnotations: View {
     case .notes:
       return ArcticEmptyState(
         kind: .notes, title: "Keep a thought",
-        detail: "Add a note to a passage in Reader.", eyebrow: "Notes")
+        detail: "Leave yourself a note while you read.", eyebrow: "Notes")
     }
   }
 
@@ -113,9 +148,11 @@ struct LibraryAnnotations: View {
         editing = annotation
       } label: {
         VStack(alignment: .leading, spacing: 12) {
-          AnnotationQuote(quote: annotation.quote.exact, colour: annotation.highlightColour)
+          if let quote = annotation.quote {
+            AnnotationQuote(quote: quote.exact, colour: annotation.highlightColour)
+          }
           if !annotation.note.isEmpty {
-            Text(annotation.note).font(.body).lineLimit(5)
+            Text(annotation.note).font(.body).fixedSize(horizontal: false, vertical: true)
               .frame(maxWidth: .infinity, alignment: .leading)
           }
         }.contentShape(Rectangle())
@@ -124,14 +161,15 @@ struct LibraryAnnotations: View {
         Button {
           open(annotation)
         } label: {
-          VStack(alignment: .leading, spacing: 4) {
+          HStack(spacing: 5) {
+            Image(systemName: "arrow.up.right").font(.caption2)
             Text(title ?? annotation.articleURL.host ?? "Article")
-              .font(.subheadline.weight(.medium)).lineLimit(2)
-            Text(annotation.articleURL.host ?? annotation.articleURL.absoluteString)
-              .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-          }.frame(maxWidth: .infinity, alignment: .leading)
+              .font(.caption.weight(.medium)).lineLimit(1)
+          }
+          .foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(.plain).accessibilityLabel("Show in article")
+        .buttonStyle(.plain)
+        .accessibilityLabel(annotation.quote == nil ? "Open article" : "Show in article")
         .accessibilityIdentifier("library-passage-open-" + annotation.id.uuidString)
         Menu {
           Button(

@@ -366,7 +366,7 @@ struct ReaderNavigationBar: View {
       .accessibilityValue(
         "\(browser.annotations.count) \(browser.annotations.count == 1 ? "passage" : "passages")"
       )
-      .disabled(!browser.readerReady)
+      // Article notes are local and remain available when the page cannot load.
       Menu {
         if let article, article.saved {
           Button(

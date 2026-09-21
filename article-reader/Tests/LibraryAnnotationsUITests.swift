@@ -12,13 +12,15 @@ final class LibraryAnnotationsUITests: XCTestCase {
     capture(app, "arctic-empty-saved-dark")
     collection.tap()
     XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(
+      app.navigationBars["Highlights & notes"].frame.minY, app.frame.height * 0.3)
     capture(app, "arctic-empty-passages-dark")
     app.segmentedControls.buttons["Highlights"].tap()
     XCTAssertTrue(app.staticTexts["Keep a line."].waitForExistence(timeout: 5))
     capture(app, "arctic-empty-highlights-dark")
     app.segmentedControls.buttons["Notes"].tap()
     XCTAssertTrue(
-      app.staticTexts["Add a note to a passage in Reader."].waitForExistence(timeout: 5))
+      app.staticTexts["Leave yourself a note while you read."].waitForExistence(timeout: 5))
     capture(app, "arctic-empty-notes-dark")
     let search = app.searchFields["Passage, note, or article"]
     search.tap()
@@ -70,7 +72,7 @@ final class LibraryAnnotationsUITests: XCTestCase {
     capture(app, "global-passage-medium-editor")
     editor.tap()
     editor.typeText("A thought from the library.")
-    app.navigationBars.buttons["Done"].firstMatch.tap()
+    app.buttons["annotation-save"].tap()
     XCTAssertTrue(app.staticTexts["A thought from the library."].waitForExistence(timeout: 5))
     XCTAssertFalse(app.searchFields["article-search"].exists)
     let search = app.searchFields["Passage, note, or article"]
@@ -96,6 +98,90 @@ final class LibraryAnnotationsUITests: XCTestCase {
     attachment.name = "global-passage-offline-source"
     attachment.lifetime = .keepAlways
     add(attachment)
+  }
+
+  @MainActor func testStandaloneNoteShowsFullBodyAndLinksToArticleOffline() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/unicode"
+    app.launch()
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
+    app.buttons["open-copied-link"].tap()
+    let compose = app.buttons["reader-add-note"]
+    XCTAssertTrue(compose.waitForExistence(timeout: 10))
+    compose.tap()
+    let input = app.descendants(matching: .any).matching(identifier: "note-message-input")
+      .firstMatch
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    let note =
+      "A note without selecting a passage. "
+      + String(
+        repeating: "The full thought stays visible when I return to my notebook. ", count: 5)
+      + "This is the final sentence."
+    input.typeText(note)
+    app.buttons["note-send"].tap()
+    XCTAssertTrue(compose.waitForExistence(timeout: 5))
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.buttons["library-annotations"].tap()
+    let body = app.buttons.matching(NSPredicate(format: "label == %@", note)).firstMatch
+    XCTAssertTrue(body.waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(
+      body.frame.height, 120, "Notebook must render the full note, not five lines")
+    XCTAssertFalse(app.staticTexts["annotation-quote-preview"].exists)
+    capture(app, "standalone-note-full-notebook")
+    let source = app.buttons.matching(
+      NSPredicate(format: "identifier BEGINSWITH 'library-passage-open-'")
+    )
+    .firstMatch
+    XCTAssertEqual(source.label, "Open article")
+    source.tap()
+    XCTAssertTrue(app.buttons["reader-add-note"].waitForExistence(timeout: 10))
+
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-disable-preloading"]
+    app.launchEnvironment = [:]
+    app.launch()
+    XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
+    app.buttons["library-annotations"].tap()
+    XCTAssertTrue(
+      app.buttons.matching(NSPredicate(format: "label == %@", note)).firstMatch
+        .waitForExistence(timeout: 5))
+    app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'library-passage-open-'"))
+      .firstMatch.tap()
+    XCTAssertTrue(app.buttons["reader-notes"].waitForExistence(timeout: 10))
+    XCTAssertTrue(
+      app.buttons["reader-notes"].isEnabled, "Local notes must not wait for page loading")
+    app.buttons["reader-notes"].tap()
+    XCTAssertTrue(
+      app.staticTexts.matching(NSPredicate(format: "label == %@", note)).firstMatch
+        .waitForExistence(timeout: 5))
+  }
+
+  @MainActor func testLargeNotebookScrollAndSearch() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "1000",
+      "-dark-ui",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
+    app.buttons["library-annotations"].tap()
+    let scroll = app.scrollViews["notebook-scroll"]
+    XCTAssertTrue(scroll.waitForExistence(timeout: 5))
+    for _ in 0..<4 { scroll.swipeUp(velocity: .fast) }
+    for _ in 0..<4 { scroll.swipeDown(velocity: .fast) }
+    let search = app.searchFields["Passage, note, or article"]
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    search.tap()
+    search.typeText("Notebook thought 999")
+    let result = app.buttons.matching(
+      NSPredicate(
+        format:
+          "identifier BEGINSWITH 'library-passage-' AND NOT identifier BEGINSWITH 'library-passage-open-'"
+      ))
+    expectation(for: NSPredicate(format: "count == 1"), evaluatedWith: result)
+    waitForExpectations(timeout: 5)
+    capture(app, "notebook-thousand-notes-search-dark")
   }
 
   @MainActor private func capture(_ app: XCUIApplication, _ name: String) {

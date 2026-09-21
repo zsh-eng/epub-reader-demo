@@ -237,3 +237,37 @@ build passed. The Release app was installed without removing device data;
 launch was blocked because the iPhone was locked. Physical-device interaction
 and current Share frame timing remain unverified. No live storage migration
 was activated.
+
+## Article conversations, notebook, and compact Share follow-up
+
+The notebook renders complete note bodies with two-line quote previews and small
+source links. Filtering and sorting use cancellable background snapshots; rows
+keep stable IDs in a lazy stack. Composer text belongs to a small child view,
+so typing neither writes note files nor invalidates the Reader or note list.
+Send and Save commit once. Article conversations remain available when the page
+cannot load. Empty collections start at medium height.
+
+Share reserves only artwork/title space; tags appear above the card. Completed
+tags are written before their reveal, preventing extension termination from
+losing an in-memory result. The app-to-extension Keychain probe uses a separate
+disposable item, never the API key. It passed in the simulator; the user's exact
+real Share failure still needs a failing URL or the new safe error diagnostics.
+
+Sixteen focused UI flows passed across `/tmp/arctic-notebook-share.xcresult`
+(Share, empty notebook, source editing, Reader favourites),
+`/tmp/arctic-notebook-final.xcresult` (four annotation flows and archived/tag
+favourites), `/tmp/arctic-notebook-lifecycle.xcresult` (explicit note lifecycle
+and the 1,000-record notebook), and `/tmp/arctic-notebook-offline.xcresult`
+(standalone-note persistence and offline article access). Earlier bundles include
+corrected failures: the star lacked a full hit area; long-text queries used the
+wrong accessibility element; a note test assumed the caret was at the end; and
+Notes incorrectly waited for Reader readiness. The large notebook run initially
+had an extended XCTest idle wait at the top edge. After prioritizing content
+scrolling over sheet resizing, the same flow passed in 34.8 seconds without that
+wait. This is functional simulator evidence, not physical-device 120 Hz proof.
+The 1,000-record fixture tests rendering/search, not filesystem startup cost.
+
+Annotation persistence checks, eight JavaScript checks, fifteen host model/sync
+checks, formatting, and signed Release builds passed. Screenshots of the Share
+layout, two-line quotes, and message composer were reviewed. The update preserves
+existing data and leaves the live storage migration dormant.
