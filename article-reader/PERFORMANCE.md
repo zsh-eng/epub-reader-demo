@@ -127,3 +127,41 @@ Remaining device checks: repeated rapid scroll while importing on a physical
 ProMotion iPhone, memory pressure, real network loss/recovery, and keyboard
 animation timing. The callback overlay helps find stalls but does not replace an
 Instruments Animation Hitches trace.
+
+## Physical fast-scroll follow-up, 21 September
+
+A Time Profiler capture on the user's iPhone 15 Pro Max caught the reported
+45–70 callback-FPS drops. In the baseline's active scroll window (seconds 27–34),
+main-thread sampled work was 711–928 ms per second. Library row construction,
+article buttons and context menus were prominent in the stacks. Inclusive stack
+times overlap and must not be added together.
+
+The library previously observed its visible-row set. Every viewport entry/exit
+could invalidate the parent view and rebuild its row-producing closures.
+`LibraryViewportVisibility` now feeds an isolated `LibraryPreloadDriver`; the
+parent does not read that set. Metadata, image and Reader preloads still follow
+the visible rows and their two nearest neighbors. Heavy Reader preloads remain
+paused during scrolling.
+
+The image pipeline also publishes a ready image without waiting for a blur
+preview. Codecs run outside the serial disk-cache actor with two bounded workers,
+so conversion cannot hold cached reads behind it. Five local fixture rounds
+reduced a hot persisted-thumbnail read under conversion load from 511.83 ms to
+3.36 ms, and first display conversion from 108.19 ms to 43.52 ms. These are Mac
+cache measurements, not iPhone FPS. Image work is committed as `0b2f99e`.
+
+A signed optimized Release build was installed on the same phone without removing
+its data. The user reported that scrolling now works great. The comparison trace
+contains several activity periods, not a precisely matched gesture interval.
+The baseline was Debug and the update is Release, so the effects of the source
+changes and compiler optimization are not isolated. Do not infer a precise FPS
+gain or sustained 120 Hz from these CPU samples.
+
+Evidence: `/tmp/arctic-device-scroll-live.trace` (baseline),
+`/tmp/arctic-device-scroll-after-v2.trace` (updated),
+`/tmp/arctic-disk-phase-profile/` (local image benchmark). Three focused native
+tests passed in `/tmp/arctic-viewport-isolation.xcresult`: viewport Reader
+preparation, import replay with no metadata publication during scrolling, and
+warm 1,000-photo library scrolling. Swift formatting, diff checks and the signed
+Release build passed. The SwiftUI Instruments template returned empty event
+tables on this device/toolchain; Time Profiler supplied the usable evidence.

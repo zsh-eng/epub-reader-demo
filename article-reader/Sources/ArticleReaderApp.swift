@@ -109,14 +109,11 @@ struct LibraryView: View {
   @State private var sort = "Newest first"
   @State private var confirmDelete = false
   @State private var browsers = BrowserPool()
-  #if DEBUG
-    @State private var backgroundBrowserCount = -1
-  #endif
   @State private var projection = LibraryProjection()
   @State private var headerHeight: CGFloat = 48
   @State private var libraryViewport: CGRect = .zero
   @State private var searchViewport: CGRect = .zero
-  @State private var visibleRows: Set<PreloadRow> = []
+  @State private var viewportVisibility = LibraryViewportVisibility()
   @AppStorage(LibraryFrameDiagnostics.enabledKey) private var frameDiagnostics = false
   @AppStorage("reader-palette") private var paletteName = "System"
   private let navigationBarHeight: CGFloat = 44
@@ -150,6 +147,15 @@ struct LibraryView: View {
         }
     }
     .overlay(alignment: .top) { navigationControls.accessibilityHidden(showingAnnotations) }
+    .overlay(alignment: .bottomLeading) {
+      LibraryPreloadDriver(
+        visibility: viewportVisibility, store: store, browsers: browsers, projection: projection,
+        folder: folder, query: query, sort: sort, searching: searching,
+        isLibraryScrolling: isLibraryScrolling, clipboardURL: clipboard.url,
+        enabled: selected == nil && !showingOnboarding && !showingTaggingSettings
+          && !showingAnnotations && !choosingImport && editingTags == nil
+      )
+    }
     .overlay(alignment: .bottomLeading) {
       LibraryFrameDiagnostics().padding(.horizontal, 20).padding(.bottom, 84)
     }
@@ -193,31 +199,6 @@ struct LibraryView: View {
           }.font(.caption2).padding(4).background(.thinMaterial)
         }
       }
-      .overlay(alignment: .bottomLeading) {
-        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-preloading") {
-          VStack(alignment: .leading) {
-            Text(preloadURLs.map(\.lastPathComponent).joined(separator: ","))
-            .accessibilityIdentifier("preload-requested")
-            Text(browsers.readyReaderURLs.map(\.lastPathComponent).joined(separator: ","))
-            .accessibilityIdentifier("preload-ready")
-            if ProcessInfo.processInfo.arguments.contains("-hold-publisher-image") {
-              Text(String(PublisherLoadProbe.shared.started))
-              .accessibilityIdentifier("publisher-loads-started")
-              // WebKit can retire a handler without a final stop callback.
-              // Poll weak owners, rather than treating missing callbacks as leaks.
-              TimelineView(.periodic(from: .now, by: 0.5)) { _ in
-                Text(String(PublisherLoadProbe.shared.active))
-                .accessibilityIdentifier("publisher-loads-active")
-              }
-            }
-            Text(String(backgroundBrowserCount))
-            .accessibilityIdentifier("background-browser-count")
-            Text(browsers.lastOpenState)
-            .accessibilityIdentifier("reader-open-state")
-          }.font(.system(size: 8)).lineLimit(1).padding(4).background(.thinMaterial)
-          .allowsHitTesting(false)
-        }
-      }
       .sheet(isPresented: $testSharing) {
         FixtureShareSheet {
           testSharing = false
@@ -247,7 +228,7 @@ struct LibraryView: View {
           // the app is hidden. Transient inactive states keep the warm viewport.
           browsers.releaseOffscreen()
           #if DEBUG
-            backgroundBrowserCount = browsers.retainedBrowserCount
+            browsers.backgroundRetainedCount = browsers.retainedBrowserCount
           #endif
         }
         return
@@ -266,12 +247,6 @@ struct LibraryView: View {
       }
       store.prepareTagging(url: url, preview: preview)
     }
-    .task(id: preloadURLs) {
-      store.prioritizePreviews(preloadURLs)
-    }
-    .task(id: imagePrefetchRequests) {
-      await ThumbnailCache.shared.preheat(imagePrefetchRequests)
-    }
     .onChange(of: isLibraryScrolling) { _, scrolling in
       store.setLibraryScrolling(scrolling)
     }
@@ -279,15 +254,6 @@ struct LibraryView: View {
       if readerOpen { isLibraryScrolling = false }
     }
     .onDisappear { store.setLibraryScrolling(false) }
-    .task(id: browserPreloadURLs) {
-      // Scrolling gets the main-thread budget. Cheap image preheat continues,
-      // but do not construct publisher WebViews until the viewport has settled.
-      let urls = browserPreloadURLs
-      if !urls.isEmpty {
-        do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-      }
-      await browsers.preload(urls, store: store)
-    }
     .onReceive(
       NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
     ) { _ in
@@ -377,74 +343,15 @@ struct LibraryView: View {
     }
   }
 
-  /// Preload the rows the user can see, then their nearest two neighbors. Lazy
-  /// stack appearance is not visibility: it includes rows outside the viewport.
-  private var preloadURLs: [URL] {
-    #if DEBUG
-      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-disable-preloading") {
-        return []
-      }
-    #endif
-    guard scenePhase == .active, selected == nil, !showingOnboarding,
-      !showingTaggingSettings, !showingAnnotations, !choosingImport, editingTags == nil
-    else { return [] }
-    let rows = projection.rows(
-      articles: store.articles, revision: store.libraryRevision, folder: folder,
-      query: searching ? query : "", sort: sort)
-    let articles = rows.articles
-    let visibleIndices = visibleRows.compactMap { row -> Int? in
-      guard row.folder == folder, row.search == searching else { return nil }
-      return rows.indices[row.articleID]
-    }.sorted()
-    var urls = visibleIndices.map { articles[$0].url }
-    // The paste suggestion has its own URL and may not exist in the library.
-    if let copied = clipboard.url, !searching, !urls.contains(copied) { urls.append(copied) }
-    for distance in 1...2 {
-      for index in visibleIndices {
-        for neighbor in [index - distance, index + distance]
-        where articles.indices.contains(neighbor) {
-          let url = articles[neighbor].url
-          if !urls.contains(url) { urls.append(url) }
-        }
-      }
-    }
-    return Array(urls.prefix(10))
-  }
-
-  private var browserPreloadURLs: [URL] { isLibraryScrolling ? [] : preloadURLs }
-
-  private var imagePrefetchRequests: [ThumbnailRequest] {
-    let rows = projection.rows(
-      articles: store.articles, revision: store.libraryRevision, folder: folder,
-      query: searching ? query : "", sort: sort)
-    let pixels = searching || folder == .history || folder == .archive ? 256 : 960
-    var requests: [ThumbnailRequest] = []
-    for url in preloadURLs {
-      guard let index = rows.urlIndices[url] else { continue }
-      let article = rows.articles[index]
-      if let image = article.imageURL {
-        requests.append(ThumbnailRequest(url: image, pixels: pixels))
-      }
-      if let icon = article.faviconURL { requests.append(ThumbnailRequest(url: icon, pixels: 96)) }
-    }
-    return requests
-  }
-
-  private struct PreloadRow: Hashable {
-    let articleID: UUID
-    let folder: ArticleFolder
-    let search: Bool
-  }
-
   private struct RowVisibility: Equatable {
-    let row: PreloadRow
+    let row: LibraryVisibleRow
     let visible: Bool
   }
 
   private func visibility(
     _ geometry: GeometryProxy, article: SavedArticle, in item: ArticleFolder, search: Bool
   ) -> RowVisibility {
-    let row = PreloadRow(articleID: article.id, folder: item, search: search)
+    let row = LibraryVisibleRow(articleID: article.id, folder: item, search: search)
     let viewport = search ? searchViewport : libraryViewport
     let overlap = geometry.frame(in: .global).intersection(viewport)
     let visible =
@@ -454,7 +361,7 @@ struct LibraryView: View {
   }
 
   private func recordVisibility(_ value: RowVisibility) {
-    if value.visible { visibleRows.insert(value.row) } else { visibleRows.remove(value.row) }
+    viewportVisibility.record(value.row, visible: value.visible)
   }
 
   private var folderItems: [ArticleFolder] {
@@ -788,7 +695,8 @@ struct LibraryView: View {
           recordVisibility($0)
         }
         .onDisappear {
-          visibleRows.remove(PreloadRow(articleID: article.id, folder: item, search: false))
+          viewportVisibility.remove(
+            LibraryVisibleRow(articleID: article.id, folder: item, search: false))
         }
         if compact {
           Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
@@ -824,7 +732,8 @@ struct LibraryView: View {
             recordVisibility($0)
           }
           .onDisappear {
-            visibleRows.remove(PreloadRow(articleID: article.id, folder: item, search: true))
+            viewportVisibility.remove(
+              LibraryVisibleRow(articleID: article.id, folder: item, search: true))
           }
         Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
           .padding(.leading, 88).padding(.trailing, 16)
@@ -899,73 +808,6 @@ struct LibraryView: View {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
   }
 #endif
-
-/// SwiftUI reevaluates the library while rows cross the viewport. Reuse sorted
-/// projections and ID indexes until domain data or the filter actually changes.
-@MainActor private final class LibraryProjection {
-  struct Rows {
-    let articles: [SavedArticle]
-    let indices: [UUID: Int]
-    let urlIndices: [URL: Int]
-  }
-  private struct Key: Hashable {
-    let folder: ArticleFolder
-    let query: String
-  }
-  private var revision = -1
-  private var sort = ""
-  private var savedOrder: [SavedArticle] = []
-  private var historyOrder: [SavedArticle] = []
-  private var cache: [Key: Rows] = [:]
-
-  func rows(
-    articles: [SavedArticle], revision: Int, folder: ArticleFolder, query: String, sort: String
-  ) -> Rows {
-    if self.revision != revision || self.sort != sort {
-      self.revision = revision
-      self.sort = sort
-      cache.removeAll(keepingCapacity: true)
-      if sort == "Title" {
-        savedOrder = articles.sorted {
-          $0.title.localizedStandardCompare($1.title) == .orderedAscending
-        }
-        historyOrder = savedOrder
-      } else {
-        let oldest = sort == "Oldest first"
-        savedOrder = articles.sorted {
-          let left = $0.savedAt ?? .distantPast
-          let right = $1.savedAt ?? .distantPast
-          return oldest ? left < right : left > right
-        }
-        historyOrder = articles.sorted {
-          let left = $0.lastVisitedAt ?? .distantPast
-          let right = $1.lastVisitedAt ?? .distantPast
-          return oldest ? left < right : left > right
-        }
-      }
-    }
-    let key = Key(folder: folder, query: query)
-    if let rows = cache[key] { return rows }
-    let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
-    let rows = (folder == .history ? historyOrder : savedOrder).filter { article in
-      guard folder.contains(article) else { return false }
-      guard !words.isEmpty else { return true }
-      let text =
-        "\(article.title) \(article.subtitle) \(article.url.absoluteString) \(article.tagNames.joined(separator: " "))"
-      return words.allSatisfy { text.localizedStandardContains($0) }
-    }
-    let result = Rows(
-      articles: rows,
-      indices: Dictionary(
-        uniqueKeysWithValues: rows.enumerated().map { ($0.element.id, $0.offset) }),
-      urlIndices: Dictionary(
-        rows.enumerated().map { ($0.element.url, $0.offset) },
-        uniquingKeysWith: { first, _ in first }))
-    if cache.count >= 24 { cache.removeAll(keepingCapacity: true) }
-    cache[key] = result
-    return result
-  }
-}
 
 /// One batch-level result keeps a large import from producing a stream of toasts.
 private struct ImportSummarySheet: View {

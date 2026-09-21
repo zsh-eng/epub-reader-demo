@@ -276,3 +276,17 @@ pending-card size, diagnostic menu and native replay assertions. See
 PERFORMANCE.md for the loopback benchmark and thirteen focused native checks.
 No publisher requests in replay tests. Sustained physical 120 Hz remains
 unverified. Live storage migration remains dormant; no automation was recreated.
+
+
+## Physical fast-scroll diagnosis and fix
+
+- Baseline Time Profiler caught 711–928 ms main-thread samples per second during
+  the rapid-scroll window, with broad library row/button/context-menu work.
+- Isolated visibility observation and preload tasks in LibraryPreloading.swift.
+  Image fix `0b2f99e` removes serial codec blocking and blur-before-image waiting.
+- Three focused native preload/import/1,000-photo checks passed; signed Release
+  build installed on the user's iPhone preserving its data. User reports scrolling
+  works great. After trace saved; see PERFORMANCE.md for artifacts and limits.
+- Baseline Debug versus updated Release and unmatched gesture windows prevent
+  attributing the improvement to one change or claiming measured sustained 120 Hz.
+  Live storage migration remains dormant. No automation recreated.

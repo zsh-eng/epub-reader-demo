@@ -1138,6 +1138,7 @@ struct WebSurface: UIViewRepresentable {
   private(set) var lastOpenState = ""
   #if DEBUG
     var retainedBrowserCount: Int { browsers.count }
+    var backgroundRetainedCount = -1
   #endif
   var readyReaderURLs: [URL] {
     browsers.filter { $0.value.readerReady }.map(\.key)
