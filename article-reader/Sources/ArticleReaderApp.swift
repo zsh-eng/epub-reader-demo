@@ -405,10 +405,11 @@ struct LibraryView: View {
   private var navigationControls: some View {
     let palette = ReadingPalette(rawValue: paletteName) ?? .system
     return ZStack {
-      libraryControls
-        .opacity(selected == nil && !searching ? 1 : 0)
-        .allowsHitTesting(selected == nil && !searching)
-        .accessibilityHidden(selected != nil || searching)
+      // Remove inactive glass controls from the hierarchy. Native glass can
+      // retain accessibility children even when its SwiftUI parent is transparent.
+      if selected == nil && !searching {
+        libraryControls.transition(.opacity)
+      }
       if searching && selected == nil {
         HStack {
           searchSummary
