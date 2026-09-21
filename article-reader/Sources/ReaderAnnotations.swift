@@ -160,7 +160,11 @@ struct AnnotationEditor: View {
   #if DEBUG
     @State private var quoteViewportFrame: CGRect = .zero
     @State private var quoteCardFrame: CGRect = .zero
-    @State private var quoteAtEnd = false
+    @State private var quoteContentFrame: CGRect = .zero
+    private var quoteAtEnd: Bool {
+      !quoteContentFrame.isEmpty && !quoteViewportFrame.isEmpty
+        && quoteContentFrame.maxY <= quoteViewportFrame.maxY + 1
+    }
   #endif
   @State private var errorMessage: String?
   @FocusState private var focused: Bool
@@ -183,6 +187,13 @@ struct AnnotationEditor: View {
           } action: {
             quoteHeight = $0
           }
+          #if DEBUG
+            .onGeometryChange(for: CGRect.self) {
+              $0.frame(in: .global)
+            } action: {
+              if TestMode.enabled { quoteContentFrame = $0 }
+            }
+          #endif
       }
       .frame(height: min(maximumQuoteHeight, max(24, quoteHeight)))
       .scrollBounceBehavior(.basedOnSize)
@@ -192,11 +203,6 @@ struct AnnotationEditor: View {
           $0.frame(in: .global)
         } action: {
           if TestMode.enabled { quoteViewportFrame = $0 }
-        }
-        .onScrollGeometryChange(for: Bool.self) {
-          $0.contentOffset.y + $0.containerSize.height >= $0.contentSize.height - 1
-        } action: { _, value in
-          if TestMode.enabled { quoteAtEnd = value }
         }
       #endif
       .padding(18)
