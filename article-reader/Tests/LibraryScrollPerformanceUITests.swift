@@ -8,13 +8,14 @@ final class LibraryScrollPerformanceUITests: XCTestCase {
   @MainActor func testWarmThousandArticleLibraryScrolling() {
     let app = XCUIApplication()
     app.launchArguments = [
-      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-long-list", "-articles-offline",
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-photo-list", "-articles-offline",
     ]
     app.launch()
     XCTAssertTrue(app.buttons["article-import-999"].waitForExistence(timeout: 10))
 
     // Warm the same neighborhood before measuring; startup and fixture import
-    // are excluded. This seed currently has text-only rows, not photo stress.
+    // are excluded. Rows share one local bundled photograph but use distinct
+    // cache keys, so entering rows exercise downsampling and decoded caching.
     app.swipeUp(velocity: .fast)
     app.swipeUp(velocity: .fast)
     app.swipeDown(velocity: .fast)
@@ -32,7 +33,7 @@ final class LibraryScrollPerformanceUITests: XCTestCase {
     add(screenshot)
     let scope = XCTAttachment(
       string:
-        "1000 text-only article rows; warm scrolling and deceleration. No photographic image-load stress. Simulator numbers are not physical-device frame-rate verification."
+        "1000 photograph rows with distinct cache keys backed by one bundled image file. Warm scrolling and deceleration; local image decoding and caching, no network latency. Simulator numbers are not physical-device frame-rate verification."
     )
     scope.name = "scroll-measurement-scope"
     scope.lifetime = .keepAlways

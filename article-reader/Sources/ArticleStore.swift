@@ -2,6 +2,10 @@ import Foundation
 import Observation
 import SwiftSoup
 
+#if DEBUG
+  import UIKit
+#endif
+
 struct SavedArticle: Identifiable, Codable, Sendable {
   var id = UUID()
   let url: URL
@@ -155,13 +159,33 @@ struct TaggingNotice: Identifiable {
         }
       #endif
       #if DEBUG
-        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-seed-long-list"),
+        if TestMode.enabled,
+          ProcessInfo.processInfo.arguments.contains("-seed-long-list")
+            || ProcessInfo.processInfo.arguments.contains("-seed-photo-list"),
           articles.isEmpty
         {
           let anchors = (0..<1000).map { index in
             "<a href='https://fixture.example/import-\(index)' add_date='\(1_700_000_000 + index)'>Imported story \(String(format: "%04d", index))</a>"
           }.joined()
           articles = try ReadingListImport.parse("<html><body>\(anchors)</body></html>")
+          if ProcessInfo.processInfo.arguments.contains("-seed-photo-list") {
+            // One bundled photograph, 1000 distinct cache identities. Query
+            // components preserve file reads without copying or decoding 1000
+            // photos during setup. Each test launch gets fresh cache keys.
+            let photoURL = downloads.appending(path: "scroll-photo.jpg")
+            guard
+              let photo = UIImage(named: "OnboardingArticle")?.jpegData(compressionQuality: 0.95)
+            else { throw CocoaError(.fileReadCorruptFile) }
+            try photo.write(to: photoURL, options: .atomic)
+            let run = UUID().uuidString
+            for index in articles.indices {
+              articles[index].imageURL = photoURL.appending(queryItems: [
+                URLQueryItem(name: "run", value: run),
+                URLQueryItem(name: "article", value: String(index)),
+              ])
+              articles[index].subtitle = "A cached photograph from the Arctic onboarding fixture."
+            }
+          }
           try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)
         }
       #endif
