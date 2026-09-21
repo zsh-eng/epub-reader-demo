@@ -28,7 +28,7 @@ struct SavedArticle: Identifiable, Codable, Sendable {
   var sharedTransferID: UUID?
   var importBatchID: UUID?
   var saved: Bool { isSaved != false }
-  var tagNames: [String] { tags ?? [] }
+  var tagNames: [String] { ArticleTagCatalog.displayNames(tags ?? []) }
 }
 
 /// Codable state lives in the same atomic record as the saved link and its tags.
@@ -100,6 +100,7 @@ struct TaggingNotice: Identifiable {
   }
   private var taggingTask: Task<Void, Never>?
   private var taggingDeferred = Set<UUID>()
+  private var retaggingContextNeeded = Set<UUID>()
   private var taggingWaitingForForeground = false
   private var fixtureTaggingFailed = false
   private var fixtureTaggingContinuations: [CheckedContinuation<Void, Never>] = []
@@ -354,10 +355,12 @@ struct TaggingNotice: Identifiable {
   func setTags(_ tags: [String], for id: UUID) {
     guard let index = articles.firstIndex(where: { $0.id == id && $0.saved }) else { return }
     var updated = articles
-    let chosen = Set(tags)
+    let chosen = Set(ArticleTagCatalog.displayNames(tags))
     var state = updated[index].tagging ?? ArticleTaggingState()
     state.rejected = Array(
-      Set(state.rejected).union(Set(updated[index].tagNames).subtracting(chosen)).subtracting(
+      Set(ArticleTagCatalog.displayNames(state.rejected)).union(
+        Set(updated[index].tagNames).subtracting(chosen)
+      ).subtracting(
         chosen)
     ).sorted()
     state.manual = Array(chosen).sorted()
@@ -449,7 +452,8 @@ struct TaggingNotice: Identifiable {
           {
             let knownTags = Set(ArticleTagCatalog.all.map(\.name))
             try mergeTags(
-              result.tagNames.filter { knownTags.contains($0) }, at: index,
+              ArticleTagCatalog.displayNames(result.tagNames).filter { knownTags.contains($0) },
+              at: index,
               identity: result.inputFingerprint)
           }
           if result.feedbackPresented == true,
@@ -484,7 +488,14 @@ struct TaggingNotice: Identifiable {
     else { return }
     let file = downloadFile(article.id)
     do {
-      try await Task.detached { try Data(html.utf8).write(to: file, options: .atomic) }.value
+      let context = try await Task.detached {
+        try Data(html.utf8).write(to: file, options: .atomic)
+        guard !ArticleMetadata.containsExcerpt(article.taggingDescription) else {
+          return Optional<String>.none
+        }
+        return try? ArticleMetadata.taggingContext(
+          fromHTML: html, title: article.title, description: article.subtitle)
+      }.value
       guard !Task.isCancelled else { return }
       guard let index = articles.firstIndex(where: { $0.id == article.id && $0.saved }) else {
         try? FileManager.default.removeItem(at: file)
@@ -492,7 +503,11 @@ struct TaggingNotice: Identifiable {
       }
       var updated = articles
       updated[index].downloadedAt = Date()
+      if let context, ArticleMetadata.containsExcerpt(context) {
+        updated[index].taggingText = context
+      }
       try commit(updated)
+      scheduleTagging()
     } catch { errorMessage = "Could not store Reader view: \(error.localizedDescription)" }
   }
 
@@ -690,7 +705,10 @@ struct TaggingNotice: Identifiable {
     taggingDeferred.removeAll()
     taggingWaitingForForeground = false
     if taggingAllowed {
-      enqueuePreviews(articles.filter { $0.saved && $0.taggingText == nil }.map(\.url))
+      enqueuePreviews(
+        articles.filter {
+          $0.saved && $0.taggingText == nil && !retaggingContextNeeded.contains($0.id)
+        }.map(\.url))
     }
     scheduleTagging()
   }
@@ -705,6 +723,10 @@ struct TaggingNotice: Identifiable {
       state.sharedFeedbackTransferID = nil
       state.generation = UUID()
       updated[index].tagging = state
+      // Explicit retagging refreshes old description-only context. Keep existing
+      // displayed tags until the replacement classification succeeds.
+      updated[index].taggingText = nil
+      retaggingContextNeeded.insert(updated[index].id)
     }
     do {
       try commit(updated)
@@ -775,7 +797,7 @@ struct TaggingNotice: Identifiable {
           throw URLError(.notConnectedToInternet)
         }
         await Task.yield()
-        return ["Engineering", "Design & craft"]
+        return ["Engineering", "Craft"]
       }
       guard let apiKey = try JevKeychain.read() else {
         throw ArticleError.message("Add your Jev API key in Settings to start tagging.")
@@ -819,12 +841,22 @@ struct TaggingNotice: Identifiable {
           // Even an imported title is not enough context. A Save that beats the
           // preview joins its fetch before submitting anything to Jev.
           if article.taggingText == nil {
-            let preview = try await ArticlePreviewCache.shared.load(article.url)
+            let cachedContext = await self.cachedReaderContext(for: article)
+            let preview: ArticlePreview?
+            if cachedContext == nil {
+              preview = try await ArticlePreviewCache.shared.load(
+                article.url, reload: self.retaggingContextNeeded.contains(article.id))
+            } else {
+              preview = nil
+            }
+            guard !Task.isCancelled else { return }
             guard let index = self.articles.firstIndex(where: { $0.id == article.id && $0.saved })
             else { continue }
             var updated = self.articles
-            preview.apply(to: &updated[index])
+            if let cachedContext { updated[index].taggingText = cachedContext }
+            if let preview { preview.apply(to: &updated[index]) }
             try self.commit(updated)
+            self.retaggingContextNeeded.remove(article.id)
             article = updated[index]
           }
           guard self.taggingAllowed else { return }
@@ -851,6 +883,7 @@ struct TaggingNotice: Identifiable {
           }
           try self.applyTags(tags, to: article.id, identity: identity, generation: generation)
         } catch {
+          guard !Task.isCancelled else { return }
           if !TestMode.enabled && credentialRevision != TaggingPreferences.credentialRevision {
             continue
           }
@@ -867,10 +900,31 @@ struct TaggingNotice: Identifiable {
     }
   }
 
+  /// Explicit retagging can use an offline Reader copy without fetching the site.
+  /// Read only a bounded prefix and parse on a worker; missing prose falls back to metadata.
+  private func cachedReaderContext(for article: SavedArticle) async -> String? {
+    guard article.downloadedAt != nil else { return nil }
+    let file = downloadFile(article.id)
+    return await Task.detached(priority: .utility) {
+      guard !Task.isCancelled,
+        let handle = try? FileHandle(forReadingFrom: file)
+      else { return nil }
+      defer { try? handle.close() }
+      guard let data = try? handle.read(upToCount: ArticleMetadata.maximumHTMLBytes),
+        let text = try? ArticleMetadata.taggingContext(
+          fromHTML: String(decoding: data, as: UTF8.self),
+          title: article.title, description: article.subtitle),
+        ArticleMetadata.containsExcerpt(text)
+      else { return nil }
+      return text
+    }.value
+  }
+
   private func nextTaggingArticle() -> SavedArticle? {
     articles.first { article in
       guard article.saved, !taggingDeferred.contains(article.id),
         article.importBatchID == nil || article.taggingText != nil
+          || retaggingContextNeeded.contains(article.id)
       else { return false }
       return article.tagging?.completedIdentity
         != ArticleTagCatalog.identity(
@@ -896,8 +950,10 @@ struct TaggingNotice: Identifiable {
     var updated = articles
     var state = updated[index].tagging ?? ArticleTaggingState()
     let existing = Set(updated[index].tagNames)
-    let manual = Set(state.manual).union(existing.subtracting(state.automatic))
-    let accepted = Set(tags).subtracting(state.rejected)
+    let manual = Set(ArticleTagCatalog.displayNames(state.manual))
+      .union(existing.subtracting(ArticleTagCatalog.displayNames(state.automatic)))
+    let accepted = Set(ArticleTagCatalog.displayNames(tags))
+      .subtracting(ArticleTagCatalog.displayNames(state.rejected))
     let result = manual.union(accepted)
     state.automatic = Array(accepted).sorted()
     state.manual = Array(manual).sorted()
@@ -1070,15 +1126,19 @@ struct ArticlePreview: Sendable {
   func apply(to article: inout SavedArticle) {
     article.title = title
     article.subtitle = subtitle
-    article.taggingText = taggingText
+    // A publisher preview without prose must not discard an extracted Reader introduction.
+    if ArticleMetadata.containsExcerpt(taggingText)
+      || !ArticleMetadata.containsExcerpt(article.taggingDescription)
+    {
+      article.taggingText = taggingText
+    }
     article.imageURL = imageURL
     article.faviconURL = faviconURL
     article.previewFailed = false
   }
 
   static func fetch(_ url: URL) async throws -> Self {
-    let html: String
-    let baseURL: URL
+    let metadata: ArticleMetadata
     if let fixture = TestMode.fixture(for: url) {
       #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-test-import-replay") {
@@ -1086,23 +1146,11 @@ struct ArticlePreview: Sendable {
           try await Task.sleep(for: .milliseconds(90 + (index % 5) * 10))
         }
       #endif
-      html = try String(contentsOf: fixture, encoding: .utf8)
-      baseURL = fixture
+      let html = try String(contentsOf: fixture, encoding: .utf8)
+      metadata = try await ArticleMetadata.parseOffMain(html, baseURL: fixture)
     } else {
-      var request = URLRequest(url: url, timeoutInterval: 20)
-      request.setValue(
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
-        forHTTPHeaderField: "User-Agent")
-      let (data, response) = try await URLSession.shared.data(for: request)
-      guard let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode),
-        let text = String(data: data, encoding: .utf8)
-      else {
-        throw ArticleError.message("This site did not provide a preview.")
-      }
-      html = text
-      baseURL = response.url ?? url
+      metadata = try await ArticleMetadata.fetch(url, timeout: 20)
     }
-    let metadata = try ArticleMetadata.parse(html, baseURL: baseURL)
     return Self(
       title: metadata.title, subtitle: metadata.description, taggingText: metadata.taggingText,
       imageURL: metadata.imageURL, faviconURL: metadata.faviconURL)

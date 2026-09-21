@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+from production_tag_catalog import production_tag_catalog
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--configuration", choices=["debug", "release"], default="debug")
@@ -26,6 +27,7 @@ with tempfile.TemporaryDirectory(prefix="arctic-domain-check-") as directory:
         'targets: [.target(name: "ArticleSyncBridge", dependencies: [.product(name: "ArcticSync", package: "Sync")]), '
         '.testTarget(name: "ArticleSyncBridgeTests", dependencies: ["ArticleSyncBridge", .product(name: "ArcticSync", package: "Sync")])])\n'
     )
+    (target / "Catalog.swift").write_text(production_tag_catalog(root))
     (target / "Models.swift").write_text("import Foundation\n" + models)
     (target / "ArticleSyncRepository.swift").write_text((root / "Sources/ArticleSyncRepository.swift").read_text())
     test_name = "ArticleSyncPerformanceChecks.swift" if arguments.performance else "ArticleSyncRepositoryTests.swift"

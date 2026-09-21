@@ -10,23 +10,64 @@ struct ArticleMetadata: Sendable {
   let imageURL: URL?
   let faviconURL: URL?
 
-  static func fetch(_ url: URL) async throws -> Self {
-    var request = URLRequest(url: url, timeoutInterval: 8)
+  static let maximumHTMLBytes = 2 * 1024 * 1024
+  static let excerptWordLimit = 180
+  static let taggingCharacterLimit = 2500
+
+  // Each process reuses connections across previews. Separate pools preserve
+  // Share's shorter resource deadline without per-request session creation.
+  private static let shareSession = session(timeout: 8)
+  private static let appSession = session(timeout: 20)
+
+  private static func session(timeout: TimeInterval) -> URLSession {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.timeoutIntervalForRequest = timeout
+    configuration.timeoutIntervalForResource = timeout
+    return URLSession(configuration: configuration)
+  }
+
+  static func fetch(_ url: URL, timeout: TimeInterval = 8) async throws -> Self {
+    var request = URLRequest(url: url, timeoutInterval: timeout)
     request.setValue(
       "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1",
       forHTTPHeaderField: "User-Agent")
-    let configuration = URLSessionConfiguration.ephemeral
-    configuration.timeoutIntervalForRequest = 8
-    configuration.timeoutIntervalForResource = 8
-    let session = URLSession(configuration: configuration)
-    defer { session.invalidateAndCancel() }
-    let (data, response) = try await session.data(for: request)
+    let session = timeout <= 8 ? shareSession : appSession
+    let (bytes, response) = try await session.bytes(for: request)
+    // Breaking AsyncBytes iteration alone does not cancel the network task.
+    defer { bytes.task.cancel() }
     guard let response = response as? HTTPURLResponse,
-      (200..<300).contains(response.statusCode),
-      let html = String(data: data, encoding: .utf8)
-    else { throw URLError(.cannotDecodeContentData) }
+      (200..<300).contains(response.statusCode)
+    else { throw URLError(.badServerResponse) }
+    // Metadata and an introduction fit in a bounded prefix. Do not download a
+    // second page for classification or retain an arbitrarily large response.
+    var data = Data()
+    data.reserveCapacity(min(maximumHTMLBytes, max(0, Int(response.expectedContentLength))))
+    for try await byte in bytes {
+      data.append(byte)
+      if data.count == maximumHTMLBytes {
+        bytes.task.cancel()
+        break
+      }
+    }
     try Task.checkCancellation()
-    return try parse(html, baseURL: response.url ?? url)
+    return try await parseOffMain(
+      String(decoding: data, as: UTF8.self), baseURL: response.url ?? url)
+  }
+
+  /// SwiftSoup and paragraph normalization stay off the caller's actor, including
+  /// Share's main-actor model. Cancellation prevents a completed parse publishing.
+  static func parseOffMain(_ html: String, baseURL: URL) async throws -> Self {
+    let task = Task.detached(priority: .utility) {
+      try Task.checkCancellation()
+      return try parse(html, baseURL: baseURL)
+    }
+    return try await withTaskCancellationHandler {
+      let result = try await task.value
+      try Task.checkCancellation()
+      return result
+    } onCancel: {
+      task.cancel()
+    }
   }
 
   static func parse(_ html: String, baseURL: URL) throws -> Self {
@@ -60,6 +101,28 @@ struct ArticleMetadata: Sendable {
       return roles.contains("icon") || roles.contains("apple-touch-icon")
     }
     let faviconURL = resourceURL(try iconElement?.attr("href") ?? "")
+    let context = try taggingContext(document, title: title, description: description)
+    return Self(
+      title: title, description: description, taggingText: context,
+      imageURL: imageURL, faviconURL: faviconURL)
+  }
+
+  /// Reuse a cached Reader page when its publisher metadata had no useful prose.
+  /// Call from a worker, as with parse(_:baseURL:).
+  static func taggingContext(fromHTML html: String, title: String, description: String) throws
+    -> String
+  {
+    let prefix = String(decoding: html.utf8.prefix(maximumHTMLBytes), as: UTF8.self)
+    return try taggingContext(SwiftSoup.parse(prefix), title: title, description: description)
+  }
+
+  static func containsExcerpt(_ text: String) -> Bool { text.contains("Article excerpt: ") }
+
+  /// Include available introductory prose even when marketing metadata is long.
+  /// Keep it distinct from the card description and exclude repeated boilerplate.
+  private static func taggingContext(_ document: Document, title: String, description: String)
+    throws -> String
+  {
     let normalizedTitle = normalized(title)
     let normalizedDescription = normalized(description)
     let repeatsTitle =
@@ -67,31 +130,28 @@ struct ArticleMetadata: Sendable {
       && (normalizedDescription == normalizedTitle
         || (normalizedDescription.hasPrefix(normalizedTitle)
           && normalizedDescription.count < normalizedTitle.count + 50))
-    var context = description
-    if description.count < 100 || repeatsTitle {
-      // Read content paragraphs only after removing common navigation and hidden
-      // elements. A metadata-only page still keeps its available description.
-      try document.select(
-        "script, style, noscript, template, nav, header, footer, aside, form, [hidden], [aria-hidden=true], [role=navigation], [role=banner], [role=contentinfo]"
-      ).remove()
-      var paragraphs = try document.select("article p, main p, [role=main] p")
-      if paragraphs.isEmpty() { paragraphs = try document.select("body p") }
-      var chunks: [String] = description.isEmpty || repeatsTitle ? [] : [description]
-      var seen = Set(chunks.map(normalized))
-      var length = chunks.joined(separator: "\n\n").count
-      for paragraph in paragraphs {
-        let text = clean(try paragraph.text())
-        let key = normalized(text)
-        guard text.count >= 40, key != normalizedTitle, seen.insert(key).inserted else { continue }
-        chunks.append(String(text.prefix(2500 - length)))
-        length += text.count + 2
-        if length >= 2500 { break }
-      }
-      if !chunks.isEmpty { context = chunks.joined(separator: "\n\n") }
+    try document.select(
+      "script, style, noscript, template, nav, header, footer, aside, form, [hidden], [aria-hidden=true], [role=navigation], [role=banner], [role=contentinfo]"
+    ).remove()
+    var paragraphs = try document.select("article p, main p, [role=main] p")
+    if paragraphs.isEmpty() { paragraphs = try document.select("body p") }
+    var words: [Substring] = []
+    var seen = Set([normalizedTitle, normalizedDescription])
+    for paragraph in paragraphs.prefix(120) {
+      try Task.checkCancellation()
+      let text = clean(try paragraph.text())
+      guard text.count >= 40, seen.insert(normalized(text)).inserted else { continue }
+      words.append(
+        contentsOf: text.split(whereSeparator: \.isWhitespace).prefix(
+          excerptWordLimit - words.count))
+      if words.count == excerptWordLimit { break }
     }
-    return Self(
-      title: title, description: description, taggingText: String(context.prefix(2500)),
-      imageURL: imageURL, faviconURL: faviconURL)
+    guard !words.isEmpty else { return String(description.prefix(taggingCharacterLimit)) }
+    let excerpt = words.joined(separator: " ")
+    let summary = repeatsTitle ? "" : String(description.prefix(600))
+    let context =
+      summary.isEmpty ? "Article excerpt: " + excerpt : summary + "\n\nArticle excerpt: " + excerpt
+    return String(context.prefix(taggingCharacterLimit))
   }
 
   private static func clean(_ text: String) -> String {

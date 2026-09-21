@@ -184,12 +184,20 @@ and extension need the shared keychain-access-group entitlement when signing.
 Both entry paths start classification as soon as rich metadata is ready; thumbnail
 loading does not block tags. No developer key is bundled. Enabling tagging sends
 previewed links’ titles and metadata descriptions directly to TypeSafe over HTTPS,
-including before Save. Missing, short, or title-like descriptions gain a cleaned
-article excerpt; this context is capped at 2,500 characters and stays separate
-from the displayed subtitle. The excerpt uses article/main paragraphs, with a
-body-paragraph fallback; it is not the full Defuddle document. A blocked HTML fetch
-in the extension can fall back to the available Link Presentation title.
-**Sort → Tag existing articles** runs the same saved queue. Prepared main-app
+including before Save. Available introductory prose adds up to 180 words, even
+when the description is long. This context is capped at 2,500 characters and
+stays separate from the displayed subtitle. The excerpt uses article/main
+paragraphs, with a body-paragraph fallback; it is not the full Defuddle document.
+Metadata and prose use the same response, capped at 2 MiB and parsed off the main
+actor. Fetches have a resource deadline of 8 seconds in Share and 20 seconds in
+the app. A blocked HTML fetch in the extension can fall back to the available
+Link Presentation title.
+**Sort → Tag existing articles** refreshes old context through the saved queue,
+first using a bounded cached Reader file when available, otherwise refreshing
+metadata. Saving a Reader copy can enrich description-only context without a
+second publisher request. Short catalog names retain their IDs, classification
+questions and fingerprints; old stored names map at display time, without a
+library rewrite or automatic retag caused by the rename. Prepared main-app
 requests are keyed by input and credential revision, capped at eight entries,
 and never persist an unsaved article. Changing the key or enabled setting
 invalidates reuse of earlier requests.

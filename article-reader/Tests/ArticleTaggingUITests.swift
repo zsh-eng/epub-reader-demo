@@ -36,7 +36,7 @@ final class ArticleTaggingUITests: XCTestCase {
     app.buttons["Tags"].tap()
     XCTAssertTrue(app.textFields["tag-name"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["tag-option-Engineering"].exists)
-    XCTAssertFalse(app.buttons["tag-option-Design & craft"].exists)
+    XCTAssertFalse(app.buttons["tag-option-Craft"].exists)
   }
 
   @MainActor func testDeleteDuringTaggingCannotRestoreArticle() {

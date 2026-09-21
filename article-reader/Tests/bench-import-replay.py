@@ -10,6 +10,7 @@ measurements, not iPhone frame rates. Baseline can be exported with:
   git show d1aab68:article-reader/Sources/ArticleStore.swift > /tmp/arctic-baseline.swift
 """
 import argparse, http.server, json, pathlib, subprocess, tempfile, threading, time
+from production_tag_catalog import production_tag_catalog
 p=argparse.ArgumentParser();p.add_argument('swiftsoup');p.add_argument('--baseline',type=pathlib.Path);p.add_argument('--count',type=int,default=180);args=p.parse_args()
 root=pathlib.Path(__file__).resolve().parents[1]
 photo=(root/'Resources/Fixtures/cover.png').read_bytes()
@@ -122,6 +123,7 @@ try:
   package=pathlib.Path(d);dest=package/'Sources/Replay';dest.mkdir(parents=True)
   dep=json.dumps(str(pathlib.Path(args.swiftsoup).resolve()))
   (package/'Package.swift').write_text('// swift-tools-version: 6.0\nimport PackageDescription\nlet package = Package(name:"Replay",platforms:[.macOS(.v14)],dependencies:[.package(path:'+dep+')],targets:[.executableTarget(name:"Replay",dependencies:["SwiftSoup"],swiftSettings:[.swiftLanguageMode(.v5)])])')
+  (dest/'Catalog.swift').write_text(production_tag_catalog(root))
   (dest/'ArticleMetadata.swift').write_text((root/'Shared/ArticleMetadata.swift').read_text())
   for mode,path in [('baseline',args.baseline),('current',root/'Sources/ArticleStore.swift')]:
    if path is None: continue

@@ -9,6 +9,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from production_tag_catalog import production_tag_catalog
 
 root = Path(__file__).resolve().parents[1]
 source = (root / "Sources/ArticleStore.swift").read_text()
@@ -25,6 +26,7 @@ with tempfile.TemporaryDirectory(prefix="arctic-import-check-") as directory:
         f'dependencies: [.package(path: {dependency})], '
         'targets: [.executableTarget(name: "ImportChecks", dependencies: ["SwiftSoup"])])\n'
     )
+    (target / "Catalog.swift").write_text(production_tag_catalog(root))
     (target / "Import.swift").write_text("import Foundation\nimport SwiftSoup\n" + models + parser)
     (target / "Checks.swift").write_text((root / "Tests/ReadingListImportChecks.swift").read_text())
     subprocess.run(["swift", "run", "--package-path", str(package), "-c", "release", "ImportChecks", *sys.argv[2:]], check=True)
