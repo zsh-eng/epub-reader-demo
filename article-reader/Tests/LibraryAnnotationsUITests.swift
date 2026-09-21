@@ -3,6 +3,30 @@ import XCTest
 final class LibraryAnnotationsUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
+  @MainActor func testDistinctEmptyPassagesInDarkMode() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-dark-ui"]
+    app.launch()
+    let collection = app.buttons["library-annotations"]
+    XCTAssertTrue(collection.waitForExistence(timeout: 10))
+    capture(app, "arctic-empty-saved-dark")
+    collection.tap()
+    XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
+    capture(app, "arctic-empty-passages-dark")
+    app.segmentedControls.buttons["Highlights"].tap()
+    XCTAssertTrue(app.staticTexts["Keep a line."].waitForExistence(timeout: 5))
+    capture(app, "arctic-empty-highlights-dark")
+    app.segmentedControls.buttons["Notes"].tap()
+    XCTAssertTrue(
+      app.staticTexts["Add a note to a passage in Reader."].waitForExistence(timeout: 5))
+    capture(app, "arctic-empty-notes-dark")
+    let search = app.searchFields["Passage, note, or article"]
+    search.tap()
+    search.typeText("a missing line")
+    XCTAssertTrue(app.staticTexts["No passages found"].waitForExistence(timeout: 5))
+    capture(app, "arctic-empty-search-dark")
+  }
+
   @MainActor func testGlobalPassagesSearchEditAndOfflineSourceJump() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard"]

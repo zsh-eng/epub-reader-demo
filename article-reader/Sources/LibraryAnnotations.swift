@@ -47,13 +47,7 @@ struct LibraryAnnotations: View {
             Text(loadError).font(.caption).foregroundStyle(.secondary)
           }
           if matching.isEmpty {
-            ContentUnavailableView(
-              query.isEmpty ? "Keep a thought" : "No passages found",
-              systemImage: "highlighter",
-              description: query.isEmpty
-                ? Text("Select text in Reader to highlight or add a note.") : nil
-            )
-            .padding(.top, 36)
+            emptyState.padding(.top, 24)
           }
           ForEach(matching) { annotation in
             passageCard(annotation, title: titles[annotation.articleURL])
@@ -89,6 +83,27 @@ struct LibraryAnnotations: View {
       Button("OK") { errorMessage = nil }
     } message: {
       Text(errorMessage ?? "")
+    }
+  }
+
+  private var emptyState: ArcticEmptyState {
+    if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      return ArcticEmptyState(
+        kind: .search, title: "No passages found", detail: "Try another word or article.")
+    }
+    switch filter {
+    case .all:
+      return ArcticEmptyState(
+        kind: .passages, title: "Keep a thought",
+        detail: "Select text in Reader to highlight or add a note.")
+    case .highlights:
+      return ArcticEmptyState(
+        kind: .highlights, title: "Keep a line.",
+        detail: "Highlight a passage worth returning to.", eyebrow: "Highlights")
+    case .notes:
+      return ArcticEmptyState(
+        kind: .notes, title: "Keep a thought",
+        detail: "Add a note to a passage in Reader.", eyebrow: "Notes")
     }
   }
 

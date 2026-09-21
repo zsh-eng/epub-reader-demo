@@ -30,11 +30,11 @@ struct ReaderAnnotations: View {
             Text(loadError).font(.caption).foregroundStyle(.secondary)
           }
           if browser.annotations.isEmpty {
-            ContentUnavailableView(
-              "Keep a thought", systemImage: "highlighter",
-              description: Text("Select text in Reader to highlight or add a note.")
+            ArcticEmptyState(
+              kind: .passages, title: "Keep a thought",
+              detail: "Select text in Reader to highlight or add a note."
             )
-            .padding(.top, 48)
+            .padding(.top, 24)
           }
           ForEach(browser.annotations) { annotation in
             VStack(alignment: .leading, spacing: 12) {

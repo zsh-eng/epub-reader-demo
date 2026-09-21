@@ -172,103 +172,32 @@ struct GradientArticleCard: View {
   }
 }
 
-/// Quiet editorial artwork, drawn in native shapes so it stays crisp at any
-/// scale and uses the same adaptive colours as the rest of the library.
+/// The existing paper still-life gains a small Arctic detail for each folder.
 struct LibraryEmptyState: View {
   let folder: ArticleFolder
 
+  private var kind: ArcticEmptyState.Kind {
+    switch folder {
+    case .saved: .saved
+    case .downloaded: .downloaded
+    case .history: .history
+    case .archive: .archive
+    case .tag: .tag
+    }
+  }
+
+  private var detail: String {
+    switch folder {
+    case .saved: "Share to Arctic, or open a copied link."
+    case .downloaded: "Articles ready to read offline appear here."
+    case .history: "Find your opened articles here."
+    case .archive: "Finished for now. Kept for later."
+    case .tag: "Add this tag to a saved article to find it here."
+    }
+  }
+
   var body: some View {
-    ViewThatFits(in: .vertical) {
-      composition(showArtwork: true)
-      composition(showArtwork: false)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-  }
-
-  private func composition(showArtwork: Bool) -> some View {
-    VStack(spacing: 0) {
-      if showArtwork {
-        ReadingStillLife().frame(width: 240, height: 174).padding(.bottom, 28)
-          .accessibilityHidden(true)
-      }
-      Text(folder.title.uppercased()).font(.caption2.weight(.medium)).tracking(2.5)
-        .foregroundStyle(ReaderTheme.muted).padding(.bottom, 12)
-      Text(folder.emptyTitle).font(.title2.weight(.semibold))
-        .multilineTextAlignment(.center).padding(.bottom, 12)
-      Text(folder.emptyDescription).font(.subheadline).lineSpacing(4)
-        .multilineTextAlignment(.center).foregroundStyle(ReaderTheme.muted)
-        .fixedSize(horizontal: false, vertical: true)
-    }
-    .frame(maxWidth: 285).padding(24)
-  }
-}
-
-private struct ReadingStillLife: View {
-  var body: some View {
-    ZStack {
-      Ellipse().fill(ReaderTheme.muted.opacity(0.08)).frame(width: 210, height: 18)
-        .blur(radius: 8).offset(y: 77)
-      paper.rotationEffect(.degrees(-13)).offset(x: -32, y: 5)
-      paper.rotationEffect(.degrees(10)).offset(x: 30, y: -2)
-      VStack(alignment: .leading, spacing: 9) {
-        HStack {
-          Capsule().fill(ReaderTheme.muted.opacity(0.35)).frame(width: 28, height: 3)
-          Spacer()
-          BookmarkRibbon().fill(ReaderTheme.foreground.opacity(0.65)).frame(width: 12, height: 24)
-        }.padding(.top, -15)
-        // A horizon on the cover, followed by the rhythm of a few typeset lines.
-        ZStack(alignment: .bottom) {
-          RoundedRectangle(cornerRadius: 5).fill(ReaderTheme.muted.opacity(0.08))
-          Circle().fill(ReaderTheme.muted.opacity(0.18)).frame(width: 20, height: 20)
-            .offset(x: 24, y: -22)
-          Horizon().fill(ReaderTheme.muted.opacity(0.18))
-        }.frame(height: 54).clipShape(RoundedRectangle(cornerRadius: 5))
-        Capsule().fill(ReaderTheme.foreground.opacity(0.5)).frame(width: 77, height: 4)
-        Capsule().fill(ReaderTheme.muted.opacity(0.2)).frame(height: 3)
-        Capsule().fill(ReaderTheme.muted.opacity(0.2)).frame(width: 61, height: 3)
-      }
-      .padding(16).frame(width: 136, height: 164)
-      .background(ReaderTheme.background, in: RoundedRectangle(cornerRadius: 10))
-      .overlay(
-        RoundedRectangle(cornerRadius: 10).stroke(ReaderTheme.border.opacity(0.45), lineWidth: 0.5)
-      )
-      .rotationEffect(.degrees(-3))
-    }
-  }
-
-  private var paper: some View {
-    RoundedRectangle(cornerRadius: 10).fill(ReaderTheme.secondary)
-      .overlay(
-        RoundedRectangle(cornerRadius: 10).stroke(ReaderTheme.border.opacity(0.35), lineWidth: 0.5)
-      )
-      .frame(width: 130, height: 156)
-  }
-}
-
-private struct BookmarkRibbon: Shape {
-  func path(in rect: CGRect) -> Path {
-    Path { path in
-      path.move(to: .zero)
-      path.addLine(to: CGPoint(x: rect.maxX, y: 0))
-      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-      path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY - 5))
-      path.addLine(to: CGPoint(x: 0, y: rect.maxY))
-      path.closeSubpath()
-    }
-  }
-}
-
-private struct Horizon: Shape {
-  func path(in rect: CGRect) -> Path {
-    Path { path in
-      path.move(to: CGPoint(x: 0, y: rect.height * 0.7))
-      path.addCurve(
-        to: CGPoint(x: rect.maxX, y: rect.height * 0.5),
-        control1: CGPoint(x: rect.width * 0.35, y: 0),
-        control2: CGPoint(x: rect.width * 0.6, y: rect.maxY))
-      path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-      path.addLine(to: CGPoint(x: 0, y: rect.maxY))
-      path.closeSubpath()
-    }
+    ArcticEmptyState(kind: kind, title: folder.emptyTitle, detail: detail, eyebrow: folder.title)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
