@@ -521,30 +521,32 @@ struct LibraryView: View {
     }
   }
 
-  /// Keep both layers mounted and crossfade in place. Search must not translate
-  /// the folder strip, article list or navigation controls.
+  /// Keep the library mounted to preserve its scroll position. Search results
+  /// exist only while searching, avoiding hidden image work and duplicate controls.
   private var page: some View {
     ZStack(alignment: .top) {
       pagedLibrary
         .opacity(searching ? 0 : 1)
-        .allowsHitTesting(!searching).accessibilityHidden(searching)
-      ScrollViewReader { proxy in
-        ScrollView {
-          VStack(spacing: 0) {
-            Color.clear.frame(height: 0).id("search-top")
-            searchResults
+        .allowsHitTesting(!searching).accessibilityHidden(searching || showingAnnotations)
+      if searching {
+        ScrollViewReader { proxy in
+          ScrollView {
+            VStack(spacing: 0) {
+              Color.clear.frame(height: 0).id("search-top")
+              searchResults
+            }
           }
+          .onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .global)
+          } action: {
+            searchViewport = $0
+          }
+          .modifier(LibraryScrollActivity { if searching { isLibraryScrolling = $0 } })
+          .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
         }
-        .onGeometryChange(for: CGRect.self) {
-          $0.frame(in: .global)
-        } action: {
-          searchViewport = $0
-        }
-        .modifier(LibraryScrollActivity { if searching { isLibraryScrolling = $0 } })
-        .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
+        .transition(.opacity)
+        .accessibilityHidden(showingAnnotations)
       }
-      .opacity(searching ? 1 : 0)
-      .allowsHitTesting(searching).accessibilityHidden(!searching)
     }
     .animation(searchTransition, value: searching)
     .scrollDismissesKeyboard(.interactively)
@@ -595,7 +597,6 @@ struct LibraryView: View {
       }
     }
     .modifier(LibrarySearchChrome(query: $query, active: $searching, obscured: showingAnnotations))
-    .accessibilityHidden(showingAnnotations)
     .confirmationDialog(
       "Delete \(selection.count) links?", isPresented: $confirmDelete, titleVisibility: .visible
     ) {
@@ -630,7 +631,7 @@ struct LibraryView: View {
                       .bottom, max(0, geometry.size.height - viewport.size.height),
                       for: .scrollContent)
                 }
-              }.accessibilityHidden(searching || folder != item)
+              }.accessibilityHidden(searching || showingAnnotations || folder != item)
             }
             .tag(item)
             .accessibilityIdentifier("library-page-" + item.identifier)
