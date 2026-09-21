@@ -166,11 +166,8 @@ final class AnnotationUITests: XCTestCase {
     let open = app.buttons["open-copied-link"]
     XCTAssertTrue(open.waitForExistence(timeout: 10))
     open.tap()
-    let toggle = app.buttons["reader-toggle"]
-    expectation(
-      for: NSPredicate(format: "exists == true AND enabled == true"), evaluatedWith: toggle)
-    waitForExpectations(timeout: 20)
-    if toggle.label == "Reader" { toggle.tap() }
+    // This fixture presents its seeded note as soon as Reader preparation ends;
+    // the modal can already hide the normal toolbar before the test observes it.
     let editor = app.textViews["annotation-note"]
     XCTAssertTrue(editor.waitForExistence(timeout: 15), app.debugDescription)
     XCTAssertEqual(editor.value as? String, "Keep the whole passage.")
