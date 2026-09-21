@@ -495,6 +495,7 @@ struct LibraryView: View {
         } label: {
           Image(systemName: active ? "star.fill" : "star")
             .frame(width: 44, height: 44)
+            .contentShape(Circle())
         }
         .buttonStyle(.plain).modifier(LibraryGlass())
         .accessibilityLabel("Favourites only")
