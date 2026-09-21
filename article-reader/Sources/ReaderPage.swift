@@ -151,6 +151,8 @@ struct ReaderPage: View {
       .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.18), value: nearEnd
     )
     .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), value: browser.selectedAnnotationID)
+    // A modal note sheet owns interaction even while the Reader remains visible.
+    .accessibilityHidden(browser.annotationPresentation != nil)
   }
 
   private var navigationControls: some View {
