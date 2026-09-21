@@ -44,6 +44,38 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
   }
 
+  @MainActor func testHighlightTapRecoloursAndPersistsOffline() {
+    let app = openFixture(dark: true)
+    selectPassage(in: app)
+    tapSelectionAction("Highlight", in: app)
+    let rose = app.buttons["highlight-colour-rose"]
+    XCTAssertTrue(rose.waitForExistence(timeout: 5), app.debugDescription)
+    rose.tap()
+    XCTAssertTrue(rose.isSelected)
+    capture(app, "highlight-colour-toolbar-dark")
+    app.buttons["Close highlight controls"].tap()
+    let passage = app.webViews.staticTexts[paragraph].firstMatch
+    passage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
+    XCTAssertTrue(rose.waitForExistence(timeout: 5), app.debugDescription)
+    XCTAssertTrue(rose.isSelected)
+    app.buttons["highlight-note"].tap()
+    let editor = app.textViews["annotation-note"]
+    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    editor.tap()
+    editor.typeText("The yellow can become rose.")
+    capture(app, "medium-note-composer-dark")
+    app.navigationBars.buttons["Done"].tap()
+    reopenOffline(app)
+    let restored = app.webViews.staticTexts[paragraph].firstMatch
+    restored.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
+    XCTAssertTrue(rose.waitForExistence(timeout: 5), app.debugDescription)
+    XCTAssertTrue(rose.isSelected)
+    app.buttons["highlight-remove"].tap()
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+    app.buttons["reader-notes"].tap()
+    XCTAssertTrue(app.staticTexts["The yellow can become rose."].waitForExistence(timeout: 5))
+  }
+
   @MainActor func testNoteOnlyPassageSurvivesClearingAndRewriting() {
     let app = openFixture()
     selectPassage(in: app)

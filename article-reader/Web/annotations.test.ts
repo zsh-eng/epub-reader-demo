@@ -33,7 +33,7 @@ test('captures exact native selection across inline elements without changing do
   const missing = await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(quote)]);
   expect(missing).toEqual([]);
   expect(await p.locator('article').innerHTML()).toBe(before);
-  expect(await p.evaluate(() => [...CSS.highlights.get('arctic-preserved')!].map(range => range.toString()))).toEqual([quote.exact]);
+  expect(await p.evaluate(() => [...CSS.highlights.get('arctic-yellow')!].map(range => range.toString()))).toEqual([quote.exact]);
   await p.close();
 });
 
@@ -66,9 +66,47 @@ test('non-highlight notes remain revealable, empty and outside selections cannot
   const p = await page();
   const quote = await select(p, 'em');
   expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [{ ...record(quote), isHighlighted: false }])).toEqual([]);
-  expect(await p.evaluate(() => CSS.highlights.get('arctic-preserved')!.size)).toBe(0);
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')!.size)).toBe(0);
   expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('one'))).toBe(true);
   await p.evaluate(() => window.getSelection()!.removeAllRanges());
   expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.selection())).toBeNull();
+  await p.close();
+});
+
+
+test('recolour updates the painted ranges and tap bridge without changing the article', async () => {
+  const p = await page();
+  const quote = await select(p, 'em');
+  const before = await p.locator('article').innerHTML();
+  await p.evaluate(() => {
+    (globalThis as any).messages = [];
+    (globalThis as any).webkit = { messageHandlers: { arcticAnnotationTap: {
+      postMessage: (message: unknown) => (globalThis as any).messages.push(message)
+    } } };
+    window.getSelection()!.removeAllRanges();
+  });
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'document-one'), [record(quote)]);
+  await p.locator('em').click();
+  expect(await p.evaluate(() => (globalThis as any).messages)).toEqual([{ id: 'one', token: 'document-one' }]);
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'document-one'), [{ ...record(quote), colour: 'rose' }]);
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')!.size)).toBe(0);
+  expect(await p.evaluate(() => [...CSS.highlights.get('arctic-rose')!].map(range => range.toString()))).toEqual([quote.exact]);
+  expect(await p.locator('article').innerHTML()).toBe(before);
+  await p.locator('p').nth(1).click();
+  expect(await p.evaluate(() => (globalThis as any).messages.at(-1))).toEqual({ id: '', token: 'document-one' });
+  await p.close();
+});
+
+test('fallback retains mixed colours, tap ranges and original text across recolours', async () => {
+  const p = await page();
+  const paragraph = await select(p, 'p');
+  const phrase = await select(p, 'em');
+  const before = await p.locator('article').innerHTML();
+  await p.evaluate(() => { (globalThis as any).Highlight = undefined; window.getSelection()!.removeAllRanges(); });
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(paragraph), { ...record(phrase, 'two'), colour: 'blue' }]);
+  expect(await p.locator('em mark[data-arctic-highlight="blue"]').innerText()).toBe(phrase.exact);
+  expect(await p.locator('mark mark').count()).toBe(0);
+  await p.evaluate(() => (globalThis as any).arcticAnnotations.render([]));
+  expect(await p.locator('article').innerHTML()).toBe(before);
   await p.close();
 });

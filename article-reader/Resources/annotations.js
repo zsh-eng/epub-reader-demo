@@ -3,13 +3,44 @@
 (() => {
   const root = document.getElementById('reader-content');
   if (!root || globalThis.arcticAnnotations) return;
+  const colours = ['yellow', 'sage', 'rose', 'blue'];
   const style = document.createElement('style');
   style.textContent = `
-    ::highlight(arctic-preserved) { background-color: var(--annotation-fill); color: inherit; }
-    mark[data-arctic-highlight] { background: var(--annotation-fill); color: inherit; }
+    :root { --annotation-yellow: rgba(245,199,64,.38); --annotation-sage: rgba(75,171,111,.24);
+      --annotation-rose: rgba(229,104,140,.24); --annotation-blue: rgba(56,164,209,.24); }
+    :root[data-theme="Ink"], :root[data-theme="Night"] {
+      --annotation-yellow: rgba(245,199,64,.30); --annotation-sage: rgba(99,200,134,.30);
+      --annotation-rose: rgba(241,137,166,.30); --annotation-blue: rgba(102,197,234,.30); }
+    ${colours.map(colour => `::highlight(arctic-${colour}) {
+      background-color: var(--annotation-${colour}); color: inherit;
+    } mark[data-arctic-highlight="${colour}"] {
+      background: var(--annotation-${colour}); color: inherit;
+    }`).join('\n')}
   `;
   document.head.append(style);
-  let resolved = new Map();
+  let resolved = new Map(), hitRanges = [], documentToken = '', picked = false;
+  const colourOf = record => colours.includes(record.colour) ? record.colour : 'yellow';
+  function notify(id = '') {
+    if (!id && !picked) return;
+    picked = Boolean(id);
+    globalThis.webkit?.messageHandlers?.arcticAnnotationTap?.postMessage({ id, token: documentToken });
+  }
+  // CSS highlights have no DOM element. Hit-test the cached ranges only on tap,
+  // never on scroll or in the rendering loop. Last-painted overlap wins.
+  root.addEventListener('click', event => {
+    if (!window.getSelection()?.isCollapsed) return;
+    for (const { id, range } of [...hitRanges].reverse()) {
+      if ([...range.getClientRects()].some(rect => event.clientX >= rect.left
+          && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)) {
+        event.preventDefault();
+        notify(id);
+        return;
+      }
+    }
+    notify();
+  });
+  document.addEventListener('click', event => { if (!root.contains(event.target)) notify(); });
+  window.addEventListener('scroll', () => notify(), { passive: true });
   function content() {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const nodes = [];
@@ -54,23 +85,27 @@
     root.normalize();
   }
   function fallbackMark(nodes, intervals) {
-    // Build disjoint intervals for each text node. This also handles overlapping
-    // highlights without nested marks or changing the article's text content.
+    // Partition each text node at every boundary. Later records win overlaps,
+    // and adjacent runs of the same colour merge without nested DOM wrappers.
     for (const item of nodes) {
-      const pieces = intervals.map(([start, end]) => [
-        Math.max(0, start - item.start), Math.min(item.node.length, end - item.start)
-      ]).filter(([start, end]) => end > start).sort((a, b) => a[0] - b[0]);
+      const pieces = intervals.map(([start, end, colour]) => [
+        Math.max(0, start - item.start), Math.min(item.node.length, end - item.start), colour
+      ]).filter(([start, end]) => end > start);
+      const boundaries = [...new Set(pieces.flatMap(([start, end]) => [start, end]))].sort((a, b) => a - b);
       const merged = [];
-      for (const piece of pieces) {
+      for (let i = 0; i + 1 < boundaries.length; i++) {
+        const start = boundaries[i], end = boundaries[i + 1];
+        const owner = [...pieces].reverse().find(piece => piece[0] <= start && piece[1] >= end);
+        if (!owner) continue;
         const previous = merged[merged.length - 1];
-        if (previous && piece[0] <= previous[1]) previous[1] = Math.max(previous[1], piece[1]);
-        else merged.push(piece);
+        if (previous && previous[1] === start && previous[2] === owner[2]) previous[1] = end;
+        else merged.push([start, end, owner[2]]);
       }
-      for (const [start, end] of merged.reverse()) {
+      for (const [start, end, colour] of merged.reverse()) {
         const selected = item.node.splitText(start);
         selected.splitText(end - start);
         const mark = document.createElement('mark');
-        mark.dataset.arcticHighlight = '';
+        mark.dataset.arcticHighlight = colour;
         selected.replaceWith(mark);
         mark.append(selected);
       }
@@ -92,21 +127,37 @@
       return { exact, start, prefix: text.slice(Math.max(0, start - 48), start),
         suffix: text.slice(start + exact.length, start + exact.length + 48) };
     },
-    render(records) {
+    render(records, token = '') {
+      documentToken = token;
       unwrap();
       const { nodes, text } = content();
-      const ranges = [], intervals = [], missing = [];
+      const ranges = new Map(colours.map(colour => [colour, []])), intervals = [], missing = [];
+      hitRanges = [];
       resolved = new Map();
       for (const record of records) {
         const start = locate(text, record.quote);
         const range = start < 0 ? null : rangeAt(nodes, start, start + record.quote.exact.length);
         if (!range) { missing.push(record.id); continue; }
         resolved.set(record.id, record.quote);
-        if (record.isHighlighted) { ranges.push(range); intervals.push([start, start + record.quote.exact.length]); }
+        hitRanges.push({ id: record.id, range });
+        if (record.isHighlighted) {
+          const colour = colourOf(record);
+          ranges.get(colour).push(range);
+          intervals.push([start, start + record.quote.exact.length, colour]);
+        }
       }
       if (globalThis.CSS?.highlights && globalThis.Highlight) {
-        CSS.highlights.set('arctic-preserved', new Highlight(...ranges));
-      } else { fallbackMark(nodes, intervals); }
+        for (const colour of colours) CSS.highlights.set('arctic-' + colour, new Highlight(...ranges.get(colour)));
+      } else {
+        fallbackMark(nodes, intervals);
+        // splitText moves live Range boundaries: rebuild after fallback wrapping.
+        const rebuilt = content();
+        hitRanges = [...resolved].flatMap(([id, quote]) => {
+          const start = locate(rebuilt.text, quote);
+          const range = start < 0 ? null : rangeAt(rebuilt.nodes, start, start + quote.exact.length);
+          return range ? [{ id, range }] : [];
+        });
+      }
       return missing;
     },
     reveal(id) {

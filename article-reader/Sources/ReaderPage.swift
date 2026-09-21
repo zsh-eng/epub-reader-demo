@@ -35,13 +35,17 @@ struct ReaderPage: View {
       }
       .onAppear {
         updateAppearance()
+        browser.refreshAnnotations()
         store.visit(browser.libraryURL)
       }
       .onChange(of: browser.committedURL) { _, url in
         nearEnd = false
         if url != nil { store.visit(browser.libraryURL) }
       }
-      .onChange(of: browser.isReader) { _, _ in nearEnd = false }
+      .onChange(of: browser.isReader) { _, _ in
+        nearEnd = false
+        browser.selectedAnnotationID = nil
+      }
       .onChange(of: fontSize, updateAppearance)
       .onChange(of: font, updateAppearance)
       .onChange(of: padding, updateAppearance)
@@ -123,7 +127,7 @@ struct ReaderPage: View {
 
   private var bottomControls: some View {
     VStack(spacing: 10) {
-      if !appearance, nearEnd, canArchive {
+      if browser.selectedAnnotationID == nil, !appearance, nearEnd, canArchive {
         Button(action: archive) {
           Label("Archive and close", systemImage: "archivebox")
             .font(.subheadline.weight(.semibold)).padding(.horizontal, 20).frame(height: 44)
@@ -131,10 +135,22 @@ struct ReaderPage: View {
         .readerGlass().accessibilityIdentifier("reader-archive-prompt")
         .transition(reduceMotion ? .opacity : .offset(y: 8).combined(with: .opacity))
       }
-      if appearance { appearanceControls } else { navigationControls.padding(.bottom, 6) }
+      if let id = browser.selectedAnnotationID,
+        let annotation = browser.annotations.first(where: { $0.id == id }), browser.isReader
+      {
+        HighlightToolbar(annotation: annotation, browser: browser)
+          .padding(.bottom, 6)
+          .transition(reduceMotion ? .opacity : .offset(y: 8).combined(with: .opacity))
+      } else if appearance {
+        appearanceControls
+      } else {
+        navigationControls.padding(.bottom, 6)
+      }
     }
     .animation(
-      .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.18), value: nearEnd)
+      .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.18), value: nearEnd
+    )
+    .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), value: browser.selectedAnnotationID)
   }
 
   private var navigationControls: some View {

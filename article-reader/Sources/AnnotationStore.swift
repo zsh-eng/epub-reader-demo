@@ -9,6 +9,12 @@ struct ReaderQuote: Codable, Equatable {
   var start: Int
 }
 
+enum HighlightColour: String, Codable, CaseIterable, Identifiable {
+  case yellow, sage, rose, blue
+  var id: String { rawValue }
+  var name: String { rawValue.capitalized }
+}
+
 struct ReaderAnnotation: Codable, Identifiable, Equatable {
   var id: UUID
   var articleURL: URL
@@ -18,6 +24,9 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable {
   var createdAt: Date
   var updatedAt: Date
   var deletedAt: Date?
+  // Optional on disk so existing passages decode without a migration.
+  var colour: HighlightColour?
+  var highlightColour: HighlightColour { colour ?? .yellow }
 }
 
 /// Small, atomic record files keep note edits independent of library size.
@@ -72,9 +81,18 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable {
     let now = Date()
     let record = ReaderAnnotation(
       id: UUID(), articleURL: url, quote: quote, note: "", isHighlighted: true,
-      createdAt: now, updatedAt: now)
+      createdAt: now, updatedAt: now, colour: .yellow)
     try write(record)
     return record
+  }
+
+  func recolour(_ id: UUID, colour: HighlightColour) throws {
+    guard var record = records.first(where: { $0.id == id && $0.deletedAt == nil }) else { return }
+    guard record.highlightColour != colour || !record.isHighlighted else { return }
+    record.colour = colour
+    record.isHighlighted = true
+    record.updatedAt = Date()
+    try write(record)
   }
 
   func updateNote(_ note: String, id: UUID) throws {

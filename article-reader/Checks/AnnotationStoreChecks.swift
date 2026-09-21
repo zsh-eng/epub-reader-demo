@@ -12,8 +12,17 @@ enum TestMode { static let enabled = false }
       exact: "“Keep this” — 日本語", prefix: "Before ", suffix: " after", start: 7)
     let store = AnnotationStore(directory: directory)
     let annotation = try store.highlight(quote, in: url)
+    precondition(annotation.highlightColour == .yellow)
+    var legacyJSON =
+      try JSONSerialization.jsonObject(with: JSONEncoder().encode(annotation)) as! [String: Any]
+    legacyJSON.removeValue(forKey: "colour")
+    let legacy = try JSONDecoder().decode(
+      ReaderAnnotation.self, from: JSONSerialization.data(withJSONObject: legacyJSON))
+    precondition(legacy.highlightColour == .yellow)
+    try store.recolour(annotation.id, colour: .rose)
     try store.updateNote("A thought to keep", id: annotation.id)
     let restored = AnnotationStore(directory: directory)
+    precondition(restored.annotations(for: url).first?.highlightColour == .rose)
     precondition(restored.annotations(for: url).first?.note == "A thought to keep")
     precondition(restored.annotations(for: url).first?.quote == quote)
     let repeated = try restored.highlight(quote, in: url)
@@ -55,7 +64,7 @@ enum TestMode { static let enabled = false }
     precondition(partial.records.count == 3)
     precondition(partial.loadError != nil)
     print(
-      "Annotation storage: reopen, Unicode, deduplication, note preservation, clear-and-retype after restart, explicit deletion, stale merge, damaged-record isolation passed"
+      "Annotation storage: reopen, legacy yellow, persisted colour, Unicode, deduplication, note preservation, clear-and-retype after restart, explicit deletion, stale merge, damaged-record isolation passed"
     )
   }
 }

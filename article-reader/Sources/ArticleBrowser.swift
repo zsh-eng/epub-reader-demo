@@ -96,6 +96,19 @@ enum ArticleRouting {
   }
 }
 
+/// Messages come only from the cleaned Reader's isolated content world.
+@MainActor private final class ReaderAnnotationBridge: NSObject, WKScriptMessageHandler {
+  weak var browser: ArticleBrowser?
+  func userContentController(
+    _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
+  ) {
+    guard message.frameInfo.isMainFrame, let body = message.body as? [String: String],
+      let token = body["token"]
+    else { return }
+    browser?.annotationTapped(body["id"], token: token, from: message.webView)
+  }
+}
+
 #if DEBUG
   @MainActor @Observable final class PublisherLoadProbe {
     static let shared = PublisherLoadProbe()
@@ -142,6 +155,8 @@ enum ArticleRouting {
   let webView: WKWebView
   let readerView: WKWebView
   var annotationPresentation: AnnotationPresentation?
+  var selectedAnnotationID: UUID?
+  @ObservationIgnored private var pendingAnnotationReveal: UUID?
   var unmatchedAnnotations: Set<String> = []
   var annotations: [ReaderAnnotation] { AnnotationStore.shared.annotations(for: libraryURL) }
   var isReader = false
@@ -228,6 +243,10 @@ enum ArticleRouting {
     readyBridge.browser = self
     readerView.configuration.userContentController.add(
       readyBridge, contentWorld: .defaultClient, name: "arcticReaderReady")
+    let annotationBridge = ReaderAnnotationBridge()
+    annotationBridge.browser = self
+    readerView.configuration.userContentController.add(
+      annotationBridge, contentWorld: .defaultClient, name: "arcticAnnotationTap")
     (readerView as? ReaderWebView)?.annotate = { [weak self] withNote in
       self?.annotateSelection(withNote: withNote)
     }
@@ -795,8 +814,6 @@ enum ArticleRouting {
         root.style.setProperty('--reader-padding', o.padding + 'px');
         root.style.setProperty('--reader-leading', o.leading);
         root.style.setProperty('--reader-font', o.family);
-        root.style.setProperty('--annotation-fill', o.theme === 'Ink' || o.theme === 'Night'
-          ? 'rgba(115,209,242,.24)' : 'rgba(33,125,181,.18)');
         const text = document.querySelector('#reader-content p') || document.getElementById('reader-content');
         const style = getComputedStyle(text);
         return {
@@ -870,12 +887,18 @@ enum ArticleRouting {
     guard let data = try? JSONEncoder().encode(annotations),
       let json = String(data: data, encoding: .utf8)
     else { return }
+    let token = readerDocumentToken
     readerView.callAsyncJavaScript(
-      "return globalThis.arcticAnnotations?.render(JSON.parse(records)) || [];",
-      arguments: ["records": json], in: nil, in: .defaultClient
+      "return globalThis.arcticAnnotations?.render(JSON.parse(records), token) || [];",
+      arguments: ["records": json, "token": token], in: nil, in: .defaultClient
     ) { [weak self] result in
+      guard let self, self.readerDocumentToken == token else { return }
       if case .success(let value) = result, let ids = value as? [String] {
-        self?.unmatchedAnnotations = Set(ids)
+        self.unmatchedAnnotations = Set(ids)
+        if let pending = self.pendingAnnotationReveal {
+          self.pendingAnnotationReveal = nil
+          self.revealAnnotation(pending)
+        }
       }
     }
   }
@@ -897,6 +920,7 @@ enum ArticleRouting {
         self.readerView.evaluateJavaScript(
           "window.getSelection().removeAllRanges()", in: nil, in: .defaultClient
         ) { _ in }
+        self.selectedAnnotationID = annotation.id
         self.refreshAnnotations()
         UISelectionFeedbackGenerator().selectionChanged()
         if withNote { self.annotationPresentation = AnnotationPresentation(editing: annotation.id) }
@@ -904,12 +928,35 @@ enum ArticleRouting {
     }
   }
 
+  fileprivate func annotationTapped(_ value: String?, token: String, from view: WKWebView?) {
+    guard view === readerView, isReader, readerReady, !token.isEmpty,
+      token == readerDocumentToken
+    else { return }
+    guard let value, let id = UUID(uuidString: value),
+      annotations.contains(where: { $0.id == id })
+    else {
+      selectedAnnotationID = nil
+      return
+    }
+    selectedAnnotationID = id
+    UISelectionFeedbackGenerator().selectionChanged()
+  }
+
   func revealAnnotation(_ id: UUID) {
+    pendingAnnotationReveal = id
     showReader()
+    guard readerReady else { return }
+    let token = readerDocumentToken
     readerView.callAsyncJavaScript(
       "return globalThis.arcticAnnotations?.reveal(id) || false;",
       arguments: ["id": id.uuidString], in: nil, in: .defaultClient
-    ) { _ in }
+    ) { [weak self] result in
+      guard let self, self.readerDocumentToken == token else { return }
+      if case .success(let value) = result, value as? Bool == true {
+        self.pendingAnnotationReveal = nil
+        self.selectedAnnotationID = id
+      }
+    }
   }
 
   func stop() {
