@@ -81,12 +81,19 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   are evicted when the limit is reached.
 - Code blocks with supported language labels receive bundled highlight.js colouring.
   Unknown languages remain plain code. No remote script is loaded.
-- The page menu provides Archive article, Reload, Open original and Try Unwall.
+- Reader restores the last text passage after relaunch, including offline. Checkpoints
+  are device-local and stored separately from the article index after scrolling settles
+  or Reader closes; Website scrolling never updates them. A paragraph anchor handles
+  text-size changes, with progress as a fallback after article text changes.
+- The page menu provides Copy link, Share, native Find in page, Open in browser,
+  Favourite, Archive article, Reload and Try Unwall.
   A saved, unarchived article also offers **Archive and close** after you scroll near
   its end. Both archive actions return to the library only after storage succeeds.
-- Empty folders center a native paper illustration and folder-specific guidance
-  in the available space. Artwork adapts to light/dark mode and hides at constrained
-  heights to preserve readable text. There is no looping decorative animation.
+- Empty folders use distinct Arctic illustrations: a reading fox, sheltered cabin,
+  snow trail, books preserved in ice, and an ice star. Notes use a paper aurora,
+  highlights an illuminated prism, and Search a telescope. The eight bundled
+  transparent assets are capped at 720 pixels and work on both themes. There is
+  no network loading or looping animation; constrained layouts prioritize text.
 - Long-press a card to refresh its preview or remove the link.
 
 This app stores link metadata in an atomic JSON file under Application Support,

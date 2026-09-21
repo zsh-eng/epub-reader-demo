@@ -42,6 +42,14 @@ enum ArticleRouting {
 @MainActor private final class ReaderWebView: WKWebView {
   private var copyRequest = 0
   var annotate: ((Bool) -> Void)?
+  var didLayout: (() -> Void)?
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    // SwiftUI can update the representable before UIKit assigns its viewport.
+    guard didLayout != nil, window != nil else { return }
+    Task { @MainActor [weak self] in self?.didLayout?() }
+  }
 
   override func buildMenu(with builder: UIMenuBuilder) {
     super.buildMenu(with: builder)
@@ -192,6 +200,8 @@ enum ArticleRouting {
   var annotations: [ReaderAnnotation] { AnnotationStore.shared.annotations(for: libraryURL) }
   var isReader = false
   var readerReady = false
+  var positionReady = false
+  @ObservationIgnored private var restoringPosition = false
   private var renderedAppearance = ""
   var appearanceDescription: String {
     get {
@@ -289,6 +299,7 @@ enum ArticleRouting {
       self?.annotateSelection(withNote: withNote)
     }
     for view in [webView, readerView] {
+      view.isFindInteractionEnabled = true
       view.isOpaque = false
       view.backgroundColor = .systemBackground
       view.scrollView.contentInsetAdjustmentBehavior = .never
@@ -686,6 +697,11 @@ enum ArticleRouting {
   }
 
   private func prepareReaderReadiness() {
+    (readerView as? ReaderWebView)?.didLayout = { [weak self] in
+      self?.restoreReaderPositionIfNeeded()
+    }
+    positionReady = false
+    restoringPosition = false
     readerDocumentToken = UUID().uuidString
     preparingReaderAppearance = false
     let controller = readerView.configuration.userContentController
@@ -722,6 +738,7 @@ enum ArticleRouting {
         }
       #endif
       self.readerReady = true
+      self.restoreReaderPositionIfNeeded()
       self.isExtracting = false
       self.applyReaderMedia()
       if self.decorationTask == nil { self.hydrateCachedDecorations() }
@@ -1095,6 +1112,56 @@ enum ArticleRouting {
     }
   }
 
+  /// Called only after the visible Reader has its real viewport and bar insets.
+  /// Preloading may prepare HTML at zero size; it must not restore or save there.
+  func restoreReaderPositionIfNeeded() {
+    guard readerReady, !positionReady, !restoringPosition, readerView.window != nil,
+      readerView.bounds.width > 0, readerView.bounds.height > 0
+    else { return }
+    guard let position = ReaderPosition.load(libraryURL) else {
+      finishPositionRestore()
+      return
+    }
+    restoringPosition = true
+    let token = readerDocumentToken
+    readerView.callAsyncJavaScript(
+      ReaderPosition.script + "\n arcticPosition.restore(JSON.parse(position), top);",
+      arguments: ["position": position, "top": readerView.scrollView.contentInset.top],
+      in: nil, in: .defaultClient
+    ) { [weak self] _ in
+      guard let self, self.readerDocumentToken == token else { return }
+      self.finishPositionRestore()
+    }
+  }
+
+  private func finishPositionRestore() {
+    (readerView as? ReaderWebView)?.didLayout = nil
+    restoringPosition = false
+    positionReady = true
+    if let id = pendingAnnotationReveal { revealAnnotation(id) }
+  }
+
+  func captureReaderPosition() {
+    guard readerReady, positionReady, !restoringPosition else { return }
+    let token = readerDocumentToken
+    let url = libraryURL
+    readerView.callAsyncJavaScript(
+      ReaderPosition.script + "\nreturn arcticPosition.capture(top);",
+      arguments: ["top": readerView.scrollView.contentInset.top], in: nil, in: .defaultClient
+    ) { [weak self] result in
+      guard let self, self.readerDocumentToken == token,
+        case .success(let value) = result, let json = value as? String
+      else { return }
+      ReaderPosition.save(json, for: url)
+    }
+  }
+
+  func findInPage() {
+    selectedAnnotationID = nil
+    let view = isReader ? readerView : webView
+    view.findInteraction?.presentFindNavigator(showingReplace: false)
+  }
+
   func beginNote(annotation: ReaderAnnotation? = nil) {
     selectedAnnotationID = nil
     noteDraft = ReaderNoteDraft(annotation: annotation)
@@ -1123,7 +1190,7 @@ enum ArticleRouting {
     }
     pendingAnnotationReveal = id
     showReader()
-    guard readerReady else { return }
+    guard readerReady, positionReady else { return }
     let token = readerDocumentToken
     readerView.callAsyncJavaScript(
       "return globalThis.arcticAnnotations?.reveal(id) || false;",
@@ -1171,7 +1238,10 @@ struct WebSurface: UIViewRepresentable {
   let insets: EdgeInsets
   var isActive: () -> Bool = { true }
   @Binding var nearEnd: Bool
-  func makeCoordinator() -> Coordinator { Coordinator(nearEnd: $nearEnd, isActive: isActive) }
+  var onScrollEnd: () -> Void = {}
+  func makeCoordinator() -> Coordinator {
+    Coordinator(nearEnd: $nearEnd, isActive: isActive, onScrollEnd: onScrollEnd)
+  }
   func makeUIView(context: Context) -> WKWebView {
     webView.scrollView.delegate = context.coordinator
     updateInsets(webView)
@@ -1180,6 +1250,7 @@ struct WebSurface: UIViewRepresentable {
   func updateUIView(_ uiView: WKWebView, context: Context) {
     context.coordinator.nearEnd = $nearEnd
     context.coordinator.isActive = isActive
+    context.coordinator.onScrollEnd = onScrollEnd
     uiView.accessibilityElementsHidden = !isActive()
     updateInsets(uiView)
   }
@@ -1193,9 +1264,18 @@ struct WebSurface: UIViewRepresentable {
   final class Coordinator: NSObject, UIScrollViewDelegate {
     var nearEnd: Binding<Bool>
     var isActive: () -> Bool
-    init(nearEnd: Binding<Bool>, isActive: @escaping () -> Bool) {
+    var onScrollEnd: () -> Void
+    init(nearEnd: Binding<Bool>, isActive: @escaping () -> Bool, onScrollEnd: @escaping () -> Void)
+    {
       self.nearEnd = nearEnd
       self.isActive = isActive
+      self.onScrollEnd = onScrollEnd
+    }
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+      if !decelerate && isActive() { onScrollEnd() }
+    }
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+      if isActive() { onScrollEnd() }
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       guard isActive() else { return }

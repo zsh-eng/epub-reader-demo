@@ -7,6 +7,12 @@ struct ArticleReaderApp: App {
   @State private var store = ArticleStore()
   init() {
     #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-store") {
+        for key in UserDefaults.standard.dictionaryRepresentation().keys
+        where key.hasPrefix("reader-position.") {
+          UserDefaults.standard.removeObject(forKey: key)
+        }
+      }
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-share-keychain-probe") {
         try? JevKeychain.writeShareAccessProbe()
       }

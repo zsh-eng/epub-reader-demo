@@ -653,6 +653,117 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(app.buttons["article-next"].exists)
   }
 
+  @MainActor func testEmptyFolderIllustrationsInLightMode() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance"]
+    app.launch()
+    let strip = app.scrollViews.containing(.button, identifier: "folder-saved").firstMatch
+    for name in ["saved", "favourites", "downloaded", "history", "archive"] {
+      let button = app.buttons["folder-" + name]
+      for _ in 0..<5 {
+        if button.isHittable { break }
+        strip.swipeLeft()
+      }
+      XCTAssertTrue(button.isHittable)
+      button.tap()
+      XCTAssertTrue(
+        app.staticTexts.matching(NSPredicate(format: "label == %@", name.uppercased())).firstMatch
+          .waitForExistence(timeout: 5))
+      capture(app, "empty-" + name + "-light")
+    }
+  }
+
+  @MainActor func testReaderPositionSurvivesOfflineRelaunchAndWebsiteScroll() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance"]
+    app.launch()
+    add("https://fixture.example/story", to: app)
+    app.buttons["article-story"].tap()
+    showReader(app)
+    let web = app.webViews.firstMatch
+    web.swipeUp(velocity: .slow)
+    let heading = app.webViews.staticTexts["A little room to think"]
+    XCTAssertTrue(heading.isHittable, app.debugDescription)
+    let y = heading.frame.minY
+    capture(app, "reader-position-before")
+    app.buttons["reader-toggle"].tap()
+    web.swipeUp()
+    app.buttons["reader-toggle"].tap()
+    XCTAssertEqual(heading.frame.minY, y, accuracy: 16)
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-images-offline"]
+    app.launchEnvironment = [:]
+    app.launch()
+    app.buttons["article-story"].tap()
+    showReader(app)
+    let restored = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: heading)
+    wait(for: [restored], timeout: 10)
+    XCTAssertEqual(heading.frame.minY, y, accuracy: 16)
+    capture(app, "reader-position-restored-offline")
+    web.swipeUp(velocity: .slow)
+    web.swipeUp(velocity: .slow)
+    let last = app.webViews.staticTexts["Read the next story"]
+    XCTAssertTrue(last.isHittable)
+    let archive = app.buttons["reader-archive-prompt"]
+    XCTAssertTrue(archive.isHittable)
+    let endGap = archive.frame.minY - last.frame.maxY
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.terminate()
+    app.launch()
+    app.buttons["article-story"].tap()
+    showReader(app)
+    let atEnd = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: last)
+    wait(for: [atEnd], timeout: 10)
+    // The Archive prompt appears after a gesture, so a fresh Reader has 54pt
+    // more space. Preserve the end passage relative to the visible controls.
+    let controls = archive.exists ? archive : app.buttons["reader-toggle"]
+    XCTAssertGreaterThan(controls.frame.minY, last.frame.maxY)
+    XCTAssertEqual(controls.frame.minY - last.frame.maxY, endGap, accuracy: 16)
+    capture(app, "reader-position-end-restored")
+  }
+
+  @MainActor func testReaderCopyShareAndNativeFind() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance"]
+    app.launch()
+    add("https://fixture.example/story", to: app)
+    app.buttons["article-story"].tap()
+    showReader(app)
+    app.buttons["Page options"].tap()
+    XCTAssertFalse(app.buttons["Open original"].exists)
+    XCTAssertTrue(app.buttons["reader-open-browser"].exists)
+    app.buttons["reader-copy-link"].tap()
+    app.buttons["reader-add-note"].tap()
+    let input = app.textFields["note-message-input"]
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    XCTAssertGreaterThanOrEqual(
+      app.descendants(matching: .any).matching(identifier: "note-input-bar").firstMatch.frame
+        .height, 54)
+    capture(app, "reader-composer-height")
+    input.press(forDuration: 1.1)
+    let paste = app.menuItems["Paste"]
+    XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
+    paste.tap()
+    XCTAssertEqual(input.value as? String, "https://fixture.example/story")
+    app.buttons["note-draft-cancel"].tap()
+    XCTAssertTrue(app.buttons["reader-add-note"].waitForExistence(timeout: 5))
+    app.buttons["Page options"].tap()
+    app.buttons["reader-share-link"].tap()
+    XCTAssertTrue(app.cells["Copy"].waitForExistence(timeout: 5), app.debugDescription)
+    capture(app, "reader-share-sheet")
+    app.cells["Copy"].tap()
+    app.buttons["Page options"].tap()
+    app.buttons["reader-find"].tap()
+    let find = app.searchFields.firstMatch
+    XCTAssertTrue(find.waitForExistence(timeout: 5), app.debugDescription)
+    find.typeText("particular")
+    capture(app, "reader-native-find")
+    XCTAssertTrue(app.buttons["Done"].exists, app.debugDescription)
+    app.buttons["Done"].tap()
+    XCTAssertTrue(app.buttons["reader-add-note"].isHittable)
+  }
+
   @MainActor func testSVGReaderIconSurvivesOfflineReopen() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-reader-icon"]

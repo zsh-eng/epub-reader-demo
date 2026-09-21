@@ -7,6 +7,7 @@ struct ReaderPage: View {
   @State private var browser: ArticleBrowser
   @Environment(\.colorScheme) private var systemScheme
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var appearance = false
   @State private var nearEnd = false
@@ -49,11 +50,16 @@ struct ReaderPage: View {
         browser.refreshAnnotations()
         store.visit(browser.libraryURL)
       }
+      .onDisappear { browser.captureReaderPosition() }
+      .onChange(of: scenePhase) { _, phase in
+        if phase != .active { browser.captureReaderPosition() }
+      }
       .onChange(of: browser.committedURL) { _, url in
         nearEnd = false
         if url != nil { store.visit(browser.libraryURL) }
       }
-      .onChange(of: browser.isReader) { _, _ in
+      .onChange(of: browser.isReader) { _, reader in
+        if !reader { browser.captureReaderPosition() }
         nearEnd = false
         browser.selectedAnnotationID = nil
       }
@@ -106,9 +112,10 @@ struct ReaderPage: View {
           if browser.isReader {
             WebSurface(
               webView: browser.readerView, insets: geometry.safeAreaInsets,
-              isActive: { browser.isReader && browser.readerReady }, nearEnd: $nearEnd
+              isActive: { browser.isReader && browser.readerReady }, nearEnd: $nearEnd,
+              onScrollEnd: browser.captureReaderPosition
             )
-            .opacity(browser.readerReady ? 1 : 0)
+            .opacity(browser.readerReady && browser.positionReady ? 1 : 0)
             .allowsHitTesting(browser.readerReady)
             .accessibilityHidden(!browser.readerReady)
             .transition(.opacity)
@@ -345,6 +352,7 @@ struct ReaderNavigationBar: View {
   let browser: ArticleBrowser
   let store: ArticleStore
   let close: () -> Void
+  @Environment(\.openURL) private var openURL
   private var article: SavedArticle? {
     store.articles.first { $0.url == browser.libraryURL }
       ?? store.articles.first { $0.url == browser.sourceURL }
@@ -368,6 +376,16 @@ struct ReaderNavigationBar: View {
       )
       // Article notes are local and remain available when the page cannot load.
       Menu {
+        Button("Copy link", systemImage: "link") {
+          UIPasteboard.general.url = browser.libraryURL
+        }.accessibilityIdentifier("reader-copy-link")
+        ShareLink(item: browser.libraryURL) {
+          Label("Share", systemImage: "square.and.arrow.up")
+        }.accessibilityIdentifier("reader-share-link")
+        Button("Find in page", systemImage: "doc.text.magnifyingglass", action: browser.findInPage)
+          .disabled(!browser.hasLoaded || browser.noteDraft != nil)
+          .accessibilityIdentifier("reader-find")
+        Divider()
         if let article, article.saved {
           Button(
             article.favourite ? "Unfavourite" : "Favourite",
@@ -386,7 +404,8 @@ struct ReaderNavigationBar: View {
         .disabled(article?.saved != true || article?.isArchived == true)
         .accessibilityIdentifier("reader-archive-menu")
         Button("Reload", systemImage: "arrow.clockwise", action: browser.reload)
-        Button("Open original", systemImage: "globe", action: browser.openOriginal)
+        Button("Open in browser", systemImage: "safari") { openURL(browser.libraryURL) }
+          .accessibilityIdentifier("reader-open-browser")
         Button("Try Unwall", systemImage: "doc.text", action: browser.openUnwall)
       } label: {
         Image(systemName: "ellipsis").frame(width: 44, height: 44)

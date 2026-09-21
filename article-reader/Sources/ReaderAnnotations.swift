@@ -262,6 +262,7 @@ struct AnnotationEditor: View {
 private struct NoteMessageInput: View {
   @Binding var text: String
   var autofocus = false
+  var dismissing = false
   var cancel: (() -> Void)?
   let send: () -> Void
   @FocusState private var focused: Bool
@@ -269,27 +270,33 @@ private struct NoteMessageInput: View {
   var body: some View {
     HStack(alignment: .bottom, spacing: 6) {
       if let cancel {
-        Button(action: cancel) { Image(systemName: "xmark").frame(width: 40, height: 44) }
+        Button(action: cancel) { Image(systemName: "xmark").frame(width: 40, height: 54) }
           .accessibilityLabel("Discard draft").accessibilityIdentifier("note-draft-cancel")
       }
       TextField("Write a note…", text: $text, axis: .vertical)
         .lineLimit(1...5).focused($focused).padding(.vertical, 12).padding(
           .leading, cancel == nil ? 14 : 0
         )
+        .frame(minHeight: 54)
         .accessibilityIdentifier("note-message-input")
       Button(action: send) {
         Image(systemName: "arrow.up.circle.fill").font(.system(size: 28, weight: .medium))
-          .frame(width: 44, height: 44)
+          .frame(width: 44, height: 54)
       }
       .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       .accessibilityLabel("Send note").accessibilityIdentifier("note-send")
     }
-    .font(.body).readerGlass()
+    .font(.body).frame(minHeight: 54).readerGlass()
+    .accessibilityElement(children: .contain).accessibilityIdentifier("note-input-bar")
     .onAppear { focused = autofocus }
+    .onChange(of: dismissing) { _, value in if value { focused = false } }
   }
 }
 
 struct ReaderNoteComposer: View {
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @State private var keyboardVisible = false
+  @State private var closing = false
   let browser: ArticleBrowser
   let draft: ReaderNoteDraft
   @State private var text: String
@@ -309,8 +316,34 @@ struct ReaderNoteComposer: View {
       }
       if let errorMessage { Text(errorMessage).font(.caption).foregroundStyle(.red) }
       NoteMessageInput(
-        text: $text, autofocus: true, cancel: { browser.noteDraft = nil }, send: send)
-    }.padding(.horizontal, 16).padding(.bottom, 6)
+        text: $text, autofocus: true, dismissing: closing, cancel: close, send: send
+      )
+      .disabled(closing)
+    }.padding(.horizontal, 12).padding(.bottom, 6)
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+      ) { _ in
+        keyboardVisible = true
+      }
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification))
+    { _ in
+      keyboardVisible = false
+      if closing { finishClosing() }
+    }
+  }
+
+  // Keep the input's native host alive while UIKit lowers the keyboard. Swapping
+  // a focused field and resizing safeAreaBar at the same time caused two jumps.
+  private func close() {
+    guard !closing else { return }
+    closing = true
+    if !keyboardVisible { finishClosing() }
+  }
+
+  private func finishClosing() {
+    withAnimation(.easeOut(duration: reduceMotion ? 0.1 : 0.16)) {
+      browser.noteDraft = nil
+    }
   }
 
   private func send() {
@@ -323,7 +356,7 @@ struct ReaderNoteComposer: View {
         try AnnotationStore.shared.addNote(value, in: browser.libraryURL)
       }
       browser.refreshAnnotations()
-      browser.noteDraft = nil
+      close()
     } catch { errorMessage = error.localizedDescription }
   }
 }
