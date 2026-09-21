@@ -92,11 +92,14 @@ struct LibraryView: View {
   @State private var selected: ArticleBrowser?
   @State private var choosingImport = false
   @State private var showingTaggingSettings = false
+  @State private var showingAnnotations = false
+  @State private var passageToOpen: ReaderAnnotation?
   @State private var showingOnboarding = false
   @State private var editingTags: SavedArticle?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var query = ""
   @State private var searching = false
+  @State private var isLibraryScrolling = false
   @State private var importReport: String?
   @State private var showingImportSummary = false
   @State private var folder = ArticleFolder.saved
@@ -264,6 +267,21 @@ struct LibraryView: View {
         .transition(.opacity)
       }
     }
+    .sheet(
+      isPresented: $showingAnnotations,
+      onDismiss: {
+        guard let passage = passageToOpen else { return }
+        passageToOpen = nil
+        let browser = browsers.open(passage.articleURL, store: store)
+        browser.revealAnnotation(passage.id)
+        selected = browser
+      }
+    ) {
+      LibraryAnnotations(articles: store.articles) { passage in
+        passageToOpen = passage
+        showingAnnotations = false
+      }
+    }
     .sheet(isPresented: $showingTaggingSettings) {
       TaggingSettingsView { store.resumeTagging() }
     }
@@ -326,7 +344,7 @@ struct LibraryView: View {
       }
     #endif
     guard scenePhase == .active, selected == nil, !showingOnboarding,
-      !showingTaggingSettings, !choosingImport, editingTags == nil
+      !showingTaggingSettings, !showingAnnotations, !choosingImport, editingTags == nil
     else { return [] }
     let rows = projection.rows(
       articles: store.articles, revision: store.libraryRevision, folder: folder,
@@ -406,6 +424,9 @@ struct LibraryView: View {
       }
     }
     .frame(height: navigationBarHeight)
+    .background {
+      if selected == nil { LibraryScrollEdge().padding(.bottom, -16).ignoresSafeArea(edges: .top) }
+    }
     .environment(\.colorScheme, selected == nil ? systemScheme : (palette.scheme ?? systemScheme))
     .animation(searchTransition, value: selected != nil)
     .animation(searchTransition, value: searching)
@@ -418,29 +439,39 @@ struct LibraryView: View {
         selection.removeAll()
       }
       .font(.subheadline.weight(.medium)).padding(.horizontal, 16).frame(height: 44)
-      .readerGlass().accessibilityIdentifier("select-articles")
+      .modifier(LibraryGlass()).accessibilityIdentifier("select-articles")
       .accessibilityHidden(searching)
       Spacer()
-      Menu {
-        Picker("Sort", selection: $sort) {
-          ForEach(["Newest first", "Oldest first", "Title"], id: \.self) { Text($0) }
+      HStack(spacing: 0) {
+        Button {
+          showingAnnotations = true
+        } label: {
+          Image(systemName: "highlighter").frame(width: 44, height: 44)
         }
-        Divider()
-        Button("Import Chrome reading list", systemImage: "square.and.arrow.down") {
-          choosingImport = true
-        }.accessibilityIdentifier("import-reading-list")
-        Divider()
-        Button("Automatic tags", systemImage: "sparkles") { showingTaggingSettings = true }
-          .accessibilityIdentifier("automatic-tag-settings")
-        Button("Tag existing articles", systemImage: "tag") { store.retagSavedArticles() }
-          .disabled(!TaggingPreferences.enabled)
-          .accessibilityIdentifier("tag-existing-articles")
-        Button("Getting started", systemImage: "book.closed") { showingOnboarding = true }
-          .accessibilityIdentifier("show-onboarding")
-      } label: {
-        Image(systemName: "line.3.horizontal.decrease").frame(width: 44, height: 44)
+        .accessibilityLabel("Highlights and notes")
+        .accessibilityIdentifier("library-annotations")
+        Menu {
+          Picker("Sort", selection: $sort) {
+            ForEach(["Newest first", "Oldest first", "Title"], id: \.self) { Text($0) }
+          }
+          Divider()
+          Button("Import Chrome reading list", systemImage: "square.and.arrow.down") {
+            choosingImport = true
+          }.accessibilityIdentifier("import-reading-list")
+          Divider()
+          Button("Automatic tags", systemImage: "sparkles") { showingTaggingSettings = true }
+            .accessibilityIdentifier("automatic-tag-settings")
+          Button("Tag existing articles", systemImage: "tag") { store.retagSavedArticles() }
+            .disabled(!TaggingPreferences.enabled)
+            .accessibilityIdentifier("tag-existing-articles")
+          Button("Getting started", systemImage: "book.closed") { showingOnboarding = true }
+            .accessibilityIdentifier("show-onboarding")
+        } label: {
+          Image(systemName: "line.3.horizontal.decrease").frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Sort and filter")
       }
-      .readerGlass().accessibilityLabel("Sort and filter")
+      .modifier(LibraryGlass())
       .accessibilityHidden(searching)
     }
     .overlay {
@@ -455,25 +486,34 @@ struct LibraryView: View {
   private var folders: some View {
     ScrollViewReader { proxy in
       ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 24) {
+        HStack(spacing: 2) {
           ForEach(folderItems, id: \.self) { item in
             Button {
-              withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) { folder = item }
+              // Content is immediately available; motion only tracks the folder selection.
+              withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { folder = item }
             } label: {
-              VStack(spacing: 10) {
-                Text(item.title).font(.subheadline.weight(.semibold))
-                  .foregroundStyle(folder == item ? ReaderTheme.foreground : ReaderTheme.muted)
-                Capsule().fill(folder == item ? ReaderTheme.foreground : .clear).frame(height: 3)
-              }.padding(.top, 12)
+              Text(item.title).font(.subheadline.weight(.semibold))
+                .foregroundStyle(folder == item ? ReaderTheme.foreground : ReaderTheme.muted)
+                .padding(.horizontal, 16).frame(minHeight: 44)
+                .background {
+                  if folder == item {
+                    Capsule().fill(ReaderTheme.foreground.opacity(0.08))
+                  }
+                }
+                .contentShape(Capsule())
             }.buttonStyle(.plain).id(item)
               .accessibilityIdentifier(item.identifier)
               .accessibilityAddTraits(folder == item ? .isSelected : [])
           }
-        }.padding(.horizontal, 20)
+        }.padding(4)
       }
+      .clipShape(Capsule())
+      .modifier(LibraryGlass())
+      .padding(.horizontal, 16)
+      .padding(.vertical, 8)
       .onChange(of: folder) { _, value in
         selection.removeAll()
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.25)) {
+        withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) {
           proxy.scrollTo(value, anchor: .center)
         }
       }
@@ -499,6 +539,7 @@ struct LibraryView: View {
         } action: {
           searchViewport = $0
         }
+        .modifier(LibraryScrollActivity { if searching { isLibraryScrolling = $0 } })
         .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
       }
       .opacity(searching ? 1 : 0)
@@ -576,6 +617,11 @@ struct LibraryView: View {
                     .padding(.top, headerHeight)
                 } else {
                   ScrollView { library(in: item) }
+                    .modifier(
+                      LibraryScrollActivity {
+                        if folder == item && !searching { isLibraryScrolling = $0 }
+                      }
+                    )
                     .contentMargins(.top, headerHeight + 8, for: .scrollContent)
                     .contentMargins(.top, headerHeight, for: .scrollIndicators)
                     .contentMargins(
@@ -590,7 +636,7 @@ struct LibraryView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .ignoresSafeArea(.container, edges: .bottom)
-        libraryHeader.background(.regularMaterial)
+        libraryHeader.background { LibraryScrollEdge() }
           .onGeometryChange(for: CGFloat.self) {
             $0.size.height
           } action: {
@@ -631,7 +677,8 @@ struct LibraryView: View {
           .disabled(!store.articles.contains { selection.contains($0.id) && $0.saved })
           Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
             .labelStyle(.iconOnly).disabled(selection.isEmpty)
-        }.padding().background(.regularMaterial)
+        }.padding(.horizontal, 16).padding(.vertical, 10)
+          .modifier(LibraryGlass()).padding(.horizontal, 16).padding(.bottom, 8)
       }
     }
   }
