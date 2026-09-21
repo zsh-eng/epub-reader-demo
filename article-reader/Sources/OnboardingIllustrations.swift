@@ -390,44 +390,49 @@ private enum OnboardingArticle {
 
 private struct OnboardingArticleImage: View {
   var height: CGFloat
+  var imageName = "OnboardingArticle"
 
   var body: some View {
     GeometryReader { geometry in
-      Image("OnboardingArticle")
+      Image(imageName)
         .resizable().scaledToFill()
         .frame(width: geometry.size.width, height: height)
         .clipped()
     }
     .frame(height: height)
-    .accessibilityLabel(
-      "An Antarctic ice shelf beneath a dark sky. Photograph by Elizabeth Rush.")
+    .accessibilityHidden(true)
   }
 }
 
-private struct DemoArticleCard: View {
+struct DemoArticleCard: View {
   var showTags: Bool
   var reservesTags = true
   var imageHeight: CGFloat = 130
+  var imageName = "OnboardingArticle"
+  var title = OnboardingArticle.title
+  var author = OnboardingArticle.author
+  var domain = OnboardingArticle.domain
+  var tags = ["Attention & wonder", "Life & meaning"]
 
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
-      OnboardingArticleImage(height: imageHeight)
+      OnboardingArticleImage(height: imageHeight, imageName: imageName)
         .clipShape(RoundedRectangle(cornerRadius: 14))
       HStack {
-        Text(OnboardingArticle.domain).font(.system(size: 11)).foregroundStyle(.secondary)
+        Text(domain).font(.system(size: 11)).foregroundStyle(.secondary)
         Spacer()
         Image(systemName: "bookmark.fill")
           .font(.system(size: 12)).foregroundStyle(ArcticBrand.accent)
       }
-      Text(OnboardingArticle.title)
+      Text(title)
         .font(.system(size: 28, weight: .medium, design: .serif))
         .tracking(-0.8)
         .fixedSize(horizontal: false, vertical: true)
-      Text(OnboardingArticle.author)
+      Text(author)
         .font(.system(size: 12)).foregroundStyle(.secondary)
       if reservesTags {
         HStack(spacing: 6) {
-          ForEach(Array(["Attention & wonder", "Life & meaning"].enumerated()), id: \.element) {
+          ForEach(Array(tags.enumerated()), id: \.element) {
             index, tag in
             TagRevealPill(name: tag, index: index, compact: true)
           }
@@ -446,7 +451,7 @@ private struct DemoArticleCard: View {
 /// One pointer stays in the scene coordinate space as its targets change.
 /// Travel, a short dwell, and a press/release make each demonstrated tap legible.
 @MainActor @Observable
-private final class DemoPointerModel {
+final class DemoPointerModel {
   var position = CGPoint.zero
   var visible = false
   var pressed = false
@@ -482,7 +487,7 @@ private final class DemoPointerModel {
   }
 }
 
-private struct DemoPointer: View {
+struct DemoPointer: View {
   var model: DemoPointerModel
   @State private var ripple = false
 
@@ -519,7 +524,7 @@ private struct DemoPointer: View {
 }
 
 extension View {
-  fileprivate func demoTarget(
+  func demoTarget(
     _ name: String, in coordinateSpace: String, positions: Binding<[String: CGRect]>
   ) -> some View {
     onGeometryChange(for: CGRect.self) { geometry in

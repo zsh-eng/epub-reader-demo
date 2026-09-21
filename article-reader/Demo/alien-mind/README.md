@@ -1,14 +1,12 @@
-# Arctic × Jev: An Alien Mind
+# Native Arctic × Jev replay
 
-A 32-second, 1080 × 1920, 30 fps H.264 designed replay for LinkedIn. It is a programmatic reconstruction, not a live screen recording. No post was published.
+Open **Sort and filter → Article replay** in the Swift app. The scene starts automatically, loops, and has no onboarding footer or replay button. Its height adapts up to 560 points, compared with the 400-point onboarding illustration. Close it with the top-right cross.
 
-## Review order
+The scene reuses the onboarding card, moving touch indicator, and real `ConnectedTagReveal` / `TagRevealPill` components. It follows the system appearance, stops when hidden or backgrounded, and shows a static saved card with Reduce Motion. No replay changes library data or makes network calls.
 
-1. `arctic-jev-linkedin.mp4`: finished video (local output, excluded from Git).
-2. `scene.html`: editable composition, UI, touch path, tap times and deterministic timeline.
-3. `render.mjs`: frame capture and H.264 export.
-4. `production-result.json` and the request/response files: actual Jev evidence.
-5. `test-jev.py` and `reference/`: reproducible Swift probe and source snapshot.
+Review `Sources/ArticleReplayView.swift`, the shared components in `Sources/OnboardingIllustrations.swift`, then the entry point in `Sources/ArticleReaderApp.swift` (paths relative to `article-reader/`). The bundled fixture is `Resources/Fixtures/alien-mind-replay.json`, copied from the measured production result below. The OG image lives in `Resources/Assets.xcassets/AlienMindReplay.imageset`.
+
+The HTML scene, web render script and web player have been removed. Existing MP4/render validation files are historical artifacts from the superseded web version, not checks of the native scene.
 
 ## Evidence
 
@@ -51,37 +49,23 @@ The full-context diagnostic retains the same model, questions, definitions and t
 | Technology & society | 0.90 | 0.87 | 0.93 |
 | Practical | 0.02 | 0.02 | 0.01 |
 
-## Timing and design
+## Timing
 
-The measured 0.911-second production request begins at 7.400 s and completes at 8.311 s in the replay. It is not accelerated. The border fades over 0.65 s and tag labels follow the native reveal pattern. The remaining navigation and dwell times are editorial. The renderer has an explicit six-second maximum for future reruns; that limit did not apply to this result.
+The native tag processing phase uses the measured 0.911414-second production duration. The remaining pauses are presentation timing. The displayed tags come from the recorded result; no labels were forced. The native screen is a designed replay, not a fresh Jev request.
 
-The simulated touch indicator moves with an ease-in-out curve, pauses at each target, compresses for 120 ms and emits a 420 ms ripple. The scenes follow Arctic's system sans/serif typography, neutral native surfaces, glacier-blue accent, glass controls and angular border beam. The Reader changes to the existing Ink palette as an editorial cut, not a recorded theme-setting action. The short Reader excerpt is intentionally truncated; pagination and reading-time measurements are not claimed. The library contains only this demo article.
+## Classification probe
 
-## Rebuild
+`test-jev.py` compiles the captured Swift parser/client and uses the existing `JEV_API_KEY` environment. It skips modes with saved results. The full-context diagnostic explicitly bypasses the normal client character cap; the production fixture does not. All three original request/response/result triplets remain here for review.
 
-From the repository root:
+## Native validation
 
-```sh
-node article-reader/Demo/alien-mind/render.mjs --stills
-node article-reader/Demo/alien-mind/render.mjs
-```
+The iPhone 17 Pro simulator build and both focused native replay UI tests pass.
+They cover successive loops, background/resume, dismissal/reopening, no library
+save, dark appearance and Reduce Motion. Final article, tagging, saved-library
+and dark screenshots were inspected. Changed Swift files pass strict
+`swift-format` lint.
 
-The renderer uses the bundled Playwright module and an installed Chromium binary. Override `PLAYWRIGHT_MODULE` and `CHROMIUM_PATH` on another machine. FFmpeg must be in PATH. Rendering uses saved results and makes no Jev calls.
-
-To run the probe, use the existing zsh environment with `JEV_API_KEY`, Swift, and the local SwiftSoup checkout path in `test-jev.py`:
-
-```sh
-python3 article-reader/Demo/alien-mind/test-jev.py
-```
-
-Existing result files prevent duplicate calls. Archive the complete request/response/result triplet before an intentional rerun. `reference/` records the precise app-code snapshot; update both snapshot files together when testing a new app version.
-
-## Source hashes
-
-- `reference/ArticleTagging.swift`: `8d7f61e525b87921876d98116b853266e728d8741d874b6944e9dd1494c90ddf`
-- `reference/ArticleMetadata.swift`: `3e873b9405cc9c05ec4eefd58d9fa709e1954f18b786d782acc5868c797a6719`
-- `og.png`: `fa3ddf2f5bc101fe54c11240abd9f574d54110d34096cae35258c0c10d99fc07`
-
-## Validation
-
-The actual Swift probe compiled and all three calls completed. Eight representative frames were visually inspected. FFmpeg decoded all 960 frames without errors. Browser playback confirmed 1080 × 1920 dimensions and a 32-second duration. `validation.json` and `render-info.json` record export checks. The video is silent. No native build or phone test was needed because the native app was not changed.
+The existing `testDemonstrationsCompleteAndReplay` check fails at its unrelated
+onboarding privacy/footer spacing assertion (`706 < 706`). The same failure was
+reproduced once on unchanged commit `7d65c0b` in an isolated baseline build.
+No connected-phone build or installation was performed.
