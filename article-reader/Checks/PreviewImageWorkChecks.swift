@@ -14,6 +14,11 @@ actor WorkCounter {
   }
 }
 
+actor WorkOrder {
+  var values: [String] = []
+  func append(_ value: String) { values.append(value) }
+}
+
 @main struct PreviewImageWorkChecks {
   static func main() async {
     let scheduler = PreviewImageWorkLimit(limit: 3)
@@ -39,7 +44,7 @@ actor WorkCounter {
       precondition(granted)
     }
     let cancelled = Task { await scheduler.acquire() }
-    for _ in 0..<10 { await Task.yield() }
+    await waitForQueue(scheduler, count: 1)
     cancelled.cancel()
     let admitted = await cancelled.value
     precondition(!admitted)
@@ -47,6 +52,53 @@ actor WorkCounter {
     let replacement = await scheduler.acquire()
     precondition(replacement)
     for _ in 0..<3 { await scheduler.release() }
-    print("Image work checks passed: 80 jobs, peak \(peak), cancelled queue entry released.")
+    // Block a single slot so both priority classes are definitely queued.
+    // The visible requests must pass older speculative work, retaining FIFO.
+    let priorityScheduler = PreviewImageWorkLimit(limit: 1)
+    let held = await priorityScheduler.acquire()
+    precondition(held)
+    let order = WorkOrder()
+    let prefetch = Task {
+      guard await priorityScheduler.acquire(prefetch: true) else { return }
+      await order.append("prefetch")
+      await priorityScheduler.release()
+    }
+    await waitForQueue(priorityScheduler, count: 1)
+    let firstVisible = Task {
+      guard await priorityScheduler.acquire() else { return }
+      await order.append("visible 1")
+      await priorityScheduler.release()
+    }
+    await waitForQueue(priorityScheduler, count: 2)
+    let secondVisible = Task {
+      guard await priorityScheduler.acquire() else { return }
+      await order.append("visible 2")
+      await priorityScheduler.release()
+    }
+    await waitForQueue(priorityScheduler, count: 3)
+    let obsoletePrefetch = Task { await priorityScheduler.acquire(prefetch: true) }
+    await waitForQueue(priorityScheduler, count: 4)
+    obsoletePrefetch.cancel()
+    let obsoleteAdmitted = await obsoletePrefetch.value
+    precondition(!obsoleteAdmitted)
+    await waitForQueue(priorityScheduler, count: 3)
+    await priorityScheduler.release()
+    await firstVisible.value
+    await secondVisible.value
+    await prefetch.value
+    let result = await order.values
+    precondition(result == ["visible 1", "visible 2", "prefetch"])
+    print(
+      "Image work checks passed: 80 jobs, peak \(peak), queued cancellation, visible FIFO before prefetch."
+    )
   }
+
+  private static func waitForQueue(_ scheduler: PreviewImageWorkLimit, count: Int) async {
+    let deadline = Date().addingTimeInterval(5)
+    while await scheduler.queuedRequestCount != count {
+      precondition(Date() < deadline, "Scheduler did not reach expected queue state")
+      await Task.yield()
+    }
+  }
+
 }
