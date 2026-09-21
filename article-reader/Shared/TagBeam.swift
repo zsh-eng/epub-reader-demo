@@ -23,6 +23,7 @@ struct ConnectedTagReveal<Content: View>: View {
   var onRevealed: () -> Void = {}
   @ViewBuilder var content: () -> Content
   @Environment(\.articleReduceMotion) private var reduceMotion
+  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
   @State private var started = Date()
   @State private var completion: Date?
@@ -44,7 +45,8 @@ struct ConnectedTagReveal<Content: View>: View {
         .environment(\.tagRevealProgress, progress)
         .overlay {
           if !settled, scenePhase == .active {
-            let gradient = tagBeamGradient(phase: reduceMotion ? 0.2 : phase)
+            let gradient = tagBeamGradient(
+              phase: reduceMotion ? 0.2 : phase, colorScheme: colorScheme)
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
               .strokeBorder(gradient, lineWidth: 2)
               .background {
@@ -115,9 +117,24 @@ struct ConnectedTagReveal<Content: View>: View {
   }
 }
 
-/// Keep the same stops and glow as the original Arctic border beam.
-private func tagBeamGradient(phase: Double) -> AngularGradient {
-  AngularGradient(
+/// Light surfaces need saturated colour rather than the dark label-colour head.
+/// Dark mode retains the original Arctic accent and luminous highlight.
+private func tagBeamGradient(phase: Double, colorScheme: ColorScheme) -> AngularGradient {
+  if colorScheme == .light {
+    return AngularGradient(
+      stops: [
+        .init(color: .clear, location: 0),
+        .init(color: .clear, location: 0.48),
+        .init(color: .cyan.opacity(0.65), location: 0.60),
+        .init(color: .blue, location: 0.72),
+        .init(color: .indigo, location: 0.80),
+        .init(color: .purple, location: 0.87),
+        .init(color: .pink, location: 0.93),
+        .init(color: .orange, location: 0.98),
+        .init(color: .clear, location: 1),
+      ], center: .center, angle: .degrees(phase * 360))
+  }
+  return AngularGradient(
     stops: [
       .init(color: .clear, location: 0),
       .init(color: .clear, location: 0.65),
@@ -168,6 +185,7 @@ struct TagRevealPill: View {
   var index: Int
   var compact = false
   @Environment(\.tagRevealProgress) private var progress
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     let labelOpacity = progress.labelOpacity(for: index)
@@ -178,12 +196,14 @@ struct TagRevealPill: View {
       .padding(.horizontal, compact ? 9 : 12).padding(.vertical, compact ? 6 : 8)
       .background(Color(uiColor: .tertiarySystemBackground), in: Capsule())
       .overlay {
-        Capsule().strokeBorder(tagBeamGradient(phase: progress.phase), lineWidth: 1.5)
-          .background {
-            Capsule().strokeBorder(ArcticBrand.accent.opacity(0.3), lineWidth: 3)
-              .blur(radius: 3)
-          }
-          .opacity(glow)
+        Capsule().strokeBorder(
+          tagBeamGradient(phase: progress.phase, colorScheme: colorScheme), lineWidth: 1.5
+        )
+        .background {
+          Capsule().strokeBorder(ArcticBrand.accent.opacity(0.3), lineWidth: 3)
+            .blur(radius: 3)
+        }
+        .opacity(glow)
       }
       .opacity(progress.shellOpacity(for: index))
       .accessibilityHidden(labelOpacity < 1)

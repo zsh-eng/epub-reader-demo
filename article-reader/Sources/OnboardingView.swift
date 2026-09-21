@@ -7,36 +7,112 @@ struct OnboardingView: View {
   @Environment(\.articleReduceMotion) private var reduceMotion
   @StateObject private var credentials = JevKeySetupModel()
   @State private var page = 0
+  @FocusState private var keyFocused: Bool
+  @State private var keyboardFrame = CGRect.null
+  @State private var restingDockHeight: CGFloat = 0
 
   private var transition: Animation {
     .easeOut(duration: reduceMotion ? 0.12 : 0.24)
   }
 
   var body: some View {
-    VStack(spacing: 0) {
-      header
-      ScrollView {
-        VStack(alignment: .leading, spacing: page == 2 ? 16 : 24) {
-          heading
-          illustration
+    GeometryReader { geometry in
+      let frame = geometry.frame(in: .global)
+      // Floating iPad keyboards do not obscure the bottom action area.
+      let keyboardOverlap =
+        keyboardFrame.maxY >= frame.maxY - 1
+        ? max(0, frame.maxY - keyboardFrame.minY) : 0
+      let editingKey = keyboardOverlap > 0
+      ZStack(alignment: .bottom) {
+        VStack(spacing: 0) {
+          header
+          ScrollView {
+            VStack(alignment: .leading, spacing: page == 2 ? 16 : 24) {
+              heading
+              illustration.frame(maxWidth: .infinity)
+              if page < 2 { pageContent }
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 24)
+            .padding(.bottom, page == 2 ? restingDockHeight + 16 : 16)
+            .frame(maxWidth: 560)
             .frame(maxWidth: .infinity)
-          pageContent
+            .id(page)
+            .transition(reduceMotion ? .identity : .opacity)
+          }
+          if page < 2 { footer() }
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 24)
-        .padding(.bottom, 16)
-        .frame(maxWidth: 560)
-        .frame(maxWidth: .infinity)
-        .id(page)
-        .transition(reduceMotion ? .identity : .opacity)
+        if page == 2 {
+          keyDock(compact: editingKey)
+            .onGeometryChange(for: CGFloat.self) {
+              $0.size.height
+            } action: { height in
+              if !keyFocused && keyboardOverlap == 0 { restingDockHeight = height }
+            }
+            .padding(.bottom, keyboardOverlap)
+        }
       }
-      .scrollDismissesKeyboard(.interactively)
-      footer
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+      ) { note in
+        guard let rect = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+          return
+        }
+        let duration =
+          note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        withAnimation(reduceMotion ? nil : .easeOut(duration: duration)) { keyboardFrame = rect }
+      }
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+      ) { note in
+        let duration =
+          note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0.25
+        withAnimation(reduceMotion ? nil : .easeOut(duration: duration)) { keyboardFrame = .null }
+      }
     }
+    // Only the dock follows keyboard geometry. The article replay keeps its size
+    // and position, and the field/action never compete with ScrollView avoidance.
+    .ignoresSafeArea(.keyboard, edges: .bottom)
     .background(ReaderTheme.background)
     .foregroundStyle(ReaderTheme.foreground)
     .tint(ArcticBrand.accent)
     .onDisappear { credentials.cancel() }
+  }
+
+  private func keyDock(compact: Bool) -> some View {
+    VStack(spacing: 0) {
+      VStack(alignment: .leading, spacing: 12) {
+        JevKeyField(key: $credentials.key)
+          .focused($keyFocused)
+          .onSubmit { keyFocused = false }
+          .accessibilityIdentifier("onboarding-key")
+        if !compact {
+          HStack {
+            Text("Optional").foregroundStyle(.secondary)
+            Spacer()
+            Link("Get a key", destination: URL(string: "https://console.typesafe.ai/keys")!)
+          }
+          .font(.caption)
+          .padding(.horizontal, 16)
+          JevPrivacyNote(compact: true)
+            .padding(.horizontal, 16)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("onboarding-privacy-note")
+        }
+        if let error = credentials.error {
+          Text(error).font(.subheadline).accessibilityIdentifier("onboarding-key-error")
+        }
+      }
+      .padding(.horizontal, 28)
+      .padding(.top, 16)
+      footer(compact: compact)
+    }
+    .frame(maxWidth: 560)
+    .background(
+      ReaderTheme.background,
+      in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+    )
+    .accessibilityIdentifier("onboarding-key-dock")
   }
 
   private var header: some View {
@@ -93,56 +169,47 @@ struct OnboardingView: View {
           .accessibilityIdentifier("onboarding-paste-note")
       }
     default:
-      VStack(alignment: .leading, spacing: 12) {
-        JevKeyField(key: $credentials.key)
-          .accessibilityIdentifier("onboarding-key")
-        HStack {
-          Text("Optional").foregroundStyle(.secondary)
-          Spacer()
-          Link("Get a key", destination: URL(string: "https://console.typesafe.ai/keys")!)
-        }
-        .font(.caption)
-        .padding(.horizontal, 16)
-        JevPrivacyNote(compact: true)
-          .padding(.horizontal, 16)
-          .accessibilityElement(children: .contain)
-          .accessibilityIdentifier("onboarding-privacy-note")
-        if let error = credentials.error {
-          Text(error).font(.subheadline).accessibilityIdentifier("onboarding-key-error")
-        }
-      }
+      EmptyView()
     }
   }
 
-  private var footer: some View {
+  private func footer(compact: Bool = false) -> some View {
     VStack(spacing: 8) {
-      HStack(spacing: 5) {
-        ForEach(0..<3) { index in
-          Capsule()
-            .fill(index == page ? ArcticBrand.accent : ReaderTheme.border.opacity(0.35))
-            .frame(width: index == page ? 24 : 6, height: 6)
+      if !compact {
+        HStack(spacing: 5) {
+          ForEach(0..<3) { index in
+            Capsule()
+              .fill(index == page ? ArcticBrand.accent : ReaderTheme.border.opacity(0.35))
+              .frame(width: index == page ? 24 : 6, height: 6)
+          }
         }
+        .accessibilityHidden(true)
       }
-      .accessibilityHidden(true)
       HStack(spacing: 12) {
         if page > 0 {
           Button {
-            credentials.cancel()
-            changePage(to: page - 1)
+            if compact {
+              keyFocused = false
+            } else {
+              credentials.cancel()
+              changePage(to: page - 1)
+            }
           } label: {
-            Image(systemName: "arrow.left")
+            Image(systemName: compact ? "chevron.down" : "arrow.left")
               .frame(width: 52, height: 52)
               .background(ReaderTheme.secondary, in: Circle())
           }
-          .accessibilityLabel("Previous page")
+          .accessibilityLabel(compact ? "Dismiss keyboard" : "Previous page")
+          .accessibilityIdentifier(compact ? "onboarding-dismiss-keyboard" : "onboarding-previous")
         }
         Button {
           if page < 2 {
             changePage(to: page + 1)
           } else {
-            UIApplication.shared.sendAction(
-              #selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-            credentials.save(onSuccess: onFinish)
+            credentials.save {
+              keyFocused = false
+              onFinish()
+            }
           }
         } label: {
           HStack(spacing: 10) {
@@ -161,14 +228,17 @@ struct OnboardingView: View {
         .disabled(page == 2 && (credentials.trimmedKey.isEmpty || credentials.isSaving))
         .accessibilityIdentifier(page == 2 ? "onboarding-finish" : "onboarding-next")
       }
-      Button("Skip for now") {
-        credentials.cancel()
-        onFinish()
+      if !compact {
+        Button("Skip for now") {
+          keyFocused = false
+          credentials.cancel()
+          onFinish()
+        }
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .frame(minHeight: 36)
+        .accessibilityIdentifier("onboarding-skip")
       }
-      .font(.subheadline)
-      .foregroundStyle(.secondary)
-      .frame(minHeight: 36)
-      .accessibilityIdentifier("onboarding-skip")
     }
     .padding(.horizontal, 28)
     .padding(.top, 16)
@@ -181,6 +251,7 @@ struct OnboardingView: View {
   }
 
   private func changePage(to value: Int) {
+    keyFocused = false
     if reduceMotion { page = value } else { withAnimation(transition) { page = value } }
   }
 

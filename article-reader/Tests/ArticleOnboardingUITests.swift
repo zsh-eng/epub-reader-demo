@@ -66,10 +66,10 @@ final class ArticleOnboardingUITests: XCTestCase {
     app.buttons["What is sent to Jev"].tap()
     XCTAssertTrue(
       app.staticTexts[
-        "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
+        "When you share or paste a link, its title, description, and sometimes a short excerpt go to Jev before you save. Tags are kept only if you save. Your API key stays in Keychain on this device."
       ].waitForExistence(timeout: 3))
     let disclosure = app.staticTexts[
-      "Saved article titles and descriptions are sent to Jev to choose your tags. Your API key stays in Keychain on this device."
+      "When you share or paste a link, its title, description, and sometimes a short excerpt go to Jev before you save. Tags are kept only if you save. Your API key stays in Keychain on this device."
     ]
     XCTAssertGreaterThan(disclosure.frame.height, 50)
     capture(app, "arctic-key-disclosure")
@@ -175,6 +175,47 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertFalse(app.otherElements["tagging-notice"].exists)
   }
 
+  @MainActor func testKeyEntryFloatsAboveKeyboardWithoutMovingIllustration() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-test-onboarding", "-reset-onboarding", "-test-key-failure",
+    ]
+    app.launch()
+    XCTAssertTrue(app.buttons["onboarding-next"].waitForExistence(timeout: 10))
+    app.buttons["onboarding-next"].tap()
+    app.buttons["onboarding-next"].tap()
+    let illustration = app.otherElements["onboarding-tags-demo"]
+    waitForDemo(illustration, value: "tagged")
+    let illustrationFrame = illustration.frame
+    let field = app.secureTextFields["onboarding-key"]
+    XCTAssertTrue(field.isHittable)
+    field.tap()
+    let keyboard = app.keyboards.firstMatch
+    XCTAssertTrue(keyboard.waitForExistence(timeout: 5))
+    let dismiss = app.buttons["onboarding-dismiss-keyboard"]
+    XCTAssertTrue(dismiss.waitForExistence(timeout: 5))
+    field.typeText("fixture-invalid-key")
+    let enable = app.buttons["onboarding-finish"]
+    XCTAssertTrue(field.isHittable)
+    XCTAssertTrue(enable.isHittable)
+    XCTAssertLessThan(field.frame.maxY, enable.frame.minY)
+    XCTAssertLessThanOrEqual(enable.frame.maxY, keyboard.frame.minY - 4)
+    XCTAssertEqual(illustration.frame.minY, illustrationFrame.minY, accuracy: 2)
+    XCTAssertEqual(illustration.frame.height, illustrationFrame.height, accuracy: 2)
+    let actionY = enable.frame.midY
+    capture(app, "onboarding-keyboard-dock")
+    enable.tap()
+    XCTAssertTrue(app.staticTexts["onboarding-key-error"].waitForExistence(timeout: 5))
+    XCTAssertEqual(enable.frame.midY, actionY, accuracy: 2)
+    XCTAssertTrue(keyboard.exists)
+    dismiss.tap()
+    let hidden = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: keyboard)
+    wait(for: [hidden], timeout: 5)
+    XCTAssertTrue(app.buttons["onboarding-skip"].isHittable)
+    XCTAssertEqual(illustration.frame.minY, illustrationFrame.minY, accuracy: 2)
+    capture(app, "onboarding-keyboard-dismissed")
+  }
+
   @MainActor func testKeySetupFailureAndSuccess() {
     let app = XCUIApplication()
     app.launchArguments = [
@@ -191,6 +232,7 @@ final class ArticleOnboardingUITests: XCTestCase {
     app.buttons["onboarding-finish"].tap()
     XCTAssertTrue(app.staticTexts["onboarding-key-error"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.buttons["folder-saved"].exists)
+    app.buttons["onboarding-dismiss-keyboard"].tap()
     app.buttons["onboarding-skip"].tap()
     XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
     app.terminate()
