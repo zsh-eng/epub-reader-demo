@@ -60,6 +60,7 @@
 		712A9841FD0A5962310D3250 /* Sources/LibraryAnnotations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A57486727C26B20627EBE2E; };
 		3724BDCED90008ED9E63975D /* Tests/LibraryAnnotationsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D296399755D86C57889B4DA3; };
 		4C80C7108F39FD6BCF36CDEC /* Tests/LibraryScrollPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5679766BFF225A4380B3B75; };
+		29AB249A0F5D41D0A0CECA38 /* Tests/FavouritesUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 522FDA0A55294C8384904C99; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -141,6 +142,7 @@
 		3A57486727C26B20627EBE2E /* Sources/LibraryAnnotations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryAnnotations.swift; sourceTree = "<group>"; };
 		D296399755D86C57889B4DA3 /* Tests/LibraryAnnotationsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/LibraryAnnotationsUITests.swift; sourceTree = "<group>"; };
 		A5679766BFF225A4380B3B75 /* Tests/LibraryScrollPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/LibraryScrollPerformanceUITests.swift; sourceTree = "<group>"; };
+		522FDA0A55294C8384904C99 /* Tests/FavouritesUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/FavouritesUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -217,6 +219,7 @@
 				0D915EFA215768CF91F0230D /* Resources/Fixtures */,
 				D601DAE211C479CFDF0063E1 /* Tests/AnnotationUITests.swift */,
 				DDE499DF7195A9AF2D03CBFA /* Tests/ReaderPerformanceUITests.swift */,
+				522FDA0A55294C8384904C99 /* Tests/FavouritesUITests.swift */,
 				39719A39DAB06EC51E5CE446 /* Tests/ArticleReaderUITests.swift */,
 				FBDC4F23F93125BBEEAE800C /* Products */,
 			);
@@ -389,6 +392,7 @@
 				F81AAC2FFA4C7815EFD9149A /* Tests/ArticleOnboardingUITests.swift in Sources */,
 				84495D52545D0C659817B828 /* Tests/AnnotationUITests.swift in Sources */,
 				C152409799A6DD136ABDE906 /* Tests/ReaderPerformanceUITests.swift in Sources */,
+				29AB249A0F5D41D0A0CECA38 /* Tests/FavouritesUITests.swift in Sources */,
 				D7AA01FA220D01B26420ADDF /* Tests/ArticleReaderUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
