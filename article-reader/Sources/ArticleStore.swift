@@ -184,6 +184,7 @@ struct TaggingNotice: Identifiable {
                 URLQueryItem(name: "article", value: String(index)),
               ])
               articles[index].subtitle = "A cached photograph from the Arctic onboarding fixture."
+              articles[index].taggingText = articles[index].subtitle
             }
           }
           try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)

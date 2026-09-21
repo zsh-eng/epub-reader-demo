@@ -11,7 +11,20 @@ final class LibraryScrollPerformanceUITests: XCTestCase {
       "-ui-testing", "-reset-store", "-reset-appearance", "-seed-photo-list", "-articles-offline",
     ]
     app.launch()
-    XCTAssertTrue(app.buttons["article-import-999"].waitForExistence(timeout: 10))
+    let firstPhoto = app.buttons["article-import-999"]
+    XCTAssertTrue(firstPhoto.waitForExistence(timeout: 10))
+    // ArticleThumbnail labels only the decoded image "Article preview";
+    // its placeholder is labelled "Loading article preview" instead.
+    let photoReady = expectation(
+      for: NSPredicate(
+        format: "label CONTAINS %@ AND NOT label CONTAINS %@", "Article preview",
+        "Loading article preview"),
+      evaluatedWith: firstPhoto)
+    wait(for: [photoReady], timeout: 15)
+    let before = XCTAttachment(screenshot: app.screenshot())
+    before.name = "thousand-photo-library-ready"
+    before.lifetime = .keepAlways
+    add(before)
 
     // Warm the same neighborhood before measuring; startup and fixture import
     // are excluded. Rows share one local bundled photograph but use distinct
