@@ -244,7 +244,18 @@ struct LibraryView: View {
     }
     .task(id: preloadURLs) {
       store.prioritizePreviews(preloadURLs)
-      await browsers.preload(preloadURLs, store: store)
+    }
+    .task(id: imagePrefetchRequests) {
+      await ThumbnailCache.shared.preheat(imagePrefetchRequests)
+    }
+    .task(id: browserPreloadURLs) {
+      // Scrolling gets the main-thread budget. Cheap image preheat continues,
+      // but do not construct publisher WebViews until the viewport has settled.
+      let urls = browserPreloadURLs
+      if !urls.isEmpty {
+        do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+      }
+      await browsers.preload(urls, store: store)
     }
     .onReceive(
       NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)
@@ -367,6 +378,25 @@ struct LibraryView: View {
       }
     }
     return Array(urls.prefix(10))
+  }
+
+  private var browserPreloadURLs: [URL] { isLibraryScrolling ? [] : preloadURLs }
+
+  private var imagePrefetchRequests: [ThumbnailRequest] {
+    let rows = projection.rows(
+      articles: store.articles, revision: store.libraryRevision, folder: folder,
+      query: searching ? query : "", sort: sort)
+    let pixels = searching || folder == .history || folder == .archive ? 256 : 960
+    var requests: [ThumbnailRequest] = []
+    for url in preloadURLs {
+      guard let index = rows.urlIndices[url] else { continue }
+      let article = rows.articles[index]
+      if let image = article.imageURL {
+        requests.append(ThumbnailRequest(url: image, pixels: pixels))
+      }
+      if let icon = article.faviconURL { requests.append(ThumbnailRequest(url: icon, pixels: 96)) }
+    }
+    return requests
   }
 
   private struct PreloadRow: Hashable {
@@ -826,6 +856,7 @@ struct LibraryView: View {
   struct Rows {
     let articles: [SavedArticle]
     let indices: [UUID: Int]
+    let urlIndices: [URL: Int]
   }
   private struct Key: Hashable {
     let folder: ArticleFolder
@@ -876,7 +907,10 @@ struct LibraryView: View {
     let result = Rows(
       articles: rows,
       indices: Dictionary(
-        uniqueKeysWithValues: rows.enumerated().map { ($0.element.id, $0.offset) }))
+        uniqueKeysWithValues: rows.enumerated().map { ($0.element.id, $0.offset) }),
+      urlIndices: Dictionary(
+        rows.enumerated().map { ($0.element.url, $0.offset) },
+        uniquingKeysWith: { first, _ in first }))
     if cache.count >= 24 { cache.removeAll(keepingCapacity: true) }
     cache[key] = result
     return result

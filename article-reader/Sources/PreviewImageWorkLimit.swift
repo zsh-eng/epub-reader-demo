@@ -5,11 +5,12 @@ import Foundation
 actor PreviewImageWorkLimit {
   private let limit: Int
   private var active = 0
-  private var queue: [(UUID, CheckedContinuation<Bool, Never>)] = []
+  private var queue: [(UUID, CheckedContinuation<Bool, Never>, Bool)] = []
 
   init(limit: Int = 3) { self.limit = limit }
+  var queuedRequestCount: Int { queue.count }
 
-  func acquire() async -> Bool {
+  func acquire(prefetch: Bool = false) async -> Bool {
     guard !Task.isCancelled else { return false }
     if active < limit {
       active += 1
@@ -21,7 +22,8 @@ actor PreviewImageWorkLimit {
         if Task.isCancelled {
           continuation.resume(returning: false)
         } else {
-          queue.append((id, continuation))
+          let position = prefetch ? queue.endIndex : (queue.firstIndex { $0.2 } ?? queue.endIndex)
+          queue.insert((id, continuation, prefetch), at: position)
         }
       }
     } onCancel: {

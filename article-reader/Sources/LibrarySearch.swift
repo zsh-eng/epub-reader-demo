@@ -78,69 +78,99 @@ private struct NativeArticleSearch: UIViewRepresentable {
   }
 }
 
-/// Keep decoded images bounded by memory cost. Only the requesting thumbnail
-/// updates its SwiftUI state; inserting an image never invalidates every row.
+/// Cache decoded variants by display size, but share their compressed resource by
+/// URL. A 58-point search image must never retain a 1,200-pixel Reader bitmap.
+struct ThumbnailRequest: Hashable, Sendable {
+  let url: URL
+  var pixels = 960
+  var key: NSString { "\(pixels):\(url.absoluteString)" as NSString }
+}
+
 @MainActor final class ThumbnailCache {
   static let shared = ThumbnailCache()
-  private let images = NSCache<NSURL, UIImage>()
+  private let images = NSCache<NSString, UIImage>()
+  private let decoding = PreviewImageWorkLimit(limit: 2)
   private struct Request {
     let task: Task<UIImage?, Never>
     var readers: Set<UUID>
   }
-  private var pending: [URL: Request] = [:]
+  private var pending: [ThumbnailRequest: Request] = [:]
 
   private init() {
-    images.countLimit = 64
+    images.countLimit = 96
     images.totalCostLimit = 32 * 1024 * 1024
   }
 
-  func image(for url: URL?) -> UIImage? {
+  func image(for url: URL?, pixels: Int = 960) -> UIImage? {
     guard let url else { return nil }
-    return images.object(forKey: url as NSURL)
+    return images.object(forKey: ThumbnailRequest(url: url, pixels: pixels).key)
   }
 
   @discardableResult
-  func load(_ url: URL?) async -> UIImage? {
+  func load(_ url: URL?, pixels: Int = 960, prefetch: Bool = false) async -> UIImage? {
     guard let url else { return nil }
-    if let image = image(for: url) { return image }
+    if let image = image(for: url, pixels: pixels) { return image }
+    let key = ThumbnailRequest(url: url, pixels: pixels)
     let reader = UUID()
     let task: Task<UIImage?, Never>
-    if var request = pending[url] {
+    if var request = pending[key] {
       request.readers.insert(reader)
-      pending[url] = request
+      pending[key] = request
       task = request.task
     } else {
-      task = Task.detached(priority: .userInitiated) { () -> UIImage? in
-        guard let bytes = await PreviewImageDisk.shared.data(for: url), !Task.isCancelled,
-          let source = CGImageSourceCreateWithData(bytes as CFData, nil),
-          let decoded = CGImageSourceCreateImageAtIndex(
-            source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
+      let decoding = self.decoding
+      task = Task.detached(priority: prefetch ? .utility : .userInitiated) { () -> UIImage? in
+        guard let bytes = await PreviewImageDisk.shared.data(for: url, prefetch: prefetch),
+          !Task.isCancelled, await decoding.acquire(prefetch: prefetch)
         else { return nil }
-        return UIImage(cgImage: decoded)
+        let decoded = Task.isCancelled ? nil : PreviewImageCodec.thumbnail(bytes, pixels: pixels)
+        await decoding.release()
+        return decoded.map { UIImage(cgImage: $0) }
       }
-      pending[url] = Request(task: task, readers: [reader])
+      pending[key] = Request(task: task, readers: [reader])
     }
     let image = await withTaskCancellationHandler {
       await task.value
     } onCancel: {
-      Task { @MainActor in self.finish(url, reader: reader) }
+      Task { @MainActor in self.finish(key, reader: reader) }
     }
-    finish(url, reader: reader)
+    finish(key, reader: reader)
     guard !Task.isCancelled else { return nil }
     if let image {
-      let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-      images.setObject(image, forKey: url as NSURL, cost: cost)
+      images.setObject(
+        image, forKey: key.key,
+        cost: image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0)
     }
     return image
   }
 
-  private func finish(_ url: URL, reader: UUID) {
-    guard var request = pending[url], request.readers.remove(reader) != nil else { return }
+  /// Two speculative consumers leave capacity for newly visible work. SwiftUI's
+  /// viewport task owns this group; leaving the working set cancels its leases.
+  func preheat(_ requests: [ThumbnailRequest]) async {
+    var seen = Set<ThumbnailRequest>()
+    var remaining = requests.filter { seen.insert($0).inserted }.makeIterator()
+    await withTaskGroup(of: Void.self) { group in
+      func enqueue(_ request: ThumbnailRequest) {
+        group.addTask { await self.load(request.url, pixels: request.pixels, prefetch: true) }
+      }
+      for _ in 0..<2 { if let request = remaining.next() { enqueue(request) } }
+      for await _ in group {
+        guard !Task.isCancelled else {
+          group.cancelAll()
+          return
+        }
+        if let request = remaining.next() { enqueue(request) }
+      }
+    }
+  }
+
+  private func finish(_ key: ThumbnailRequest, reader: UUID) {
+    guard var request = pending[key], request.readers.remove(reader) != nil else { return }
     if request.readers.isEmpty {
       request.task.cancel()
-      pending[url] = nil
+      pending[key] = nil
     } else {
-      pending[url] = request
+      pending[key] = request
     }
   }
 
@@ -150,27 +180,59 @@ private struct NativeArticleSearch: UIViewRepresentable {
 struct ArticleThumbnail: View {
   let url: URL?
   var label = "Article preview"
+  var pixels = 960
   @State private var loadedImage: UIImage?
+  @State private var preview: UIImage?
+  @State private var showProgress = false
+  @State private var requestID = UUID()
   var body: some View {
     GeometryReader { geometry in
       Group {
-        if let image = loadedImage {
+        if let image = loadedImage ?? ThumbnailCache.shared.image(for: url, pixels: pixels) {
           Image(uiImage: image).resizable().scaledToFill().accessibilityLabel(label)
         } else {
-          ReaderTheme.secondary.overlay {
-            Image(systemName: "text.alignleft")
-              .font(.system(size: 20, weight: .light)).foregroundStyle(
-                ReaderTheme.muted.opacity(0.5))
-          }
+          ZStack {
+            ReaderTheme.secondary
+            if let preview {
+              Image(uiImage: preview).resizable().scaledToFill().blur(radius: 5)
+            } else {
+              Image(systemName: "text.alignleft")
+                .font(.system(size: 20, weight: .light))
+                .foregroundStyle(ReaderTheme.muted.opacity(0.5))
+            }
+            if showProgress && pixels > 96 { ProgressView().controlSize(.small) }
+          }.accessibilityLabel("Loading " + label.lowercased())
         }
       }
       .frame(width: geometry.size.width, height: geometry.size.height).clipped()
     }
-    .onDisappear { loadedImage = nil }
-    .task(id: url) {
-      loadedImage = ThumbnailCache.shared.image(for: url)
-      let image = await ThumbnailCache.shared.load(url)
-      guard !Task.isCancelled else { return }
+    .onDisappear {
+      requestID = UUID()
+      loadedImage = nil
+      preview = nil
+      showProgress = false
+    }
+    .task(id: url.map { ThumbnailRequest(url: $0, pixels: pixels) }) {
+      let request = UUID()
+      requestID = request
+      preview = nil
+      showProgress = false
+      loadedImage = ThumbnailCache.shared.image(for: url, pixels: pixels)
+      guard loadedImage == nil, let url else { return }
+      let indicator = Task {
+        do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
+        guard requestID == request, !Task.isCancelled else { return }
+        showProgress = true
+      }
+      defer {
+        indicator.cancel()
+        if requestID == request { showProgress = false }
+      }
+      let bytes = await PreviewImageDisk.shared.preview(for: url)
+      guard requestID == request, !Task.isCancelled else { return }
+      if let bytes { preview = UIImage(data: bytes) }
+      let image = await ThumbnailCache.shared.load(url, pixels: pixels)
+      guard requestID == request, !Task.isCancelled else { return }
       loadedImage = image
     }
   }
@@ -183,7 +245,7 @@ struct ArticleSearchRow: View {
 
   var body: some View {
     HStack(alignment: .center, spacing: 14) {
-      ArticleThumbnail(url: article.imageURL)
+      ArticleThumbnail(url: article.imageURL, pixels: 256)
         .frame(width: 58, height: thumbnailHeight).clipShape(RoundedRectangle(cornerRadius: 10))
       VStack(alignment: .leading, spacing: 4) {
         Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
@@ -249,7 +311,7 @@ actor PreviewImageDisk {
   private var lastTrim = Date.distantPast
   private var bytesSinceTrim = 0
 
-  func data(for url: URL) async -> Data? {
+  func data(for url: URL, prefetch: Bool = false) async -> Data? {
     let key = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }
       .joined()
     let file = directory.appending(path: key + ".image")
@@ -268,8 +330,8 @@ actor PreviewImageDisk {
       task = request.task
     } else {
       let work = self.work
-      task = Task.detached(priority: .userInitiated) { () -> Data? in
-        guard await work.acquire() else { return nil }
+      task = Task.detached(priority: prefetch ? .utility : .userInitiated) { () -> Data? in
+        guard await work.acquire(prefetch: prefetch) else { return nil }
         let bytes = await Self.fetch(url)
         await work.release()
         return bytes
@@ -284,8 +346,13 @@ actor PreviewImageDisk {
     finish(url, reader: reader)
     guard !Task.isCancelled else { return nil }
     guard let bytes else { return nil }
+    // Concurrent size variants share one resource; only the first consumer stores it.
+    guard !FileManager.default.fileExists(atPath: file.path) else { return bytes }
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     try? bytes.write(to: file, options: .atomic)
+    if let tiny = PreviewImageCodec.placeholder(bytes) {
+      try? tiny.write(to: file.appendingPathExtension("preview"), options: .atomic)
+    }
     // Enumerating and sorting the whole cache for every image made large imports
     // progressively slower. Check the disk budget once per minute or after another 8 MB is written.
     bytesSinceTrim += bytes.count
@@ -307,38 +374,49 @@ actor PreviewImageDisk {
     }
   }
 
+  private static let session: URLSession = {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.urlCache = nil
+    configuration.httpMaximumConnectionsPerHost = 3
+    return URLSession(configuration: configuration)
+  }()
+
   private nonisolated static func fetch(_ url: URL) async -> Data? {
     guard !Task.isCancelled else { return nil }
-    let bytes: Data
+    let file: URL
+    let temporary: Bool
     if TestMode.enabled && url.isFileURL {
-      guard let data = try? Data(contentsOf: url) else { return nil }
-      bytes = data
+      file = url
+      temporary = false
     } else {
       guard ["http", "https"].contains(url.scheme ?? ""),
-        let (data, response) = try? await URLSession.shared.data(
-          for: URLRequest(url: url, timeoutInterval: 8)),
-        let response = response as? HTTPURLResponse, (200..<300).contains(response.statusCode)
+        let (download, response) = try? await session.download(
+          for: URLRequest(url: url, timeoutInterval: 8))
       else { return nil }
-      bytes = data
+      guard let response = response as? HTTPURLResponse,
+        (200..<300).contains(response.statusCode)
+      else {
+        try? FileManager.default.removeItem(at: download)
+        return nil
+      }
+      file = download
+      temporary = true
     }
-    guard !Task.isCancelled, bytes.count < 15_000_000,
-      let source = CGImageSourceCreateWithData(bytes as CFData, nil),
-      let decoded = CGImageSourceCreateThumbnailAtIndex(
-        source, 0,
-        [
-          kCGImageSourceCreateThumbnailFromImageAlways: true,
-          kCGImageSourceThumbnailMaxPixelSize: 1200,
-          kCGImageSourceCreateThumbnailWithTransform: true,
-          kCGImageSourceShouldCacheImmediately: true,
-        ] as CFDictionary)
+    defer { if temporary { try? FileManager.default.removeItem(at: file) } }
+    guard !Task.isCancelled,
+      let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+      size < 15_000_000,
+      let bytes = try? Data(contentsOf: file, options: .mappedIfSafe)
     else { return nil }
-    let image = UIImage(cgImage: decoded)
-    switch decoded.alphaInfo {
-    case .first, .last, .premultipliedFirst, .premultipliedLast:
-      return image.pngData()
-    default:
-      return image.jpegData(compressionQuality: 0.85)
-    }
+    return PreviewImageCodec.compact(bytes)
+  }
+
+  /// A tiny local preview is available after the first download. It does not
+  /// start network work or pretend to know colours before seeing the source.
+  func preview(for url: URL) -> Data? {
+    let key = SHA256.hash(data: Data(url.absoluteString.utf8)).map { String(format: "%02x", $0) }
+      .joined()
+    return try? Data(contentsOf: directory.appending(path: key + ".image.preview"))
   }
 
   /// Reader text can use an existing local decoration without waiting for network work.
@@ -349,14 +427,12 @@ actor PreviewImageDisk {
     guard let bytes = try? Data(contentsOf: directory.appending(path: key + ".image")) else {
       return ""
     }
-    let type = bytes.starts(with: [0x89, 0x50, 0x4e, 0x47]) ? "png" : "jpeg"
-    return "data:image/\(type);base64,\(bytes.base64EncodedString())"
+    return PreviewImageCodec.webDataURL(bytes)
   }
 
   func dataURL(for value: String) async -> String {
     guard let url = URL(string: value), let bytes = await data(for: url) else { return "" }
-    let type = bytes.starts(with: [0x89, 0x50, 0x4e, 0x47]) ? "png" : "jpeg"
-    return "data:image/\(type);base64," + bytes.base64EncodedString()
+    return PreviewImageCodec.webDataURL(bytes)
   }
 
   private func trim() {

@@ -13,14 +13,8 @@ final class LibraryScrollPerformanceUITests: XCTestCase {
     app.launch()
     let firstPhoto = app.buttons["article-import-999"]
     XCTAssertTrue(firstPhoto.waitForExistence(timeout: 10))
-    // ArticleThumbnail labels only the decoded image "Article preview";
-    // its placeholder is labelled "Loading article preview" instead.
-    let photoReady = expectation(
-      for: NSPredicate(
-        format: "label CONTAINS %@ AND NOT label CONTAINS %@", "Article preview",
-        "Loading article preview"),
-      evaluatedWith: firstPhoto)
-    wait(for: [photoReady], timeout: 15)
+    // Readiness belongs to the decoded image, not the button's combined label.
+    XCTAssertTrue(app.images["Article preview"].firstMatch.waitForExistence(timeout: 15))
     let before = XCTAttachment(screenshot: app.screenshot())
     before.name = "thousand-photo-library-ready"
     before.lifetime = .keepAlways

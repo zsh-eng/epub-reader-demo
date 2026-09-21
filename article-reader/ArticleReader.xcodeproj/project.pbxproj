@@ -52,6 +52,10 @@
 		ABC000000000000000000003 /* ArcticSync in Frameworks */ = {isa = PBXBuildFile; productRef = ABC000000000000000000002; };
 		C152409799A6DD136ABDE906 /* Tests/ReaderPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDE499DF7195A9AF2D03CBFA; };
 		7BD85323A4807875A1E15639 /* Sources/ReaderFontScheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353E9B7484F57124364E4DB4; };
+		7FF975968B6C84DC4B1EF301 /* Sources/PreviewImageCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189B88D17D4346B47DEDFE7E; };
+		712A9841FD0A5962310D3250 /* Sources/LibraryAnnotations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A57486727C26B20627EBE2E; };
+		3724BDCED90008ED9E63975D /* Tests/LibraryAnnotationsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D296399755D86C57889B4DA3; };
+		4C80C7108F39FD6BCF36CDEC /* Tests/LibraryScrollPerformanceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5679766BFF225A4380B3B75; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -125,6 +129,10 @@
 		092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleSyncRepository.swift; sourceTree = "<group>"; };
 		DDE499DF7195A9AF2D03CBFA /* Tests/ReaderPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/ReaderPerformanceUITests.swift; sourceTree = "<group>"; };
 		353E9B7484F57124364E4DB4 /* Sources/ReaderFontScheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ReaderFontScheme.swift; sourceTree = "<group>"; };
+		189B88D17D4346B47DEDFE7E /* Sources/PreviewImageCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PreviewImageCodec.swift; sourceTree = "<group>"; };
+		3A57486727C26B20627EBE2E /* Sources/LibraryAnnotations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryAnnotations.swift; sourceTree = "<group>"; };
+		D296399755D86C57889B4DA3 /* Tests/LibraryAnnotationsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/LibraryAnnotationsUITests.swift; sourceTree = "<group>"; };
+		A5679766BFF225A4380B3B75 /* Tests/LibraryScrollPerformanceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/LibraryScrollPerformanceUITests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -158,6 +166,10 @@
 		B28B7AF69320201D1CF206EB = {
 			isa = PBXGroup;
 			children = (
+				D296399755D86C57889B4DA3 /* Tests/LibraryAnnotationsUITests.swift */,
+				A5679766BFF225A4380B3B75 /* Tests/LibraryScrollPerformanceUITests.swift */,
+				3A57486727C26B20627EBE2E /* Sources/LibraryAnnotations.swift */,
+				189B88D17D4346B47DEDFE7E /* Sources/PreviewImageCodec.swift */,
 				4545F5318A0046043187F2EB /* Resources/Assets.xcassets */,
 				6E326710A7D6E0839A4FFD3E /* Shared/ArcticBrand.swift */,
 				DB5DC4BC6003C9D4D88F740A /* Tests/ArticleTaggingUITests.swift */,
@@ -359,6 +371,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3724BDCED90008ED9E63975D /* Tests/LibraryAnnotationsUITests.swift in Sources */,
+				4C80C7108F39FD6BCF36CDEC /* Tests/LibraryScrollPerformanceUITests.swift in Sources */,
 				55D4734A40FDC1796310CFA3 /* Tests/ArticleTaggingUITests.swift in Sources */,
 				F81AAC2FFA4C7815EFD9149A /* Tests/ArticleOnboardingUITests.swift in Sources */,
 				84495D52545D0C659817B828 /* Tests/AnnotationUITests.swift in Sources */,
@@ -371,6 +385,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				712A9841FD0A5962310D3250 /* Sources/LibraryAnnotations.swift in Sources */,
+				7FF975968B6C84DC4B1EF301 /* Sources/PreviewImageCodec.swift in Sources */,
 				AE2306DE25C1E0BCFFFC485D /* Shared/ArcticBrand.swift in Sources */,
 				A47B570ED105F4A6AF8686AB /* Sources/TaggingFeedback.swift in Sources */,
 				F2C5ECCD58964F85A6840623 /* Sources/OnboardingIllustrations.swift in Sources */,

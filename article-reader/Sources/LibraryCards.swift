@@ -48,7 +48,7 @@ struct ArticleCard: View {
   private var source: some View {
     HStack(spacing: 6) {
       if let favicon = article.faviconURL {
-        ArticleThumbnail(url: favicon, label: "Site icon")
+        ArticleThumbnail(url: favicon, label: "Site icon", pixels: 96)
           .frame(width: 16, height: 16).clipShape(Circle())
       }
       Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
@@ -155,7 +155,7 @@ struct GradientArticleCard: View {
         }
         HStack(spacing: 7) {
           if let favicon = article.faviconURL {
-            ArticleThumbnail(url: favicon, label: "Site icon")
+            ArticleThumbnail(url: favicon, label: "Site icon", pixels: 96)
               .frame(width: 18, height: 18).clipShape(Circle())
           }
           Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")

@@ -63,7 +63,7 @@ struct ClipboardBanner: View {
   var body: some View {
     HStack(spacing: 12) {
       if let image = preview?.imageURL {
-        ArticleThumbnail(url: image).frame(width: 38, height: 44)
+        ArticleThumbnail(url: image, pixels: 192).frame(width: 38, height: 44)
           .clipShape(RoundedRectangle(cornerRadius: 7))
       } else {
         Image(systemName: "link").font(.title3)
