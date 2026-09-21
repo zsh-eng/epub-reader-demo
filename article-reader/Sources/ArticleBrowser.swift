@@ -129,6 +129,33 @@ enum ArticleRouting {
     }
   }
 
+  /// The first request fails through WebKit's real navigation delegate; retry
+  /// serves bundled HTML. No publisher request or device network toggle is used.
+  @MainActor private final class ReaderRecoveryFixture: NSObject, WKURLSchemeHandler {
+    private var hasFailed = false
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+      guard hasFailed else {
+        hasFailed = true
+        task.didFailWithError(URLError(.notConnectedToInternet))
+        return
+      }
+      guard let url = task.request.url,
+        let original = URL(string: "https://fixture.example" + url.path),
+        let fixture = TestMode.fixture(for: original), let data = try? Data(contentsOf: fixture)
+      else {
+        task.didFailWithError(URLError(.fileDoesNotExist))
+        return
+      }
+      task.didReceive(
+        URLResponse(
+          url: url, mimeType: "text/html", expectedContentLength: data.count,
+          textEncodingName: "UTF-8"))
+      task.didReceive(data)
+      task.didFinish()
+    }
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
+  }
+
   /// A held subresource lets UI tests distinguish DOM readiness from the load event.
   @MainActor private final class ReaderHeldImage: NSObject, WKURLSchemeHandler {
     private var publisherTasks = Set<ObjectIdentifier>()
@@ -189,6 +216,9 @@ enum ArticleRouting {
   var canGoForward = false
   var hasLoaded = false
   var errorMessage: String?
+  private(set) var websiteFailure: String?
+  @ObservationIgnored private var requestedWebsiteURL: URL?
+  @ObservationIgnored private var failedWebsiteURL: URL?
   var committedURL: URL?
   var currentURL: URL
   @ObservationIgnored private var observations: [NSKeyValueObservation] = []
@@ -219,6 +249,10 @@ enum ArticleRouting {
     self.store = store
     let websiteConfiguration = WKWebViewConfiguration()
     #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-website-recovery") {
+        websiteConfiguration.setURLSchemeHandler(
+          ReaderRecoveryFixture(), forURLScheme: "arctic-recovery")
+      }
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-hold-publisher-image") {
         websiteConfiguration.setURLSchemeHandler(ReaderHeldImage(), forURLScheme: "arctic-test")
       }
@@ -271,7 +305,9 @@ enum ArticleRouting {
       },
       webView.observe(\.url, options: [.new]) { [weak self] view, _ in
         Task { @MainActor in
-          if let url = view.url, url.scheme != "file" { self?.currentURL = url }
+          if let url = view.url, !["file", "arctic-recovery"].contains(url.scheme ?? "") {
+            self?.currentURL = url
+          }
         }
       },
     ]
@@ -321,13 +357,22 @@ enum ArticleRouting {
   }
 
   private func loadWebsite(_ url: URL) {
+    requestedWebsiteURL = ArticleRouting.original(url)
+    websiteFailure = nil
+    failedWebsiteURL = nil
+    errorMessage = nil
+    isLoading = true
     if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-articles-offline") {
-      isOpeningWebsite = false
-      errorMessage = "Offline test: website loading is disabled."
+      failWebsite(URLError(.notConnectedToInternet))
       return
     }
     if let fixture = TestMode.fixture(for: url) {
       #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-test-website-recovery") {
+          let recovery = URL(string: "arctic-recovery://fixture.example" + url.path)!
+          webView.load(URLRequest(url: recovery))
+          return
+        }
         if ProcessInfo.processInfo.arguments.contains("-hold-publisher-image"),
           let html = try? String(contentsOf: fixture, encoding: .utf8)
         {
@@ -343,7 +388,7 @@ enum ArticleRouting {
       #endif
       webView.loadFileURL(fixture, allowingReadAccessTo: fixture.deletingLastPathComponent())
     } else {
-      webView.load(URLRequest(url: ArticleRouting.automatic(url)))
+      webView.load(URLRequest(url: bypassRouting ? url : ArticleRouting.automatic(url)))
     }
   }
 
@@ -363,8 +408,28 @@ enum ArticleRouting {
     webView.goForward()
   }
   func reload() {
-    selectWebsite()
-    if webView.url == nil { loadWebsite(sourceURL) } else { webView.reload() }
+    let url = failedWebsiteURL ?? requestedWebsiteURL ?? sourceURL
+    if readerReady {
+      // Keep a valid Reader visible while a requested website refresh runs.
+      wantsReader = false
+      isOpeningWebsite = true
+    } else {
+      selectWebsite()
+    }
+    // Reload a real request, not WebKit's empty/failed provisional history item.
+    loadWebsite(url)
+  }
+
+  func retryFailedWebsite() {
+    guard failedWebsiteURL != nil else { return }
+    reload()
+  }
+
+  /// A pooled failure is not a useful warm document. Reopen retries its exact
+  /// request, even when the earlier error UI has been dismissed.
+  func retryFailedWebsiteOnOpen() {
+    guard websiteFailure != nil, !readerReady else { return }
+    retryFailedWebsite()
   }
 
   func openOriginal() {
@@ -659,6 +724,8 @@ enum ArticleRouting {
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
     guard webView === self.webView else { return }
     websiteNavigation = navigation
+    websiteFailure = nil
+    failedWebsiteURL = nil
     websiteReady = false
     // This initial website load belongs to the same downloaded article. Its
     // cached document remains valid and visible while the website prepares.
@@ -683,7 +750,9 @@ enum ArticleRouting {
     guard webView === self.webView, navigation === websiteNavigation, let url = webView.url else {
       return
     }
-    if TestMode.enabled && url.isFileURL {
+    if TestMode.enabled && url.scheme == "arctic-recovery" {
+      currentURL = requestedWebsiteURL ?? currentURL
+    } else if TestMode.enabled && url.isFileURL {
       currentURL = URL(
         string: "https://fixture.example/" + url.deletingPathExtension().lastPathComponent)!
     } else {
@@ -731,13 +800,23 @@ enum ArticleRouting {
     guard (error as NSError).code != NSURLErrorCancelled else { return }
     if view === webView {
       guard navigation === websiteNavigation else { return }
-      websiteReady = false
-      isOpeningWebsite = false
+      failWebsite(error)
+      return
     } else {
       guard navigation === readerNavigation else { return }
       isExtracting = false
     }
     errorMessage = error.localizedDescription
+  }
+
+  private func failWebsite(_ error: Error) {
+    failedWebsiteURL = requestedWebsiteURL ?? sourceURL
+    websiteFailure = error.localizedDescription
+    websiteReady = false
+    isOpeningWebsite = false
+    isLoading = false
+    hasLoaded = readerReady
+    if readerReady { isReader = true }
   }
 
   func webView(
@@ -747,6 +826,11 @@ enum ArticleRouting {
     guard let url = navigationAction.request.url else {
       decisionHandler(.cancel)
       return
+    }
+    if webView === self.webView, navigationAction.targetFrame?.isMainFrame == true,
+      ["https", "http"].contains(url.scheme ?? "")
+    {
+      requestedWebsiteURL = ArticleRouting.original(url)
     }
     if navigationAction.navigationType == .linkActivated { cacheIdentity = nil }
     guard navigationAction.navigationType == .linkActivated else {
@@ -1067,6 +1151,7 @@ struct WebSurface: UIViewRepresentable {
     // just because the user taps before fonts or local HTML have finished loading.
     if let browser = browsers[url], browser.cacheIdentity == url {
       lastOpenState = browser.readerReady ? "prepared" : "preparing"
+      browser.retryFailedWebsiteOnOpen()
       if store.articles.contains(where: { $0.url == url && $0.saved && $0.downloadedAt != nil }) {
         browser.showReader()
       }
@@ -1094,13 +1179,15 @@ struct WebSurface: UIViewRepresentable {
     let ordered = local + warmURLs.filter { !local.contains($0) }
     var pending: [(url: URL, browser: ArticleBrowser, began: Date)] = browsers.compactMap {
       url, browser in
-      guard url != active, !browser.readerReady, browser.errorMessage == nil else { return nil }
+      guard url != active, !browser.readerReady, browser.errorMessage == nil,
+        browser.websiteFailure == nil
+      else { return nil }
       return (url, browser, Date())
     }
     for url in ordered {
       guard !Task.isCancelled, version == preloadVersion else { return }
       if let browser = browsers[url], browser.cacheIdentity == url,
-        browser.errorMessage == nil
+        browser.errorMessage == nil, browser.websiteFailure == nil
       {
         continue
       }
@@ -1110,7 +1197,11 @@ struct WebSurface: UIViewRepresentable {
       while pending.count >= 2 {
         guard !Task.isCancelled, version == preloadVersion else { return }
         pending.removeAll { item in
-          if item.browser.readerReady || item.browser.errorMessage != nil { return true }
+          if item.browser.readerReady || item.browser.errorMessage != nil
+            || item.browser.websiteFailure != nil
+          {
+            return true
+          }
           guard Date().timeIntervalSince(item.began) > 8 else { return false }
           guard item.url != active, browsers[item.url] === item.browser else { return true }
           item.browser.stop()
@@ -1123,7 +1214,7 @@ struct WebSurface: UIViewRepresentable {
       guard !Task.isCancelled, version == preloadVersion else { return }
       // A tap can supply the browser while this queue is suspended.
       if let browser = browsers[url], browser.cacheIdentity == url,
-        browser.errorMessage == nil
+        browser.errorMessage == nil, browser.websiteFailure == nil
       {
         continue
       }

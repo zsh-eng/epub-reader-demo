@@ -123,6 +123,28 @@ struct ReaderPage: View {
       if (browser.isLoading && !browser.isReader) || browser.isOpeningWebsite {
         ProgressView().padding(8).background(.regularMaterial, in: Capsule()).padding(8)
       }
+      if let failure = browser.websiteFailure {
+        if browser.readerReady {
+          HStack(spacing: 12) {
+            Text("Website unavailable").font(.subheadline)
+            Button("Retry", action: browser.retryFailedWebsite).font(.subheadline.weight(.semibold))
+              .accessibilityIdentifier("reader-retry")
+          }
+          .padding(.horizontal, 16).padding(.vertical, 10)
+          .background(.regularMaterial, in: Capsule()).padding(.top, 8)
+        } else {
+          ContentUnavailableView {
+            Label("Page unavailable", systemImage: "wifi.slash")
+          } description: {
+            Text(failure)
+          } actions: {
+            Button("Retry", action: browser.retryFailedWebsite)
+              .buttonStyle(.borderedProminent).accessibilityIdentifier("reader-retry")
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(palette.background)
+        }
+      }
     }
   }
 

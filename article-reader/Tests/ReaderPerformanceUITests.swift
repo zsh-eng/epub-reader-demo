@@ -3,6 +3,76 @@ import XCTest
 final class ReaderPerformanceUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
+  @MainActor func testFailedWebsiteRetriesWithoutRestart() {
+    let app = openRecoverableFailure()
+    let retry = app.buttons["reader-retry"]
+    XCTAssertTrue(retry.waitForExistence(timeout: 10), app.debugDescription)
+    XCTAssertFalse(app.buttons["reader-toggle"].isEnabled)
+    XCTAssertFalse(app.alerts["Could not open article"].exists)
+    capture(app, "failed-website-retry")
+    retry.tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].waitForExistence(timeout: 5))
+    XCTAssertFalse(retry.exists)
+    capture(app, "website-recovered-without-restart")
+  }
+
+  @MainActor func testReopeningFailedPooledWebsiteRetriesItsRequest() {
+    let app = openRecoverableFailure()
+    XCTAssertTrue(app.buttons["reader-retry"].waitForExistence(timeout: 10))
+    app.buttons["reader-save"].tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    let card = app.buttons["article-story"]
+    XCTAssertTrue(card.waitForExistence(timeout: 5), app.debugDescription)
+    card.tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["reader-retry"].exists)
+  }
+
+  @MainActor func testPublisherFailureKeepsDownloadedReaderVisible() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-preload-fixtures",
+      "-disable-preloading", "-test-website-recovery",
+    ]
+    app.launch()
+    let card = app.buttons["article-cached-0"]
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    card.tap()
+    showReader(app)
+    let text = app.webViews.staticTexts[
+      "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."]
+    XCTAssertTrue(text.waitForExistence(timeout: 5))
+    app.buttons["reader-toggle"].tap()
+    let retry = app.buttons["reader-retry"]
+    XCTAssertTrue(retry.waitForExistence(timeout: 10))
+    XCTAssertTrue(text.exists)
+    XCTAssertEqual(app.buttons["reader-toggle"].label, "Website")
+    capture(app, "downloaded-reader-survives-publisher-failure")
+    retry.tap()
+    let website = expectation(
+      for: NSPredicate(format: "label == 'Reader'"), evaluatedWith: app.buttons["reader-toggle"])
+    wait(for: [website], timeout: 10)
+    app.buttons["reader-toggle"].tap()
+    XCTAssertTrue(text.waitForExistence(timeout: 5))
+    XCTAssertFalse(retry.exists)
+  }
+
+  @MainActor private func openRecoverableFailure() -> XCUIApplication {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard",
+      "-disable-preloading", "-test-website-recovery",
+    ]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    let open = app.buttons["open-copied-link"]
+    XCTAssertTrue(open.waitForExistence(timeout: 10))
+    open.tap()
+    return app
+  }
+
   @MainActor func testSlowPublisherPreloadsCancelBeforeStartingMore() {
     let app = XCUIApplication()
     app.launchArguments = [
