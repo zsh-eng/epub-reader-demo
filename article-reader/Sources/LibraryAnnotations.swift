@@ -68,7 +68,7 @@ struct LibraryAnnotations: View {
             Text(loadError).font(.caption).foregroundStyle(.secondary)
           }
           if hasLoaded && matching.isEmpty {
-            emptyState.padding(.top, 24)
+            emptyState
           }
           ForEach(matching) { annotation in
             passageCard(annotation, title: titles[annotation.articleURL])
@@ -124,7 +124,8 @@ struct LibraryAnnotations: View {
   private var emptyState: ArcticEmptyState {
     if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       return ArcticEmptyState(
-        kind: .search, title: "No passages found", detail: "Try another word or article.")
+        kind: .search, title: "No passages found", detail: "Try another word or article.",
+        compact: true)
     }
     switch filter {
     case .all:
@@ -134,11 +135,11 @@ struct LibraryAnnotations: View {
     case .highlights:
       return ArcticEmptyState(
         kind: .highlights, title: "Keep a line.",
-        detail: "Highlight a passage worth returning to.", eyebrow: "Highlights")
+        detail: "Highlight a passage worth returning to.")
     case .notes:
       return ArcticEmptyState(
         kind: .notes, title: "Keep a thought",
-        detail: "Leave yourself a note while you read.", eyebrow: "Notes")
+        detail: "Leave yourself a note while you read.")
     }
   }
 
