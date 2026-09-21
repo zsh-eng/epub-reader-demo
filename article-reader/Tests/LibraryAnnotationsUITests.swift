@@ -36,17 +36,21 @@ final class LibraryAnnotationsUITests: XCTestCase {
       )
     ).firstMatch
     XCTAssertTrue(row.waitForExistence(timeout: 5), app.debugDescription)
+    capture(app, "global-passages-collection")
     app.segmentedControls.buttons["Notes"].tap()
     XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
     app.segmentedControls.buttons["All"].tap()
     row.tap()
     let editor = app.textViews["annotation-note"]
     XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    capture(app, "global-passage-medium-editor")
     editor.tap()
     editor.typeText("A thought from the library.")
     app.navigationBars.buttons["Done"].firstMatch.tap()
     XCTAssertTrue(app.staticTexts["A thought from the library."].waitForExistence(timeout: 5))
-    let search = app.searchFields.firstMatch
+    XCTAssertFalse(app.searchFields["article-search"].exists)
+    let search = app.searchFields["Passage, note, or article"]
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
     search.tap()
     search.typeText("no matching passage")
     XCTAssertTrue(app.staticTexts["No passages found"].waitForExistence(timeout: 5))
@@ -66,6 +70,13 @@ final class LibraryAnnotationsUITests: XCTestCase {
     XCTAssertTrue(app.webViews.staticTexts[paragraph].firstMatch.waitForExistence(timeout: 15))
     let attachment = XCTAttachment(screenshot: app.screenshot())
     attachment.name = "global-passage-offline-source"
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  @MainActor private func capture(_ app: XCUIApplication, _ name: String) {
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
     attachment.lifetime = .keepAlways
     add(attachment)
   }

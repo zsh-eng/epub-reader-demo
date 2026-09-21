@@ -148,7 +148,7 @@ struct LibraryView: View {
           }
         }
     }
-    .overlay(alignment: .top) { navigationControls }
+    .overlay(alignment: .top) { navigationControls.accessibilityHidden(showingAnnotations) }
     #if DEBUG
       .overlay(alignment: .top) {
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-share-fixture") {
@@ -594,7 +594,8 @@ struct LibraryView: View {
         }
       }
     }
-    .modifier(LibrarySearchChrome(query: $query, active: $searching))
+    .modifier(LibrarySearchChrome(query: $query, active: $searching, obscured: showingAnnotations))
+    .accessibilityHidden(showingAnnotations)
     .confirmationDialog(
       "Delete \(selection.count) links?", isPresented: $confirmDelete, titleVisibility: .visible
     ) {

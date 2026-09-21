@@ -8,11 +8,12 @@ import UIKit
 struct LibrarySearchChrome: ViewModifier {
   @Binding var query: String
   @Binding var active: Bool
+  var obscured = false
 
   func body(content: Content) -> some View {
     content.readerBar(edge: .bottom) {
       HStack(spacing: 10) {
-        NativeArticleSearch(query: $query, active: $active)
+        NativeArticleSearch(query: $query, active: $active, obscured: obscured)
           .frame(height: 50).padding(.horizontal, 12).readerGlass()
         if active {
           Button {
@@ -23,6 +24,7 @@ struct LibrarySearchChrome: ViewModifier {
           }.readerGlass().accessibilityLabel("Close search").accessibilityIdentifier("close")
         }
       }.padding(.horizontal, 20).padding(.vertical, 8)
+        .accessibilityHidden(obscured).allowsHitTesting(!obscured)
     }
   }
 }
@@ -30,6 +32,7 @@ struct LibrarySearchChrome: ViewModifier {
 private struct NativeArticleSearch: UIViewRepresentable {
   @Binding var query: String
   @Binding var active: Bool
+  var obscured: Bool
 
   func makeCoordinator() -> Coordinator { Coordinator(query: $query, active: $active) }
   func makeUIView(context: Context) -> UISearchTextField {
@@ -53,7 +56,12 @@ private struct NativeArticleSearch: UIViewRepresentable {
     context.coordinator.query = $query
     context.coordinator.active = $active
     if field.text != query { field.text = query }
-    if !active && field.isFirstResponder { field.resignFirstResponder() }
+    // The native safe-area bar is hosted outside the SwiftUI page hierarchy.
+    // Exclude its text field explicitly while a modal collection is presented.
+    field.isAccessibilityElement = !obscured
+    field.accessibilityElementsHidden = obscured
+    field.isUserInteractionEnabled = !obscured
+    if (!active || obscured) && field.isFirstResponder { field.resignFirstResponder() }
   }
   final class Coordinator: NSObject, UITextFieldDelegate {
     var query: Binding<String>
