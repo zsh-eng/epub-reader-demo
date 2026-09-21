@@ -6,6 +6,7 @@ the same signing team for **ArticleReader** and **ArticleShare**, then register/
 enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 `ArticleReader.entitlements`. The simulator build can use ad-hoc signing.
 
+- **Sort and filter → Article replay** opens a taller, automatically looping native share/tag/save scene for An Alien Mind. It uses bundled artwork and a measured Jev result, makes no network calls, and does not save to the library. Close it with the top-right cross; Reduce Motion shows its completed state.
 - First launch offers three optional setup pages: Share, paste permission, and Jev automatic tagging. Replay them from **Sort and filter → Getting started**.
 - Copy an HTTP(S) link and enter Arctic. Choose **Save** or **Open** in the clipboard banner above Search. Already-saved links offer only Open.
 - Cards use an inset Open Graph image, a source badge at the upper left, and a

@@ -1,0 +1,10 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "seconds": 32,
+  "taggingRequestSeconds": 0.9114140272140503,
+  "taggingShownSeconds": 0.9114140272140503,
+  "source": "production-result.json",
+  "designedReplay": true
+}

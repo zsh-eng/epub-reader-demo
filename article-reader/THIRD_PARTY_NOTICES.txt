@@ -294,3 +294,12 @@ Article: https://emergencemagazine.org/essay/glacial-longings/
 Original Open Graph image: https://emergencemagazine.org/app/uploads/2024/01/Glacial_longing_1_SEO.jpg
 Retrieved: 2026-09-20. The photograph is bundled unchanged for the offline
 onboarding replay; the title and author identify the original article.
+
+An Alien Mind replay
+--------------------
+Article title, byline, metadata and Open Graph artwork: OpenAI, An Alien Mind
+by Jakub Pachocki, September 6, 2026.
+https://openai.com/index/an-alien-mind/
+The original OG image is bundled in AlienMindReplay.imageset for the native
+article replay. It is not generated artwork. The replay uses a recorded Jev
+result and does not contact OpenAI or Jev.

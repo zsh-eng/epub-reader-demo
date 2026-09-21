@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF2000000000000000000001 /* ArticleReplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000002; };
 		AF1000000000000000000005 /* LibraryPreloading.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000006; };
 		AF1000000000000000000003 /* LibraryFrameDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000004; };
 		AF1000000000000000000001 /* ArcticEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000002; };
@@ -93,6 +94,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AF2000000000000000000002 /* ArticleReplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleReplayView.swift; sourceTree = "<group>"; };
 		AF1000000000000000000006 /* LibraryPreloading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryPreloading.swift; sourceTree = "<group>"; };
 		AF1000000000000000000004 /* LibraryFrameDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryFrameDiagnostics.swift; sourceTree = "<group>"; };
 		AF1000000000000000000002 /* ArcticEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArcticEmptyState.swift; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 		B28B7AF69320201D1CF206EB = {
 			isa = PBXGroup;
 			children = (
+				AF2000000000000000000002 /* ArticleReplayView.swift */,
 				D296399755D86C57889B4DA3 /* Tests/LibraryAnnotationsUITests.swift */,
 				A5679766BFF225A4380B3B75 /* Tests/LibraryScrollPerformanceUITests.swift */,
 				3A57486727C26B20627EBE2E /* Sources/LibraryAnnotations.swift */,
@@ -399,6 +402,7 @@
 				AE2306DE25C1E0BCFFFC485D /* Shared/ArcticBrand.swift in Sources */,
 				A47B570ED105F4A6AF8686AB /* Sources/TaggingFeedback.swift in Sources */,
 				F2C5ECCD58964F85A6840623 /* Sources/OnboardingIllustrations.swift in Sources */,
+				AF2000000000000000000001 /* ArticleReplayView.swift in Sources */,
 				FF871BE3F2D0BCEB2E70AC6D /* Sources/OnboardingView.swift in Sources */,
 				AC0000000000000000000012 /* Shared/ArticleMetadata.swift in Sources */,
 				5CB4D81ACB71977A69B67990 /* Shared/ArticleTagging.swift in Sources */,

@@ -1,0 +1,87 @@
+{
+  "catalog" : [
+    {
+      "classificationName" : "Engineering",
+      "detail" : "How software works: systems, databases, performance, networking, code and implementation trade-offs.",
+      "id" : "engineering",
+      "name" : "Engineering"
+    },
+    {
+      "classificationName" : "Building with AI",
+      "detail" : "Using or building AI models, agents, tools, prompts and development workflows.",
+      "id" : "building_ai",
+      "name" : "Building with AI"
+    },
+    {
+      "classificationName" : "Design & craft",
+      "detail" : "Interface design and implementation, interaction, animation, typography, simplicity and software craftsmanship.",
+      "id" : "design_craft",
+      "name" : "Craft"
+    },
+    {
+      "classificationName" : "Work & career",
+      "detail" : "Professional growth, workplace decisions, organisational influence, leadership and choosing worthwhile work.",
+      "id" : "work_career",
+      "name" : "Career"
+    },
+    {
+      "classificationName" : "Agency & courage",
+      "detail" : "Starting, acting, persisting, overcoming avoidance and taking responsibility for shaping your life.",
+      "id" : "agency_courage",
+      "name" : "Agency"
+    },
+    {
+      "classificationName" : "Attention & wonder",
+      "detail" : "Slowing down, noticing beauty, escaping distraction and appreciating ordinary experience.",
+      "id" : "attention_wonder",
+      "name" : "Attention"
+    },
+    {
+      "classificationName" : "People & relationships",
+      "detail" : "Friendship, conversation, love, family, care, loneliness and belonging.",
+      "id" : "people_relationships",
+      "name" : "Social"
+    },
+    {
+      "classificationName" : "Learning & writing",
+      "detail" : "Reading deeply, understanding, remembering, writing as thinking and creative practice.",
+      "id" : "learning_writing",
+      "name" : "Learning & writing"
+    },
+    {
+      "classificationName" : "Life & meaning",
+      "detail" : "Mortality, identity, happiness, acceptance, personal values and what makes life worthwhile.",
+      "id" : "life_meaning",
+      "name" : "Life"
+    },
+    {
+      "classificationName" : "Society & power",
+      "detail" : "Institutions, politics, inequality, economics, culture and civic responsibility.",
+      "id" : "society_power",
+      "name" : "Society"
+    },
+    {
+      "classificationName" : "Technology & society",
+      "detail" : "How technology changes work, creativity, relationships, human autonomy and power.",
+      "id" : "technology_society",
+      "name" : "Technology & society"
+    },
+    {
+      "classificationName" : "Practical life",
+      "detail" : "Actionable personal finance, household, travel and everyday life guides or recommendations.",
+      "id" : "practical_life",
+      "name" : "Practical"
+    }
+  ],
+  "context" : "Jakub Pachocki reflects on increasingly capable AI and the challenge of keeping it aligned. He calls for stronger safeguards and international coordination.",
+  "description" : "Jakub Pachocki reflects on increasingly capable AI and the challenge of keeping it aligned. He calls for stronger safeguards and international coordination.",
+  "durationSeconds" : 0.71154904365539551,
+  "imageURL" : "https:\/\/images.ctfassets.net\/kftzwdyauwt9\/7f6sLIUC3tdeliJMQ3PwOq\/c47109c8b3f00ccbf881271c9c720877\/og-an-alien-mind.png?w=1600&h=900&fit=fill",
+  "mode" : "metadata",
+  "model" : "jev-1.13.0",
+  "selected" : [
+    "Technology & society"
+  ],
+  "threshold" : 0.75,
+  "title" : "An Alien Mind"
+}

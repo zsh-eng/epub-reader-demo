@@ -104,6 +104,55 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
   }
 
+  @MainActor func testArticleReplayLoopsAndClosesWithoutSaving() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store"]
+    app.launch()
+    XCTAssertTrue(app.buttons["Sort and filter"].waitForExistence(timeout: 10))
+    app.buttons["Sort and filter"].tap()
+    app.buttons["Article replay"].tap()
+    let scene = app.otherElements["article-replay-scene"]
+    XCTAssertTrue(scene.waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(scene.frame.height, 400)
+    XCTAssertLessThanOrEqual(scene.frame.maxY, app.frame.maxY)
+    XCTAssertFalse(app.buttons["onboarding-replay-share"].exists)
+    XCTAssertFalse(app.buttons["onboarding-next"].exists)
+    capture(app, "native-replay-article")
+    waitForDemo(scene, value: "1:tagged")
+    capture(app, "native-replay-tags")
+    waitForDemo(scene, value: "1:library")
+    capture(app, "native-replay-saved")
+    waitForDemo(scene, value: "2:article")
+    XCUIDevice.shared.press(.home)
+    app.activate()
+    waitForDemo(scene, value: "3:article")
+    app.buttons["close-article-replay"].tap()
+    XCTAssertTrue(app.buttons["Sort and filter"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.staticTexts["An Alien Mind"].exists)
+    app.buttons["Sort and filter"].tap()
+    app.buttons["Article replay"].tap()
+    XCTAssertTrue(scene.waitForExistence(timeout: 5))
+    let restarted = expectation(
+      for: NSPredicate(format: "value BEGINSWITH %@", "1:"), evaluatedWith: scene)
+    wait(for: [restarted], timeout: 5)
+  }
+
+  @MainActor func testArticleReplayDarkReducedMotion() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-dark-ui", "-reduce-motion"]
+    app.launch()
+    XCTAssertTrue(app.buttons["Sort and filter"].waitForExistence(timeout: 10))
+    app.buttons["Sort and filter"].tap()
+    app.buttons["Article replay"].tap()
+    let scene = app.otherElements["article-replay-scene"]
+    XCTAssertTrue(scene.waitForExistence(timeout: 5))
+    waitForDemo(scene, value: "0:library")
+    capture(app, "native-replay-dark-reduced-motion")
+    XCTAssertTrue(app.buttons["close-article-replay"].isHittable)
+    app.buttons["close-article-replay"].tap()
+    XCTAssertTrue(app.buttons["Sort and filter"].waitForExistence(timeout: 5))
+  }
+
   @MainActor func testPasteOffersOnlyOpen() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-test-tagging", "-test-clipboard"]

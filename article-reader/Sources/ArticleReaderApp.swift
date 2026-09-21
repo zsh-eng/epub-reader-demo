@@ -96,6 +96,7 @@ struct LibraryView: View {
   @State private var showingAnnotations = false
   @State private var passageToOpen: ReaderAnnotation?
   @State private var showingOnboarding = false
+  @State private var showingArticleReplay = false
   @State private var editingTags: SavedArticle?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var query = ""
@@ -150,7 +151,8 @@ struct LibraryView: View {
         visibility: viewportVisibility, store: store, browsers: browsers, projection: projection,
         folder: folder, query: query, sort: sort, searching: searching,
         isLibraryScrolling: isLibraryScrolling, clipboardURL: clipboard.url,
-        enabled: selected == nil && !showingOnboarding && !showingTaggingSettings
+        enabled: selected == nil && !showingOnboarding && !showingArticleReplay
+          && !showingTaggingSettings
           && !showingAnnotations && !choosingImport && editingTags == nil
       )
     }
@@ -297,6 +299,9 @@ struct LibraryView: View {
         store.resumeTagging()
       }
     }
+    .fullScreenCover(isPresented: $showingArticleReplay) {
+      ArticleReplayView()
+    }
     .sheet(item: $editingTags) { article in
       ArticleTagsSheet(article: article, store: store)
     }
@@ -409,6 +414,8 @@ struct LibraryView: View {
             .accessibilityIdentifier("tag-existing-articles")
           Button("Getting started", systemImage: "book.closed") { showingOnboarding = true }
             .accessibilityIdentifier("show-onboarding")
+          Button("Article replay", systemImage: "play.rectangle") { showingArticleReplay = true }
+            .accessibilityIdentifier("show-article-replay")
           Divider()
           Toggle("Frame diagnostics", isOn: $frameDiagnostics)
             .accessibilityIdentifier("toggle-frame-diagnostics")
