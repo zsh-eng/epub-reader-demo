@@ -707,6 +707,20 @@ enum ArticleRouting {
     applyAppearance { [weak self] in
       guard let self, version == self.pageVersion, token == self.readerDocumentToken else { return }
       self.installAnnotations()
+      #if DEBUG
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-reader-icon") {
+          // Expose successful WebKit decoding, not just an assigned src, to UI tests.
+          self.readerView.callAsyncJavaScript(
+            """
+            const icon = document.getElementById('reader-avatar');
+            if (icon) {
+              const report = () => { if (icon.naturalWidth > 0) icon.alt = 'Loaded Reader icon'; };
+              icon.addEventListener('load', report); report();
+            }
+            """, arguments: [:], in: nil, in: .defaultClient
+          ) { _ in }
+        }
+      #endif
       self.readerReady = true
       self.isExtracting = false
       self.applyReaderMedia()

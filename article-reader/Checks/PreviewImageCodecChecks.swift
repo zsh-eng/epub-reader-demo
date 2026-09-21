@@ -6,6 +6,21 @@ import UniformTypeIdentifiers
 
 @main struct PreviewImageCodecChecks {
   static func main() throws {
+    let svg = Data(
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='gold'/></svg>"
+        .utf8)
+    precondition(PreviewImageCodec.compact(svg) == svg)
+    let svgURL = PreviewImageCodec.webDataURL(svg)
+    precondition(svgURL.hasPrefix("data:image/svg+xml;base64,"))
+    precondition(Data(base64Encoded: String(svgURL.split(separator: ",")[1])) == svg)
+    for invalid in [
+      "<html><svg/></html>", "<svg xmlns='http://www.w3.org/2000/svg'>",
+      "<!DOCTYPE svg><svg xmlns='http://www.w3.org/2000/svg'/>",
+    ] {
+      precondition(PreviewImageCodec.compact(Data(invalid.utf8)) == nil)
+      precondition(PreviewImageCodec.webDataURL(Data(invalid.utf8)).isEmpty)
+    }
+    print("SVG favicon survives cache and Reader embedding; invalid documents rejected")
     let resource = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
       .deletingLastPathComponent()
       .appending(path: "Resources/Assets.xcassets/OnboardingArticle.imageset/glacial-longings.jpg")

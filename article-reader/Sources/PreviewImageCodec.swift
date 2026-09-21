@@ -22,6 +22,9 @@ enum PreviewImageCodec {
   }
 
   static func compact(_ data: Data) -> Data? {
+    // Tiny vector favicons already scale without a full photo decode. Keep
+    // them for WebKit; ImageIO cannot rasterize SVG. Raster photos still shrink.
+    if isSmallSVG(data) { return data }
     guard let image = thumbnail(data, pixels: 1200) else { return nil }
     if hasAlpha(data) { return encode(image, type: UTType.png.identifier, quality: 1) }
     guard let jpeg = encode(image, type: UTType.jpeg.identifier, quality: 0.8) else { return nil }
@@ -54,7 +57,9 @@ enum PreviewImageCodec {
 
   /// Cached HEIC is for native images. Saved Reader HTML uses universally
   /// supported JPEG/PNG so offline WebKit rendering does not depend on HEIC.
+  /// Small SVG icons remain vectors and are embedded for offline use.
   static func webDataURL(_ data: Data) -> String {
+    if isSmallSVG(data) { return "data:image/svg+xml;base64," + data.base64EncodedString() }
     guard let source = CGImageSourceCreateWithData(data as CFData, nil),
       let type = CGImageSourceGetType(source) as String?
     else { return "" }
@@ -86,5 +91,35 @@ enum PreviewImageCodec {
     CGImageDestinationAddImage(
       destination, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
     return CGImageDestinationFinalize(destination) ? result as Data : nil
+  }
+}
+
+// Only small, complete SVG documents enter the vector cache. WebKit receives
+// these exclusively as <img> data URLs, never as executable page markup.
+private final class SVGDocumentProbe: NSObject, XMLParserDelegate {
+  var isSVG = false
+  private var sawRoot = false
+  func parser(
+    _ parser: XMLParser, didStartElement elementName: String,
+    namespaceURI: String?, qualifiedName: String?, attributes: [String: String]
+  ) {
+    guard !sawRoot else { return }
+    sawRoot = true
+    isSVG = elementName == "svg" && namespaceURI == "http://www.w3.org/2000/svg"
+    if !isSVG { parser.abortParsing() }
+  }
+}
+
+extension PreviewImageCodec {
+  private static func isSmallSVG(_ data: Data) -> Bool {
+    guard data.count <= 256_000, let text = String(data: data, encoding: .utf8),
+      text.contains("<svg"), !text.contains("<!DOCTYPE"), !text.contains("<!ENTITY")
+    else { return false }
+    let parser = XMLParser(data: data)
+    let probe = SVGDocumentProbe()
+    parser.shouldProcessNamespaces = true
+    parser.shouldResolveExternalEntities = false
+    parser.delegate = probe
+    return parser.parse() && probe.isSVG
   }
 }

@@ -653,6 +653,29 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(app.buttons["article-next"].exists)
   }
 
+  @MainActor func testSVGReaderIconSurvivesOfflineReopen() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-reader-icon"]
+    app.launch()
+    add("https://fixture.example/icon", to: app)
+    app.buttons["article-icon"].tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.images["Loaded Reader icon"].waitForExistence(timeout: 10))
+    capture(app, "reader-svg-favicon")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.buttons["folder-downloaded"].tap()
+    XCTAssertTrue(app.buttons["article-icon"].waitForExistence(timeout: 10))
+    app.terminate()
+    app.launchArguments = [
+      "-ui-testing", "-test-reader-icon", "-articles-offline", "-images-offline",
+    ]
+    app.launch()
+    app.buttons["article-icon"].tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.images["Loaded Reader icon"].waitForExistence(timeout: 10))
+    capture(app, "reader-svg-favicon-offline")
+  }
+
   @MainActor func testShareExtensionSavesToLibrary() throws {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture", "-test-tagging"]
@@ -661,7 +684,6 @@ final class ArticleReaderUITests: XCTestCase {
     let footerY = save.frame.midY
     let card = app.descendants(matching: .any).matching(identifier: "share-preview-card").firstMatch
     XCTAssertTrue(card.waitForExistence(timeout: 5))
-    let reservedHeight = card.frame.height
     let previewTitle = app.staticTexts["share-preview-title"]
     XCTAssertTrue(previewTitle.waitForExistence(timeout: 5))
     let revealed = expectation(
@@ -673,21 +695,21 @@ final class ArticleReaderUITests: XCTestCase {
     waitForExpectations(timeout: 10)
     let artwork = expectation(for: NSPredicate(format: "value == 'image'"), evaluatedWith: card)
     wait(for: [artwork], timeout: 10)
-    XCTAssertEqual(card.frame.height, reservedHeight, accuracy: 2)
     XCTAssertEqual(save.frame.midY, footerY, accuracy: 2)
-    XCTAssertFalse(app.staticTexts["Attention"].exists)
-    capture(app, "08-share-extension")
-    save.tap()
-    let done = app.buttons["share-done"]
-    XCTAssertTrue(done.waitForExistence(timeout: 5))
     let tags = app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch
     expectation(for: NSPredicate(format: "value == 'presented'"), evaluatedWith: tags)
     waitForExpectations(timeout: 10)
     XCTAssertTrue(app.staticTexts["Attention"].exists)
     XCTAssertTrue(app.staticTexts["Life"].exists)
-    XCTAssertGreaterThan(card.frame.height, reservedHeight)
-    XCTAssertLessThan(card.frame.height - reservedHeight, 90)
+    XCTAssertLessThan(card.frame.height, 400)
     XCTAssertLessThan(tags.frame.maxY, previewTitle.frame.minY)
+    capture(app, "share-tags-before-save")
+    let previewHeight = card.frame.height
+    save.tap()
+    let done = app.buttons["share-done"]
+    XCTAssertTrue(done.waitForExistence(timeout: 5))
+    XCTAssertEqual(tags.value as? String, "presented")
+    XCTAssertEqual(card.frame.height, previewHeight, accuracy: 2)
     XCTAssertEqual(done.frame.midY, footerY, accuracy: 2)
     capture(app, "share-magic-tags")
     done.tap()
@@ -725,7 +747,7 @@ final class ArticleReaderUITests: XCTestCase {
     let save = openShareFixture(app)
     expectation(for: NSPredicate(format: "value == 'ready'"), evaluatedWith: save)
     waitForExpectations(timeout: 10)
-    XCTAssertFalse(app.staticTexts["Attention"].exists)
+    XCTAssertTrue(app.staticTexts["Attention"].waitForExistence(timeout: 5))
     app.buttons["share-cancel"].tap()
     XCUIDevice.shared.press(.home)
     app.activate()

@@ -204,8 +204,8 @@ private final class ShareSaveModel: ObservableObject {
     #endif
   }
 
-  var isPreparingSavedTags: Bool {
-    isSaved && (isTagging || (isLoadingContext && (isFixture || TaggingPreferences.enabled)))
+  var isPreparingTags: Bool {
+    isTagging || (isLoadingContext && (isFixture || TaggingPreferences.enabled))
   }
 
   private func accepts(_ revision: String) -> Bool {
@@ -406,6 +406,9 @@ private final class ShareSaveModel: ObservableObject {
       }
       // A changed key or disabled setting must not reuse speculative results.
       classification = nil
+      tagNames = nil
+      tagFeedbackPresented = false
+      pendingTaggingResult = nil
       if let taggingRevision, !accepts(taggingRevision) {
         taggingTask?.cancel()
         taggingTask = nil
@@ -473,6 +476,12 @@ private final class ShareSaveModel: ObservableObject {
       }
       let result = Classification(context: input, tags: tags, credentialRevision: revision)
       classification = result
+      tagNames = tags
+      tagFeedbackPresented = false
+      UIAccessibility.post(
+        notification: .announcement,
+        argument: tags.isEmpty
+          ? "No matching tags" : "Suggested tags: " + tags.joined(separator: ", "))
       record("ready")
       if isSaved { try publish(result) }
     } catch is CancellationError {
@@ -513,22 +522,19 @@ private final class ShareSaveModel: ObservableObject {
       id: transfer.id, url: transfer.url, title: input.title, subtitle: input.subtitle,
       taggingText: input.text, tagNames: classification.tags,
       inputFingerprint: ArticleTagCatalog.identity(title: input.title, description: input.text),
-      categoryVersion: ArticleTagCatalog.version, feedbackPresented: false)
-    // Commit completed tags before animation. Extension termination can skip
-    // dismissal callbacks; the app must still receive this unpresented result.
+      categoryVersion: ArticleTagCatalog.version, feedbackPresented: tagFeedbackPresented)
+    // Commit on Save even when the reveal is unfinished. Extension termination
+    // can skip dismissal callbacks; the app must still receive completed tags.
     try SharedInbox.saveTaggingResult(result)
-    if !classification.tags.isEmpty { pendingTaggingResult = result }
-    tagNames = classification.tags
-    UIAccessibility.post(
-      notification: .announcement,
-      argument: classification.tags.isEmpty
-        ? "No matching tags" : "Added tags: " + classification.tags.joined(separator: ", "))
+    if !classification.tags.isEmpty && !tagFeedbackPresented { pendingTaggingResult = result }
   }
 
   func presentTagFeedback() {
-    guard var result = pendingTaggingResult, let classification,
-      accepts(classification.credentialRevision)
-    else { return }
+    // The reveal can finish before Save. Carry that receipt into the later
+    // committed result, without writing anything for a cancelled preview.
+    guard let classification, accepts(classification.credentialRevision) else { return }
+    tagFeedbackPresented = true
+    guard var result = pendingTaggingResult else { return }
     result.feedbackPresented = true
     do {
       try SharedInbox.saveTaggingResult(result)
@@ -579,7 +585,7 @@ private struct ShareSaveView: View {
           .font(.headline)
           .foregroundStyle(model.isSaved ? ArcticBrand.accent : Color.primary)
           ConnectedTagReveal(
-            isProcessing: model.isPreparingSavedTags, tags: model.tagNames ?? [],
+            isProcessing: model.isPreparingTags, tags: model.tagNames ?? [],
             cornerRadius: 22,
             onRevealed: model.presentTagFeedback
           ) {
@@ -660,7 +666,7 @@ private struct ShareSaveView: View {
     }
     .background(Color(uiColor: .secondarySystemBackground))
     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-    .accessibilityValue(model.isSaved && model.isTagging ? "Adding tags" : "")
+    .accessibilityValue(model.isTagging ? "Finding tags" : "")
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
