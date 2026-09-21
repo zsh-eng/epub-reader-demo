@@ -5,48 +5,50 @@ final class AnnotationUITests: XCTestCase {
   private let paragraph = "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."
   override func setUp() { continueAfterFailure = false }
 
-  @MainActor func testHighlightsAndNotesPersistAndRemoveIndependently() {
+  @MainActor func testStandaloneNotesSendCancelEditAndPersistOffline() {
     let app = openFixture()
-    selectPassage(in: app)
-    tapSelectionAction("Highlight", in: app)
-    expectRender("painted=1; marks=0; selected=0", in: app)
-    let notes = app.buttons["reader-notes"]
-    expectValue("1 passage", on: notes)
-    notes.tap()
-    let passage = annotationRows(in: app).firstMatch
-    XCTAssertTrue(passage.waitForExistence(timeout: 5), app.debugDescription)
-    capture(app, "annotation-light-collection")
-    passage.tap()
+    app.buttons["reader-add-note"].tap()
+    let input = messageInput(in: app)
+    XCTAssertTrue(input.waitForExistence(timeout: 5), app.debugDescription)
+    input.typeText("This draft should not be stored.")
+    expectValue("0 passages", on: app.buttons["reader-notes"])
+    app.buttons["note-draft-cancel"].tap()
+    expectValue("0 passages", on: app.buttons["reader-notes"])
+    app.buttons["reader-add-note"].tap()
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    input.typeText("A thought about the whole article.")
+    app.buttons["note-send"].tap()
+    XCTAssertTrue(app.buttons["reader-add-note"].waitForExistence(timeout: 5))
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+    expectRender("painted=0; marks=0; selected=0", in: app)
+    reopenOffline(app)
+    app.buttons["reader-notes"].tap()
+    XCTAssertTrue(
+      app.staticTexts["A thought about the whole article."].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.staticTexts["annotation-quote-preview"].exists)
+    app.buttons["Note options"].tap()
+    app.buttons["Edit note"].tap()
     let editor = app.textViews["annotation-note"]
     XCTAssertTrue(editor.waitForExistence(timeout: 5))
     editor.tap()
-    editor.typeText("Keep this thought for tomorrow.")
-    app.navigationBars.buttons["Done"].tap()
-    XCTAssertTrue(app.staticTexts["Keep this thought for tomorrow."].waitForExistence(timeout: 5))
-
-    // Terminating while the collection is open proves the draft was written,
-    // rather than merely copied into the presenting view's state.
-    reopenOffline(app)
-    expectValue("1 passage", on: notes)
-    notes.tap()
-    XCTAssertTrue(app.staticTexts["Keep this thought for tomorrow."].waitForExistence(timeout: 5))
-    XCTAssertEqual(annotationRows(in: app).count, 1)
-    app.buttons["Passage options"].tap()
-    app.buttons["Remove highlight"].tap()
-    app.navigationBars.buttons["Done"].tap()
-    expectRender("painted=0; marks=0; selected=0", in: app)
-    notes.tap()
-    XCTAssertTrue(app.staticTexts["Keep this thought for tomorrow."].waitForExistence(timeout: 5))
-    XCTAssertEqual(annotationRows(in: app).count, 1)
-    app.buttons["Passage options"].tap()
+    editor.typeText(" A discarded edit.")
+    app.buttons["annotation-cancel"].tap()
+    XCTAssertTrue(
+      app.staticTexts["A thought about the whole article."].waitForExistence(timeout: 5))
+    app.buttons["Note options"].tap()
+    app.buttons["Edit note"].tap()
+    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    editor.tap()
+    editor.typeText(" Saved deliberately.")
+    app.buttons["annotation-save"].tap()
+    XCTAssertTrue(
+      app.staticTexts["A thought about the whole article. Saved deliberately."].waitForExistence(
+        timeout: 5))
+    capture(app, "article-note-conversation")
+    app.buttons["Note options"].tap()
     XCTAssertFalse(app.buttons["Remove highlight"].exists)
     app.buttons["Delete note"].tap()
-    XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
-
-    reopenOffline(app)
-    expectValue("0 passages", on: notes)
-    notes.tap()
-    XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["No notes yet"].waitForExistence(timeout: 5))
   }
 
   @MainActor func testHighlightTapRecoloursAndPersistsOffline() {
@@ -54,108 +56,52 @@ final class AnnotationUITests: XCTestCase {
     selectPassage(in: app)
     tapSelectionAction("Highlight", in: app)
     let rose = app.buttons["highlight-colour-rose"]
-    XCTAssertTrue(rose.waitForExistence(timeout: 5), app.debugDescription)
+    XCTAssertTrue(rose.waitForExistence(timeout: 5))
     XCTAssertTrue(app.buttons["highlight-colour-yellow"].isSelected)
     rose.tap()
     XCTAssertTrue(rose.isSelected)
-    capture(app, "highlight-colour-toolbar-dark")
-    app.buttons["Close highlight controls"].tap()
+    app.buttons["highlight-note"].tap()
+    let input = messageInput(in: app)
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["annotation-quote-preview"].exists)
+    input.typeText("The yellow can become rose.")
+    capture(app, "quoted-note-inline-composer-dark")
+    app.buttons["note-send"].tap()
+    reopenOffline(app)
     let passage = app.webViews.staticTexts[paragraph].firstMatch
     passage.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
-    XCTAssertTrue(rose.waitForExistence(timeout: 5), app.debugDescription)
+    XCTAssertTrue(rose.waitForExistence(timeout: 5))
     XCTAssertTrue(rose.isSelected)
-    app.buttons["highlight-note"].tap()
-    let editor = app.textViews["annotation-note"]
-    XCTAssertTrue(editor.waitForExistence(timeout: 5))
-    editor.tap()
-    editor.typeText("The yellow can become rose.")
-    capture(app, "medium-note-composer-dark")
-    app.navigationBars.buttons["Done"].tap()
-    reopenOffline(app)
-    let restored = app.webViews.staticTexts[paragraph].firstMatch
-    restored.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
-    XCTAssertTrue(rose.waitForExistence(timeout: 5), app.debugDescription)
-    XCTAssertTrue(rose.isSelected)
-    app.buttons["highlight-note"].tap()
-    XCTAssertTrue(editor.waitForExistence(timeout: 5))
-    XCTAssertEqual(editor.value as? String, "The yellow can become rose.")
-    let noteBar = app.navigationBars["Note"]
-    XCTAssertTrue(noteBar.waitForExistence(timeout: 5), app.debugDescription)
-    XCTAssertGreaterThan(noteBar.frame.minY, app.frame.height * 0.3)
-    XCTAssertFalse(app.keyboards.firstMatch.exists)
-    capture(app, "restored-note-medium-detent-dark")
-    noteBar.buttons["Done"].tap()
-    XCTAssertTrue(app.staticTexts["The yellow can become rose."].waitForExistence(timeout: 5))
-    app.navigationBars.buttons["Done"].tap()
-    XCTAssertTrue(app.buttons["highlight-remove"].waitForExistence(timeout: 5))
     app.buttons["highlight-remove"].tap()
     expectRender("painted=0; marks=0; selected=0", in: app)
-    capture(app, "highlight-removed-note-preserved-reader")
     expectValue("1 passage", on: app.buttons["reader-notes"])
     app.buttons["reader-notes"].tap()
     XCTAssertTrue(app.staticTexts["The yellow can become rose."].waitForExistence(timeout: 5))
-  }
-
-  @MainActor func testNoteOnlyPassageSurvivesClearingAndRewriting() {
-    let app = openFixture()
-    selectPassage(in: app)
-    tapSelectionAction("Add note", in: app)
-    let editor = app.textViews["annotation-note"]
-    XCTAssertTrue(editor.waitForExistence(timeout: 5))
-    editor.tap()
-    let original = "Old thought."
-    editor.typeText(original)
-    app.navigationBars.buttons["Done"].tap()
-    XCTAssertTrue(app.staticTexts[original].waitForExistence(timeout: 5))
-    let passageID = annotationRows(in: app).firstMatch.identifier
-    app.buttons["Passage options"].tap()
-    app.buttons["Remove highlight"].tap()
-    annotationRows(in: app).firstMatch.tap()
-    XCTAssertTrue(editor.waitForExistence(timeout: 5))
-    editor.tap()
-    editor.press(forDuration: 1.1)
-    tapSelectionAction("Select All", in: app)
-    editor.typeText(XCUIKeyboardKey.delete.rawValue)
-    // Clearing the final character is an intermediate draft edit, not deletion.
-    XCTAssertTrue(editor.exists)
-    XCTAssertEqual(editor.value as? String ?? "", "")
-    let replacement = "A better thought for tomorrow."
-    editor.typeText(replacement)
-    app.navigationBars.buttons["Done"].tap()
-    XCTAssertTrue(app.staticTexts[replacement].waitForExistence(timeout: 5))
-    capture(app, "rewritten-note-without-highlight")
-
-    reopenOffline(app)
-    let notes = app.buttons["reader-notes"]
-    expectValue("1 passage", on: notes)
-    notes.tap()
-    XCTAssertTrue(app.staticTexts[replacement].waitForExistence(timeout: 5))
-    XCTAssertEqual(annotationRows(in: app).firstMatch.identifier, passageID)
-    app.buttons["Passage options"].tap()
+    app.buttons["Note options"].tap()
     XCTAssertFalse(app.buttons["Remove highlight"].exists)
     app.buttons["Delete note"].tap()
-    XCTAssertTrue(app.staticTexts["Keep a thought"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["No notes yet"].waitForExistence(timeout: 5))
   }
 
-  @MainActor func testSelectedTextOpensNativeNoteEditorInDarkMode() {
-    let app = openFixture(dark: true)
-    selectPassage(in: app)
-    XCTAssertTrue(app.menuItems["Copy"].exists, app.debugDescription)
-    tapSelectionAction("Add note", in: app)
-    let editor = app.textViews["annotation-note"]
-    XCTAssertTrue(editor.waitForExistence(timeout: 5), app.debugDescription)
-    editor.tap()
-    editor.typeText("A little room to think.")
-    capture(app, "annotation-dark-note-editor")
-    app.navigationBars.buttons["Done"].tap()
-    XCTAssertTrue(app.staticTexts["A little room to think."].waitForExistence(timeout: 5))
-    capture(app, "annotation-dark-collection")
-    app.buttons["Show in article"].tap()
-    XCTAssertTrue(app.buttons["reader-notes"].waitForExistence(timeout: 5))
-    XCTAssertTrue(app.webViews.staticTexts[paragraph].firstMatch.isHittable)
+  @MainActor func testEmptyArticleNotesUseMediumSheetAndKeepFullMessages() {
+    let app = openFixture()
+    app.buttons["reader-notes"].tap()
+    XCTAssertTrue(app.staticTexts["No notes yet"].waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(app.navigationBars["Notes"].frame.minY, app.frame.height * 0.3)
+    let input = messageInput(in: app)
+    XCTAssertTrue(input.exists)
+    capture(app, "empty-article-notes-medium")
+    input.tap()
+    let note = String(repeating: "A sentence worth keeping with this article. ", count: 10)
+    input.typeText(note)
+    app.buttons["note-send"].tap()
+    let saved = app.staticTexts[note.trimmingCharacters(in: .whitespacesAndNewlines)]
+    XCTAssertTrue(saved.waitForExistence(timeout: 5))
+    XCTAssertGreaterThan(saved.frame.height, 120)
+    capture(app, "full-note-in-conversation")
   }
 
-  @MainActor func testLongQuoteKeepsInsetWhileScrollingInMediumNoteSheet() {
+  @MainActor func testLongQuoteIsCompactReplyPreview() {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard",
@@ -166,37 +112,18 @@ final class AnnotationUITests: XCTestCase {
     let open = app.buttons["open-copied-link"]
     XCTAssertTrue(open.waitForExistence(timeout: 10))
     open.tap()
-    // This fixture presents its seeded note as soon as Reader preparation ends;
-    // the modal can already hide the normal toolbar before the test observes it.
     let editor = app.textViews["annotation-note"]
     XCTAssertTrue(editor.waitForExistence(timeout: 15), app.debugDescription)
     XCTAssertEqual(editor.value as? String, "Keep the whole passage.")
-    XCTAssertGreaterThan(app.navigationBars["Note"].frame.minY, app.frame.height * 0.3)
-    XCTAssertFalse(app.keyboards.firstMatch.exists)
-    let quote = app.scrollViews["annotation-quote-scroll"]
-    XCTAssertTrue(quote.waitForExistence(timeout: 5), app.debugDescription)
-    capture(app, "long-quote-medium-sheet-top-dark")
-    expectQuoteInsets(on: quote, atEnd: false)
-    quote.swipeUp()
-    expectQuoteInsets(on: quote, atEnd: true)
-    XCTAssertGreaterThan(app.navigationBars["Note"].frame.minY, app.frame.height * 0.3)
-    capture(app, "long-quote-medium-sheet-bottom-dark")
+    let quote = app.staticTexts["annotation-quote-preview"].firstMatch
+    XCTAssertTrue(quote.exists)
+    XCTAssertLessThanOrEqual(quote.frame.height, 46)
+    XCTAssertFalse(app.scrollViews["annotation-quote-scroll"].exists)
+    capture(app, "two-line-quote-reply-dark")
   }
 
-  @MainActor private func expectQuoteInsets(on quote: XCUIElement, atEnd: Bool) {
-    let settled = NSPredicate { element, _ in
-      guard let value = (element as? XCUIElement)?.value as? String else { return false }
-      let fields = value.components(separatedBy: "; ")
-      guard fields.count == 3,
-        let top = Double(fields[0].replacingOccurrences(of: "top=", with: "")),
-        let bottom = Double(fields[1].replacingOccurrences(of: "bottom=", with: ""))
-      else { return false }
-      return abs(top - 18) <= 1 && abs(bottom - 18) <= 1
-        && fields[2] == "end=\(atEnd)"
-    }
-    let check = expectation(for: settled, evaluatedWith: quote)
-    let result = XCTWaiter.wait(for: [check], timeout: 5)
-    XCTAssertEqual(result, .completed, "Quote geometry: \(quote.value as? String ?? "missing")")
+  @MainActor private func messageInput(in app: XCUIApplication) -> XCUIElement {
+    app.descendants(matching: .any).matching(identifier: "note-message-input").firstMatch
   }
 
   @MainActor func testRemoveHighlightClearsReaderPaintImmediately() {

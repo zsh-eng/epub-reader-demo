@@ -59,9 +59,22 @@ enum TestMode { static let enabled = false }
     try deleted.updateNote("", id: draft.id)
     try deleted.deleteNote(draft.id)
     precondition(deleted.annotations(for: url).isEmpty)
+    // Standalone notes have no quote, paint, or migration requirement.
+    let standalone = try deleted.addNote("An article-level thought.", in: url)
+    precondition(standalone.quote == nil && !standalone.isHighlighted)
+    let noteRestored = AnnotationStore(directory: directory)
+    precondition(noteRestored.annotations(for: url).first?.note == "An article-level thought.")
+    precondition(noteRestored.annotations(for: url).first?.quote == nil)
+    try noteRestored.recolour(standalone.id, colour: .rose)
+    precondition(noteRestored.annotations(for: url).first?.isHighlighted == false)
+    try noteRestored.updateNote("Revised only on explicit Save.", id: standalone.id)
+    let noteEdited = AnnotationStore(directory: directory)
+    precondition(noteEdited.annotations(for: url).first?.note == "Revised only on explicit Save.")
+    try noteEdited.deleteNote(standalone.id)
+    precondition(noteEdited.annotations(for: url).isEmpty)
     try Data("bad json".utf8).write(to: directory.appending(path: "broken.json"))
     let partial = AnnotationStore(directory: directory)
-    precondition(partial.records.count == 3)
+    precondition(partial.records.count == 4)
     precondition(partial.loadError != nil)
     print(
       "Annotation storage: reopen, legacy yellow, persisted colour, Unicode, deduplication, note preservation, clear-and-retype after restart, explicit deletion, stale merge, damaged-record isolation passed"

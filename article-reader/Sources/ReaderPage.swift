@@ -183,7 +183,10 @@ struct ReaderPage: View {
         .readerGlass().accessibilityIdentifier("reader-archive-prompt")
         .transition(reduceMotion ? .opacity : .offset(y: 8).combined(with: .opacity))
       }
-      if let id = browser.selectedAnnotationID,
+      if let draft = browser.noteDraft {
+        ReaderNoteComposer(browser: browser, draft: draft).id(draft.id)
+          .transition(.opacity)
+      } else if let id = browser.selectedAnnotationID,
         let annotation = browser.annotations.first(where: { $0.id == id }), browser.isReader
       {
         HighlightToolbar(annotation: annotation, browser: browser)
@@ -192,13 +195,22 @@ struct ReaderPage: View {
       } else if appearance {
         appearanceControls
       } else {
-        navigationControls.padding(.bottom, 6)
+        HStack(alignment: .bottom, spacing: 10) {
+          navigationControls
+          Button {
+            browser.beginNote()
+          } label: {
+            Image(systemName: "square.and.pencil").font(.title3).frame(width: 54, height: 54)
+          }
+          .readerGlass().accessibilityLabel("Add note").accessibilityIdentifier("reader-add-note")
+        }.padding(.horizontal, 12).padding(.bottom, 6)
       }
     }
     .animation(
       .timingCurve(0.23, 1, 0.32, 1, duration: reduceMotion ? 0.1 : 0.18), value: nearEnd
     )
     .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), value: browser.selectedAnnotationID)
+    .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), value: browser.noteDraft?.id)
   }
 
   private var navigationControls: some View {
@@ -237,7 +249,7 @@ struct ReaderPage: View {
       .frame(maxWidth: .infinity)
     }
     .font(.title3).padding(.horizontal, 12).padding(.vertical, 5)
-    .frame(maxWidth: 360).readerGlass().padding(.horizontal, 12)
+    .frame(maxWidth: 360).readerGlass()
   }
 
   private func toggleSaved() {
@@ -356,6 +368,14 @@ struct ReaderNavigationBar: View {
       )
       .disabled(!browser.readerReady)
       Menu {
+        if let article, article.saved {
+          Button(
+            article.favourite ? "Unfavourite" : "Favourite",
+            systemImage: article.favourite ? "star.slash" : "star"
+          ) {
+            store.setFavourite(!article.favourite, for: article.id)
+          }.accessibilityIdentifier("reader-favourite")
+        }
         Button("Archive article", systemImage: "archivebox") {
           guard let article else { return }
           do {

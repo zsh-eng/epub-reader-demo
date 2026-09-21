@@ -143,6 +143,7 @@
       hitRanges = [];
       resolved = new Map();
       for (const record of records) {
+        if (!record.quote) continue; // Article notes have no DOM anchor or paint.
         const start = locate(text, record.quote);
         const range = start < 0 ? null : rangeAt(nodes, start, start + record.quote.exact.length);
         if (!range) { missing.push(record.id); continue; }

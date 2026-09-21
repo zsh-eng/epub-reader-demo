@@ -182,6 +182,7 @@ enum ArticleRouting {
   let webView: WKWebView
   let readerView: WKWebView
   var annotationPresentation: AnnotationPresentation?
+  var noteDraft: ReaderNoteDraft?
   var selectedAnnotationID: UUID?
   @ObservationIgnored private var pendingAnnotationReveal: UUID?
   var unmatchedAnnotations: Set<String> = []
@@ -1075,9 +1076,14 @@ enum ArticleRouting {
         self.selectedAnnotationID = annotation.id
         self.refreshAnnotations()
         UISelectionFeedbackGenerator().selectionChanged()
-        if withNote { self.annotationPresentation = AnnotationPresentation(editing: annotation.id) }
+        if withNote { self.beginNote(annotation: annotation) }
       } catch { self.errorMessage = "Could not save passage: " + error.localizedDescription }
     }
+  }
+
+  func beginNote(annotation: ReaderAnnotation? = nil) {
+    selectedAnnotationID = nil
+    noteDraft = ReaderNoteDraft(annotation: annotation)
   }
 
   fileprivate func annotationTapped(_ value: String?, token: String, from view: WKWebView?) {
@@ -1095,6 +1101,12 @@ enum ArticleRouting {
   }
 
   func revealAnnotation(_ id: UUID) {
+    guard annotations.first(where: { $0.id == id })?.quote != nil else {
+      pendingAnnotationReveal = nil
+      selectedAnnotationID = nil
+      showReader()
+      return
+    }
     pendingAnnotationReveal = id
     showReader()
     guard readerReady else { return }

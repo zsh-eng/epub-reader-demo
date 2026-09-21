@@ -124,3 +124,16 @@ test('removal unregisters paint while keeping a note-only passage revealable', a
   expect(await p.locator('mark[data-arctic-highlight]').count()).toBe(0);
   await p.close();
 });
+
+
+test('unanchored article notes never paint or appear as unmatched quotes', async () => {
+  const p = await page();
+  const missing = await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [
+    { id: 'standalone', note: 'An article thought.', isHighlighted: false },
+    { id: 'null-quote', quote: null, note: 'Another thought.', isHighlighted: false }
+  ]);
+  expect(missing).toEqual([]);
+  expect(await p.evaluate(() => [...CSS.highlights.keys()].filter(name => name.startsWith('arctic-')))).toEqual([]);
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('standalone'))).toBe(false);
+  await p.close();
+});

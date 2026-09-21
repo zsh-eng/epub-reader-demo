@@ -2,23 +2,23 @@ import Foundation
 import Observation
 
 /// Text and context survive Reader regeneration. `start` is a UTF-16 hint, not identity.
-struct ReaderQuote: Codable, Equatable {
+struct ReaderQuote: Codable, Equatable, Sendable {
   var exact: String
   var prefix: String
   var suffix: String
   var start: Int
 }
 
-enum HighlightColour: String, Codable, CaseIterable, Identifiable {
+enum HighlightColour: String, Codable, CaseIterable, Identifiable, Sendable {
   case yellow, sage, rose, blue
   var id: String { rawValue }
   var name: String { rawValue.capitalized }
 }
 
-struct ReaderAnnotation: Codable, Identifiable, Equatable {
+struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
   var id: UUID
   var articleURL: URL
-  var quote: ReaderQuote
+  var quote: ReaderQuote?
   var note: String
   var isHighlighted: Bool
   var createdAt: Date
@@ -62,11 +62,48 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable {
         }
       }
     } catch { loadError = error.localizedDescription }
+    #if DEBUG
+      if directory == nil { seedNotebookFixture() }
+    #endif
   }
+
+  #if DEBUG
+    /// In-memory UI fixture only: this measures list rendering/search, not disk
+    /// persistence throughput. Real note persistence is tested separately.
+    private func seedNotebookFixture() {
+      let arguments = ProcessInfo.processInfo.arguments
+      guard TestMode.enabled, arguments.contains("-reset-store"),
+        let index = arguments.firstIndex(of: "-test-notebook-count"),
+        arguments.indices.contains(index + 1), let requested = Int(arguments[index + 1])
+      else { return }
+      records = (0..<max(0, min(2000, requested))).map { index in
+        let date = Date(timeIntervalSince1970: Double(1_700_000_000 + index))
+        return ReaderAnnotation(
+          id: UUID(), articleURL: URL(string: "https://fixture.example/unicode")!,
+          quote: index.isMultiple(of: 2)
+            ? ReaderQuote(exact: "Fixture passage \(index)", prefix: "", suffix: "", start: 0)
+            : nil,
+          note: "Notebook thought \(index). A complete thought kept with this article.",
+          isHighlighted: index.isMultiple(of: 2), createdAt: date, updatedAt: date,
+          colour: .yellow)
+      }
+    }
+  #endif
 
   func annotations(for url: URL) -> [ReaderAnnotation] {
     records.filter { $0.articleURL == url && $0.deletedAt == nil }
-      .sorted { $0.quote.start < $1.quote.start }
+      .sorted { ($0.quote?.start ?? Int.max) < ($1.quote?.start ?? Int.max) }
+  }
+
+  /// Article notes do not require a text selection. A missing quote is local
+  /// metadata only; it never produces a Reader range or an unmatched warning.
+  @discardableResult func addNote(_ text: String, in url: URL) throws -> ReaderAnnotation {
+    let now = Date()
+    let record = ReaderAnnotation(
+      id: UUID(), articleURL: url, quote: nil, note: text,
+      isHighlighted: false, createdAt: now, updatedAt: now)
+    try write(record)
+    return record
   }
 
   @discardableResult func highlight(_ quote: ReaderQuote, in url: URL) throws -> ReaderAnnotation {
@@ -87,7 +124,9 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable {
   }
 
   func recolour(_ id: UUID, colour: HighlightColour) throws {
-    guard var record = records.first(where: { $0.id == id && $0.deletedAt == nil }) else { return }
+    guard var record = records.first(where: { $0.id == id && $0.deletedAt == nil }),
+      record.quote != nil
+    else { return }
     guard record.highlightColour != colour || !record.isHighlighted else { return }
     record.colour = colour
     record.isHighlighted = true
