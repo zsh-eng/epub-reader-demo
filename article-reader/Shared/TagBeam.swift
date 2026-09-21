@@ -23,7 +23,6 @@ struct ConnectedTagReveal<Content: View>: View {
   var onRevealed: () -> Void = {}
   @ViewBuilder var content: () -> Content
   @Environment(\.articleReduceMotion) private var reduceMotion
-  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.scenePhase) private var scenePhase
   @State private var started = Date()
   @State private var completion: Date?
@@ -31,76 +30,68 @@ struct ConnectedTagReveal<Content: View>: View {
   @State private var acknowledged: Result?
 
   var body: some View {
-    TimelineView(
-      .animation(
-        minimumInterval: 1.0 / 60, paused: settled || reduceMotion || scenePhase != .active)
-    ) { timeline in
-      let elapsed = completion.map { timeline.date.timeIntervalSince($0) } ?? -1
-      let phase =
-        timeline.date.timeIntervalSince(started).truncatingRemainder(dividingBy: 2.4) / 2.4
-      let progress = TagRevealProgress(
-        elapsed: elapsed, phase: phase,
-        immediate: reduceMotion || settled || scenePhase != .active)
-      content()
-        .environment(\.tagRevealProgress, progress)
-        .overlay {
-          if !settled, scenePhase == .active {
-            let gradient = tagBeamGradient(
-              phase: reduceMotion ? 0.2 : phase, colorScheme: colorScheme)
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-              .strokeBorder(gradient, lineWidth: 2)
-              .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                  .strokeBorder(gradient, lineWidth: 4).blur(radius: 5)
-              }
-              .opacity(reduceMotion || elapsed < 0 ? 1 : max(0, 1 - elapsed / 0.65))
-              .allowsHitTesting(false).accessibilityHidden(true)
-          }
+    // Keep publisher images, text layout and sheet measurement outside the
+    // display clock. Only the border and the small tag pills redraw per frame.
+    content()
+      .environment(\.tagRevealTimeline, timing)
+      .overlay {
+        if !settled, scenePhase == .active, isProcessing || !tags.isEmpty {
+          TagBeamBorder(timing: timing, cornerRadius: cornerRadius)
+            .allowsHitTesting(false).accessibilityHidden(true)
         }
-    }
-    .task(
-      id: Run(
-        tags: tags, processing: isProcessing, replay: replayID, reduced: reduceMotion,
-        active: scenePhase == .active)
-    ) {
-      // The view can display results immediately while inactive, but a receipt
-      // is issued only after the foreground reveal has actually finished.
-      guard scenePhase == .active else { return }
-      let result = Result(tags: tags, replay: replayID)
-      if !isProcessing, acknowledged == result {
-        settled = true
-        return
       }
-      if isProcessing {
-        acknowledged = nil
-        started = Date()
-        completion = nil
+      .task(
+        id: Run(
+          tags: tags, processing: isProcessing, replay: replayID, reduced: reduceMotion,
+          active: scenePhase == .active)
+      ) {
+        // The view can display results immediately while inactive, but a receipt
+        // is issued only after the foreground reveal has actually finished.
+        guard scenePhase == .active else { return }
+        let result = Result(tags: tags, replay: replayID)
+        if !isProcessing, acknowledged == result {
+          settled = true
+          return
+        }
+        if isProcessing {
+          acknowledged = nil
+          started = Date()
+          completion = nil
+          settled = false
+          return
+        }
+        guard !tags.isEmpty else {
+          settled = true
+          return
+        }
+        if reduceMotion {
+          settled = true
+          acknowledged = result
+          onRevealed()
+          return
+        }
         settled = false
-        return
+        completion = Date()
+        do {
+          let lastArrival = TagRevealProgress.arrival(for: tags.count - 1)
+          try await Task.sleep(for: .seconds(lastArrival + 0.32))
+          acknowledged = result
+          onRevealed()
+          try await Task.sleep(for: .milliseconds(500))
+          settled = true
+        } catch {
+          // Dismissal, backgrounding, or replay cancels acknowledgement.
+        }
       }
-      guard !tags.isEmpty else {
-        settled = true
-        return
-      }
-      if reduceMotion {
-        settled = true
-        acknowledged = result
-        onRevealed()
-        return
-      }
-      settled = false
-      completion = Date()
-      do {
-        let lastArrival = TagRevealProgress.arrival(for: tags.count - 1)
-        try await Task.sleep(for: .seconds(lastArrival + 0.32))
-        acknowledged = result
-        onRevealed()
-        try await Task.sleep(for: .milliseconds(500))
-        settled = true
-      } catch {
-        // Dismissal, backgrounding, or replay cancels acknowledgement.
-      }
-    }
+  }
+
+  private var timing: TagRevealTimeline {
+    let currentResult = Result(tags: tags, replay: replayID)
+    let finishedCurrentResult = settled && acknowledged == currentResult
+    return TagRevealTimeline(
+      started: started, completion: settled && !finishedCurrentResult ? nil : completion,
+      immediate: reduceMotion || finishedCurrentResult || scenePhase != .active,
+      paused: settled || reduceMotion || scenePhase != .active)
   }
 
   private struct Result: Equatable {
@@ -114,6 +105,42 @@ struct ConnectedTagReveal<Content: View>: View {
     var replay: Int
     var reduced: Bool
     var active: Bool
+  }
+}
+
+private struct TagBeamBorder: View {
+  let timing: TagRevealTimeline
+  let cornerRadius: CGFloat
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    TimelineView(.animation(minimumInterval: 1.0 / 60, paused: timing.paused)) { timeline in
+      let progress = timing.progress(at: timeline.date)
+      let gradient = tagBeamGradient(
+        phase: timing.immediate ? 0.2 : progress.phase, colorScheme: colorScheme)
+      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        .strokeBorder(gradient, lineWidth: 2)
+        .background {
+          RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .strokeBorder(gradient, lineWidth: 4).blur(radius: 5)
+        }
+        .opacity(
+          timing.immediate || progress.elapsed < 0 ? 1 : max(0, 1 - progress.elapsed / 0.65))
+    }
+  }
+}
+
+private struct TagRevealTimeline {
+  var started = Date()
+  var completion: Date?
+  var immediate = true
+  var paused = true
+
+  func progress(at date: Date) -> TagRevealProgress {
+    TagRevealProgress(
+      elapsed: completion.map { date.timeIntervalSince($0) } ?? -1,
+      phase: date.timeIntervalSince(started).truncatingRemainder(dividingBy: 2.4) / 2.4,
+      immediate: immediate)
   }
 }
 
@@ -169,13 +196,13 @@ private struct TagRevealProgress {
   }
 }
 
-private struct TagRevealProgressKey: EnvironmentKey {
-  static let defaultValue = TagRevealProgress()
+private struct TagRevealTimelineKey: EnvironmentKey {
+  static let defaultValue = TagRevealTimeline()
 }
 extension EnvironmentValues {
-  fileprivate var tagRevealProgress: TagRevealProgress {
-    get { self[TagRevealProgressKey.self] }
-    set { self[TagRevealProgressKey.self] = newValue }
+  fileprivate var tagRevealTimeline: TagRevealTimeline {
+    get { self[TagRevealTimelineKey.self] }
+    set { self[TagRevealTimelineKey.self] = newValue }
   }
 }
 
@@ -184,13 +211,19 @@ struct TagRevealPill: View {
   var name: String
   var index: Int
   var compact = false
-  @Environment(\.tagRevealProgress) private var progress
+  @Environment(\.tagRevealTimeline) private var timing
   @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
+    TimelineView(.animation(minimumInterval: 1.0 / 60, paused: timing.paused)) { timeline in
+      pill(progress: timing.progress(at: timeline.date))
+    }
+  }
+
+  private func pill(progress: TagRevealProgress) -> some View {
     let labelOpacity = progress.labelOpacity(for: index)
     let glow = progress.glow(for: index)
-    Text(name)
+    return Text(name)
       .font(compact ? .system(size: 10, weight: .medium) : .subheadline.weight(.medium))
       .opacity(labelOpacity)
       .padding(.horizontal, compact ? 9 : 12).padding(.vertical, compact ? 6 : 8)

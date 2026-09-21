@@ -55,6 +55,7 @@ final class ShareViewController: UIViewController, UISheetPresentationController
 private final class SaveArticleViewController: UIHostingController<ShareSaveView> {
   private let model: ShareSaveModel
   fileprivate var contentHeight: CGFloat = 260
+  private var pendingHeight: CGFloat?
 
   init(context: NSExtensionContext) {
     let model = ShareSaveModel(context: context)
@@ -69,8 +70,7 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
       self, selector: #selector(hostWillResignActive),
       name: .NSExtensionHostWillResignActive, object: context)
     model.heightDidChange = { [weak self] height in
-      // Resolve detents after SwiftUI finishes the current layout pass.
-      DispatchQueue.main.async { self?.resize(to: height) }
+      self?.scheduleResize(to: height)
     }
   }
 
@@ -103,6 +103,19 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
 
   func cancelWork() { model.cancelWork() }
 
+  private func scheduleResize(to height: CGFloat) {
+    let alreadyScheduled = pendingHeight != nil
+    pendingHeight = height
+    guard !alreadyScheduled else { return }
+    // Coalesce body/footer measurements from one layout pass into one detent
+    // update; never animate the sheet again for each intermediate measurement.
+    DispatchQueue.main.async { [weak self] in
+      guard let self, let height = self.pendingHeight else { return }
+      self.pendingHeight = nil
+      self.resize(to: height)
+    }
+  }
+
   private func resize(to height: CGFloat) {
     let height = max(240, height + 28)
     guard abs(height - contentHeight) > 1 else { return }
@@ -116,7 +129,7 @@ private final class SaveArticleViewController: UIHostingController<ShareSaveView
       ]
       sheet.selectedDetentIdentifier = .init("save-article")
     }
-    if UIAccessibility.isReduceMotionEnabled {
+    if UIAccessibility.isReduceMotionEnabled || !model.isVisible {
       updateDetent()
     } else {
       sheet.animateChanges(updateDetent)
@@ -180,6 +193,10 @@ private final class ShareSaveModel: ObservableObject {
     #endif
   }
 
+  var reservesTagSpace: Bool {
+    isFixture || TaggingPreferences.enabled || !(tagNames ?? []).isEmpty
+  }
+
   var isPreparingSavedTags: Bool {
     isSaved && (isTagging || (isLoadingContext && (isFixture || TaggingPreferences.enabled)))
   }
@@ -198,11 +215,13 @@ private final class ShareSaveModel: ObservableObject {
   func start() { linkTask = Task { await readLink() } }
 
   func measureBody(_ height: CGFloat) {
+    guard abs(bodyHeight - height) > 0.5 else { return }
     bodyHeight = height
     heightDidChange?(bodyHeight + footerHeight)
   }
 
   func measureFooter(_ height: CGFloat) {
+    guard abs(footerHeight - height) > 0.5 else { return }
     footerHeight = height
     heightDidChange?(bodyHeight + footerHeight)
   }
@@ -232,9 +251,11 @@ private final class ShareSaveModel: ObservableObject {
         // The reserved fixture host makes the actual extension reveal testable
         // without publisher timing. This path is absent from release builds.
         if url.host == "fixture.example" {
-          try await Task.sleep(for: .seconds(1.5))
+          try await Task.sleep(for: .milliseconds(250))
           try Task.checkCancellation()
           title = "The quiet art of paying attention"
+          try await Task.sleep(for: .milliseconds(1250))
+          try Task.checkCancellation()
           image = Self.fixtureImage()
           return
         }
@@ -301,16 +322,30 @@ private final class ShareSaveModel: ObservableObject {
           }
         }
       }
-      guard !Task.isCancelled, let data,
-        let source = CGImageSourceCreateWithData(data as CFData, nil),
-        let thumbnail = CGImageSourceCreateThumbnailAtIndex(
+      guard !Task.isCancelled, let data else { return }
+      // Decode at preview size off the main actor. An undecoded full-size image
+      // can otherwise stall the first frame that places it in the card.
+      let decode = Task.detached(priority: .userInitiated) { () -> CGImage? in
+        guard data.count <= 15_000_000,
+          let source = CGImageSourceCreateWithData(
+            data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+          !Task.isCancelled
+        else { return nil }
+        return CGImageSourceCreateThumbnailAtIndex(
           source, 0,
           [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceThumbnailMaxPixelSize: 800,
+            kCGImageSourceShouldCacheImmediately: true,
           ] as CFDictionary)
-      else { return }
+      }
+      let thumbnail = await withTaskCancellationHandler {
+        await decode.value
+      } onCancel: {
+        decode.cancel()
+      }
+      guard !Task.isCancelled, let thumbnail else { return }
       image = UIImage(cgImage: thumbnail)
     } catch {
       // Preview artwork is optional; metadata-based tagging can already proceed.
@@ -389,7 +424,7 @@ private final class ShareSaveModel: ObservableObject {
       #if DEBUG
         if isFixture {
           try await Task.sleep(for: .milliseconds(650))
-          tags = ["Attention & wonder", "Life & meaning"]
+          tags = ["Attention", "Life"]
         } else {
           guard let key = try JevKeychain.read(), !key.isEmpty else {
             message = "Add your Jev API key in Arctic to turn on automatic tags."
@@ -489,9 +524,7 @@ private struct ShareSaveView: View {
   @ObservedObject var model: ShareSaveModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  private var reveal: AnyTransition {
-    reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 10))
-  }
+  @ScaledMetric(relativeTo: .subheadline) private var tagReservation: CGFloat = 112
 
   var body: some View {
     VStack(spacing: 0) {
@@ -510,14 +543,25 @@ private struct ShareSaveView: View {
           ) {
             VStack(spacing: 0) {
               articleCard
-              if let tags = model.tagNames, !tags.isEmpty {
-                tagResult(tags)
+              if model.reservesTagSpace {
+                ZStack(alignment: .topLeading) {
+                  Color.clear
+                  if let tags = model.tagNames, !tags.isEmpty { tagResult(tags) }
+                }
+                .frame(minHeight: tagReservation, alignment: .topLeading)
+                .fixedSize(horizontal: false, vertical: true)
               }
             }
             .background(
               Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
           }
           .environment(\.scenePhase, model.isVisible && model.hostIsActive ? .active : .inactive)
+          .accessibilityElement(children: .contain)
+          .accessibilityIdentifier("share-preview-card")
+          #if DEBUG
+            .accessibilityValue(
+              model.image != nil ? "image" : model.title != nil ? "title" : "link")
+          #endif
           if model.isSaved, let message = model.message {
             Text(message).font(.subheadline).foregroundStyle(.secondary)
           }
@@ -540,48 +584,36 @@ private struct ShareSaveView: View {
       footer
     }
     .background(Color(uiColor: .systemBackground))
-    .animation(
-      reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.28, dampingFraction: 1),
-      value: model.title
-    )
-    .animation(
-      reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.28, dampingFraction: 1),
-      value: model.image != nil
-    )
-    .animation(.easeOut(duration: 0.2), value: model.isSaved)
-    .animation(
-      reduceMotion ? .easeOut(duration: 0.18) : .spring(response: 0.28, dampingFraction: 1),
-      value: model.tagNames
-    )
   }
 
   private var articleCard: some View {
     VStack(alignment: .leading, spacing: 0) {
-      if let image = model.image {
-        Image(uiImage: image)
-          .resizable().scaledToFill()
-          .frame(height: 154).clipped()
-          .accessibilityHidden(true)
-          .transition(reveal)
-      }
-      VStack(alignment: .leading, spacing: 10) {
-        if let title = model.title {
-          Text(title)
-            .font(.system(.title3, design: .serif).weight(.semibold))
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("share-preview-title")
-            .transition(reveal)
+      ZStack {
+        Color(uiColor: .tertiarySystemBackground)
+        if let image = model.image {
+          Image(uiImage: image).resizable().scaledToFill()
+            .transition(.opacity)
+        } else {
+          Image(systemName: "photo").font(.system(size: 24, weight: .light))
+            .foregroundStyle(.tertiary)
         }
-        Text(
-          model.title == nil
-            ? (model.url?.absoluteString ?? "Reading link…")
-            : (model.url?.host?.replacingOccurrences(of: "www.", with: "") ?? "")
-        )
-        .font(model.title == nil ? .body : .caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(model.title == nil ? 3 : 1)
-        .truncationMode(.middle)
-        .accessibilityIdentifier("share-link")
+      }
+      .frame(height: 154).clipped().accessibilityHidden(true)
+      .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), value: model.image != nil)
+      .accessibilityIdentifier("share-artwork")
+      VStack(alignment: .leading, spacing: 10) {
+        Text(model.title ?? model.url?.absoluteString ?? "Reading link…")
+          .font(.system(.title3, design: .serif).weight(.semibold))
+          .foregroundStyle(model.title == nil ? .secondary : .primary)
+          .lineLimit(2, reservesSpace: true)
+          .truncationMode(model.title == nil ? .middle : .tail)
+          .contentTransition(.opacity)
+          .animation(.easeOut(duration: 0.18), value: model.title)
+          .accessibilityIdentifier(model.title == nil ? "share-link" : "share-preview-title")
+        Text(model.url?.host?.replacingOccurrences(of: "www.", with: "") ?? " ")
+          .font(.caption).foregroundStyle(.secondary)
+          .lineLimit(1, reservesSpace: true)
+          .accessibilityIdentifier("share-source")
       }
       .padding(20)
       .frame(maxWidth: .infinity, alignment: .leading)
