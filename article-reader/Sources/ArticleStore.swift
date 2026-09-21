@@ -65,6 +65,9 @@ struct TaggingNotice: Identifiable {
 @MainActor @Observable final class ArticleStore {
   private(set) var articles: [SavedArticle] = []
   private(set) var libraryRevision = 0
+  @ObservationIgnored private var derivedRevision = -1
+  @ObservationIgnored private var cachedTags: [String] = []
+  @ObservationIgnored private var cachedSavedIDs: [UUID] = []
   var errorMessage: String?
   private(set) var taggingNotice: TaggingNotice?
   private(set) var importSummary: ImportSummary?
@@ -72,11 +75,20 @@ struct TaggingNotice: Identifiable {
   private var persistenceTask: Task<Void, Never>?
   private var importTaggedIDs = Set<UUID>()
   private var importPreparedIDs = Set<UUID>()
-  private var previewQueue: [URL] = []
-  private var previewWorkers: [URL: Task<Void, Never>] = [:]
-  private var pendingPreviews: [UUID: Result<ArticlePreview, Error>] = [:]
-  private var previewCommitTask: Task<Void, Never>?
-  private var priorityPreviewURLs: [URL] = []
+  @ObservationIgnored private var previewQueue: [URL] = []
+  @ObservationIgnored private var previewWorkers: [URL: Task<Void, Never>] = [:]
+  @ObservationIgnored private var pendingPreviews: [UUID: Result<ArticlePreview, Error>] = [:]
+  @ObservationIgnored private var previewCommitTask: Task<Void, Never>?
+  @ObservationIgnored private var priorityPreviewURLs: [URL] = []
+  @ObservationIgnored private var libraryScrolling = false
+  @ObservationIgnored private var previewArticleIDs: [URL: UUID] = [:]
+  #if DEBUG
+    @ObservationIgnored private(set) var previewPublicationCount = 0
+    @ObservationIgnored private(set) var previewPublicationsDuringScrolling = 0
+    @ObservationIgnored private(set) var previewPeakBuffered = 0
+    @ObservationIgnored private(set) var previewPeakWorkers = 0
+    @ObservationIgnored private(set) var previewScrollSessions = 0
+  #endif
   var isImportWorking: Bool {
     guard let summary = importSummary else { return false }
     if summary.previewsReady < summary.total,
@@ -217,6 +229,24 @@ struct TaggingNotice: Identifiable {
         }
       #endif
     } catch { errorMessage = "Could not read saved links: \(error.localizedDescription)" }
+    #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-import-replay"),
+        articles.isEmpty
+      {
+        // Replay real import and publication paths without Files or publishers.
+        Task { [weak self] in
+          guard let self else { return }
+          let file = self.downloads.appending(path: "import-replay.html")
+          let html = (0..<460).map { index in
+            "<a href='https://fixture.example/import-\(index)' ADD_DATE='\(1_700_000_000 + index)'>Imported story \(index)</a>"
+          }.joined(separator: "\n")
+          do {
+            try Data(html.utf8).write(to: file, options: .atomic)
+            _ = try await self.importReadingList(from: file)
+          } catch { self.errorMessage = error.localizedDescription }
+        }
+      }
+    #endif
   }
 
   func add(_ text: String, preview: ArticlePreview? = nil) throws {
@@ -250,9 +280,28 @@ struct TaggingNotice: Identifiable {
   }
 
   var allTags: [String] {
-    Array(Set(articles.filter(\.saved).flatMap(\.tagNames))).sorted {
-      $0.localizedStandardCompare($1) == .orderedAscending
+    updateLibraryDerivedValues()
+    return cachedTags
+  }
+
+  var savedArticleIDs: [UUID] {
+    updateLibraryDerivedValues()
+    return cachedSavedIDs
+  }
+
+  /// Geometry updates do not change these values. Compute their projection once
+  /// per committed revision instead of scanning a long list on every body pass.
+  private func updateLibraryDerivedValues() {
+    guard derivedRevision != libraryRevision else { return }
+    var tags = Set<String>()
+    var ids: [UUID] = []
+    for article in articles where article.saved {
+      ids.append(article.id)
+      tags.formUnion(article.tagNames)
     }
+    cachedTags = tags.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    cachedSavedIDs = ids
+    derivedRevision = libraryRevision
   }
 
   /// Unsave keeps history, tags and the cached Reader copy. Removing the link
@@ -505,11 +554,31 @@ struct TaggingNotice: Identifiable {
     enqueuePreviews(urls)
   }
 
+  /// Automatic metadata waits for a settled viewport. User saves remain durable
+  /// and foreground/background flushing bypasses this pause.
+  func setLibraryScrolling(_ scrolling: Bool) {
+    guard libraryScrolling != scrolling else { return }
+    libraryScrolling = scrolling
+    if scrolling {
+      #if DEBUG
+        previewScrollSessions += 1
+      #endif
+      previewCommitTask?.cancel()
+      previewCommitTask = nil
+      return
+    }
+    flushPreviews()
+    persistPendingChanges()
+    startPreviewWorkers()
+    scheduleTagging()
+  }
+
   private func enqueuePreviews(_ urls: [URL]) {
-    let eligible = Set(
+    previewArticleIDs = Dictionary(
       articles.filter {
         $0.taggingText == nil && !$0.previewFailed && pendingPreviews[$0.id] == nil
-      }.map(\.url))
+      }.map { ($0.url, $0.id) }, uniquingKeysWith: { first, _ in first })
+    let eligible = Set(previewArticleIDs.keys)
     var seen = Set<URL>()
     previewQueue = (priorityPreviewURLs + urls + previewQueue).filter {
       eligible.contains($0) && previewWorkers[$0] == nil && seen.insert($0).inserted
@@ -518,40 +587,58 @@ struct TaggingNotice: Identifiable {
   }
 
   private func startPreviewWorkers() {
-    while previewWorkers.count < 3, !previewQueue.isEmpty {
-      let url = previewQueue.removeFirst()
-      guard let article = articles.first(where: { $0.url == url && $0.taggingText == nil })
-      else { continue }
-      previewWorkers[url] = Task { [weak self] in
+    // Six origins can make progress without serializing the whole import. Keep
+    // one publisher at the previous three-request limit, and cap buffered work
+    // while scrolling so a long gesture cannot accumulate an unbounded batch.
+    while previewWorkers.count < 6, pendingPreviews.count + previewWorkers.count < 48 {
+      let hosts = Dictionary(grouping: previewWorkers.keys, by: { $0.host ?? "" })
+      guard let next = previewQueue.firstIndex(where: { (hosts[$0.host ?? ""]?.count ?? 0) < 3 })
+      else { break }
+      let url = previewQueue.remove(at: next)
+      guard let articleID = previewArticleIDs[url] else { continue }
+      previewWorkers[url] = Task(priority: .utility) { [weak self] in
         let result: Result<ArticlePreview, Error>
         do { result = .success(try await ArticlePreviewCache.shared.load(url)) } catch {
           result = .failure(error)
         }
         guard let self else { return }
-        self.pendingPreviews[article.id] = result
+        self.pendingPreviews[articleID] = result
+        #if DEBUG
+          self.previewPeakBuffered = max(self.previewPeakBuffered, self.pendingPreviews.count)
+        #endif
         self.previewWorkers[url] = nil
         self.startPreviewWorkers()
         self.schedulePreviewCommit()
       }
+      #if DEBUG
+        previewPeakWorkers = max(previewPeakWorkers, previewWorkers.count)
+      #endif
     }
   }
 
   private func schedulePreviewCommit() {
-    guard previewCommitTask == nil else { return }
+    guard !libraryScrolling, previewCommitTask == nil, !pendingPreviews.isEmpty else { return }
+    let visibleIDs = Set(priorityPreviewURLs.compactMap { previewArticleIDs[$0] })
+    let hasVisibleResult = pendingPreviews.keys.contains { visibleIDs.contains($0) }
+    let delay = hasVisibleResult ? 120 : 600
     previewCommitTask = Task { [weak self] in
-      // Nearby requests often complete together. Publish their metadata once,
-      // instead of serializing a long library and invalidating rows per result.
-      do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
+      // Show the first visible metadata promptly; amortize background imports.
+      do { try await Task.sleep(for: .milliseconds(delay)) } catch { return }
       guard let self else { return }
       self.previewCommitTask = nil
-      self.flushPreviews()
+      self.flushPreviews(automatic: true)
+      self.startPreviewWorkers()
     }
   }
 
-  private func flushPreviews() {
+  private func flushPreviews(automatic: Bool = false) {
     let results = pendingPreviews
     pendingPreviews.removeAll()
     guard !results.isEmpty else { return }
+    #if DEBUG
+      previewPublicationCount += 1
+      if automatic && libraryScrolling { previewPublicationsDuringScrolling += 1 }
+    #endif
     var updated = articles
     for index in updated.indices {
       guard let result = results[updated[index].id] else { continue }
@@ -720,11 +807,13 @@ struct TaggingNotice: Identifiable {
   }
 
   private func scheduleTagging() {
-    guard taggingAllowed, !taggingWaitingForForeground, taggingTask == nil else { return }
+    guard taggingAllowed, !libraryScrolling, !taggingWaitingForForeground, taggingTask == nil else {
+      return
+    }
     taggingTask = Task { [weak self] in
       guard let self else { return }
       defer { self.taggingTask = nil }
-      while self.taggingAllowed, var article = self.nextTaggingArticle() {
+      while self.taggingAllowed, !self.libraryScrolling, var article = self.nextTaggingArticle() {
         let credentialRevision = TestMode.enabled ? "" : TaggingPreferences.credentialRevision
         do {
           // Even an imported title is not enough context. A Save that beats the
@@ -845,10 +934,12 @@ struct TaggingNotice: Identifiable {
     } else if persistenceTask == nil {
       persistenceTask = Task { [weak self] in
         do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-        self?.flushPendingWrites()
+        guard self?.libraryScrolling == false else { return }
+        self?.persistPendingChanges()
       }
     }
-    let removed = Set(articles.map(\.id)).subtracting(updated.map(\.id))
+    // Deferred commits only add preview/tag metadata; they cannot remove rows.
+    let removed = deferred ? Set<UUID>() : Set(articles.map(\.id)).subtracting(updated.map(\.id))
     articles = updated
     libraryRevision += 1
     if let notice = taggingNotice,
@@ -864,6 +955,12 @@ struct TaggingNotice: Identifiable {
     previewCommitTask?.cancel()
     previewCommitTask = nil
     flushPreviews()
+    persistPendingChanges()
+  }
+
+  // The trailing disk write must not force an early metadata publication.
+  // Foreground exit explicitly flushes both; the timer only persists published rows.
+  private func persistPendingChanges() {
     guard persistenceTask != nil else { return }
     persistenceTask?.cancel()
     persistenceTask = nil
@@ -983,6 +1080,12 @@ struct ArticlePreview: Sendable {
     let html: String
     let baseURL: URL
     if let fixture = TestMode.fixture(for: url) {
+      #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-test-import-replay") {
+          let index = Int(url.lastPathComponent.replacingOccurrences(of: "import-", with: "")) ?? 0
+          try await Task.sleep(for: .milliseconds(90 + (index % 5) * 10))
+        }
+      #endif
       html = try String(contentsOf: fixture, encoding: .utf8)
       baseURL = fixture
     } else {
