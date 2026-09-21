@@ -73,6 +73,81 @@ final class LibraryScrollPerformanceUITests: XCTestCase {
     add(screenshot)
   }
 
+  /// Keep first activation separate from warm scrolling: the keyboard and compact
+  /// result cells are cold even when the library photographs are already visible.
+  @MainActor func testFirstSearchOpenAndRapidPhotoResults() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-photo-list", "-articles-offline",
+    ]
+    app.launch()
+    XCTAssertTrue(app.images["Article preview"].firstMatch.waitForExistence(timeout: 15))
+    let search = app.searchFields.firstMatch
+    let start = Date()
+    search.tap()
+    XCTAssertTrue(app.buttons["close"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["search-result-subtitle"].firstMatch.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    let opening = XCTAttachment(
+      string:
+        "First search tap to results and keyboard: \(Date().timeIntervalSince(start)) seconds. UI automation wall time; not a frame-rate measurement."
+    )
+    opening.name = "first-search-readiness"
+    opening.lifetime = .keepAlways
+    add(opening)
+    search.typeText("\n")
+    let keyboardGone = expectation(
+      for: NSPredicate(format: "exists == false"), evaluatedWith: app.keyboards.firstMatch)
+    wait(for: [keyboardGone], timeout: 5)
+    for _ in 0..<4 { app.swipeUp(velocity: .fast) }
+    for _ in 0..<4 { app.swipeDown(velocity: .fast) }
+    XCTAssertTrue(app.staticTexts["search-result-subtitle"].firstMatch.exists)
+    search.tap()
+    search.typeText("import-217")
+    XCTAssertTrue(app.buttons["article-import-217"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["article-import-999"].exists)
+    app.buttons["close"].tap()
+    XCTAssertTrue(app.buttons["article-import-999"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.staticTexts["search-result-subtitle"].firstMatch.exists)
+    search.tap()
+    XCTAssertTrue(app.staticTexts["search-result-subtitle"].firstMatch.waitForExistence(timeout: 5))
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "photo-search-reopened"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
+  @MainActor func testLargeTextSearchInDarkMode() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-photo-list", "-articles-offline",
+      "-large-type", "-dark-ui",
+    ]
+    app.launch()
+    XCTAssertTrue(app.images["Article preview"].firstMatch.waitForExistence(timeout: 15))
+    let search = app.searchFields.firstMatch
+    search.tap()
+    search.typeText("import-217")
+    let result = app.buttons["article-import-217"]
+    XCTAssertTrue(result.waitForExistence(timeout: 5))
+    // This short title still fits at accessibility2 on the fixture phone.
+    // Check scaled text and subtitle bounds, rather than assuming it must wrap.
+    let title = result.staticTexts["search-result-title"]
+    let subtitle = result.staticTexts["search-result-subtitle"]
+    XCTAssertTrue(title.exists)
+    XCTAssertTrue(subtitle.exists)
+    XCTAssertGreaterThan(title.frame.height, 24)
+    XCTAssertLessThanOrEqual(title.frame.maxX, result.frame.maxX)
+    XCTAssertGreaterThanOrEqual(subtitle.frame.minY, title.frame.maxY)
+    XCTAssertLessThanOrEqual(subtitle.frame.maxY, result.frame.maxY)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "search-dark-accessibility-type"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+    app.buttons["close"].tap()
+    XCTAssertTrue(app.buttons["article-import-999"].waitForExistence(timeout: 5))
+  }
+
   @MainActor func testWarmThousandArticleLibraryScrolling() {
     let app = XCUIApplication()
     app.launchArguments = [

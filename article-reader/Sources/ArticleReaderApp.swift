@@ -111,8 +111,6 @@ struct LibraryView: View {
   @State private var browsers = BrowserPool()
   @State private var projection = LibraryProjection()
   @State private var headerHeight: CGFloat = 48
-  @State private var libraryViewport: CGRect = .zero
-  @State private var searchViewport: CGRect = .zero
   @State private var viewportVisibility = LibraryViewportVisibility()
   @AppStorage(LibraryFrameDiagnostics.enabledKey) private var frameDiagnostics = false
   @AppStorage("reader-palette") private var paletteName = "System"
@@ -343,27 +341,6 @@ struct LibraryView: View {
     }
   }
 
-  private struct RowVisibility: Equatable {
-    let row: LibraryVisibleRow
-    let visible: Bool
-  }
-
-  private func visibility(
-    _ geometry: GeometryProxy, article: SavedArticle, in item: ArticleFolder, search: Bool
-  ) -> RowVisibility {
-    let row = LibraryVisibleRow(articleID: article.id, folder: item, search: search)
-    let viewport = search ? searchViewport : libraryViewport
-    let overlap = geometry.frame(in: .global).intersection(viewport)
-    let visible =
-      folder == item && searching == search && !viewport.isEmpty
-      && !overlap.isNull && overlap.width > 1 && overlap.height > 1
-    return RowVisibility(row: row, visible: visible)
-  }
-
-  private func recordVisibility(_ value: RowVisibility) {
-    viewportVisibility.record(value.row, visible: value.visible)
-  }
-
   private var folderItems: [ArticleFolder] {
     [.saved, .downloaded] + store.allTags.map(ArticleFolder.tag) + [.history, .archive]
   }
@@ -494,6 +471,9 @@ struct LibraryView: View {
   private var page: some View {
     ZStack(alignment: .top) {
       pagedLibrary
+        // Search owns keyboard avoidance. The retained library must not relayout
+        // its cards underneath that transition or lose its scroll position.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .opacity(searching ? 0 : 1)
         .allowsHitTesting(!searching).accessibilityHidden(searching || showingAnnotations)
       if searching {
@@ -512,7 +492,7 @@ struct LibraryView: View {
                 by: UIEdgeInsets(
                   top: boundary.safeAreaInsets.top, left: 0, bottom: 0, right: 0))
             } action: {
-              searchViewport = $0
+              viewportVisibility.searchBounds = $0
             }
             .modifier(LibraryScrollActivity { if searching { isLibraryScrolling = $0 } })
             .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
@@ -643,7 +623,7 @@ struct LibraryView: View {
           x: frame.minX, y: frame.minY + topInset + headerHeight + 8,
           width: frame.width, height: max(0, frame.height - topInset - headerHeight - 8))
       } action: {
-        libraryViewport = $0
+        viewportVisibility.libraryBounds = $0
       }
     }
   }
@@ -689,15 +669,10 @@ struct LibraryView: View {
           }
         }
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: compact ? 16 : 24))
-        .onGeometryChange(for: RowVisibility.self) {
-          visibility($0, article: article, in: item, search: false)
-        } action: {
-          recordVisibility($0)
-        }
-        .onDisappear {
-          viewportVisibility.remove(
-            LibraryVisibleRow(articleID: article.id, folder: item, search: false))
-        }
+        .modifier(
+          LibraryRowVisibility(
+            row: LibraryVisibleRow(articleID: article.id, folder: item, search: false),
+            active: folder == item && !searching, visibility: viewportVisibility))
         if compact {
           Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
             .padding(.leading, 88).padding(.trailing, 16)
@@ -726,15 +701,10 @@ struct LibraryView: View {
       }
       ForEach(matches) { article in
         articleButton(article) { ArticleSearchRow(article: article, query: query) }
-          .onGeometryChange(for: RowVisibility.self) {
-            visibility($0, article: article, in: item, search: true)
-          } action: {
-            recordVisibility($0)
-          }
-          .onDisappear {
-            viewportVisibility.remove(
-              LibraryVisibleRow(articleID: article.id, folder: item, search: true))
-          }
+          .modifier(
+            LibraryRowVisibility(
+              row: LibraryVisibleRow(articleID: article.id, folder: item, search: true),
+              active: folder == item && searching, visibility: viewportVisibility))
         Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
           .padding(.leading, 88).padding(.trailing, 16)
       }

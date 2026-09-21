@@ -165,3 +165,36 @@ preparation, import replay with no metadata publication during scrolling, and
 warm 1,000-photo library scrolling. Swift formatting, diff checks and the signed
 Release build passed. The SwiftUI Instruments template returned empty event
 tables on this device/toolchain; Time Profiler supplied the usable evidence.
+
+## Search opening and compact scrolling follow-up
+
+The physical first-Search trace included native keyboard initialization and
+speculative Reader WebView construction in the same opening interval. Reader
+preloading now waits for keyboard frame transitions to finish; image/metadata
+preheating remains active. Keyboard-driven viewport bounds are observed by small
+row modifiers rather than LibraryView. The retained library ignores keyboard
+insets so its hidden cards keep their layout and scroll position.
+
+Search text uses one native layout with bounded width/configuration caches. The
+old ViewThatFits also considered the subtitle's ideal width and hid a long
+subtitle even when the title fit one line; the new local-photo replay reproduced
+that bug before the fix. Only title width now chooses the subtitle variant.
+Two-line truncation, query highlighting, native colours and Dynamic Type remain.
+Shared card titles also reuse unchanged attributed text and size measurements.
+
+The user tested the updated Release build on the iPhone and reported that Search
+feels good. Both captures used Release builds, but gesture timing differs and
+CPU sampling does not establish a compositor FPS improvement. Traces are at
+`/tmp/arctic-search-before.trace` and `/tmp/arctic-search-after.trace`.
+Four native flows passed in `/tmp/arctic-search-after-ui.xcresult`: first-open/
+rapid photo scrolling/filter/reopen, title/subtitle geometry, 1,000-item search,
+and viewport Reader preparation. The initial replay failed on the subtitle bug
+and passed after the source fix.
+
+Dark accessibility-size title/subtitle bounds passed in
+`/tmp/arctic-search-accessibility-final.xcresult`; its first assertion incorrectly
+assumed the short fixture title would wrap, and was corrected after inspecting
+the captured screen. The final row-identity change also passed viewport Reader
+preparation in `/tmp/arctic-search-accessibility-v2.xcresult`. Light and dark
+screenshots were inspected. Swift formatting, diff checks and the signed Release
+build passed; the final build is installed and launched on the iPhone.

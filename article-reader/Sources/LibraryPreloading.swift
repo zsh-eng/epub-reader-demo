@@ -11,6 +11,8 @@ struct LibraryVisibleRow: Hashable {
 /// this state; the library and its row-building closures must not depend on it.
 @MainActor @Observable final class LibraryViewportVisibility {
   private(set) var rows: Set<LibraryVisibleRow> = []
+  var libraryBounds: CGRect = .zero
+  var searchBounds: CGRect = .zero
   func record(_ row: LibraryVisibleRow, visible: Bool) {
     if visible {
       guard !rows.contains(row) else { return }
@@ -22,6 +24,37 @@ struct LibraryVisibleRow: Hashable {
   func remove(_ row: LibraryVisibleRow) {
     guard rows.contains(row) else { return }
     rows.remove(row)
+  }
+}
+
+/// Keyboard safe-area changes affect only these small visibility modifiers.
+/// Reading viewport bounds in LibraryView would rebuild all its row closures.
+struct LibraryRowVisibility: ViewModifier {
+  let row: LibraryVisibleRow
+  let active: Bool
+  let visibility: LibraryViewportVisibility
+  private struct Value: Equatable {
+    let row: LibraryVisibleRow
+    let visible: Bool
+  }
+
+  func body(content: Content) -> some View {
+    let viewport = row.search ? visibility.searchBounds : visibility.libraryBounds
+    content.onGeometryChange(for: Value.self) { geometry in
+      let overlap = geometry.frame(in: .global).intersection(viewport)
+      let visible =
+        active && !viewport.isEmpty && !overlap.isNull && overlap.width > 1
+        && overlap.height > 1
+      return Value(row: row, visible: visible)
+    } action: { value in
+      visibility.record(value.row, visible: value.visible)
+    }
+    .onChange(of: row) { old, _ in
+      // A tag edit can move a retained result into another folder without an
+      // appearance event. Retire its old identity even if it stays visible.
+      visibility.remove(old)
+    }
+    .onDisappear { visibility.remove(row) }
   }
 }
 
@@ -40,6 +73,7 @@ struct LibraryPreloadDriver: View {
   let clipboardURL: URL?
   let enabled: Bool
   @Environment(\.scenePhase) private var scenePhase
+  @State private var keyboardIsMoving = false
 
   var body: some View {
     ZStack(alignment: .bottomLeading) {
@@ -72,6 +106,19 @@ struct LibraryPreloadDriver: View {
       #endif
     }
     .allowsHitTesting(false)
+    .onReceive(
+      NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
+    ) { _ in
+      keyboardIsMoving = true
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(for: UIResponder.keyboardDidChangeFrameNotification)
+    ) { _ in
+      keyboardIsMoving = false
+    }
+    .onChange(of: scenePhase) { _, phase in
+      if phase != .active { keyboardIsMoving = false }
+    }
     .task(id: preloadURLs) { store.prioritizePreviews(preloadURLs) }
     .task(id: imagePrefetchRequests) {
       await ThumbnailCache.shared.preheat(imagePrefetchRequests)
@@ -118,7 +165,11 @@ struct LibraryPreloadDriver: View {
     return Array(urls.prefix(10))
   }
 
-  private var browserPreloadURLs: [URL] { isLibraryScrolling ? [] : preloadURLs }
+  // WebView initialization was visible in the physical first-keyboard trace.
+  // Keep image/metadata preheating active, but give the keyboard the UI budget.
+  private var browserPreloadURLs: [URL] {
+    isLibraryScrolling || keyboardIsMoving ? [] : preloadURLs
+  }
 
   private var imagePrefetchRequests: [ThumbnailRequest] {
     let rows = projection.rows(

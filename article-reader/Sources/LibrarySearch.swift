@@ -388,21 +388,12 @@ struct ArticleSearchRow: View {
       VStack(alignment: .leading, spacing: 4) {
         Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
           .font(ReaderTheme.sans(11, weight: .medium, relativeTo: .caption))
-          .foregroundStyle(ReaderTheme.muted)
-        ViewThatFits(in: .horizontal) {
-          VStack(alignment: .leading, spacing: 4) {
-            Text(highlighted(article.title)).font(ReaderTheme.sans(16, weight: .medium))
-              .fixedSize(horizontal: true, vertical: false)
-            Text(
-              highlighted(article.subtitle.isEmpty ? article.url.absoluteString : article.subtitle)
-            )
-            .font(ReaderTheme.sans(13, relativeTo: .subheadline))
-            .foregroundStyle(ReaderTheme.muted).lineLimit(2)
-            .accessibilityIdentifier("search-result-subtitle")
-          }
-          LibraryTitle(
-            text: article.title, style: .body, pointSize: 16, weight: .medium, query: query)
-        }
+          .foregroundStyle(ReaderTheme.muted).lineLimit(1)
+        SearchResultText(
+          title: article.title,
+          subtitle: article.subtitle.isEmpty ? article.url.absoluteString : article.subtitle,
+          query: query
+        )
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -412,26 +403,117 @@ struct ArticleSearchRow: View {
     .background(ReaderTheme.background, in: RoundedRectangle(cornerRadius: 16))
     .contentShape(RoundedRectangle(cornerRadius: 16))
   }
+}
 
-  private func highlighted(_ text: String) -> AttributedString {
-    var result = AttributedString(text)
-    for word in query.split(whereSeparator: \.isWhitespace) {
-      var start = text.startIndex
-      while start < text.endIndex,
-        let range = text.range(
-          of: String(word), options: [.caseInsensitive, .diacriticInsensitive],
-          range: start..<text.endIndex)
-      {
-        if let lower = AttributedString.Index(range.lowerBound, within: result),
-          let upper = AttributedString.Index(range.upperBound, within: result)
-        {
-          result[lower..<upper].backgroundColor = ReaderTheme.secondary
-          result[lower..<upper].foregroundColor = ReaderTheme.foreground
-        }
-        start = range.upperBound
-      }
+/// Fit the title, not the subtitle's unbounded ideal width. One native text
+/// layout chooses either one title line plus two subtitle lines, or two title
+/// lines alone. Repeated SwiftUI size proposals reuse the same measurement.
+struct SearchResultText: UIViewRepresentable {
+  let title: String
+  let subtitle: String
+  let query: String
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.colorScheme) private var colourScheme
+
+  func makeUIView(context: Context) -> SearchResultTextView { SearchResultTextView() }
+  func updateUIView(_ view: SearchResultTextView, context: Context) {
+    view.configure(
+      title: title, subtitle: subtitle, query: query,
+      category: LibraryTextFormatting.category(dynamicTypeSize), colourScheme: colourScheme)
+  }
+  func sizeThatFits(_ proposal: ProposedViewSize, uiView: SearchResultTextView, context: Context)
+    -> CGSize?
+  {
+    let width = proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil } ?? uiView.idealWidth
+    return CGSize(width: width, height: uiView.measure(width: width).height)
+  }
+}
+
+final class SearchResultTextView: UIView {
+  private struct Configuration: Equatable {
+    let title: String
+    let subtitle: String
+    let query: String
+    let category: UIContentSizeCategory
+    let colourScheme: ColorScheme
+  }
+  struct Measurement {
+    let titleHeight: CGFloat
+    let subtitleHeight: CGFloat
+    let showsSubtitle: Bool
+    var height: CGFloat { titleHeight + (showsSubtitle ? 4 + subtitleHeight : 0) }
+  }
+  private let titleLabel = UILabel()
+  private let subtitleLabel = UILabel()
+  private var configuration: Configuration?
+  private var measurements: [CGFloat: Measurement] = [:]
+  private(set) var idealWidth: CGFloat = 0
+
+  init() {
+    super.init(frame: .zero)
+    isAccessibilityElement = false
+    titleLabel.numberOfLines = 2
+    titleLabel.lineBreakMode = .byTruncatingTail
+    titleLabel.lineBreakStrategy = .pushOut
+    titleLabel.textColor = .label
+    subtitleLabel.numberOfLines = 2
+    subtitleLabel.lineBreakMode = .byTruncatingTail
+    subtitleLabel.textColor = .secondaryLabel
+    subtitleLabel.accessibilityIdentifier = "search-result-subtitle"
+    for label in [titleLabel, subtitleLabel] {
+      label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+      addSubview(label)
     }
-    return result
+  }
+  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  func configure(
+    title: String, subtitle: String, query: String,
+    category: UIContentSizeCategory, colourScheme: ColorScheme
+  ) {
+    let next = Configuration(
+      title: title, subtitle: subtitle, query: query, category: category, colourScheme: colourScheme
+    )
+    guard configuration != next else { return }
+    configuration = next
+    measurements.removeAll(keepingCapacity: true)
+    titleLabel.font = LibraryTextFormatting.font(
+      style: .body, pointSize: 16, weight: .medium, category: category)
+    subtitleLabel.font = LibraryTextFormatting.font(
+      style: .subheadline, pointSize: 13, weight: .regular, category: category)
+    LibraryTextFormatting.apply(title, query: query, to: titleLabel)
+    LibraryTextFormatting.apply(subtitle, query: query, to: subtitleLabel)
+    idealWidth = ceil((title as NSString).size(withAttributes: [.font: titleLabel.font!]).width)
+    setNeedsLayout()
+    invalidateIntrinsicContentSize()
+  }
+
+  func measure(width: CGFloat) -> Measurement {
+    if let cached = measurements[width] { return cached }
+    let multiline = configuration?.title.rangeOfCharacter(from: .newlines) != nil
+    let showsSubtitle =
+      !multiline && idealWidth <= floor(width) && configuration?.subtitle.isEmpty == false
+    let titleSize = titleLabel.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    let subtitleSize =
+      showsSubtitle
+      ? subtitleLabel.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)) : .zero
+    let measured = Measurement(
+      titleHeight: ceil(titleSize.height), subtitleHeight: ceil(subtitleSize.height),
+      showsSubtitle: showsSubtitle)
+    if measurements.count >= 4 { measurements.removeAll(keepingCapacity: true) }
+    measurements[width] = measured
+    return measured
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    let measured = measure(width: bounds.width)
+    titleLabel.frame = CGRect(x: 0, y: 0, width: bounds.width, height: measured.titleHeight)
+    titleLabel.accessibilityIdentifier =
+      measured.showsSubtitle ? "search-result-title" : "article-title-two-lines"
+    subtitleLabel.isHidden = !measured.showsSubtitle
+    subtitleLabel.frame = CGRect(
+      x: 0, y: measured.titleHeight + 4, width: bounds.width, height: measured.subtitleHeight)
   }
 }
 

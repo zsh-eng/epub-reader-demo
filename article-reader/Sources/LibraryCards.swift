@@ -82,46 +82,117 @@ struct LibraryTitle: UIViewRepresentable {
   var pointSize: CGFloat? = nil
   var weight: UIFont.Weight = .semibold
   var query = ""
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.colorScheme) private var colourScheme
+
+  struct Configuration: Equatable {
+    var text: String
+    var query: String
+    var style: UIFont.TextStyle
+    var pointSize: CGFloat?
+    var weight: UIFont.Weight
+    var category: UIContentSizeCategory
+    var colourScheme: ColorScheme
+  }
+  final class Coordinator {
+    var configuration: Configuration?
+    var sizes: [CGFloat: CGSize] = [:]
+  }
+  func makeCoordinator() -> Coordinator { Coordinator() }
 
   func makeUIView(context: Context) -> UILabel {
     let label = UILabel()
     label.numberOfLines = 2
     label.lineBreakMode = .byTruncatingTail
     label.lineBreakStrategy = .pushOut
-    label.adjustsFontForContentSizeCategory = true
     label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     label.accessibilityIdentifier = "article-title-two-lines"
     return label
   }
 
   func updateUIView(_ label: UILabel, context: Context) {
-    let size = pointSize ?? UIFontDescriptor.preferredFontDescriptor(withTextStyle: style).pointSize
-    label.font =
-      pointSize == nil
-      ? .systemFont(ofSize: size, weight: weight)
-      : UIFontMetrics(forTextStyle: style).scaledFont(
-        for: .systemFont(ofSize: size, weight: weight))
+    let configuration = Configuration(
+      text: text, query: query, style: style, pointSize: pointSize, weight: weight,
+      category: LibraryTextFormatting.category(dynamicTypeSize), colourScheme: colourScheme)
+    guard context.coordinator.configuration != configuration else { return }
+    context.coordinator.configuration = configuration
+    context.coordinator.sizes.removeAll(keepingCapacity: true)
+    label.font = LibraryTextFormatting.font(
+      style: style, pointSize: pointSize, weight: weight, category: configuration.category)
     label.textColor = .label
+    LibraryTextFormatting.apply(text, query: query, to: label)
+    label.accessibilityLabel = text
+  }
+
+  func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
+    let width =
+      proposal.width.flatMap { $0.isFinite ? max(0, $0) : nil }
+      ?? max(0, uiView.intrinsicContentSize.width)
+    if let size = context.coordinator.sizes[width] { return size }
+    let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+    let size = CGSize(width: width, height: fitting.height)
+    if context.coordinator.sizes.count >= 4 {
+      context.coordinator.sizes.removeAll(keepingCapacity: true)
+    }
+    context.coordinator.sizes[width] = size
+    return size
+  }
+}
+
+/// Shared native text formatting. Content, query and Dynamic Type are stable
+/// between scroll frames, so callers apply this only when their key changes.
+enum LibraryTextFormatting {
+  static func apply(_ text: String, query: String, to label: UILabel) {
+    let words = query.split(whereSeparator: \.isWhitespace)
+    guard !words.isEmpty else {
+      label.attributedText = nil
+      label.text = text
+      return
+    }
     let attributed = NSMutableAttributedString(string: text)
-    for word in query.split(whereSeparator: \.isWhitespace) {
+    for word in words {
       var search = text.startIndex..<text.endIndex
       while let range = text.range(
         of: String(word), options: [.caseInsensitive, .diacriticInsensitive], range: search)
       {
-        attributed.addAttribute(
-          .backgroundColor, value: UIColor.secondarySystemBackground,
+        attributed.addAttributes(
+          [.backgroundColor: UIColor.secondarySystemBackground, .foregroundColor: UIColor.label],
           range: NSRange(range, in: text))
         search = range.upperBound..<text.endIndex
       }
     }
     label.attributedText = attributed
-    label.accessibilityLabel = text
   }
 
-  func sizeThatFits(_ proposal: ProposedViewSize, uiView: UILabel, context: Context) -> CGSize? {
-    let width = proposal.width ?? uiView.intrinsicContentSize.width
-    let fitting = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-    return CGSize(width: width, height: fitting.height)
+  static func font(
+    style: UIFont.TextStyle, pointSize: CGFloat?, weight: UIFont.Weight,
+    category: UIContentSizeCategory
+  ) -> UIFont {
+    let traits = UITraitCollection(preferredContentSizeCategory: category)
+    guard let pointSize else {
+      let size = UIFont.preferredFont(forTextStyle: style, compatibleWith: traits).pointSize
+      return .systemFont(ofSize: size, weight: weight)
+    }
+    return UIFontMetrics(forTextStyle: style).scaledFont(
+      for: .systemFont(ofSize: pointSize, weight: weight), compatibleWith: traits)
+  }
+
+  static func category(_ size: DynamicTypeSize) -> UIContentSizeCategory {
+    switch size {
+    case .xSmall: .extraSmall
+    case .small: .small
+    case .medium: .medium
+    case .large: .large
+    case .xLarge: .extraLarge
+    case .xxLarge: .extraExtraLarge
+    case .xxxLarge: .extraExtraExtraLarge
+    case .accessibility1: .accessibilityMedium
+    case .accessibility2: .accessibilityLarge
+    case .accessibility3: .accessibilityExtraLarge
+    case .accessibility4: .accessibilityExtraExtraLarge
+    case .accessibility5: .accessibilityExtraExtraExtraLarge
+    @unknown default: .large
+    }
   }
 }
 
