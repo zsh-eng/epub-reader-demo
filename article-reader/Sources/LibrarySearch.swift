@@ -3,8 +3,8 @@ import ImageIO
 import SwiftUI
 import UIKit
 
-/// Keep the native text field mounted from launch. A tap focuses it directly;
-/// it does not need to construct and present a separate search controller.
+/// Keep the native text field mounted during normal search transitions. A tap
+/// focuses it directly; modal sheets remove the inactive hosted bar temporarily.
 struct LibrarySearchChrome: ViewModifier {
   @Binding var query: String
   @Binding var active: Bool
@@ -12,19 +12,24 @@ struct LibrarySearchChrome: ViewModifier {
 
   func body(content: Content) -> some View {
     content.readerBar(edge: .bottom) {
-      HStack(spacing: 10) {
-        NativeArticleSearch(query: $query, active: $active, obscured: obscured)
-          .frame(height: 50).padding(.horizontal, 12).readerGlass()
-        if active {
-          Button {
-            query = ""
-            active = false
-          } label: {
-            Image(systemName: "xmark").frame(width: 44, height: 44)
-          }.readerGlass().accessibilityLabel("Close search").accessibilityIdentifier("close")
-        }
-      }.padding(.horizontal, 20).padding(.vertical, 8)
-        .accessibilityHidden(obscured).allowsHitTesting(!obscured)
+      if obscured {
+        // iOS 26 hosts safe-area bars separately from the modal page. Remove
+        // interactive descendants, but keep the same inset to prevent a jump.
+        Color.clear.frame(height: 66).accessibilityHidden(true).allowsHitTesting(false)
+      } else {
+        HStack(spacing: 10) {
+          NativeArticleSearch(query: $query, active: $active)
+            .frame(height: 50).padding(.horizontal, 12).readerGlass()
+          if active {
+            Button {
+              query = ""
+              active = false
+            } label: {
+              Image(systemName: "xmark").frame(width: 44, height: 44)
+            }.readerGlass().accessibilityLabel("Close search").accessibilityIdentifier("close")
+          }
+        }.padding(.horizontal, 20).padding(.vertical, 8)
+      }
     }
   }
 }
@@ -32,7 +37,6 @@ struct LibrarySearchChrome: ViewModifier {
 private struct NativeArticleSearch: UIViewRepresentable {
   @Binding var query: String
   @Binding var active: Bool
-  var obscured: Bool
 
   func makeCoordinator() -> Coordinator { Coordinator(query: $query, active: $active) }
   func makeUIView(context: Context) -> UISearchTextField {
@@ -56,12 +60,7 @@ private struct NativeArticleSearch: UIViewRepresentable {
     context.coordinator.query = $query
     context.coordinator.active = $active
     if field.text != query { field.text = query }
-    // The native safe-area bar is hosted outside the SwiftUI page hierarchy.
-    // Exclude its text field explicitly while a modal collection is presented.
-    field.isAccessibilityElement = !obscured
-    field.accessibilityElementsHidden = obscured
-    field.isUserInteractionEnabled = !obscured
-    if (!active || obscured) && field.isFirstResponder { field.resignFirstResponder() }
+    if !active && field.isFirstResponder { field.resignFirstResponder() }
   }
   final class Coordinator: NSObject, UITextFieldDelegate {
     var query: Binding<String>
