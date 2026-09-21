@@ -350,7 +350,7 @@ struct TaggingOnboardingIllustration: View {
   @State private var processing = true
   @State private var revealed = false
   @State private var replay = 0
-  private let tags = ["Attention & wonder", "Life & meaning"]
+  private let tags = ["Attention", "Life"]
 
   var body: some View {
     VStack(spacing: 8) {
@@ -363,7 +363,7 @@ struct TaggingOnboardingIllustration: View {
       .accessibilityIdentifier("onboarding-tags-demo")
       .accessibilityValue(revealed ? "tagged" : "pending")
       .accessibilityLabel(
-        "Glacial Longings by Elizabeth Rush. Automatic tags: Attention and wonder; Life and meaning."
+        "Glacial Longings by Elizabeth Rush. Automatic tags: Attention; Life."
       )
       IllustrationReplay(id: "tags") { replay += 1 }
     }
@@ -427,7 +427,7 @@ private struct DemoArticleCard: View {
         .font(.system(size: 12)).foregroundStyle(.secondary)
       if reservesTags {
         HStack(spacing: 6) {
-          ForEach(Array(["Attention & wonder", "Life & meaning"].enumerated()), id: \.element) {
+          ForEach(Array(["Attention", "Life"].enumerated()), id: \.element) {
             index, tag in
             TagRevealPill(name: tag, index: index, compact: true)
           }

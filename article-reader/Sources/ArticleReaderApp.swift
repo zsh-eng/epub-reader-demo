@@ -675,7 +675,8 @@ struct LibraryView: View {
             active: folder == item && !searching, visibility: viewportVisibility))
         if compact {
           Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
-            .padding(.leading, 88).padding(.trailing, 16)
+            .padding(.leading, ArticleSearchRow.textInset).padding(
+              .trailing, ArticleSearchRow.horizontalInset)
         }
       }
     }.padding(.horizontal, compact ? 8 : 16).padding(.bottom, 20)
@@ -706,7 +707,8 @@ struct LibraryView: View {
               row: LibraryVisibleRow(articleID: article.id, folder: item, search: true),
               active: folder == item && searching, visibility: viewportVisibility))
         Rectangle().fill(ReaderTheme.border).frame(height: 0.5)
-          .padding(.leading, 88).padding(.trailing, 16)
+          .padding(.leading, ArticleSearchRow.textInset).padding(
+            .trailing, ArticleSearchRow.horizontalInset)
       }
     }.padding(.horizontal, 8).padding(.bottom, 24)
   }

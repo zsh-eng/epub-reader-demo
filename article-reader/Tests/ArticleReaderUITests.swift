@@ -21,7 +21,7 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Page options"].isHittable)
     waitEnabled(app.buttons["reader-toggle"])
     let controls = [
-      "browser-back", "browser-forward", "reader-toggle", "reader-save", "reader-appearance",
+      "browser-back", "browser-forward", "reader-appearance", "reader-save", "reader-toggle",
     ]
     .map { app.buttons[$0] }
     for index in 1..<controls.count {
@@ -65,6 +65,9 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(shortResult.waitForExistence(timeout: 5))
     XCTAssertTrue(shortResult.staticTexts["search-result-subtitle"].exists)
     XCTAssertFalse(longResult.staticTexts["search-result-subtitle"].exists)
+    // Compact results retain the full text variant while reducing vertical gaps.
+    XCTAssertLessThanOrEqual(shortResult.frame.height, 92)
+    XCTAssertLessThanOrEqual(longResult.frame.height, 92)
     let title = longResult.staticTexts["article-title-two-lines"]
     XCTAssertTrue(title.exists)
     XCTAssertLessThanOrEqual(title.frame.height, 44)
@@ -656,6 +659,9 @@ final class ArticleReaderUITests: XCTestCase {
     app.launch()
     let save = openShareFixture(app)
     let footerY = save.frame.midY
+    let card = app.descendants(matching: .any).matching(identifier: "share-preview-card").firstMatch
+    XCTAssertTrue(card.waitForExistence(timeout: 5))
+    let reservedHeight = card.frame.height
     let previewTitle = app.staticTexts["share-preview-title"]
     XCTAssertTrue(previewTitle.waitForExistence(timeout: 5))
     let revealed = expectation(
@@ -665,7 +671,11 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertLessThan(previewTitle.frame.maxY, save.frame.minY)
     expectation(for: NSPredicate(format: "value == 'ready'"), evaluatedWith: save)
     waitForExpectations(timeout: 10)
-    XCTAssertFalse(app.staticTexts["Attention & wonder"].exists)
+    let artwork = expectation(for: NSPredicate(format: "value == 'image'"), evaluatedWith: card)
+    wait(for: [artwork], timeout: 10)
+    XCTAssertEqual(card.frame.height, reservedHeight, accuracy: 2)
+    XCTAssertEqual(save.frame.midY, footerY, accuracy: 2)
+    XCTAssertFalse(app.staticTexts["Attention"].exists)
     capture(app, "08-share-extension")
     save.tap()
     let done = app.buttons["share-done"]
@@ -673,8 +683,10 @@ final class ArticleReaderUITests: XCTestCase {
     let tags = app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch
     expectation(for: NSPredicate(format: "value == 'presented'"), evaluatedWith: tags)
     waitForExpectations(timeout: 10)
-    XCTAssertTrue(app.staticTexts["Attention & wonder"].exists)
-    XCTAssertTrue(app.staticTexts["Life & meaning"].exists)
+    XCTAssertTrue(app.staticTexts["Attention"].exists)
+    XCTAssertTrue(app.staticTexts["Life"].exists)
+    XCTAssertEqual(card.frame.height, reservedHeight, accuracy: 2)
+    XCTAssertEqual(done.frame.midY, footerY, accuracy: 2)
     capture(app, "share-magic-tags")
     done.tap()
     // Match the real Safari flow: finish sharing, then foreground Arctic.
@@ -711,7 +723,7 @@ final class ArticleReaderUITests: XCTestCase {
     let save = openShareFixture(app)
     expectation(for: NSPredicate(format: "value == 'ready'"), evaluatedWith: save)
     waitForExpectations(timeout: 10)
-    XCTAssertFalse(app.staticTexts["Attention & wonder"].exists)
+    XCTAssertFalse(app.staticTexts["Attention"].exists)
     app.buttons["share-cancel"].tap()
     XCUIDevice.shared.press(.home)
     app.activate()

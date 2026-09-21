@@ -377,14 +377,19 @@ private final class ThumbnailArcView: UIView {
 }
 
 struct ArticleSearchRow: View {
+  static let thumbnailWidth: CGFloat = 74
+  static let contentSpacing: CGFloat = 10
+  static let horizontalInset: CGFloat = 16
+  static var textInset: CGFloat { horizontalInset + thumbnailWidth + contentSpacing }
   let article: SavedArticle
   let query: String
   @ScaledMetric(relativeTo: .body) private var thumbnailHeight = 74
 
   var body: some View {
-    HStack(alignment: .center, spacing: 14) {
+    HStack(alignment: .center, spacing: Self.contentSpacing) {
       ArticleThumbnail(url: article.imageURL, pixels: 256)
-        .frame(width: 58, height: thumbnailHeight).clipShape(RoundedRectangle(cornerRadius: 10))
+        .frame(width: Self.thumbnailWidth, height: thumbnailHeight).clipShape(
+          RoundedRectangle(cornerRadius: 10))
       VStack(alignment: .leading, spacing: 4) {
         Text(article.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
           .font(ReaderTheme.sans(11, weight: .medium, relativeTo: .caption))
@@ -398,8 +403,8 @@ struct ArticleSearchRow: View {
       }
       .frame(maxWidth: .infinity, alignment: .leading)
     }
-    .padding(.vertical, 14)
-    .padding(.horizontal, 16)
+    .padding(.vertical, 8)
+    .padding(.horizontal, Self.horizontalInset)
     .background(ReaderTheme.background, in: RoundedRectangle(cornerRadius: 16))
     .contentShape(RoundedRectangle(cornerRadius: 16))
   }
