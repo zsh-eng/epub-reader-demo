@@ -39,11 +39,13 @@ final class AnnotationUITests: XCTestCase {
     app.buttons["Edit note"].tap()
     XCTAssertTrue(editor.waitForExistence(timeout: 5))
     editor.tap()
-    editor.typeText(" Saved deliberately.")
+    editor.press(forDuration: 1.1)
+    tapSelectionAction("Select All", in: app)
+    let replacement = "A thought about the whole article. Saved deliberately."
+    editor.typeText(replacement)
+    XCTAssertEqual(editor.value as? String, replacement)
     app.buttons["annotation-save"].tap()
-    XCTAssertTrue(
-      app.staticTexts["A thought about the whole article. Saved deliberately."].waitForExistence(
-        timeout: 5))
+    XCTAssertTrue(app.staticTexts[replacement].waitForExistence(timeout: 5))
     capture(app, "article-note-conversation")
     app.buttons["Note options"].tap()
     XCTAssertFalse(app.buttons["Remove highlight"].exists)
