@@ -81,3 +81,7 @@ Existing result files prevent duplicate calls. Archive the complete request/resp
 - `reference/ArticleTagging.swift`: `8d7f61e525b87921876d98116b853266e728d8741d874b6944e9dd1494c90ddf`
 - `reference/ArticleMetadata.swift`: `3e873b9405cc9c05ec4eefd58d9fa709e1954f18b786d782acc5868c797a6719`
 - `og.png`: `fa3ddf2f5bc101fe54c11240abd9f574d54110d34096cae35258c0c10d99fc07`
+
+## Validation
+
+The actual Swift probe compiled and all three calls completed. Eight representative frames were visually inspected. FFmpeg decoded all 960 frames without errors. Browser playback confirmed 1080 × 1920 dimensions and a 32-second duration. `validation.json` and `render-info.json` record export checks. The video is silent. No native build or phone test was needed because the native app was not changed.
