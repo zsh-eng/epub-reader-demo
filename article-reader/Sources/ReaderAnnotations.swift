@@ -95,12 +95,20 @@ struct ReaderAnnotations: View {
   private func noteBubble(_ annotation: ReaderAnnotation) -> some View {
     VStack(alignment: .leading, spacing: 12) {
       if let quote = annotation.quote {
-        Button {
-          dismiss()
-          browser.revealAnnotation(annotation.id)
-        } label: {
-          AnnotationQuote(quote: quote.exact, colour: annotation.highlightColour)
-        }.buttonStyle(.plain).accessibilityLabel("Show passage")
+        let preview = AnnotationQuote(quote: quote.exact, colour: annotation.highlightColour)
+        if browser.unmatchedAnnotations.contains(annotation.id.uuidString) {
+          VStack(alignment: .leading, spacing: 6) {
+            preview
+            Text("Passage changed").font(.caption).foregroundStyle(.secondary)
+          }
+        } else {
+          Button {
+            dismiss()
+            browser.revealAnnotation(annotation.id)
+          } label: {
+            preview
+          }.buttonStyle(.plain).accessibilityLabel("Show passage")
+        }
       }
       if !annotation.note.isEmpty {
         Text(annotation.note).font(.body).textSelection(.enabled)
