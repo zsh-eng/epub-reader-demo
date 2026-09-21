@@ -95,7 +95,9 @@ final class AnnotationUITests: XCTestCase {
     let note = String(repeating: "A sentence worth keeping with this article. ", count: 10)
     input.typeText(note)
     app.buttons["note-send"].tap()
-    let saved = app.staticTexts[note.trimmingCharacters(in: .whitespacesAndNewlines)]
+    let saved = app.staticTexts.matching(
+      NSPredicate(format: "label == %@", note.trimmingCharacters(in: .whitespacesAndNewlines))
+    ).firstMatch
     XCTAssertTrue(saved.waitForExistence(timeout: 5))
     XCTAssertGreaterThan(saved.frame.height, 120)
     capture(app, "full-note-in-conversation")
