@@ -198,3 +198,42 @@ the captured screen. The final row-identity change also passed viewport Reader
 preparation in `/tmp/arctic-search-accessibility-v2.xcresult`. Light and dark
 screenshots were inspected. Swift formatting, diff checks and the signed Release
 build passed; the final build is installed and launched on the iPhone.
+
+## Compact Search, stable Share preview, and annotation follow-up
+
+Search now uses 74 pt thumbnails, a 10 pt text gap, and 8 pt vertical insets
+(default row height 90 pt). Dividers share the text inset. Existing two-line
+truncation, subtitle selection, cached text layout, and Dynamic Type remain.
+
+The Share preview reserves image, title, and tag space. It no longer drives a
+whole-sheet animation from each intermediate layout measurement. ImageIO creates
+an 800 px decoded thumbnail off the main actor. The tag beam's display clock
+updates only its border and pills, leaving card content outside the timeline.
+The native test verifies that the card height and Save/Done position stay within
+2 pt as the title, image, and tags arrive. This is layout evidence, not a measured
+physical-device FPS claim.
+
+Tagging reuses the metadata response for up to 180 introductory words. HTML is
+limited to a 2 MiB prefix and parsed off actor. Shared URLSession pools retain
+connection reuse; loopback tests confirm prefix cancellation, task cancellation,
+and socket reuse without publisher or Jev requests.
+
+Sixteen focused native UI checks passed: four layout/share/toolbar/large-text
+checks, four annotation checks, and eight tagging lifecycle checks. Results:
+`/tmp/arctic-polish-layout.xcresult`,
+`/tmp/arctic-polish-annotations-v2.xcresult` (three passing annotation checks),
+`/tmp/arctic-polish-tagging-quote.xcresult` (eight passing tagging checks), and
+`/tmp/arctic-polish-quote-final.xcresult` (corrected long-quote check).
+The quote test first waited on a covered toolbar, then used an exact integer
+geometry comparison that truncated a fractional inset. Its final version reads
+the visible scroll view and checks 18 +/- 1 pt at both ends. Screenshots were
+inspected. The eraser regression checks paragraph pixels as well as stored state:
+the original WebKit registry could report zero while yellow paint remained.
+Explicitly clearing and removing old Highlight objects fixes that captured case.
+
+Seven annotation JavaScript checks, metadata/catalog/loopback checks, import
+checks, twelve dormant sync/model checks, formatting, and the signed Release
+build passed. The Release app was installed without removing device data;
+launch was blocked because the iPhone was locked. Physical-device interaction
+and current Share frame timing remain unverified. No live storage migration
+was activated.
