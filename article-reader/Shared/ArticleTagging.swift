@@ -134,6 +134,12 @@ enum TaggingPreferences {
     get { defaults.bool(forKey: "taggingCredentialFailure") }
     set { defaults.set(newValue, forKey: "taggingCredentialFailure") }
   }
+  /// Last Share phase contains only a fixed stage and numeric error code. Never
+  /// record a key, URL, publisher text, or response body in this diagnostic.
+  static var lastShareStatus: String? {
+    get { defaults.string(forKey: "lastShareTaggingStatus") }
+    set { defaults.set(newValue, forKey: "lastShareTaggingStatus") }
+  }
   static var lastError: String? {
     get { defaults.string(forKey: "taggingLastError") }
     set { defaults.set(newValue, forKey: "taggingLastError") }
@@ -158,9 +164,9 @@ enum JevKeychain {
     var result: CFTypeRef?
     let status = SecItemCopyMatching(request as CFDictionary, &result)
     if status == errSecItemNotFound { return nil }
-    guard status == errSecSuccess, let data = result as? Data,
-      let key = String(data: data, encoding: .utf8)
-    else { throw JevError.keychain }
+    guard status == errSecSuccess else { throw JevError.keychain(status) }
+    guard let data = result as? Data, let key = String(data: data, encoding: .utf8)
+    else { throw JevError.keychain(errSecDecode) }
     return key
   }
 
@@ -174,18 +180,54 @@ enum JevKeychain {
     let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
     if status == errSecItemNotFound {
       let result = SecItemAdd(query.merging(attributes) { _, value in value } as CFDictionary, nil)
-      guard result == errSecSuccess else { throw JevError.keychain }
+      guard result == errSecSuccess else { throw JevError.keychain(result) }
     } else if status != errSecSuccess {
-      throw JevError.keychain
+      throw JevError.keychain(status)
     }
     TaggingPreferences.credentialRevision = UUID().uuidString
     TaggingPreferences.credentialFailure = false
     TaggingPreferences.lastError = nil
   }
 
+  #if DEBUG
+    // A disposable, non-secret item checks the actual app-to-extension Keychain
+    // boundary. It uses a separate account and never reads or replaces the API key.
+    private static var accessProbeQuery: [String: Any] {
+      var value = query
+      value[kSecAttrAccount as String] = "shared-access-probe"
+      return value
+    }
+
+    static func writeShareAccessProbe() throws {
+      clearShareAccessProbe()
+      var attributes = accessProbeQuery
+      attributes[kSecValueData as String] = Data("arctic-shared-access".utf8)
+      attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+      let status = SecItemAdd(attributes as CFDictionary, nil)
+      guard status == errSecSuccess else { throw JevError.keychain(status) }
+    }
+
+    static func shareAccessProbeStatus() -> String {
+      var request = accessProbeQuery
+      request[kSecReturnData as String] = true
+      request[kSecMatchLimit as String] = kSecMatchLimitOne
+      var result: CFTypeRef?
+      let status = SecItemCopyMatching(request as CFDictionary, &result)
+      guard status == errSecSuccess else { return "keychain-probe:\(status)" }
+      return (result as? Data) == Data("arctic-shared-access".utf8)
+        ? "keychain-probe:available" : "keychain-probe:unexpected"
+    }
+
+    static func clearShareAccessProbe() {
+      SecItemDelete(accessProbeQuery as CFDictionary)
+    }
+  #endif
+
   static func delete() throws {
     let status = SecItemDelete(query as CFDictionary)
-    guard status == errSecSuccess || status == errSecItemNotFound else { throw JevError.keychain }
+    guard status == errSecSuccess || status == errSecItemNotFound else {
+      throw JevError.keychain(status)
+    }
     TaggingPreferences.enabled = false
     TaggingPreferences.credentialRevision = UUID().uuidString
     TaggingPreferences.credentialFailure = false
@@ -194,7 +236,8 @@ enum JevKeychain {
 }
 
 enum JevError: LocalizedError {
-  case invalidKey, keychain, invalidResponse
+  case invalidKey, invalidResponse
+  case keychain(OSStatus)
   case unavailable(Int)
   var errorDescription: String? {
     switch self {

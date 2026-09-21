@@ -685,7 +685,9 @@ final class ArticleReaderUITests: XCTestCase {
     waitForExpectations(timeout: 10)
     XCTAssertTrue(app.staticTexts["Attention"].exists)
     XCTAssertTrue(app.staticTexts["Life"].exists)
-    XCTAssertEqual(card.frame.height, reservedHeight, accuracy: 2)
+    XCTAssertGreaterThan(card.frame.height, reservedHeight)
+    XCTAssertLessThan(card.frame.height - reservedHeight, 90)
+    XCTAssertLessThan(tags.frame.maxY, previewTitle.frame.minY)
     XCTAssertEqual(done.frame.midY, footerY, accuracy: 2)
     capture(app, "share-magic-tags")
     done.tap()
@@ -743,7 +745,7 @@ final class ArticleReaderUITests: XCTestCase {
     ]
     app.launch()
     let save = openShareFixture(app)
-    XCTAssertEqual(save.value as? String, "idle")
+    XCTAssertEqual(save.value as? String, "loading-context")
     save.tap()
     let tags = app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch
     expectation(for: NSPredicate(format: "value == 'presented'"), evaluatedWith: tags)
@@ -753,6 +755,49 @@ final class ArticleReaderUITests: XCTestCase {
     app.activate()
     XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
+  }
+
+  @MainActor func testShareWithoutMatchingTagsDoesNotReserveEmptySpace() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-share-fixture", "-test-tagging", "-share-empty-tags",
+    ]
+    app.launch()
+    let save = openShareFixture(app)
+    let card = app.descendants(matching: .any).matching(identifier: "share-preview-card").firstMatch
+    expectation(for: NSPredicate(format: "value == 'image'"), evaluatedWith: card)
+    waitForExpectations(timeout: 10)
+    let height = card.frame.height
+    // Image (154), two title lines and their source/padding; no blank tag region.
+    XCTAssertLessThan(height, 310)
+    let footerY = save.frame.midY
+    expectation(for: NSPredicate(format: "value == 'ready'"), evaluatedWith: save)
+    waitForExpectations(timeout: 10)
+    save.tap()
+    let done = app.buttons["share-done"]
+    XCTAssertTrue(done.waitForExistence(timeout: 5))
+    XCTAssertEqual(card.frame.height, height, accuracy: 2)
+    XCTAssertEqual(done.frame.midY, footerY, accuracy: 2)
+    XCTAssertFalse(
+      app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch.exists)
+    capture(app, "share-no-empty-tag-reservation")
+    done.tap()
+  }
+
+  @MainActor func testShareExtensionReadsAppKeychainAccessProbe() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-share-fixture", "-share-keychain-probe",
+    ]
+    app.launch()
+    _ = openShareFixture(app)
+    let probe = app.staticTexts["share-keychain-probe"]
+    XCTAssertTrue(probe.waitForExistence(timeout: 5))
+    XCTAssertEqual(probe.label, "keychain-probe:available")
+    app.buttons["share-cancel"].tap()
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-clear-share-keychain-probe"]
+    app.launch()
   }
 
   @MainActor func testViewportPreparesCachedReadersBeforeTap() {

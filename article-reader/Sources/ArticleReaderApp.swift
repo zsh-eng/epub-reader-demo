@@ -7,6 +7,14 @@ struct ArticleReaderApp: App {
   @State private var store = ArticleStore()
   init() {
     #if DEBUG
+      if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-share-keychain-probe") {
+        try? JevKeychain.writeShareAccessProbe()
+      }
+      if TestMode.enabled
+        && ProcessInfo.processInfo.arguments.contains("-clear-share-keychain-probe")
+      {
+        JevKeychain.clearShareAccessProbe()
+      }
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-appearance") {
         for key in [
           "reader-size", "reader-font", "reader-padding", "reader-leading", "reader-palette",
@@ -802,13 +810,19 @@ struct LibraryView: View {
     var onComplete: () -> Void
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
+      let arguments = ProcessInfo.processInfo.arguments
+      let query: String
+      if arguments.contains("-share-keychain-probe") {
+        query = "?keychain_probe"
+      } else if arguments.contains("-share-empty-tags") {
+        query = "?no_tags"
+      } else if arguments.contains("-share-wait-context") {
+        query = "?wait_for_save"
+      } else {
+        query = ""
+      }
       let controller = UIActivityViewController(
-        activityItems: [
-          URL(
-            string: "https://fixture.example/story"
-              + (ProcessInfo.processInfo.arguments.contains("-share-wait-context")
-                ? "?wait_for_save" : ""))!
-        ],
+        activityItems: [URL(string: "https://fixture.example/story" + query)!],
         applicationActivities: nil)
       // UIKit can finish the activity without updating the SwiftUI sheet binding.
       controller.completionWithItemsHandler = { _, _, _, _ in onComplete() }

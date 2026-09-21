@@ -1,5 +1,6 @@
 import ImageIO
 import LinkPresentation
+import OSLog
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -149,6 +150,9 @@ private final class ShareSaveModel: ObservableObject {
   @Published var isTagging = false
   @Published private(set) var isLoadingContext = false
   @Published private(set) var taggingState = "idle"
+  #if DEBUG
+    @Published private(set) var keychainProbeStatus: String?
+  #endif
   @Published var isVisible = false
   @Published var hostIsActive = true
   @Published var tagNames: [String]?
@@ -172,6 +176,13 @@ private final class ShareSaveModel: ObservableObject {
   private var taggingContext: TaggingContext?
   private var classification: Classification?
   private var taggingRevision: String?
+  private let logger = Logger(subsystem: "com.zsheng.ArticleReader", category: "ShareTagging")
+
+  private func record(_ stage: String) {
+    taggingState = stage
+    TaggingPreferences.lastShareStatus = stage
+    logger.info("Share tagging: \(stage, privacy: .public)")
+  }
 
   private struct TaggingContext {
     var title: String
@@ -191,10 +202,6 @@ private final class ShareSaveModel: ObservableObject {
     #else
       return false
     #endif
-  }
-
-  var reservesTagSpace: Bool {
-    isFixture || TaggingPreferences.enabled || !(tagNames ?? []).isEmpty
   }
 
   var isPreparingSavedTags: Bool {
@@ -236,6 +243,12 @@ private final class ShareSaveModel: ObservableObject {
         let text = (item as? URL)?.absoluteString ?? (item as? String) ?? ""
         guard let url = SharedInbox.webURL(text) else { continue }
         self.url = url
+        record("loading-context")
+        #if DEBUG
+          if url.query == "keychain_probe" {
+            keychainProbeStatus = JevKeychain.shareAccessProbeStatus()
+          }
+        #endif
         previewTask = Task { await loadPreview(for: url) }
         isLoadingContext = true
         metadataTask = Task { await loadTaggingContext(for: url) }
@@ -302,7 +315,13 @@ private final class ShareSaveModel: ObservableObject {
       // Some publishers block HTML fetches but permit Link Presentation. Use
       // that title only after richer context has proved unavailable.
       await previewTask?.value
-      guard !Task.isCancelled, let title else { return }
+      guard !Task.isCancelled else { return }
+      guard let title else {
+        record("context-unavailable")
+        message = "Could not read this page. Open it in Arctic to add tags."
+        return
+      }
+      record("using-preview-title")
       taggingContext = TaggingContext(title: title, subtitle: "", text: "")
     }
     startClassification()
@@ -399,15 +418,19 @@ private final class ShareSaveModel: ObservableObject {
 
   private func startClassification() {
     guard taggingTask == nil, classification == nil, let taggingContext else { return }
-    guard isFixture || TaggingPreferences.enabled else { return }
+    guard isFixture || TaggingPreferences.enabled else {
+      record("disabled")
+      return
+    }
     guard isFixture || !TaggingPreferences.credentialFailure else {
+      record("credentials-paused")
       message = "Update your API key in Arctic to add tags."
       return
     }
     let revision = TaggingPreferences.credentialRevision
     taggingRevision = revision
     isTagging = true
-    taggingState = "started"
+    record("started")
     taggingTask = Task { await classify(taggingContext, revision: revision) }
   }
 
@@ -424,10 +447,11 @@ private final class ShareSaveModel: ObservableObject {
       #if DEBUG
         if isFixture {
           try await Task.sleep(for: .milliseconds(650))
-          tags = ["Attention", "Life"]
+          tags = url?.query == "no_tags" ? [] : ["Attention", "Life"]
         } else {
           guard let key = try JevKeychain.read(), !key.isEmpty else {
-            message = "Add your Jev API key in Arctic to turn on automatic tags."
+            record("keychain-missing")
+            message = "Arctic could not find your API key. Open Arctic to check automatic tags."
             return
           }
           tags = try await JevClient.classify(
@@ -435,27 +459,48 @@ private final class ShareSaveModel: ObservableObject {
         }
       #else
         guard let key = try JevKeychain.read(), !key.isEmpty else {
-          message = "Add your Jev API key in Arctic to turn on automatic tags."
+          record("keychain-missing")
+          message = "Arctic could not find your API key. Open Arctic to check automatic tags."
           return
         }
         tags = try await JevClient.classify(
           title: input.title, description: input.text, apiKey: key)
       #endif
       try Task.checkCancellation()
-      guard accepts(revision) else { return }
+      guard accepts(revision) else {
+        record("credentials-changed")
+        return
+      }
       let result = Classification(context: input, tags: tags, credentialRevision: revision)
       classification = result
-      taggingState = "ready"
+      record("ready")
       if isSaved { try publish(result) }
     } catch is CancellationError {
       // Cancel discards speculative work; a saved entry remains available to the app.
+    } catch JevError.keychain(let status) {
+      record("keychain-error:\(status)")
+      message = "Share could not access the API key. Open Arctic to check automatic tags."
     } catch JevError.invalidKey {
+      record("invalid-key")
       guard TaggingPreferences.credentialRevision == revision else { return }
       TaggingPreferences.credentialFailure = true
       TaggingPreferences.lastError = JevError.invalidKey.localizedDescription
       message = "Update your API key in Arctic to add tags."
+    } catch let error as URLError {
+      record("network-error:\(error.code.rawValue)")
+      message =
+        error.code == .timedOut
+        ? "Tagging timed out. Open Arctic to retry."
+        : "Could not reach Jev. Open Arctic to retry."
+    } catch JevError.unavailable(let status) {
+      record("service-error:\(status)")
+      message = "Jev is unavailable. Open Arctic to retry."
+    } catch JevError.invalidResponse {
+      record("invalid-response")
+      message = "Jev returned an incomplete result. Open Arctic to retry."
     } catch {
-      message = "Tags can finish when you open Arctic."
+      record("classification-failed")
+      message = "Could not add tags. Open Arctic to retry."
     }
   }
 
@@ -469,11 +514,10 @@ private final class ShareSaveModel: ObservableObject {
       taggingText: input.text, tagNames: classification.tags,
       inputFingerprint: ArticleTagCatalog.identity(title: input.title, description: input.text),
       categoryVersion: ArticleTagCatalog.version, feedbackPresented: false)
-    if classification.tags.isEmpty {
-      try SharedInbox.saveTaggingResult(result)
-    } else {
-      pendingTaggingResult = result
-    }
+    // Commit completed tags before animation. Extension termination can skip
+    // dismissal callbacks; the app must still receive this unpresented result.
+    try SharedInbox.saveTaggingResult(result)
+    if !classification.tags.isEmpty { pendingTaggingResult = result }
     tagNames = classification.tags
     UIAccessibility.post(
       notification: .announcement,
@@ -524,8 +568,6 @@ private struct ShareSaveView: View {
   @ObservedObject var model: ShareSaveModel
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  @ScaledMetric(relativeTo: .subheadline) private var tagReservation: CGFloat = 112
-
   var body: some View {
     VStack(spacing: 0) {
       ScrollView {
@@ -542,15 +584,8 @@ private struct ShareSaveView: View {
             onRevealed: model.presentTagFeedback
           ) {
             VStack(spacing: 0) {
+              if let tags = model.tagNames, !tags.isEmpty { tagResult(tags) }
               articleCard
-              if model.reservesTagSpace {
-                ZStack(alignment: .topLeading) {
-                  Color.clear
-                  if let tags = model.tagNames, !tags.isEmpty { tagResult(tags) }
-                }
-                .frame(minHeight: tagReservation, alignment: .topLeading)
-                .fixedSize(horizontal: false, vertical: true)
-              }
             }
             .background(
               Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
@@ -561,6 +596,11 @@ private struct ShareSaveView: View {
           #if DEBUG
             .accessibilityValue(
               model.image != nil ? "image" : model.title != nil ? "title" : "link")
+          #endif
+          #if DEBUG
+            if let probe = model.keychainProbeStatus {
+              Text(probe).font(.caption).accessibilityIdentifier("share-keychain-probe")
+            }
           #endif
           if model.isSaved, let message = model.message {
             Text(message).font(.subheadline).foregroundStyle(.secondary)
@@ -634,11 +674,7 @@ private struct ShareSaveView: View {
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(18)
-    .background(
-      Color(uiColor: .secondarySystemBackground),
-      in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-    )
+    .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 10)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("share-added-tags")
     .accessibilityValue(model.tagFeedbackPresented ? "presented" : "revealing")
