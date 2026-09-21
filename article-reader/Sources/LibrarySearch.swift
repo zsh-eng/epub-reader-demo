@@ -345,7 +345,7 @@ private final class ThumbnailArcView: UIView {
     rotation.repeatCount = .infinity
     let length = CABasicAnimation(keyPath: "strokeEnd")
     length.fromValue = 0.12
-    length.toValue = 0.8
+    length.toValue = 1.0
     length.duration = 0.7
     length.autoreverses = true
     length.repeatCount = .infinity

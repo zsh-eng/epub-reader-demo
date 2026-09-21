@@ -5,7 +5,7 @@ The server replays Resources/Fixtures/story.html and serves its bundled cover.
 Only metadata is requested by the benchmark; image decode/rendering is separate.
 The harness extracts production queue/commit/cache methods unchanged apart from
 measurement counters. It stubs tagging and stores 10,000 synthetic records in a
-temporary directory. Publisher/user data is never accessed. Timings are host CPU
+temporary directory. Publisher/user data is never accessed. Timings are host elapsed-time
 measurements, not iPhone frame rates. Baseline can be exported with:
   git show d1aab68:article-reader/Sources/ArticleStore.swift > /tmp/arctic-baseline.swift
 """

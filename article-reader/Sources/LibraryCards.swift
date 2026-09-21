@@ -7,8 +7,10 @@ struct ArticleCard: View {
 
   var body: some View {
     Group {
-      if let image = article.imageURL {
-        ArticleThumbnail(url: image)
+      // Imports start with a title. Reserve the eventual cover's space while
+      // metadata is pending so arriving images do not push cards under a finger.
+      if article.imageURL != nil || (article.taggingText == nil && !article.previewFailed) {
+        ArticleThumbnail(url: article.imageURL)
           .aspectRatio(1.65, contentMode: .fit)
           .overlay(alignment: .topLeading) {
             source.padding(.horizontal, 10).padding(.vertical, 7)

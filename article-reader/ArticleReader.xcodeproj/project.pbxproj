@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF1000000000000000000003 /* LibraryFrameDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000004; };
+		AF1000000000000000000001 /* ArcticEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000002; };
 		AC0000000000000000000011 /* Shared/ArticleMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000010; };
 		AC0000000000000000000012 /* Shared/ArticleMetadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000010; };
 		AC0000000000000000000013 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = AC0000000000000000000014; };
@@ -90,6 +92,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AF1000000000000000000004 /* LibraryFrameDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryFrameDiagnostics.swift; sourceTree = "<group>"; };
+		AF1000000000000000000002 /* ArcticEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArcticEmptyState.swift; sourceTree = "<group>"; };
 		AC0000000000000000000010 /* Shared/ArticleMetadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/ArticleMetadata.swift; sourceTree = "<group>"; };
 		AC0000000000000000000002 /* LibraryCards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryCards.swift; sourceTree = "<group>"; };
 		0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleReaderApp.swift; sourceTree = "<group>"; };
@@ -191,6 +195,8 @@
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
 				AC0000000000000000000002 /* LibraryCards.swift */,
+				AF1000000000000000000004 /* LibraryFrameDiagnostics.swift */,
+				AF1000000000000000000002 /* ArcticEmptyState.swift */,
 				215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */,
 				092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */,
 				353E9B7484F57124364E4DB4 /* Sources/ReaderFontScheme.swift */,
@@ -402,6 +408,8 @@
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,
+				AF1000000000000000000003 /* LibraryFrameDiagnostics.swift in Sources */,
+				AF1000000000000000000001 /* ArcticEmptyState.swift in Sources */,
 				F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */,
 				038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */,
 				7BD85323A4807875A1E15639 /* Sources/ReaderFontScheme.swift in Sources */,

@@ -5,6 +5,74 @@ import XCTest
 final class LibraryScrollPerformanceUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
+  @MainActor func testGlassHeaderAndOptionalFrameDiagnostics() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-seed-photo-list", "-articles-offline",
+    ]
+    app.launch()
+    let menu = app.buttons["Sort and filter"]
+    XCTAssertTrue(menu.waitForExistence(timeout: 10))
+    let folders = app.buttons["folder-saved"]
+    XCTAssertGreaterThanOrEqual(folders.frame.minY, menu.frame.maxY)
+    let counter = app.descendants(matching: .any)
+      .matching(identifier: "library-frame-diagnostics").firstMatch
+    XCTAssertFalse(counter.exists)
+    menu.tap()
+    let toggle = app.descendants(matching: .any)
+      .matching(identifier: "toggle-frame-diagnostics").firstMatch
+    XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+    toggle.tap()
+    XCTAssertTrue(counter.waitForExistence(timeout: 5))
+    let ready = expectation(
+      for: NSPredicate(format: "label CONTAINS 'callback FPS'"), evaluatedWith: counter)
+    wait(for: [ready], timeout: 5)
+    let top = folders.frame.minY
+    app.swipeUp(velocity: .slow)
+    XCTAssertEqual(folders.frame.minY, top, accuracy: 1)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "glass-header-over-scrolled-photos-and-frame-diagnostic"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+    menu.tap()
+    XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+    toggle.tap()
+    let gone = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: counter)
+    wait(for: [gone], timeout: 5)
+  }
+
+  @MainActor func testImportReplayScrollsWithoutPublishingMetadataUnderFinger() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-test-import-replay",
+      "-articles-offline", "-disable-preloading",
+    ]
+    app.launch()
+    let state = app.staticTexts["import-replay-state"]
+    XCTAssertTrue(app.buttons["article-import-459"].waitForExistence(timeout: 10))
+    // These gestures overlap incoming metadata from the fixed local replay.
+    // No publisher, Files picker or variable network service is involved.
+    for _ in 0..<3 {
+      app.swipeUp(velocity: .fast)
+      app.swipeDown(velocity: .fast)
+    }
+    let complete = expectation(
+      for: NSPredicate(format: "label BEGINSWITH '460/460'"), evaluatedWith: state)
+    wait(for: [complete], timeout: 60)
+    XCTAssertTrue(state.label.contains("dates=true"), state.label)
+    XCTAssertTrue(state.label.contains("during=0"), state.label)
+    XCTAssertFalse(state.label.contains("scrolls=0;"), state.label)
+    XCTAssertTrue(app.images["Article preview"].firstMatch.waitForExistence(timeout: 10))
+    let evidence = XCTAttachment(string: state.label)
+    evidence.name = "import-replay-batching-evidence"
+    evidence.lifetime = .keepAlways
+    add(evidence)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "import-replay-settled-library"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+
   @MainActor func testWarmThousandArticleLibraryScrolling() {
     let app = XCUIApplication()
     app.launchArguments = [

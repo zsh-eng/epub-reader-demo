@@ -263,3 +263,16 @@ Visual review replaced an unavailable remove-highlight SF Symbol with `eraser`;
 `/tmp/arctic-highlight-icon.xcresult` confirms the recolour/medium/offline flow still
 passes. Final colour controls, medium sheet and global collection screenshots
 were inspected in both light and dark presentations.
+
+## 21 September follow-up: keyboard, import and scrolling
+
+User requested another UI/performance pass after the overnight summary. Main:
+`321f6ca` distinct Arctic empty states; `56a55b5` failed-webpage Retry/reopen;
+`c084f4e`/`c150114` keyboard dock and light rainbow beam; `f8d166c`/`34e4298`
+optional callback diagnostics; `7abf010` persistent thumbnail sizes/legacy blur
+previews/native arc; `0221129` import batching, scroll pause and cached derived
+values. Root integration adds actual content behind the glass header, stable
+pending-card size, diagnostic menu and native replay assertions. See
+PERFORMANCE.md for the loopback benchmark and thirteen focused native checks.
+No publisher requests in replay tests. Sustained physical 120 Hz remains
+unverified. Live storage migration remains dormant; no automation was recreated.

@@ -10,6 +10,7 @@ struct ArticleReaderApp: App {
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-reset-appearance") {
         for key in [
           "reader-size", "reader-font", "reader-padding", "reader-leading", "reader-palette",
+          LibraryFrameDiagnostics.enabledKey,
         ] {
           UserDefaults.standard.removeObject(forKey: key)
         }
@@ -116,6 +117,7 @@ struct LibraryView: View {
   @State private var libraryViewport: CGRect = .zero
   @State private var searchViewport: CGRect = .zero
   @State private var visibleRows: Set<PreloadRow> = []
+  @AppStorage(LibraryFrameDiagnostics.enabledKey) private var frameDiagnostics = false
   @AppStorage("reader-palette") private var paletteName = "System"
   private let navigationBarHeight: CGFloat = 44
 
@@ -135,7 +137,6 @@ struct LibraryView: View {
   var body: some View {
     NavigationStack {
       page
-        .padding(.top, searching ? 0 : 8)
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
@@ -149,7 +150,28 @@ struct LibraryView: View {
         }
     }
     .overlay(alignment: .top) { navigationControls.accessibilityHidden(showingAnnotations) }
+    .overlay(alignment: .bottomLeading) {
+      LibraryFrameDiagnostics().padding(.horizontal, 20).padding(.bottom, 84)
+    }
     #if DEBUG
+      .overlay(alignment: .bottomTrailing) {
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-import-replay") {
+          let ready = store.importSummary?.previewsReady ?? 0
+          let datesOK =
+            store.articles.count == 460
+            && store.articles.allSatisfy { article in
+              let index =
+                Int(article.url.lastPathComponent.replacingOccurrences(of: "import-", with: ""))
+                ?? -1
+              return article.savedAt == Date(timeIntervalSince1970: Double(1_700_000_000 + index))
+            }
+          Text(
+            "\(ready)/460; dates=\(datesOK); scrolls=\(store.previewScrollSessions); during=\(store.previewPublicationsDuringScrolling); batches=\(store.previewPublicationCount); buffered=\(store.previewPeakBuffered); workers=\(store.previewPeakWorkers)"
+          )
+          .font(.system(size: 7)).lineLimit(1).padding(2).background(.thinMaterial)
+          .accessibilityIdentifier("import-replay-state").allowsHitTesting(false)
+        }
+      }
       .overlay(alignment: .top) {
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-share-fixture") {
           Button("Share fixture") { testSharing = true }.accessibilityIdentifier("share-fixture")
@@ -217,6 +239,8 @@ struct LibraryView: View {
     }
     .task(id: scenePhase) {
       guard scenePhase == .active else {
+        isLibraryScrolling = false
+        store.setLibraryScrolling(false)
         store.flushPendingWrites()
         if scenePhase == .background {
           // Keep the last opened Reader, but stop speculative documents while
@@ -248,6 +272,13 @@ struct LibraryView: View {
     .task(id: imagePrefetchRequests) {
       await ThumbnailCache.shared.preheat(imagePrefetchRequests)
     }
+    .onChange(of: isLibraryScrolling) { _, scrolling in
+      store.setLibraryScrolling(scrolling)
+    }
+    .onChange(of: selected != nil) { _, readerOpen in
+      if readerOpen { isLibraryScrolling = false }
+    }
+    .onDisappear { store.setLibraryScrolling(false) }
     .task(id: browserPreloadURLs) {
       // Scrolling gets the main-thread budget. Cheap image preheat continues,
       // but do not construct publisher WebViews until the viewport has settled.
@@ -263,7 +294,7 @@ struct LibraryView: View {
       browsers.releaseOffscreen()
       ThumbnailCache.shared.releaseMemory()
     }
-    .onChange(of: store.articles.filter(\.saved).map(\.id)) { _, _ in
+    .onChange(of: store.savedArticleIDs) { _, _ in
       browsers.persistExtractions(in: store)
     }
     .overlay(alignment: .top) {
@@ -455,9 +486,6 @@ struct LibraryView: View {
       }
     }
     .frame(height: navigationBarHeight)
-    .background {
-      if selected == nil { LibraryScrollEdge().padding(.bottom, -16).ignoresSafeArea(edges: .top) }
-    }
     .environment(\.colorScheme, selected == nil ? systemScheme : (palette.scheme ?? systemScheme))
     .animation(searchTransition, value: selected != nil)
     .animation(searchTransition, value: searching)
@@ -497,6 +525,9 @@ struct LibraryView: View {
             .accessibilityIdentifier("tag-existing-articles")
           Button("Getting started", systemImage: "book.closed") { showingOnboarding = true }
             .accessibilityIdentifier("show-onboarding")
+          Divider()
+          Toggle("Frame diagnostics", isOn: $frameDiagnostics)
+            .accessibilityIdentifier("toggle-frame-diagnostics")
         } label: {
           Image(systemName: "line.3.horizontal.decrease").frame(width: 44, height: 44)
         }
@@ -559,20 +590,30 @@ struct LibraryView: View {
         .opacity(searching ? 0 : 1)
         .allowsHitTesting(!searching).accessibilityHidden(searching || showingAnnotations)
       if searching {
-        ScrollViewReader { proxy in
-          ScrollView {
-            VStack(spacing: 0) {
-              Color.clear.frame(height: 0).id("search-top")
-              searchResults
+        GeometryReader { boundary in
+          ScrollViewReader { proxy in
+            ScrollView {
+              VStack(spacing: 0) {
+                Color.clear.frame(height: 0).id("search-top")
+                searchResults
+              }
             }
+            .contentMargins(.top, boundary.safeAreaInsets.top, for: .scrollContent)
+            .onGeometryChange(for: CGRect.self) {
+              let frame = $0.frame(in: .global)
+              return frame.inset(
+                by: UIEdgeInsets(
+                  top: boundary.safeAreaInsets.top, left: 0, bottom: 0, right: 0))
+            } action: {
+              searchViewport = $0
+            }
+            .modifier(LibraryScrollActivity { if searching { isLibraryScrolling = $0 } })
+            .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
+            .overlay(alignment: .top) {
+              LibraryScrollEdge().frame(height: boundary.safeAreaInsets.top + 20)
+            }
+            .ignoresSafeArea(.container, edges: .top)
           }
-          .onGeometryChange(for: CGRect.self) {
-            $0.frame(in: .global)
-          } action: {
-            searchViewport = $0
-          }
-          .modifier(LibraryScrollActivity { if searching { isLibraryScrolling = $0 } })
-          .onChange(of: query) { _, _ in proxy.scrollTo("search-top", anchor: .top) }
         }
         .transition(.opacity)
         .accessibilityHidden(showingAnnotations)
@@ -638,7 +679,16 @@ struct LibraryView: View {
   }
 
   private var pagedLibrary: some View {
+    GeometryReader { boundary in
+      libraryPages(topInset: boundary.safeAreaInsets.top)
+        .ignoresSafeArea(.container, edges: .top)
+    }
+  }
+
+  private func libraryPages(topInset: CGFloat) -> some View {
     GeometryReader { viewport in
+      // Capture the inset before extending this scrolling surface under the
+      // status area. Only the first row and folder controls keep that inset.
       ZStack(alignment: .top) {
         TabView(selection: $folder) {
           ForEach(folderItems, id: \.self) { item in
@@ -646,8 +696,8 @@ struct LibraryView: View {
               Group {
                 if matches(in: item).isEmpty {
                   LibraryEmptyState(folder: item)
-                    .frame(height: max(0, viewport.size.height - headerHeight))
-                    .padding(.top, headerHeight)
+                    .frame(height: max(0, viewport.size.height - headerHeight - topInset))
+                    .padding(.top, headerHeight + topInset)
                 } else {
                   ScrollView { library(in: item) }
                     .modifier(
@@ -655,8 +705,8 @@ struct LibraryView: View {
                         if folder == item && !searching { isLibraryScrolling = $0 }
                       }
                     )
-                    .contentMargins(.top, headerHeight + 8, for: .scrollContent)
-                    .contentMargins(.top, headerHeight, for: .scrollIndicators)
+                    .contentMargins(.top, topInset + headerHeight + 16, for: .scrollContent)
+                    .contentMargins(.top, topInset + headerHeight, for: .scrollIndicators)
                     .contentMargins(
                       .bottom, max(0, geometry.size.height - viewport.size.height),
                       for: .scrollContent)
@@ -669,18 +719,22 @@ struct LibraryView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .ignoresSafeArea(.container, edges: .bottom)
-        libraryHeader.background { LibraryScrollEdge() }
+        LibraryScrollEdge()
+          .frame(height: topInset + headerHeight + 28)
+          .frame(maxHeight: .infinity, alignment: .top)
+        libraryHeader
           .onGeometryChange(for: CGFloat.self) {
             $0.size.height
           } action: {
             headerHeight = $0
           }
+          .padding(.top, topInset + 8)
       }
       .onGeometryChange(for: CGRect.self) { geometry in
         let frame = geometry.frame(in: .global)
         return CGRect(
-          x: frame.minX, y: frame.minY + headerHeight,
-          width: frame.width, height: max(0, frame.height - headerHeight))
+          x: frame.minX, y: frame.minY + topInset + headerHeight + 8,
+          width: frame.width, height: max(0, frame.height - topInset - headerHeight - 8))
       } action: {
         libraryViewport = $0
       }
@@ -758,13 +812,9 @@ struct LibraryView: View {
     let item = folder
     return LazyVStack(alignment: .leading, spacing: 0) {
       if matches.isEmpty {
-        VStack(spacing: 10) {
-          Image(systemName: "magnifyingglass").font(.system(size: 26, weight: .light))
-            .foregroundStyle(ReaderTheme.muted)
-          Text("No articles found").font(.title2.weight(.semibold))
-          Text("Try a title, a topic, or a website.")
-            .font(ReaderTheme.sans(14)).foregroundStyle(ReaderTheme.muted)
-        }.frame(maxWidth: .infinity).padding(.top, 70)
+        ArcticEmptyState(
+          kind: .search, title: "No articles found", detail: "Try a title, a topic, or a website."
+        ).padding(.top, 36)
       }
       ForEach(matches) { article in
         articleButton(article) { ArticleSearchRow(article: article, query: query) }
