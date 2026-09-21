@@ -227,3 +227,39 @@ performance validation. Do not imply the tests prove iPhone responsiveness.
 - Updated the existing automation to an 08:00 Singapore morning-summary
   follow-up. It must report the implementation/validation boundaries and pause
   after delivering the summary. No further overnight feature work is queued.
+
+## Morning feedback — 21 September
+
+New user input authorized this follow-up after the overnight automation was removed.
+Work remains on main; live sync/storage migration stays dormant.
+
+- `669fab4` plus follow-up fixes: default warm yellow and four adaptive highlight
+  colours, tap-to-edit controls, medium note editor and independent removal.
+- `53d31cb` plus follow-up fixes: library-wide Highlights & notes collection,
+  search/filter/edit/offline source jump, floating material/glass controls.
+- `78a8ca3`: size-specific off-main image decoding, compact HEIC/JPEG/PNG
+  resources, tiny local previews, bounded viewport image preheat, queued visible
+  priority, Reader webview preparation deferred during scrolling, ProMotion key.
+- Hidden search result rows now unmount; iOS 26 safe-area controls unmount behind
+  modal sheets with equal-height placeholders. AccessibilityHidden alone left
+  native hosted controls exposed; native regression tests found this.
+- Codec checks: one controlled photo 205,494-byte prior JPEG85 -> 57,818-byte HEIC
+  at the same 1,200x900 size; alpha/orientation/Reader MIME and priority/cancellation
+  checks pass. See PERFORMANCE.md for exact implementation and Telegram sources.
+- Native checks: highlight persistence and independent note removal, dark note
+  editing, Reader controls/offline images, 1,000-row search and viewport preloads,
+  recolour/tap/offline restoration, actual medium detent, and global passages
+  search/edit/offline source jump verified. Earlier UI failures were corrected,
+  not suppressed by retries or weaker selectors.
+- No physical-device 120 Hz claim. The new 1,000-photo scrolling fixture uses one
+  bundled image with independent cache identities; no network timing is simulated.
+
+Final focused native suite: `/tmp/arctic-feedback-final.xcresult`, 5/5 passed;
+combined with four other distinct initial successes, nine native flows verified.
+Simulator scroll metric reports duration only (2.594s average), no FPS/hitch ratio.
+The CJK text remains intact in DOM assertions, but screenshots show missing-glyph
+boxes in this simulator; physical-device font rendering remains a visual check.
+Visual review replaced an unavailable remove-highlight SF Symbol with `eraser`;
+`/tmp/arctic-highlight-icon.xcresult` confirms the recolour/medium/offline flow still
+passes. Final colour controls, medium sheet and global collection screenshots
+were inspected in both light and dark presentations.

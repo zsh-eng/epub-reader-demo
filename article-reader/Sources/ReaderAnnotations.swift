@@ -262,7 +262,7 @@ struct HighlightToolbar: View {
           perform { try AnnotationStore.shared.removeHighlight(annotation.id) }
           browser.selectedAnnotationID = nil
         } label: {
-          Image(systemName: "highlighter.slash").frame(width: 44, height: 44)
+          Image(systemName: "eraser").frame(width: 44, height: 44)
         }
         .accessibilityLabel("Remove highlight").accessibilityIdentifier("highlight-remove")
       }
