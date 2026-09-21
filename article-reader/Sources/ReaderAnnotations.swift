@@ -274,7 +274,6 @@ struct HighlightToolbar: View {
     }
     .font(.body.weight(.medium)).buttonStyle(.plain)
     .padding(.horizontal, 8).padding(.vertical, 5).readerGlass()
-    .accessibilityIdentifier("highlight-toolbar")
   }
 
   private func perform(_ action: () throws -> Void) {
