@@ -165,6 +165,12 @@ struct AnnotationEditor: View {
       !quoteContentFrame.isEmpty && !quoteViewportFrame.isEmpty
         && quoteContentFrame.maxY <= quoteViewportFrame.maxY + 1
     }
+    private var quoteLayoutDescription: String {
+      String(
+        format: "top=%.2f; bottom=%.2f; end=%@",
+        quoteViewportFrame.minY - quoteCardFrame.minY,
+        quoteCardFrame.maxY - quoteViewportFrame.maxY, String(quoteAtEnd))
+    }
   #endif
   @State private var errorMessage: String?
   @FocusState private var focused: Bool
@@ -199,6 +205,7 @@ struct AnnotationEditor: View {
       .scrollBounceBehavior(.basedOnSize)
       .accessibilityIdentifier("annotation-quote-scroll")
       #if DEBUG
+        .accessibilityValue(quoteLayoutDescription)
         .onGeometryChange(for: CGRect.self) {
           $0.frame(in: .global)
         } action: {
@@ -229,17 +236,6 @@ struct AnnotationEditor: View {
       }
     }
     .padding(20).background(Color(uiColor: .systemBackground))
-    #if DEBUG
-      .overlay(alignment: .bottomLeading) {
-        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-long-annotation") {
-          Text(
-            "top=\(Int(quoteViewportFrame.minY - quoteCardFrame.minY)); bottom=\(Int(quoteCardFrame.maxY - quoteViewportFrame.maxY)); end=\(quoteAtEnd)"
-          )
-          .font(.system(size: 7)).accessibilityIdentifier("annotation-quote-layout")
-          .allowsHitTesting(false)
-        }
-      }
-    #endif
     .navigationTitle("Note").navigationBarTitleDisplayMode(.inline)
     .toolbar {
       ToolbarItem(placement: .confirmationAction) {

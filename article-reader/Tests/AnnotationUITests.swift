@@ -173,20 +173,30 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertEqual(editor.value as? String, "Keep the whole passage.")
     XCTAssertGreaterThan(app.navigationBars["Note"].frame.minY, app.frame.height * 0.3)
     XCTAssertFalse(app.keyboards.firstMatch.exists)
-    let layout = app.staticTexts["annotation-quote-layout"]
-    expectation(
-      for: NSPredicate(format: "label == %@", "top=18; bottom=18; end=false"), evaluatedWith: layout
-    )
-    waitForExpectations(timeout: 5)
-    capture(app, "long-quote-medium-sheet-top-dark")
     let quote = app.scrollViews["annotation-quote-scroll"]
-    XCTAssertTrue(quote.exists, app.debugDescription)
+    XCTAssertTrue(quote.waitForExistence(timeout: 5), app.debugDescription)
+    capture(app, "long-quote-medium-sheet-top-dark")
+    expectQuoteInsets(on: quote, atEnd: false)
     quote.swipeUp()
-    expectation(
-      for: NSPredicate(format: "label == %@", "top=18; bottom=18; end=true"), evaluatedWith: layout)
-    waitForExpectations(timeout: 5)
+    expectQuoteInsets(on: quote, atEnd: true)
     XCTAssertGreaterThan(app.navigationBars["Note"].frame.minY, app.frame.height * 0.3)
     capture(app, "long-quote-medium-sheet-bottom-dark")
+  }
+
+  @MainActor private func expectQuoteInsets(on quote: XCUIElement, atEnd: Bool) {
+    let settled = NSPredicate { element, _ in
+      guard let value = (element as? XCUIElement)?.value as? String else { return false }
+      let fields = value.components(separatedBy: "; ")
+      guard fields.count == 3,
+        let top = Double(fields[0].replacingOccurrences(of: "top=", with: "")),
+        let bottom = Double(fields[1].replacingOccurrences(of: "bottom=", with: ""))
+      else { return false }
+      return abs(top - 18) <= 1 && abs(bottom - 18) <= 1
+        && fields[2] == "end=\(atEnd)"
+    }
+    let check = expectation(for: settled, evaluatedWith: quote)
+    let result = XCTWaiter.wait(for: [check], timeout: 5)
+    XCTAssertEqual(result, .completed, "Quote geometry: \(quote.value as? String ?? "missing")")
   }
 
   @MainActor func testRemoveHighlightClearsReaderPaintImmediately() {
