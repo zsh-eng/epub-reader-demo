@@ -31,11 +31,15 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   text highlighted. A one-line title allows up to two subtitle lines; longer titles
   use two lines alone. Clearing or cancelling restores the library.
 - **Saved** is the default inbox. The top folder strip switches between Saved,
-  Downloaded, article tags, History, then Archive. History and Archive use compact
-  search-style rows; Saved, Downloaded and tags retain image cards. Swipe horizontally through these folders. The bottom has one native search field in a glass capsule, with a soft scroll edge on iOS 26 and a material fallback on older iOS. The field stays mounted from launch so the first tap can focus it directly.
+  Favourites, Downloaded, article tags, History, then Archive. History and Archive use compact
+  search-style rows; Saved, Favourites, Downloaded and tags retain image cards. Swipe horizontally through these folders. The bottom has one native search field in a glass capsule, with a soft scroll edge on iOS 26 and a material fallback on older iOS. The field stays mounted from launch so the first tap can focus it directly.
 - **History** records each URL you view, most recently viewed first, including links
   followed inside articles. Opening does not save a link. Preloading does not add history.
-- Long-press a saved article to edit **Tags**, archive, or remove it. Archived links
+- **Favourites** includes favourite saved articles, including archived ones. In a tag,
+  tap the star beside the folder strip to show only favourites, including archived
+  matches. The ordinary tag view remains limited to the inbox. Favourites are a
+  separate flag, not a tag. Unsaving clears that flag; archiving preserves it.
+- Long-press a saved article to **Favourite** or **Unfavourite**, edit **Tags**, archive, or remove it. Archived links
   retain their tags and history. **Move to Saved** restores them to the inbox.
   Select supports bulk archiving and confirmed deletion. Tags use a compact sheet
   that grows with the tag list, up to 360 points.

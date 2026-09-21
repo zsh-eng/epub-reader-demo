@@ -4,11 +4,12 @@ import SwiftUI
 /// static, use semantic colours, and yield their space before enlarged text does.
 struct ArcticEmptyState: View {
   enum Kind {
-    case saved, downloaded, history, archive, tag, passages, highlights, notes, search
+    case saved, favourites, downloaded, history, archive, tag, passages, highlights, notes, search
 
     fileprivate var symbol: String {
       switch self {
       case .saved: "bookmark"
+      case .favourites: "star"
       case .downloaded: "arrow.down"
       case .history: "clock.arrow.circlepath"
       case .archive: "archivebox"

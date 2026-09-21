@@ -73,6 +73,7 @@ enum ArticleSyncCodec {
     let url: URL
     let saved: Bool
     let archived: Bool
+    let favourite: Bool?
     let read: Bool
     let savedAt: Date?
     let lastVisitedAt: Date?
@@ -150,7 +151,7 @@ enum ArticleSyncCodec {
       "library/" + id: try encode(
         Library(
           url: url, saved: article.saved, archived: article.isArchived == true,
-          read: article.isRead == true, savedAt: article.savedAt,
+          favourite: article.isFavourite, read: article.isRead == true, savedAt: article.savedAt,
           lastVisitedAt: article.lastVisitedAt, importBatchID: article.importBatchID)),
       "tags/" + id: try encode(
         Tags(
@@ -223,6 +224,7 @@ enum ArticleSyncCodec {
         metadata.faviconURL ?? (article.faviconURL?.isFileURL == true ? article.faviconURL : nil)
       article.isSaved = library.saved
       article.isArchived = library.archived
+      article.isFavourite = library.favourite
       article.isRead = library.read
       article.savedAt = library.savedAt
       article.lastVisitedAt = library.lastVisitedAt
@@ -364,6 +366,7 @@ enum ArticleSyncCodec {
       sharedImageURL(lhs.imageURL) == sharedImageURL(rhs.imageURL),
       sharedImageURL(lhs.faviconURL) == sharedImageURL(rhs.faviconURL),
       lhs.saved == rhs.saved, (lhs.isArchived == true) == (rhs.isArchived == true),
+      lhs.favourite == rhs.favourite,
       (lhs.isRead == true) == (rhs.isRead == true), lhs.savedAt == rhs.savedAt,
       lhs.lastVisitedAt == rhs.lastVisitedAt, lhs.importBatchID == rhs.importBatchID,
       lhs.tagNames.sorted() == rhs.tagNames.sorted(),

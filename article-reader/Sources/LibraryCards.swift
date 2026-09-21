@@ -248,10 +248,12 @@ struct GradientArticleCard: View {
 /// The existing paper still-life gains a small Arctic detail for each folder.
 struct LibraryEmptyState: View {
   let folder: ArticleFolder
+  var favouritesOnly = false
 
   private var kind: ArcticEmptyState.Kind {
     switch folder {
     case .saved: .saved
+    case .favourites: .favourites
     case .downloaded: .downloaded
     case .history: .history
     case .archive: .archive
@@ -262,10 +264,14 @@ struct LibraryEmptyState: View {
   private var detail: String {
     switch folder {
     case .saved: "Share to Arctic, or open a copied link."
+    case .favourites: "Favourite an article to keep it here, even after archiving."
     case .downloaded: "Articles ready to read offline appear here."
     case .history: "Find your opened articles here."
     case .archive: "Finished for now. Kept for later."
-    case .tag: "Add this tag to a saved article to find it here."
+    case .tag:
+      favouritesOnly
+        ? "Favourite an article with this tag to keep it here."
+        : "Add this tag to a saved article to find it here."
     }
   }
 

@@ -1,13 +1,14 @@
 import SwiftUI
 
-/// Saved is the inbox. Tags are filters over that inbox, not separate copies.
+/// Saved is the inbox. Favourite tag filters also include archived saved articles.
 enum ArticleFolder: Hashable {
-  case saved, history, archive, downloaded
+  case saved, favourites, history, archive, downloaded
   case tag(String)
 
   var title: String {
     switch self {
     case .saved: "Saved"
+    case .favourites: "Favourites"
     case .history: "History"
     case .archive: "Archive"
     case .downloaded: "Downloaded"
@@ -20,18 +21,21 @@ enum ArticleFolder: Hashable {
     default: "folder-\(title.lowercased())"
     }
   }
-  func contains(_ article: SavedArticle) -> Bool {
+  func contains(_ article: SavedArticle, favouritesOnly: Bool = false) -> Bool {
     switch self {
     case .saved: article.saved && article.isArchived != true
+    case .favourites: article.saved && article.favourite
     case .history: article.lastVisitedAt != nil
     case .archive: article.saved && article.isArchived == true
     case .downloaded: article.saved && article.downloadedAt != nil
     case .tag(let name):
-      article.saved && article.isArchived != true && article.tagNames.contains(name)
+      article.saved && article.tagNames.contains(name)
+        && (favouritesOnly ? article.favourite : article.isArchived != true)
     }
   }
   var emptyTitle: String {
     switch self {
+    case .favourites: "Worth keeping close."
     case .history: "Every read leaves a trail."
     case .archive: "A place for finished stories."
     case .downloaded: "Take a good read with you."
@@ -41,6 +45,7 @@ enum ArticleFolder: Hashable {
   }
   var emptyDescription: String {
     switch self {
+    case .favourites: "Favourite an article to keep it here, even after archiving."
     case .history: "Links you open here appear in History, even if you do not save them."
     case .archive: "Archive saved articles to keep your inbox clear."
     case .downloaded: "Saved articles appear here once their Reader view is stored on this device."

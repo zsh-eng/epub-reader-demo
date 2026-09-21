@@ -105,6 +105,7 @@ struct LibraryView: View {
   @State private var importReport: String?
   @State private var showingImportSummary = false
   @State private var folder = ArticleFolder.saved
+  @State private var favouriteTags: Set<String> = []
   @State private var selecting = false
   @State private var selection: Set<UUID> = []
   @State private var sort = "Newest first"
@@ -122,8 +123,13 @@ struct LibraryView: View {
   private func matches(in folder: ArticleFolder, query: String = "") -> [SavedArticle] {
     projection.rows(
       articles: store.articles, revision: store.libraryRevision, folder: folder,
-      query: query, sort: sort
+      query: query, sort: sort, favouritesOnly: filtersFavourites(in: folder)
     ).articles
+  }
+
+  private func filtersFavourites(in folder: ArticleFolder) -> Bool {
+    guard case .tag(let name) = folder else { return false }
+    return favouriteTags.contains(name)
   }
 
   private var searchTransition: Animation {
@@ -149,7 +155,8 @@ struct LibraryView: View {
     .overlay(alignment: .bottomLeading) {
       LibraryPreloadDriver(
         visibility: viewportVisibility, store: store, browsers: browsers, projection: projection,
-        folder: folder, query: query, sort: sort, searching: searching,
+        folder: folder, query: query, sort: sort, favouritesOnly: filtersFavourites(in: folder),
+        searching: searching,
         isLibraryScrolling: isLibraryScrolling, clipboardURL: clipboard.url,
         enabled: selected == nil && !showingOnboarding && !showingArticleReplay
           && !showingTaggingSettings
@@ -347,7 +354,9 @@ struct LibraryView: View {
   }
 
   private var folderItems: [ArticleFolder] {
-    [.saved, .downloaded] + store.allTags.map(ArticleFolder.tag) + [.history, .archive]
+    [.saved, .favourites, .downloaded] + store.allTags.map(ArticleFolder.tag) + [
+      .history, .archive,
+    ]
   }
 
   /// This bar belongs to the stack, not either sliding page. Only its contents
@@ -437,40 +446,55 @@ struct LibraryView: View {
   }
 
   private var folders: some View {
-    ScrollViewReader { proxy in
-      ScrollView(.horizontal, showsIndicators: false) {
-        HStack(spacing: 2) {
-          ForEach(folderItems, id: \.self) { item in
-            Button {
-              // Content is immediately available; motion only tracks the folder selection.
-              withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { folder = item }
-            } label: {
-              Text(item.title).font(.subheadline.weight(.semibold))
-                .foregroundStyle(folder == item ? ReaderTheme.foreground : ReaderTheme.muted)
-                .padding(.horizontal, 16).frame(minHeight: 44)
-                .background {
-                  if folder == item {
-                    Capsule().fill(ReaderTheme.foreground.opacity(0.08))
+    HStack(spacing: 8) {
+      ScrollViewReader { proxy in
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 2) {
+            ForEach(folderItems, id: \.self) { item in
+              Button {
+                // Content is immediately available; motion only tracks the folder selection.
+                withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { folder = item }
+              } label: {
+                Text(item.title).font(.subheadline.weight(.semibold))
+                  .foregroundStyle(folder == item ? ReaderTheme.foreground : ReaderTheme.muted)
+                  .padding(.horizontal, 16).frame(minHeight: 44)
+                  .background {
+                    if folder == item {
+                      Capsule().fill(ReaderTheme.foreground.opacity(0.08))
+                    }
                   }
-                }
-                .contentShape(Capsule())
-            }.buttonStyle(.plain).id(item)
-              .accessibilityIdentifier(item.identifier)
-              .accessibilityAddTraits(folder == item ? .isSelected : [])
+                  .contentShape(Capsule())
+              }.buttonStyle(.plain).id(item)
+                .accessibilityIdentifier(item.identifier)
+                .accessibilityAddTraits(folder == item ? .isSelected : [])
+            }
+          }.padding(4)
+        }
+        .clipShape(Capsule())
+        .modifier(LibraryGlass())
+        .onChange(of: folder) { _, value in
+          selection.removeAll()
+          withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) {
+            proxy.scrollTo(value, anchor: .center)
           }
-        }.padding(4)
-      }
-      .clipShape(Capsule())
-      .modifier(LibraryGlass())
-      .padding(.horizontal, 16)
-      .padding(.vertical, 8)
-      .onChange(of: folder) { _, value in
-        selection.removeAll()
-        withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) {
-          proxy.scrollTo(value, anchor: .center)
         }
       }
+      if case .tag(let name) = folder {
+        let active = favouriteTags.contains(name)
+        Button {
+          if active { favouriteTags.remove(name) } else { favouriteTags.insert(name) }
+          selection.removeAll()
+        } label: {
+          Image(systemName: active ? "star.fill" : "star")
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain).modifier(LibraryGlass())
+        .accessibilityLabel("Favourites only")
+        .accessibilityValue(active ? "On" : "Off")
+        .accessibilityIdentifier("filter-tag-favourites")
+      }
     }
+    .padding(.horizontal, 16).padding(.vertical, 8)
   }
 
   /// Keep the library mounted to preserve its scroll position. Search results
@@ -589,7 +613,7 @@ struct LibraryView: View {
             GeometryReader { geometry in
               Group {
                 if matches(in: item).isEmpty {
-                  LibraryEmptyState(folder: item)
+                  LibraryEmptyState(folder: item, favouritesOnly: filtersFavourites(in: item))
                     .frame(height: max(0, viewport.size.height - headerHeight - topInset))
                     .padding(.top, headerHeight + topInset)
                 } else {
@@ -746,6 +770,12 @@ struct LibraryView: View {
     .accessibilityIdentifier("article-\(article.url.lastPathComponent)")
     .contextMenu {
       if article.saved {
+        Button(
+          article.favourite ? "Unfavourite" : "Favourite",
+          systemImage: article.favourite ? "star.slash" : "star"
+        ) {
+          store.setFavourite(!article.favourite, for: article.id)
+        }.accessibilityIdentifier("favourite-article")
         Button("Tags", systemImage: "tag") { editingTags = article }
         Button(article.isArchived == true ? "Move to Saved" : "Archive", systemImage: "archivebox")
         {

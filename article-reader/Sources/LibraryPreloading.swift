@@ -68,6 +68,7 @@ struct LibraryPreloadDriver: View {
   let folder: ArticleFolder
   let query: String
   let sort: String
+  var favouritesOnly = false
   let searching: Bool
   let isLibraryScrolling: Bool
   let clipboardURL: URL?
@@ -144,7 +145,7 @@ struct LibraryPreloadDriver: View {
     else { return [] }
     let rows = projection.rows(
       articles: store.articles, revision: store.libraryRevision, folder: folder,
-      query: searching ? query : "", sort: sort)
+      query: searching ? query : "", sort: sort, favouritesOnly: favouritesOnly)
     let articles = rows.articles
     let visibleIndices = visibility.rows.compactMap { row -> Int? in
       guard row.folder == folder, row.search == searching else { return nil }
@@ -174,7 +175,7 @@ struct LibraryPreloadDriver: View {
   private var imagePrefetchRequests: [ThumbnailRequest] {
     let rows = projection.rows(
       articles: store.articles, revision: store.libraryRevision, folder: folder,
-      query: searching ? query : "", sort: sort)
+      query: searching ? query : "", sort: sort, favouritesOnly: favouritesOnly)
     let pixels = searching || folder == .history || folder == .archive ? 256 : 960
     var requests: [ThumbnailRequest] = []
     for url in preloadURLs {
@@ -201,6 +202,7 @@ struct LibraryPreloadDriver: View {
   private struct Key: Hashable {
     let folder: ArticleFolder
     let query: String
+    let favouritesOnly: Bool
   }
   private var revision = -1
   private var sort = ""
@@ -209,7 +211,8 @@ struct LibraryPreloadDriver: View {
   private var cache: [Key: Rows] = [:]
 
   func rows(
-    articles: [SavedArticle], revision: Int, folder: ArticleFolder, query: String, sort: String
+    articles: [SavedArticle], revision: Int, folder: ArticleFolder, query: String, sort: String,
+    favouritesOnly: Bool = false
   ) -> Rows {
     if self.revision != revision || self.sort != sort {
       self.revision = revision
@@ -234,11 +237,11 @@ struct LibraryPreloadDriver: View {
         }
       }
     }
-    let key = Key(folder: folder, query: query)
+    let key = Key(folder: folder, query: query, favouritesOnly: favouritesOnly)
     if let rows = cache[key] { return rows }
     let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
     let rows = (folder == .history ? historyOrder : savedOrder).filter { article in
-      guard folder.contains(article) else { return false }
+      guard folder.contains(article, favouritesOnly: favouritesOnly) else { return false }
       guard !words.isEmpty else { return true }
       let text =
         "\(article.title) \(article.subtitle) \(article.url.absoluteString) \(article.tagNames.joined(separator: " "))"

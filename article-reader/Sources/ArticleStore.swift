@@ -18,6 +18,7 @@ struct SavedArticle: Identifiable, Codable, Sendable {
   var previewFailed = false
   var isRead: Bool?
   var isArchived: Bool?
+  var isFavourite: Bool?
   // Missing isSaved means a link from the original saved-only library.
   var isSaved: Bool?
   var savedAt: Date?
@@ -28,6 +29,7 @@ struct SavedArticle: Identifiable, Codable, Sendable {
   var sharedTransferID: UUID?
   var importBatchID: UUID?
   var saved: Bool { isSaved != false }
+  var favourite: Bool { isFavourite == true }
   var tagNames: [String] { ArticleTagCatalog.displayNames(tags ?? []) }
 }
 
@@ -315,11 +317,22 @@ struct TaggingNotice: Identifiable {
     guard let index = articles.firstIndex(where: { $0.url == url }) else { return }
     var updated = articles
     updated[index].isSaved = false
+    updated[index].isFavourite = false
     updated[index].isArchived = false
     updated[index].savedAt = nil
     updated[index].sharedTransferID = nil
     updated[index].tagging?.generation = UUID()
     try commit(updated)
+  }
+
+  /// Favourites are library state, independent from tags and archive membership.
+  func setFavourite(_ favourite: Bool, for id: UUID) {
+    guard let index = articles.firstIndex(where: { $0.id == id && $0.saved }),
+      articles[index].favourite != favourite
+    else { return }
+    var updated = articles
+    updated[index].isFavourite = favourite
+    do { try commit(updated) } catch { errorMessage = error.localizedDescription }
   }
 
   func archive(_ id: UUID) throws {
