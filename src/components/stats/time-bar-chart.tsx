@@ -135,6 +135,24 @@ function formatTooltipLabel(value: string, bucket: Bucket) {
   return format(date, "MMM d, yyyy");
 }
 
+export function DurationTooltipLabel({
+  date,
+  bucket,
+  data,
+}: {
+  date: string;
+  bucket: Bucket;
+  data: Pick<ChartDatum, "new" | "learning" | "relearning" | "review">;
+}) {
+  const total = data.new + data.learning + data.relearning + data.review;
+  return (
+    <div className="grid gap-1">
+      <span>{formatTooltipLabel(date, bucket)}</span>
+      <strong>Total: {(total / 60000).toFixed(1)} min</strong>
+    </div>
+  );
+}
+
 export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
   const clock = useStatisticsClock();
   const [selectedRange, setSelectedRange] = React.useState<RangeKey>("1M");
@@ -222,9 +240,13 @@ export function TimeBarChart({ reviewLogs }: TimeBarChartProps) {
             <ChartTooltip
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value) =>
-                    formatTooltipLabel(value as string, bucket)
-                  }
+                  labelFormatter={(value, payload) => (
+                    <DurationTooltipLabel
+                      date={value as string}
+                      bucket={bucket}
+                      data={payload[0].payload}
+                    />
+                  )}
                   formatter={(value, name) =>
                     `${capitalise(name as string)}: ${(
                       (value as number) /

@@ -23,6 +23,12 @@ interface HeatmapProps {
 
 export function Heatmap({ reviewLogs }: HeatmapProps) {
   const clock = useStatisticsClock();
+  const [selectedDate, setSelectedDate] = React.useState<string>();
+  const [hoveredDate, setHoveredDate] = React.useState<string>();
+  const dismiss = () => {
+    setSelectedDate(undefined);
+    setHoveredDate(undefined);
+  };
   const heatmapData = React.useMemo(() => {
     const today = studyDayKey(clock);
     const yearAgo = addStudyMonths(today, -12);
@@ -85,8 +91,29 @@ export function Heatmap({ reviewLogs }: HeatmapProps) {
             <div key={weekIndex} className="flex flex-col gap-1">
               {week.map(({ date, count }) => (
                 <TooltipProvider key={date} delayDuration={50}>
-                  <Tooltip>
-                    <TooltipTrigger aria-label={`${count} reviews on ${date}`}>
+                  <Tooltip
+                    open={(selectedDate ?? hoveredDate) === date}
+                    onOpenChange={(open) =>
+                      setHoveredDate((previous) =>
+                        open ? date : previous === date ? undefined : previous,
+                      )
+                    }
+                  >
+                    <TooltipTrigger
+                      aria-label={`${count} reviews on ${date}`}
+                      aria-pressed={selectedDate === date}
+                      className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      onFocus={() => setSelectedDate(date)}
+                      onClick={() => setSelectedDate(date)}
+                      onBlur={() =>
+                        setSelectedDate((previous) =>
+                          previous === date ? undefined : previous,
+                        )
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") dismiss();
+                      }}
+                    >
                       <div
                         className={cn(
                           "h-3 w-3 rounded-sm",
@@ -94,7 +121,10 @@ export function Heatmap({ reviewLogs }: HeatmapProps) {
                         )}
                       />
                     </TooltipTrigger>
-                    <TooltipContent>
+                    <TooltipContent
+                      onEscapeKeyDown={dismiss}
+                      onPointerDownOutside={dismiss}
+                    >
                       <p>
                         {count} reviews on {formatTooltipDate(date)}
                       </p>

@@ -34,12 +34,12 @@ export default function StatsRoute() {
         <>
           <BasicStats reviewLogs={reviewLogs} />
           <Heatmap reviewLogs={reviewLogs} />
+          <TimeBarChart reviewLogs={reviewLogs} />
           <div className="flex sm:flex-row flex-col gap-2 w-full">
             <RatingPieChart reviewLogs={reviewLogs} />
             <TimeOfDayChart reviewLogs={reviewLogs} />
           </div>
           <ReviewChart reviewLogs={reviewLogs} />
-          <TimeBarChart reviewLogs={reviewLogs} />
         </>
       ) : (
         <EmptyStats />
