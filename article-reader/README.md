@@ -89,11 +89,11 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   Favourite, Archive article, Reload and Try Unwall.
   A saved, unarchived article also offers **Archive and close** after you scroll near
   its end. Both archive actions return to the library only after storage succeeds.
-- Empty folders use distinct Arctic illustrations: a reading fox, sheltered cabin,
-  snow trail, books preserved in ice, and an ice star. Notes use a paper aurora,
-  highlights an illuminated prism, and Search a telescope. The eight bundled
-  transparent assets are capped at 720 pixels and work on both themes. There is
-  no network loading or looping animation; constrained layouts prioritize text.
+- Empty folders use muted ink-wash landscapes and botanical studies: a shoreline,
+  sheltered pine, snow trail, layered ridges, plum branch, reeds, pale sun and bird.
+  Transparent edges and native multiply/screen blending let the light or dark
+  surface act as the canvas. The eight local assets are capped at 720 pixels
+  (about 1.3 MB total); constrained layouts prioritize text.
 - Long-press a card to refresh its preview or remove the link.
 
 This app stores link metadata in an atomic JSON file under Application Support,
@@ -107,8 +107,13 @@ they do not replace the current local storage path.
 ## Highlights and notes
 
 The bottom **Add note** button turns the Reader toolbar into a composer. Notes
-can refer to the article without selecting text. **Send** writes the note once;
-Discard removes only the unsent draft. Select text and choose **Add note**, or
+can refer to the article without selecting text. Send appears only for nonempty
+text. Tap the article to lower the keyboard and return to the toolbar; opening
+the input again resumes that draft while its browser is retained. **Send** publishes
+immediately and writes an atomic record off the UI thread. Failed writes keep the
+text visible with Retry; later edits and deletion are ordered after pending sends.
+
+Select text and choose **Add note**, or
 use the highlight toolbar, to include a compact two-line quote with its colour.
 The top Notes button opens the article conversation with full note text. Empty
 conversations open at medium height. Editing uses explicit **Save** and **Cancel**.

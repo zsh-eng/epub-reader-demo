@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Each empty state has its own Arctic scene. Transparent, bounded local assets
-/// work on both themes and yield their space before enlarged text does.
+/// Sparse ink washes let the surrounding app surface become the canvas.
+/// Multiply/screen remove paper tones on light/dark surfaces; alpha preserves
+/// broken brush edges. These local, static assets never animate during scrolling.
 struct ArcticEmptyState: View {
   enum Kind {
     case saved, favourites, downloaded, history, archive, tag, passages, highlights, notes, search
@@ -27,6 +28,7 @@ struct ArcticEmptyState: View {
     }
   }
 
+  @Environment(\.colorScheme) private var colourScheme
   let kind: Kind
   let title: String
   let detail: String
@@ -42,11 +44,27 @@ struct ArcticEmptyState: View {
     .frame(maxWidth: .infinity)
   }
 
+  @ViewBuilder private var inkArtwork: some View {
+    let width: CGFloat = isCompact ? 240 : 300
+    let painting = Image(kind.artwork).resizable().scaledToFit()
+      .frame(width: width, height: width).saturation(0.15)
+    if colourScheme == .dark {
+      painting.colorInvert().blendMode(.screen).opacity(0.48)
+    } else {
+      painting.blendMode(.multiply).opacity(0.7)
+    }
+  }
+
   private func composition(artwork: Bool) -> some View {
     VStack(spacing: 0) {
       if artwork {
-        Image(kind.artwork).resizable().scaledToFit()
-          .frame(width: 240, height: isCompact ? 128 : 224)
+        inkArtwork
+          .frame(width: isCompact ? 240 : 300, height: isCompact ? 128 : 172).clipped()
+          .mask {
+            LinearGradient(stops: [.init(color: .clear, location: 0),
+              .init(color: .black, location: 0.08), .init(color: .black, location: 0.92),
+              .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing)
+          }
           .padding(.bottom, isCompact ? 8 : 16).accessibilityHidden(true)
       }
       if let eyebrow {
