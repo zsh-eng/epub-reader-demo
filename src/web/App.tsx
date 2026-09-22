@@ -1606,6 +1606,17 @@ export function App({
                     ? `${state.review.base.slice(0, 7)} → ${state.review.head.slice(0, 7)}`
                     : ""}
                 </span>
+                {state.review && (
+                  <span
+                    {...stylex.props(styles.reviewTotals)}
+                    role="group"
+                    aria-label={`Review total: ${added} lines added, ${deleted} lines deleted`}
+                    title="Total lines changed in this comparison"
+                  >
+                    <span {...stylex.props(ui.added)}>+{added.toLocaleString()}</span>
+                    <span {...stylex.props(ui.removed)}>−{deleted.toLocaleString()}</span>
+                  </span>
+                )}
                 <span {...stylex.props(ui.grow)} />
                 <div {...stylex.props(styles.modeGroup)}>
                   <button
@@ -1878,8 +1889,9 @@ export function App({
                     return (
                       <div {...stylex.props(styles.diffHeader)}>
                         <button
-                          {...stylex.props(ui.button, ui.iconButton)}
+                          {...stylex.props(styles.headerToggle)}
                           aria-label={`${collapsed.has(item.id) ? "Expand" : "Collapse"} ${path}`}
+                          aria-expanded={!collapsed.has(item.id)}
                           onClick={() =>
                             setCollapsed((current) => {
                               const next = new Set(current);
@@ -1888,15 +1900,14 @@ export function App({
                               return next;
                             })
                           }
-                        >
-                          <Icon
-                            name="chevron"
-                            size={12}
-                            style={{
-                              transform: collapsed.has(item.id) ? "rotate(-90deg)" : undefined,
-                            }}
-                          />
-                        </button>
+                        />
+                        <Icon
+                          name="chevron"
+                          size={12}
+                          style={{
+                            transform: collapsed.has(item.id) ? "rotate(-90deg)" : undefined,
+                          }}
+                        />
                         {item.type === "diff" &&
                           item.fileDiff.prevName &&
                           item.fileDiff.prevName !== path && (
@@ -2144,6 +2155,8 @@ export function App({
 
 const styles = stylex.create({
   diffHeader: {
+    position: "relative",
+    pointerEvents: "none",
     display: "flex",
     alignItems: "center",
     gap: 8,
@@ -2155,7 +2168,19 @@ const styles = stylex.create({
     fontSize: 12,
     minHeight: 32,
   },
+  headerToggle: {
+    position: "absolute",
+    inset: 0,
+    borderWidth: 0,
+    backgroundColor: "transparent",
+    cursor: "pointer",
+    pointerEvents: "auto",
+    outline: { default: "none", ":focus-visible": `2px solid ${tokens.accent}` },
+    outlineOffset: -2,
+  },
   fileLink: {
+    position: "relative",
+    pointerEvents: "auto",
     borderWidth: 0,
     backgroundColor: "transparent",
     color: tokens.text,
@@ -2242,6 +2267,15 @@ const styles = stylex.create({
     fontFamily: tokens.code,
     whiteSpace: "nowrap",
     display: { default: "inline", "@media (max-width: 1000px)": "none" },
+  },
+  reviewTotals: {
+    display: "inline-flex",
+    gap: 6,
+    marginInlineStart: 5,
+    fontFamily: tokens.code,
+    fontSize: 11,
+    whiteSpace: "nowrap",
+    flexShrink: 0,
   },
   modeGroup: { display: "flex", backgroundColor: tokens.panel, padding: 2, borderRadius: 5 },
   findbar: {

@@ -692,9 +692,14 @@ describe("graphical review", () => {
 
   test("filters the full file set, switches layout, and finds across both files", async () => {
     const { controller } = await mountApp();
+    const totals = page.getByRole("group", {
+      name: "Review total: 2 lines added, 2 lines deleted",
+    });
+    await expect.element(totals).toBeVisible();
     await page.getByRole("textbox", { name: "Filter changed files" }).fill("alpha");
     await expect.poll(() => controller.getSnapshot().visibleFiles.length).toBe(1);
     expect(controller.getSnapshot().files).toHaveLength(2);
+    await expect.element(totals).toBeVisible();
     await page.getByRole("button", { name: "Clear file filter" }).click();
     await expect.poll(() => controller.getSnapshot().visibleFiles.length).toBe(2);
     await page.getByRole("button", { name: "Unified", exact: true }).click();
@@ -712,6 +717,24 @@ describe("graphical review", () => {
     await expect.element(page.getByText("1 / 2 hunks", { exact: true })).toBeVisible();
     await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
     await expect.element(page.getByText("2 / 2 hunks", { exact: true })).toBeVisible();
+  });
+
+  test("the full diff header toggles collapse while its filename opens the file", async () => {
+    await mountApp();
+    const toggle = page.getByRole("button", { name: "Collapse src/alpha.ts", exact: true });
+    await expect.element(toggle).toBeVisible();
+    const bounds = toggle.element().getBoundingClientRect();
+    // The far edge of the header is clickable, not just the chevron.
+    await toggle.click({ position: { x: bounds.width - 4, y: bounds.height / 2 } });
+    const expand = page.getByRole("button", { name: "Expand src/alpha.ts", exact: true });
+    await expect.element(expand).toHaveAttribute("aria-expanded", "false");
+    (expand.element() as HTMLButtonElement).focus();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(toggle).toHaveAttribute("aria-expanded", "true");
+    await page.getByRole("link", { name: "src/alpha.ts", exact: true }).click();
+    await expect.element(page.getByRole("textbox", { name: "File navigation" })).toBeVisible();
+    await page.getByRole("tab", { name: "Changes", exact: true }).click();
+    await expect.element(toggle).toHaveAttribute("aria-expanded", "true");
   });
 
   test("gd uses ctags to jump to a declaration in the current file", async () => {
