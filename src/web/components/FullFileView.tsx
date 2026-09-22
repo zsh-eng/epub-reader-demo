@@ -227,9 +227,9 @@ export function FullFileView({
           blameOpen && canBlame
             ? `[data-column-number] { padding-left: 196px; }
         [data-med-blame] { position: absolute; left: 8px; top: 0; width: 176px; height: 100%; display: flex; align-items: baseline; gap: 8px; font-family: var(--diffs-header-font-family); font-size: 10px; text-align: left; color: ${active.palette.muted}; user-select: none; overflow: hidden; white-space: nowrap; }
-        [data-med-blame-trigger] { display: flex; align-items: baseline; gap: 8px; width: 100%; height: 100%; }
-        [data-med-blame-trigger] > :first-child { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-        [data-med-blame-trigger] > :last-child { color: ${active.palette.faint}; }`
+        [data-med-blame-trigger] { display: flex; align-items: baseline; gap: 6px; width: 100%; height: 100%; }
+        [data-med-blame-trigger] > :first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+        [data-med-blame-trigger] > :not(:first-child) { flex-shrink: 0; color: ${active.palette.faint}; }`
             : ""
         }
         [data-vim-visual-empty]::before { content: ""; position: absolute; width: 1ch; height: 100%; background: color-mix(in srgb, ${active.palette.accent} 45%, transparent); pointer-events: none; }`,

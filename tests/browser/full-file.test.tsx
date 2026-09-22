@@ -306,7 +306,7 @@ test("blame uses Base UI tooltips that update between lines and dismiss on Escap
       line,
       commit: "a".repeat(40),
       author: "Mira",
-      date: "2026-09-20",
+      date: "2026-09-20T01:23:45.000Z",
       summary: `Change for line ${line}`,
     })),
   });
@@ -315,16 +315,64 @@ test("blame uses Base UI tooltips that update between lines and dismiss on Escap
   const second = page.getByLabelText(/^Line 2: aaaaaaaa/);
   await expect.element(first).toBeVisible();
   expect(first.element().hasAttribute("title")).toBe(false);
+  const date = first.element().querySelector("time")!;
+  expect(date.dateTime).toBe("2026-09-20T01:23:45.000Z");
+  expect(date.textContent).toBe(
+    new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
+      new Date("2026-09-20T01:23:45.000Z"),
+    ),
+  );
   await first.hover();
   await expect
     .poll(() => document.querySelector('[role="tooltip"]')?.textContent)
     .toContain("Change for line 1");
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toContain(
+    "2026-09-20T01:23:45.000Z",
+  );
   await second.hover();
   await expect
     .poll(() => document.querySelector('[role="tooltip"]')?.textContent)
     .toContain("Change for line 2");
   await userEvent.keyboard("{Escape}");
   await expect.element(page.getByRole("tooltip")).not.toBeInTheDocument();
+});
+
+test("compact blame dates fit beside long authors and omit uncommitted or missing dates", async () => {
+  const load: BlameLoader = async (file) => ({
+    source: file.source,
+    path: file.path,
+    identity: file.identity,
+    truncated: false,
+    lines: [1, 2, 3].map((line) => ({
+      line,
+      commit: (line === 2 ? "0" : "a").repeat(40),
+      author: "An author with a name much wider than the blame gutter",
+      date: line === 3 ? "" : "2026-09-20T01:23:45.000Z",
+      summary: `Change for line ${line}`,
+    })),
+  });
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, text: "one\ntwo\nthree\n" }}
+      loadBlame={load}
+      blameEnabled
+    />,
+  );
+  const committed = page.getByLabelText(/^Line 1: aaaaaaaa/);
+  const uncommitted = page.getByLabelText(/^Line 2: Uncommitted/);
+  const missingDate = page.getByLabelText(/^Line 3: aaaaaaaa/);
+  await expect.element(committed).toBeVisible();
+  const author = committed.element().firstElementChild!;
+  const date = committed.element().querySelector("time")!;
+  expect(author.scrollWidth).toBeGreaterThan(author.clientWidth);
+  expect(date.getBoundingClientRect().right).toBeLessThanOrEqual(
+    committed.element().getBoundingClientRect().right + 1,
+  );
+  expect(date.getBoundingClientRect().left).toBeGreaterThan(author.getBoundingClientRect().right);
+  expect(uncommitted.element().textContent).toContain("Uncommitted");
+  expect(uncommitted.element().querySelector("time")).toBeNull();
+  expect(missingDate.element().querySelector("time")).toBeNull();
 });
 
 test("picker previews do not start background blame", async () => {

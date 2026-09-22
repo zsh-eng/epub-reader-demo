@@ -6,6 +6,13 @@ import type { BlameCell } from "../data/blame-gutter";
 import { tokens, ui } from "../theme.stylex";
 
 const shortCommit = (commit: string) => (/^0+$/.test(commit) ? "Uncommitted" : commit.slice(0, 8));
+const dateFormatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const compactDate = (entry: BlameCell["entry"]) => {
+  const timestamp = Date.parse(entry.date);
+  return /^0+$/.test(entry.commit) || !Number.isFinite(timestamp)
+    ? null
+    : dateFormatter.format(timestamp);
+};
 
 /** React portals keep Base UI's trigger and delay-group behavior inside Pierre's
  * shadow root. Only mounted line numbers get a trigger; one popup is shared. */
@@ -21,10 +28,11 @@ export function BlameTooltips({ cells }: { cells: BlameCell[] }) {
             render={<span />}
             data-med-blame-trigger=""
             tabIndex={-1}
-            aria-label={`Line ${entry.line}: ${shortCommit(entry.commit)} · ${entry.author} · ${entry.date.slice(0, 10)} · ${entry.summary}`}
+            aria-label={`Line ${entry.line}: ${shortCommit(entry.commit)} · ${entry.author}${compactDate(entry) ? ` · ${entry.date}` : ""} · ${entry.summary}`}
           >
             <span>{entry.author}</span>
             <span>{shortCommit(entry.commit)}</span>
+            {compactDate(entry) && <time dateTime={entry.date}>{compactDate(entry)}</time>}
           </Tooltip.Trigger>,
           container,
           String(entry.line),
@@ -44,7 +52,7 @@ export function BlameTooltips({ cells }: { cells: BlameCell[] }) {
                   <>
                     <div {...stylex.props(styles.meta)}>
                       <strong>{payload.author}</strong>
-                      <span>{payload.date.slice(0, 10)}</span>
+                      {compactDate(payload) && <time dateTime={payload.date}>{payload.date}</time>}
                     </div>
                     <div>{payload.summary}</div>
                     <span {...stylex.props(styles.commit)}>
