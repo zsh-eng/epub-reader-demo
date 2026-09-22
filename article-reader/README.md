@@ -71,8 +71,17 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   and are no longer copied into each saved HTML file. Reader text does not wait
   for decorative images or body-image load events. Inline article media can still
   require a network connection. Deleting a link removes its stored Reader view;
-  archiving keeps it. For uncached pages, extraction still waits for the publisher
-  load event; a stalled publisher resource can delay initial Reader availability.
+  archiving keeps it. New pages extract at DOM readiness without waiting for
+  publisher images or analytics. Reader is also available during loading once
+  the main document has committed; extraction still needs enough article text.
+  Background preloads stop unrelated publisher resources once Reader is ready.
+- Reader and Website share an explicit article history, including the initial
+  offline Reader. Following a link uses its own save state, notes and HTML target.
+  Back and Forward restore that identity; a detour cannot replace the original
+  saved article. Website form/scroll state is not retained across history loads.
+- Leading article images stay in their editorial position and suppress the OG
+  hero. Large standalone images extend through the text gutter. Wide media caps
+  at 60% of viewport height; other body images cap at 70%, without cropping.
 - Preview images and favicons share a memory cache and a durable 128 MB disk cache.
   Reader lead images and author portraits use the same cache; images are downsampled
   to at most 1200 pixels. Thumbnail decoding runs off the main thread, with at
@@ -86,7 +95,9 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   or Reader closes; Website scrolling never updates them. A paragraph anchor handles
   text-size changes, with progress as a fallback after article text changes.
 - The page menu provides Copy link, Share, native Find in page, Open in browser,
-  Favourite, Archive article, Reload and Try Unwall.
+  Favourite, Archive article, **Refresh Reader**, Reload and Try Unwall.
+  Refresh Reader uses the current page DOM, or loads the source if only cached
+  HTML is open. A failed extraction keeps the previous saved document.
   A saved, unarchived article also offers **Archive and close** after you scroll near
   its end. Both archive actions return to the library only after storage succeeds.
 - Empty folders use muted ink-wash landscapes and botanical studies: a shoreline,
@@ -337,8 +348,9 @@ DOM. That integration may need an update if Unwall changes its page structure.
 Source: https://unwall.app/assets/Reader-C69bK8Zs.js.
 
 Reader HTML is sanitized and displayed in a separate WebView with page JavaScript
-disabled and a restrictive content policy. The live page stays intact. No
-website receives a native message bridge.
+disabled and a restrictive content policy. The live page stays intact. Publisher
+readiness and Reader tools use the app’s isolated JavaScript world; publisher
+scripts cannot call these native bridges.
 
 Reading themes reuse the parent app’s `src/index.css` neutral and Flexoki palettes.
 The library uses native adaptive colours and follows the system appearance.

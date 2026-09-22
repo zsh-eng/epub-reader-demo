@@ -249,6 +249,8 @@ struct ReaderPage: View {
       .frame(maxWidth: .infinity)
       Button(action: toggleSaved) {
         Image(systemName: isSaved ? "bookmark.fill" : "bookmark").frame(width: 44, height: 44)
+          .contentTransition(.symbolEffect(.replace))
+          .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.2), value: isSaved)
       }
       .accessibilityLabel(isSaved ? "Unsave article" : "Save article")
       .accessibilityValue(isSaved ? "Saved" : "Not saved")
@@ -411,6 +413,9 @@ struct ReaderNavigationBar: View {
         }
         .disabled(article?.saved != true || article?.isArchived == true)
         .accessibilityIdentifier("reader-archive-menu")
+        Button("Refresh Reader", systemImage: "arrow.clockwise.document", action: browser.refreshReader)
+          .disabled(browser.isExtracting || browser.isOpeningWebsite)
+          .accessibilityIdentifier("reader-refresh")
         Button("Reload", systemImage: "arrow.clockwise", action: browser.reload)
         Button("Open in browser", systemImage: "safari") { openURL(browser.libraryURL) }
           .accessibilityIdentifier("reader-open-browser")

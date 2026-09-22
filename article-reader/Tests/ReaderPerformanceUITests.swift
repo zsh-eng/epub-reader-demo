@@ -59,6 +59,94 @@ final class ReaderPerformanceUITests: XCTestCase {
     XCTAssertFalse(retry.exists)
   }
 
+  @MainActor func testCachedReaderLinkHistoryNeverReplacesSavedArticle() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-disable-preloading"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
+    app.buttons["open-copied-link"].tap()
+    showReader(app)
+    let bookmark = app.buttons["reader-save"]
+    if bookmark.value as? String == "Not saved" { bookmark.tap() }
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-disable-preloading"]
+    app.launchEnvironment = [:]
+    app.launch()
+    XCTAssertTrue(app.buttons["article-story"].waitForExistence(timeout: 10))
+    app.buttons["article-story"].tap()
+    showReader(app)
+    XCTAssertFalse(app.buttons["browser-back"].isEnabled)
+    let link = app.webViews.links["Read the next story"]
+    for _ in 0..<6 { if link.isHittable { break }; app.webViews.firstMatch.swipeUp() }
+    XCTAssertTrue(link.isHittable)
+    link.tap()
+    XCTAssertTrue(app.webViews.staticTexts["A second story"].waitForExistence(timeout: 10))
+    XCTAssertEqual(bookmark.value as? String, "Not saved")
+    XCTAssertTrue(app.buttons["browser-back"].isEnabled)
+    showReader(app)
+    app.buttons["Page options"].tap()
+    app.buttons["reader-refresh"].tap()
+    XCTAssertTrue(app.webViews.staticTexts["A second story"].waitForExistence(timeout: 10))
+    app.buttons["browser-back"].tap()
+    showReader(app)
+    XCTAssertEqual(bookmark.value as? String, "Saved")
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    XCTAssertTrue(app.buttons["browser-forward"].isEnabled)
+    app.buttons["browser-forward"].tap()
+    showReader(app)
+    XCTAssertEqual(bookmark.value as? String, "Not saved")
+    XCTAssertTrue(app.webViews.staticTexts["A second story"].exists)
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.buttons["article-story"].tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    XCTAssertFalse(app.webViews.staticTexts["A second story"].exists)
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-disable-preloading"]
+    app.launch()
+    app.buttons["article-story"].tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    XCTAssertFalse(app.webViews.staticTexts["A second story"].exists)
+    capture(app, "saved-reader-keeps-own-content-after-detour")
+  }
+
+  @MainActor func testReaderExtractsWhilePublisherImageNeverFinishes() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-hold-publisher-image", "-disable-preloading"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
+    app.buttons["open-copied-link"].tap()
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
+    XCTAssertTrue((app.buttons["reader-appearance"].value as? String ?? "").contains("publisher resource pending"))
+    capture(app, "reader-with-publisher-resource-still-pending")
+  }
+
+  @MainActor func testRefreshReaderUsesLatestDOM() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-disable-preloading"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
+    app.buttons["open-copied-link"].tap()
+    showReader(app)
+    app.buttons["reader-toggle"].tap()
+    let button = app.webViews.buttons["Load late article text"]
+    for _ in 0..<8 { if button.isHittable { break }; app.webViews.firstMatch.swipeUp() }
+    XCTAssertTrue(button.isHittable)
+    button.tap()
+    showReader(app)
+    let late = app.webViews.staticTexts["This late paragraph arrived after extraction. Refresh Reader includes the latest article text."]
+    XCTAssertFalse(late.exists)
+    app.buttons["Page options"].tap()
+    app.buttons["reader-refresh"].tap()
+    XCTAssertTrue(late.waitForExistence(timeout: 10))
+    capture(app, "reader-refreshed-from-latest-dom")
+  }
+
   @MainActor private func openRecoverableFailure() -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [
@@ -91,15 +179,16 @@ final class ReaderPerformanceUITests: XCTestCase {
       for: NSPredicate { _, _ in (Int(active.label) ?? 99) <= 2 }, evaluatedWith: active)
     wait(for: [bounded], timeout: 3)
     capture(app, "bounded-slow-publisher-preloads")
-    // An expired speculative page must open as a new foreground load, never
-    // reuse a stopped document with a permanently disabled Reader action.
+    // Early extraction preserves the useful Reader while stopping unrelated
+    // publisher resources. Opening it must reuse that prepared document.
     let requested = app.staticTexts["preload-requested"].label
     let firstPath = requested.split(separator: ",").first.map(String.init) ?? "missing"
     let first = app.buttons["article-" + firstPath]
     XCTAssertTrue(first.exists)
     first.tap()
-    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "cold")
-    XCTAssertTrue(app.webViews.staticTexts["Publisher navigation"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].waitForExistence(timeout: 5))
   }
 
   @MainActor func testBackgroundReleasesNeighborsAndPreservesOpenReader() {

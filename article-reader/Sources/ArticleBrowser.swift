@@ -104,6 +104,15 @@ enum ArticleRouting {
   }
 }
 
+/// Publisher DOM readiness is independent of images, ads and analytics finishing.
+@MainActor private final class PublisherReadyBridge: NSObject, WKScriptMessageHandler {
+  weak var browser: ArticleBrowser?
+  func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+    guard message.frameInfo.isMainFrame else { return }
+    browser?.publisherDocumentBecameReady(from: message.webView)
+  }
+}
+
 /// Messages come only from the cleaned Reader's isolated content world.
 @MainActor private final class ReaderAnnotationBridge: NSObject, WKScriptMessageHandler {
   weak var browser: ArticleBrowser?
@@ -228,8 +237,16 @@ enum ArticleRouting {
   private var wantsReader = false
   var isExtracting = false
   var isLoading = true
-  var canGoBack = false
-  var canGoForward = false
+  var canGoBack: Bool { historyIndex > 0 }
+  var canGoForward: Bool { historyIndex + 1 < history.count }
+  private struct PageEntry {
+    var url: URL
+    var source: URL
+    var reader = false
+  }
+  private var history: [PageEntry] = []
+  private var historyIndex = 0
+  @ObservationIgnored private var refreshWhenReady = false
   var hasLoaded = false
   var errorMessage: String?
   private(set) var websiteFailure: String?
@@ -255,14 +272,18 @@ enum ArticleRouting {
   @ObservationIgnored private var appearanceVersion = 0
   @ObservationIgnored private var extraction: (url: URL, html: String)?
   @ObservationIgnored private weak var store: ArticleStore?
-  @ObservationIgnored private var downloadURL: URL
+  private var articleIdentity: URL
   @ObservationIgnored private var cachedLoadTask: Task<Void, Never>?
+  @ObservationIgnored private var speculative: Bool
+  @ObservationIgnored private var suspendedPublisher = false
 
-  init(url: URL, store: ArticleStore, downloadedFile: URL? = nil) {
+  init(url: URL, store: ArticleStore, downloadedFile: URL? = nil, speculative: Bool = false) {
+    self.speculative = speculative
     currentURL = url
     cacheIdentity = url
-    downloadURL = url
+    articleIdentity = url
     self.store = store
+    history = [PageEntry(url: url, source: url)]
     let websiteConfiguration = WKWebViewConfiguration()
     #if DEBUG
       if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-website-recovery") {
@@ -287,7 +308,16 @@ enum ArticleRouting {
     super.init()
     webView.navigationDelegate = self
     webView.uiDelegate = self
-    webView.allowsBackForwardNavigationGestures = true
+    // Toolbar history also includes local Reader documents, which WKWebView's
+    // website-only back/forward list cannot represent.
+    webView.allowsBackForwardNavigationGestures = false
+    let publisherBridge = PublisherReadyBridge()
+    publisherBridge.browser = self
+    websiteConfiguration.userContentController.add(
+      publisherBridge, contentWorld: .defaultClient, name: "arcticPublisherReady")
+    websiteConfiguration.userContentController.addUserScript(WKUserScript(
+      source: "window.webkit.messageHandlers.arcticPublisherReady.postMessage(true);",
+      injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
     readerView.navigationDelegate = self
     let readyBridge = ReaderReadyBridge()
     readyBridge.browser = self
@@ -311,69 +341,60 @@ enum ArticleRouting {
       }
     }
     observations = [
-      webView.observe(\.canGoBack, options: [.new]) { [weak self] view, _ in
-        Task { @MainActor in self?.canGoBack = view.canGoBack }
-      },
-      webView.observe(\.canGoForward, options: [.new]) { [weak self] view, _ in
-        Task { @MainActor in self?.canGoForward = view.canGoForward }
-      },
       webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
         Task { @MainActor in self?.isLoading = view.isLoading }
       },
-      webView.observe(\.url, options: [.new]) { [weak self] view, _ in
-        Task { @MainActor in
-          if let url = view.url, !["file", "arctic-recovery"].contains(url.scheme ?? "") {
-            self?.currentURL = url
-          }
-        }
-      },
     ]
-    if let downloadedFile {
-      isExtracting = true
-      isLoading = false
-      hasLoaded = true
-      wantsReader = true
-      isReader = true
-      let version = pageVersion
-      cachedLoadTask = Task { [weak self] in
-        do {
-          // Existing saved documents predate the charset declaration. Declare
-          // their known encoding at load time instead of letting WebKit guess.
-          var bytes = try await Task.detached {
-            try Data(contentsOf: downloadedFile)
-          }.value
-          #if DEBUG
-            if TestMode.enabled
-              && ProcessInfo.processInfo.arguments.contains("-hold-reader-body-image")
-            {
-              let html = String(decoding: bytes, as: UTF8.self)
-                .replacingOccurrences(
-                  of: "img-src https: http: data:;",
-                  with: "img-src https: http: data: arctic-test:;"
-                )
-                .replacingOccurrences(
-                  of: "</article>",
-                  with: "<img src='arctic-test://held' width='1' height='1' alt=''></article>")
-              bytes = Data(html.utf8)
-            }
-          #endif
-          guard let self, !Task.isCancelled, version == self.pageVersion else { return }
-          self.prepareReaderReadiness()
-          self.readerNavigation = self.readerView.load(
-            bytes, mimeType: "text/html", characterEncodingName: "UTF-8",
-            baseURL: downloadedFile.deletingLastPathComponent())
-        } catch {
-          guard let self, !Task.isCancelled, version == self.pageVersion else { return }
-          self.isExtracting = false
-          self.errorMessage = "Could not open the downloaded article: " + error.localizedDescription
-        }
+    if let downloadedFile { loadCachedReader(downloadedFile) }
+    else { loadWebsite(url) }
+  }
+
+  private func loadCachedReader(_ downloadedFile: URL) {
+    isExtracting = true
+    isLoading = false
+    hasLoaded = true
+    wantsReader = true
+    isReader = true
+    let version = pageVersion
+    cachedLoadTask = Task { [weak self] in
+      do {
+        // Existing saved documents predate the charset declaration. Declare
+        // their known encoding at load time instead of letting WebKit guess.
+        let cached = try await Task.detached {
+          let cssURL = Bundle.main.url(forResource: "reader", withExtension: "css")!
+          return (try Data(contentsOf: downloadedFile), try String(contentsOf: cssURL, encoding: .utf8))
+        }.value
+        var bytes = cached.0
+        #if DEBUG
+          if TestMode.enabled
+            && ProcessInfo.processInfo.arguments.contains("-hold-reader-body-image")
+          {
+            let html = String(decoding: bytes, as: UTF8.self)
+              .replacingOccurrences(
+                of: "img-src https: http: data:;",
+                with: "img-src https: http: data: arctic-test:;"
+              )
+              .replacingOccurrences(
+                of: "</article>",
+                with: "<img src='arctic-test://held' width='1' height='1' alt=''></article>")
+            bytes = Data(html.utf8)
+          }
+        #endif
+        guard let self, !Task.isCancelled, version == self.pageVersion else { return }
+        self.prepareReaderReadiness(styles: cached.1)
+        self.readerNavigation = self.readerView.load(
+          bytes, mimeType: "text/html", characterEncodingName: "UTF-8",
+          baseURL: downloadedFile.deletingLastPathComponent())
+      } catch {
+        guard let self, !Task.isCancelled, version == self.pageVersion else { return }
+        self.isExtracting = false
+        self.errorMessage = "Could not open the downloaded article: " + error.localizedDescription
       }
-    } else {
-      loadWebsite(url)
     }
   }
 
   private func loadWebsite(_ url: URL) {
+    suspendedPublisher = false
     requestedWebsiteURL = ArticleRouting.original(url)
     websiteFailure = nil
     failedWebsiteURL = nil
@@ -409,21 +430,83 @@ enum ArticleRouting {
     }
   }
 
+  /// Once useful HTML is prepared, speculative pages do not keep downloading
+  /// unrelated publisher resources. Opening Website restarts that request.
+  func activate(preferReader: Bool) {
+    speculative = false
+    if preferReader { showReader() }
+    else if suspendedPublisher { loadWebsite(sourceURL) }
+  }
+
   var sourceURL: URL { ArticleRouting.original(currentURL) }
-  var libraryURL: URL { downloadURL }
+  var libraryURL: URL { articleIdentity }
 
   func back() {
-    guard webView.canGoBack else { return }
-    cacheIdentity = nil
-    selectWebsite()
-    webView.goBack()
+    guard canGoBack else { return }
+    openHistory(at: historyIndex - 1)
   }
+
   func forward() {
-    guard webView.canGoForward else { return }
-    cacheIdentity = nil
-    selectWebsite()
-    webView.goForward()
+    guard canGoForward else { return }
+    openHistory(at: historyIndex + 1)
   }
+
+  private func openHistory(at index: Int) {
+    captureReaderPosition()
+    history[historyIndex].reader = isReader
+    historyIndex = index
+    let entry = history[index]
+    resetDocument()
+    cacheIdentity = nil
+    isOpeningWebsite = false
+    refreshWhenReady = false
+    currentURL = entry.source
+    articleIdentity = entry.url
+    committedURL = nil
+    websiteNavigation = nil
+    websiteReady = false
+    webView.stopLoading()
+    if entry.reader, let file = store?.downloadedFile(for: entry.url) {
+      loadCachedReader(file)
+    } else {
+      loadWebsite(entry.source)
+      wantsReader = entry.reader
+    }
+  }
+
+  private func followLink(_ url: URL) {
+    captureReaderPosition()
+    history[historyIndex].reader = isReader
+    let identity = ArticleRouting.original(url)
+    history = Array(history.prefix(historyIndex + 1))
+    history.append(PageEntry(url: identity, source: identity))
+    historyIndex = history.count - 1
+    cacheIdentity = nil
+    resetDocument()
+    wantsReader = false
+    isOpeningWebsite = false
+    refreshWhenReady = false
+    currentURL = url
+    articleIdentity = identity
+    committedURL = nil
+    websiteNavigation = nil
+    loadWebsite(url)
+  }
+
+  /// Re-extract the current DOM. A cached-only Reader first loads its own source;
+  /// its existing document remains available until fresh extraction succeeds.
+  func refreshReader() {
+    wantsReader = true
+    errorMessage = nil
+    if websiteReady || (committedURL != nil && hasLoaded) {
+      prepareReader(force: true)
+    } else {
+      refreshWhenReady = true
+      isOpeningWebsite = true
+      loadWebsite(sourceURL)
+    }
+  }
+
   func reload() {
     let url = failedWebsiteURL ?? requestedWebsiteURL ?? sourceURL
     if readerReady {
@@ -494,10 +577,18 @@ enum ArticleRouting {
   }
 
   /// Prepare the cleaned page before a tap, without changing the visible mode.
-  func prepareReader() {
-    guard hasLoaded, !isExtracting, !readerReady else { return }
+  func prepareReader(force: Bool = false) {
+    guard hasLoaded, !isExtracting, force || !readerReady else { return }
     isExtracting = true
+    if force {
+      pageVersion += 1
+      decorationTask?.cancel()
+      decorationTask = nil
+      persistenceTask?.cancel()
+      pendingReaderMedia = nil
+    }
     let version = pageVersion
+    let articleURL = libraryURL
     extractionTask?.cancel()
     extractionTask = Task { [weak self] in
       guard let self else { return }
@@ -532,9 +623,10 @@ enum ArticleRouting {
         guard !Task.isCancelled, version == pageVersion else { return }
         let host = sourceURL.host ?? ""
         let html = Self.readerHTML(article: article, css: css, host: host, media: media)
-        extraction = (downloadURL, html)
+        extraction = (articleURL, html)
         persistExtraction(in: store)
-        prepareReaderReadiness()
+        readerReady = false
+        prepareReaderReadiness(styles: css)
         readerNavigation = readerView.loadHTMLString(html, baseURL: nil)
         hydrateDecorations(article: article, css: css, host: host, initial: media, version: version)
       } catch {
@@ -580,8 +672,8 @@ enum ArticleRouting {
     let hero =
       hasHero
       ? """
-      <figure class='hero'><div style='aspect-ratio:\(width)/\(height);background:var(--muted);overflow:hidden'>
-      <img id='reader-hero' data-arctic-source="\(escape(article["image"] ?? ""))" \(media.hero.isEmpty ? "" : "src='\(media.hero)'") alt='' style='display:block;width:100%;height:100%;object-fit:cover'></div>
+      <figure class='hero'><div class='hero-frame' style='aspect-ratio:\(width)/\(height);background:var(--muted);overflow:hidden'>
+      <img id='reader-hero' data-arctic-source="\(escape(article["image"] ?? ""))" \(media.hero.isEmpty ? "" : "src='\(media.hero)'") alt='' style='display:block;width:100%;height:100%;object-fit:contain'></div>
       \(caption.isEmpty ? "" : "<figcaption>\(caption)</figcaption>")</figure>
       """ : ""
     return """
@@ -598,6 +690,7 @@ enum ArticleRouting {
   private func hydrateDecorations(
     article: [String: String], css: String, host: String, initial: ReaderMedia, version: Int
   ) {
+    let articleURL = libraryURL
     loadReaderMedia(
       sources: [
         "hero": article["image"] ?? "", "icon": article["favicon"] ?? "",
@@ -607,7 +700,7 @@ enum ArticleRouting {
     ) { [weak self] media in
       guard let self, media != initial else { return }
       self.extraction = (
-        self.downloadURL, Self.readerHTML(article: article, css: css, host: host, media: media)
+        articleURL, Self.readerHTML(article: article, css: css, host: host, media: media)
       )
       self.persistExtraction(in: self.store)
     }
@@ -698,7 +791,9 @@ enum ArticleRouting {
     ) { _ in }
   }
 
-  private func prepareReaderReadiness() {
+  private func prepareReaderReadiness(styles: String) {
+    // Apply current layout to old downloads without rewriting stored article bytes.
+    let styleJSON = String(data: try! JSONEncoder().encode(styles), encoding: .utf8)!
     (readerView as? ReaderWebView)?.didLayout = { [weak self] in
       self?.restoreReaderPositionIfNeeded()
     }
@@ -711,7 +806,28 @@ enum ArticleRouting {
     controller.addUserScript(
       WKUserScript(
         source:
-          "window.webkit.messageHandlers.arcticReaderReady.postMessage('\(readerDocumentToken)');",
+          """
+          (() => {
+            const style = document.createElement('style');
+            style.textContent = \(styleJSON); document.head.append(style);
+            const hero = document.getElementById('reader-hero');
+            if (hero) { hero.parentElement.classList.add('hero-frame'); hero.style.objectFit = 'contain'; }
+            const expand = image => {
+              if (image.naturalWidth < Math.min(480, innerWidth * devicePixelRatio) ||
+                  image.naturalWidth / image.naturalHeight < 0.55) return;
+              // Only expand a standalone image, never an inline icon or a table cell.
+              const block = image.closest('figure, p') || image;
+              if (block.closest('li, td, blockquote') ||
+                  (block.tagName === 'P' && block.textContent.trim())) return;
+              block.classList.add('reader-wide-media');
+            };
+            for (const image of document.querySelectorAll('#reader-content img')) {
+              if (image.complete) expand(image);
+              else image.addEventListener('load', () => expand(image), { once: true });
+            }
+            window.webkit.messageHandlers.arcticReaderReady.postMessage('\(readerDocumentToken)');
+          })();
+          """,
         injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
   }
 
@@ -745,6 +861,11 @@ enum ArticleRouting {
       self.applyReaderMedia()
       if self.decorationTask == nil { self.hydrateCachedDecorations() }
       if self.wantsReader { self.isReader = true }
+      if self.speculative && self.webView.isLoading {
+        self.suspendedPublisher = true
+        self.websiteReady = false
+        self.webView.stopLoading()
+      }
     }
   }
 
@@ -767,6 +888,19 @@ enum ArticleRouting {
     // This initial website load belongs to the same downloaded article. Its
     // cached document remains valid and visible while the website prepares.
     if isOpeningWebsite { return }
+    resetDocument()
+  }
+
+  private func resetDocument() {
+    cachedLoadTask?.cancel()
+    cachedLoadTask = nil
+    selectedAnnotationID = nil
+    pendingAnnotationReveal = nil
+    unmatchedAnnotations = []
+    annotationPresentation = nil
+    noteDraft = nil
+    positionReady = false
+    restoringPosition = false
     pageVersion += 1
     extractionTask?.cancel()
     decorationTask?.cancel()
@@ -778,7 +912,6 @@ enum ArticleRouting {
     readerView.stopLoading()
     hasLoaded = false
     readerReady = false
-    wantsReader = false
     isExtracting = false
     isReader = false
   }
@@ -798,10 +931,15 @@ enum ArticleRouting {
     // Keep the saved URL for the initial document, even after a publisher
     // redirect. Later navigation belongs to the newly viewed article.
     if let previous = committedURL, previous != sourceURL {
-      downloadURL = sourceURL
+      articleIdentity = sourceURL
       cacheIdentity = nil
+      history = Array(history.prefix(historyIndex + 1))
+      history.append(PageEntry(url: articleIdentity, source: sourceURL))
+      historyIndex = history.count - 1
     }
+    history[historyIndex].source = sourceURL
     committedURL = sourceURL
+    hasLoaded = true
   }
 
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -812,8 +950,19 @@ enum ArticleRouting {
       return
     }
     guard navigation === websiteNavigation else { return }
+    publisherDocumentBecameReady(from: webView)
+  }
+
+  fileprivate func publisherDocumentBecameReady(from view: WKWebView?) {
+    guard view === webView, committedURL != nil, !suspendedPublisher else { return }
     websiteReady = true
     hasLoaded = true
+    if refreshWhenReady {
+      refreshWhenReady = false
+      isOpeningWebsite = false
+      prepareReader(force: true)
+      return
+    }
     if isOpeningWebsite {
       isOpeningWebsite = false
       if !wantsReader { isReader = false }
@@ -869,28 +1018,29 @@ enum ArticleRouting {
     {
       requestedWebsiteURL = ArticleRouting.original(url)
     }
-    if navigationAction.navigationType == .linkActivated { cacheIdentity = nil }
     guard navigationAction.navigationType == .linkActivated else {
       decisionHandler(.allow)
       return
     }
-    guard ["https", "http", "file", "about"].contains(url.scheme ?? "") else {
+    if url.fragment != nil {
+      var target = URLComponents(url: url, resolvingAgainstBaseURL: true)
+      var current = URLComponents(url: webView.url ?? currentURL, resolvingAgainstBaseURL: true)
+      target?.fragment = nil; current?.fragment = nil
+      if target?.url == current?.url { decisionHandler(.allow); return }
+    }
+    if TestMode.enabled, url.isFileURL {
+      decisionHandler(.cancel)
+      followLink(URL(string: "https://fixture.example/" + url.deletingPathExtension().lastPathComponent)!)
+      return
+    }
+    guard ["https", "http"].contains(url.scheme ?? "") else {
       decisionHandler(.cancel)
       return
     }
-    if webView === readerView, ["https", "http"].contains(url.scheme ?? "") {
+    if webView === readerView || navigationAction.targetFrame?.isMainFrame != false {
       decisionHandler(.cancel)
-      selectWebsite()
-      if bypassRouting { self.webView.load(URLRequest(url: url)) } else { loadWebsite(url) }
+      followLink(url)
       return
-    }
-    if navigationAction.targetFrame?.isMainFrame == true, !bypassRouting {
-      let routed = ArticleRouting.automatic(url)
-      if routed != url {
-        decisionHandler(.cancel)
-        webView.load(URLRequest(url: routed))
-        return
-      }
     }
     decisionHandler(.allow)
   }
@@ -900,7 +1050,7 @@ enum ArticleRouting {
     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
   ) -> WKWebView? {
     if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme ?? "") {
-      webView.load(URLRequest(url: bypassRouting ? url : ArticleRouting.automatic(url)))
+      followLink(url)
     }
     return nil
   }
@@ -1357,9 +1507,9 @@ struct WebSurface: UIViewRepresentable {
     if let browser = browsers[url], browser.cacheIdentity == url {
       lastOpenState = browser.readerReady ? "prepared" : "preparing"
       browser.retryFailedWebsiteOnOpen()
-      if store.articles.contains(where: { $0.url == url && $0.saved && $0.downloadedAt != nil }) {
-        browser.showReader()
-      }
+      browser.activate(preferReader: store.articles.contains {
+        $0.url == url && $0.saved && $0.downloadedAt != nil
+      })
       recordOpen(since: began)
       return browser
     }
@@ -1425,7 +1575,7 @@ struct WebSurface: UIViewRepresentable {
       }
       browsers[url]?.stop()
       let browser = ArticleBrowser(
-        url: url, store: store, downloadedFile: store.downloadedFile(for: url))
+        url: url, store: store, downloadedFile: store.downloadedFile(for: url), speculative: true)
       browsers[url] = browser
       pending.append((url, browser, Date()))
       await Task.yield()

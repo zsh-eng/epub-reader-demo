@@ -8,17 +8,19 @@ beforeAll(async () => { browser = await chromium.launch(); });
 afterAll(async () => { await browser?.close(); });
 const script = readFileSync(resolve(import.meta.dir, '../Resources/reader.js'), 'utf8');
 
-test('extracts metadata, moves the lead image once, and highlights code safely', async () => {
+test('preserves the lead image in the body without adding an OG hero', async () => {
   const page = await browser.newPage();
-  await page.route('https://fixture.example/**', route => route.fulfill({ contentType: 'text/html', body: readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/story.html'), 'utf8') }));
+  await page.route('https://fixture.example/**', route => route.fulfill(route.request().resourceType() === 'image'
+    ? { contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"></svg>' }
+    : { contentType: 'text/html', body: readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/story.html'), 'utf8') }));
   await page.goto('https://fixture.example/story');
   await page.evaluate(script);
   const result = await page.evaluate(() => (globalThis as any).extractArticle());
   expect(result.author).toBe('Alex Reader');
   expect(result.description).toContain('On walking slowly');
-  expect(result.image).toEndWith('cover.png');
+  expect(result.image).toBe('');
   expect(result.favicon).toEndWith('cover.png');
-  expect(result.content).not.toContain('<img');
+  expect(result.content.match(/<img/g)).toHaveLength(1);
   expect(result.content).toContain('hljs-keyword');
   expect(result.content).toContain('hljs-string');
   expect(result.content).not.toContain('<script');
@@ -43,7 +45,9 @@ test('uses only the declared author image from structured metadata', async () =>
   const page = await browser.newPage();
   const html = readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/story.html'), 'utf8')
     .replace('</head>', '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","headline":"The quiet art of paying attention","author":{"@type":"Person","name":"Alex Reader","image":{"url":"https://fixture.example/portrait.png"}}}</script></head>');
-  await page.route('https://fixture.example/**', route => route.fulfill({ contentType: 'text/html', body: html }));
+  await page.route('https://fixture.example/**', route => route.fulfill(route.request().resourceType() === 'image'
+      ? { contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"></svg>' }
+      : { contentType: 'text/html', body: html }));
   await page.goto('https://fixture.example/story');
   await page.evaluate(script);
   const result = await page.evaluate(() => (globalThis as any).extractArticle());
@@ -79,13 +83,54 @@ test('preserves Unicode punctuation and selectable text through extraction', asy
 test('reserves declared OG image geometry before decorative image bytes arrive', async () => {
   const page = await browser.newPage();
   const html = readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/story.html'), 'utf8')
+    .replace('<img src="cover.png" alt="A quiet landscape">', '')
     .replace('<meta property="og:image" content="cover.png">', '<meta property="og:image" content="https://fixture.example/og-only.png"><meta property="og:image:width" content="1600"><meta property="og:image:height" content="900">');
-  await page.route('https://fixture.example/**', route => route.fulfill({ contentType: 'text/html', body: html }));
+  await page.route('https://fixture.example/**', route => route.fulfill(route.request().resourceType() === 'image'
+      ? { contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"></svg>' }
+      : { contentType: 'text/html', body: html }));
   await page.goto('https://fixture.example/story');
   await page.evaluate(script);
   const result = await page.evaluate(() => (globalThis as any).extractArticle());
   expect(result.heroWidth).toBe('1600');
   expect(result.heroHeight).toBe('900');
   expect(result.content).toContain('A little room to think');
+  await page.close();
+});
+
+for (const lead of [
+  '<figure><img src="editorial.png" width="1400" height="900"><figcaption>A real caption</figcaption></figure>',
+  '<img src="editorial.png">',
+]) {
+  test('suppresses a different social hero when editorial media leads: ' + lead.slice(0, 20), async () => {
+    const page = await browser.newPage();
+    const html = readFileSync(resolve(import.meta.dir, '../Resources/Fixtures/story.html'), 'utf8')
+      .replace('<img src="cover.png" alt="A quiet landscape">', lead);
+    await page.route('https://fixture.example/**', route => route.fulfill(route.request().resourceType() === 'image'
+      ? { contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"></svg>' }
+      : { contentType: 'text/html', body: html }));
+    await page.goto('https://fixture.example/story');
+    await page.evaluate(script);
+    const result = await page.evaluate(() => (globalThis as any).extractArticle());
+    expect(result.image).toBe('');
+    expect(result.content).toContain('editorial.png');
+    if (lead.includes('figcaption')) expect(result.content).toContain('A real caption');
+    await page.close();
+  });
+}
+
+test('full-width media crosses the text gutter and caps portrait height', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const css = readFileSync(resolve(import.meta.dir, '../Resources/reader.css'), 'utf8');
+  const src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1400"></svg>');
+  await page.setContent(`<style>${css}</style><main><article id="reader-content"><p>Inset text</p><figure class="reader-wide-media"><img src="${src}"><figcaption>Caption</figcaption></figure><img width="32" height="32" src="${src}"></article></main>`);
+  await page.locator('figure img').evaluate((image: HTMLImageElement) => image.decode());
+  const picture = await page.locator('figure img').boundingBox();
+  const text = await page.locator('p').boundingBox();
+  const icon = await page.locator('article > img').boundingBox();
+  expect(picture!.x).toBe(0);
+  expect(picture!.width).toBe(390);
+  expect(picture!.height).toBeLessThanOrEqual(507);
+  expect(text!.x).toBe(18);
+  expect(icon!.width).toBe(32);
   await page.close();
 });

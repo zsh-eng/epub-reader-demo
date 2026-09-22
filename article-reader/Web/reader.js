@@ -51,24 +51,29 @@ globalThis.extractArticle = () => {
     } catch { return ""; }
   };
   const originalContent = parsed.body.innerHTML;
-  const image = assetURL(result.image);
-  // Move an existing lead image with its caption into the header, rather than duplicate it.
-  let heroCaption = "";
+  const candidateImage = assetURL(result.image);
+  const firstImage = parsed.querySelector("img");
+  let hasLeadImage = false;
+  if (firstImage) {
+    const before = parsed.createRange();
+    before.setStart(parsed.body, 0); before.setEndBefore(firstImage);
+    const words = before.toString().trim().split(/\s+/).filter(Boolean).length;
+    const width = Number(firstImage.getAttribute("width"));
+    const height = Number(firstImage.getAttribute("height"));
+    const isSmall = (width > 0 && width < 120) || (height > 0 && height < 80);
+    hasLeadImage = words < 80 && !isSmall;
+  }
+  // Preserve editorial placement and captions. Never prepend a social preview
+  // when the article already opens with an image, even if its URL is different.
+  const alreadyInBody = [...parsed.images].some(img => img.src === candidateImage);
+  const image = hasLeadImage || alreadyInBody ? "" : candidateImage;
+  const heroCaption = "";
   const sourceHero = [...source.images].find(candidate => candidate.currentSrc === image || candidate.src === image);
   const width = Number(sourceHero?.naturalWidth || source.querySelector('meta[property="og:image:width"]')?.content);
   const height = Number(sourceHero?.naturalHeight || source.querySelector('meta[property="og:image:height"]')?.content);
   const hasRatio = Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
   const heroWidth = String(hasRatio ? width : 16);
   const heroHeight = String(hasRatio ? height : 9);
-  if (image) {
-    const lead = [...parsed.querySelectorAll("img")].find(img => img.src === image);
-    if (lead) {
-      const figure = lead.closest("figure");
-      heroCaption = figure?.querySelector("figcaption")?.textContent || "";
-      if (figure && figure.querySelectorAll("img").length === 1) figure.remove();
-      else lead.remove();
-    }
-  }
   let authorImage = "";
   // Only accept an image attached to a declared author in structured metadata.
   const nodes = Array.isArray(result.schemaOrgData) ? result.schemaOrgData : [result.schemaOrgData];
