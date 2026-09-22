@@ -48,6 +48,8 @@ A saved review opens its first target. Select other repositories or ranges from 
 
 Saved reviews and their comments persist in `~/.local/state/med`. Normal branch review notes still end with the host process. See [agent integration](AGENT_INTEGRATION.md) for commands, state settings, limits, and suggested `AGENTS.md` guidance.
 
+Review endpoints can be branch names: `review create --repo /path/to/feature-worktree --base main --head HEAD`. This compares the tips directly and saves their exact commits. Use the common ancestor for a pull-request-style diff, and create a new link after merging the base branch. See [branch comparisons](AGENT_INTEGRATION.md#compare-with-a-base-branch) for commands. In the app, **Compare revisions…** accepts the same refs.
+
 ### Indexed branch search
 
 Set up the optional [Zoekt](https://github.com/sourcegraph/zoekt) search helper once. This command builds pinned binaries and saves them in the user cache:

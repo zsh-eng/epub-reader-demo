@@ -51,6 +51,35 @@ The result is ready to paste into the final response:
 
 The base is the state before the task's changes, not the first changed commit. med resolves the endpoints and captures the comparison. It does not switch branches, stage files, or make commits. Do not commit solely to create a link unless the user has authorized commits.
 
+### Compare with a base branch
+
+Both `--base` and `--head` accept branch names and other local Git refs. Run this command against the feature worktree:
+
+```sh
+node /path/to/med/dist/cli.js review create \
+  --title "Feature changes against main" \
+  --repo /path/to/feature-worktree \
+  --base main --head HEAD
+```
+
+Use the repository's intended base branch, such as `main`, `develop`, or `origin/main`. med compares the two tips directly. It does not fetch remote refs or calculate their common ancestor. A remote-tracking ref such as `origin/main` uses its locally stored commit.
+
+For a pull-request-style review that excludes changes made only on the base branch, calculate the common ancestor first:
+
+```sh
+review_base=$(git -C /path/to/feature-worktree merge-base main HEAD)
+node /path/to/med/dist/cli.js review create \
+  --title "Feature changes" \
+  --repo /path/to/feature-worktree \
+  --base "$review_base" --head HEAD
+```
+
+After merging `main` or `develop` into the feature branch, calculate the base again and create a new review. Saved links resolve branch names to exact commits at creation time; they do not move when a branch changes. A before/after task range can include changes from a base-branch merge, so use the common ancestor when the intended scope is the feature's changes. Set the base separately for each repository in a multi-repository review. Manifest range endpoints also accept branch names.
+
+In the app, open **Compare revisions…** from the review toolbar menu and enter the base and head refs. This also compares the two tips directly.
+
+### Capture working changes
+
 For uncommitted changes:
 
 ```sh
@@ -111,6 +140,7 @@ When handing off code changes, provide a med review link if the user's med host 
 - Use `node /path/to/med/dist/cli.js review repos` to discover the user's registered review scope.
 - Match the task's actual working directories to that list. Include only repositories changed for this task. Do not include every registered repository.
 - Prefer exact before/after commit IDs for completed changes. For uncommitted work, use `--working` and explain any pre-existing changes included in the snapshot.
+- For a feature review, use that repository's intended base branch (`main`, `develop`, or another agreed ref). `--base <branch> --head HEAD` compares tips directly. To exclude changes made only on the base branch, pass `git merge-base <base-branch> HEAD`'s result as `--base`. Recalculate after merging the base branch and create a new link. Do not guess the same base for every repository or fetch without authorization.
 - Use `review create` for one target, or `review create --manifest` for several repositories or comparisons. Include its Markdown link in the final response.
 - Do not commit, switch branches, add unrelated repositories, or edit AGENTS.md just to generate a link. Follow the user's authorization for those actions.
 - If the host is unavailable or a relevant repository is missing, state what is needed. Do not invent a URL or print the host's access token.
