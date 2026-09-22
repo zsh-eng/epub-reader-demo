@@ -813,7 +813,9 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Attention"].exists)
     XCTAssertTrue(app.staticTexts["Life"].exists)
     XCTAssertLessThan(card.frame.height, 400)
-    XCTAssertLessThan(tags.frame.maxY, previewTitle.frame.minY)
+    let surface = app.descendants(matching: .any).matching(identifier: "share-article-card").firstMatch
+    XCTAssertTrue(surface.exists)
+    XCTAssertLessThan(tags.frame.maxY, surface.frame.minY)
     capture(app, "share-tags-before-save")
     let previewHeight = card.frame.height
     save.tap()

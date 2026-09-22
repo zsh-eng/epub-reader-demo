@@ -20,6 +20,7 @@ struct ConnectedTagReveal<Content: View>: View {
   var tags: [String]
   var replayID = 0
   var cornerRadius: CGFloat = 24
+  var borderAroundContent = true
   var onRevealed: () -> Void = {}
   @ViewBuilder var content: () -> Content
   @Environment(\.articleReduceMotion) private var reduceMotion
@@ -35,7 +36,7 @@ struct ConnectedTagReveal<Content: View>: View {
     content()
       .environment(\.tagRevealTimeline, timing)
       .overlay {
-        if !settled, scenePhase == .active, isProcessing || !tags.isEmpty {
+        if borderAroundContent, !settled, scenePhase == .active, isProcessing || !tags.isEmpty {
           TagBeamBorder(timing: timing, cornerRadius: cornerRadius)
             .allowsHitTesting(false).accessibilityHidden(true)
         }
@@ -105,6 +106,18 @@ struct ConnectedTagReveal<Content: View>: View {
     var replay: Int
     var reduced: Bool
     var active: Bool
+  }
+}
+
+/// A card can host the beam while sibling tags share its reveal clock.
+struct ConnectedTagCardBorder: View {
+  var cornerRadius: CGFloat = 22
+  @Environment(\.tagRevealTimeline) private var timing
+  var body: some View {
+    if !timing.paused {
+      TagBeamBorder(timing: timing, cornerRadius: cornerRadius)
+        .allowsHitTesting(false).accessibilityHidden(true)
+    }
   }
 }
 
@@ -211,6 +224,7 @@ struct TagRevealPill: View {
   var name: String
   var index: Int
   var compact = false
+  var surface = Color(uiColor: .tertiarySystemBackground)
   @Environment(\.tagRevealTimeline) private var timing
   @Environment(\.colorScheme) private var colorScheme
 
@@ -227,7 +241,7 @@ struct TagRevealPill: View {
       .font(compact ? .system(size: 10, weight: .medium) : .subheadline.weight(.medium))
       .opacity(labelOpacity)
       .padding(.horizontal, compact ? 9 : 12).padding(.vertical, compact ? 6 : 8)
-      .background(Color(uiColor: .tertiarySystemBackground), in: Capsule())
+      .background(surface, in: Capsule())
       .overlay {
         Capsule().strokeBorder(
           tagBeamGradient(phase: progress.phase, colorScheme: colorScheme), lineWidth: 1.5

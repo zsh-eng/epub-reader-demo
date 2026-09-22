@@ -586,15 +586,13 @@ private struct ShareSaveView: View {
           .foregroundStyle(model.isSaved ? ArcticBrand.accent : Color.primary)
           ConnectedTagReveal(
             isProcessing: model.isPreparingTags, tags: model.tagNames ?? [],
-            cornerRadius: 22,
+            cornerRadius: 22, borderAroundContent: false,
             onRevealed: model.presentTagFeedback
           ) {
-            VStack(spacing: 0) {
+            VStack(spacing: 12) {
               if let tags = model.tagNames, !tags.isEmpty { tagResult(tags) }
-              articleCard
+              articleCard.overlay { ConnectedTagCardBorder() }
             }
-            .background(
-              Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22))
           }
           .environment(\.scenePhase, model.isVisible && model.hostIsActive ? .active : .inactive)
           .accessibilityElement(children: .contain)
@@ -666,6 +664,8 @@ private struct ShareSaveView: View {
     }
     .background(Color(uiColor: .secondarySystemBackground))
     .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    .accessibilityElement(children: .contain)
+    .accessibilityIdentifier("share-article-card")
     .accessibilityValue(model.isTagging ? "Finding tags" : "")
     .overlay {
       RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -676,11 +676,11 @@ private struct ShareSaveView: View {
   private func tagResult(_ tags: [String]) -> some View {
     LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 8) {
       ForEach(Array(tags.enumerated()), id: \.element) { index, tag in
-        TagRevealPill(name: tag, index: index)
+        TagRevealPill(name: tag, index: index, surface: Color(uiColor: .secondarySystemBackground))
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 18).padding(.top, 14).padding(.bottom, 10)
+    .padding(.horizontal, 2)
     .accessibilityElement(children: .contain)
     .accessibilityIdentifier("share-added-tags")
     .accessibilityValue(model.tagFeedbackPresented ? "presented" : "revealing")
