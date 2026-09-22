@@ -147,6 +147,64 @@ test("a hidden tree retains its scroll position when shown again", async () => {
   await expect.poll(() => scroll()?.scrollTop).toBe(5000);
 });
 
+test("the active source prepares its file tree before the sidebar is first opened", async () => {
+  const list = vi.fn<BrowseApi["list"]>(async (source) => ({
+    source,
+    entries: [{ path: `${source.repo.slice(1)}.ts`, kind: "file" }],
+    truncated: false,
+  }));
+  const api: BrowseApi = { list, read: vi.fn<BrowseApi["read"]>() };
+  function Harness() {
+    const [visible, setVisible] = useState(false);
+    const [repo, setRepo] = useState("/first");
+    const state = useBrowseFiles({ kind: "worktree", repo }, true, 0, { api });
+    return (
+      <>
+        <button onClick={() => setVisible(!visible)}>Toggle tree</button>
+        <button onClick={() => setRepo("/second")}>Switch source</button>
+        <div hidden={!visible} style={{ width: 300, height: 450 }}>
+          <RepositoryFiles
+            {...state}
+            sourceLabel={repo}
+            selectedPath={null}
+            onPreview={() => {}}
+            onPin={() => {}}
+            onIgnoredChange={state.setIgnored}
+            onRefresh={state.refresh}
+            onClose={() => setVisible(false)}
+          />
+        </div>
+      </>
+    );
+  }
+  render(<Harness />);
+  const tree = () => document.querySelector("file-tree-container");
+  const hasPreparedFile = (path: string) =>
+    !!tree()?.shadowRoot?.querySelector(`[data-item-path="${path}"]`);
+  await expect.poll(() => hasPreparedFile("first.ts")).toBe(true);
+  expect(tree()!.checkVisibility()).toBe(false);
+  expect(list).toHaveBeenCalledTimes(1);
+
+  // A new branch must also prepare its tree while the sidebar stays closed.
+  await page.getByRole("button", { name: "Switch source", exact: true }).click();
+  await expect.poll(() => hasPreparedFile("second.ts")).toBe(true);
+  expect(hasPreparedFile("first.ts")).toBe(false);
+  expect(tree()!.checkVisibility()).toBe(false);
+  expect(list).toHaveBeenCalledTimes(2);
+  const preparedTree = tree();
+
+  await page.getByRole("button", { name: "Toggle tree", exact: true }).click();
+  await expect
+    .element(page.getByRole("treeitem", { name: "second.ts", exact: true }))
+    .toBeVisible();
+  expect(tree()).toBe(preparedTree);
+  expect(list).toHaveBeenCalledTimes(2);
+  await page.getByRole("button", { name: "Toggle tree", exact: true }).click();
+  await page.getByRole("button", { name: "Toggle tree", exact: true }).click();
+  expect(tree()).toBe(preparedTree);
+  expect(list).toHaveBeenCalledTimes(2);
+});
+
 test("file lists load on demand and a stale worktree response cannot replace the new scope", async () => {
   const requests: {
     source: BrowseSource;

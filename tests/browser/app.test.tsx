@@ -590,6 +590,16 @@ describe("graphical review", () => {
           bubbles: true,
         }),
       );
+    await expect
+      .poll(() => {
+        const tree = document.querySelector('[aria-label="Workspace files"] file-tree-container');
+        return tree?.shadowRoot?.querySelectorAll('[role="treeitem"]').length ?? 0;
+      })
+      .toBeGreaterThan(0);
+    const preparedHost = document.querySelector(
+      '[aria-label="Workspace files"] file-tree-container',
+    );
+    expect(preparedHost?.checkVisibility()).toBe(false);
     toggle();
     const sidebar = page.getByRole("complementary", { name: "Workspace files", exact: true });
     const folder = sidebar.getByRole("treeitem", { name: "src", exact: true });
@@ -597,6 +607,7 @@ describe("graphical review", () => {
     await folder.click();
     await expect.element(folder).toHaveAttribute("aria-expanded", "false");
     const host = document.querySelector('[aria-label="Workspace files"] file-tree-container');
+    expect(host).toBe(preparedHost);
     toggle();
     await expect.poll(() => host?.checkVisibility()).toBe(false);
     toggle();
