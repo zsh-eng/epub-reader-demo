@@ -46,8 +46,8 @@ async function fetchImage(url: string): Promise<Blob> {
   const response = await fetch(
     url,
     backendUrl && url.startsWith(backendUrl)
-      ? { credentials: "include" }
-      : undefined,
+      ? { credentials: "include", signal: AbortSignal.timeout(15000) }
+      : { signal: AbortSignal.timeout(15000) },
   );
   if (!response.ok)
     throw new Error(`Image download failed (${response.status})`);

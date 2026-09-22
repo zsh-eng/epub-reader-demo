@@ -1,3 +1,4 @@
+import PreloadReviewImages from "@/components/review/preload-images";
 import { reviewSession } from "@/lib/review/session";
 import { toast } from "sonner";
 import { useReviewActionTarget } from "@/components/hooks/use-review-action-target";
@@ -107,6 +108,7 @@ export default function ReviewRoute() {
         "md:mt-12 mb-6",
       )}
     >
+      <PreloadReviewImages current={nextReviewCard} queue={reviewCards} />
       <DeleteFlashcardDialog
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}

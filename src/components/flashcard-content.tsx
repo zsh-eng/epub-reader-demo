@@ -1,4 +1,5 @@
-import { cn, markdownToHtml } from "@/lib/utils";
+import { prepareCardContent } from "@/lib/images/card-images";
+import { cn } from "@/lib/utils";
 
 // Note: code styling CSS is imported in main.tsx
 export default function FlashcardContent({ content }: { content: string }) {
@@ -21,7 +22,7 @@ export default function FlashcardContent({ content }: { content: string }) {
         "prose-code:whitespace-pre-wrap [&_pre]:p-0 sm:[&_pre]:rounded-none [&_pre]:!overflow-visible [&_pre_code]:!overflow-visible",
       )}
       dangerouslySetInnerHTML={{
-        __html: markdownToHtml(content),
+        __html: prepareCardContent(content).html,
       }}
     ></article>
   );

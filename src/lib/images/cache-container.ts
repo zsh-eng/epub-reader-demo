@@ -24,21 +24,26 @@ export function cacheImagesInContainer(
     image.removeAttribute("data-is-cached-src");
     if (reference.objectURL) {
       release(reference.source);
-      if (image.src === reference.objectURL) image.src = reference.source;
+      if (image.src === reference.objectURL) {
+        if (image.dataset.cacheSrc) image.removeAttribute("src");
+        else image.src = reference.source;
+      }
     }
   }
 
   function add(image: HTMLImageElement) {
     if (disposed || !container.contains(image)) return;
+    const source = image.dataset.cacheSrc || image.src;
     const previous = references.get(image);
     if (
       previous &&
-      (image.src === previous.source || image.src === previous.objectURL)
+      source === (image.dataset.cacheSrc ? previous.source : image.src) &&
+      (source === previous.source || image.src === previous.objectURL)
     )
       return;
     if (previous) remove(image);
-    if (!/^https?:/.test(image.src)) return;
-    const reference: Reference = { source: image.src, active: true };
+    if (!/^https?:/.test(source)) return;
+    const reference: Reference = { source, active: true };
     references.set(image, reference);
     image.setAttribute("data-is-cached-src", reference.source);
     void acquire(reference.source, image.alt).then(
@@ -47,7 +52,7 @@ export function cacheImagesInContainer(
           disposed ||
           !reference.active ||
           !container.contains(image) ||
-          image.src !== reference.source
+          (image.dataset.cacheSrc || image.src) !== reference.source
         ) {
           if (references.get(image) === reference) remove(image);
           release(reference.source);
@@ -81,7 +86,7 @@ export function cacheImagesInContainer(
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ["src"],
+    attributeFilter: ["src", "data-cache-src"],
   });
   imagesIn(container).forEach(add);
   return () => {
