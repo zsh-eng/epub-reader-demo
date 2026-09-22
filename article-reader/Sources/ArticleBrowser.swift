@@ -191,6 +191,8 @@ enum ArticleRouting {
   let readerView: WKWebView
   var annotationPresentation: AnnotationPresentation?
   var noteDraft: ReaderNoteDraft?
+  var noteDismissRequest = 0
+  @ObservationIgnored private var noteDrafts: [String: ReaderNoteDraft] = [:]
   var selectedAnnotationID: UUID?
   @ObservationIgnored private var pendingAnnotationReveal: UUID?
   var unmatchedAnnotations: Set<String> = []
@@ -1164,7 +1166,16 @@ enum ArticleRouting {
 
   func beginNote(annotation: ReaderAnnotation? = nil) {
     selectedAnnotationID = nil
-    noteDraft = ReaderNoteDraft(annotation: annotation)
+    let key = libraryURL.absoluteString + "::" + (annotation?.id.uuidString ?? "article")
+    let draft = noteDrafts[key] ?? ReaderNoteDraft(in: libraryURL, annotation: annotation)
+    noteDrafts[key] = draft
+    noteDraft = draft
+  }
+
+  func finishNoteDraft(_ id: UUID, sent: Bool) {
+    guard let draft = noteDraft, draft.id == id else { return }
+    if sent || draft.text.isEmpty { noteDrafts.removeValue(forKey: draft.storageKey) }
+    noteDraft = nil
   }
 
   fileprivate func annotationTapped(_ value: String?, token: String, from view: WKWebView?) {
@@ -1239,11 +1250,13 @@ struct WebSurface: UIViewRepresentable {
   var isActive: () -> Bool = { true }
   @Binding var nearEnd: Bool
   var onScrollEnd: () -> Void = {}
+  var onTap: (() -> Void)?
   func makeCoordinator() -> Coordinator {
     Coordinator(nearEnd: $nearEnd, isActive: isActive, onScrollEnd: onScrollEnd)
   }
   func makeUIView(context: Context) -> WKWebView {
     webView.scrollView.delegate = context.coordinator
+    context.coordinator.installTap(on: webView)
     updateInsets(webView)
     return webView
   }
@@ -1251,20 +1264,37 @@ struct WebSurface: UIViewRepresentable {
     context.coordinator.nearEnd = $nearEnd
     context.coordinator.isActive = isActive
     context.coordinator.onScrollEnd = onScrollEnd
+    context.coordinator.onTap = onTap
+    context.coordinator.tap?.isEnabled = onTap != nil
     uiView.accessibilityElementsHidden = !isActive()
     updateInsets(uiView)
   }
 
   static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
     if uiView.scrollView.delegate === coordinator { uiView.scrollView.delegate = nil }
+    if let tap = coordinator.tap { uiView.removeGestureRecognizer(tap) }
   }
 
   /// Different enter/leave distances prevent the prompt's own height from
   /// repeatedly hiding and showing it. Loading a page alone never triggers it.
-  final class Coordinator: NSObject, UIScrollViewDelegate {
+  final class Coordinator: NSObject, UIScrollViewDelegate, UIGestureRecognizerDelegate {
     var nearEnd: Binding<Bool>
     var isActive: () -> Bool
     var onScrollEnd: () -> Void
+    var onTap: (() -> Void)?
+    var tap: UITapGestureRecognizer?
+
+    func installTap(on view: UIView) {
+      let recognizer = UITapGestureRecognizer(target: self, action: #selector(pageTapped))
+      recognizer.cancelsTouchesInView = false
+      recognizer.delegate = self
+      view.addGestureRecognizer(recognizer)
+      tap = recognizer
+    }
+    @objc private func pageTapped() { onTap?() }
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+      shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+
     init(nearEnd: Binding<Bool>, isActive: @escaping () -> Bool, onScrollEnd: @escaping () -> Void)
     {
       self.nearEnd = nearEnd

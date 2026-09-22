@@ -5,18 +5,23 @@ final class AnnotationUITests: XCTestCase {
   private let paragraph = "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."
   override func setUp() { continueAfterFailure = false }
 
-  @MainActor func testStandaloneNotesSendCancelEditAndPersistOffline() {
+  @MainActor func testStandaloneNotesUnfocusResumeSendEditAndPersistOffline() {
     let app = openFixture()
     app.buttons["reader-add-note"].tap()
     let input = messageInput(in: app)
     XCTAssertTrue(input.waitForExistence(timeout: 5), app.debugDescription)
-    input.typeText("This draft should not be stored.")
+    XCTAssertFalse(app.buttons["note-send"].exists)
+    XCTAssertFalse(app.buttons["note-draft-cancel"].exists)
+    input.typeText("A thought about the whole article.")
+    XCTAssertTrue(app.buttons["note-send"].exists)
+    capture(app, "note-oblong-send-light")
     expectValue("0 passages", on: app.buttons["reader-notes"])
-    app.buttons["note-draft-cancel"].tap()
+    app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+    XCTAssertTrue(app.buttons["reader-add-note"].waitForExistence(timeout: 5))
     expectValue("0 passages", on: app.buttons["reader-notes"])
     app.buttons["reader-add-note"].tap()
     XCTAssertTrue(input.waitForExistence(timeout: 5))
-    input.typeText("A thought about the whole article.")
+    XCTAssertEqual(input.value as? String, "A thought about the whole article.")
     app.buttons["note-send"].tap()
     XCTAssertTrue(app.buttons["reader-add-note"].waitForExistence(timeout: 5))
     expectValue("1 passage", on: app.buttons["reader-notes"])

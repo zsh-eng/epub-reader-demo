@@ -4,7 +4,7 @@ import Foundation
 enum TestMode { static let enabled = false }
 
 @main struct AnnotationStoreChecks {
-  @MainActor static func main() throws {
+  @MainActor static func main() async throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
     let url = URL(string: "https://fixture.example/article")!
@@ -76,8 +76,47 @@ enum TestMode { static let enabled = false }
     let partial = AnnotationStore(directory: directory)
     precondition(partial.records.count == 4)
     precondition(partial.loadError != nil)
+    // Send publishes before its completion callback; disk work never delays UI.
+    let sending = AnnotationStore(directory: directory.appending(path: "sending"))
+    let sent = sending.sendNote("Immediate thought", in: url)!
+    precondition(sending.annotations(for: url).first?.note == "Immediate thought")
+    precondition(sending.pendingNoteIDs.contains(sent))
+    try await finishWrites(sending)
+    precondition(AnnotationStore(directory: directory.appending(path: "sending")).records.first?.note == "Immediate thought")
+    let editedID = sending.sendNote("Old value", in: url)!
+    try sending.updateNote("Newest edit", id: editedID)
+    let removedID = sending.sendNote("Remove before completion", in: url)!
+    try sending.deleteNote(removedID)
+    try await finishWrites(sending)
+    let ordered = AnnotationStore(directory: directory.appending(path: "sending"))
+    precondition(ordered.records.first(where: { $0.id == editedID })?.note == "Newest edit")
+    precondition(ordered.records.first(where: { $0.id == removedID })?.deletedAt != nil)
+    // A failed write retains the text, exposes Retry, then persists the same ID.
+    let failedDirectory = directory.appending(path: "failure")
+    let failing = AnnotationStore(directory: failedDirectory)
+    try FileManager.default.removeItem(at: failedDirectory)
+    try Data("Not a directory".utf8).write(to: failedDirectory)
+    let failedID = failing.sendNote("Do not lose this thought", in: url)!
+    try await finishWrites(failing)
+    precondition(failing.failedNotes[failedID] != nil)
+    precondition(failing.annotations(for: url).first?.note == "Do not lose this thought")
+    try FileManager.default.removeItem(at: failedDirectory)
+    try FileManager.default.createDirectory(at: failedDirectory, withIntermediateDirectories: true)
+    failing.retryNote(failedID)
+    try await finishWrites(failing)
+    precondition(failing.failedNotes.isEmpty)
+    precondition(AnnotationStore(directory: failedDirectory).records.first?.id == failedID)
+    print("Optimistic notes: immediate publication, async persistence, ordered edits/deletes, retained failure and retry passed")
     print(
       "Annotation storage: reopen, legacy yellow, persisted colour, Unicode, deduplication, note preservation, clear-and-retype after restart, explicit deletion, stale merge, damaged-record isolation passed"
     )
+  }
+
+  @MainActor private static func finishWrites(_ store: AnnotationStore) async throws {
+    let deadline = Date().addingTimeInterval(5)
+    while !store.pendingNoteIDs.isEmpty && Date() < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    precondition(store.pendingNoteIDs.isEmpty, "Annotation writes did not finish")
   }
 }

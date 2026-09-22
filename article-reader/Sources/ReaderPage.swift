@@ -113,7 +113,8 @@ struct ReaderPage: View {
             WebSurface(
               webView: browser.readerView, insets: geometry.safeAreaInsets,
               isActive: { browser.isReader && browser.readerReady }, nearEnd: $nearEnd,
-              onScrollEnd: browser.captureReaderPosition
+              onScrollEnd: browser.captureReaderPosition,
+              onTap: browser.noteDraft == nil ? nil : { browser.noteDismissRequest += 1 }
             )
             .opacity(browser.readerReady && browser.positionReady ? 1 : 0)
             .allowsHitTesting(browser.readerReady)
@@ -122,7 +123,8 @@ struct ReaderPage: View {
           } else {
             WebSurface(
               webView: browser.webView, insets: geometry.safeAreaInsets,
-              isActive: { !browser.isReader }, nearEnd: $nearEnd
+              isActive: { !browser.isReader }, nearEnd: $nearEnd,
+              onTap: browser.noteDraft == nil ? nil : { browser.noteDismissRequest += 1 }
             )
             .transition(.opacity)
           }
@@ -139,6 +141,11 @@ struct ReaderPage: View {
       }
       if (browser.isLoading && !browser.isReader) || browser.isOpeningWebsite {
         ProgressView().padding(8).background(.regularMaterial, in: Capsule()).padding(8)
+      }
+      if let failed = browser.annotations.first(where: { AnnotationStore.shared.failedNotes[$0.id] != nil }) {
+        Button("Note not saved · Retry") { AnnotationStore.shared.retryNote(failed.id) }
+          .font(.subheadline).padding(12).readerGlass().padding(.top, 8)
+          .accessibilityIdentifier("reader-note-retry")
       }
       if let failure = browser.websiteFailure {
         if browser.readerReady {
@@ -207,7 +214,8 @@ struct ReaderPage: View {
           Button {
             browser.beginNote()
           } label: {
-            Image(systemName: "square.and.pencil").font(.title3).frame(width: 54, height: 54)
+            Image(systemName: "square.and.pencil").font(.system(size: 21))
+              .offset(y: -1).frame(width: 54, height: 54)
           }
           .readerGlass().accessibilityLabel("Add note").accessibilityIdentifier("reader-add-note")
         }.padding(.horizontal, 12).padding(.bottom, 6)

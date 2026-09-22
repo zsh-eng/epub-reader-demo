@@ -36,6 +36,10 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
   private(set) var records: [ReaderAnnotation] = []
   private(set) var loadError: String?
   private let directory: URL
+  private(set) var pendingNoteIDs: Set<UUID> = []
+  private(set) var failedNotes: [UUID: String] = [:]
+  @ObservationIgnored private let writes = DispatchQueue(label: "arctic.annotation-writes", qos: .userInitiated)
+
 
   init(directory: URL? = nil) {
     self.directory =
@@ -104,6 +108,49 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
       isHighlighted: false, createdAt: now, updatedAt: now)
     try write(record)
     return record
+  }
+
+  /// Publish Send immediately, then persist off the UI thread. All writes use
+  /// the same queue so an older pending send cannot overwrite a later edit/delete.
+  /// Failed notes remain visible in memory with an explicit Retry action.
+  @discardableResult func sendNote(_ text: String, in url: URL, annotationID: UUID? = nil) -> UUID? {
+    var record: ReaderAnnotation
+    if let id = annotationID {
+      guard let existing = records.first(where: { $0.id == id && $0.deletedAt == nil }) else { return nil }
+      record = existing
+      record.note = text
+      record.updatedAt = Date()
+    } else {
+      let now = Date()
+      record = ReaderAnnotation(id: UUID(), articleURL: url, quote: nil, note: text,
+        isHighlighted: false, createdAt: now, updatedAt: now)
+    }
+    publish(record)
+    enqueueNote(record)
+    return record.id
+  }
+
+  func retryNote(_ id: UUID) {
+    guard !pendingNoteIDs.contains(id), failedNotes[id] != nil,
+      let record = records.first(where: { $0.id == id && $0.deletedAt == nil }) else { return }
+    enqueueNote(record)
+  }
+
+  private func enqueueNote(_ record: ReaderAnnotation) {
+    pendingNoteIDs.insert(record.id)
+    failedNotes.removeValue(forKey: record.id)
+    let directory = directory
+    writes.async {
+      let result = Result { try Self.saveFile(record, directory: directory) }
+      Task { @MainActor in
+        // A newer edit, recolour, merge, or deletion owns its own result.
+        guard self.records.first(where: { $0.id == record.id }) == record else { return }
+        self.pendingNoteIDs.remove(record.id)
+        if case .failure(let error) = result {
+          self.failedNotes[record.id] = error.localizedDescription
+        }
+      }
+    }
   }
 
   @discardableResult func highlight(_ quote: ReaderQuote, in url: URL) throws -> ReaderAnnotation {
@@ -175,8 +222,18 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
   }
 
   private func write(_ record: ReaderAnnotation) throws {
+    try writes.sync { try Self.saveFile(record, directory: directory) }
+    pendingNoteIDs.remove(record.id)
+    failedNotes.removeValue(forKey: record.id)
+    publish(record)
+  }
+
+  nonisolated private static func saveFile(_ record: ReaderAnnotation, directory: URL) throws {
     let data = try JSONEncoder().encode(record)
     try data.write(to: directory.appending(path: record.id.uuidString + ".json"), options: .atomic)
+  }
+
+  private func publish(_ record: ReaderAnnotation) {
     if let index = records.firstIndex(where: { $0.id == record.id }) {
       records[index] = record
     } else {

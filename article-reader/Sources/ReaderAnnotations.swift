@@ -6,15 +6,18 @@ struct AnnotationPresentation: Identifiable {
 }
 
 /// Unsent text belongs to the open article, not to persisted note records.
-/// Send commits once; Cancel explicitly discards this draft.
-struct ReaderNoteDraft: Identifiable {
+/// Unfocus tucks the draft away; only Send creates or updates a note.
+@Observable final class ReaderNoteDraft: Identifiable {
   let id = UUID()
+  let articleURL: URL
+  var storageKey: String { articleURL.absoluteString + "::" + (annotationID?.uuidString ?? "article") }
   var annotationID: UUID?
   var quote: ReaderQuote?
   var colour: HighlightColour = .yellow
   var text = ""
 
-  init(annotation: ReaderAnnotation? = nil) {
+  init(in url: URL, annotation: ReaderAnnotation? = nil) {
+    articleURL = url
     annotationID = annotation?.id
     quote = annotation?.quote
     colour = annotation?.highlightColour ?? .yellow
@@ -117,6 +120,10 @@ struct ReaderAnnotations: View {
       }
       HStack {
         Text(annotation.createdAt, style: .time).font(.caption2).foregroundStyle(.tertiary)
+        if AnnotationStore.shared.failedNotes[annotation.id] != nil {
+          Button("Not saved · Retry") { AnnotationStore.shared.retryNote(annotation.id) }
+            .font(.caption).accessibilityIdentifier("note-retry")
+        }
         Spacer()
         Menu {
           Button(
@@ -158,24 +165,18 @@ struct ReaderAnnotations: View {
 private struct ArticleNoteInput: View {
   let browser: ArticleBrowser
   @State private var text = ""
-  @State private var errorMessage: String?
 
   var body: some View {
-    VStack(spacing: 6) {
-      if let errorMessage { Text(errorMessage).font(.caption).foregroundStyle(.red) }
-      NoteMessageInput(text: $text, send: send)
-    }.padding(.horizontal, 16).padding(.vertical, 10).background(.bar)
+    NoteMessageInput(text: $text, send: send)
+      .padding(.horizontal, 16).padding(.vertical, 10).background(.bar)
   }
 
   private func send() {
     let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty else { return }
-    do {
-      try AnnotationStore.shared.addNote(value, in: browser.libraryURL)
-      browser.refreshAnnotations()
-      text = ""
-      errorMessage = nil
-    } catch { errorMessage = error.localizedDescription }
+    AnnotationStore.shared.sendNote(value, in: browser.libraryURL)
+    text = ""
+    UISelectionFeedbackGenerator().selectionChanged()
   }
 }
 
@@ -263,33 +264,40 @@ private struct NoteMessageInput: View {
   @Binding var text: String
   var autofocus = false
   var dismissing = false
-  var cancel: (() -> Void)?
+  var onBlur: () -> Void = {}
   let send: () -> Void
   @FocusState private var focused: Bool
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  private var hasText: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
   var body: some View {
-    HStack(alignment: .bottom, spacing: 6) {
-      if let cancel {
-        Button(action: cancel) { Image(systemName: "xmark").frame(width: 40, height: 54) }
-          .accessibilityLabel("Discard draft").accessibilityIdentifier("note-draft-cancel")
-      }
+    HStack(alignment: .bottom, spacing: 0) {
       TextField("Write a note…", text: $text, axis: .vertical)
-        .lineLimit(1...5).focused($focused).padding(.vertical, 12).padding(
-          .leading, cancel == nil ? 14 : 0
-        )
+        .lineLimit(1...5).focused($focused).padding(.vertical, 12)
+        .padding(.leading, 18).padding(.trailing, hasText ? 8 : 18)
         .frame(minHeight: 54)
         .accessibilityIdentifier("note-message-input")
-      Button(action: send) {
-        Image(systemName: "arrow.up.circle.fill").font(.system(size: 28, weight: .medium))
-          .frame(width: 44, height: 54)
+      if hasText {
+        Button(action: send) {
+          Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(Color(uiColor: .systemBackground))
+            .frame(width: 50, height: 40)
+            .background(ArcticBrand.accent, in: Capsule())
+            .frame(width: 56, height: 54)
+        }
+        .buttonStyle(.plain).padding(.trailing, 3)
+        .accessibilityLabel("Send note").accessibilityIdentifier("note-send")
+        .transition(.opacity)
       }
-      .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      .accessibilityLabel("Send note").accessibilityIdentifier("note-send")
     }
     .font(.body).frame(minHeight: 54).readerGlass()
     .accessibilityElement(children: .contain).accessibilityIdentifier("note-input-bar")
+    .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.15), value: hasText)
     .onAppear { focused = autofocus }
     .onChange(of: dismissing) { _, value in if value { focused = false } }
+    .onChange(of: focused) { wasFocused, isFocused in
+      if wasFocused && !isFocused { onBlur() }
+    }
   }
 }
 
@@ -297,16 +305,10 @@ struct ReaderNoteComposer: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var keyboardVisible = false
   @State private var closing = false
-  let browser: ArticleBrowser
-  let draft: ReaderNoteDraft
-  @State private var text: String
+  @State private var sent = false
   @State private var errorMessage: String?
-
-  init(browser: ArticleBrowser, draft: ReaderNoteDraft) {
-    self.browser = browser
-    self.draft = draft
-    _text = State(initialValue: draft.text)
-  }
+  let browser: ArticleBrowser
+  @Bindable var draft: ReaderNoteDraft
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -316,24 +318,22 @@ struct ReaderNoteComposer: View {
       }
       if let errorMessage { Text(errorMessage).font(.caption).foregroundStyle(.red) }
       NoteMessageInput(
-        text: $text, autofocus: true, dismissing: closing, cancel: close, send: send
+        text: $draft.text, autofocus: true, dismissing: closing, onBlur: close, send: send
       )
       .disabled(closing)
     }.padding(.horizontal, 12).padding(.bottom, 6)
-      .onReceive(
-        NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
-      ) { _ in
+      .onChange(of: browser.noteDismissRequest) { _, _ in close() }
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
         keyboardVisible = true
       }
-      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification))
-    { _ in
-      keyboardVisible = false
-      if closing { finishClosing() }
-    }
+      .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)) { _ in
+        keyboardVisible = false
+        if closing { finishClosing() }
+      }
   }
 
-  // Keep the input's native host alive while UIKit lowers the keyboard. Swapping
-  // a focused field and resizing safeAreaBar at the same time caused two jumps.
+  // The empty input responds to Send immediately; its native host stays alive
+  // while the keyboard lowers, then the reading controls occupy the same bar.
   private func close() {
     guard !closing else { return }
     closing = true
@@ -342,22 +342,22 @@ struct ReaderNoteComposer: View {
 
   private func finishClosing() {
     withAnimation(.easeOut(duration: reduceMotion ? 0.1 : 0.16)) {
-      browser.noteDraft = nil
+      browser.finishNoteDraft(draft.id, sent: sent)
     }
+    if sent && draft.quote != nil { browser.refreshAnnotations() }
   }
 
   private func send() {
-    let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !value.isEmpty else { return }
-    do {
-      if let id = draft.annotationID {
-        try AnnotationStore.shared.updateNote(value, id: id)
-      } else {
-        try AnnotationStore.shared.addNote(value, in: browser.libraryURL)
-      }
-      browser.refreshAnnotations()
-      close()
-    } catch { errorMessage = error.localizedDescription }
+    let value = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty, !closing else { return }
+    guard AnnotationStore.shared.sendNote(value, in: draft.articleURL, annotationID: draft.annotationID) != nil else {
+      errorMessage = "This passage was removed. Copy your draft before closing."
+      return
+    }
+    sent = true
+    draft.text = ""
+    UISelectionFeedbackGenerator().selectionChanged()
+    close()
   }
 }
 

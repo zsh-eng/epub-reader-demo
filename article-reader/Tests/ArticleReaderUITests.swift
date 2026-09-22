@@ -746,7 +746,7 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(paste.waitForExistence(timeout: 5), app.debugDescription)
     paste.tap()
     XCTAssertEqual(input.value as? String, "https://fixture.example/story")
-    app.buttons["note-draft-cancel"].tap()
+    app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
     XCTAssertTrue(app.buttons["reader-add-note"].waitForExistence(timeout: 5))
     app.buttons["Page options"].tap()
     app.buttons["reader-share-link"].tap()
