@@ -1,3 +1,4 @@
+import { createLocalSyncState } from "./local-sync-state";
 import { API_BASE } from "@/lib/api";
 import {
   broadcastRecordsChanged,
@@ -18,7 +19,7 @@ import {
 import MemoryDB, { reloadMemory, memoryReady } from "../db/memory";
 import { syncTables } from "./records";
 import { createRemote } from "./server";
-import { withSyncLock } from "./lock";
+import { withSyncLock, withNetworkSyncLock } from "./lock";
 
 type Status = { syncing: boolean; error: string | null; restoring: boolean };
 let status: Status = { syncing: false, error: null, restoring: false };
@@ -36,13 +37,14 @@ let interval: ReturnType<typeof setInterval> | undefined;
 function sync(): Promise<void> {
   if (stopped) return Promise.resolve();
   if (pending) return pending;
-  pending = withSyncLock(async () => {
+  pending = withNetworkSyncLock(async () => {
     if (stopped) return;
     await memoryReady;
     controller = new AbortController();
 
     setStatus({ ...status, syncing: true, error: null });
     let touched = false;
+    let localState: ReturnType<typeof createLocalSyncState> | undefined;
     try {
       const response = await fetch(`${API_BASE}/me`, {
         credentials: "include",
@@ -61,34 +63,54 @@ function sync(): Promise<void> {
       const { userId, expiresAt } = await response.json();
       if (typeof userId !== "string" || !userId)
         throw new Error("Invalid account identity");
-      const owner = await db.metadataKv.get("owner");
-      if (owner && owner.value !== userId) {
-        await rawDb.transaction("rw", rawDb.tables, async () => {
-          for (const table of rawDb.tables) await table.clear();
-        });
-        stateStore.write(createSyncClientState(crypto.randomUUID()));
-        MemoryDB._db.undoGradeStack = [];
-        await reloadMemory();
-      }
-      await db.metadataKv.put({ key: "owner", value: userId });
-      const expiry = Date.parse(expiresAt);
-      if (Number.isFinite(expiry))
-        await db.metadataKv.put({ key: "sessionExpiry", value: expiry });
-      const state = ensureSyncState();
-      await db.metadataKv.put({ key: "syncState", value: 2 });
-      if (!(await db.metadataKv.get("clientId")))
-        await db.metadataKv.put({ key: "clientId", value: state.deviceId });
+      const state = await withSyncLock(async () => {
+        controller!.signal.throwIfAborted();
+        const owner = await db.metadataKv.get("owner");
+        if (owner && owner.value !== userId) {
+          await rawDb.transaction("rw", rawDb.tables, async () => {
+            for (const table of rawDb.tables) await table.clear();
+          });
+          stateStore.write(createSyncClientState(crypto.randomUUID()));
+          MemoryDB._db.undoGradeStack = [];
+          await reloadMemory();
+        }
+        await db.metadataKv.put({ key: "owner", value: userId });
+        const expiry = Date.parse(expiresAt);
+        if (Number.isFinite(expiry))
+          await db.metadataKv.put({ key: "sessionExpiry", value: expiry });
+        const state = ensureSyncState();
+        await db.metadataKv.put({ key: "syncState", value: 2 });
+        if (!(await db.metadataKv.get("clientId")))
+          await db.metadataKv.put({ key: "clientId", value: state.deviceId });
+        localState = createLocalSyncState(stateStore);
+        return state;
+      });
       setStatus({ ...status, restoring: !state.bootstrapped });
       const storage = new DexieSyncStorage({
         db: rawDb,
         tables: syncTables,
-        onEvent: () => {
-          touched = true;
+        onEvent: (event) => {
+          if (event.outcome === "applied" || event.outcome === "replaced")
+            touched = true;
         },
       });
+      const locally = <T>(work: () => Promise<T>) =>
+        withSyncLock(async () => {
+          controller!.signal.throwIfAborted();
+          localState!.checkpoint();
+          return work();
+        });
       const client = new SyncClient({
-        storage,
-        stateStore,
+        storage: {
+          getPendingChanges: () => locally(() => storage.getPendingChanges()),
+          prepareRemoteRecords: (records) =>
+            storage.prepareRemoteRecords(records),
+          applyRemoteRecords: (records, deviceId) =>
+            locally(() => storage.applyRemoteRecords(records, deviceId)),
+          reconcilePushResults: (sent, records) =>
+            locally(() => storage.reconcilePushResults(sent, records)),
+        },
+        stateStore: localState!.store,
         remote: createRemote(controller.signal),
         signal: controller.signal,
       });
@@ -107,16 +129,25 @@ function sync(): Promise<void> {
         });
       throw error;
     } finally {
-      if (touched && !stopped) {
-        await reloadMemory();
-        broadcastRecordsChanged();
+      try {
+        if (!stopped && localState) {
+          await withSyncLock(async () => {
+            if (stopped) return;
+            localState!.checkpoint();
+            if (touched) {
+              await reloadMemory();
+              broadcastRecordsChanged();
+            }
+          });
+        }
+      } finally {
+        setStatus({
+          ...status,
+          syncing: false,
+          restoring: status.restoring && !stateStore.read()?.bootstrapped,
+        });
+        controller = undefined;
       }
-      setStatus({
-        ...status,
-        syncing: false,
-        restoring: status.restoring && !stateStore.read()?.bootstrapped,
-      });
-      controller = undefined;
     }
   });
   const reset = () => {
