@@ -4,6 +4,7 @@
     "node_modules/**",
     ".benchmarks/**",
     ".test-artifacts/**",
+    "docs/validation/highlighters-comparison.html",
     "upstream/**",
     "src/shared/hunk/**",
     "tests/review/upstream/**"

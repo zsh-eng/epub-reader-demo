@@ -1,10 +1,12 @@
 # Replacing Shiki in Pierre
 
+**Implemented:** see [the production adapter and comparison recordings](HIGHLIGHTER_INTEGRATION.md). This page records the earlier feasibility probe and design.
+
 Investigated on 2026-09-24 against med's installed Pierre Diffs 1.4.3.
 
 **Shiki is not a requirement for Pierre's diff layout, virtualization, comments, or file navigation. A complete highlighting-engine replacement is feasible.** The earlier fallback recommendation was a way to preserve language coverage during migration, not a fundamental requirement of the renderer.
 
-The isolated adapter probe passes six checks through Pierre's real file/diff rendering utilities. med's running app still uses Shiki. This is evidence for the integration boundary, not a completed app migration.
+The isolated adapter probe passes six checks through Pierre's real file/diff rendering utilities. At the time of this probe, med's running app still used Shiki. This is evidence for the integration boundary, not a completed app migration.
 
 ## Current path
 

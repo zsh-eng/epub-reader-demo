@@ -164,7 +164,9 @@ The UI uses React, [Pierre Diffs and Trees](https://pierre.computer/), Base UI, 
 
 ## Limits and evidence
 
-Binary and unsupported files show metadata only. Text above 8 MiB, 200,000 lines, or 250,000 characters on one line is not rendered. Large supported text uses plain rendering. File manifests stop at 50,000 entries. Missing files are shown as missing; historical content is not silently substituted. See [file browsing](FILE_BROWSING.md) for details.
+Syntax highlighting uses Twinkleplop. This build includes JavaScript/JSX, TypeScript/TSX, CSS, HTML, JSON/JSONC, Markdown, YAML, TOML, Bash, Go, Python, Rust, SQL, Svelte, diff, INI, HTTP, dotenv, and shell-session grammars. Markdown code fences use the matching installed grammar. C, C++, Zig, and other missing grammars display as plain text; files, diffs, selection, and comments still work. Syntax colours can differ from Shiki because semantic token kinds do not contain full TextMate scope stacks.
+
+Binary files and files with unsupported encodings show metadata only. Text above 8 MiB, 200,000 lines, or 250,000 characters on one line is not rendered. Large supported text uses plain rendering. File manifests stop at 50,000 entries. Missing files are shown as missing; historical content is not silently substituted. See [file browsing](FILE_BROWSING.md) for details.
 
 History follows the selected worktree's HEAD ancestry. Shallow clones can lack the parent needed for a comparison. Blame has the same history limit and is unavailable for files without history or files that require Git content conversion.
 
@@ -174,6 +176,7 @@ This is a browser app backed by a local server. Native desktop packaging, shared
 - [Hover prefetch, compact UI, and render diagnostics](validation/HOVER_AND_RENDERING.md)
 - [Navigation validation and screenshots](validation/NAVIGATION.md)
 - [Zoekt benchmark: setup cost, search latency, and reproducible harness](validation/ZOEKT.md)
+- [Twinkleplop integration and timed comparison videos](validation/HIGHLIGHTER_INTEGRATION.md)
 - [Baseline diff performance](validation/RESULTS.md)
 - [Theme and workspace validation](validation/UI_UPDATE.md)
 - [Feature status and navigation behavior](SNACKS_REVIEW.md)

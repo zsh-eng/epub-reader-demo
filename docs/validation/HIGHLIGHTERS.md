@@ -1,6 +1,8 @@
 # Syntax highlighting comparison
 
-This benchmark compares med's current Shiki JavaScript engine with Twinkleplop in Chromium workers. It does not change med's renderer or dependencies.
+**Update:** med now uses the [Twinkleplop adapter](HIGHLIGHTER_INTEGRATION.md). The report below preserves the earlier isolated engine measurements; the new report records the production UI comparison.
+
+This historical benchmark compares med's then-current Shiki JavaScript engine with Twinkleplop in Chromium workers. It does not change med's renderer or dependencies.
 
 ## Result
 
