@@ -6,7 +6,7 @@ is about **8.33 ms**; the app does not own all of that time.
 
 Arctic became visibly smoother on the user's iPhone after the changes below.
 We have not established sustained 120 rendered frames per second in every
-condition. The [performance record](article-reader/PERFORMANCE.md) keeps the
+condition. The [performance record](apps/arctic/PERFORMANCE.md) keeps the
 measurements, build differences and validation limits.
 
 ## Measure the action that feels slow
@@ -27,7 +27,7 @@ Use three layers of evidence:
 Arctic's **Sort and filter → Frame diagnostics** samples callbacks in a bounded
 ring and publishes only twice a second. The counter owns its observation state;
 it must not make the library update every frame. It stops when disabled or
-inactive. See [`LibraryFrameDiagnostics`](article-reader/Sources/LibraryFrameDiagnostics.swift).
+inactive. See [`LibraryFrameDiagnostics`](apps/arctic/Sources/LibraryFrameDiagnostics.swift).
 Apple explains [hitch measurement](https://developer.apple.com/videos/play/wwdc2020/10077/)
 and [ProMotion timing](https://developer.apple.com/documentation/QuartzCore/optimizing-iphone-and-ipad-apps-to-support-promotion-displays).
 
@@ -52,8 +52,8 @@ measurements are reused with bounded caches. Large keyboard transitions suspend
 speculative Reader WebView construction, while image and metadata work can
 continue. Inactive result rows unmount instead of loading hidden images.
 
-Source: [viewport and projection ownership](article-reader/Sources/LibraryPreloading.swift),
-[search and thumbnail caches](article-reader/Sources/LibrarySearch.swift).
+Source: [viewport and projection ownership](apps/arctic/Sources/LibraryPreloading.swift),
+[search and thumbnail caches](apps/arctic/Sources/LibrarySearch.swift).
 
 ## Keep four image representations distinct
 
@@ -78,8 +78,8 @@ uses WebP and BlurHash.
 
 One controlled large-image fixture shrank from a 205,494-byte 1,200 px JPEG to a
 57,818-byte HEIC. This is one example, not a publisher-wide compression estimate.
-See [codec source](article-reader/Sources/PreviewImageCodec.swift) and the
-[measured image table](article-reader/PERFORMANCE.md#measured-image-example).
+See [codec source](apps/arctic/Sources/PreviewImageCodec.swift) and the
+[measured image table](apps/arctic/PERFORMANCE.md#measured-image-example).
 
 An unseen URL has no local tiny preview until its first image download. Arctic
 does not receive Telegram's immediate thumbnail bytes with each message. Show a
@@ -119,9 +119,9 @@ contacted. These are Mac results. Replay bundled HTML and images locally before
 increasing concurrency; variable websites make attribution difficult and should
 not receive repeated benchmark traffic.
 
-Use [the import replay](article-reader/Tests/bench-import-replay.py),
-[1,000-photo scroll tests](article-reader/Tests/LibraryScrollPerformanceUITests.swift)
-and [Reader preparation tests](article-reader/Tests/ReaderPerformanceUITests.swift).
+Use [the import replay](apps/arctic/Tests/bench-import-replay.py),
+[1,000-photo scroll tests](apps/arctic/Tests/LibraryScrollPerformanceUITests.swift)
+and [Reader preparation tests](apps/arctic/Tests/ReaderPerformanceUITests.swift).
 The replay script documents its SwiftSoup argument and baseline setup.
 
 ## Preserve geometry and state
@@ -133,7 +133,7 @@ content. Do not replay image-arrival animations during fast scrolling.
 For a distant folder tap, decide before starting native paging. Arctic replaces
 the destination directly under an outgoing snapshot; it does not scroll through
 all intermediate folders. Keep the controller and frame stable. See
-[`LibraryPager`](article-reader/Sources/LibraryPager.swift).
+[`LibraryPager`](apps/arctic/Sources/LibraryPager.swift).
 
 For Reader navigation, scope async extraction, caches and callbacks to the current
 document identity. Preparing a linked page must not overwrite its saved parent.
@@ -153,5 +153,5 @@ A fast but incorrect restore is not a performance improvement.
    gesture timing. User feedback confirms feel, not an exact frame-rate gain.
 
 For web Reader spans, workers and first-content measurements, use the
-[Reader diagnostic guide](src/features/reader/README.md) and
-[web performance evidence](src/features/reader/PERFORMANCE.md).
+[Reader diagnostic guide](apps/reader/src/features/reader/README.md) and
+[web performance evidence](apps/reader/src/features/reader/PERFORMANCE.md).

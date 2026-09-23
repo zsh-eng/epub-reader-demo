@@ -1,7 +1,7 @@
 # Local-first data that stays fast
 
 A reusable guide from the EPUB Reader and Arctic. Read this before designing a
-new app's storage or sync. The [architecture guide](docs/ARCHITECTURE.md) defines
+new app's storage or sync. The [architecture guide](apps/reader/docs/ARCHITECTURE.md) defines
 this repository's current rules.
 
 ## Start with three kinds of data
@@ -60,7 +60,7 @@ cleanup policies that assume these features exist.
 
 ## Transfer files separately
 
-[`FilesManager`](src/lib/files/files-manager.ts) stores local bytes and durable
+[`FilesManager`](apps/reader/src/lib/files/files-manager.ts) stores local bytes and durable
 upload intent together. `put()` does not wait for the network. `get()` checks
 local bytes, shares an existing download for the same file ID, then downloads
 only if needed. The app chooses which file is needed next; the file service
@@ -105,7 +105,7 @@ Native sync activation remains a separate migration and validation task. Its
 current staged JSON journal rewrites a snapshot. A measured one-item edit with
 10,000 articles took about 320 ms on a Mac; JSON encoding dominated. Moving
 that journal to SQLite is proposed, not implemented. See the
-[native measurements and migration boundary](article-reader/Sync/PERFORMANCE.md).
+[native measurements and migration boundary](apps/arctic/Sync/PERFORMANCE.md).
 These guides do not authorize that migration.
 
 ## Checks worth reusing
@@ -116,8 +116,8 @@ switch accounts with a request in flight. Verify both visible state and stored
 rows. Test file upload failure separately from record sync failure.
 
 Start with the [package contract and tests](packages/local-sync/README.md),
-[Reader sync tests](test/client/sync-v2-sync.test.ts),
-[file tests](test/client/files-manager.test.ts) and
-[table definitions](src/lib/sync-v2/tables.ts). Add a new entity through the
+[Reader sync tests](apps/reader/test/client/sync-v2-sync.test.ts),
+[file tests](apps/reader/test/client/files-manager.test.ts) and
+[table definitions](apps/reader/src/lib/sync-v2/tables.ts). Add a new entity through the
 existing domain/table/codec boundary; do not add a dedicated server route for
 each record type.

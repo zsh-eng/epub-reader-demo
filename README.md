@@ -1,86 +1,58 @@
-# EPUB Reader Demo (Name TBD)
+# Workbench
 
-Modern Reader App
+A monorepo for personal apps and shared local-first software.
 
-See [Architecture and performance principles](docs/ARCHITECTURE.md) for the
-current design decisions and validation approach.
+## Apps and packages
 
-## Reusable project guides
+| Path | Purpose |
+| --- | --- |
+| [apps/reader](apps/reader/README.md) | Web EPUB Reader. React, IndexedDB, and a Cloudflare Worker. |
+| [apps/arctic](apps/arctic/README.md) | Arctic, the native iOS article reader and share extension. |
+| [packages/local-sync](packages/local-sync/README.md) | Shared sync protocol, engine, and Dexie/Hono adapters. |
+| [packages/text-highlighter](packages/text-highlighter/README.md) | DOM text selection and highlight restoration. |
+| [packages/arctic-sync-server](packages/arctic-sync-server/README.md) | Private Arctic auth and sync routes, hosted by the Reader Worker. |
 
-- [Local-first data and sync](LOCAL_FIRST.md) — durable writes, files, cache ownership and loading order.
-- [Reading time](READING_TIME.md) — activity-based sessions, idle limits and lifecycle rules.
-- [UI performance](UI_PERFORMANCE.md) — frame diagnostics, viewport preloading, compact images and measured limits.
-- [Adapting design references](DESIGN_REFERENCES.md) — turn a useful reference into testable behavior.
+Arctic works locally. Its native sync storage integration remains dormant;
+this repository move does not enable it.
 
-These guides describe transferable patterns. They distinguish the web Reader's
-active sync from Arctic's dormant native sync integration.
+## Start
 
-Roadmap (v0.1):
+Use Bun from this directory. There is one workspace lockfile.
 
-- [x] Read books
-- [x] Themes
-- [x] Highlights
-- [x] Navigation
-- [x] Mobile view
-- [x] Reading progress
+```sh
+bun install --frozen-lockfile
+bun run dev:reader
+```
 
-Roadmap (v0.2):
+For Arctic, open `apps/arctic/ArticleReader.xcodeproj` in Xcode and select the
+**ArticleReader** scheme. See its README for signing and device setup.
 
-- [x] Login
-- [x] Sync books
-- [x] Sync Engine
-- [x] Sync reading progress
-- [x] Sync highlights
-- [x] Sync log (for debugging)
+| Command, from this directory | Action |
+| --- | --- |
+| `bun run build` | Build shared libraries and the web Reader. |
+| `bun run test:client --run` | Run Reader client tests. |
+| `bun run test:server --run` | Run Worker tests with local D1. |
+| `bun run test:packages` | Test shared packages. |
+| `bun run test:e2e` | Run Reader browser tests. |
+| `bun run build:arctic-web` | Bundle Arctic's WebView extraction code. |
+| `bun run test:arctic-web` | Test Arctic's WebView code. |
+| `bun run lint` | Check TypeScript and JavaScript sources. |
+| `bun run deploy` | Build and deploy the existing Reader Worker. |
 
-Testing:
+The default `dev`, `build`, `test`, `deploy`, database, and diagnostic commands
+still target Reader. Each app owns its dependencies, tests, and configuration.
+Reader environment files belong in `apps/reader/`; start with its
+[environment examples](apps/reader/.env.example) and
+[Worker secret names](apps/reader/.dev.vars.example).
+Deployment names, domains, database bindings, and iOS bundle IDs are unchanged.
 
-- Playwright tests for
-  - Adding books
-  - Deleting books
-  - Reading and navigating
-  - Changing settings
-  - Sync of books
-  - Sync of highlights
-  - Offline usage and support
+## Guides for future projects
 
-Roadmap (v0.3):
+- [Local-first data and sync](LOCAL_FIRST.md): durable local writes, files, and preloading.
+- [Reading time](READING_TIME.md): session boundaries and idle time.
+- [UI performance](UI_PERFORMANCE.md): traces, virtualization, and image preparation.
+- [Adapting design references](DESIGN_REFERENCES.md): turn references into testable behavior.
+- [Architecture](docs/ARCHITECTURE.md): workspace boundaries and app-specific designs.
 
-- [ ] Better book text styles
-- [ ] Text notes
-- [ ] Reading stats over time
-- [ ] Book shelves (DNF, completed, etc.)
-- [ ] Full text search
-- [ ] Add multiple EPUBs at once
-
-Future:
-
-- [ ] Voice notes
-- [ ] Audio notes
-- [ ] Quote sharing
-- [ ] Read articles
-- [ ] Read PDFs
-- [ ] LLM (ask questions)
-- [ ] Flashcard integration
-- [ ] Chinese learning (show pinyin, translation of words)
-- [ ] Desktop / Mobile App (Tauri)
-
-Not on roadmap:
-
-- Paginated view
-- RTL or Top to bottom layout
-- EPUB CFI for reading progress
-
-## Notes on Env
-
-`VITE_BETTER_AUTH_URL` should be defined in `.env.development` and `.env.production`.
-Other environment variables should be defined in `.dev.vars` or `wrangler.jsonc` (non-sensitive).
-
-You should manually add these environment variables to the cloudflare dashboard for the production build.
-The only environment variable that's updated locally is the `VITE_BETTER_AUTH_URL` variable.
-
-## Notes on Dependencies
-
-Following the latest (as of 2025-12-20) Cloudflare Workers docs on using Vitest,
-which means only using Vitest 3.2.0 (instead of the latest version).
-See [this link](https://developers.cloudflare.com/workers/testing/vitest-integration/write-your-first-test/).
+Add independent products under `apps/`. Add a package under `packages/` when
+code has a clear shared contract. Keep app data and generated output out of Git.

@@ -1,0 +1,16 @@
+{
+  "name": "@workbench/arctic-sync-server",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./routes": "./routes.ts",
+    "./native-auth": "./native-auth.ts"
+  },
+  "scripts": {
+    "test": "bun test routes.test.ts"
+  },
+  "dependencies": {
+    "@zsh-eng/local-sync": "workspace:*",
+    "hono": "^4.12.15"
+  }
+}

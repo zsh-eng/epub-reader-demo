@@ -1,0 +1,17 @@
+{
+  "name": "@workbench/arctic-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build reader.js --target browser --format iife --minify --outfile ../Resources/reader.js",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "defuddle": "0.19.4",
+    "dompurify": "3.4.15",
+    "highlight.js": "11.12.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

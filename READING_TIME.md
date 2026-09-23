@@ -51,7 +51,7 @@ from being written into the wrong saved article.
 
 ## Storage without scroll work
 
-The native [ReadingSessions controller](article-reader/Sources/ReadingSessions.swift)
+The native [ReadingSessions controller](apps/arctic/Sources/ReadingSessions.swift)
 holds active boundaries and totals in memory. It has no published value that
 invalidates the UI on every action. `total(for:)` returns completed intervals;
 it does not estimate additional time while the reader is idle.
@@ -90,18 +90,18 @@ counter cannot compensate for a view that sends activity for the wrong page.
 Native deterministic checks:
 
 ```sh
-swiftc article-reader/Sources/ReadingSessions.swift \
-  article-reader/Checks/ReadingSessionChecks.swift \
+swiftc apps/arctic/Sources/ReadingSessions.swift \
+  apps/arctic/Checks/ReadingSessionChecks.swift \
   -o /tmp/arctic-reading-time-check
 /tmp/arctic-reading-time-check
 ```
 
 Useful code to compare:
 
-- [Native accounting and local files](article-reader/Sources/ReadingSessions.swift)
-- [Native deterministic checks](article-reader/Checks/ReadingSessionChecks.swift)
-- [Web session controller](src/features/reader/hooks/reading-sessions/reader-reading-session-controller.ts)
-- [Web session domain store](src/data/reading-sessions.ts)
+- [Native accounting and local files](apps/arctic/Sources/ReadingSessions.swift)
+- [Native deterministic checks](apps/arctic/Checks/ReadingSessionChecks.swift)
+- [Web session controller](apps/reader/src/features/reader/hooks/reading-sessions/reader-reading-session-controller.ts)
+- [Web session domain store](apps/reader/src/data/reading-sessions.ts)
 
 A forced process termination can lose changes after the last completed write.
 No background timer or exit callback guarantees a final write. Keep the

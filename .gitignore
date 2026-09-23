@@ -26,10 +26,11 @@ dist-ssr
 *.sw?
 
 .env.*
+!.env.example
 .dev.vars
 
-diagnostics/*
-!diagnostics/**/*.md
+apps/reader/diagnostics/*
+!apps/reader/diagnostics/**/*.md
 
 # Browser test output
 playwright-report/

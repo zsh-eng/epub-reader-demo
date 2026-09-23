@@ -15,7 +15,7 @@
   "author": "zsh-eng",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zsh-eng/epub-reader-demo",
+    "url": "https://github.com/zsh-eng/workbench",
     "directory": "packages/text-highlighter"
   },
   "files": [
@@ -50,14 +50,16 @@
   },
   "scripts": {
     "build": "tsup",
-    "test": "bun test",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
     "tsup": "^8.5.1",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "happy-dom": "^20.9.0",
+    "vitest": "^4.1.5"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
