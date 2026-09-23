@@ -5,6 +5,16 @@ Modern Reader App
 See [Architecture and performance principles](docs/ARCHITECTURE.md) for the
 current design decisions and validation approach.
 
+## Reusable project guides
+
+- [Local-first data and sync](LOCAL_FIRST.md) — durable writes, files, cache ownership and loading order.
+- [Reading time](READING_TIME.md) — activity-based sessions, idle limits and lifecycle rules.
+- [UI performance](UI_PERFORMANCE.md) — frame diagnostics, viewport preloading, compact images and measured limits.
+- [Adapting design references](DESIGN_REFERENCES.md) — turn a useful reference into testable behavior.
+
+These guides describe transferable patterns. They distinguish the web Reader's
+active sync from Arctic's dormant native sync integration.
+
 Roadmap (v0.1):
 
 - [x] Read books
