@@ -787,6 +787,62 @@ final class ArticleReaderUITests: XCTestCase {
     capture(app, "reader-svg-favicon-offline")
   }
 
+  @MainActor func testShareTagsPackLeftAndKeepLongLabelsOnOneLine() throws {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture", "-test-tagging", "-share-long-tags"]
+    app.launch()
+    _ = openShareFixture(app)
+    let group = app.descendants(matching: .any).matching(identifier: "share-added-tags").firstMatch
+    expectation(for: NSPredicate(format: "value == 'presented'"), evaluatedWith: group)
+    waitForExpectations(timeout: 10)
+    let attention = app.staticTexts["Attention"]
+    let life = app.staticTexts["Life"]
+    let long = app.staticTexts["Technology and Society"]
+    XCTAssertTrue(long.exists)
+    // Label frames include the pill's padding. Short tags stay together instead
+    // of occupying equal-width columns; the long label remains a single line.
+    XCTAssertEqual(attention.frame.minY, life.frame.minY, accuracy: 1)
+    XCTAssertLessThan(life.frame.minX - attention.frame.maxX, 36)
+    XCTAssertEqual(long.frame.height, attention.frame.height, accuracy: 1)
+    XCTAssertLessThanOrEqual(long.frame.maxX, group.frame.maxX + 1)
+    capture(app, "share-leading-single-line-tags")
+    app.buttons["share-cancel"].tap()
+  }
+
+  @MainActor func testDistantFolderJumpsFadeAndNearbyNavigationStillWorks() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-seed-preload-fixtures", "-disable-preloading", "-test-folder-transitions"]
+    app.launch()
+    XCTAssertTrue(app.buttons["article-cached-0"].waitForExistence(timeout: 10))
+    let strip = app.scrollViews["library-folders"]
+    let history = app.buttons["folder-history"]
+    for _ in 0..<5 { if history.isHittable { break }; strip.swipeLeft() }
+    history.tap()
+    XCTAssertTrue(history.isSelected)
+    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "crossfade")
+    XCTAssertTrue(app.staticTexts["Every read leaves a trail."].waitForExistence(timeout: 5))
+    let archive = app.buttons["folder-archive"]
+    if !archive.isHittable { strip.swipeLeft() }
+    archive.tap()
+    XCTAssertTrue(archive.isSelected)
+    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "slide")
+    swipeLibrary(app, left: false)
+    XCTAssertTrue(history.isSelected)
+    let downloaded = app.buttons["folder-downloaded"]
+    for _ in 0..<5 { if downloaded.isHittable { break }; strip.swipeRight() }
+    downloaded.tap()
+    XCTAssertTrue(downloaded.isSelected)
+    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "crossfade")
+    XCTAssertTrue(app.buttons["article-cached-0"].waitForExistence(timeout: 5))
+    let saved = app.buttons["folder-saved"]
+    if !saved.isHittable { strip.swipeRight() }
+    saved.tap()
+    XCTAssertTrue(saved.isSelected)
+    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "slide")
+    XCTAssertTrue(app.buttons["article-cached-0"].exists)
+    capture(app, "library-after-distant-and-nearby-jumps")
+  }
+
   @MainActor func testShareExtensionSavesToLibrary() throws {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-share-fixture", "-test-tagging"]

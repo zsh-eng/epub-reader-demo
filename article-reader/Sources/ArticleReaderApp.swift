@@ -119,6 +119,10 @@ struct LibraryView: View {
   @State private var importReport: String?
   @State private var showingImportSummary = false
   @State private var folder = ArticleFolder.saved
+  @State private var pagerGeneration = 0
+  #if DEBUG
+    @State private var folderTransition = "initial"
+  #endif
   @State private var favouriteTags: Set<String> = []
   @State private var selecting = false
   @State private var selection: Set<UUID> = []
@@ -200,6 +204,10 @@ struct LibraryView: View {
         }
       }
       .overlay(alignment: .top) {
+        if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-folder-transitions") {
+          Text(folderTransition).font(.system(size: 7))
+            .accessibilityIdentifier("folder-transition-mode").allowsHitTesting(false)
+        }
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-share-fixture") {
           Button("Share fixture") { testSharing = true }.accessibilityIdentifier("share-fixture")
         }
@@ -459,6 +467,22 @@ struct LibraryView: View {
     .padding(.horizontal, 16)
   }
 
+  private func selectFolder(_ target: ArticleFolder) {
+    guard target != folder else { return }
+    let items = folderItems
+    let distance = abs((items.firstIndex(of: target) ?? 0) - (items.firstIndex(of: folder) ?? 0))
+    let fade = reduceMotion || distance >= 3
+    #if DEBUG
+      folderTransition = fade ? "crossfade" : "slide"
+    #endif
+    // A fresh pager starts at the destination. Reusing the old pager here would
+    // animate its offset through every intervening page and build those lists.
+    withAnimation(fade ? .easeOut(duration: reduceMotion ? 0.1 : 0.18) : .smooth(duration: 0.2)) {
+      folder = target
+      if fade { pagerGeneration += 1 }
+    }
+  }
+
   private var folders: some View {
     HStack(spacing: 8) {
       ScrollViewReader { proxy in
@@ -466,8 +490,7 @@ struct LibraryView: View {
           HStack(spacing: 2) {
             ForEach(folderItems, id: \.self) { item in
               Button {
-                // Content is immediately available; motion only tracks the folder selection.
-                withAnimation(reduceMotion ? nil : .smooth(duration: 0.2)) { folder = item }
+                selectFolder(item)
               } label: {
                 Text(item.title).font(.subheadline.weight(.semibold))
                   .foregroundStyle(folder == item ? ReaderTheme.foreground : ReaderTheme.muted)
@@ -484,6 +507,7 @@ struct LibraryView: View {
             }
           }.padding(4)
         }
+        .accessibilityIdentifier("library-folders")
         .clipShape(Capsule())
         .modifier(LibraryGlass())
         .onChange(of: folder) { _, value in
@@ -651,6 +675,8 @@ struct LibraryView: View {
           }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .id(pagerGeneration)
+        .transition(.opacity)
         .ignoresSafeArea(.container, edges: .bottom)
         LibraryScrollEdge()
           .frame(height: topInset + headerHeight + 28)
@@ -821,6 +847,8 @@ struct LibraryView: View {
       let query: String
       if arguments.contains("-share-keychain-probe") {
         query = "?keychain_probe"
+      } else if arguments.contains("-share-long-tags") {
+        query = "?long_tags"
       } else if arguments.contains("-share-empty-tags") {
         query = "?no_tags"
       } else if arguments.contains("-share-wait-context") {

@@ -238,6 +238,7 @@ struct TagRevealPill: View {
     let labelOpacity = progress.labelOpacity(for: index)
     let glow = progress.glow(for: index)
     return Text(name)
+      .lineLimit(1).truncationMode(.tail)
       .font(compact ? .system(size: 10, weight: .medium) : .subheadline.weight(.medium))
       .opacity(labelOpacity)
       .padding(.horizontal, compact ? 9 : 12).padding(.vertical, compact ? 6 : 8)
@@ -254,5 +255,49 @@ struct TagRevealPill: View {
       }
       .opacity(progress.shellOpacity(for: index))
       .accessibilityHidden(labelOpacity < 1)
+  }
+}
+
+/// Pack intrinsic-width pills from the leading edge. Only whole pills wrap;
+/// a label wider than the viewport gets one line with an ellipsis.
+struct LeadingTagFlow: Layout {
+  var spacing: CGFloat = 8
+
+  private func positions(width: CGFloat, subviews: Subviews) -> (sizes: [CGSize], origins: [CGPoint], height: CGFloat) {
+    var sizes: [CGSize] = []
+    var origins: [CGPoint] = []
+    var x: CGFloat = 0
+    var y: CGFloat = 0
+    var rowHeight: CGFloat = 0
+    for view in subviews {
+      let natural = view.sizeThatFits(.unspecified)
+      let size = view.sizeThatFits(ProposedViewSize(width: min(width, natural.width), height: nil))
+      if x > 0 && x + size.width > width {
+        x = 0
+        y += rowHeight + spacing
+        rowHeight = 0
+      }
+      origins.append(CGPoint(x: x, y: y))
+      sizes.append(size)
+      x += size.width + spacing
+      rowHeight = max(rowHeight, size.height)
+    }
+    return (sizes, origins, y + rowHeight)
+  }
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    let natural = subviews.reduce(CGFloat.zero) { $0 + $1.sizeThatFits(.unspecified).width }
+      + CGFloat(max(0, subviews.count - 1)) * spacing
+    let width = proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? natural
+    return CGSize(width: width, height: positions(width: width, subviews: subviews).height)
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    let layout = positions(width: bounds.width, subviews: subviews)
+    for index in subviews.indices {
+      let origin = layout.origins[index]
+      subviews[index].place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
+        anchor: .topLeading, proposal: ProposedViewSize(layout.sizes[index]))
+    }
   }
 }

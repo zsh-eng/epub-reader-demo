@@ -450,7 +450,11 @@ private final class ShareSaveModel: ObservableObject {
       #if DEBUG
         if isFixture {
           try await Task.sleep(for: .milliseconds(650))
-          tags = url?.query == "no_tags" ? [] : ["Attention", "Life"]
+          switch url?.query {
+          case "no_tags": tags = []
+          case "long_tags": tags = ["Attention", "Life", "Technology and Society"]
+          default: tags = ["Attention", "Life"]
+          }
         } else {
           guard let key = try JevKeychain.read(), !key.isEmpty else {
             record("keychain-missing")
@@ -674,9 +678,10 @@ private struct ShareSaveView: View {
   }
 
   private func tagResult(_ tags: [String]) -> some View {
-    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)], spacing: 8) {
+    LeadingTagFlow(spacing: 8) {
       ForEach(Array(tags.enumerated()), id: \.element) { index, tag in
         TagRevealPill(name: tag, index: index, surface: Color(uiColor: .secondarySystemBackground))
+          .accessibilityIdentifier("share-tag-" + tag)
       }
     }
     .frame(maxWidth: .infinity, alignment: .leading)
