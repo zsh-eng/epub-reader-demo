@@ -202,7 +202,18 @@ enum ArticleRouting {
   var noteDraft: ReaderNoteDraft?
   var noteDismissRequest = 0
   @ObservationIgnored private var noteDrafts: [String: ReaderNoteDraft] = [:]
-  var selectedAnnotationID: UUID?
+  var selectedAnnotationID: UUID? {
+    didSet {
+      guard oldValue != selectedAnnotationID, readerReady else { return }
+      // Swift owns focus; keep the app-world mirror current for every entry
+      // point, including creation, notebook reveal, removal and dismissal.
+      readerView.callAsyncJavaScript(
+        "globalThis.arcticAnnotations?.setFocused(id, token)",
+        arguments: ["id": selectedAnnotationID?.uuidString ?? "", "token": readerDocumentToken],
+        in: nil, in: .defaultClient
+      ) { _ in }
+    }
+  }
   @ObservationIgnored private var pendingAnnotationReveal: UUID?
   var unmatchedAnnotations: Set<String> = []
   #if DEBUG
@@ -1246,7 +1257,7 @@ enum ArticleRouting {
     readerView.evaluateJavaScript(
       "globalThis.arcticAnnotations?.selection()", in: nil, in: .defaultClient
     ) { [weak self] result in
-      guard let self, self.pageVersion == version, self.libraryURL == url,
+      guard let self, self.isReader, self.readerReady, self.pageVersion == version, self.libraryURL == url,
         case .success(let value) = result, let selection = value as? [String: Any],
         let data = try? JSONSerialization.data(withJSONObject: selection),
         let quote = try? JSONDecoder().decode(ReaderQuote.self, from: data)
@@ -1335,9 +1346,12 @@ enum ArticleRouting {
     guard let value, let id = UUID(uuidString: value),
       annotations.contains(where: { $0.id == id })
     else {
-      selectedAnnotationID = nil
+      // WebKit emits selection changes while native selection handles move.
+      // Do not invalidate the SwiftUI host when there is no focus to dismiss.
+      if selectedAnnotationID != nil { selectedAnnotationID = nil }
       return
     }
+    guard selectedAnnotationID != id else { return }
     selectedAnnotationID = id
     UISelectionFeedbackGenerator().selectionChanged()
   }

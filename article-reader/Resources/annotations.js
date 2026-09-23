@@ -18,17 +18,20 @@
     }`).join('\n')}
   `;
   document.head.append(style);
-  let resolved = new Map(), hitRanges = [], documentToken = '', picked = false;
+  let resolved = new Map(), hitRanges = [], documentToken = '', focused = '', revealing = false;
   const colourOf = record => colours.includes(record.colour) ? record.colour : 'yellow';
   function notify(id = '') {
-    if (!id && !picked) return;
-    picked = Boolean(id);
+    if (!id && !focused) return;
+    focused = id;
     globalThis.webkit?.messageHandlers?.arcticAnnotationTap?.postMessage({ id, token: documentToken });
   }
   // CSS highlights have no DOM element. Hit-test the cached ranges only on tap,
   // never on scroll or in the rendering loop. Last-painted overlap wins.
   root.addEventListener('click', event => {
-    if (!window.getSelection()?.isCollapsed) return;
+    if (!window.getSelection()?.isCollapsed || event.target.closest?.('a')) {
+      notify();
+      return;
+    }
     for (const { id, range } of [...hitRanges].reverse()) {
       if ([...range.getClientRects()].some(rect => event.clientX >= rect.left
           && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)) {
@@ -40,7 +43,12 @@
     notify();
   });
   document.addEventListener('click', event => { if (!root.contains(event.target)) notify(); });
-  window.addEventListener('scroll', () => notify(), { passive: true });
+  document.addEventListener('selectionchange', () => {
+    // A fresh selection supersedes the focused saved passage. Collapsing the
+    // selection after Highlight must not dismiss its newly opened controls.
+    if (!window.getSelection()?.isCollapsed) notify();
+  });
+  window.addEventListener('scroll', () => { if (!revealing) notify(); }, { passive: true });
   function content() {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     const nodes = [];
@@ -112,6 +120,11 @@
     }
   }
   globalThis.arcticAnnotations = {
+    // A mirror of native focus, including creation and Show passage. This lets
+    // ordinary text selection avoid unnecessary messages to the SwiftUI host.
+    setFocused(id, token) {
+      if (token === documentToken) focused = id;
+    },
     selection() {
       const selection = window.getSelection();
       if (!selection?.rangeCount || selection.isCollapsed) return null;
@@ -180,7 +193,10 @@
       const range = start < 0 ? null : rangeAt(nodes, start, start + quote.exact.length);
       if (!range) return false;
       const top = window.scrollY + range.getBoundingClientRect().top - window.innerHeight * 0.3;
+      // Let this programmatic jump settle before treating scroll as dismissal.
+      revealing = true;
       window.scrollTo({ top: Math.max(0, top), behavior: 'instant' });
+      requestAnimationFrame(() => requestAnimationFrame(() => { revealing = false; }));
       return true;
     }
   };

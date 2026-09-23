@@ -50,9 +50,15 @@ struct ReaderPage: View {
         browser.refreshAnnotations()
         store.visit(browser.libraryURL)
       }
-      .onDisappear { browser.captureReaderPosition() }
+      .onDisappear {
+        browser.captureReaderPosition()
+        if browser.selectedAnnotationID != nil { browser.selectedAnnotationID = nil }
+      }
       .onChange(of: scenePhase) { _, phase in
-        if phase != .active { browser.captureReaderPosition() }
+        if phase != .active {
+          browser.captureReaderPosition()
+          if browser.selectedAnnotationID != nil { browser.selectedAnnotationID = nil }
+        }
       }
       .onChange(of: browser.committedURL) { _, url in
         nearEnd = false
@@ -61,7 +67,7 @@ struct ReaderPage: View {
       .onChange(of: browser.isReader) { _, reader in
         if !reader { browser.captureReaderPosition() }
         nearEnd = false
-        browser.selectedAnnotationID = nil
+        if browser.selectedAnnotationID != nil { browser.selectedAnnotationID = nil }
       }
       .onChange(of: fontSize, updateAppearance)
       .onChange(of: font, updateAppearance)

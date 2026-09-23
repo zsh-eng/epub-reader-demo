@@ -90,6 +90,46 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["No notes yet"].waitForExistence(timeout: 5))
   }
 
+  @MainActor func testHighlightFocusClearsAndNewSelectionOwnsTheToolbar() {
+    let app = openFixture()
+    // Establish WebKit focus before asking the simulator for its native edit menu.
+    app.webViews.staticTexts[paragraph].firstMatch.tap()
+    selectPassage(in: app)
+    tapSelectionAction("Highlight", in: app)
+    let rose = app.buttons["highlight-colour-rose"]
+    XCTAssertTrue(rose.waitForExistence(timeout: 5))
+    rose.tap()
+    // Creation focuses natively. A tap on unmarked text must dismiss that focus.
+    let second = app.webViews.staticTexts.matching(
+      NSPredicate(format: "label BEGINSWITH %@", "There is a particular pleasure")
+    ).firstMatch
+    XCTAssertTrue(second.isHittable)
+    second.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
+    XCTAssertTrue(rose.waitForNonExistence(timeout: 5))
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+
+    let first = app.webViews.staticTexts[paragraph].firstMatch
+    first.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
+    XCTAssertTrue(rose.waitForExistence(timeout: 5))
+    XCTAssertTrue(rose.isSelected)
+    // Starting another selection must also clear focus, without a prior tap-away.
+    second.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).press(forDuration: 1.2)
+    XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5))
+    XCTAssertFalse(rose.exists)
+    tapSelectionAction("Highlight", in: app)
+    XCTAssertTrue(app.buttons["highlight-colour-yellow"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["highlight-colour-yellow"].isSelected)
+    expectValue("2 passages", on: app.buttons["reader-notes"])
+    app.buttons["highlight-remove"].tap()
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+    first.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.2)).tap()
+    XCTAssertTrue(rose.waitForExistence(timeout: 5))
+    XCTAssertTrue(rose.isSelected, "Removing the new highlight must not alter the old one")
+    app.webViews.firstMatch.swipeUp()
+    XCTAssertTrue(rose.waitForNonExistence(timeout: 5))
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+  }
+
   @MainActor func testEmptyArticleNotesUseMediumSheetAndKeepFullMessages() {
     let app = openFixture()
     app.buttons["reader-notes"].tap()

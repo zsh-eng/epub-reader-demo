@@ -137,3 +137,74 @@ test('unanchored article notes never paint or appear as unmatched quotes', async
   expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('standalone'))).toBe(false);
   await p.close();
 });
+
+
+test('native-created focus dismisses on tap-away and selecting another passage', async () => {
+  const p = await page();
+  const quote = await select(p, 'em');
+  await p.evaluate(() => window.getSelection()!.removeAllRanges());
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'doc'), [record(quote)]);
+  await p.evaluate(() => {
+    (globalThis as any).messages = [];
+    (globalThis as any).webkit = { messageHandlers: { arcticAnnotationTap: {
+      postMessage: (message: unknown) => (globalThis as any).messages.push(message)
+    } } };
+  });
+  // Native creation opens the toolbar and mirrors focus without a DOM tap.
+  await p.evaluate(() => (globalThis as any).arcticAnnotations.setFocused('one', 'doc'));
+  await p.locator('p').nth(1).click();
+  expect(await p.evaluate(() => (globalThis as any).messages.at(-1))).toEqual({ id: '', token: 'doc' });
+  await p.locator('em').click();
+  expect(await p.evaluate(() => (globalThis as any).messages.at(-1).id)).toBe('one');
+  await select(p, 'p:nth-child(2)');
+  await p.waitForFunction(() => (globalThis as any).messages.at(-1).id === '');
+  // Removing selection after saving must not dismiss the new native focus.
+  await p.evaluate(() => { (globalThis as any).messages = []; window.getSelection()!.removeAllRanges(); });
+  await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await p.evaluate(() => (globalThis as any).messages)).toEqual([]);
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')?.size)).toBe(1);
+  await p.close();
+});
+
+test('highlighted links retain navigation and clear focus', async () => {
+  const p = await page();
+  await p.locator('em').evaluate(node => { node.innerHTML = '<a href="#next">quiet thought</a>'; });
+  const quote = await select(p, 'a');
+  await p.evaluate(() => {
+    window.getSelection()!.removeAllRanges();
+    (globalThis as any).messages = [];
+    (globalThis as any).webkit = { messageHandlers: { arcticAnnotationTap: {
+      postMessage: (message: unknown) => (globalThis as any).messages.push(message)
+    } } };
+  });
+  await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'doc'), [record(quote)]);
+  await p.evaluate(() => (globalThis as any).arcticAnnotations.setFocused('one', 'doc'));
+  await p.locator('a').click();
+  expect(new URL(p.url()).hash).toBe('#next');
+  expect(await p.evaluate(() => (globalThis as any).messages.at(-1))).toEqual({ id: '', token: 'doc' });
+  await p.close();
+});
+
+test('Show passage retains focus and a subsequent user scroll dismisses it', async () => {
+  const p = await page();
+  await p.locator('p').first().evaluate(node => (node as HTMLElement).style.height = '1200px');
+  const quote = await select(p, 'p:nth-child(2)');
+  await p.evaluate(() => {
+    window.getSelection()!.removeAllRanges();
+    (globalThis as any).messages = [];
+    (globalThis as any).webkit = { messageHandlers: { arcticAnnotationTap: {
+      postMessage: (message: unknown) => (globalThis as any).messages.push(message)
+    } } };
+  });
+  await p.evaluate(records => {
+    (globalThis as any).arcticAnnotations.render(records, 'doc');
+    (globalThis as any).arcticAnnotations.reveal('one');
+    (globalThis as any).arcticAnnotations.setFocused('one', 'doc');
+  }, [record(quote)]);
+  await p.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await p.evaluate(() => (globalThis as any).messages)).toEqual([]);
+  await p.mouse.wheel(0, -100);
+  await p.waitForFunction(() => (globalThis as any).messages.at(-1)?.id === '');
+  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')?.size)).toBe(1);
+  await p.close();
+});
