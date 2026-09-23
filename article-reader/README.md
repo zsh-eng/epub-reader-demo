@@ -41,6 +41,9 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   separate flag, not a tag. Unsaving clears that flag; archiving preserves it.
 - Long-press a saved article to **Favourite** or **Unfavourite**, edit **Tags**, archive, or remove it. Archived links
   retain their tags and history. **Move to Saved** restores them to the inbox.
+  Both actions show a six-second **Undo** banner, including bulk changes and
+  archiving from Reader. Undo changes only archive status. VoiceOver users can
+  dismiss it explicitly; its timer pauses while the app is inactive.
   Select supports bulk archiving and confirmed deletion. Tags use a compact sheet
   that grows with the tag list, up to 360 points.
 - Reader controls use the native navigation bar, safe-area bars and soft scroll-edge
@@ -95,7 +98,7 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   or Reader closes; Website scrolling never updates them. A paragraph anchor handles
   text-size changes, with progress as a fallback after article text changes.
 - The page menu provides Copy link, Share, native Find in page, Open in browser,
-  Favourite, Archive article, **Refresh Reader**, Reload and Try Unwall.
+  Favourite, Archive article, **Reading time**, **Refresh Reader**, Reload and Try Unwall.
   Refresh Reader uses the current page DOM, or loads the source if only cached
   HTML is open. A failed extraction keeps the previous saved document.
   A saved, unarchived article also offers **Archive and close** after you scroll near
@@ -124,6 +127,11 @@ the input again resumes that draft while its browser is retained. **Send** publi
 immediately and writes an atomic record off the UI thread. Failed writes keep the
 text visible with Retry; later edits and deletion are ordered after pending sends.
 
+For an unsaved article, the selection menu says **Save & highlight** and a new
+note's send button says **Save & keep note**. A quoted draft creates neither an
+article nor a highlight until Send. Existing annotations remain accessible and
+editable after unsaving; editing them does not save the article again.
+
 Select text and choose **Add note**, or
 use the highlight toolbar, to include a compact two-line quote with its colour.
 The top Notes button opens the article conversation with full note text. Empty
@@ -142,6 +150,17 @@ ambiguous matches stay available without attaching to unrelated text. Removing
 the final highlight/note writes a deletion marker. These records are local;
 annotation sync is not active. A damaged record is kept and reported without
 preventing other records from loading.
+
+## Estimated reading time
+
+Open **Page options → Reading time** for the current article's total. Only a
+saved article's visible Reader content counts, including archived articles.
+Website mode, loading, background, notes and appearance controls pause tracking.
+Gaps longer than 120 seconds are discarded in full. Saving starts tracking from
+that point; unsaving stops it without deleting earlier time.
+
+Records use separate local files and background checkpoints. They are not synced.
+See [the reusable session guide](../READING_TIME.md) for rules and tests.
 
 ## Favourites
 

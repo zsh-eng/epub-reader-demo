@@ -113,17 +113,28 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
   /// Publish Send immediately, then persist off the UI thread. All writes use
   /// the same queue so an older pending send cannot overwrite a later edit/delete.
   /// Failed notes remain visible in memory with an explicit Retry action.
-  @discardableResult func sendNote(_ text: String, in url: URL, annotationID: UUID? = nil) -> UUID? {
+  @discardableResult func sendNote(
+    _ text: String, in url: URL, annotationID: UUID? = nil,
+    quote: ReaderQuote? = nil, colour: HighlightColour = .yellow
+  ) -> UUID? {
     var record: ReaderAnnotation
     if let id = annotationID {
-      guard let existing = records.first(where: { $0.id == id && $0.deletedAt == nil }) else { return nil }
+      guard
+        let existing = records.first(where: {
+          $0.id == id && $0.articleURL == url && $0.deletedAt == nil
+        })
+      else { return nil }
       record = existing
       record.note = text
       record.updatedAt = Date()
     } else {
       let now = Date()
-      record = ReaderAnnotation(id: UUID(), articleURL: url, quote: nil, note: text,
-        isHighlighted: false, createdAt: now, updatedAt: now)
+      // A new quoted note creates the quote and text together. Draft creation
+      // never leaves an empty highlight behind when the user cancels.
+      record = ReaderAnnotation(
+        id: UUID(), articleURL: url, quote: quote, note: text,
+        isHighlighted: quote != nil, createdAt: now, updatedAt: now,
+        colour: quote == nil ? nil : colour)
     }
     publish(record)
     enqueueNote(record)

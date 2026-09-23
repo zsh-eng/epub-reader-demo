@@ -208,3 +208,23 @@ test('Show passage retains focus and a subsequent user scroll dismisses it', asy
   expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')?.size)).toBe(1);
   await p.close();
 });
+
+
+test('reading activity excludes synthetic input and restored scroll, and throttles trusted input', async () => {
+  const p = await page();
+  await p.evaluate(() => {
+    (globalThis as any).activityMessages = [];
+    (globalThis as any).webkit = { messageHandlers: { arcticReadingActivity: {
+      postMessage(token: string) { (globalThis as any).activityMessages.push(token); },
+    } } };
+    (globalThis as any).arcticAnnotations.render([], 'reading-document');
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    window.scrollTo(0, 100);
+  });
+  expect(await p.evaluate(() => (globalThis as any).activityMessages)).toEqual([]);
+  await p.locator('em').click();
+  await p.keyboard.press('ArrowDown');
+  expect(await p.evaluate(() => (globalThis as any).activityMessages)).toEqual(['reading-document']);
+  await p.close();
+});

@@ -10,16 +10,21 @@ struct AnnotationPresentation: Identifiable {
 @Observable final class ReaderNoteDraft: Identifiable {
   let id = UUID()
   let articleURL: URL
-  var storageKey: String { articleURL.absoluteString + "::" + (annotationID?.uuidString ?? "article") }
+  var storageKey: String {
+    let identity =
+      annotationID?.uuidString
+      ?? quote.map { "quote:\($0.start):\($0.exact)" } ?? "article"
+    return articleURL.absoluteString + "::" + identity
+  }
   var annotationID: UUID?
   var quote: ReaderQuote?
   var colour: HighlightColour = .yellow
   var text = ""
 
-  init(in url: URL, annotation: ReaderAnnotation? = nil) {
+  init(in url: URL, annotation: ReaderAnnotation? = nil, quote: ReaderQuote? = nil) {
     articleURL = url
     annotationID = annotation?.id
-    quote = annotation?.quote
+    self.quote = annotation?.quote ?? quote
     colour = annotation?.highlightColour ?? .yellow
     text = annotation?.note ?? ""
   }
@@ -165,18 +170,25 @@ struct ReaderAnnotations: View {
 private struct ArticleNoteInput: View {
   let browser: ArticleBrowser
   @State private var text = ""
+  @State private var errorMessage: String?
 
   var body: some View {
-    NoteMessageInput(text: $text, send: send)
-      .padding(.horizontal, 16).padding(.vertical, 10).background(.bar)
+    VStack(alignment: .leading, spacing: 6) {
+      if let errorMessage { Text(errorMessage).font(.caption).foregroundStyle(.red) }
+      NoteMessageInput(text: $text, requiresSave: browser.annotationRequiresSave, send: send)
+    }.padding(.horizontal, 16).padding(.vertical, 10).background(.bar)
   }
 
   private func send() {
     let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty else { return }
-    AnnotationStore.shared.sendNote(value, in: browser.libraryURL)
-    text = ""
-    UISelectionFeedbackGenerator().selectionChanged()
+    do {
+      try browser.saveForNewAnnotation(in: browser.libraryURL)
+      AnnotationStore.shared.sendNote(value, in: browser.libraryURL)
+      text = ""
+      errorMessage = nil
+      UISelectionFeedbackGenerator().selectionChanged()
+    } catch { errorMessage = error.localizedDescription }
   }
 }
 
@@ -262,6 +274,7 @@ struct AnnotationEditor: View {
 /// the same composition affordance. Typing changes draft state only.
 private struct NoteMessageInput: View {
   @Binding var text: String
+  var requiresSave = false
   var autofocus = false
   var dismissing = false
   var onBlur: () -> Void = {}
@@ -279,14 +292,22 @@ private struct NoteMessageInput: View {
         .accessibilityIdentifier("note-message-input")
       if hasText {
         Button(action: send) {
-          Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold))
-            .foregroundStyle(Color(uiColor: .systemBackground))
-            .frame(width: 50, height: 40)
-            .background(ArcticBrand.accent, in: Capsule())
-            .frame(width: 56, height: 54)
+          Group {
+            if requiresSave {
+              Text("Save & keep note").font(.caption.weight(.semibold))
+                .fixedSize().padding(.horizontal, 12)
+            } else {
+              Image(systemName: "arrow.up").font(.system(size: 20, weight: .semibold))
+                .frame(width: 50)
+            }
+          }
+          .foregroundStyle(Color(uiColor: .systemBackground))
+          .frame(height: 40).background(ArcticBrand.accent, in: Capsule())
+          .frame(height: 54).padding(.horizontal, 3)
         }
         .buttonStyle(.plain).padding(.trailing, 3)
-        .accessibilityLabel("Send note").accessibilityIdentifier("note-send")
+        .accessibilityLabel(requiresSave ? "Save & keep note" : "Send note")
+        .accessibilityIdentifier("note-send")
         .transition(.opacity)
       }
     }
@@ -318,7 +339,9 @@ struct ReaderNoteComposer: View {
       }
       if let errorMessage { Text(errorMessage).font(.caption).foregroundStyle(.red) }
       NoteMessageInput(
-        text: $draft.text, autofocus: true, dismissing: closing, onBlur: close, send: send
+        text: $draft.text,
+        requiresSave: draft.annotationID == nil && browser.annotationRequiresSave,
+        autofocus: true, dismissing: closing, onBlur: close, send: send
       )
       .disabled(closing)
     }.padding(.horizontal, 12).padding(.bottom, 6)
@@ -350,7 +373,17 @@ struct ReaderNoteComposer: View {
   private func send() {
     let value = draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty, !closing else { return }
-    guard AnnotationStore.shared.sendNote(value, in: draft.articleURL, annotationID: draft.annotationID) != nil else {
+    do {
+      if draft.annotationID == nil { try browser.saveForNewAnnotation(in: draft.articleURL) }
+    } catch {
+      errorMessage = error.localizedDescription
+      return
+    }
+    guard
+      AnnotationStore.shared.sendNote(
+        value, in: draft.articleURL,
+        annotationID: draft.annotationID, quote: draft.quote, colour: draft.colour) != nil
+    else {
       errorMessage = "This passage was removed. Copy your draft before closing."
       return
     }

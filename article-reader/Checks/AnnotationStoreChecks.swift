@@ -91,6 +91,18 @@ enum TestMode { static let enabled = false }
     let ordered = AnnotationStore(directory: directory.appending(path: "sending"))
     precondition(ordered.records.first(where: { $0.id == editedID })?.note == "Newest edit")
     precondition(ordered.records.first(where: { $0.id == removedID })?.deletedAt != nil)
+    // Quoted drafts publish their quote and note in one record only at Send.
+    let quotedID = sending.sendNote(
+      "Thought with a staged quote", in: url, quote: quote, colour: .sage)!
+    precondition(sending.annotations(for: url).first(where: { $0.id == quotedID })?.quote == quote)
+    precondition(
+      sending.annotations(for: url).first(where: { $0.id == quotedID })?.isHighlighted == true)
+    let otherURL = URL(string: "https://fixture.example/linked-article")!
+    precondition(sending.sendNote("Wrong article", in: otherURL, annotationID: quotedID) == nil)
+    try await finishWrites(sending)
+    let quoted = AnnotationStore(directory: directory.appending(path: "sending"))
+      .annotations(for: url).first(where: { $0.id == quotedID })!
+    precondition(quoted.note == "Thought with a staged quote" && quoted.highlightColour == .sage)
     // A failed write retains the text, exposes Retry, then persists the same ID.
     let failedDirectory = directory.appending(path: "failure")
     let failing = AnnotationStore(directory: failedDirectory)

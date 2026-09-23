@@ -5,6 +5,64 @@ final class AnnotationUITests: XCTestCase {
   private let paragraph = "“Slow down,” she said — café, naïve, 日本語. Keep every character intact."
   override func setUp() { continueAfterFailure = false }
 
+  @MainActor func testUnsavedQuotedDraftDoesNotSaveUntilExplicitHighlight() {
+    let app = openFixture(saved: false)
+    selectWord(in: app)
+    tapSelectionAction("Add note", in: app)
+    let input = messageInput(in: app)
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["annotation-quote-preview"].exists)
+    expectValue("0 passages", on: app.buttons["reader-notes"])
+    app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 5))
+    expectValue("Not saved", on: app.buttons["reader-save"])
+    expectValue("0 passages", on: app.buttons["reader-notes"])
+    selectWord(in: app)
+    tapSelectionAction("Save & highlight", in: app)
+    XCTAssertTrue(app.buttons["highlight-colour-yellow"].waitForExistence(timeout: 5))
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+    app.buttons["Close highlight controls"].tap()
+    expectValue("Saved", on: app.buttons["reader-save"])
+    reopenOffline(app)
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+  }
+
+  @MainActor func testQuotedNoteExplicitlySavesAndExistingNoteEditsStayUnsaved() {
+    let app = openFixture(saved: false)
+    selectWord(in: app)
+    tapSelectionAction("Add note", in: app)
+    let input = messageInput(in: app)
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    input.typeText("A deliberately saved quote.")
+    XCTAssertEqual(app.buttons["note-send"].label, "Save & keep note")
+    expectValue("0 passages", on: app.buttons["reader-notes"])
+    capture(app, "unsaved-quote-explicit-send")
+    app.buttons["note-send"].tap()
+    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 5))
+    expectValue("Saved", on: app.buttons["reader-save"])
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+    expectRender("painted=1; marks=0; selected=0", in: app)
+    app.buttons["reader-save"].tap()
+    expectValue("Not saved", on: app.buttons["reader-save"])
+    app.buttons["reader-notes"].tap()
+    XCTAssertTrue(app.staticTexts["A deliberately saved quote."].waitForExistence(timeout: 5))
+    app.buttons["Note options"].tap()
+    app.buttons["Edit note"].tap()
+    let editor = app.textViews["annotation-note"]
+    XCTAssertTrue(editor.waitForExistence(timeout: 5))
+    editor.tap()
+    editor.press(forDuration: 1.1)
+    tapSelectionAction("Select All", in: app)
+    let replacement = "A deliberately saved quote. Still kept after unsaving."
+    editor.typeText(replacement)
+    XCTAssertEqual(editor.value as? String, replacement)
+    app.buttons["annotation-save"].tap()
+    XCTAssertTrue(app.staticTexts[replacement].waitForExistence(timeout: 5))
+    app.buttons["Done"].tap()
+    expectValue("Not saved", on: app.buttons["reader-save"])
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+  }
+
   @MainActor func testStandaloneNotesUnfocusResumeSendEditAndPersistOffline() {
     let app = openFixture()
     app.buttons["reader-add-note"].tap()
@@ -243,11 +301,48 @@ final class AnnotationUITests: XCTestCase {
     waitForExpectations(timeout: 5)
   }
 
-  @MainActor private func openFixture(dark: Bool = false) -> XCUIApplication {
+  @MainActor func testReadingTimeEligibilityFollowsSavedReaderAndNotes() {
+    let app = openFixture(saved: false)
+    let state = app.staticTexts["reading-time-state"]
+    func expectState(_ value: String) {
+      let ready = expectation(for: NSPredicate(format: "label == %@", value), evaluatedWith: state)
+      wait(for: [ready], timeout: 5)
+    }
+    expectState("Paused")
+    app.buttons["reader-save"].tap()
+    expectState("Tracking")
+    app.buttons["reader-add-note"].tap()
+    expectState("Paused")
+    app.webViews.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
+    expectState("Tracking")
+    app.buttons["reader-appearance"].tap()
+    expectState("Paused")
+    app.buttons["Done"].tap()
+    expectState("Tracking")
+    app.buttons["reader-toggle"].tap()
+    expectState("Paused")
+    showReader(app)
+    expectState("Tracking")
+    // A lifecycle checkpoint must survive process restart, not just UI state.
+    reopenOffline(app)
+    app.buttons["Page options"].tap()
+    app.buttons["reader-reading-time"].tap()
+    let estimate = app.alerts.staticTexts.matching(
+      NSPredicate(format: "label CONTAINS %@", "in Reader.")
+    ).firstMatch
+    XCTAssertTrue(estimate.waitForExistence(timeout: 5))
+    XCTAssertFalse(estimate.label.hasPrefix("0 seconds"), estimate.label)
+    app.alerts.buttons["Done"].tap()
+    expectState("Tracking")
+    app.buttons["reader-save"].tap()
+    expectState("Paused")
+  }
+
+  @MainActor private func openFixture(dark: Bool = false, saved: Bool = true) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ui-testing", "-reset-store", "-reset-appearance", "-test-clipboard",
-      "-test-annotation-render",
+      "-test-annotation-render", "-test-reading-time",
     ]
     if dark { app.launchArguments.append("-dark-ui") }
     app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/unicode"
@@ -257,14 +352,16 @@ final class AnnotationUITests: XCTestCase {
     open.tap()
     let bookmark = app.buttons["reader-save"]
     XCTAssertTrue(bookmark.waitForExistence(timeout: 5))
-    if bookmark.value as? String == "Not saved" { bookmark.tap() }
+    if saved && bookmark.value as? String == "Not saved" { bookmark.tap() }
     showReader(app)
     return app
   }
 
   @MainActor private func reopenOffline(_ app: XCUIApplication) {
     app.terminate()
-    app.launchArguments = ["-ui-testing", "-articles-offline", "-test-annotation-render"]
+    app.launchArguments = [
+      "-ui-testing", "-articles-offline", "-test-annotation-render", "-test-reading-time",
+    ]
     app.launchEnvironment = [:]
     app.launch()
     let card = app.buttons["article-unicode"]
@@ -281,6 +378,17 @@ final class AnnotationUITests: XCTestCase {
     if toggle.label == "Reader" { toggle.tap() }
     XCTAssertTrue(app.buttons["Website"].waitForExistence(timeout: 10), app.debugDescription)
     XCTAssertTrue(app.webViews.staticTexts[paragraph].firstMatch.waitForExistence(timeout: 10))
+  }
+
+  /// Pick the first text line, not a fraction of a multi-line paragraph's box.
+  /// Focus and select the same word using WebKit's native edit interaction.
+  @MainActor private func selectWord(in app: XCUIApplication) {
+    let text = app.webViews.staticTexts[paragraph].firstMatch
+    XCTAssertTrue(text.isHittable)
+    let word = text.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 40, dy: 12))
+    word.tap()
+    word.press(forDuration: 1.2)
+    XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5), app.debugDescription)
   }
 
   @MainActor private func selectPassage(in app: XCUIApplication) {

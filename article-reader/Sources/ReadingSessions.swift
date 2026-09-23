@@ -85,6 +85,13 @@ struct ArticleReadingSession: Codable, Identifiable, Equatable, Sendable {
     accountBoundary()
   }
 
+  /// UI callbacks carry their current document identity. A late callback from
+  /// an outgoing page must not credit the newly opened article.
+  func activity(for url: URL) {
+    guard let visit, records[visit.id]?.articleURL == url else { return }
+    activity()
+  }
+
   /// Ends an active interval without ending the article visit. Repeated pauses
   /// have no effect. No time between this call and the next begin is included.
   func pause() {

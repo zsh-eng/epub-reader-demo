@@ -45,7 +45,8 @@ The view owns eligibility. The accounting module does not inspect UI state.
 
 A WebView wrapper can outlive the article it first opened. Key sessions to the
 **current document identity**, not the wrapper's original URL. Scope delayed
-callbacks to that document. This also prevents annotations and extracted HTML
+callbacks to that document. Native callbacks report drag boundaries and throttle progress updates to once
+a second; the Reader's isolated script reports trusted clicks and keys. Automatic scroll events do not count. This also prevents annotations and extracted HTML
 from being written into the wrong saved article.
 
 ## Storage without scroll work

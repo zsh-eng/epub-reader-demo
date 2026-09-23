@@ -19,6 +19,20 @@
   `;
   document.head.append(style);
   let resolved = new Map(), hitRanges = [], documentToken = '', focused = '', revealing = false;
+  // Only trusted input is activity. Scroll/layout events also come from image
+  // loading, position restoration and Show passage, so they do not count.
+  // UIKit reports real drags separately; leave WebKit touch recognition alone.
+  let lastActivity = -Infinity;
+  const activity = event => {
+    if (!event.isTrusted || !documentToken || document.hidden) return;
+    const now = performance.now();
+    if (now - lastActivity < 1000) return;
+    lastActivity = now;
+    globalThis.webkit?.messageHandlers?.arcticReadingActivity?.postMessage(documentToken);
+  };
+  for (const name of ['click', 'keydown']) {
+    document.addEventListener(name, activity, { passive: true, capture: true });
+  }
   const colourOf = record => colours.includes(record.colour) ? record.colour : 'yellow';
   function notify(id = '') {
     if (!id && !focused) return;

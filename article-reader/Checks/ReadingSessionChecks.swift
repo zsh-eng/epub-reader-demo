@@ -56,6 +56,8 @@ import Foundation
     clock.advance(7)
     store.begin(url: next)
     clock.advance(8)
+    store.activity(for: first)
+    precondition(store.total(for: next) == 0)  // An outgoing document cannot report for this visit.
     store.end()
     try await settled(store)
     precondition(store.total(for: first) == 155)

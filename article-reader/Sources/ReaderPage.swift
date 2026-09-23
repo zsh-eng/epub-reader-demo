@@ -10,6 +10,7 @@ struct ReaderPage: View {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var appearance = false
+  @State private var readingVisible = false
   @State private var nearEnd = false
   @State private var actionError: String?
   @State private var controlsHeight: CGFloat = 60
@@ -37,6 +38,11 @@ struct ReaderPage: View {
       }
       #if DEBUG
         .overlay(alignment: .topLeading) {
+          if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-test-reading-time") {
+            Text(readingContext.eligible ? "Tracking" : "Paused")
+            .font(.system(size: 7)).accessibilityIdentifier("reading-time-state")
+            .allowsHitTesting(false)
+          }
           if TestMode.enabled
             && ProcessInfo.processInfo.arguments.contains("-test-annotation-render")
           {
@@ -49,8 +55,20 @@ struct ReaderPage: View {
         updateAppearance()
         browser.refreshAnnotations()
         store.visit(browser.libraryURL)
+        browser.readingActivity = { [weak browser] in
+          guard let browser else { return }
+          ReadingSessions.shared.activity(for: browser.libraryURL)
+        }
+        browser.readingDocumentEnded = { ReadingSessions.shared.end() }
+        readingVisible = true
+        updateReadingSession()
       }
       .onDisappear {
+        readingVisible = false
+        browser.showingReadingTime = false
+        browser.readingActivity = nil
+        browser.readingDocumentEnded = nil
+        ReadingSessions.shared.end()
         browser.captureReaderPosition()
         if browser.selectedAnnotationID != nil { browser.selectedAnnotationID = nil }
       }
@@ -68,6 +86,13 @@ struct ReaderPage: View {
         if !reader { browser.captureReaderPosition() }
         nearEnd = false
         if browser.selectedAnnotationID != nil { browser.selectedAnnotationID = nil }
+      }
+      .onChange(of: readingContext) { _, _ in updateReadingSession() }
+      .task {
+        while !Task.isCancelled {
+          do { try await Task.sleep(for: .seconds(5)) } catch { return }
+          ReadingSessions.shared.flush()
+        }
       }
       .onChange(of: fontSize, updateAppearance)
       .onChange(of: font, updateAppearance)
@@ -96,6 +121,32 @@ struct ReaderPage: View {
       }
   }
 
+  private struct ReadingContext: Equatable {
+    let url: URL
+    let saved: Bool
+    let eligible: Bool
+  }
+
+  private var readingContext: ReadingContext {
+    ReadingContext(
+      url: browser.libraryURL, saved: isSaved,
+      eligible: readingVisible && scenePhase == .active && isSaved && browser.isReader
+        && browser.readerReady && browser.positionReady && !appearance
+        && browser.noteDraft == nil && browser.annotationPresentation == nil
+        && !browser.showingReadingTime
+        && browser.errorMessage == nil && actionError == nil)
+  }
+
+  private func updateReadingSession() {
+    let context = readingContext
+    if !context.saved { ReadingSessions.shared.end(); return }
+    if context.eligible {
+      ReadingSessions.shared.begin(url: context.url)
+    } else {
+      ReadingSessions.shared.pause()
+    }
+  }
+
   private var readingPage: some View {
     pageContent
       .background(palette.background)
@@ -120,6 +171,7 @@ struct ReaderPage: View {
               webView: browser.readerView, insets: geometry.safeAreaInsets,
               isActive: { browser.isReader && browser.readerReady }, nearEnd: $nearEnd,
               onScrollEnd: browser.captureReaderPosition,
+              onReadingActivity: { browser.readingActivity?() },
               onTap: browser.noteDraft == nil ? nil : { browser.noteDismissRequest += 1 }
             )
             .opacity(browser.readerReady && browser.positionReady ? 1 : 0)
@@ -369,6 +421,8 @@ struct ReaderNavigationBar: View {
   let store: ArticleStore
   let close: () -> Void
   @Environment(\.openURL) private var openURL
+  @State private var readingTime: String?
+
   private var article: SavedArticle? {
     store.articles.first { $0.url == browser.libraryURL }
       ?? store.articles.first { $0.url == browser.sourceURL }
@@ -401,6 +455,11 @@ struct ReaderNavigationBar: View {
         Button("Find in page", systemImage: "doc.text.magnifyingglass", action: browser.findInPage)
           .disabled(!browser.hasLoaded || browser.noteDraft != nil)
           .accessibilityIdentifier("reader-find")
+        Button("Reading time", systemImage: "clock") {
+          ReadingSessions.shared.activity(for: browser.libraryURL)
+          browser.showingReadingTime = true
+          readingTime = nil
+        }.accessibilityIdentifier("reader-reading-time")
         Divider()
         if let article, article.saved {
           Button(
@@ -435,5 +494,38 @@ struct ReaderNavigationBar: View {
         .padding(.horizontal, 108).allowsHitTesting(false)
     }
     .padding(.horizontal, 16)
+    .alert(
+      "Estimated reading time",
+      isPresented: Binding(
+        get: { readingTime != nil },
+        set: { if !$0 { readingTime = nil; browser.showingReadingTime = false } }
+      )
+    ) {
+      if ReadingSessions.shared.hasUnpersistedChanges && ReadingSessions.shared.lastError != nil {
+        Button("Retry saving") {
+          ReadingSessions.shared.flush(force: true)
+          readingTime = nil
+          browser.showingReadingTime = false
+        }
+      }
+      Button("Done") {
+        readingTime = nil; browser.showingReadingTime = false
+      }
+    } message: {
+      Text(
+        (readingTime.map { "\($0) in Reader. Gaps longer than 2 minutes are excluded." }
+          ?? "Loading reading time…")
+          + (ReadingSessions.shared.lastError.map { "\n\nSome reading time is unavailable: " + $0 }
+            ?? ""))
+    }
+    .task(id: browser.showingReadingTime) {
+      guard browser.showingReadingTime else { return }
+      while !ReadingSessions.shared.isLoaded {
+        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
+      }
+      guard !Task.isCancelled, browser.showingReadingTime else { return }
+      let seconds = Int(ReadingSessions.shared.total(for: browser.libraryURL))
+      readingTime = seconds < 60 ? "\(seconds) seconds" : "\(seconds / 60) min \(seconds % 60) sec"
+    }
   }
 }

@@ -42,6 +42,7 @@ enum ArticleRouting {
 @MainActor private final class ReaderWebView: WKWebView {
   private var copyRequest = 0
   var annotate: ((Bool) -> Void)?
+  var highlightTitle: (() -> String)?
   var didLayout: (() -> Void)?
 
   override func layoutSubviews() {
@@ -56,7 +57,8 @@ enum ArticleRouting {
     let actions = UIMenu(
       options: .displayInline,
       children: [
-        UIAction(title: "Highlight", image: UIImage(systemName: "highlighter")) { [weak self] _ in
+        UIAction(title: highlightTitle?() ?? "Highlight", image: UIImage(systemName: "highlighter"))
+        { [weak self] _ in
           self?.annotate?(false)
         },
         UIAction(title: "Add note", image: UIImage(systemName: "square.and.pencil")) {
@@ -101,6 +103,17 @@ enum ArticleRouting {
   ) {
     guard message.frameInfo.isMainFrame, let token = message.body as? String else { return }
     browser?.readerDocumentBecameReady(token, from: message.webView)
+  }
+}
+
+/// A separate channel keeps activity independent of annotation focus messages.
+@MainActor private final class ReaderActivityBridge: NSObject, WKScriptMessageHandler {
+  weak var browser: ArticleBrowser?
+  func userContentController(
+    _ controller: WKUserContentController, didReceive message: WKScriptMessage
+  ) {
+    guard message.frameInfo.isMainFrame, let token = message.body as? String else { return }
+    browser?.readerActivityReceived(token: token, from: message.webView)
   }
 }
 
@@ -198,9 +211,13 @@ enum ArticleRouting {
 @MainActor @Observable final class ArticleBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
   let webView: WKWebView
   let readerView: WKWebView
+  var showingReadingTime = false
   var annotationPresentation: AnnotationPresentation?
   var noteDraft: ReaderNoteDraft?
   var noteDismissRequest = 0
+  // Set only by the visible Reader. Warm browsers never own a reading session.
+  @ObservationIgnored var readingActivity: (() -> Void)?
+  @ObservationIgnored var readingDocumentEnded: (() -> Void)?
   @ObservationIgnored private var noteDrafts: [String: ReaderNoteDraft] = [:]
   var selectedAnnotationID: UUID? {
     didSet {
@@ -334,10 +351,17 @@ enum ArticleRouting {
     readyBridge.browser = self
     readerView.configuration.userContentController.add(
       readyBridge, contentWorld: .defaultClient, name: "arcticReaderReady")
+    let activityBridge = ReaderActivityBridge()
+    activityBridge.browser = self
+    readerView.configuration.userContentController.add(
+      activityBridge, contentWorld: .defaultClient, name: "arcticReadingActivity")
     let annotationBridge = ReaderAnnotationBridge()
     annotationBridge.browser = self
     readerView.configuration.userContentController.add(
       annotationBridge, contentWorld: .defaultClient, name: "arcticAnnotationTap")
+    (readerView as? ReaderWebView)?.highlightTitle = { [weak self] in
+      self?.annotationRequiresSave == true ? "Save & highlight" : "Highlight"
+    }
     (readerView as? ReaderWebView)?.annotate = { [weak self] withNote in
       self?.annotateSelection(withNote: withNote)
     }
@@ -903,6 +927,7 @@ enum ArticleRouting {
   }
 
   private func resetDocument() {
+    readingDocumentEnded?()
     cachedLoadTask?.cancel()
     cachedLoadTask = nil
     selectedAnnotationID = nil
@@ -1262,7 +1287,18 @@ enum ArticleRouting {
         let data = try? JSONSerialization.data(withJSONObject: selection),
         let quote = try? JSONDecoder().decode(ReaderQuote.self, from: data)
       else { return }
+      if withNote {
+        // A quoted draft has no stored highlight until Send. Leaving the input
+        // must not save a preview article or create an empty passage record.
+        self.beginNote(
+          annotation: self.annotations.first(where: { $0.quote == quote }), quote: quote)
+        self.readerView.evaluateJavaScript(
+          "window.getSelection().removeAllRanges()", in: nil, in: .defaultClient
+        ) { _ in }
+        return
+      }
       do {
+        try self.saveForNewAnnotation(in: url)
         let annotation = try AnnotationStore.shared.highlight(quote, in: url)
         self.readerView.evaluateJavaScript(
           "window.getSelection().removeAllRanges()", in: nil, in: .defaultClient
@@ -1270,7 +1306,6 @@ enum ArticleRouting {
         self.selectedAnnotationID = annotation.id
         self.refreshAnnotations()
         UISelectionFeedbackGenerator().selectionChanged()
-        if withNote { self.beginNote(annotation: annotation) }
       } catch { self.errorMessage = "Could not save passage: " + error.localizedDescription }
     }
   }
@@ -1325,11 +1360,28 @@ enum ArticleRouting {
     view.findInteraction?.presentFindNavigator(showingReplace: false)
   }
 
-  func beginNote(annotation: ReaderAnnotation? = nil) {
+  var annotationRequiresSave: Bool {
+    store?.articles.first(where: { $0.url == libraryURL })?.saved != true
+  }
+
+  /// Called by an explicitly labelled Save action, never by opening a draft.
+  /// The current navigation identity owns both the save and the extracted HTML.
+  func saveForNewAnnotation(in url: URL) throws {
+    guard url == libraryURL, let store else {
+      throw NSError(
+        domain: "ArcticAnnotations", code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Return to this article before sending your note."])
+    }
+    guard annotationRequiresSave else { return }
+    try store.setSaved(true, url: url)
+    if extraction?.url == url { persistExtraction(in: store) }
+  }
+
+  func beginNote(annotation: ReaderAnnotation? = nil, quote: ReaderQuote? = nil) {
     selectedAnnotationID = nil
-    let key = libraryURL.absoluteString + "::" + (annotation?.id.uuidString ?? "article")
-    let draft = noteDrafts[key] ?? ReaderNoteDraft(in: libraryURL, annotation: annotation)
-    noteDrafts[key] = draft
+    let proposed = ReaderNoteDraft(in: libraryURL, annotation: annotation, quote: quote)
+    let draft = noteDrafts[proposed.storageKey] ?? proposed
+    noteDrafts[draft.storageKey] = draft
     noteDraft = draft
   }
 
@@ -1337,6 +1389,13 @@ enum ArticleRouting {
     guard let draft = noteDraft, draft.id == id else { return }
     if sent || draft.text.isEmpty { noteDrafts.removeValue(forKey: draft.storageKey) }
     noteDraft = nil
+  }
+
+  fileprivate func readerActivityReceived(token: String, from view: WKWebView?) {
+    guard view === readerView, isReader, readerReady, positionReady,
+      !token.isEmpty, token == readerDocumentToken
+    else { return }
+    readingActivity?()
   }
 
   fileprivate func annotationTapped(_ value: String?, token: String, from view: WKWebView?) {
@@ -1414,6 +1473,7 @@ struct WebSurface: UIViewRepresentable {
   var isActive: () -> Bool = { true }
   @Binding var nearEnd: Bool
   var onScrollEnd: () -> Void = {}
+  var onReadingActivity: () -> Void = {}
   var onTap: (() -> Void)?
   func makeCoordinator() -> Coordinator {
     Coordinator(nearEnd: $nearEnd, isActive: isActive, onScrollEnd: onScrollEnd)
@@ -1428,6 +1488,7 @@ struct WebSurface: UIViewRepresentable {
     context.coordinator.nearEnd = $nearEnd
     context.coordinator.isActive = isActive
     context.coordinator.onScrollEnd = onScrollEnd
+    context.coordinator.onReadingActivity = onReadingActivity
     context.coordinator.onTap = onTap
     context.coordinator.tap?.isEnabled = onTap != nil
     uiView.accessibilityElementsHidden = !isActive()
@@ -1445,6 +1506,8 @@ struct WebSurface: UIViewRepresentable {
     var nearEnd: Binding<Bool>
     var isActive: () -> Bool
     var onScrollEnd: () -> Void
+    var onReadingActivity: () -> Void = {}
+    private var lastActivity: CFTimeInterval = 0
     var onTap: (() -> Void)?
     var tap: UITapGestureRecognizer?
 
@@ -1465,15 +1528,24 @@ struct WebSurface: UIViewRepresentable {
       self.isActive = isActive
       self.onScrollEnd = onScrollEnd
     }
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+      if isActive() { onReadingActivity(); lastActivity = CACurrentMediaTime() }
+    }
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-      if !decelerate && isActive() { onScrollEnd() }
+      if isActive() {
+        onReadingActivity()
+        if !decelerate { onScrollEnd() }
+      }
     }
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-      if isActive() { onScrollEnd() }
+      if isActive() { onReadingActivity(); onScrollEnd() }
     }
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
       guard isActive() else { return }
       guard scrollView.isDragging || scrollView.isDecelerating else { return }
+      // Bound accounting to once a second, with no published scrolling state.
+      let now = CACurrentMediaTime()
+      if now - lastActivity >= 1 { lastActivity = now; onReadingActivity() }
       let bottom =
         scrollView.contentOffset.y + scrollView.bounds.height
         - scrollView.adjustedContentInset.bottom

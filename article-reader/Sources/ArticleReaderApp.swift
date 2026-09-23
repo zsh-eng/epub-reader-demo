@@ -182,7 +182,7 @@ struct LibraryView: View {
     }
     .overlay(alignment: .bottom) {
       ArchiveUndoToast(store: store)
-        .padding(.horizontal, 16).padding(.bottom, selected == nil ? 12 : 86)
+        .padding(.horizontal, 16).padding(.bottom, 86)
     }
     .overlay(alignment: .bottomLeading) {
       LibraryFrameDiagnostics().padding(.horizontal, 20).padding(.bottom, 84)
