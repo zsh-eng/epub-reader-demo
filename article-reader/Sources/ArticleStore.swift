@@ -55,6 +55,18 @@ struct ImportSummary: Identifiable {
   var tagCounts: [String: Int] = [:]
 }
 
+/// A receipt for the latest completed action, never a copy of the whole library.
+struct ArchiveUndo: Identifiable {
+  let id = UUID()
+  let previous: [UUID: Bool]
+  let archived: Bool
+  var message: String {
+    let count = previous.count
+    if archived { return count == 1 ? "Article archived" : "\(count) articles archived" }
+    return count == 1 ? "Returned to Saved" : "\(count) articles returned to Saved"
+  }
+}
+
 struct TaggingNotice: Identifiable {
   let id = UUID()
   let articleID: UUID
@@ -71,6 +83,7 @@ struct TaggingNotice: Identifiable {
   @ObservationIgnored private var cachedTags: [String] = []
   @ObservationIgnored private var cachedSavedIDs: [UUID] = []
   var errorMessage: String?
+  var archiveUndo: ArchiveUndo?
   private(set) var taggingNotice: TaggingNotice?
   private(set) var importSummary: ImportSummary?
   private var currentImportIDs = Set<UUID>()
@@ -336,10 +349,37 @@ struct TaggingNotice: Identifiable {
   }
 
   func archive(_ id: UUID) throws {
-    guard let index = articles.firstIndex(where: { $0.id == id && $0.saved }) else { return }
+    try setArchived(true, ids: [id])
+  }
+
+  /// Undo restores only archive membership. New metadata, notes and tags survive.
+  func setArchived(_ archived: Bool, ids: Set<UUID>) throws {
+    let changed = articles.filter {
+      ids.contains($0.id) && $0.saved && ($0.isArchived == true) != archived
+    }
+    guard !changed.isEmpty else { return }
+    let previous = Dictionary(uniqueKeysWithValues: changed.map { ($0.id, $0.isArchived == true) })
     var updated = articles
-    updated[index].isArchived = true
+    for index in updated.indices where previous[updated[index].id] != nil {
+      updated[index].isArchived = archived
+    }
     try commit(updated)
+    archiveUndo = ArchiveUndo(previous: previous, archived: archived)
+  }
+
+  func undoArchive(_ id: UUID) {
+    guard let receipt = archiveUndo, receipt.id == id else { return }
+    var updated = articles
+    for index in updated.indices {
+      guard let previous = receipt.previous[updated[index].id], updated[index].saved,
+        (updated[index].isArchived == true) == receipt.archived
+      else { continue }
+      updated[index].isArchived = previous
+    }
+    do {
+      try commit(updated)
+      archiveUndo = nil
+    } catch { errorMessage = error.localizedDescription }
   }
 
   /// Called by the visible Reader only. Speculative browsers never write history.
@@ -384,6 +424,10 @@ struct TaggingNotice: Identifiable {
 
   func update(_ ids: Set<UUID>, read: Bool? = nil, archived: Bool? = nil, delete: Bool = false) {
     do {
+      if let archived, read == nil, !delete {
+        try setArchived(archived, ids: ids)
+        return
+      }
       let updated = articles.compactMap { article -> SavedArticle? in
         guard ids.contains(article.id) else { return article }
         if delete { return nil }

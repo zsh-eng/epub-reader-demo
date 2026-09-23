@@ -64,6 +64,8 @@
 		29AB249A0F5D41D0A0CECA38 /* Tests/FavouritesUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 522FDA0A55294C8384904C99; };
 		AF4000000000000000000001 /* Sources/ReaderPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF4000000000000000000002; };
 		AF4000000000000000000003 /* Resources/reader-position.js in Resources */ = {isa = PBXBuildFile; fileRef = AF4000000000000000000004; };
+		2ABD32A0E4340061755CBF59 /* Sources/ArchiveUndoToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAC6B298BA182045B26158EE; };
+		CAEFC4237214578E761120AC /* Sources/ReadingSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E762F6912614FD2051D94B; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -149,6 +151,8 @@
 		522FDA0A55294C8384904C99 /* Tests/FavouritesUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/FavouritesUITests.swift; sourceTree = "<group>"; };
 		AF4000000000000000000002 /* Sources/ReaderPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ReaderPosition.swift; sourceTree = "<group>"; };
 		AF4000000000000000000004 /* Resources/reader-position.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/reader-position.js; sourceTree = "<group>"; };
+		BAC6B298BA182045B26158EE /* Sources/ArchiveUndoToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArchiveUndoToast.swift; sourceTree = "<group>"; };
+		A0E762F6912614FD2051D94B /* Sources/ReadingSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ReadingSessions.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -215,6 +219,8 @@
 				215E1D8DEDCDE9DD2F568E99 /* Sources/PreviewImageWorkLimit.swift */,
 				092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */,
 				353E9B7484F57124364E4DB4 /* Sources/ReaderFontScheme.swift */,
+				BAC6B298BA182045B26158EE /* Sources/ArchiveUndoToast.swift */,
+				A0E762F6912614FD2051D94B /* Sources/ReadingSessions.swift */,
 				3AC7E3F6AF5D3349C2B82840 /* Sources/AnnotationStore.swift */,
 				E2C4040636A8440F5AB50B3E /* Sources/ReaderAnnotations.swift */,
 				864C6F1CB9FB13DA8613C8A4 /* Resources/annotations.js */,
@@ -436,6 +442,8 @@
 				F8E7F1651E3903F31546899B /* Sources/PreviewImageWorkLimit.swift in Sources */,
 				038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */,
 				7BD85323A4807875A1E15639 /* Sources/ReaderFontScheme.swift in Sources */,
+				2ABD32A0E4340061755CBF59 /* Sources/ArchiveUndoToast.swift in Sources */,
+				CAEFC4237214578E761120AC /* Sources/ReadingSessions.swift in Sources */,
 				5BF86EF416D56DD5760525E5 /* Sources/AnnotationStore.swift in Sources */,
 				E8E6F3EAD101B0744972C82F /* Sources/ReaderAnnotations.swift in Sources */,
 				3753BC55C93758D0B1748C68 /* Sources/ArticleStore.swift in Sources */,

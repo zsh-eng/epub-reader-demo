@@ -83,6 +83,39 @@ final class FavouritesUITests: XCTestCase {
     XCTAssertTrue(card.waitForExistence(timeout: 5))
   }
 
+  @MainActor func testArchiveAndUnarchiveUndoSurviveReaderCloseAndRelaunch() {
+    let app = launchFixtures()
+    let card = app.buttons["article-cached-0"]
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    card.tap()
+    app.buttons["Page options"].tap()
+    app.buttons["reader-archive-menu"].tap()
+    let undo = app.buttons["archive-undo"]
+    XCTAssertTrue(undo.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Article archived"].exists)
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = "archive-undo-after-reader-close"; shot.lifetime = .keepAlways; add(shot)
+    undo.tap()
+    XCTAssertTrue(card.waitForExistence(timeout: 5))
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-disable-preloading"]
+    app.launch()
+    XCTAssertTrue(card.waitForExistence(timeout: 10), "Undo must persist the saved membership")
+    card.press(forDuration: 1)
+    app.buttons["archive-article"].tap()
+    openFolder("folder-archive", in: app)
+    XCTAssertTrue(card.waitForExistence(timeout: 5))
+    card.press(forDuration: 1)
+    app.buttons["archive-article"].tap()
+    XCTAssertTrue(app.staticTexts["Returned to Saved"].waitForExistence(timeout: 5))
+    undo.tap()
+    XCTAssertTrue(card.waitForExistence(timeout: 5))
+    app.terminate(); app.launch()
+    openFolder("folder-archive", in: app)
+    XCTAssertTrue(
+      card.waitForExistence(timeout: 5), "Undo Unarchive must persist archive membership")
+  }
+
   @MainActor private func launchFixtures() -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [
