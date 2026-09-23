@@ -809,7 +809,48 @@ final class ArticleReaderUITests: XCTestCase {
     app.buttons["share-cancel"].tap()
   }
 
-  @MainActor func testDistantFolderJumpsFadeAndNearbyNavigationStillWorks() {
+  @MainActor func testReadingStatsTotalsAndDaySelection() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-seed-preload-fixtures", "-disable-preloading", "-seed-reading-stats"]
+    app.launch()
+    app.buttons["Sort and filter"].tap()
+    app.buttons["library-reading-stats"].tap()
+    let total = app.staticTexts["stats-week-total"]
+    XCTAssertTrue(total.waitForExistence(timeout: 5))
+    XCTAssertEqual(total.label, "1 hr 21 min")
+    let days = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'stats-day-'"))
+    XCTAssertEqual(days.count, 7)
+    days.element(boundBy: 0).tap()
+    XCTAssertTrue(app.descendants(matching: .any)["stats-selected-day"].label.contains("7 min"))
+    capture(app, "reading-stats-light")
+    app.buttons["stats-done"].tap()
+    XCTAssertTrue(app.buttons["article-cached-0"].waitForExistence(timeout: 5))
+    app.buttons["article-cached-0"].tap()
+    app.buttons["Page options"].tap()
+    app.buttons["reader-reading-time"].tap()
+    XCTAssertTrue(app.staticTexts["stats-week-total"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.staticTexts["stats-week-total"].label, "0 min")
+    app.buttons["stats-done"].tap()
+    XCTAssertTrue(app.buttons["Page options"].exists)
+  }
+
+  @MainActor func testReadingStatsEmptyDarkLargeType() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-disable-preloading", "-dark-ui", "-large-type", "-reduce-motion"]
+    app.launch()
+    app.buttons["Sort and filter"].tap()
+    app.buttons["library-reading-stats"].tap()
+    XCTAssertTrue(app.staticTexts["stats-week-total"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.staticTexts["stats-week-total"].label, "0 min")
+    capture(app, "reading-stats-dark-large-type-top")
+    app.swipeUp()
+    XCTAssertTrue(app.staticTexts["stats-empty"].waitForExistence(timeout: 5))
+    capture(app, "reading-stats-empty-dark-large-type")
+    app.buttons["stats-done"].tap()
+    XCTAssertTrue(app.buttons["Sort and filter"].exists)
+  }
+
+  @MainActor func testFolderTapsAlwaysFadeAndSwipesStillNavigate() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-seed-preload-fixtures", "-disable-preloading", "-test-folder-transitions"]
     app.launch()
@@ -827,7 +868,7 @@ final class ArticleReaderUITests: XCTestCase {
     if !archive.isHittable { strip.swipeLeft() }
     archive.tap()
     XCTAssertTrue(archive.isSelected)
-    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "slide")
+    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "crossfade")
     swipeLibrary(app, left: false)
     XCTAssertTrue(history.isSelected)
     let downloaded = app.buttons["folder-downloaded"]
@@ -843,7 +884,7 @@ final class ArticleReaderUITests: XCTestCase {
     if !saved.isHittable { strip.swipeRight() }
     saved.tap()
     XCTAssertTrue(saved.isSelected)
-    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "slide")
+    XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "crossfade")
     XCTAssertTrue(app.buttons["article-cached-0"].exists)
     capture(app, "library-after-distant-and-nearby-jumps")
   }

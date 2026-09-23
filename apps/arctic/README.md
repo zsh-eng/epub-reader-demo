@@ -32,7 +32,7 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   use two lines alone. Clearing or cancelling restores the library.
 - **Saved** is the default inbox. The top folder strip switches between Saved,
   Favourites, Downloaded, article tags, History, then Archive. History and Archive use compact
-  search-style rows; Saved, Favourites, Downloaded and tags retain image cards. Swipe horizontally through these folders. The bottom has one native search field in a glass capsule, with a soft scroll edge on iOS 26 and a material fallback on older iOS. The field stays mounted from launch so the first tap can focus it directly.
+  search-style rows; Saved, Favourites, Downloaded and tags retain image cards. Tapping any folder crossfades directly. Swipe horizontally to move between adjacent folders. The bottom has one native search field in a glass capsule, with a soft scroll edge on iOS 26 and a material fallback on older iOS. The field stays mounted from launch so the first tap can focus it directly.
 - **History** records each URL you view, most recently viewed first, including links
   followed inside articles. Opening does not save a link. Preloading does not add history.
 - **Favourites** includes favourite saved articles, including archived ones. In a tag,
@@ -153,7 +153,12 @@ preventing other records from loading.
 
 ## Estimated reading time
 
-Open **Page options → Reading time** for the current article's total. Only a
+Open **Sort and filter → Reading stats** for the library, or
+**Page options → Reading time** for the current article. The rounded sheet shows
+seven days of activity, selectable day bubbles, today's time, weekly articles/visits,
+and an all-time total. Visits are grouped by their start day in the current
+time zone. Summaries use one in-memory snapshot when opened; no timer drives
+the chart or reads article content. Only a
 saved article's visible Reader content counts, including archived articles.
 Website mode, loading, background, notes and appearance controls pause tracking.
 Gaps longer than 120 seconds are discarded in full. Saving starts tracking from

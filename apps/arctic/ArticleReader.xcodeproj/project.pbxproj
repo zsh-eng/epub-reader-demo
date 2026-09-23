@@ -66,6 +66,8 @@
 		AF4000000000000000000003 /* Resources/reader-position.js in Resources */ = {isa = PBXBuildFile; fileRef = AF4000000000000000000004; };
 		2ABD32A0E4340061755CBF59 /* Sources/ArchiveUndoToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAC6B298BA182045B26158EE; };
 		CAEFC4237214578E761120AC /* Sources/ReadingSessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0E762F6912614FD2051D94B; };
+		CDA0690096CC52691C006B65 /* Sources/ReadingStats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AC71F61560E1D127D230EA; };
+		85684CB8B7B9E0B2B5D01A62 /* Sources/ReadingStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 422C6D319857B789D17E7ECA; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -153,6 +155,8 @@
 		AF4000000000000000000004 /* Resources/reader-position.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Resources/reader-position.js; sourceTree = "<group>"; };
 		BAC6B298BA182045B26158EE /* Sources/ArchiveUndoToast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArchiveUndoToast.swift; sourceTree = "<group>"; };
 		A0E762F6912614FD2051D94B /* Sources/ReadingSessions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ReadingSessions.swift; sourceTree = "<group>"; };
+		57AC71F61560E1D127D230EA /* Sources/ReadingStats.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/ReadingStats.swift"; sourceTree = "<group>"; };
+		422C6D319857B789D17E7ECA /* Sources/ReadingStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Sources/ReadingStatsView.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -220,6 +224,8 @@
 				092EA8ED3C38F268ED5CD960 /* Sources/ArticleSyncRepository.swift */,
 				353E9B7484F57124364E4DB4 /* Sources/ReaderFontScheme.swift */,
 				BAC6B298BA182045B26158EE /* Sources/ArchiveUndoToast.swift */,
+				57AC71F61560E1D127D230EA /* Sources/ReadingStats.swift */,
+				422C6D319857B789D17E7ECA /* Sources/ReadingStatsView.swift */,
 				A0E762F6912614FD2051D94B /* Sources/ReadingSessions.swift */,
 				3AC7E3F6AF5D3349C2B82840 /* Sources/AnnotationStore.swift */,
 				E2C4040636A8440F5AB50B3E /* Sources/ReaderAnnotations.swift */,
@@ -443,6 +449,8 @@
 				038CF846B18FA82B609AEE97 /* Sources/ArticleSyncRepository.swift in Sources */,
 				7BD85323A4807875A1E15639 /* Sources/ReaderFontScheme.swift in Sources */,
 				2ABD32A0E4340061755CBF59 /* Sources/ArchiveUndoToast.swift in Sources */,
+				CDA0690096CC52691C006B65 /* Sources/ReadingStats.swift in Sources */,
+				85684CB8B7B9E0B2B5D01A62 /* Sources/ReadingStatsView.swift in Sources */,
 				CAEFC4237214578E761120AC /* Sources/ReadingSessions.swift in Sources */,
 				5BF86EF416D56DD5760525E5 /* Sources/AnnotationStore.swift in Sources */,
 				E8E6F3EAD101B0744972C82F /* Sources/ReaderAnnotations.swift in Sources */,

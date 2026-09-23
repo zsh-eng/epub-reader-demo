@@ -421,7 +421,6 @@ struct ReaderNavigationBar: View {
   let store: ArticleStore
   let close: () -> Void
   @Environment(\.openURL) private var openURL
-  @State private var readingTime: String?
 
   private var article: SavedArticle? {
     store.articles.first { $0.url == browser.libraryURL }
@@ -456,9 +455,8 @@ struct ReaderNavigationBar: View {
           .disabled(!browser.hasLoaded || browser.noteDraft != nil)
           .accessibilityIdentifier("reader-find")
         Button("Reading time", systemImage: "clock") {
-          ReadingSessions.shared.activity(for: browser.libraryURL)
+          ReadingSessions.shared.pause()
           browser.showingReadingTime = true
-          readingTime = nil
         }.accessibilityIdentifier("reader-reading-time")
         Divider()
         if let article, article.saved {
@@ -494,38 +492,11 @@ struct ReaderNavigationBar: View {
         .padding(.horizontal, 108).allowsHitTesting(false)
     }
     .padding(.horizontal, 16)
-    .alert(
-      "Estimated reading time",
-      isPresented: Binding(
-        get: { readingTime != nil },
-        set: { if !$0 { readingTime = nil; browser.showingReadingTime = false } }
-      )
-    ) {
-      if ReadingSessions.shared.hasUnpersistedChanges && ReadingSessions.shared.lastError != nil {
-        Button("Retry saving") {
-          ReadingSessions.shared.flush(force: true)
-          readingTime = nil
-          browser.showingReadingTime = false
-        }
-      }
-      Button("Done") {
-        readingTime = nil; browser.showingReadingTime = false
-      }
-    } message: {
-      Text(
-        (readingTime.map { "\($0) in Reader. Gaps longer than 2 minutes are excluded." }
-          ?? "Loading reading time…")
-          + (ReadingSessions.shared.lastError.map { "\n\nSome reading time is unavailable: " + $0 }
-            ?? ""))
-    }
-    .task(id: browser.showingReadingTime) {
-      guard browser.showingReadingTime else { return }
-      while !ReadingSessions.shared.isLoaded {
-        do { try await Task.sleep(for: .milliseconds(50)) } catch { return }
-      }
-      guard !Task.isCancelled, browser.showingReadingTime else { return }
-      let seconds = Int(ReadingSessions.shared.total(for: browser.libraryURL))
-      readingTime = seconds < 60 ? "\(seconds) seconds" : "\(seconds / 60) min \(seconds % 60) sec"
+    .sheet(isPresented: Binding(
+      get: { browser.showingReadingTime },
+      set: { browser.showingReadingTime = $0 }
+    )) {
+      ReadingStatsView(articleURL: browser.libraryURL, articleTitle: article?.title)
     }
   }
 }

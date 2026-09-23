@@ -108,6 +108,7 @@ struct LibraryView: View {
   @State private var choosingImport = false
   @State private var showingTaggingSettings = false
   @State private var showingAnnotations = false
+  @State private var showingReadingStats = false
   @State private var passageToOpen: ReaderAnnotation?
   @State private var showingOnboarding = false
   @State private var showingArticleReplay = false
@@ -177,7 +178,7 @@ struct LibraryView: View {
         isLibraryScrolling: isLibraryScrolling, clipboardURL: clipboard.url,
         enabled: selected == nil && !showingOnboarding && !showingArticleReplay
           && !showingTaggingSettings
-          && !showingAnnotations && !choosingImport && editingTags == nil
+          && !showingAnnotations && !showingReadingStats && !choosingImport && editingTags == nil
       )
     }
     .overlay(alignment: .bottom) {
@@ -322,6 +323,7 @@ struct LibraryView: View {
         showingAnnotations = false
       }
     }
+    .sheet(isPresented: $showingReadingStats) { ReadingStatsView() }
     .sheet(isPresented: $showingTaggingSettings) {
       TaggingSettingsView { store.resumeTagging() }
     }
@@ -441,6 +443,8 @@ struct LibraryView: View {
             choosingImport = true
           }.accessibilityIdentifier("import-reading-list")
           Divider()
+          Button("Reading stats", systemImage: "chart.bar.xaxis") { showingReadingStats = true }
+            .accessibilityIdentifier("library-reading-stats")
           Button("Automatic tags", systemImage: "sparkles") { showingTaggingSettings = true }
             .accessibilityIdentifier("automatic-tag-settings")
           Button("Tag existing articles", systemImage: "tag") { store.retagSavedArticles() }
@@ -472,13 +476,10 @@ struct LibraryView: View {
 
   private func selectFolder(_ target: ArticleFolder) {
     guard target != folder else { return }
-    let items = folderItems
-    let distance = abs((items.firstIndex(of: target) ?? 0) - (items.firstIndex(of: folder) ?? 0))
-    let fade = reduceMotion || distance >= 3
     #if DEBUG
-      folderTransition = fade ? "crossfade" : "slide"
+      folderTransition = "crossfade"
     #endif
-    // UIKit decides slide versus crossfade before receiving the destination.
+    // All explicit folder choices fade; UIKit alone owns swipe translation.
     // Never animate SwiftUI selection or rebuild the pager to simulate a fade.
     var transaction = Transaction(animation: nil)
     transaction.disablesAnimations = true

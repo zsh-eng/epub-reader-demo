@@ -1,8 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// Own the paging decision before UIKit receives a new selection. Long jumps
-/// switch without scrolling, under an immutable snapshot of the outgoing page.
+/// Explicit selections crossfade beneath an immutable outgoing snapshot.
+/// Only the page controller's interactive swipe moves pages horizontally.
 /// The controller and its frame stay stable through taps, swipes and updates.
 struct LibraryPager<Page: Hashable, Content: View>: UIViewControllerRepresentable {
   var pages: [Page]
@@ -91,42 +91,34 @@ struct LibraryPager<Page: Hashable, Content: View>: UIViewControllerRepresentabl
       else { return }
       let from = owner.pages.firstIndex(of: current.page)
       let direction: UIPageViewController.NavigationDirection = to > (from ?? 0) ? .forward : .reverse
-      let crossfade = owner.reduceMotion || from == nil || abs(to - (from ?? to)) >= 3 || snapshot != nil
-      if crossfade {
-        // Capture the current presentation before cancelling an earlier fade.
-        // A second tap can therefore continue from what is actually on screen.
-        let cover = pager.view.snapshotView(afterScreenUpdates: false)
-        fade?.stopAnimation(true)
-        snapshot?.removeFromSuperview()
-        snapshot = cover
-        let destination = host(for: page)
-        UIView.performWithoutAnimation {
-          pager.setViewControllers([destination], direction: direction, animated: false)
-          pager.view.layoutIfNeeded()
-        }
-        guard let cover else { return }
-        cover.frame = pager.view.bounds
-        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        cover.isUserInteractionEnabled = false
-        cover.accessibilityElementsHidden = true
-        pager.view.addSubview(cover)
-        let animator = UIViewPropertyAnimator(duration: owner.reduceMotion ? 0.1 : 0.18, curve: .easeOut) {
-          cover.alpha = 0
-        }
-        animator.addCompletion { [weak self, weak cover] _ in
-          cover?.removeFromSuperview()
-          guard let self, self.snapshot === cover else { return }
-          self.snapshot = nil
-          self.fade = nil
-        }
-        fade = animator
-        animator.startAnimation()
-        return
+      // Capture the current presentation before cancelling an earlier fade.
+      // A second tap can therefore continue from what is actually on screen.
+      let cover = pager.view.snapshotView(afterScreenUpdates: false)
+      fade?.stopAnimation(true)
+      snapshot?.removeFromSuperview()
+      snapshot = cover
+      let destination = host(for: page)
+      UIView.performWithoutAnimation {
+        pager.setViewControllers([destination], direction: direction, animated: false)
+        pager.view.layoutIfNeeded()
       }
-      moving = true
-      pager.setViewControllers([host(for: page)], direction: direction, animated: true) { [weak self] _ in
-        self?.finishTransition()
+      guard let cover else { return }
+      cover.frame = pager.view.bounds
+      cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      cover.isUserInteractionEnabled = false
+      cover.accessibilityElementsHidden = true
+      pager.view.addSubview(cover)
+      let animator = UIViewPropertyAnimator(duration: owner.reduceMotion ? 0.1 : 0.18, curve: .easeOut) {
+        cover.alpha = 0
       }
+      animator.addCompletion { [weak self, weak cover] _ in
+        cover?.removeFromSuperview()
+        guard let self, self.snapshot === cover else { return }
+        self.snapshot = nil
+        self.fade = nil
+      }
+      fade = animator
+      animator.startAnimation()
     }
 
     private func finishTransition() {
@@ -151,7 +143,13 @@ struct LibraryPager<Page: Hashable, Content: View>: UIViewControllerRepresentabl
     }
 
     func pageViewController(_ pageViewController: UIPageViewController,
-      willTransitionTo pendingViewControllers: [UIViewController]) { moving = true }
+      willTransitionTo pendingViewControllers: [UIViewController]) {
+      fade?.stopAnimation(true)
+      snapshot?.removeFromSuperview()
+      fade = nil
+      snapshot = nil
+      moving = true
+    }
 
     func pageViewController(_ pageViewController: UIPageViewController, didFinishAnimating finished: Bool,
       previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {

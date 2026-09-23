@@ -111,6 +111,9 @@ struct ArticleReadingSession: Codable, Identifiable, Equatable, Sendable {
   /// It never extrapolates time from an unanswered activity boundary.
   func total(for url: URL) -> TimeInterval { totals[url, default: 0] }
 
+  /// Read once when statistics open, rather than observing each activity boundary.
+  func snapshot() -> [ArticleReadingSession] { Array(records.values) }
+
   func sessions(for url: URL) -> [ArticleReadingSession] {
     records.values.filter { $0.articleURL == url && $0.seconds > 0 }
       .sorted { $0.startedAt < $1.startedAt }
