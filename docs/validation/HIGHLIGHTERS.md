@@ -47,6 +47,8 @@ Keep Shiki as med's default for now. The next useful experiment is a TypeScript/
 
 This result does not compare Twinkleplop against Shiki's WASM engine. That remains another available option in Pierre and needs its own measurement before a final engine choice.
 
+Follow-up: the [Pierre integration probe](PIERRE_HIGHLIGHTER_REPLACEMENT.md) confirms that Shiki tokenization is not required at the file/diff rendering boundary. It preserves line metadata, word-diff markers, and light/dark colours using Twinkleplop tokens, and avoids the direct HTML renderer's CRLF issue. A permanent Shiki fallback is a coverage choice, not an architecture requirement.
+
 ## Reproduce
 
 Run from the med checkout. Install the experimental dependencies in the ignored benchmark directory:
