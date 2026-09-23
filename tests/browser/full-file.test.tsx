@@ -213,6 +213,20 @@ test("search highlights follow virtualized rows and release their ranges on clos
   expect(searchRanges()).toEqual([]);
 });
 
+test("an unsupported grammar keeps readable source and identifies plain highlighting", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, path: "example.cpp", identity: "cpp:1", text: "int main() { return 0; }" }}
+    />,
+  );
+  await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
+  expect(lines()![0].textContent).toContain("int main()");
+  expect(mount!.querySelector('[role="status"]')?.textContent).toContain(
+    "Syntax highlighting is not available for cpp",
+  );
+});
+
 test("a long plain line uses horizontal scrolling instead of wrapping", async () => {
   render(
     <FullFileView

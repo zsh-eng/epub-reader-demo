@@ -23,6 +23,8 @@ import "../pierre-theme";
 import { Icon } from "./Icon";
 import { useFileVim, type FileNavigationCommand } from "../data/use-file-vim";
 import { pierreFile } from "../data/file-prefetch";
+import { getFiletypeFromFileName } from "@pierre/diffs";
+import { supportedLanguage } from "../highlighting/languages";
 import { createSearchHighlights } from "../data/search-highlights";
 import { BlameTooltips } from "./BlameTooltips";
 import { createBlameGutter } from "../data/blame-gutter";
@@ -195,6 +197,11 @@ export function FullFileView({
     onBlameEnabledChange?.(open);
   };
   const plain = !!file?.plain;
+  const language = getFiletypeFromFileName(file?.path ?? "");
+  const unsupportedSyntax =
+    import.meta.env.MED_HIGHLIGHTER !== "shiki" &&
+    language !== "text" &&
+    !supportedLanguage(language);
   const items = useMemo<CodeViewItem<undefined>[]>(() => {
     if (file?.kind !== "text" || typeof file.text !== "string") return [];
     return [
@@ -350,10 +357,13 @@ export function FullFileView({
         <div {...stylex.props(styles.pending)} aria-hidden="true" />
       ) : file ? (
         <>
-          {(plain || file.truncated) && file.kind === "text" && (
+          {(plain || file.truncated || unsupportedSyntax) && file.kind === "text" && (
             <div role="status" {...stylex.props(styles.banner)}>
               {file.truncated ? "Partial preview" : "Plain text preview"} ·{" "}
-              {file.reason ?? "Syntax highlighting is disabled for this file."}
+              {file.reason ??
+                (unsupportedSyntax
+                  ? `Syntax highlighting is not available for ${language}.`
+                  : "Syntax highlighting is disabled for this file.")}
             </div>
           )}
           {items.length ? (

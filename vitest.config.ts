@@ -2,6 +2,7 @@ import { defineConfig } from "vitest/config";
 import { playwright } from "@vitest/browser-playwright";
 import react from "@vitejs/plugin-react";
 import stylex from "@stylexjs/unplugin";
+import { pierreHighlighter } from "./tools/pierre-highlighter.ts";
 export default defineConfig({
   test: {
     projects: [
@@ -15,9 +16,11 @@ export default defineConfig({
         },
       },
       {
-        plugins: [stylex.vite({ useCSSLayers: true }), react()],
+        plugins: [pierreHighlighter(), stylex.vite({ useCSSLayers: true }), react()],
         optimizeDeps: {
+          exclude: ["@pierre/diffs"],
           include: [
+            "lru_map",
             "@base-ui/react/combobox",
             "@base-ui/react/popover",
             "@base-ui/react/tabs",

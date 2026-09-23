@@ -1,18 +1,21 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import stylex from "@stylexjs/unplugin";
+import { pierreHighlighter } from "./tools/pierre-highlighter.ts";
 
 export default defineConfig({
-  plugins: [stylex.vite({ useCSSLayers: true }), react()],
+  plugins: [pierreHighlighter(), stylex.vite({ useCSSLayers: true }), react()],
   optimizeDeps: {
+    exclude: ["@pierre/diffs"],
     include: [
+      "lru_map",
       "@base-ui/react/combobox",
       "@base-ui/react/popover",
       "@base-ui/react/tabs",
       "@pierre/trees",
     ],
   },
-  worker: { format: "es" },
+  worker: { format: "es", plugins: () => [pierreHighlighter()] },
   build: { outDir: "dist/web", target: "es2022", sourcemap: true },
   server: {
     host: "127.0.0.1",

@@ -18,7 +18,7 @@ _Bun and med · Vitesse Light_
 
 ## Find and read code
 
-Find files or search committed code with a preview. Open files in tabs, jump to symbols, and inspect line blame. Keyboard shortcuts and Vim navigation are built in.
+Find files or search committed code with a preview. Open files in tabs, jump to symbols, and inspect line blame. Keyboard shortcuts and Vim navigation are built in. Twinkleplop supplies syntax colours; files without a supported grammar remain readable as plain text.
 
 ![Bun file search with matching paths and a code preview in Vitesse Dark](docs/screenshots/bun-search-vitesse-dark.png)
 
@@ -98,6 +98,7 @@ See the [usage guide](docs/USAGE.md) for all shortcuts, search setup, patch and 
 | Project                                                            | Use in med                                             |
 | ------------------------------------------------------------------ | ------------------------------------------------------ |
 | [Pierre Diffs and Trees](https://github.com/pierrecomputer/pierre) | Code and diff rendering; file trees                    |
+| [Twinkleplop](https://github.com/pngwn/twinkleplop)                | Syntax highlighting                                    |
 | [Base UI](https://base-ui.com/)                                    | UI controls and dialogs                                |
 | [Universal Ctags](https://github.com/universal-ctags/ctags)        | Symbol extraction                                      |
 | [Zoekt](https://github.com/sourcegraph/zoekt)                      | Indexed search across committed branches               |
