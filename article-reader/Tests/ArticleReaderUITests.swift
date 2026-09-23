@@ -814,6 +814,8 @@ final class ArticleReaderUITests: XCTestCase {
     app.launchArguments = ["-ui-testing", "-reset-store", "-seed-preload-fixtures", "-disable-preloading", "-test-folder-transitions"]
     app.launch()
     XCTAssertTrue(app.buttons["article-cached-0"].waitForExistence(timeout: 10))
+    let originalCard = app.buttons["article-cached-0"].frame
+    let originalHeader = app.buttons["folder-saved"].frame.minY
     let strip = app.scrollViews["library-folders"]
     let history = app.buttons["folder-history"]
     for _ in 0..<5 { if history.isHittable { break }; strip.swipeLeft() }
@@ -834,6 +836,9 @@ final class ArticleReaderUITests: XCTestCase {
     XCTAssertTrue(downloaded.isSelected)
     XCTAssertEqual(app.staticTexts["folder-transition-mode"].label, "crossfade")
     XCTAssertTrue(app.buttons["article-cached-0"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["article-cached-0"].frame.minX, originalCard.minX, accuracy: 1)
+    XCTAssertEqual(app.buttons["article-cached-0"].frame.minY, originalCard.minY, accuracy: 1)
+    XCTAssertEqual(downloaded.frame.minY, originalHeader, accuracy: 1)
     let saved = app.buttons["folder-saved"]
     if !saved.isHittable { strip.swipeRight() }
     saved.tap()

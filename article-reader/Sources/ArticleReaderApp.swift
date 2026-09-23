@@ -119,7 +119,6 @@ struct LibraryView: View {
   @State private var importReport: String?
   @State private var showingImportSummary = false
   @State private var folder = ArticleFolder.saved
-  @State private var pagerGeneration = 0
   #if DEBUG
     @State private var folderTransition = "initial"
   #endif
@@ -475,12 +474,11 @@ struct LibraryView: View {
     #if DEBUG
       folderTransition = fade ? "crossfade" : "slide"
     #endif
-    // A fresh pager starts at the destination. Reusing the old pager here would
-    // animate its offset through every intervening page and build those lists.
-    withAnimation(fade ? .easeOut(duration: reduceMotion ? 0.1 : 0.18) : .smooth(duration: 0.2)) {
-      folder = target
-      if fade { pagerGeneration += 1 }
-    }
+    // UIKit decides slide versus crossfade before receiving the destination.
+    // Never animate SwiftUI selection or rebuild the pager to simulate a fade.
+    var transaction = Transaction(animation: nil)
+    transaction.disablesAnimations = true
+    withTransaction(transaction) { folder = target }
   }
 
   private var folders: some View {
@@ -647,36 +645,30 @@ struct LibraryView: View {
       // Capture the inset before extending this scrolling surface under the
       // status area. Only the first row and folder controls keep that inset.
       ZStack(alignment: .top) {
-        TabView(selection: $folder) {
-          ForEach(folderItems, id: \.self) { item in
-            GeometryReader { geometry in
-              Group {
-                if matches(in: item).isEmpty {
-                  LibraryEmptyState(folder: item, favouritesOnly: filtersFavourites(in: item))
-                    .frame(height: max(0, viewport.size.height - headerHeight - topInset))
-                    .padding(.top, headerHeight + topInset)
-                } else {
-                  ScrollView { library(in: item) }
-                    .modifier(
-                      LibraryScrollActivity {
-                        if folder == item && !searching { isLibraryScrolling = $0 }
-                      }
-                    )
-                    .contentMargins(.top, topInset + headerHeight + 16, for: .scrollContent)
-                    .contentMargins(.top, topInset + headerHeight, for: .scrollIndicators)
-                    .contentMargins(
-                      .bottom, max(0, geometry.size.height - viewport.size.height),
-                      for: .scrollContent)
-                }
-              }.accessibilityHidden(searching || showingAnnotations || folder != item)
-            }
-            .tag(item)
-            .accessibilityIdentifier("library-page-" + item.identifier)
+        LibraryPager(pages: folderItems, selection: $folder, reduceMotion: reduceMotion) { item in
+          GeometryReader { geometry in
+            Group {
+              if matches(in: item).isEmpty {
+                LibraryEmptyState(folder: item, favouritesOnly: filtersFavourites(in: item))
+                  .frame(height: max(0, viewport.size.height - headerHeight - topInset))
+                  .padding(.top, headerHeight + topInset)
+              } else {
+                ScrollView { library(in: item) }
+                  .modifier(
+                    LibraryScrollActivity {
+                      if folder == item && !searching { isLibraryScrolling = $0 }
+                    }
+                  )
+                  .contentMargins(.top, topInset + headerHeight + 16, for: .scrollContent)
+                  .contentMargins(.top, topInset + headerHeight, for: .scrollIndicators)
+                  .contentMargins(
+                    .bottom, max(0, geometry.size.height - viewport.size.height),
+                    for: .scrollContent)
+              }
+            }.accessibilityHidden(searching || showingAnnotations || folder != item)
           }
+          .accessibilityIdentifier("library-page-" + item.identifier)
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .id(pagerGeneration)
-        .transition(.opacity)
         .ignoresSafeArea(.container, edges: .bottom)
         LibraryScrollEdge()
           .frame(height: topInset + headerHeight + 28)

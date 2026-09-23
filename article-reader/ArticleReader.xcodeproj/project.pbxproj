@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B90000000000000000000001 /* LibraryPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90000000000000000000002; };
 		AF2000000000000000000001 /* ArticleReplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000002; };
 		AF1000000000000000000005 /* LibraryPreloading.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000006; };
 		AF1000000000000000000003 /* LibraryFrameDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000004; };
@@ -97,6 +98,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B90000000000000000000002 /* LibraryPager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryPager.swift; sourceTree = "<group>"; };
 		AF2000000000000000000002 /* ArticleReplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleReplayView.swift; sourceTree = "<group>"; };
 		AF1000000000000000000006 /* LibraryPreloading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryPreloading.swift; sourceTree = "<group>"; };
 		AF1000000000000000000004 /* LibraryFrameDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryFrameDiagnostics.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
 				AC0000000000000000000002 /* LibraryCards.swift */,
+				B90000000000000000000002 /* LibraryPager.swift */,
 				AF1000000000000000000006 /* LibraryPreloading.swift */,
 				AF1000000000000000000004 /* LibraryFrameDiagnostics.swift */,
 				AF1000000000000000000002 /* ArcticEmptyState.swift */,
@@ -426,6 +429,7 @@
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,
+				B90000000000000000000001 /* LibraryPager.swift in Sources */,
 				AF1000000000000000000005 /* LibraryPreloading.swift in Sources */,
 				AF1000000000000000000003 /* LibraryFrameDiagnostics.swift in Sources */,
 				AF1000000000000000000001 /* ArcticEmptyState.swift in Sources */,
