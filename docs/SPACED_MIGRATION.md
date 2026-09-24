@@ -51,12 +51,13 @@ original absolute paths as evidence, not as instructions to use the old repo.
 - Shared sync package: 36 tests passed.
 - Reader: 623 client tests and production build passed.
 - Med: production build passed.
+- Worker deployment dry run passed with the existing D1 and R2 bindings.
 - Root frozen install passed; existing workspace direct versions are unchanged.
 - Browser smoke check: home and card editor render; empty card submission
   shows both required-field errors. No production account or data was used.
 
 The canonical local app is `/Users/admin/workbench/apps/spaced2`. The former
-`/Users/admin/spaced2` path will be a compatibility symlink to this app.
+`/Users/admin/spaced2` path is a compatibility symlink to this app.
 The retired checkout is kept under ignored `migration-backups.local/spaced2`;
-private environment files, Wrangler state and `.local` data directories move
+private environment files, Wrangler state and `.local` data directories moved
 to the canonical app. The archive is for recovery, not continued development.
