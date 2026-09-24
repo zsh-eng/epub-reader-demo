@@ -1,16 +1,31 @@
 import SwiftUI
-import UIKit
+
+#if os(iOS)
+  import UIKit
+#else
+  import AppKit
+#endif
 
 /// Glacier blue is reserved for actions and small identity details.
 enum ArcticBrand {
-  static let onAccent = Color(uiColor: .systemBackground)
+  #if os(macOS)
+    static let onAccent = Color(nsColor: .windowBackgroundColor)
+    static let accent = Color(
+      nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+          ? NSColor(red: 0.45, green: 0.82, blue: 0.95, alpha: 1)
+          : NSColor(red: 0.13, green: 0.49, blue: 0.71, alpha: 1)
+      })
+  #else
+    static let onAccent = Color(uiColor: .systemBackground)
 
-  static let accent = Color(
-    uiColor: UIColor { traits in
-      traits.userInterfaceStyle == .dark
-        ? UIColor(red: 0.45, green: 0.82, blue: 0.95, alpha: 1)
-        : UIColor(red: 0.13, green: 0.49, blue: 0.71, alpha: 1)
-    })
+    static let accent = Color(
+      uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+          ? UIColor(red: 0.45, green: 0.82, blue: 0.95, alpha: 1)
+          : UIColor(red: 0.13, green: 0.49, blue: 0.71, alpha: 1)
+      })
+  #endif
 }
 
 /// Three preserved pages form an ice shelf; the small ribbon identifies a saved read.

@@ -115,7 +115,13 @@ enum ArticleTagCatalog {
 }
 
 enum TaggingPreferences {
-  private static var defaults: UserDefaults { UserDefaults(suiteName: SharedInbox.group)! }
+  private static var defaults: UserDefaults {
+    #if os(macOS)
+      .standard
+    #else
+      UserDefaults(suiteName: SharedInbox.group)!
+    #endif
+  }
   static var enabled: Bool {
     get { defaults.bool(forKey: "automaticTaggingEnabled") }
     set {

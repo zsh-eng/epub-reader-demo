@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftSoup
 
-#if DEBUG
+#if DEBUG && canImport(UIKit)
   import UIKit
 #endif
 
@@ -145,9 +145,11 @@ struct TaggingNotice: Identifiable {
   private let fileURL: URL
   private let downloads: URL
 
-  init() {
-    let directory = URL.applicationSupportDirectory.appending(
-      path: "ArticleReader", directoryHint: .isDirectory)
+  init(directory: URL? = nil) {
+    let directory =
+      directory
+      ?? URL.applicationSupportDirectory.appending(
+        path: "ArticleReader", directoryHint: .isDirectory)
     fileURL = directory.appending(path: TestMode.enabled ? "test-links.json" : "links.json")
     downloads = directory.appending(path: TestMode.enabled ? "TestDownloads" : "Downloads")
     do {
@@ -196,25 +198,27 @@ struct TaggingNotice: Identifiable {
             "<a href='https://fixture.example/import-\(index)' add_date='\(1_700_000_000 + index)'>Imported story \(String(format: "%04d", index))</a>"
           }.joined()
           articles = try ReadingListImport.parse("<html><body>\(anchors)</body></html>")
-          if ProcessInfo.processInfo.arguments.contains("-seed-photo-list") {
-            // One bundled photograph, 1000 distinct cache identities. Query
-            // components preserve file reads without copying or decoding 1000
-            // photos during setup. Each test launch gets fresh cache keys.
-            let photoURL = downloads.appending(path: "scroll-photo.jpg")
-            guard
-              let photo = UIImage(named: "OnboardingArticle")?.jpegData(compressionQuality: 0.95)
-            else { throw CocoaError(.fileReadCorruptFile) }
-            try photo.write(to: photoURL, options: .atomic)
-            let run = UUID().uuidString
-            for index in articles.indices {
-              articles[index].imageURL = photoURL.appending(queryItems: [
-                URLQueryItem(name: "run", value: run),
-                URLQueryItem(name: "article", value: String(index)),
-              ])
-              articles[index].subtitle = "A cached photograph from the Arctic onboarding fixture."
-              articles[index].taggingText = articles[index].subtitle
+          #if canImport(UIKit)
+            if ProcessInfo.processInfo.arguments.contains("-seed-photo-list") {
+              // One bundled photograph, 1000 distinct cache identities. Query
+              // components preserve file reads without copying or decoding 1000
+              // photos during setup. Each test launch gets fresh cache keys.
+              let photoURL = downloads.appending(path: "scroll-photo.jpg")
+              guard
+                let photo = UIImage(named: "OnboardingArticle")?.jpegData(compressionQuality: 0.95)
+              else { throw CocoaError(.fileReadCorruptFile) }
+              try photo.write(to: photoURL, options: .atomic)
+              let run = UUID().uuidString
+              for index in articles.indices {
+                articles[index].imageURL = photoURL.appending(queryItems: [
+                  URLQueryItem(name: "run", value: run),
+                  URLQueryItem(name: "article", value: String(index)),
+                ])
+                articles[index].subtitle = "A cached photograph from the Arctic onboarding fixture."
+                articles[index].taggingText = articles[index].subtitle
+              }
             }
-          }
+          #endif
           try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)
         }
       #endif
@@ -1219,18 +1223,20 @@ enum TestMode {
     /// Failed share tests must not leave a saved fixture for the next test. Never
     /// remove real shared links or results from the simulator's App Group.
     static func resetSharedFixtures() throws {
-      for directory in [try SharedInbox.directory(), try SharedInbox.taggingResultsDirectory()] {
-        let files = try FileManager.default.contentsOfDirectory(
-          at: directory, includingPropertiesForKeys: nil)
-        for file in files where file.pathExtension == "json" {
-          let data = try Data(contentsOf: file)
-          let transfer = try? SharedInbox.decodeTransfer(from: data)
-          let result = try? JSONDecoder().decode(SharedTaggingResult.self, from: data)
-          if (transfer?.url ?? result?.url)?.host == "fixture.example" {
-            try FileManager.default.removeItem(at: file)
+      #if os(iOS)
+        for directory in [try SharedInbox.directory(), try SharedInbox.taggingResultsDirectory()] {
+          let files = try FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil)
+          for file in files where file.pathExtension == "json" {
+            let data = try Data(contentsOf: file)
+            let transfer = try? SharedInbox.decodeTransfer(from: data)
+            let result = try? JSONDecoder().decode(SharedTaggingResult.self, from: data)
+            if (transfer?.url ?? result?.url)?.host == "fixture.example" {
+              try FileManager.default.removeItem(at: file)
+            }
           }
         }
-      }
+      #endif
     }
   #endif
   static var enabled: Bool {

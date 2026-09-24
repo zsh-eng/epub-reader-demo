@@ -7,7 +7,7 @@ A monorepo for personal apps and shared local-first software.
 | Path | Purpose |
 | --- | --- |
 | [apps/reader](apps/reader/README.md) | Web EPUB Reader. React, IndexedDB, and a Cloudflare Worker. |
-| [apps/arctic](apps/arctic/README.md) | Arctic, the native iOS article reader and share extension. |
+| [apps/arctic](apps/arctic/README.md) | Arctic, the native iOS and Mac article reader, plus the iOS share extension. |
 | [packages/local-sync](packages/local-sync/README.md) | Shared sync protocol, engine, and Dexie/Hono adapters. |
 | [packages/text-highlighter](packages/text-highlighter/README.md) | DOM text selection and highlight restoration. |
 | [packages/arctic-sync-server](packages/arctic-sync-server/README.md) | Private Arctic auth and sync routes, hosted by the Reader Worker. |
@@ -56,3 +56,6 @@ Deployment names, domains, database bindings, and iOS bundle IDs are unchanged.
 
 Add independent products under `apps/`. Add a package under `packages/` when
 code has a clear shared contract. Keep app data and generated output out of Git.
+
+For the native desktop app, open `apps/arctic/ArcticMac.xcodeproj`. See the
+[Mac guide](apps/arctic/Mac/README.md) for shortcuts, build commands and performance evidence.

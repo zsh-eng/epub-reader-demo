@@ -9,7 +9,7 @@ and local development files. Shared packages must not import app code.
 - **Reader** owns the web EPUB app and its deployed Hono Worker. Read
   [Reader architecture](../apps/reader/docs/ARCHITECTURE.md) before changing
   its data loading, storage, caches, or Reader lifecycle.
-- **Arctic** owns the native iOS app, share extension, Swift sync package,
+- **Arctic** owns the native iOS and Mac apps, share extension, Swift sync package,
   and WebView extraction bundle. Read its [app guide](../apps/arctic/README.md),
   [performance evidence](../apps/arctic/PERFORMANCE.md), and
   [sync boundaries](../packages/arctic-sync-server/README.md) before changes.

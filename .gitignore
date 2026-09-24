@@ -35,3 +35,6 @@ apps/reader/diagnostics/*
 # Browser test output
 playwright-report/
 test-results/
+
+# Native Arctic build products
+apps/arctic/.build/

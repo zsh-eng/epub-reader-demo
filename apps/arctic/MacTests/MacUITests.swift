@@ -1,0 +1,57 @@
+import XCTest
+
+@MainActor final class MacUITests: XCTestCase {
+  private func launch() -> XCUIApplication {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-seed-preload-fixtures"]
+    app.launch()
+    return app
+  }
+  func testOpenSwitchNotesAndShortcuts() throws {
+    let app = launch()
+    let table = app.tables["article-list"]
+    XCTAssertTrue(table.waitForExistence(timeout: 10))
+    table.staticTexts["Cached story 00"].click()
+    XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
+    app.typeKey("l", modifierFlags: .command)
+    table.staticTexts["Cached story 01"].click()
+    app.buttons["tab-cached-0"].click()
+    XCTAssertTrue(
+      app.webViews.firstMatch.staticTexts.containing(
+        NSPredicate(format: "label CONTAINS %@", "Slow down")
+      ).firstMatch.waitForExistence(timeout: 10))
+    app.typeKey("n", modifierFlags: [.command, .shift])
+    let input = app.textFields["note-input"]
+    XCTAssertTrue(input.waitForExistence(timeout: 5))
+    input.click()
+    input.typeText("A note from the Mac.")
+    app.buttons["Send note"].click()
+    XCTAssertTrue(app.staticTexts["A note from the Mac."].waitForExistence(timeout: 5))
+    app.typeKey("/", modifierFlags: [.command, .shift])
+    XCTAssertTrue(app.staticTexts["A little more fluent."].waitForExistence(timeout: 5))
+    app.buttons["Done"].click()
+    app.typeKey("s", modifierFlags: [.command, .shift])
+    app.typeKey("s", modifierFlags: [.command, .shift])
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+  }
+  func testManyOpenTabsStayResponsive() throws {
+    let app = launch()
+    let table = app.tables["article-list"]
+    XCTAssertTrue(table.waitForExistence(timeout: 10))
+    for index in 0..<6 {
+      app.typeKey("k", modifierFlags: .command)
+      let input = app.textFields["open-input"]
+      XCTAssertTrue(input.waitForExistence(timeout: 5))
+      input.typeText(String(format: "Cached story %02d", index))
+      input.typeKey(.return, modifierFlags: [])
+      XCTAssertTrue(app.buttons["tab-cached-\(index)"].waitForExistence(timeout: 8))
+    }
+    for index in [4, 5, 3, 0, 5, 4] { app.buttons["tab-cached-\(index)"].click() }
+    app.typeKey("w", modifierFlags: .command)
+    XCTAssertFalse(app.buttons["tab-cached-4"].exists)
+    app.typeKey("t", modifierFlags: [.command, .shift])
+    XCTAssertTrue(app.buttons["tab-cached-4"].waitForExistence(timeout: 5))
+  }
+}

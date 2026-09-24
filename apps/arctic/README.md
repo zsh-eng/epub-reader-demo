@@ -1,5 +1,8 @@
 # Arctic — native article reader
 
+The native Mac workspace has its own [Mac guide](Mac/README.md) and
+`ArcticMac.xcodeproj`. The iPhone app and share extension use the project below.
+
 Open `ArticleReader.xcodeproj`, select the **ArticleReader** scheme and an iPhone
 simulator, then Run. Requires Xcode 26+ and iOS 17+. For a physical iPhone, select
 the same signing team for **ArticleReader** and **ArticleShare**, then register/
