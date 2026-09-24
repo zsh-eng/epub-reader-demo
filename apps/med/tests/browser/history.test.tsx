@@ -9,10 +9,11 @@ let mount: HTMLDivElement | undefined;
 afterEach(() => {
   root?.unmount();
   mount?.remove();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 let now: number;
-function render() {
+function render(ages?: number[]) {
   now = Date.now();
   initializeTheme();
   mount = document.createElement("div");
@@ -21,24 +22,35 @@ function render() {
   root = createRoot(mount);
   root.render(
     <HistoryPanel
-      commits={[
-        {
-          id: "a".repeat(40),
-          parents: ["b".repeat(40)],
-          subject: "First commit subject",
-          author: "Alex",
-          timestamp: now - 60_000,
-          refs: ["main"],
-        },
-        {
-          id: "b".repeat(40),
-          parents: [],
-          subject: "Second commit subject",
-          author: "Sam",
-          timestamp: now - 3_600_000,
-          refs: [],
-        },
-      ]}
+      commits={
+        ages
+          ? ages.map((age, index) => ({
+              id: String(index).padStart(40, "0"),
+              parents: [],
+              subject: `Commit ${index + 1}`,
+              author: "Alex",
+              timestamp: now - age,
+              refs: [],
+            }))
+          : [
+              {
+                id: "a".repeat(40),
+                parents: ["b".repeat(40)],
+                subject: "First commit subject",
+                author: "Alex",
+                timestamp: now - 60_000,
+                refs: ["main"],
+              },
+              {
+                id: "b".repeat(40),
+                parents: [],
+                subject: "Second commit subject",
+                author: "Sam",
+                timestamp: now - 3_600_000,
+                refs: [],
+              },
+            ]
+      }
       loading={false}
       hasMore={false}
       error={null}
@@ -100,16 +112,33 @@ test("shows compact elapsed author times and exact dates in a shared tooltip", a
 });
 
 test("updates relative times while the history stays open", async () => {
-  const intervals = vi.spyOn(window, "setInterval");
+  vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
   render();
   await expect
     .poll(() => document.querySelector('[role="option"] time')?.textContent)
     .toBe("1 min ago");
-  const clock = vi.spyOn(Date, "now").mockReturnValue(now + 60_000);
-  const refresh = intervals.mock.calls.find(([, timeout]) => timeout === 30_000)![0];
-  refresh();
-  clock.mockRestore();
+  await vi.advanceTimersByTimeAsync(60_000);
   await expect
     .poll(() => document.querySelector('[role="option"] time')?.textContent)
     .toBe("2 min ago");
+});
+
+test("renders recent, older, and future author dates as relative times", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const minute = 60_000;
+  const day = 24 * 60 * minute;
+  render([0, day, 29 * day, 30 * day, 365 * day, 730 * day, -minute]);
+  await expect
+    .poll(() =>
+      [...document.querySelectorAll('[role="option"] time')].map((node) => node.textContent),
+    )
+    .toEqual([
+      "just now",
+      "1 day ago",
+      "29 days ago",
+      "1 mo ago",
+      "1 yr ago",
+      "2 yr ago",
+      "in 1 min",
+    ]);
 });

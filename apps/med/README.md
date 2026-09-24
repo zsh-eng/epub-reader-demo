@@ -125,4 +125,4 @@ bun run dev:med /path/to/repository
 
 Open the Vite URL with the `#token=…` fragment printed by the API host.
 
-See the [architecture](ARCHITECTURE.md), [development checks](docs/USAGE.md#development), and [limits and validation reports](docs/USAGE.md#limits-and-evidence).
+See the [architecture](ARCHITECTURE.md), [test design and commands](docs/TESTING.md), and [limits and validation reports](docs/USAGE.md#limits-and-evidence).

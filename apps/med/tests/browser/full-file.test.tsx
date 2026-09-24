@@ -1060,9 +1060,11 @@ test("colon rejects invalid commands and Escape leaves cursor and scroll unchang
   const before = scroller.scrollTop;
   await userEvent.keyboard(":");
   const input = page.getByRole("textbox", { name: "Go to line", exact: true });
-  await input.fill("w");
-  await userEvent.keyboard("{Enter}");
-  await expect.element(input).toHaveAttribute("aria-invalid", "true");
+  for (const command of ["w", "0", "-1", "1.5", "1e2", "2x", "9007199254740992"]) {
+    await input.fill(command);
+    await userEvent.keyboard("{Enter}");
+    await expect.element(input).toHaveAttribute("aria-invalid", "true");
+  }
   await expect.element(pane).toHaveAttribute("data-vim-line", "200");
   await expect.element(pane).toHaveAttribute("data-vim-column", "3");
   await input.fill("12");
@@ -1523,4 +1525,240 @@ test("quote and nested bracket objects copy exact source through the file pane",
   await userEvent.keyboard("2000Gv2a(");
   await userEvent.keyboard("y");
   await expect.poll(() => write.mock.calls[2]?.[0]).toBe(`("value", (${inside}))`);
+});
+
+// Keep edge cases on the file-pane path: key events -> navigation -> rendered
+// selection -> clipboard. Only the external clipboard is replaced.
+test.each([
+  {
+    name: "counted motions retain columns through short lines and stop at file boundaries",
+    text: "abcdef\nx\nabcdef\n",
+    copies: [
+      ["4ljjv", "e"],
+      ["99j99lv", "f"],
+      ["2GV", "x\n"],
+      ["G$kkv", "f"],
+    ],
+  },
+  {
+    name: "grapheme and word motions preserve complete Unicode characters",
+    text: "a🙂e\u0301z\n𝒜𝒞 next",
+    copies: [
+      ["llv", "e\u0301"],
+      ["lllhv", "e\u0301"],
+      ["Gev", "𝒞"],
+      ["Gewbv", "𝒜"],
+      ["Av", "z"],
+    ],
+  },
+  {
+    name: "word motions distinguish punctuation and cross line boundaries",
+    text: "one.two\n  three four",
+    copies: [
+      ["wv", "."],
+      ["wwev", "o"],
+      ["wwwev", "e"],
+      ["wwwbv", "t"],
+    ],
+  },
+  {
+    name: "find and till honor counts and repeat direction",
+    text: "a x b x c x d",
+    copies: [
+      ["2fxv2l", "x c"],
+      ["2fx;v2l", "x d"],
+      ["2fx;,v2l", "x c"],
+      ["tx;v3l", " x c"],
+      ["$Fxv2l", "x d"],
+    ],
+  },
+  {
+    name: "paragraph motions keep whitespace-only lines and support counts",
+    text: "a\n \nb\n\nc\n\nd\n",
+    copies: [
+      ["}v", "\n"],
+      ["}}2{v", "a"],
+      ["V2}", "a\n \nb\n\nc\n\n"],
+    ],
+  },
+  {
+    name: "vertical motions preserve tab display columns across CRLF",
+    text: "\tx\r\nabc\r\n\r\nz\r\n",
+    copies: [
+      ["ljv", "c"],
+      ["ljkv", "x"],
+      ["}V", "\r\n"],
+    ],
+  },
+  {
+    name: "visual reversal and mode switches preserve the selection anchor",
+    text: "a🙂e\u0301\nnext",
+    copies: [
+      ["lvloh", "a🙂e\u0301"],
+      ["lvlG$", "🙂e\u0301\nnext"],
+      ["lvjVv", "🙂e\u0301\nne"],
+      ["GV", "next"],
+    ],
+  },
+  {
+    name: "inner words select punctuation, spaces, WORDs, and full graphemes",
+    text: "one.two  𝒜e\u0301🙂\n☀️ next",
+    copies: [
+      ["3lviw", "."],
+      ["7lviw", "  "],
+      ["9lviw", "𝒜e\u0301"],
+      ["lviW", "one.two"],
+      ["Gviw", "☀️"],
+    ],
+  },
+  {
+    name: "word objects apply counts and use adjacent whitespace",
+    text: "one  two.three\nnext",
+    copies: [
+      ["vaw", "one  "],
+      ["4lvaw", "  two"],
+      ["10lvaW", "  two.three"],
+      ["v2iw", "one  "],
+      ["v3iw", "one  two"],
+      ["v2aw", "one  two"],
+      ["viwiw", "one  "],
+    ],
+  },
+  {
+    name: "paragraph objects preserve CRLF, blank separators, and missing final newline",
+    text: "one\r\ntwo\r\n\r\n\r\nthree\r\nfour",
+    copies: [
+      ["3Gvip", "\r\n\r\n"],
+      ["3Gvap", "\r\n\r\nthree\r\nfour"],
+      ["Gvap", "\r\n\r\nthree\r\nfour"],
+      ["v2ip", "one\r\ntwo\r\n\r\n\r\n"],
+      ["vipip", "one\r\ntwo\r\n\r\n\r\n"],
+      ["v2ap", "one\r\ntwo\r\n\r\n\r\nthree\r\nfour"],
+    ],
+  },
+  {
+    name: "marks retain exact Unicode columns and linewise jumps use first content",
+    text: "  a🙂bc\nother\nlast\n",
+    copies: [
+      ["4lmaG`av", "b"],
+      ["4lmaG'av", "a"],
+    ],
+  },
+  {
+    name: "empty delimiters allow selection to extend to source text",
+    text: 'call(""); ()',
+    copies: [
+      ['5lvi"l', '")'],
+      ["10lvibab", "()"],
+    ],
+  },
+  {
+    name: "unmatched objects keep the current selection",
+    text: "a (unclosed",
+    copies: [["vi(", "a"]],
+  },
+])("Vim file-pane copy: $name", async ({ text, copies }) => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  render(<FullFileView {...props} file={{ ...base, plain: true, text }} vimEnabled />);
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  for (const [sequence, expected] of copies) {
+    await userEvent.keyboard("{Escape}gg0");
+    write.mockClear();
+    // Vitest reserves { and [ for named key syntax.
+    await userEvent.keyboard(sequence!.replaceAll("[", "[[").replaceAll("{", "{{") + "y");
+    await expect.poll(() => write.mock.calls[0]?.[0]).toBe(expected);
+  }
+});
+
+test.each(['"', "'", "`"])(
+  "Vim quote %s preserves escaped delimiters and adjacent spaces",
+  async (quote) => {
+    const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    const content = `a\\${quote}b`;
+    render(
+      <FullFileView
+        {...props}
+        file={{ ...base, plain: true, text: `call(${quote}${content}${quote}  );` }}
+        vimEnabled
+      />,
+    );
+    await expect
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
+      .toBeVisible();
+    await userEvent.keyboard(`7lvi${quote}y`);
+    await expect.poll(() => write.mock.calls[0]?.[0]).toBe(content);
+    await userEvent.keyboard(`gg07lva${quote}y`);
+    await expect.poll(() => write.mock.calls[1]?.[0]).toBe(`${quote}${content}${quote}  `);
+  },
+);
+
+test.each([
+  ["(", ")"],
+  ["[", "]"],
+  ["{", "}"],
+])(
+  "Vim %s%s objects ignore quoted delimiters and expand nested selections",
+  async (open, close) => {
+    const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+    const text = `${open}\r\n  ${open}one "${close}" two${close}\r\n${close}`;
+    render(<FullFileView {...props} file={{ ...base, plain: true, text }} vimEnabled />);
+    await expect
+      .element(page.getByRole("textbox", { name: "File navigation", exact: true }))
+      .toBeVisible();
+    const object = open === "(" ? open : open + open;
+    await userEvent.keyboard(`j4lvi${object}i${object}y`);
+    await expect
+      .poll(() => write.mock.calls[0]?.[0])
+      .toBe(`\r\n  ${open}one "${close}" two${close}\r\n`);
+    await userEvent.keyboard(`gg0j4lv2a${close}y`);
+    await expect.poll(() => write.mock.calls[1]?.[0]).toBe(text);
+  },
+);
+
+test("cancelled Vim prefixes do not affect the next selection", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  render(
+    <FullFileView {...props} file={{ ...base, plain: true, text: "one\n\nlast" }} vimEnabled />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("4g{Escape}jvi{Escape}vixy");
+  await expect.poll(() => write.mock.calls[0]?.[0]).toBe("\n");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+});
+
+test("Vim word search skips partial keywords and wraps in both directions", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, text: "foo\nfoobar\nFOO\nend" }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("*");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "3");
+  await expect.poll(() => searchRanges().map((range) => range.toString())).toEqual(["foo", "FOO"]);
+  await userEvent.keyboard("n");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+  await userEvent.keyboard("N");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "3");
+});
+
+test("Vim half-page keys move within the visible file and return to its start", async () => {
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, text: "line\n".repeat(40) }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("{Control>}d{/Control}");
+  await expect.poll(() => Number(pane.element().getAttribute("data-vim-line"))).toBeGreaterThan(1);
+  await userEvent.keyboard("{Control>}u{/Control}");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "1");
 });

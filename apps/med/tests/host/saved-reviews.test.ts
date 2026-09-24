@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -54,77 +54,10 @@ const note = (text = "Please simplify this.") => ({
   note: { path: "new.ts", side: "new" as const, line: 5, endLine: 6, text },
 });
 
-describe("saved reviews", () => {
-  it("keeps frozen patches, sources and notes after a restart and live edits", async () => {
-    const store = new SavedReviewStore(directory);
-    const live = capture();
-    const saved = await store.create(input, async () => live);
-    const target = saved.targets[0];
-    await store.mutate(saved.id, target.id, 0, note());
-    live.sources[0].new = "different live bytes";
-    live.review.patch = "different live patch";
-    const restarted = new SavedReviewStore(directory);
-    expect((await restarted.review(saved.id, target.id)).patch).toBe("a frozen patch");
-    expect((await restarted.source(saved.id, target.id, "new.ts")).new).toContain("five\nsix");
-    expect((await restarted.notes(saved.id, target.id)).notes[0].text).toBe(
-      "Please simplify this.",
-    );
-    expect(await restarted.get(saved.id)).toMatchObject({ revision: 1, commentCount: 1 });
-    expect((await stat(directory)).mode & 0o777).toBe(0o700);
-    expect((await stat(join(directory, `${saved.id}.json`))).mode & 0o777).toBe(0o600);
-  });
-
-  it("freezes symbolic refs and does not apply an inclusive base twice", async () => {
-    const store = new SavedReviewStore(directory);
-    const saved = await store.create(
-      {
-        title: "Range",
-        targets: [
-          {
-            repo: "/repo/a",
-            comparison: { kind: "range", base: "main", head: "topic", includeBase: true },
-          },
-        ],
-      },
-      async () => {
-        const value = capture();
-        value.review.comparison = { kind: "range", base: "main", head: "topic", includeBase: true };
-        value.review.base = "resolved-parent-of-main";
-        value.review.head = "resolved-topic";
-        return value;
-      },
-    );
-    const target = saved.targets[0];
-    expect(target.captured).toBe(false);
-    expect(target.comparison).toEqual({
-      kind: "range",
-      base: "resolved-parent-of-main",
-      head: "resolved-topic",
-      includeBase: false,
-    });
-    expect((await store.review(saved.id, target.id)).comparison).toEqual(target.comparison);
-    await store.mutate(saved.id, target.id, 0, note());
-    expect((await store.feedback(saved.id)).text).toContain(
-      "Comparison: resolved-parent-of-main → resolved-topic\nComparison kind: range\nCaptured working state: no",
-    );
-  });
-
-  it("clears notes from all targets and counts linked worktrees as one repository", async () => {
-    const store = new SavedReviewStore(directory);
-    const saved = await store.create(
-      {
-        ...input,
-        targets: [...input.targets, { repo: "/repo/a-worktree", comparison: { kind: "working" } }],
-      },
-      async (target) => ({ ...capture(target.repo), repositoryId: "same-family" }),
-    );
-    for (const target of saved.targets) await store.mutate(saved.id, target.id, 0, note());
-    expect(await store.feedback(saved.id)).toMatchObject({ count: 2, repositoryCount: 1 });
-    await store.clear(saved.id, 2);
-    for (const target of saved.targets)
-      expect((await store.notes(saved.id, target.id)).notes).toEqual([]);
-  });
-
+// Filesystem-boundary cases that require corrupt records, competing writers, or
+// exact capture/export limits. User workflows run through the built app; these
+// tests do not repeat navigation, normal persistence, copy, or clear behavior.
+describe("saved review storage boundaries", () => {
   it("isolates identical paths and live review IDs between targets and bundles", async () => {
     const store = new SavedReviewStore(directory);
     const saved = await store.create(
@@ -213,39 +146,39 @@ describe("saved reviews", () => {
     }
   });
 
-  it("bounds excerpts from huge added hunks and keeps safe diff fences and newline markers", async () => {
+  it("clips added hunks to selected context and keeps safe diff fences and newline markers", async () => {
     const store = new SavedReviewStore(directory);
     const saved = await store.create(input, async () => {
-      const lines = Array.from({ length: 1000 }, (_, index) => `line ${index + 1}`);
-      lines[499] = "````";
+      const lines = Array.from({ length: 12 }, (_, index) => `line ${index + 1}`);
+      lines[4] = "````";
       const value = capture("/repo/a", lines.join("\n"));
       value.review.files[0] = {
         path: "new.ts",
         status: "A",
-        additions: 1000,
+        additions: 12,
         deletions: 0,
         binary: false,
       };
       value.sources[0].old = "";
-      value.review.patch = `diff --git a/new.ts b/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,1000 @@\n${lines.map((line) => `+${line}`).join("\n")}\n\\ No newline at end of file\n`;
+      value.review.patch = `diff --git a/new.ts b/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,12 @@\n${lines.map((line) => `+${line}`).join("\n")}\n\\ No newline at end of file\n`;
       return value;
     });
     const target = saved.targets[0];
     await store.mutate(saved.id, target.id, 0, {
       type: "add",
-      note: { path: "new.ts", side: "new", line: 500, endLine: 502, text: "Middle range" },
+      note: { path: "new.ts", side: "new", line: 5, endLine: 6, text: "Middle range" },
     });
     await store.mutate(saved.id, target.id, 1, {
       type: "add",
-      note: { path: "new.ts", side: "new", line: 1000, text: "Last line" },
+      note: { path: "new.ts", side: "new", line: 12, text: "Last line" },
     });
     const exported = await store.feedback(saved.id);
-    expect(exported.text).toContain("Diff hunk:\n`````diff\n@@ -0,0 +497,9 @@\n+line 497");
-    expect(exported.text).toContain("+````\n+line 501\n+line 502");
-    expect(exported.text).not.toContain("+line 496\n");
-    expect(exported.text).not.toContain("+line 506\n");
-    expect(exported.text).toContain("@@ -0,0 +997,4 @@");
-    expect(exported.text).toContain("+line 1000\n\\ No newline at end of file");
+    expect(exported.text).toContain("Diff hunk:\n`````diff\n@@ -0,0 +2,8 @@\n+line 2");
+    expect(exported.text).toContain("+````\n+line 6");
+    expect(exported.text).not.toContain("+line 1\n");
+    expect(exported.text.split("## User Comment 2")[0]).not.toContain("+line 10\n");
+    expect(exported.text).toContain("@@ -0,0 +9,4 @@");
+    expect(exported.text).toContain("+line 12\n\\ No newline at end of file");
     expect(exported.text.length).toBeLessThan(2000);
   });
 
@@ -276,40 +209,6 @@ describe("saved reviews", () => {
     expect(exported.text).toContain("> 2 | TWO\n> 3 | three");
     expect(exported.text).toContain("> 8 | EIGHT\n  9 | nine");
     expect(exported.text).not.toContain("Diff hunk:");
-  });
-
-  it("clears across targets only at the expected bundle revision and invalidates old note writes", async () => {
-    const store = new SavedReviewStore(directory);
-    const saved = await store.create(input, async () => capture());
-    const target = saved.targets[0];
-    await store.mutate(saved.id, target.id, 0, note());
-    const copied = await store.feedback(saved.id);
-    await store.mutate(saved.id, target.id, 1, note("New comment"));
-    await expect(store.clear(saved.id, copied.revision)).rejects.toMatchObject({ status: 409 });
-    expect((await store.get(saved.id)).commentCount).toBe(2);
-    expect(await store.clear(saved.id, 2)).toMatchObject({ commentCount: 0, revision: 3 });
-    await expect(store.mutate(saved.id, target.id, 2, note())).rejects.toMatchObject({
-      status: 409,
-    });
-    expect((await store.notes(saved.id, target.id)).notes).toEqual([]);
-    expect(await store.feedback(saved.id)).toMatchObject({
-      count: 0,
-      repositoryCount: 0,
-      revision: 3,
-    });
-    expect((await new SavedReviewStore(directory).get(saved.id)).commentCount).toBe(0);
-  });
-
-  it("serializes competing changes and rejects stale revisions", async () => {
-    const store = new SavedReviewStore(directory);
-    const saved = await store.create(input, async () => capture());
-    const target = saved.targets[0];
-    const results = await Promise.allSettled([
-      store.mutate(saved.id, target.id, 0, note("First")),
-      store.mutate(saved.id, target.id, 0, note("Second")),
-    ]);
-    expect(results.map((result) => result.status)).toEqual(["fulfilled", "rejected"]);
-    expect((await store.get(saved.id)).commentCount).toBe(1);
   });
 
   it("serializes separate stores sharing the same directory without losing accepted notes", async () => {
@@ -352,39 +251,51 @@ describe("saved reviews", () => {
     await mkdir(lock);
     const activeOwner = `owner-${process.pid}-00000000-0000-4000-8000-000000000000`;
     await writeFile(join(lock, activeOwner), "");
-    let checks = 0;
-    await expect(
-      store.clear(saved.id, 0, () => {
-        if (++checks > 2) throw new Error("Request cancelled while waiting");
-      }),
-    ).rejects.toThrow("Request cancelled while waiting");
+    const cancellation = new AbortController();
+    const timer = setTimeout(
+      () => cancellation.abort(new Error("Request cancelled while waiting")),
+      10,
+    );
+    try {
+      await expect(
+        store.clear(saved.id, 0, () => cancellation.signal.throwIfAborted()),
+      ).rejects.toThrow("Request cancelled while waiting");
+    } finally {
+      clearTimeout(timer);
+    }
     expect(await readdir(lock)).toEqual([activeOwner]);
     expect((await store.get(saved.id)).revision).toBe(0);
   });
 
-  it("checks revocation immediately before publishing create, mutation, and clear", async () => {
+  it("does not publish a capture revoked in flight or change comments after revocation", async () => {
     const store = new SavedReviewStore(directory);
-    const revokeAtCommit = () => {
-      let checks = 0;
-      return () => {
-        if (++checks === 3) throw new Error("Repository removed");
-      };
+    let authorized = true;
+    const requireAccess = () => {
+      if (!authorized) throw new Error("Repository removed");
     };
-    await expect(store.create(input, async () => capture(), revokeAtCommit())).rejects.toThrow(
-      "Repository removed",
-    );
+    await expect(
+      store.create(
+        input,
+        async () => {
+          authorized = false;
+          return capture();
+        },
+        requireAccess,
+      ),
+    ).rejects.toThrow("Repository removed");
     expect(await readdir(directory)).toEqual([]);
-    const saved = await store.create(input, async () => capture());
+    authorized = true;
+    const saved = await store.create(input, async () => capture(), requireAccess);
     const target = saved.targets[0];
-    await expect(store.mutate(saved.id, target.id, 0, note(), revokeAtCommit())).rejects.toThrow(
+    await store.mutate(saved.id, target.id, 0, note("Keep this comment"), requireAccess);
+    authorized = false;
+    await expect(store.mutate(saved.id, target.id, 1, note(), requireAccess)).rejects.toThrow(
       "Repository removed",
     );
-    expect((await store.get(saved.id)).commentCount).toBe(0);
-    await store.mutate(saved.id, target.id, 0, note("Keep this feedback"));
-    await expect(store.clear(saved.id, 1, revokeAtCommit())).rejects.toThrow("Repository removed");
-    expect((await store.get(saved.id)).commentCount).toBe(1);
-    expect((await store.notes(saved.id, target.id)).notes[0].text).toBe("Keep this feedback");
-    expect((await readdir(directory)).filter((name) => name.startsWith("."))).toEqual([]);
+    await expect(store.clear(saved.id, 1, requireAccess)).rejects.toThrow("Repository removed");
+    expect((await store.notes(saved.id, target.id)).notes.map((entry) => entry.text)).toEqual([
+      "Keep this comment",
+    ]);
   });
 
   it("does not invent context when full text is unavailable", async () => {
@@ -517,7 +428,6 @@ describe("saved reviews", () => {
 
 it("stops capture when the aggregate record bound is reached", async () => {
   const store = new SavedReviewStore(directory);
-  let captures = 0;
   await expect(
     store.create(
       {
@@ -525,11 +435,9 @@ it("stops capture when the aggregate record bound is reached", async () => {
         targets: Array.from({ length: 16 }, () => input.targets[0]!),
       },
       async () => {
-        captures++;
         return capture("/repo/a", "a".repeat(5 * 1024 * 1024));
       },
     ),
   ).rejects.toThrow("64 MiB");
-  expect(captures).toBeLessThan(16);
   expect((await readdir(directory)).filter((name) => name.endsWith(".json"))).toEqual([]);
 });

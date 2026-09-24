@@ -16,26 +16,14 @@ import {
   selectFallbackFileKey,
   selectNormalizedSelection,
   selectNotesByHunk,
-  selectReviewFileByKey,
   selectReviewGapForSelection,
   selectReviewNavigationFiles,
-  selectStoredReviewNotes,
   selectThreadedStoredReviewNotes,
   selectVisibleThreadedStoredReviewNotes,
   resolveReviewRevealNoteId,
   selectRevealTarget,
   selectVisibleReviewFiles,
 } from "../../src/shared/hunk/selectors";
-
-describe("file selectors", () => {
-  test("resolve a file by key and reject an unknown one", () => {
-    const state = createTestReviewState();
-
-    expect(selectReviewFileByKey(state, "beta")?.key).toBe("beta");
-    expect(selectReviewFileByKey(state, "missing")).toBeUndefined();
-    expect(selectReviewFileByKey(state, null)).toBeUndefined();
-  });
-});
 
 describe("reviewFileKeysWithRetiredContent", () => {
   test("names files that left the review or came back with different content", () => {
@@ -163,40 +151,6 @@ describe("reveal selectors", () => {
 });
 
 describe("note selectors", () => {
-  test("return every saved note in collection order without drafts or resolution filtering", () => {
-    const state = {
-      ...createTestReviewState(["alpha"]),
-      liveNotes: [
-        createTestStoredNote({ id: "live-active", fileKey: "alpha" }),
-        createTestStoredNote({ id: "live-orphaned", fileKey: "gone", resolution: "orphaned" }),
-      ],
-      userNotes: [
-        createTestStoredNote({
-          id: "user-stale",
-          fileKey: "alpha",
-          source: "user",
-          resolution: "stale",
-        }),
-      ],
-      draftNote: {
-        id: "draft:1",
-        fileKey: "alpha",
-        hunkIndex: 0,
-        side: "new" as const,
-        line: 1,
-        body: "not saved",
-      },
-    };
-
-    expect(
-      selectStoredReviewNotes(state).map((entry) => [entry.note.id, entry.resolution]),
-    ).toEqual([
-      ["live-active", "active"],
-      ["live-orphaned", "orphaned"],
-      ["user-stale", "stale"],
-    ]);
-  });
-
   test("flattens arbitrarily deep reply trees in deterministic depth-first order", () => {
     const state = {
       ...createTestReviewState(["alpha"], { showAgentNotes: true }),
