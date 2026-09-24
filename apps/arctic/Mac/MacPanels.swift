@@ -50,42 +50,6 @@ struct MacReaderPane: View {
           Button("Website") { if !reader.websiteVisible { reader.toggleWebsite() } }
         }.padding(14).background(.bar)
       }
-      if !reader.websiteVisible && reader.ready {
-        HStack(spacing: 16) {
-          Button(workspace.selectedArticle?.saved == true ? "Highlight" : "Save & highlight") {
-            reader.highlight()
-          }
-          .help("Select article text first · ⇧⌘H")
-          Button("Quote in note") {
-            Task {
-              reader.quotedDraft = await reader.selection()
-              workspace.showNotes = true
-            }
-          }
-          if let id = reader.focusedAnnotation {
-            Menu("Colour") {
-              ForEach(HighlightColour.allCases) { colour in
-                Button(colour.name) {
-                  changeAnnotation { try workspace.annotations.recolour(id, colour: colour) }
-                }
-              }
-            }.fixedSize()
-            Button("Remove highlight") {
-              changeAnnotation { try workspace.annotations.removeHighlight(id) }
-              reader.focusedAnnotation = nil
-            }
-          }
-          Spacer()
-          Menu {
-            ForEach([17, 19, 21, 23, 25], id: \.self) { size in
-              Button("\(size) pt") { reader.setFontSize(size) }
-            }
-          } label: {
-            Text("Aa").font(.system(size: 15, design: .serif))
-          }.fixedSize()
-        }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
-          .padding(.horizontal, 22).padding(.vertical, 13).background(.bar)
-      }
       if workspace.showDiagnostics {
         Text(
           "Warm readers \(workspace.readers.count)/3 · hits \(workspace.readers.hits) · misses \(workspace.readers.misses) · last ready \(Int(reader.readyMilliseconds)) ms · loads \(reader.loadCount)"
@@ -96,12 +60,6 @@ struct MacReaderPane: View {
     }
     .onChange(of: workspace.annotations.records) { _, _ in reader.renderAnnotations() }
     .onAppear { reader.onShortcuts = { workspace.showShortcuts = true } }
-  }
-  private func changeAnnotation(_ action: () throws -> Void) {
-    do {
-      try action()
-      reader.renderAnnotations()
-    } catch { workspace.error = error.localizedDescription }
   }
 }
 
@@ -371,8 +329,7 @@ struct MacShortcutsPanel: View {
 }
 
 struct MacStatsPanel: View {
-  @Environment(\.dismiss) private var dismiss
-  @State private var stats: ReadingStats?
+  let stats: ReadingStats
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       HStack {
@@ -380,7 +337,7 @@ struct MacStatsPanel: View {
         Spacer()
         ArcticMark().frame(width: 28, height: 28)
       }
-      if let stats {
+      Group {
         VStack(alignment: .leading, spacing: 20) {
           Text(ReadingStats.duration(stats.weekSeconds)).font(
             .system(size: 44, weight: .bold, design: .rounded))
@@ -404,24 +361,15 @@ struct MacStatsPanel: View {
           Spacer()
           Text("\(stats.visits) visits")
           Spacer()
-          Text("\(stats.activeDays) days")
+          Text("\(stats.activeDays) \(stats.activeDays == 1 ? "day" : "days")")
         }.font(.subheadline)
         Text("Estimated time in saved articles. Idle gaps over 2 minutes are excluded.").font(
           .caption
         ).foregroundStyle(.secondary)
       }
-      HStack {
-        Spacer()
-        Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
-      }
-    }.padding(30).frame(width: 450)
-      .task {
-        while !ReadingSessions.shared.isLoaded {
-          do { try await Task.sleep(for: .milliseconds(30)) } catch { return }
-        }
-        let records = ReadingSessions.shared.snapshot()
-        stats = await Task.detached { ReadingStats(sessions: records) }.value
-      }
+    }.padding(48).frame(maxWidth: 720)
+      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+      .accessibilityIdentifier("reading-stats-page")
   }
 }
 
@@ -459,5 +407,51 @@ struct MacTaggingSettings: View {
           .defaultAction)
       }
     }.padding(28).frame(width: 470)
+  }
+}
+
+/// NSPopover supplies native placement, dismissal and focus. These controls exist
+/// only while a passage is selected, leaving the entire reading area available.
+struct MacSelectionTools: View {
+  let reader: MacReader
+  var body: some View {
+    VStack(spacing: 6) {
+      if !reader.isSaved { Text("Save & highlight").font(.caption).foregroundStyle(.secondary) }
+      HStack(spacing: 10) {
+        ForEach(HighlightColour.allCases) { colour in
+          Button {
+            reader.colourSelection(colour)
+          } label: {
+            Circle().fill(tint(colour)).frame(width: 18, height: 18)
+              .overlay(Circle().strokeBorder(.primary.opacity(0.14)))
+              .padding(4)
+          }.buttonStyle(MacQuietButtonStyle())
+            .help(colour.name).accessibilityLabel("Highlight " + colour.name)
+        }
+        Divider().frame(height: 18)
+        Button {
+          reader.quoteSelection()
+        } label: {
+          Image(systemName: "square.and.pencil").frame(width: 28, height: 28)
+        }.buttonStyle(MacQuietButtonStyle()).help("Quote in note").accessibilityLabel(
+          "Quote in note")
+        if reader.focusedAnnotation != nil {
+          Button {
+            reader.removeFocusedHighlight()
+          } label: {
+            Image(systemName: "eraser").frame(width: 28, height: 28)
+          }.buttonStyle(MacQuietButtonStyle()).help("Remove highlight").accessibilityLabel(
+            "Remove highlight")
+        }
+      }
+    }.padding(10).fixedSize()
+  }
+  private func tint(_ colour: HighlightColour) -> Color {
+    switch colour {
+    case .yellow: .yellow
+    case .sage: .green
+    case .rose: .pink
+    case .blue: .cyan
+    }
   }
 }

@@ -1,0 +1,28 @@
+/* A real text column also bounds native multi-paragraph selection. Media may
+   break out of that column; paragraph wrappers must not span the window. */
+:root { --reader-size: 18px; --reader-leading: 1.6; --reader-padding: 0px; --media-gutter: clamp(12px, calc((100vw - 704px) / 2), 120px); }
+main { width: min(640px, calc(100% - 64px)); max-width: none; padding: 64px 0 80px; }
+header h1 { font: 500 clamp(28px, 3.6vw, 42px)/1.16 -apple-system, sans-serif; letter-spacing: -.035em; margin: 22px 0; text-wrap: balance; }
+header { margin-bottom: 40px; }
+.subtitle { font-size: 18px; line-height: 1.5; }
+#reader-content { width: 100%; }
+#reader-content :is(p, div, section) { max-width: 100%; }
+#reader-content :is(h1,h2,h3,h4) { font-weight: 550; }
+p { margin-bottom: 1.25em; }
+.hero, #reader-content .reader-wide-media, #reader-content img.reader-wide-media {
+  width: calc(100% + 2 * var(--media-gutter)); max-width: none;
+  margin-inline: calc(-1 * var(--media-gutter));
+}
+.hero img, #reader-content .reader-wide-media img { width: 100%; max-height: min(70vh, 720px); object-fit: contain; }
+.hero figcaption, .reader-wide-media figcaption { padding-inline: var(--media-gutter); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) { color-scheme: dark; --background: #171717; --foreground: #cecec4; --muted: #252525; --border: #383838; }
+}
+@media (max-width: 550px) { main { width: calc(100% - 40px); padding-top: 36px; } :root { --media-gutter: 12px; } }
+
+/* WebKit extends its native multi-line selection wash to the containing web
+   surface. Keep native selection/copy, but paint its exact text ranges instead. */
+@supports selector(::highlight(arctic-selection)) {
+  ::selection { background: transparent; }
+  ::highlight(arctic-selection) { background: var(--border); color: inherit; }
+}

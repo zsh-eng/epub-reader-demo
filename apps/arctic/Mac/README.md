@@ -28,8 +28,8 @@ development build, not a notarized distribution.
 - **⇧⌘[ / ⇧⌘]** switch articles; **⌘W** closes an article;
   **⇧⌘T** reopens the last closed article. Open tabs restore on next launch,
   without starting their publisher requests.
-- **⇧⌘S** toggles the sidebar. **⌘L** returns to the library.
-- **⇧⌘N** opens notes beside the article. Text selection supports Highlight
+- **⌘B** toggles the sidebar. **⌘L** returns to the library.
+- **⌥⌘B** opens notes beside the article. Text selection supports Highlight
   (**⇧⌘H**) and Quote in note. New annotations on an unsaved article explicitly
   save it; existing annotations remain separate from library status.
 - **⌘F** opens Find; **⌘R** refreshes Reader from the original URL.
@@ -70,14 +70,14 @@ storage migration should address very large library mutations independently.
 
 ## Library and image work
 
-`NSTableView` reuses visible cells. Filtering uses a cancellable background
+`NSCollectionView` reuses visible grid items. Filtering uses a cancellable background
 snapshot. Viewport notifications do not invalidate the parent SwiftUI view.
-The shared metadata scheduler gets visible rows and two neighbors after a short
+The shared metadata scheduler gets visible items and four neighbors on each side after a short
 scroll-idle interval. Only visible cells and that nearby range request images.
 
-ImageIO decodes at 256 px for 92 × 66 pt rows. The disk cache stores only these
+ImageIO decodes at 640 px for Retina grid cards. The disk cache stores only these
 JPEG/PNG derivatives, not original publisher downloads. It is trimmed to 64 MiB
-in batches; decoded memory has a separate 24 MiB limit. Three workers serve
+in batches; decoded memory has a separate 48 MiB limit. Three workers serve
 visible requests before queued prefetch work. URL requests are shared by leases;
 when the last consumer cancels, queued or active work cancels too. These Mac
 adapters reuse Arctic's tested codec and work limiter.
@@ -162,3 +162,29 @@ Reduce Motion use semantic colours and motion guards but were not visually
 checked in this pass. XCTest UI startup failed before executing a test with
 “Timed out while enabling automation mode” (`/tmp/arctic-chrome-ui.xcresult`).
 This pass does not establish a frame-rate or hitch improvement.
+
+## Desktop refinement — 24 September 2026
+
+The 46 pt title row contains the native window controls, sidebar toggle, article
+tabs and icon actions. Reader has no permanent bottom toolbar. Selection opens
+an AppKit popover with colours and a quote action; existing highlights also offer
+an eraser. Native selection and Copy remain intact, while a CSS Highlight paints
+only the selected text, avoiding WebKit's full-width selection wash.
+
+[Cursor's article](https://cursor.com/blog/git-at-any-scale) informed the quiet,
+narrow text column and restrained heading; [Meta's article](https://research.meta.ai/blog/bringing-your-muse-to-life)
+informed the wider media. Arctic uses its own system fonts: 18 px body, 1.6 line
+height, a 640 px text measure, and up to 120 px media extension on each side.
+The desktop CSS is included before loading cached HTML. Fonts and restored scroll
+position settle before the first reveal; network images do not block readiness.
+
+Reading statistics is a workspace page. Its projection warms at launch and stays
+in memory; opening the page displays that result while refreshing off the main
+actor. The Mac app icon is generated from the existing Arctic iOS artwork.
+
+Validation: Release Mac and iOS Simulator builds, 23 WebView tests, Swift formatting
+and JS lint passed. Native computer-use checks covered grid card activation,
+sidebar shortcuts, the stats page, bounded text selection and the contextual
+popover. Light-mode geometry has browser coverage; the native visual check used
+dark mode. Frame-rate and end-to-end tab-switch latency were not measured. The
+previous Mac XCTest host signing mismatch remains a separate test-runner issue.

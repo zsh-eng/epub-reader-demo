@@ -57,6 +57,8 @@ enum MacLibraryFolder: Hashable {
   var showNotes = false
   var showNotebook = false
   var showStats = false
+  private(set) var stats = ReadingStats(sessions: [])
+  @ObservationIgnored private var statsTask: Task<Void, Never>?
   var showShortcuts = false
   var showOpen = false
   var showSettings = false
@@ -74,6 +76,7 @@ enum MacLibraryFolder: Hashable {
   var selectedArticle: SavedArticle? { selectedURL.flatMap { store.article(for: $0) } }
 
   init() {
+    refreshStats()
     if !TestMode.enabled, let bytes = UserDefaults.standard.data(forKey: tabsKey),
       let restored = try? JSONDecoder().decode([MacArticleTab].self, from: bytes)
     {
@@ -97,9 +100,11 @@ enum MacLibraryFolder: Hashable {
     ReadingSessions.shared.end()
     selectedURL = url
     showNotebook = false
+    showStats = false
     let reader = readers.acquire(url, store: store)
     reader.onLink = { [weak self] url, background in self?.open(url, background: background) }
     reader.onChange = { [weak self] in self?.updateActivity() }
+    reader.onQuote = { [weak self] in self?.showNotes = true }
     reader.onShortcuts = { [weak self] in self?.showShortcuts = true }
     reader.onTitle = { [weak self] title in
       guard let self, let index = tabs.firstIndex(where: { $0.url == url }) else { return }
@@ -121,7 +126,29 @@ enum MacLibraryFolder: Hashable {
     selectedURL = nil
     if let folder { self.folder = folder }
     showNotebook = false
+    showStats = false
     prewarmTask?.cancel()
+  }
+
+  func statistics() {
+    library()
+    showStats = true
+    refreshStats()
+  }
+
+  /// Keep the last complete projection visible. Disk reads and aggregation never
+  /// sit on the navigation path, including the first visit after launch.
+  private func refreshStats() {
+    statsTask?.cancel()
+    statsTask = Task { [weak self] in
+      while !ReadingSessions.shared.isLoaded {
+        do { try await Task.sleep(for: .milliseconds(30)) } catch { return }
+      }
+      let records = ReadingSessions.shared.snapshot()
+      let result = await Task.detached(priority: .utility) { ReadingStats(sessions: records) }.value
+      guard !Task.isCancelled else { return }
+      self?.stats = result
+    }
   }
 
   func close(_ url: URL) {

@@ -9,18 +9,18 @@ import XCTest
   }
   func testOpenSwitchNotesAndShortcuts() throws {
     let app = launch()
-    let table = app.tables["article-list"]
-    XCTAssertTrue(table.waitForExistence(timeout: 10))
-    table.staticTexts["Cached story 00"].click()
+    let grid = app.collectionViews["article-grid"]
+    XCTAssertTrue(grid.waitForExistence(timeout: 10))
+    grid.buttons["Cached story 00"].click()
     XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
     app.typeKey("l", modifierFlags: .command)
-    table.staticTexts["Cached story 01"].click()
+    grid.buttons["Cached story 01"].click()
     app.buttons["tab-cached-0"].click()
     XCTAssertTrue(
       app.webViews.firstMatch.staticTexts.containing(
         NSPredicate(format: "label CONTAINS %@", "Slow down")
       ).firstMatch.waitForExistence(timeout: 10))
-    app.typeKey("n", modifierFlags: [.command, .shift])
+    app.typeKey("b", modifierFlags: [.command, .option])
     let input = app.textFields["note-input"]
     XCTAssertTrue(input.waitForExistence(timeout: 5))
     input.click()
@@ -30,16 +30,16 @@ import XCTest
     app.typeKey("/", modifierFlags: [.command, .shift])
     XCTAssertTrue(app.staticTexts["A little more fluent."].waitForExistence(timeout: 5))
     app.buttons["Done"].click()
-    app.typeKey("s", modifierFlags: [.command, .shift])
-    app.typeKey("s", modifierFlags: [.command, .shift])
+    app.typeKey("b", modifierFlags: [.command])
+    app.typeKey("b", modifierFlags: [.command])
     let screenshot = XCTAttachment(screenshot: app.screenshot())
     screenshot.lifetime = .keepAlways
     add(screenshot)
   }
   func testManyOpenTabsStayResponsive() throws {
     let app = launch()
-    let table = app.tables["article-list"]
-    XCTAssertTrue(table.waitForExistence(timeout: 10))
+    let grid = app.collectionViews["article-grid"]
+    XCTAssertTrue(grid.waitForExistence(timeout: 10))
     for index in 0..<6 {
       app.typeKey("k", modifierFlags: .command)
       let input = app.textFields["open-input"]

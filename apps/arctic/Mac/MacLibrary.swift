@@ -35,7 +35,7 @@ struct MacLibrary: View {
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        MacArticleList(articles: articles, revision: revision, workspace: workspace)
+        MacArticleGrid(articles: articles, revision: revision, workspace: workspace)
       }
       if let summary = workspace.store.importSummary {
         HStack {
@@ -77,32 +77,28 @@ struct MacLibrary: View {
   }
 }
 
-/// AppKit recycles a small number of cells. SwiftUI never builds a view tree for
-/// every article. Viewport callbacks do not publish state to the parent view.
-struct MacArticleList: NSViewRepresentable {
+/// AppKit owns cell reuse and viewport observation. Scrolling does not publish
+/// an offset into SwiftUI or create a view tree for every article.
+struct MacArticleGrid: NSViewRepresentable {
   let articles: [SavedArticle]
   let revision: Int
   let workspace: MacWorkspace
   func makeCoordinator() -> Coordinator { Coordinator(workspace: workspace) }
   func makeNSView(context: Context) -> NSScrollView {
     let scroll = NSScrollView()
-    let table = MacArticleTable()
-    table.headerView = nil
-    table.style = .plain
-    table.backgroundColor = .clear
-    table.rowHeight = 88
-    table.intercellSpacing = NSSize(width: 0, height: 0)
-    table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("article")))
-    table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-    table.delegate = context.coordinator
-    table.dataSource = context.coordinator
-    table.target = context.coordinator
-    table.action = #selector(Coordinator.openRow)
-    table.setAccessibilityIdentifier("article-list")
-    scroll.documentView = table
+    let grid = NSCollectionView()
+    grid.collectionViewLayout = MacGridLayout()
+    grid.backgroundColors = [.clear]
+    grid.isSelectable = true
+    grid.allowsMultipleSelection = false
+    grid.register(MacArticleItem.self, forItemWithIdentifier: .init("article"))
+    grid.delegate = context.coordinator
+    grid.dataSource = context.coordinator
+    grid.setAccessibilityIdentifier("article-grid")
+    scroll.documentView = grid
     scroll.hasVerticalScroller = true
     scroll.drawsBackground = false
-    context.coordinator.table = table
+    context.coordinator.grid = grid
     scroll.contentView.postsBoundsChangedNotifications = true
     context.coordinator.observer = NotificationCenter.default.addObserver(
       forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main
@@ -115,55 +111,59 @@ struct MacArticleList: NSViewRepresentable {
     guard context.coordinator.revision != revision else { return }
     context.coordinator.revision = revision
     context.coordinator.articles = articles
-    context.coordinator.table?.reloadData()
+    context.coordinator.grid?.reloadData()
     context.coordinator.viewport()
   }
   static func dismantleNSView(_ view: NSScrollView, coordinator: Coordinator) {
     coordinator.dispose()
   }
 
-  @MainActor final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+  @MainActor final class Coordinator: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate
+  {
     let workspace: MacWorkspace
     var articles: [SavedArticle] = []
     var revision = -1
-    weak var table: NSTableView?
+    weak var grid: NSCollectionView?
     var observer: NSObjectProtocol?
     private var prefetch: Task<Void, Never>?
     init(workspace: MacWorkspace) { self.workspace = workspace }
-    func numberOfRows(in tableView: NSTableView) -> Int { articles.count }
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
-      -> NSView?
-    {
-      let id = NSUserInterfaceItemIdentifier("article-cell")
-      let cell =
-        tableView.makeView(withIdentifier: id, owner: nil) as? MacArticleCell ?? MacArticleCell()
-      cell.identifier = id
-      cell.configure(articles[row])
-      return cell
+    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int)
+      -> Int
+    { articles.count }
+    func collectionView(
+      _ collectionView: NSCollectionView, itemForRepresentedObjectAt path: IndexPath
+    ) -> NSCollectionViewItem {
+      let item =
+        collectionView.makeItem(withIdentifier: .init("article"), for: path) as! MacArticleItem
+      let article = articles[path.item]
+      item.configure(article)
+      (item.view as? MacArticleCardView)?.open = { [weak workspace] in
+        workspace?.open(
+          article.url, title: article.title,
+          background: NSApp.currentEvent?.modifierFlags.contains(.command) == true)
+      }
+      return item
     }
-    @objc func openRow() {
-      guard let table,
-        articles.indices.contains(table.clickedRow >= 0 ? table.clickedRow : table.selectedRow)
-      else { return }
-      let article = articles[table.clickedRow >= 0 ? table.clickedRow : table.selectedRow]
+    func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt paths: Set<IndexPath>)
+    {
+      guard let path = paths.first, articles.indices.contains(path.item) else { return }
+      let article = articles[path.item]
+      collectionView.deselectItems(at: paths)
       workspace.open(
         article.url, title: article.title,
         background: NSApp.currentEvent?.modifierFlags.contains(.command) == true)
     }
     func viewport() {
       prefetch?.cancel()
-      guard let table, !articles.isEmpty else { return }
-      let visible = table.rows(in: table.visibleRect)
-      guard visible.location != NSNotFound else { return }
-      let lower = max(0, visible.location - 2)
-      let upper = min(articles.count, visible.location + visible.length + 2)
-      guard lower < upper else { return }
-      let nearby = Array(articles[lower..<upper])
+      guard let grid, !articles.isEmpty else { return }
       workspace.store.setLibraryScrolling(true)
-      prefetch = Task { [weak self] in
-        do { try await Task.sleep(for: .milliseconds(140)) } catch { return }
-        guard let self else { return }
+      prefetch = Task { [weak self, weak grid] in
+        do { try await Task.sleep(for: .milliseconds(120)) } catch { return }
+        guard let self, let grid else { return }
         workspace.store.setLibraryScrolling(false)
+        let visible = grid.indexPathsForVisibleItems().map(\.item)
+        guard let first = visible.min(), let last = visible.max() else { return }
+        let nearby = Array(articles[max(0, first - 4)..<min(articles.count, last + 5)])
         workspace.store.prioritizePreviews(nearby.map(\.url))
         for article in nearby {
           guard !Task.isCancelled else { return }
@@ -181,73 +181,108 @@ struct MacArticleList: NSViewRepresentable {
   }
 }
 
-@MainActor final class MacArticleCell: NSTableCellView {
-  private let thumbnail = NSImageView()
-  private let title = NSTextField(wrappingLabelWithString: "")
+/// Adapt columns only when the viewport width changes, not on every scroll tick.
+private final class MacGridLayout: NSCollectionViewFlowLayout {
+  override func prepare() {
+    let available = max(1, (collectionView?.enclosingScrollView?.contentSize.width ?? 760) - 56)
+    let columns = max(1, floor((available + 20) / 240))
+    let width = floor((available - (columns - 1) * 20) / columns)
+    itemSize = NSSize(width: width, height: width * 0.61 + 76)
+    minimumInteritemSpacing = 20
+    minimumLineSpacing = 24
+    sectionInset = NSEdgeInsets(top: 0, left: 28, bottom: 28, right: 28)
+    super.prepare()
+  }
+  override func shouldInvalidateLayout(forBoundsChange newBounds: NSRect) -> Bool {
+    newBounds.width != collectionView?.bounds.width
+  }
+}
+
+@MainActor final class MacArticleItem: NSCollectionViewItem {
+  private let thumbnail = NSView()
+  private let titleLabel = NSTextField(wrappingLabelWithString: "")
   private let detail = NSTextField(labelWithString: "")
   private var imageTask: Task<Void, Never>?
   private var identity: UUID?
-  override init(frame frameRect: NSRect) {
-    super.init(frame: frameRect)
-    thumbnail.imageScaling = .scaleProportionallyUpOrDown
+  override func loadView() {
+    view = MacArticleCardView()
     thumbnail.wantsLayer = true
-    thumbnail.layer?.cornerRadius = 9
+    thumbnail.layer?.contentsGravity = .resizeAspectFill
+    thumbnail.layer?.cornerRadius = 10
     thumbnail.layer?.masksToBounds = true
-    title.font = .systemFont(ofSize: 15, weight: .medium)
-    title.maximumNumberOfLines = 2
-    title.lineBreakMode = .byTruncatingTail
+    thumbnail.layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.08).cgColor
+    titleLabel.font = .systemFont(ofSize: 15, weight: .medium)
+    titleLabel.maximumNumberOfLines = 2
+    titleLabel.lineBreakMode = .byWordWrapping
+    (titleLabel.cell as? NSTextFieldCell)?.truncatesLastVisibleLine = true
+    titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     detail.font = .systemFont(ofSize: 11)
     detail.textColor = .secondaryLabelColor
     detail.lineBreakMode = .byTruncatingTail
-    for view in [thumbnail, title, detail] {
-      view.translatesAutoresizingMaskIntoConstraints = false
-      addSubview(view)
+    for child in [thumbnail, titleLabel, detail] {
+      child.translatesAutoresizingMaskIntoConstraints = false
+      view.addSubview(child)
     }
     NSLayoutConstraint.activate([
-      thumbnail.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 28),
-      thumbnail.centerYAnchor.constraint(equalTo: centerYAnchor),
-      thumbnail.widthAnchor.constraint(equalToConstant: 92),
-      thumbnail.heightAnchor.constraint(equalToConstant: 66),
-      title.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 16),
-      title.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -28),
-      title.topAnchor.constraint(equalTo: topAnchor, constant: 17),
-      detail.leadingAnchor.constraint(equalTo: title.leadingAnchor),
-      detail.trailingAnchor.constraint(equalTo: title.trailingAnchor),
-      detail.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 6),
-      detail.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -10),
+      thumbnail.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      thumbnail.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      thumbnail.topAnchor.constraint(equalTo: view.topAnchor),
+      thumbnail.heightAnchor.constraint(equalTo: thumbnail.widthAnchor, multiplier: 0.61),
+      titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+      titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      titleLabel.topAnchor.constraint(equalTo: thumbnail.bottomAnchor, constant: 10),
+      detail.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+      detail.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+      detail.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 5),
     ])
   }
-  required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
   func configure(_ article: SavedArticle) {
     imageTask?.cancel()
     identity = article.id
-    title.stringValue = article.title
-    detail.stringValue = ([article.url.host ?? ""] + article.tagNames.prefix(2)).joined(
+    titleLabel.stringValue = article.title
+    detail.stringValue = ([article.url.host ?? ""] + article.tagNames.prefix(1)).joined(
       separator: "  ·  ")
-    thumbnail.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
-    thumbnail.contentTintColor = .tertiaryLabelColor
-    setAccessibilityLabel(article.title)
+    thumbnail.layer?.contents = nil
+    view.setAccessibilityLabel(article.title)
     guard let url = article.imageURL else { return }
     imageTask = Task { [weak self] in
       let image = await MacThumbnailCache.shared.image(url)
       guard !Task.isCancelled, let self, identity == article.id, let image else { return }
-      thumbnail.image = NSImage(
-        cgImage: image, size: NSSize(width: image.width, height: image.height))
-      thumbnail.contentTintColor = nil
+      thumbnail.layer?.contents = image
     }
   }
-  override func viewDidMoveToWindow() {
-    if window == nil { imageTask?.cancel() }
+  override func prepareForReuse() {
+    super.prepareForReuse()
+    imageTask?.cancel()
+    identity = nil
+    thumbnail.layer?.contents = nil
   }
 }
 
-/// The Mac list needs only a 256 px derivative. Originals never enter the durable
+/// Labels are display-only. The card owns click and accessibility activation so
+/// a click on its title cannot be swallowed by an NSTextField editor.
+private final class MacArticleCardView: NSView {
+  var open: (() -> Void)?
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    bounds.contains(convert(point, from: superview)) ? self : nil
+  }
+  override func mouseDown(with event: NSEvent) { open?() }
+  override func isAccessibilityElement() -> Bool { true }
+  override func accessibilityRole() -> NSAccessibility.Role? { .button }
+  override func accessibilityChildren() -> [Any]? { [] }
+  override func accessibilityPerformPress() -> Bool {
+    open?()
+    return true
+  }
+}
+
+/// The Retina grid uses a 640 px derivative. Originals never enter the durable
 /// cache. ImageIO decode and disk operations stay outside the main actor.
 actor MacThumbnailCache {
   static let shared = MacThumbnailCache()
   private let memory = NSCache<NSURL, CGImage>()
   private let workers = PreviewImageWorkLimit(limit: 3)
-  private let directory = URL.cachesDirectory.appending(path: "ArcticMacThumbnails")
+  private let directory = URL.cachesDirectory.appending(path: "ArcticMacThumbnails-640")
   private struct Request {
     let id = UUID()
     let task: Task<CGImage?, Never>
@@ -263,7 +298,7 @@ actor MacThumbnailCache {
     return URLSession(configuration: configuration)
   }()
   init() {
-    memory.totalCostLimit = 24 * 1024 * 1024
+    memory.totalCostLimit = 48 * 1024 * 1024
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
   }
   func image(_ url: URL, prefetch: Bool = false) async -> CGImage? {
@@ -285,7 +320,7 @@ actor MacThumbnailCache {
           do {
             try Task.checkCancellation()
             if let bytes = try? Data(contentsOf: path),
-              let image = PreviewImageCodec.thumbnail(bytes, pixels: 256)
+              let image = PreviewImageCodec.thumbnail(bytes, pixels: 640)
             {
               return image
             }
@@ -296,8 +331,8 @@ actor MacThumbnailCache {
               (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) ?? true,
               (try temp.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= 8 * 1024 * 1024,
               let bytes = PreviewImageCodec.displayThumbnail(
-                try Data(contentsOf: temp), pixels: 256),
-              let image = PreviewImageCodec.thumbnail(bytes, pixels: 256)
+                try Data(contentsOf: temp), pixels: 640),
+              let image = PreviewImageCodec.thumbnail(bytes, pixels: 640)
             else { return nil }
             try Task.checkCancellation()
             try bytes.write(to: path, options: .atomic)
@@ -358,16 +393,5 @@ actor MacThumbnailCache {
         total -= size
       } catch { continue }
     }
-  }
-}
-
-/// Return activates the selected row; arrow keys retain normal table navigation.
-private final class MacArticleTable: NSTableView {
-  override func keyDown(with event: NSEvent) {
-    if [36, 76].contains(event.keyCode), selectedRow >= 0, let action {
-      NSApp.sendAction(action, to: target, from: self)
-      return
-    }
-    super.keyDown(with: event)
   }
 }

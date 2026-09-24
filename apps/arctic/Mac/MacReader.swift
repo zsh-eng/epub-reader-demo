@@ -26,7 +26,12 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   var error: String?
   var showFind = false { didSet { onChange?() } }
   var onShortcuts: (() -> Void)?
+  var isSaved: Bool { store.article(for: url)?.saved == true }
   var focusedAnnotation: UUID?
+  var onQuote: (() -> Void)?
+  @ObservationIgnored private var selectionPopover: NSPopover?
+  @ObservationIgnored private var selectedQuote: ReaderQuote?
+  @ObservationIgnored private var selectionTask: Task<Void, Never>?
   var draft = ""
   var quotedDraft: ReaderQuote?
   private(set) var readyMilliseconds = 0.0
@@ -103,7 +108,10 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
           }.value
           guard let self, !Task.isCancelled, token == generation else { return }
           self.html = html
-          readerView.loadHTMLString(html, baseURL: url)
+          let assets = try await MacReaderAssets.shared.load()
+          guard !Task.isCancelled, token == generation else { return }
+          readerView.loadHTMLString(
+            MacReaderAssets.prepare(html, css: assets.desktopCSS), baseURL: url)
         } catch {
           guard let self, !Task.isCancelled, token == generation else { return }
           loading = false
@@ -175,7 +183,8 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         guard !Task.isCancelled, token == generation,
           let article = raw as? [String: String], article["content"] != nil
         else { return }
-        let rendered = MacReaderAssets.document(article, css: assets.css, source: url)
+        let rendered = MacReaderAssets.document(
+          article, css: assets.css + assets.desktopCSS, source: url)
         html = rendered
         onTitle?(article["title"] ?? url.host ?? "Article")
         readerView.loadHTMLString(rendered, baseURL: url)
@@ -207,7 +216,14 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   func receive(_ message: WKScriptMessage) {
     guard !discarded, message.frameInfo.isMainFrame else { return }
     if message.name == "arcticAnnotationTap", let body = message.body as? [String: String] {
+      selectionTask?.cancel()
       focusedAnnotation = body["id"].flatMap(UUID.init(uuidString:))
+      if focusedAnnotation != nil {
+        selectedQuote = nil
+        presentSelection()
+      } else {
+        selectionPopover?.close()
+      }
       return
     }
     if message.name == "arcticReadingActivity" || message.body as? String == "activity" {
@@ -216,6 +232,24 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     }
     if let value = message.body as? [String: String], let position = value["position"] {
       ReaderPosition.save(position, for: url)
+      return
+    }
+    if let body = message.body as? [String: Any] {
+      if body["selection"] as? [String: Double] != nil {
+        selectionTask?.cancel()
+        selectionTask = Task {
+          let quote = await selection()
+          guard !Task.isCancelled, let quote else { return }
+          selectedQuote = quote
+          focusedAnnotation = nil
+          presentSelection()
+        }
+      } else if body["dismissSelection"] as? Bool == true {
+        selectionTask?.cancel()
+        selectedQuote = nil
+        focusedAnnotation = nil
+        selectionPopover?.close()
+      }
       return
     }
     switch message.body as? String {
@@ -231,21 +265,19 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         let assets = try? await MacReaderAssets.shared.load()
         guard !Task.isCancelled, !discarded, let assets else { return }
         _ = try? await readerView.evaluateJavaScript(
-          assets.annotations + "\n" + ReaderPosition.script,
+          assets.annotations + "\n" + ReaderPosition.script + "\n" + assets.selection,
           in: nil, contentWorld: .defaultClient)
-        // Cached iPhone HTML uses the same content schema. Desktop gets wider
-        // gutters and a text measure that does not expand with the window.
-        _ = try? await readerView.callAsyncJavaScript(
-          """
-          const style = document.createElement('style'); style.textContent = css;
-          document.head.append(style);
-          """, arguments: ["css": MacReaderAssets.desktopCSS], in: nil, contentWorld: .defaultClient
-        )
         if let position = ReaderPosition.load(url) {
           _ = try? await readerView.callAsyncJavaScript(
             "arcticPosition.restore(JSON.parse(position), 20)", arguments: ["position": position],
             in: nil, contentWorld: .defaultClient)
         }
+        // Fonts, restored position and the final layout settle behind the
+        // placeholder. Network images are deliberately not part of readiness.
+        _ = try? await readerView.callAsyncJavaScript(
+          "await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+          arguments: [:], in: nil, contentWorld: .defaultClient)
+        guard !Task.isCancelled, !discarded else { return }
         renderedRecords = nil
         ready = true
         loading = false
@@ -264,6 +296,9 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   }
 
   func checkpoint() {
+    selectionTask?.cancel()
+    selectionPopover?.close()
+    selectedQuote = nil
     guard ready else { return }
     let identity = url
     readerView.evaluateJavaScript("arcticPosition.capture(20)", in: nil, in: .defaultClient) {
@@ -296,19 +331,81 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     return try? JSONDecoder().decode(ReaderQuote.self, from: data)
   }
 
-  func highlight() {
+  func highlight(_ colour: HighlightColour = .yellow) {
     Task {
-      guard let quote = await selection() else { return }
+      guard let quote = await currentQuote() else { return }
       do {
         if store.article(for: url)?.saved != true {
           try store.setSaved(true, url: url)
           persistReader()
         }
         let record = try AnnotationStore.shared.highlight(quote, in: url)
+        if colour != .yellow { try AnnotationStore.shared.recolour(record.id, colour: colour) }
         focusedAnnotation = record.id
+        selectionPopover?.close()
+        selectedQuote = nil
+        readerView.evaluateJavaScript(
+          "window.getSelection()?.removeAllRanges()", in: nil, in: .defaultClient
+        ) { _ in }
         renderAnnotations()
         onChange?()
       } catch { self.error = error.localizedDescription }
+    }
+  }
+
+  func currentQuote() async -> ReaderQuote? {
+    if selectionPopover?.isShown == true, let selectedQuote { return selectedQuote }
+    return await selection()
+  }
+
+  private func presentSelection() {
+    guard ready, !websiteVisible, let window = readerView.window, let host = window.contentView
+    else { return }
+    selectionPopover?.close()
+    let popover = NSPopover()
+    popover.behavior = .semitransient
+    popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    popover.contentViewController = NSHostingController(rootView: MacSelectionTools(reader: self))
+    selectionPopover = popover
+    // These controls follow mouse-up or a highlight click. Anchor in AppKit's
+    // window coordinates, avoiding WebKit's flipped/document coordinate spaces.
+    let point = host.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
+    popover.show(
+      relativeTo: NSRect(origin: point, size: NSSize(width: 1, height: 1)),
+      of: host, preferredEdge: .maxY)
+  }
+
+  func colourSelection(_ colour: HighlightColour) {
+    guard let id = focusedAnnotation else {
+      highlight(colour)
+      return
+    }
+    do {
+      try AnnotationStore.shared.recolour(id, colour: colour)
+      renderAnnotations()
+    } catch { self.error = error.localizedDescription }
+    selectionPopover?.close()
+  }
+
+  func removeFocusedHighlight() {
+    guard let id = focusedAnnotation else { return }
+    do {
+      try AnnotationStore.shared.removeHighlight(id)
+      renderAnnotations()
+    } catch { self.error = error.localizedDescription }
+    focusedAnnotation = nil
+    selectionPopover?.close()
+  }
+
+  func quoteSelection() {
+    Task {
+      if let id = focusedAnnotation {
+        quotedDraft = AnnotationStore.shared.annotations(for: url).first { $0.id == id }?.quote
+      } else {
+        quotedDraft = await currentQuote()
+      }
+      selectionPopover?.close()
+      onQuote?()
     }
   }
 
@@ -328,6 +425,8 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
 
   func discard() {
     checkpoint()
+    selectionPopover?.close()
+    onQuote = nil
     discarded = true
     generation = UUID()
     loadTask?.cancel()
@@ -462,6 +561,8 @@ private actor MacReaderAssets {
     let script: String
     let css: String
     let annotations: String
+    let desktopCSS: String
+    let selection: String
   }
   private var cached: Assets?
   func load() throws -> Assets {
@@ -473,17 +574,20 @@ private actor MacReaderAssets {
     let assets = try Assets(
       script: read("reader", "js"),
       css: ReaderFontAsset.allCases.map(\.css).joined() + read("reader", "css"),
-      annotations: read("annotations", "js"))
+      annotations: read("annotations", "js"), desktopCSS: read("reader-mac", "css"),
+      selection: read("reader-selection", "js"))
     cached = assets
     return assets
   }
-  static let desktopCSS = """
-    :root { --reader-size: 19px; --reader-padding: 48px; }
-    main { max-width: 820px; padding-top: 60px; padding-bottom: 100px; }
-    header h1 { font-family: 'EB Garamond', Georgia, serif; font-size: 2.7rem; font-weight: 550; letter-spacing: -.025em; }
-    @media (prefers-color-scheme: dark) { :root:not([data-theme]) { color-scheme: dark; --background: #171717; --foreground: #cecec4; --muted: #252525; --border: #383838; } }
-    @media (max-width: 550px) { :root { --reader-padding: 24px; } main { padding-top: 32px; } }
-    """
+  static func prepare(_ html: String, css: String) -> String {
+    let style = "<style data-arctic-desktop>\(css)</style>"
+    guard let head = html.range(of: "</head>", options: .caseInsensitive) else {
+      return style + html
+    }
+    var prepared = html
+    prepared.insert(contentsOf: style, at: head.lowerBound)
+    return prepared
+  }
   static func document(_ article: [String: String], css: String, source: URL) -> String {
     func escape(_ s: String) -> String {
       s.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
@@ -508,7 +612,7 @@ private actor MacReaderAssets {
 
 struct MacWebSurface: NSViewRepresentable {
   let webView: WKWebView
-  func makeNSView(context: Context) -> NSView { NSView() }
+  func makeNSView(context: Context) -> NSView { MacWebContainer() }
   func updateNSView(_ container: NSView, context: Context) {
     guard webView.superview !== container else { return }
     for view in container.subviews { view.removeFromSuperview() }
@@ -526,4 +630,8 @@ struct MacWebSurface: NSViewRepresentable {
 
 extension ArticleStore {
   func article(for url: URL) -> SavedArticle? { articles.first { $0.url == url } }
+}
+
+private final class MacWebContainer: NSView {
+  override var isFlipped: Bool { true }
 }

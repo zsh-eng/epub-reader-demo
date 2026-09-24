@@ -65,7 +65,7 @@ struct MacNavigationSidebar: View {
             workspace.library()
             workspace.showNotebook = true
           }
-          row("Reading stats") { workspace.showStats = true }
+          row("Reading stats", selected: workspace.showStats) { workspace.statistics() }
           folderRow(.history)
           folderRow(.archive)
         }.padding(.vertical, 12)
@@ -94,7 +94,7 @@ struct MacNavigationSidebar: View {
   private func folderRow(_ folder: MacLibraryFolder) -> some View {
     row(
       folder.title,
-      selected: workspace.selectedURL == nil && !workspace.showNotebook
+      selected: workspace.selectedURL == nil && !workspace.showNotebook && !workspace.showStats
         && workspace.folder == folder
     ) {
       workspace.library(folder)
@@ -120,7 +120,7 @@ struct MacArticleTabStrip: View {
       Button {
         workspace.library()
       } label: {
-        Text("Library").padding(.horizontal, 12).frame(height: 30)
+        Image(systemName: "square.grid.2x2").frame(width: 30, height: 30)
       }.buttonStyle(MacQuietButtonStyle(selected: workspace.selectedURL == nil))
         .help("Library · ⌘L").accessibilityLabel("Show library")
       ScrollViewReader { proxy in
@@ -131,18 +131,20 @@ struct MacArticleTabStrip: View {
             }
           }
         }.scrollIndicators(.hidden)
+          .frame(maxWidth: CGFloat(max(1, workspace.tabs.count)) * 189)
           .onChange(of: workspace.selectedURL) { _, url in
             if let url { proxy.scrollTo(url) }
           }
           .onAppear { if let url = workspace.selectedURL { proxy.scrollTo(url) } }
       }
+      Spacer(minLength: 0)
       Button {
         workspace.showOpen = true
       } label: {
         Image(systemName: "plus").font(.system(size: 12)).frame(width: 30, height: 30)
       }.buttonStyle(MacQuietButtonStyle()).help("Open article · ⌘K")
         .accessibilityLabel("New article tab")
-    }.font(.system(size: 12)).padding(.horizontal, 12).frame(height: 46)
+    }.font(.system(size: 12)).padding(.horizontal, 4).frame(height: 46)
   }
 }
 
@@ -204,5 +206,15 @@ struct MacPanelReveal: ViewModifier {
       .onAppear {
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) { appeared = true }
       }
+  }
+}
+
+/// Drag only the unoccupied title row. Buttons and tabs remain normal controls.
+struct MacWindowDragArea: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSView { DragView() }
+  func updateNSView(_ view: NSView, context: Context) {}
+  private final class DragView: NSView {
+    override var mouseDownCanMoveWindow: Bool { true }
+    override func mouseDown(with event: NSEvent) { window?.performDrag(with: event) }
   }
 }

@@ -11,7 +11,7 @@ import SwiftUI
         .onDisappear { workspace.shutDown() }
     }
     .defaultSize(width: 1240, height: 840)
-    .windowToolbarStyle(.unifiedCompact)
+    .windowStyle(.hiddenTitleBar)
     .commands { MacCommands(workspace: workspace) }
   }
 }
@@ -44,8 +44,8 @@ enum MacShortcut: String, CaseIterable, Identifiable {
     switch self {
     case .open: "k"
     case .library: "l"
-    case .sidebar: "s"
-    case .notes: "n"
+    case .sidebar: "b"
+    case .notes: "b"
     case .next: "]"
     case .previous: "["
     case .close: "w"
@@ -60,12 +60,14 @@ enum MacShortcut: String, CaseIterable, Identifiable {
     }
   }
   var modifiers: EventModifiers {
-    [.sidebar, .notes, .next, .previous, .reopen, .highlight, .shortcuts, .importList].contains(
+    if self == .notes { return [.command, .option] }
+    return [.next, .previous, .reopen, .highlight, .shortcuts, .importList].contains(
       self)
       ? [.command, .shift] : .command
   }
   var keys: String {
-    (modifiers.contains(.shift) ? "⇧" : "") + "⌘" + String(key.character).uppercased()
+    (modifiers.contains(.option) ? "⌥" : "") + (modifiers.contains(.shift) ? "⇧" : "") + "⌘"
+      + String(key.character).uppercased()
   }
   @MainActor func perform(_ w: MacWorkspace) {
     switch self {
@@ -127,35 +129,51 @@ struct MacWorkspaceView: View {
   @Bindable var workspace: MacWorkspace
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.scenePhase) private var scenePhase
-  @State private var visibility: NavigationSplitViewVisibility = .all
   @State private var keyMonitor: Any?
 
   private var layout: some View {
-    NavigationSplitView(columnVisibility: $visibility) {
-      MacNavigationSidebar(workspace: workspace)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 232, max: 320)
-    } detail: {
-      VStack(spacing: 0) {
+    VStack(spacing: 0) {
+      HStack(spacing: 4) {
+        // Native traffic lights remain owned by NSWindow. This space keeps all
+        // article tabs on the same row without replacing system window controls.
+        Color.clear.frame(width: 78).accessibilityHidden(true)
+        Button {
+          workspace.sidebarVisible.toggle()
+        } label: {
+          Image(systemName: "sidebar.left").frame(width: 30, height: 30)
+        }.buttonStyle(MacQuietButtonStyle()).help("Toggle sidebar · ⌘B")
+          .accessibilityLabel("Toggle sidebar")
         MacArticleTabStrip(workspace: workspace)
-        Divider().opacity(0.5)
-        if let reader = workspace.selectedReader {
-          HStack(spacing: 0) {
-            MacReaderPane(reader: reader, workspace: workspace)
-            if workspace.showNotes {
-              Divider().opacity(0.5)
-              MacNotesPane(workspace: workspace, reader: reader).frame(width: 300)
-            }
-          }
-        } else if workspace.showNotebook {
-          MacNotebook(workspace: workspace)
-        } else {
-          MacLibrary(workspace: workspace)
+        workspaceControls
+      }.frame(height: 46).padding(.trailing, 10)
+        .background(MacWindowDragArea())
+      Divider().opacity(0.4)
+      HStack(spacing: 0) {
+        if workspace.sidebarVisible {
+          MacNavigationSidebar(workspace: workspace).frame(width: 216)
+          Divider().opacity(0.4)
         }
+        Group {
+          if let reader = workspace.selectedReader {
+            HStack(spacing: 0) {
+              MacReaderPane(reader: reader, workspace: workspace)
+              if workspace.showNotes {
+                Divider().opacity(0.4)
+                MacNotesPane(workspace: workspace, reader: reader).frame(width: 300)
+              }
+            }
+          } else if workspace.showNotebook {
+            MacNotebook(workspace: workspace)
+          } else if workspace.showStats {
+            MacStatsPanel(stats: workspace.stats)
+          } else {
+            MacLibrary(workspace: workspace)
+          }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
       }
-      .background(Color(nsColor: .textBackgroundColor))
-      .toolbar { workspaceToolbar }
     }
-    .navigationTitle("")
+    .background(Color(nsColor: .textBackgroundColor))
+    .ignoresSafeArea(.container, edges: .top)
   }
 
   private var blocksReading: Bool {
@@ -165,12 +183,6 @@ struct MacWorkspaceView: View {
 
   private var observedLayout: some View {
     layout
-      .onChange(of: workspace.sidebarVisible) { _, visible in
-        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
-          visibility = visible ? .all : .detailOnly
-        }
-      }
-      .onChange(of: visibility) { _, value in workspace.sidebarVisible = value != .detailOnly }
       .onChange(of: scenePhase) { _, phase in workspace.windowActive = phase == .active }
       .onChange(of: blocksReading) { workspace.updateActivity() }
       .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification))
@@ -181,7 +193,6 @@ struct MacWorkspaceView: View {
     observedLayout
       .sheet(isPresented: $workspace.showOpen) { MacOpenPanel(workspace: workspace) }
       .sheet(isPresented: $workspace.showShortcuts) { MacShortcutsPanel() }
-      .sheet(isPresented: $workspace.showStats) { MacStatsPanel() }
       .sheet(isPresented: $workspace.showSettings) { MacTaggingSettings(workspace: workspace) }
       .alert(
         "Arctic",
@@ -220,14 +231,32 @@ struct MacWorkspaceView: View {
       .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
   }
 
-  @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {
-
-    ToolbarItemGroup(placement: .primaryAction) {
+  @ViewBuilder private var workspaceControls: some View {
+    HStack(spacing: 4) {
       if let reader = workspace.selectedReader {
-        Button(reader.websiteVisible ? "Reader" : "Website") { reader.toggleWebsite() }
+        Button {
+          reader.toggleWebsite()
+        } label: {
+          Image(systemName: reader.websiteVisible ? "doc.text" : "globe").frame(
+            width: 30, height: 30)
+        }.buttonStyle(MacQuietButtonStyle())
+          .accessibilityLabel(reader.websiteVisible ? "Show Reader" : "Show website")
           .help(reader.websiteVisible ? "Show Reader" : "Show website")
-        Button("Notes") { workspace.showNotes.toggle() }
-          .help("Notes · ⇧⌘N").accessibilityLabel("Toggle notes")
+        Button {
+          workspace.showNotes.toggle()
+        } label: {
+          Image(systemName: "sidebar.right").frame(width: 30, height: 30)
+        }.buttonStyle(MacQuietButtonStyle(selected: workspace.showNotes))
+          .help("Notes · ⌥⌘B").accessibilityLabel("Toggle notes")
+        Menu {
+          ForEach([16, 18, 20, 22, 24], id: \.self) { size in
+            Button("\(size) pt") { reader.setFontSize(size) }
+          }
+        } label: {
+          Image(systemName: "textformat.size").frame(width: 26, height: 30)
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .help("Text size").accessibilityLabel("Text size")
         Menu {
           Button(workspace.selectedArticle?.saved == true ? "Saved" : "Save article") {
             workspace.saveCurrent()
@@ -255,7 +284,8 @@ struct MacWorkspaceView: View {
           Button("Reader diagnostics") { workspace.showDiagnostics.toggle() }
         } label: {
           Image(systemName: "ellipsis")
-        }.accessibilityLabel("Article options")
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+          .frame(width: 26).help("Article options").accessibilityLabel("Article options")
       }
     }
 
