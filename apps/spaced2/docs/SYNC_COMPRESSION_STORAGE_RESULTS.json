@@ -1,0 +1,255 @@
+{
+  "runtime": "v25.3.0",
+  "records": 97266,
+  "rawValueBytes": 43852891,
+  "loadStart": [
+    7.138671875,
+    7.1240234375,
+    6.41943359375
+  ],
+  "cases": [
+    {
+      "name": "plain",
+      "encodeMs": 25.74295900000004,
+      "storedValueBytes": 43852891,
+      "runs": [
+        {
+          "repetition": 0,
+          "writeMs": 3144.748708,
+          "readMs": 137.1987429999972,
+          "decodeMs": 8.034290999994482,
+          "parseMs": 118.8341259999761,
+          "readDecodeParseMs": 265.71841700000004,
+          "databaseBytes": 84353024,
+          "verified": true,
+          "load": [
+            7.12744140625,
+            7.12158203125,
+            6.42236328125
+          ]
+        },
+        {
+          "repetition": 1,
+          "writeMs": 3072.2350000000006,
+          "readMs": 159.72091299997555,
+          "decodeMs": 10.873760999915248,
+          "parseMs": 119.96676899997692,
+          "readDecodeParseMs": 292.0236670000013,
+          "databaseBytes": 84353024,
+          "verified": true,
+          "load": [
+            7.38818359375,
+            7.19677734375,
+            6.4814453125
+          ]
+        },
+        {
+          "repetition": 2,
+          "writeMs": 2922.837292000004,
+          "readMs": 147.18162799999118,
+          "decodeMs": 8.082919999971637,
+          "parseMs": 106.2590429999982,
+          "readDecodeParseMs": 263.45108400000026,
+          "databaseBytes": 84353024,
+          "verified": true,
+          "load": [
+            7.46923828125,
+            7.22216796875,
+            6.49853515625
+          ]
+        }
+      ],
+      "jsonWireBytes": 75151044,
+      "httpGzipMs": 840.5059579999943,
+      "httpGzipBytes": 9202899
+    },
+    {
+      "name": "gzip1",
+      "encodeMs": 2008.571,
+      "storedValueBytes": 28774103,
+      "runs": [
+        {
+          "repetition": 0,
+          "writeMs": 3621.53125,
+          "readMs": 271.39437099998395,
+          "decodeMs": 950.260415999981,
+          "parseMs": 117.2643279999993,
+          "readDecodeParseMs": 1341.4049999999988,
+          "databaseBytes": 69181440,
+          "verified": true,
+          "load": [
+            7.27734375,
+            7.15234375,
+            6.43701171875
+          ]
+        },
+        {
+          "repetition": 1,
+          "writeMs": 3907.5751249999994,
+          "readMs": 220.79120700001295,
+          "decodeMs": 1088.6715860000186,
+          "parseMs": 110.579832000014,
+          "readDecodeParseMs": 1422.4072919999999,
+          "databaseBytes": 69181440,
+          "verified": true,
+          "load": [
+            8.03662109375,
+            7.3095703125,
+            6.50830078125
+          ]
+        },
+        {
+          "repetition": 2,
+          "writeMs": 3924.195832999998,
+          "readMs": 171.08924000000843,
+          "decodeMs": 1166.5103340000642,
+          "parseMs": 109.5233350000126,
+          "readDecodeParseMs": 1449.5105419999963,
+          "databaseBytes": 69181440,
+          "verified": true,
+          "load": [
+            7.19140625,
+            7.16845703125,
+            6.48388671875
+          ]
+        }
+      ],
+      "jsonWireBytes": 64278965,
+      "httpGzipMs": 1364.6960830000025,
+      "httpGzipBytes": 30424921
+    },
+    {
+      "name": "gzip6",
+      "encodeMs": 2137.56325,
+      "storedValueBytes": 28681203,
+      "runs": [
+        {
+          "repetition": 0,
+          "writeMs": 3769.106834000002,
+          "readMs": 483.59170600001016,
+          "decodeMs": 1133.9064229999894,
+          "parseMs": 128.1331770000179,
+          "readDecodeParseMs": 1747.8375830000004,
+          "databaseBytes": 69160960,
+          "verified": true,
+          "load": [
+            6.779296875,
+            7.04833984375,
+            6.408203125
+          ]
+        },
+        {
+          "repetition": 1,
+          "writeMs": 3793.6589160000003,
+          "readMs": 341.98520599999756,
+          "decodeMs": 848.1205060000502,
+          "parseMs": 111.74350200001936,
+          "readDecodeParseMs": 1304.0154170000023,
+          "databaseBytes": 69160960,
+          "verified": true,
+          "load": [
+            7.712890625,
+            7.25439453125,
+            6.4931640625
+          ]
+        },
+        {
+          "repetition": 2,
+          "writeMs": 3850.496583,
+          "readMs": 217.69471100002556,
+          "decodeMs": 951.6158389999473,
+          "parseMs": 107.23670999990281,
+          "readDecodeParseMs": 1278.7369160000017,
+          "databaseBytes": 69160960,
+          "verified": true,
+          "load": [
+            7.59716796875,
+            7.2431640625,
+            6.501953125
+          ]
+        }
+      ],
+      "jsonWireBytes": 64154041,
+      "httpGzipMs": 1346.0650409999944,
+      "httpGzipBytes": 30138490
+    },
+    {
+      "name": "zstd3",
+      "encodeMs": 1967.202292,
+      "storedValueBytes": 28440133,
+      "runs": [
+        {
+          "repetition": 0,
+          "writeMs": 3888.6145000000033,
+          "readMs": 340.10517099998106,
+          "decodeMs": 1040.8355399999928,
+          "parseMs": 124.64837699999043,
+          "readDecodeParseMs": 1508.0153329999994,
+          "databaseBytes": 68755456,
+          "verified": true,
+          "load": [
+            7.517578125,
+            7.19677734375,
+            6.46435546875
+          ]
+        },
+        {
+          "repetition": 1,
+          "writeMs": 4368.969749999997,
+          "readMs": 192.56984200002626,
+          "decodeMs": 1150.944078000015,
+          "parseMs": 111.92312199999287,
+          "readDecodeParseMs": 1457.877124999999,
+          "databaseBytes": 68755456,
+          "verified": true,
+          "load": [
+            7.33544921875,
+            7.18359375,
+            6.47265625
+          ]
+        },
+        {
+          "repetition": 2,
+          "writeMs": 3796.4084999999977,
+          "readMs": 326.1547000000137,
+          "decodeMs": 969.9284189999453,
+          "parseMs": 112.78486700000212,
+          "readDecodeParseMs": 1411.4651249999952,
+          "databaseBytes": 68755456,
+          "verified": true,
+          "load": [
+            7.46923828125,
+            7.22216796875,
+            6.49853515625
+          ]
+        }
+      ],
+      "jsonWireBytes": 63832597,
+      "httpGzipMs": 1259.0678330000082,
+      "httpGzipBytes": 27999066
+    }
+  ],
+  "pageCache": [
+    {
+      "codec": "gzip6",
+      "pages": 195,
+      "bytes": 9296985,
+      "encodeMs": 903.1956670000072,
+      "decodeParseMs": 346.76058300001023,
+      "verified": true
+    },
+    {
+      "codec": "zstd3",
+      "pages": 195,
+      "bytes": 8430486,
+      "encodeMs": 361.10199999999895,
+      "decodeParseMs": 254.2508749999979,
+      "verified": true
+    }
+  ],
+  "loadEnd": [
+    7.00146484375,
+    7.12939453125,
+    6.47802734375
+  ]
+}

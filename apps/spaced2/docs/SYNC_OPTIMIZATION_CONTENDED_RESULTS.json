@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "records": 97266,
+    "head": 99810,
+    "zod": "4.6.5",
+    "decoder": "single discriminated compiled",
+    "loadStart": [
+      7.20166015625,
+      12.21337890625,
+      13.22021484375
+    ]
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "plannedRuns": 18,
+  "status": "interrupted_due_to_external_load",
+  "results": [
+    {
+      "mode": "fixed-500",
+      "repeat": 0,
+      "totalMs": 33361.299999952316,
+      "prepareMs": 4005.799999833107,
+      "writeMs": 28605.099998116493,
+      "maxPrepareMs": 778.1999999284744,
+      "maxWriteMs": 2020.7000000476837,
+      "requests": 7,
+      "writes": 202,
+      "minWriteRecords": 443,
+      "maxWriteRecords": 500,
+      "peakQueueRecords": 500,
+      "peakQueueJsonBytes": 412013,
+      "outboxChecks": 0,
+      "outboxGets": 97266,
+      "verified": true,
+      "host": {
+        "load": [
+          9.0615234375,
+          12.02099609375,
+          13.09716796875
+        ],
+        "at": "2026-09-19T12:54:23.624Z"
+      }
+    }
+  ],
+  "host": {
+    "load": [
+      9.0615234375,
+      12.02099609375,
+      13.09716796875
+    ],
+    "at": "2026-09-19T12:54:23.624Z"
+  },
+  "note": "Load peaked above115 with concurrent Swift builds; browser control detached during second case. Only completed verified samples retained."
+}

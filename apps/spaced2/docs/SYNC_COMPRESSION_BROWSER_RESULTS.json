@@ -1,0 +1,69 @@
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "results": [
+    {
+      "mode": "plain",
+      "repeat": 0,
+      "totalMs": 22026.700000047684,
+      "decompressMs": 17.199999928474426,
+      "prepareMs": 3442.999999165535,
+      "writeMs": 16089.799998760223,
+      "records": 97266,
+      "verified": true
+    },
+    {
+      "mode": "gzip6",
+      "repeat": 0,
+      "totalMs": 45104.90000009537,
+      "decompressMs": 17184.60000038147,
+      "prepareMs": 4545.699999809265,
+      "writeMs": 22348.499999165535,
+      "records": 97266,
+      "verified": true
+    },
+    {
+      "mode": "zstd3",
+      "repeat": 0,
+      "totalMs": 47075.200000047684,
+      "decompressMs": 18071.399999260902,
+      "prepareMs": 4010.500000476837,
+      "writeMs": 24163.000001072884,
+      "records": 97266,
+      "verified": true
+    },
+    {
+      "mode": "gzip6",
+      "repeat": 1,
+      "totalMs": 47575.10000002384,
+      "decompressMs": 16043.39999961853,
+      "prepareMs": 4001.0000001192093,
+      "writeMs": 27055.39999985695,
+      "records": 97266,
+      "verified": true
+    },
+    {
+      "mode": "zstd3",
+      "repeat": 1,
+      "totalMs": 41543.60000002384,
+      "decompressMs": 15075.699998021126,
+      "prepareMs": 4220.39999961853,
+      "writeMs": 21735.60000181198,
+      "records": 97266,
+      "verified": true
+    },
+    {
+      "mode": "plain",
+      "repeat": 1,
+      "totalMs": 21857.399999976158,
+      "decompressMs": 5.3000006675720215,
+      "prepareMs": 3194.3999993801117,
+      "writeMs": 16449.79999923706,
+      "records": 97266,
+      "verified": true
+    }
+  ],
+  "experimentStatus": "stopped_after_two_complete_rounds",
+  "plannedRuns": 9,
+  "completedRuns": 6,
+  "stopReason": "Host one-minute load rose to 36.24 and browser control detached; unfinished third-round data excluded because no completed verified result was saved."
+}

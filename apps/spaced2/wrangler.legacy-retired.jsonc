@@ -1,0 +1,33 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spaced-backend",
+  "main": "server/legacy-retired.ts",
+  "compatibility_date": "2025-01-21",
+  "observability": {
+    "enabled": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "D1",
+      "database_name": "spaced-backend",
+      "database_id": "611d4308-28af-437f-b5e8-ad12c77c209a",
+      "migrations_dir": "drizzle/",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "bucket_name": "spaced2-files-bucket",
+      "binding": "FILES_BUCKET",
+    },
+  ],
+  "vars": {
+    "WORKER_ENV": "production",
+    "FRONTEND_ORIGIN": "https://spaced2.zsheng.app",
+  },
+  "routes": [
+    {
+      "pattern": "api.spaced2.zsheng.app",
+      "custom_domain": true,
+    },
+  ],
+}
