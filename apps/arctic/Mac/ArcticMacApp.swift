@@ -66,14 +66,16 @@ enum MacShortcut: String, CaseIterable, Identifiable {
       ? [.command, .shift] : .command
   }
   var keys: String {
-    (modifiers.contains(.option) ? "⌥" : "") + (modifiers.contains(.shift) ? "⇧" : "") + "⌘"
+    if self == .next { return "⌃⇥ / ⇧⌘]" }
+    if self == .previous { return "⌃⇧⇥ / ⇧⌘[" }
+    return (modifiers.contains(.option) ? "⌥" : "") + (modifiers.contains(.shift) ? "⇧" : "") + "⌘"
       + String(key.character).uppercased()
   }
   @MainActor func perform(_ w: MacWorkspace) {
     switch self {
     case .open: w.showOpen = true
     case .library: w.library()
-    case .sidebar: w.sidebarVisible.toggle()
+    case .sidebar: w.toggleSidebar(animated: false)
     case .notes: w.showNotes.toggle()
     case .next: w.cycle(1)
     case .previous: w.cycle(-1)
@@ -130,6 +132,7 @@ struct MacWorkspaceView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.scenePhase) private var scenePhase
   @State private var keyMonitor: Any?
+  @State private var showAppearance = false
 
   private var layout: some View {
     VStack(spacing: 0) {
@@ -138,7 +141,7 @@ struct MacWorkspaceView: View {
         // article tabs on the same row without replacing system window controls.
         Color.clear.frame(width: 78).accessibilityHidden(true)
         Button {
-          workspace.sidebarVisible.toggle()
+          workspace.toggleSidebar(animated: true)
         } label: {
           Image(systemName: "sidebar.left").frame(width: 30, height: 30)
         }.buttonStyle(MacQuietButtonStyle()).help("Toggle sidebar · ⌘B")
@@ -148,11 +151,7 @@ struct MacWorkspaceView: View {
       }.frame(height: 46).padding(.trailing, 10)
         .background(MacWindowDragArea())
       Divider().opacity(0.4)
-      HStack(spacing: 0) {
-        if workspace.sidebarVisible {
-          MacNavigationSidebar(workspace: workspace).frame(width: 216)
-          Divider().opacity(0.4)
-        }
+      ZStack(alignment: .leading) {
         Group {
           if let reader = workspace.selectedReader {
             HStack(spacing: 0) {
@@ -170,7 +169,21 @@ struct MacWorkspaceView: View {
             MacLibrary(workspace: workspace)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-      }
+          .padding(.leading, workspace.sidebarVisible ? 217 : 0)
+        // Commit the document width once. Only the overlaid rail animates;
+        // WebKit and the collection layout do not resize on every frame.
+        MacNavigationSidebar(workspace: workspace).frame(width: 216)
+          .frame(maxHeight: .infinity).background(MacMaterial())
+          .overlay(alignment: .trailing) { Divider().opacity(0.3) }
+          .offset(x: workspace.sidebarVisible ? 0 : -217)
+          .opacity(workspace.sidebarVisible ? 1 : 0)
+          .allowsHitTesting(workspace.sidebarVisible)
+          .accessibilityHidden(!workspace.sidebarVisible)
+          .animation(
+            reduceMotion || !workspace.animateSidebar
+              ? nil : .timingCurve(0.32, 0.72, 0, 1, duration: 0.24),
+            value: workspace.sidebarVisible)
+      }.clipped()
     }
     .background(Color(nsColor: .textBackgroundColor))
     .ignoresSafeArea(.container, edges: .top)
@@ -248,15 +261,13 @@ struct MacWorkspaceView: View {
           Image(systemName: "sidebar.right").frame(width: 30, height: 30)
         }.buttonStyle(MacQuietButtonStyle(selected: workspace.showNotes))
           .help("Notes · ⌥⌘B").accessibilityLabel("Toggle notes")
-        Menu {
-          ForEach([16, 18, 20, 22, 24], id: \.self) { size in
-            Button("\(size) pt") { reader.setFontSize(size) }
-          }
+        Button {
+          showAppearance.toggle()
         } label: {
-          Image(systemName: "textformat.size").frame(width: 26, height: 30)
-        }
-        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-        .help("Text size").accessibilityLabel("Text size")
+          Image(systemName: "textformat.size").frame(width: 30, height: 30)
+        }.buttonStyle(MacQuietButtonStyle(selected: showAppearance))
+          .help("Reading appearance").accessibilityLabel("Reading appearance")
+          .popover(isPresented: $showAppearance) { MacAppearancePanel() }
         Menu {
           Button(workspace.selectedArticle?.saved == true ? "Saved" : "Save article") {
             workspace.saveCurrent()
@@ -297,6 +308,13 @@ struct MacWorkspaceView: View {
       // macOS reserves Command-? for Help search. Handle our documented
       // shortcut before menu dispatch, including when a text field has focus.
       let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      if event.keyCode == 48, modifiers.contains(.control),
+        !modifiers.contains(.command), !modifiers.contains(.option),
+        !workspace.showOpen, !workspace.showSettings, !workspace.showShortcuts
+      {
+        workspace.cycle(modifiers.contains(.shift) ? -1 : 1)
+        return nil
+      }
       if modifiers.contains([.command, .shift]),
         !modifiers.contains(.option), !modifiers.contains(.control),
         ["/", "?"].contains(event.charactersIgnoringModifiers ?? "")

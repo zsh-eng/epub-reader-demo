@@ -51,6 +51,13 @@ struct MacReaderPane: View {
         }.padding(14).background(.bar)
       }
       if workspace.showDiagnostics {
+        HStack {
+          Text(reader.measuredFPS.map { "Web rAF \($0) fps" } ?? "Web rAF —")
+          Button("Measure") { reader.measureRefresh() }
+          Text(
+            reader.highRefreshAvailable
+              ? "High-refresh flag available" : "High-refresh flag unavailable")
+        }.font(.caption).padding(.top, 6)
         Text(
           "Warm readers \(workspace.readers.count)/3 · hits \(workspace.readers.hits) · misses \(workspace.readers.misses) · last ready \(Int(reader.readyMilliseconds)) ms · loads \(reader.loadCount)"
         )
@@ -108,15 +115,22 @@ struct MacNotesPane: View {
           }
         }
         HStack(alignment: .bottom) {
-          TextField("Your thought…", text: $reader.draft, axis: .vertical)
-            .lineLimit(2...7).textFieldStyle(.plain).accessibilityIdentifier("note-input")
-          if !reader.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Button(action: send) { Image(systemName: "arrow.up").fontWeight(.semibold).padding(8) }
-              .buttonStyle(.borderedProminent).clipShape(Capsule())
-              .help(workspace.selectedArticle?.saved == true ? "Send note" : "Save & keep note")
-              .accessibilityLabel(
-                workspace.selectedArticle?.saved == true ? "Send note" : "Save & keep note")
-          }
+          MacNoteInput(text: $reader.draft, send: send).frame(height: 44)
+          Button(action: send) {
+            MacSendGlyph().stroke(
+              style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round)
+            )
+            .frame(width: 20, height: 20).foregroundStyle(.white)
+            .frame(width: 32, height: 30).background(
+              ArcticBrand.accent, in: RoundedRectangle(cornerRadius: 12))
+          }.buttonStyle(.plain)
+            .opacity(reader.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : 1)
+            .disabled(reader.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help("Send · Return (Shift-Return for a new line)").accessibilityLabel(
+              workspace.selectedArticle?.saved == true ? "Send note" : "Save & keep note"
+            )
+            .padding(.bottom, 6)
+
         }
       }.padding(14).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 20))
         .padding(16)
@@ -410,7 +424,7 @@ struct MacTaggingSettings: View {
   }
 }
 
-/// NSPopover supplies native placement, dismissal and focus. These controls exist
+/// A reused native tooltip follows the selected passage. These controls exist
 /// only while a passage is selected, leaving the entire reading area available.
 struct MacSelectionTools: View {
   let reader: MacReader
@@ -435,14 +449,15 @@ struct MacSelectionTools: View {
           Image(systemName: "square.and.pencil").frame(width: 28, height: 28)
         }.buttonStyle(MacQuietButtonStyle()).help("Quote in note").accessibilityLabel(
           "Quote in note")
-        if reader.focusedAnnotation != nil {
-          Button {
-            reader.removeFocusedHighlight()
-          } label: {
-            Image(systemName: "eraser").frame(width: 28, height: 28)
-          }.buttonStyle(MacQuietButtonStyle()).help("Remove highlight").accessibilityLabel(
-            "Remove highlight")
-        }
+        Button {
+          reader.removeFocusedHighlight()
+        } label: {
+          Image(systemName: "eraser").frame(width: 28, height: 28)
+        }.buttonStyle(MacQuietButtonStyle()).help("Remove highlight").accessibilityLabel(
+          "Remove highlight"
+        )
+        .disabled(reader.focusedAnnotation == nil)
+        .opacity(reader.focusedAnnotation == nil ? 0.35 : 1)
       }
     }.padding(10).fixedSize()
   }

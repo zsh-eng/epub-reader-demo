@@ -15,17 +15,17 @@ import XCTest
     XCTAssertTrue(app.webViews.firstMatch.waitForExistence(timeout: 10))
     app.typeKey("l", modifierFlags: .command)
     grid.buttons["Cached story 01"].click()
-    app.buttons["tab-cached-0"].click()
+    app.typeKey(.tab, modifierFlags: [.control, .shift])
     XCTAssertTrue(
       app.webViews.firstMatch.staticTexts.containing(
         NSPredicate(format: "label CONTAINS %@", "Slow down")
       ).firstMatch.waitForExistence(timeout: 10))
     app.typeKey("b", modifierFlags: [.command, .option])
-    let input = app.textFields["note-input"]
+    let input = app.textViews["note-input"]
     XCTAssertTrue(input.waitForExistence(timeout: 5))
     input.click()
     input.typeText("A note from the Mac.")
-    app.buttons["Send note"].click()
+    input.typeKey(.return, modifierFlags: [])
     XCTAssertTrue(app.staticTexts["A note from the Mac."].waitForExistence(timeout: 5))
     app.typeKey("/", modifierFlags: [.command, .shift])
     XCTAssertTrue(app.staticTexts["A little more fluent."].waitForExistence(timeout: 5))

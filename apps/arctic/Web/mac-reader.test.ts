@@ -62,3 +62,18 @@ test('native selection controls open after selection and dismiss on scroll or an
   expect(errors).toEqual([]);
   await page.close();
 });
+
+
+test('desktop headlines keep their type size when sidebars change the viewport', async () => {
+  const page = await browser.newPage({ viewport: { width: 1250, height: 900 } });
+  await page.setContent(`<style>${css}</style><main><header><h1>A long title that should wrap without shrinking</h1></header><article id="reader-content"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='300'/%3E"></article></main>`);
+  const heading = page.locator('h1');
+  const originalSize = await heading.evaluate(el => getComputedStyle(el).fontSize);
+  for (const width of [1033, 733, 1250]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await heading.evaluate(el => getComputedStyle(el).fontSize)).toBe(originalSize);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+  expect(await page.locator('img').evaluate(el => getComputedStyle(el).borderRadius)).toBe('12px');
+  await page.close();
+});

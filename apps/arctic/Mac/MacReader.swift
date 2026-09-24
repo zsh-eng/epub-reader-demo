@@ -29,7 +29,11 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   var isSaved: Bool { store.article(for: url)?.saved == true }
   var focusedAnnotation: UUID?
   var onQuote: (() -> Void)?
-  @ObservationIgnored private var selectionPopover: NSPopover?
+  @ObservationIgnored private var selectionPopover: MacSelectionTooltip?
+  @ObservationIgnored private var dismissSelectionTask: Task<Void, Never>?
+  @ObservationIgnored private var appearanceObserver: NSObjectProtocol?
+  private(set) var measuredFPS: Int?
+  private(set) var highRefreshAvailable = false
   @ObservationIgnored private var selectedQuote: ReaderQuote?
   @ObservationIgnored private var selectionTask: Task<Void, Never>?
   var draft = ""
@@ -56,6 +60,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     bridge = MacScriptBridge()
     let config = WKWebViewConfiguration()
     config.mediaTypesRequiringUserActionForPlayback = .all
+    _ = MacWebRefresh.configure(config.preferences)
     config.setURLSchemeHandler(ReaderFontScheme(), forURLScheme: "arctic-font")
     config.userContentController.add(bridge, contentWorld: .defaultClient, name: "arcticMac")
     config.userContentController.add(
@@ -88,6 +93,12 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
       frame: NSRect(x: 0, y: 0, width: 900, height: 800), configuration: config)
     super.init()
     bridge.reader = self
+    highRefreshAvailable = MacWebRefresh.configure(readerView.configuration.preferences)
+    appearanceObserver = NotificationCenter.default.addObserver(
+      forName: MacAppearance.changed, object: nil, queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.applyAppearance() }
+    }
     readerView.navigationDelegate = self
     readerView.isInspectable = TestMode.enabled
     readerView.setValue(false, forKey: "drawsBackground")
@@ -111,7 +122,8 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
           let assets = try await MacReaderAssets.shared.load()
           guard !Task.isCancelled, token == generation else { return }
           readerView.loadHTMLString(
-            MacReaderAssets.prepare(html, css: assets.desktopCSS), baseURL: url)
+            MacReaderAssets.prepare(html, css: assets.desktopCSS + MacAppearance.shared.css),
+            baseURL: url)
         } catch {
           guard let self, !Task.isCancelled, token == generation else { return }
           loading = false
@@ -139,6 +151,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     if let websiteView { return websiteView }
     let config = WKWebViewConfiguration()
     config.mediaTypesRequiringUserActionForPlayback = .all
+    _ = MacWebRefresh.configure(config.preferences)
     config.userContentController.add(bridge, contentWorld: .defaultClient, name: "arcticMac")
     config.userContentController.addUserScript(
       WKUserScript(
@@ -187,7 +200,8 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
           article, css: assets.css + assets.desktopCSS, source: url)
         html = rendered
         onTitle?(article["title"] ?? url.host ?? "Article")
-        readerView.loadHTMLString(rendered, baseURL: url)
+        readerView.loadHTMLString(
+          MacReaderAssets.prepare(rendered, css: MacAppearance.shared.css), baseURL: url)
         persistReader()
         if !websiteVisible {
           source.stopLoading()
@@ -217,12 +231,13 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     guard !discarded, message.frameInfo.isMainFrame else { return }
     if message.name == "arcticAnnotationTap", let body = message.body as? [String: String] {
       selectionTask?.cancel()
+      dismissSelectionTask?.cancel()
       focusedAnnotation = body["id"].flatMap(UUID.init(uuidString:))
       if focusedAnnotation != nil {
         selectedQuote = nil
         presentSelection()
       } else {
-        selectionPopover?.close()
+        scheduleSelectionDismissal()
       }
       return
     }
@@ -237,6 +252,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     if let body = message.body as? [String: Any] {
       if body["selection"] as? [String: Double] != nil {
         selectionTask?.cancel()
+        dismissSelectionTask?.cancel()
         selectionTask = Task {
           let quote = await selection()
           guard !Task.isCancelled, let quote else { return }
@@ -245,10 +261,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
           presentSelection()
         }
       } else if body["dismissSelection"] as? Bool == true {
-        selectionTask?.cancel()
-        selectedQuote = nil
-        focusedAnnotation = nil
-        selectionPopover?.close()
+        scheduleSelectionDismissal()
       }
       return
     }
@@ -275,9 +288,10 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         // Fonts, restored position and the final layout settle behind the
         // placeholder. Network images are deliberately not part of readiness.
         _ = try? await readerView.callAsyncJavaScript(
-          "await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
-          arguments: [:], in: nil, contentWorld: .defaultClient)
+          "await document.fonts.ready; if (visible) await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+          arguments: ["visible": readerView.window != nil], in: nil, contentWorld: .defaultClient)
         guard !Task.isCancelled, !discarded else { return }
+        applyAppearance()
         renderedRecords = nil
         ready = true
         loading = false
@@ -296,6 +310,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   }
 
   func checkpoint() {
+    dismissSelectionTask?.cancel()
     selectionTask?.cancel()
     selectionPopover?.close()
     selectedQuote = nil
@@ -342,7 +357,6 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         let record = try AnnotationStore.shared.highlight(quote, in: url)
         if colour != .yellow { try AnnotationStore.shared.recolour(record.id, colour: colour) }
         focusedAnnotation = record.id
-        selectionPopover?.close()
         selectedQuote = nil
         readerView.evaluateJavaScript(
           "window.getSelection()?.removeAllRanges()", in: nil, in: .defaultClient
@@ -358,21 +372,25 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     return await selection()
   }
 
+  private func scheduleSelectionDismissal() {
+    dismissSelectionTask?.cancel()
+    dismissSelectionTask = Task { [weak self] in
+      // Mouse-up and the annotation click are separate messages. Keep the same
+      // surface alive until we know this is an outside click, not a new target.
+      do { try await Task.sleep(for: .milliseconds(90)) } catch { return }
+      guard let self else { return }
+      selectionTask?.cancel()
+      selectedQuote = nil
+      focusedAnnotation = nil
+      selectionPopover?.close()
+    }
+  }
+
   private func presentSelection() {
-    guard ready, !websiteVisible, let window = readerView.window, let host = window.contentView
-    else { return }
-    selectionPopover?.close()
-    let popover = NSPopover()
-    popover.behavior = .semitransient
-    popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-    popover.contentViewController = NSHostingController(rootView: MacSelectionTools(reader: self))
-    selectionPopover = popover
-    // These controls follow mouse-up or a highlight click. Anchor in AppKit's
-    // window coordinates, avoiding WebKit's flipped/document coordinate spaces.
-    let point = host.convert(window.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil)
-    popover.show(
-      relativeTo: NSRect(origin: point, size: NSSize(width: 1, height: 1)),
-      of: host, preferredEdge: .maxY)
+    guard ready, !websiteVisible, let window = readerView.window else { return }
+    dismissSelectionTask?.cancel()
+    if selectionPopover == nil { selectionPopover = MacSelectionTooltip(reader: self) }
+    selectionPopover?.show(in: window, near: NSEvent.mouseLocation)
   }
 
   func colourSelection(_ colour: HighlightColour) {
@@ -384,7 +402,6 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
       try AnnotationStore.shared.recolour(id, colour: colour)
       renderAnnotations()
     } catch { self.error = error.localizedDescription }
-    selectionPopover?.close()
   }
 
   func removeFocusedHighlight() {
@@ -416,16 +433,46 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     (websiteVisible ? websiteView : readerView)?.find(text, configuration: configuration) { _ in }
   }
 
-  func setFontSize(_ size: Int) {
+  private func applyAppearance() {
+    highRefreshAvailable = MacWebRefresh.configure(readerView.configuration.preferences)
+    if let websiteView { _ = MacWebRefresh.configure(websiteView.configuration.preferences) }
     readerView.callAsyncJavaScript(
-      "document.documentElement.style.setProperty('--reader-size', size + 'px')",
-      arguments: ["size": size], in: nil, in: .defaultClient
+      """
+      let style = document.getElementById('arctic-appearance');
+      if (!style) { style = document.createElement('style'); style.id = 'arctic-appearance'; document.head.appendChild(style); }
+      document.documentElement.removeAttribute('data-theme');
+      style.textContent = css;
+      """, arguments: ["css": MacAppearance.shared.css], in: nil, in: .defaultClient
     ) { _ in }
+  }
+
+  func measureRefresh() {
+    let view = websiteVisible ? websiteView : readerView
+    view?.callAsyncJavaScript(
+      """
+      return await new Promise(resolve => {
+        let samples = [], last;
+        function tick(now) {
+          if (last !== undefined) samples.push(now - last);
+          last = now;
+          if (samples.length < 90) requestAnimationFrame(tick);
+          else { samples.sort((a,b)=>a-b); resolve(Math.round(1000 / samples[Math.floor(samples.length/2)])); }
+        }
+        requestAnimationFrame(tick);
+      });
+      """, arguments: [:], in: nil, in: .defaultClient
+    ) { [weak self] result in
+      if case .success(let fps as Int) = result { self?.measuredFPS = fps }
+    }
   }
 
   func discard() {
     checkpoint()
+    dismissSelectionTask?.cancel()
     selectionPopover?.close()
+    selectionPopover = nil
+    if let appearanceObserver { NotificationCenter.default.removeObserver(appearanceObserver) }
+    appearanceObserver = nil
     onQuote = nil
     discarded = true
     generation = UUID()

@@ -7,17 +7,7 @@ struct MacLibrary: View {
   @State private var articles: [SavedArticle] = []
   @State private var revision = 0
   var body: some View {
-    VStack(alignment: .leading, spacing: 0) {
-      HStack(alignment: .firstTextBaseline) {
-        VStack(alignment: .leading, spacing: 5) {
-          Text(workspace.folder.title).font(.system(size: 32, weight: .medium, design: .rounded))
-          Text("\(articles.count) articles").font(.subheadline).foregroundStyle(.secondary)
-        }
-        Spacer()
-        TextField("Search this collection", text: $workspace.search)
-          .textFieldStyle(.roundedBorder).frame(width: 250).accessibilityIdentifier(
-            "library-search")
-      }.padding(28)
+    ZStack(alignment: .top) {
       if articles.isEmpty {
         ContentUnavailableView {
           Label(
@@ -37,13 +27,15 @@ struct MacLibrary: View {
       } else {
         MacArticleGrid(articles: articles, revision: revision, workspace: workspace)
       }
+      libraryHeader
       if let summary = workspace.store.importSummary {
         HStack {
           Image(systemName: "sparkles").foregroundStyle(ArcticBrand.accent)
           Text("\(summary.previewsReady) of \(summary.total) previews ready")
           Spacer()
           Button("Done") { workspace.store.dismissImportSummary() }
-        }.font(.caption).padding(14).background(.regularMaterial)
+        }.font(.caption).padding(14).background(.regularMaterial).frame(
+          maxHeight: .infinity, alignment: .bottom)
       }
     }
     .task(
@@ -69,6 +61,20 @@ struct MacLibrary: View {
       articles = projected
       revision += 1
     }
+  }
+  private var libraryHeader: some View {
+    HStack(alignment: .firstTextBaseline) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(workspace.folder.title).font(.system(size: 32, weight: .medium, design: .rounded))
+        Text("\(articles.count) articles").font(.subheadline).foregroundStyle(.secondary)
+      }
+      Spacer()
+      TextField("Search this collection", text: $workspace.search)
+        .textFieldStyle(.roundedBorder).frame(width: 250).accessibilityIdentifier(
+          "library-search")
+    }.padding(28).padding(.bottom, 18)
+      .background(MacMaterial(fades: true))
+
   }
   private struct ProjectionKey: Equatable {
     let revision: Int
@@ -98,6 +104,8 @@ struct MacArticleGrid: NSViewRepresentable {
     scroll.documentView = grid
     scroll.hasVerticalScroller = true
     scroll.drawsBackground = false
+    scroll.automaticallyAdjustsContentInsets = false
+    scroll.contentInsets.top = 118
     context.coordinator.grid = grid
     scroll.contentView.postsBoundsChangedNotifications = true
     context.coordinator.observer = NotificationCenter.default.addObserver(
@@ -137,6 +145,9 @@ struct MacArticleGrid: NSViewRepresentable {
         collectionView.makeItem(withIdentifier: .init("article"), for: path) as! MacArticleItem
       let article = articles[path.item]
       item.configure(article)
+      (item.view as? MacArticleCardView)?.hover = { [weak workspace] active in
+        workspace?.hover(article.url, active: active)
+      }
       (item.view as? MacArticleCardView)?.open = { [weak workspace] in
         workspace?.open(
           article.url, title: article.title,
@@ -204,12 +215,15 @@ private final class MacGridLayout: NSCollectionViewFlowLayout {
   private let detail = NSTextField(labelWithString: "")
   private var imageTask: Task<Void, Never>?
   private var identity: UUID?
+  private let photograph = CALayer()
   override func loadView() {
     view = MacArticleCardView()
     thumbnail.wantsLayer = true
     thumbnail.layer?.contentsGravity = .resizeAspectFill
     thumbnail.layer?.cornerRadius = 10
     thumbnail.layer?.masksToBounds = true
+    photograph.contentsGravity = .resizeAspectFill
+    thumbnail.layer?.addSublayer(photograph)
     thumbnail.layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.08).cgColor
     titleLabel.font = .systemFont(ofSize: 15, weight: .medium)
     titleLabel.maximumNumberOfLines = 2
@@ -236,25 +250,58 @@ private final class MacGridLayout: NSCollectionViewFlowLayout {
       detail.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 5),
     ])
   }
+  override func viewDidLayout() {
+    super.viewDidLayout()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    photograph.frame = thumbnail.bounds
+    CATransaction.commit()
+  }
   func configure(_ article: SavedArticle) {
+    (view as? MacArticleCardView)?.endHover()
     imageTask?.cancel()
     identity = article.id
     titleLabel.stringValue = article.title
     detail.stringValue = ([article.url.host ?? ""] + article.tagNames.prefix(1)).joined(
       separator: "  ·  ")
+    photograph.removeAllAnimations()
+    photograph.contents = nil
     thumbnail.layer?.contents = nil
     view.setAccessibilityLabel(article.title)
-    guard let url = article.imageURL else { return }
     imageTask = Task { [weak self] in
-      let image = await MacThumbnailCache.shared.image(url)
-      guard !Task.isCancelled, let self, identity == article.id, let image else { return }
-      thumbnail.layer?.contents = image
+      let fallback = await MacArtwork.shared.image(for: article.url)
+      guard !Task.isCancelled, let self, identity == article.id else { return }
+      thumbnail.layer?.contents = fallback
+      guard let url = article.imageURL else { return }
+      let warm = await MacThumbnailCache.shared.isDecoded(url)
+      let requested = ContinuousClock.now
+      guard let image = await MacThumbnailCache.shared.image(url),
+        !Task.isCancelled, identity == article.id
+      else { return }
+      CATransaction.begin()
+      CATransaction.setDisableActions(true)
+      photograph.contents = image
+      CATransaction.commit()
+      // Warm memory/disk hits never pulse. Offscreen arrivals become ready
+      // content; only a late image in the visible viewport gets a short fade.
+      if !warm, requested.duration(to: .now) > .milliseconds(100), !view.visibleRect.isEmpty,
+        view.window?.isVisible == true, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+      {
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0
+        fade.toValue = 1
+        fade.duration = 0.18
+        photograph.add(fade, forKey: "arrival")
+      }
     }
   }
   override func prepareForReuse() {
     super.prepareForReuse()
     imageTask?.cancel()
     identity = nil
+    (view as? MacArticleCardView)?.endHover()
+    photograph.removeAllAnimations()
+    photograph.contents = nil
     thumbnail.layer?.contents = nil
   }
 }
@@ -263,6 +310,29 @@ private final class MacGridLayout: NSCollectionViewFlowLayout {
 /// a click on its title cannot be swallowed by an NSTextField editor.
 private final class MacArticleCardView: NSView {
   var open: (() -> Void)?
+  var hover: ((Bool) -> Void)?
+  private var tracking: NSTrackingArea?
+  private var hovered = false
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    if let tracking { removeTrackingArea(tracking) }
+    let area = NSTrackingArea(
+      rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+      owner: self)
+    addTrackingArea(area)
+    tracking = area
+  }
+  override func mouseEntered(with event: NSEvent) {
+    hovered = true
+    hover?(true)
+  }
+  override func mouseExited(with event: NSEvent) { endHover() }
+  func endHover() {
+    if hovered { hover?(false) }
+    hovered = false
+  }
+  override func viewWillMove(toWindow window: NSWindow?) { if window == nil { endHover() } }
+
   override func hitTest(_ point: NSPoint) -> NSView? {
     bounds.contains(convert(point, from: superview)) ? self : nil
   }
@@ -301,6 +371,7 @@ actor MacThumbnailCache {
     memory.totalCostLimit = 48 * 1024 * 1024
     try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
   }
+  func isDecoded(_ url: URL) -> Bool { memory.object(forKey: url as NSURL) != nil }
   func image(_ url: URL, prefetch: Bool = false) async -> CGImage? {
     guard !Task.isCancelled else { return nil }
     if let image = memory.object(forKey: url as NSURL) { return image }

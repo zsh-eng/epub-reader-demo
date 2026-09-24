@@ -65,10 +65,13 @@ enum MacLibraryFolder: Hashable {
   var showDiagnostics = false
   var error: String?
   var sidebarVisible = true
+  var animateSidebar = false
   var windowActive = true { didSet { updateActivity() } }
   @ObservationIgnored private var visitedTabs: Set<URL> = []
   private var lastClosed: [MacArticleTab] = []
   @ObservationIgnored private var prewarmTask: Task<Void, Never>?
+  @ObservationIgnored private var hoverTask: Task<Void, Never>?
+  @ObservationIgnored private var hoverURL: URL?
   private let tabsKey = "mac.workspace.tabs.v1"
 
   var selectedTab: MacArticleTab? { tabs.first { $0.url == selectedURL } }
@@ -82,6 +85,11 @@ enum MacLibraryFolder: Hashable {
     {
       tabs = restored.filter { SharedInbox.webURL($0.url.absoluteString) != nil }
     }
+  }
+
+  func toggleSidebar(animated: Bool) {
+    animateSidebar = animated
+    sidebarVisible.toggle()
   }
 
   func open(_ url: URL, title: String = "", background: Bool = false) {
@@ -151,6 +159,30 @@ enum MacLibraryFolder: Hashable {
     }
   }
 
+  /// Intent-based loading shares the bounded reader pool. It creates neither a
+  /// tab nor a history/reading event. Leaving cancels only a speculative load.
+  func hover(_ url: URL, active: Bool) {
+    if !active {
+      guard hoverURL == url else { return }
+      hoverTask?.cancel()
+      hoverURL = nil
+      if selectedURL != url, !tabs.contains(where: { $0.url == url }),
+        let reader = readers.existing(url), !reader.ready
+      {
+        readers.remove(url)
+      }
+      return
+    }
+    if let previous = hoverURL, previous != url { hover(previous, active: false) }
+    hoverURL = url
+    hoverTask?.cancel()
+    hoverTask = Task { [weak self] in
+      do { try await Task.sleep(for: .milliseconds(160)) } catch { return }
+      guard let self, hoverURL == url, selectedURL != url else { return }
+      readers.acquire(url, store: store, protecting: selectedURL).start()
+    }
+  }
+
   func close(_ url: URL) {
     guard let index = tabs.firstIndex(where: { $0.url == url }) else { return }
     if selectedURL == url {
@@ -216,6 +248,7 @@ enum MacLibraryFolder: Hashable {
   }
 
   func shutDown() {
+    hoverTask?.cancel()
     selectedReader?.checkpoint()
     ReadingSessions.shared.end()
     store.flushPendingWrites()

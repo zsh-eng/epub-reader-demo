@@ -36,6 +36,16 @@ import XCTest
     }
     XCTAssertTrue(reader.ready, reader.error ?? "Reader did not become ready")
   }
+  func testWebKitAcceptsTheSelectedRefreshPreference() throws {
+    let preferences = WKPreferences()
+    try XCTSkipUnless(
+      WKPreferences.responds(to: NSSelectorFromString("_features")),
+      "This WebKit has no feature discovery API")
+    XCTAssertTrue(
+      MacWebRefresh.configure(preferences), "WebKit must read back the requested refresh preference"
+    )
+  }
+
   func testWarmSwitchReusesWebViewsAndBoundsPool() async throws {
     let urls = try await [seed(0), seed(1), seed(2), seed(3)]
     let pool = MacReaderPool()

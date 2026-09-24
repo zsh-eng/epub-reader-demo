@@ -188,3 +188,75 @@ sidebar shortcuts, the stats page, bounded text selection and the contextual
 popover. Light-mode geometry has browser coverage; the native visual check used
 dark mode. Frame-rate and end-to-end tab-switch latency were not measured. The
 previous Mac XCTest host signing mismatch remains a separate test-runner issue.
+
+## Images, intent and reading controls — 25 September 2026
+
+The Mac retains native collection-cell reuse, background ImageIO decode, deduplicated
+requests, cancellation and viewport-first scheduling. The 640 px longest-edge
+JPEG/PNG files have a 64 MiB disk budget. Decoded images have a **48 MiB cache
+cost limit**, roughly 50 landscape 640×390 images or 30 square 640×640 images.
+This is not a process-memory ceiling: visible layers, in-flight jobs and WebKit
+use additional memory. The inspected local cache contained 141 files / 9.45 MiB,
+with a 43.6 KiB median file size; those figures describe that snapshot only.
+
+Four neighboring items on each side join the visible image range. A 160 ms card
+hover starts article preparation in the same three-reader pool. It does not open
+a tab, record a visit or credit reading time. Uncached articles can contact their
+publisher, and saved articles can acquire an offline copy. Leaving cancels an
+unfinished speculative reader that is neither selected nor already an open tab.
+Background documents wait for fonts, but not offscreen animation frames. A visible
+cold image fades for 180 ms only after a load longer than 100 ms. Memory hits and
+offscreen completions do not fade.
+
+Missing or failed OG images use original, deterministic colour fields inspired by
+[OpenAI News](https://openai.com/news/). The reference serves raster cover images;
+Arctic recreates the soft colour transitions and grain locally, without copying
+those files. Sixteen 320×200 variants cost about 4 MiB. They are generated on an
+actor and reused. No continuous gradient rendering runs during scrolling.
+
+The library header overlays scrolling cards with an AppKit material whose opacity
+fades toward its lower edge. This uses public APIs; it is a graduated backdrop,
+not a private variable-radius blur filter. Sidebar clicks animate only the rail's
+translation and opacity for 240 ms. Document width changes once, avoiding repeated
+WebKit reflow during motion. Keyboard sidebar changes and Reduce Motion are immediate.
+Reader images have 12 px corners and the 38 px headline does not depend on viewport
+width. The interface uses SF Pro, with rounded library headings; Reader defaults
+to system sans-serif at 18 px / 1.6 leading.
+
+Reading appearance now retains palette (System, Light, Paper, Ink), typeface
+(System, DM Sans, EB Garamond), size, line spacing and column width. The same recipe
+is injected before initial paint and updated in all retained readers. The native
+highlight tooltip is reused, moves to a new selection and does not take keyboard
+focus. Outside clicks, Escape, scroll and tab changes dismiss it. The fixed-height
+note editor keeps a small send-button slot reserved: Return sends, Shift-Return
+inserts a line, and IME composition retains Return. Control-Tab and Control-Shift-Tab
+cycle articles even when WebKit has focus.
+
+### High refresh experiment
+
+WebKit defaults `PreferPageRenderingUpdatesNear60FPSEnabled` to true. Arctic's
+**High refresh · experimental** preference disables it for both Reader and Website
+views and reads back the result. The runtime feature is present on the tested Mac,
+whose main display reports a 120 Hz maximum. This uses guarded **private WebKit
+SPI**, isolated in `MacWebRefresh`; an App Store build must omit that SPI or replace
+it with a public API. Safari's own preference does not configure these webviews.
+Sources: [WebKit preference definition](https://github.com/WebKit/WebKit/blob/main/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml)
+and [WKPreferencesPrivate.h](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h).
+
+Article options → Reader diagnostics → Measure samples 90 animation frames and
+reports median `requestAnimationFrame` cadence. This is a page-scheduling measure,
+not a compositor hitch trace or proof of sustained 120 fps scrolling. Display mode,
+power settings, window visibility and workload can still limit the observed rate.
+
+### Validation limits
+
+The 24 WebView browser checks pass, including stable heading size across sidebar
+widths and rounded media. Release Mac and iOS Simulator builds pass. Native reader
+integration tests run with `ENABLE_HARDENED_RUNTIME=NO` **only on the temporary
+Debug test host**, avoiding the prior ad-hoc test-library signing mismatch. The
+installed/package Release build keeps hardened runtime enabled. The network replay
+and opt-in timing tests remain skipped unless explicitly enabled.
+
+The Mac locked during this pass. Native visual checks of the new material,
+selection tooltip, hover intent and note composer, plus an on-screen refresh-rate
+measurement, remain open. Do not treat the builds or headless tests as that evidence.

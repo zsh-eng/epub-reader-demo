@@ -26,5 +26,6 @@
     const rect = rects.at(-1);
     if (rect) send({ selection: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
   });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') send({ dismissSelection: true }); });
   window.addEventListener('scroll', () => send({ dismissSelection: true }), { passive: true });
 })();
