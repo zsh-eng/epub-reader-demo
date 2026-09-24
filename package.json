@@ -5,7 +5,8 @@
     "apps/reader",
     "apps/med",
     "apps/arctic/Web",
-    "packages/*"
+    "packages/*",
+    "apps/spaced2"
   ],
   "type": "module",
   "scripts": {
@@ -48,7 +49,14 @@
     "check:med": "bun run --cwd apps/med check",
     "lint:med": "bun run --cwd apps/med lint",
     "format:med": "bun run --cwd apps/med format",
-    "format:check:med": "bun run --cwd apps/med format:check"
+    "format:check:med": "bun run --cwd apps/med format:check",
+    "dev:spaced2": "bun run --cwd apps/spaced2 dev",
+    "build:spaced2": "bun run --cwd apps/spaced2 build",
+    "test:spaced2": "bun run --cwd apps/spaced2 test",
+    "lint:spaced2": "bun run --cwd apps/spaced2 lint",
+    "deploy:spaced2": "bun run --cwd apps/spaced2 deploy",
+    "preview:spaced2": "bun run --cwd apps/spaced2 preview",
+    "dev:spaced2-server": "bun run --cwd apps/spaced2 dev:server"
   },
   "devDependencies": {
     "oxfmt": "^0.46.0",

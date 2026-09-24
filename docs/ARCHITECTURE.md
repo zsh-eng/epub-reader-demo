@@ -6,6 +6,10 @@ and local development files. Shared packages must not import app code.
 
 ## Current boundaries
 
+- **Spaced** owns flashcards, FSRS, review UI, local operation storage and its
+  deployed Hono Worker. Read its [architecture](../apps/spaced2/ARCHITECTURE.md).
+  It consumes `packages/local-sync` through a workspace dependency.
+
 - **med** owns the local Git review host, browser UI, review links, syntax rendering, and video comparison helpers. Read its [architecture](../apps/med/ARCHITECTURE.md) and [agent integration](../apps/med/docs/AGENT_INTEGRATION.md). It has no deployed service.
 - **Reader** owns the web EPUB app and its deployed Hono Worker. Read
   [Reader architecture](../apps/reader/docs/ARCHITECTURE.md) before changing

@@ -6,6 +6,7 @@ A monorepo for personal apps and shared local-first software.
 
 | Path                                                                 | Purpose                                                                      |
 | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [apps/spaced2](apps/spaced2/README.md) | Spaced flashcards, FSRS scheduling, local review and sync. |
 | [apps/med](apps/med/README.md)                                       | Local Git review, file navigation, and agent review links.                   |
 | [apps/reader](apps/reader/README.md)                                 | Web EPUB Reader. React, IndexedDB, and a Cloudflare Worker.                  |
 | [apps/arctic](apps/arctic/README.md)                                 | Arctic, the native iOS and Mac article reader, plus the iOS share extension. |
@@ -23,6 +24,9 @@ Use Bun from this directory. There is one workspace lockfile.
 ```sh
 bun install --frozen-lockfile
 bun run dev:reader
+# Or run Spaced (a second terminal runs its local API):
+bun run dev:spaced2
+bun run dev:spaced2-server
 ```
 
 For Arctic, open `apps/arctic/ArticleReader.xcodeproj` in Xcode and select the
@@ -67,3 +71,8 @@ code has a clear shared contract. Keep app data and generated output out of Git.
 
 For the native desktop app, open `apps/arctic/ArcticMac.xcodeproj`. See the
 [Mac guide](apps/arctic/Mac/README.md) for shortcuts, build commands and performance evidence.
+
+Spaced is developed in `apps/spaced2`. Use `bun run test:spaced2`,
+`bun run build:spaced2`, and `bun run deploy:spaced2`. Its existing Worker,
+domain, auth, D1 and R2 resources remain separate from Reader. See the
+[Spaced migration notes](docs/SPACED_MIGRATION.md).

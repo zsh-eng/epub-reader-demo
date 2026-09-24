@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const SYNC_PROTOCOL_VERSION = 2;
 export const SYNC_DEVICE_ID_HEADER = "X-Device-ID";

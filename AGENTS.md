@@ -8,6 +8,7 @@ Include line numbers when useful. Preserve unrelated edits.
 
 - `apps/reader`: web Reader and deployed Cloudflare Worker. Follow its `AGENTS.md`.
 - `apps/arctic`: native Arctic iOS app. Follow its `AGENTS.md`.
+- `apps/spaced2`: Spaced flashcards and its Worker. Follow its `AGENTS.md`.
 - `packages`: shared libraries and private server support. Do not import app code.
 - Root guides document reusable patterns; keep them easy to read.
 
