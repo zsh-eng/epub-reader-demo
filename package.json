@@ -45,7 +45,7 @@
     "med": "node apps/med/dist/cli.js",
     "dev:med": "node apps/med/scripts/dev.mjs",
     "build:med": "bun run --cwd apps/med build",
-    "test:med": "bun run --cwd apps/med test:unit && bun run --cwd apps/med test:browser",
+    "test:med": "bun run --cwd apps/med test:integration && bun run --cwd apps/med test:browser && bun run --cwd apps/med test:unit",
     "check:med": "bun run --cwd apps/med check",
     "lint:med": "bun run --cwd apps/med lint",
     "format:med": "bun run --cwd apps/med format",

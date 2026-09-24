@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startHost, type RunningHost } from "../../src/host/server";
@@ -27,11 +27,11 @@ const git = (cwd: string, ...args: string[]) =>
       GIT_COMMITTER_EMAIL: "test@example.invalid",
     },
   }).trim();
-async function fixture() {
+async function fixture(names = ["one"]) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), "med saved links ")));
   directories.push(directory);
   const repos: string[] = [];
-  for (const name of ["one", "two"]) {
+  for (const name of names) {
     const repo = join(directory, name);
     await mkdir(repo);
     git(repo, "init", "-b", "main");
@@ -55,10 +55,10 @@ async function fixture() {
       });
     return { host, origin, api };
   };
-  return { repos, launch };
+  return { repos, launch, stateDir };
 }
 
-test("saved review links serve the app and authorize a new browser tab through a cookie", async () => {
+test("cookie access rejects cross-origin writes and never exposes the launch token", async () => {
   const { launch } = await fixture();
   const { host, api, origin } = await launch();
   expect((await fetch(`${origin}/api/repositories`)).status).toBe(401);
@@ -86,63 +86,6 @@ test("saved review links serve the app and authorize a new browser tab through a
   expect(deep.status).toBe(200);
   expect(deep.headers.get("cache-control") ?? "").not.toContain("immutable");
   expect((await deep.text()).includes(host.token)).toBe(false);
-});
-
-test("captures multi-repo changes, exports comments, persists after restart and clears only this review", async () => {
-  const { repos, launch } = await fixture();
-  let connection = await launch();
-  const input = {
-    title: "Agent changes",
-    targets: repos.map((repo) => ({ repo, comparison: { kind: "working" } })),
-  };
-  const response = await connection.api("/api/reviews", input);
-  expect(response.status).toBe(200);
-  const bundle = await response.json();
-  expect(bundle.targets).toHaveLength(2);
-  const other = await (await connection.api("/api/reviews", input)).json();
-  for (const [index, target] of bundle.targets.entries()) {
-    const notes = await connection.api(`/api/reviews/${bundle.id}/targets/${target.id}/notes`, {
-      expectedRevision: 0,
-      mutation: {
-        type: "add",
-        note: { path: "same.ts", side: "new", line: 1, text: `Feedback ${index}` },
-      },
-    });
-    expect(notes.status).toBe(200);
-  }
-  await connection.api(`/api/reviews/${other.id}/targets/${other.targets[0].id}/notes`, {
-    expectedRevision: 0,
-    mutation: {
-      type: "add",
-      note: { path: "same.ts", side: "new", line: 1, text: "Keep other review" },
-    },
-  });
-  const token = connection.host.token;
-  await connection.host.close();
-  hosts.splice(hosts.indexOf(connection.host), 1);
-  await writeFile(join(repos[0]!, "same.ts"), "changed after capture\n");
-  connection = await launch();
-  expect(connection.host.token).toBe(token);
-  const source = await (
-    await connection.api(
-      `/api/reviews/${bundle.id}/targets/${bundle.targets[0].id}/source?path=same.ts`,
-    )
-  ).json();
-  expect(source.new).toContain("one after");
-  const feedback = await (await connection.api(`/api/reviews/${bundle.id}/feedback`)).json();
-  expect(feedback.count).toBe(2);
-  expect(feedback.repositoryCount).toBe(2);
-  expect(feedback.text).toContain("Feedback 0");
-  expect(feedback.text).toContain("one after");
-  expect(feedback.text).toContain(repos[0]);
-  expect(feedback.text).toContain(repos[1]);
-  expect(feedback.text).not.toContain("changed after capture");
-  const cleared = await connection.api(`/api/reviews/${bundle.id}/clear`, {
-    expectedRevision: feedback.revision,
-  });
-  expect(cleared.status).toBe(200);
-  expect((await (await connection.api(`/api/reviews/${bundle.id}/feedback`)).json()).count).toBe(0);
-  expect((await (await connection.api(`/api/reviews/${other.id}/feedback`)).json()).count).toBe(1);
 });
 
 test("a link does not register unrelated repository paths", async () => {
@@ -177,86 +120,57 @@ test("saved metadata allows recovery while source access waits for repository re
   expect((await api(`/api/reviews/${saved.id}/targets/${target.id}/review`)).status).toBe(200);
 });
 
-test("comments on browsed commits across repositories join the saved review and survive restart", async () => {
+test("concurrent comments and clear reject stale requests without losing accepted writes", async () => {
   const { repos, launch } = await fixture();
-  let connection = await launch();
+  const { api } = await launch();
   const saved = await (
-    await connection.api("/api/reviews", {
-      title: "Cross-tab comments",
+    await api("/api/reviews", {
+      title: "Concurrent writers",
       targets: [{ repo: repos[0], comparison: { kind: "working" } }],
     })
   ).json();
-  const original = saved.targets[0];
-  await connection.api(`/api/reviews/${saved.id}/targets/${original.id}/notes`, {
-    expectedRevision: 0,
-    mutation: {
-      type: "add",
-      note: { path: "same.ts", side: "new", line: 1, text: "Original target" },
-    },
-  });
-  const paths: string[] = [];
-  for (const [index, repo] of repos.entries()) {
-    const review = await (
-      await connection.api("/api/review", {
-        repo,
-        comparison: { kind: "commit", commit: git(repo, "rev-parse", "HEAD") },
-      })
-    ).json();
-    const path = `/api/reviews/${saved.id}/browsing/${review.id}/notes`;
-    paths.push(path);
-    expect(await (await connection.api(path)).json()).toMatchObject({
-      reviewId: review.id,
-      revision: 0,
-      notes: [],
+  const path = `/api/reviews/${saved.id}/targets/${saved.targets[0].id}/notes`;
+  const add = (text: string, expectedRevision = 0) =>
+    api(path, {
+      expectedRevision,
+      mutation: { type: "add", note: { path: "same.ts", side: "new", line: 1, text } },
     });
-    const response = await connection.api(path, {
-      reviewId: review.id,
-      expectedRevision: 0,
-      mutation: {
-        type: "add",
-        note: { path: "same.ts", side: "new", line: 1, text: `Commit tab ${index}` },
-      },
-    });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ reviewId: review.id, revision: 1 });
-  }
-  const updated = await (await connection.api(`/api/reviews/${saved.id}`)).json();
-  expect(updated.commentCount).toBe(3);
-  expect(updated.targets).toHaveLength(3);
-  expect(updated.targets[0]).toEqual(original);
-  const exported = await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json();
-  expect(exported.count).toBe(3);
-  expect(exported.repositoryCount).toBe(2);
-  expect(exported.text).toContain("Original target");
-  expect(exported.text).toContain("Commit tab 0");
-  expect(exported.text).toContain("Commit tab 1");
-  expect(exported.text).toContain("one before");
-  await connection.host.close();
-  hosts.splice(hosts.indexOf(connection.host), 1);
-  await writeFile(join(repos[0]!, "same.ts"), "later content\n");
-  connection = await launch();
-  expect(await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).toEqual(
-    exported,
-  );
-  const persisted = await (await connection.api(paths[1]!)).json();
-  expect(persisted.notes[0].text).toBe("Commit tab 1");
-  const deleted = await connection.api(paths[1]!, {
-    reviewId: persisted.reviewId,
-    expectedRevision: persisted.revision,
-    mutation: { type: "remove", id: persisted.notes[0].id },
-  });
-  expect(deleted.status).toBe(200);
-  expect((await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).count).toBe(2);
-  expect(
-    (await connection.api(`/api/reviews/${saved.id}/clear`, { expectedRevision: updated.revision }))
-      .status,
-  ).toBe(409);
-  const latest = await (await connection.api(`/api/reviews/${saved.id}`)).json();
-  expect(
-    (await connection.api(`/api/reviews/${saved.id}/clear`, { expectedRevision: latest.revision }))
-      .status,
-  ).toBe(200);
-  expect((await (await connection.api(paths[0]!)).json()).notes).toEqual([]);
+  const competing = await Promise.all([add("First"), add("Second")]);
+  expect(competing.map((response) => response.status).sort()).toEqual([200, 409]);
+  const accepted = await (await api(path)).json();
+  expect(accepted.notes).toHaveLength(1);
+  await add("Newer comment", 1);
+  expect((await api(`/api/reviews/${saved.id}/clear`, { expectedRevision: 1 })).status).toBe(409);
+  expect((await (await api(path)).json()).notes).toHaveLength(2);
+  expect((await api(`/api/reviews/${saved.id}/clear`, { expectedRevision: 2 })).status).toBe(200);
+  expect((await add("Outdated tab", 2)).status).toBe(409);
+  expect((await (await api(path)).json()).notes).toEqual([]);
+});
+
+test("captures symbolic inclusive ranges once and writes private saved records", async () => {
+  const { repos, launch, stateDir } = await fixture();
+  const repo = repos[0]!;
+  git(repo, "commit", "-am", "second");
+  const { api } = await launch();
+  const saved = await (
+    await api("/api/reviews", {
+      title: "Inclusive range",
+      targets: [
+        { repo, comparison: { kind: "range", base: "main", head: "main", includeBase: true } },
+      ],
+    })
+  ).json();
+  const target = saved.targets[0];
+  await writeFile(join(repo, "same.ts"), "later content\n");
+  git(repo, "commit", "-am", "third");
+  const review = await (await api(`/api/reviews/${saved.id}/targets/${target.id}/review`)).json();
+  expect(review.patch).toContain('-export const name = "one before";');
+  expect(review.patch).toContain('+export const name = "one after";');
+  expect(review.patch).not.toContain("later content");
+  expect(review.base).toBe(git(repo, "rev-parse", "HEAD~2"));
+  expect(review.head).toBe(git(repo, "rev-parse", "HEAD~1"));
+  expect((await stat(join(stateDir, "reviews"))).mode & 0o777).toBe(0o700);
+  expect((await stat(join(stateDir, "reviews", `${saved.id}.json`))).mode & 0o777).toBe(0o600);
 });
 
 test("browsed comments skip gitlinks, reject invalid first notes atomically, and survive removed worktrees", async () => {
@@ -300,4 +214,7 @@ test("browsed comments skip gitlinks, reject invalid first notes atomically, and
   expect((await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).text).toContain(
     "export const linked = true;",
   );
+  expect(
+    (await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).repositoryCount,
+  ).toBe(1);
 });

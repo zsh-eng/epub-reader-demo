@@ -136,6 +136,18 @@ try {
   const catalogue = JSON.parse(runCli("repos"));
   assert.equal(catalogue.repositories.length, 2);
   const markdown = runCli("create", "--manifest", manifestPath);
+  // Clearing one review must leave another review's comments intact.
+  const other = await api("/api/reviews", {
+    title: "Separate review",
+    targets: [{ repo: repositories[0], comparison: { kind: "working" } }],
+  });
+  await api(`/api/reviews/${other.id}/targets/${other.targets[0].id}/notes`, {
+    expectedRevision: 0,
+    mutation: {
+      type: "add",
+      note: { path: "same.ts", side: "new", line: 2, text: "Keep other review" },
+    },
+  });
   assert.ok(!markdown.includes(connection.token));
   const reviewUrl = /^\[Review changes here\]\((http:\/\/127\.0\.0\.1:\d+\/review\/[^)]+)\)$/.exec(
     markdown,
@@ -154,9 +166,26 @@ try {
   const pageErrors = [];
   context.on("page", (page) => page.on("pageerror", (error) => pageErrors.push(error.message)));
   const launchPage = await context.newPage();
-  await launchPage.goto(connection.url);
+  const invalidLaunch = new URL(connection.url);
+  invalidLaunch.hash = "token=invalid-launch-token";
+  await launchPage.goto(invalidLaunch.href);
+  await launchPage.getByRole("alert").waitFor();
+  assert.equal(
+    await launchPage.evaluate(async () => (await fetch("/api/repositories")).status),
+    401,
+  );
+  assert.equal((await context.cookies()).length, 0);
+  const validLaunch = new URL(connection.url);
+  validLaunch.searchParams.set("example", "preserved");
+  validLaunch.hash += "&anchor=preserved";
+  await launchPage.goto(validLaunch.href);
   await launchPage.locator('[data-review-status="ready"]').waitFor();
-  await launchPage.waitForFunction(() => location.hash === "");
+  await launchPage.waitForFunction(() => !location.hash.includes("token="));
+  assert.equal(new URL(launchPage.url()).searchParams.get("example"), "preserved");
+  assert.equal(
+    new URLSearchParams(new URL(launchPage.url()).hash.slice(1)).get("anchor"),
+    "preserved",
+  );
   const cookies = await context.cookies();
   assert.ok(cookies.some((cookie) => cookie.httpOnly && cookie.sameSite === "Strict"));
   const page = await context.newPage();
@@ -166,6 +195,7 @@ try {
   assert.equal(new URL(page.url()).hash, "");
   const header = page.getByRole("region", { name: "Saved review" });
   await header.getByText("Agent handoff validation", { exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "Push", exact: true }).isEnabled(), false);
   await page.getByRole("button", { name: "Split", exact: true }).click();
   // Select the changed line itself. A hover-only gutter button can disappear
   // when the renderer updates after browser focus or source loading.
@@ -231,7 +261,74 @@ try {
     ...repositories,
   ])
     assert.ok(clipboard.includes(expected), `Feedback must include ${expected}`);
-  assert.match(clipboard, /2/);
+
+  // Copy state must remain in place, including when the external clipboard is slow.
+  const clearButton = header.getByRole("button", { name: "Clear all comments", exact: true });
+  assert.ok((await header.boundingBox()).height <= 36);
+  await page.waitForFunction(() => {
+    const button = document.querySelector('[aria-label="Copy comments"]');
+    return button && new DOMMatrix(getComputedStyle(button).transform).isIdentity;
+  });
+  const copyBounds = await copyButton.boundingBox();
+  const clearBounds = await clearButton.boundingBox();
+  assert.ok(clearBounds.x > copyBounds.x + copyBounds.width);
+  assert.equal(clearBounds.y, copyBounds.y);
+  assert.equal(await copyButton.getAttribute("title"), null);
+  await page.waitForFunction(
+    () => document.querySelector('[aria-label="Copy comments"]')?.dataset.copied === "false",
+  );
+  assert.equal((await copyButton.boundingBox()).width, copyBounds.width);
+  await page.evaluate(() => {
+    const original = navigator.clipboard.writeText.bind(navigator.clipboard);
+    window.restoreClipboard = () => {
+      navigator.clipboard.writeText = original;
+    };
+    navigator.clipboard.writeText = async (text) => {
+      await new Promise((resolve) => {
+        window.releaseClipboard = resolve;
+      });
+      await original(text);
+    };
+  });
+  await copyButton.hover();
+  const appearance = () =>
+    header.evaluate((element) =>
+      [
+        ...element.querySelectorAll(
+          '[aria-label="Copy comments"], [aria-label="Clear all comments"]',
+        ),
+      ].map((button) => {
+        const style = getComputedStyle(button);
+        return {
+          color: style.color,
+          background: style.backgroundColor,
+          opacity: style.opacity,
+          x: button.offsetLeft,
+          y: button.offsetTop,
+          width: button.offsetWidth,
+          height: button.offsetHeight,
+        };
+      }),
+    );
+  const beforeCopy = await appearance();
+  await copyButton.click();
+  await page.waitForFunction(() => typeof window.releaseClipboard === "function");
+  assert.deepEqual(await appearance(), beforeCopy);
+  assert.equal(await clearButton.evaluate((button) => button.disabled), false);
+  await page.evaluate(() => window.releaseClipboard());
+  await page.waitForFunction(
+    () => document.querySelector('[aria-label="Copy comments"]')?.dataset.copied === "true",
+  );
+  assert.deepEqual(await appearance(), beforeCopy);
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = async () => {
+      throw new Error("Clipboard unavailable");
+    };
+  });
+  await copyButton.click();
+  await header.getByRole("alert").filter({ hasText: "Clipboard unavailable" }).waitFor();
+  assert.equal(await copyButton.getAttribute("data-copied"), "false");
+  await page.evaluate(() => window.restoreClipboard());
 
   // Browse a commit outside the initial snapshot, then return and copy all scopes.
   await page.getByRole("option").filter({ hasText: "baseline" }).first().click();
@@ -252,6 +349,10 @@ try {
     document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("3"),
   );
   await page.getByRole("button", { name: "Push", exact: true }).click();
+  assert.equal(
+    await page.getByRole("combobox", { name: "Destination branch" }).inputValue(),
+    "main",
+  );
   await page
     .getByRole("combobox", { name: "Destination branch" })
     .fill("review/browser-validation");
@@ -262,6 +363,9 @@ try {
     git(repositories[0], "rev-parse", "HEAD"),
   );
   await page.getByRole("button", { name: "Compare against base branch" }).click();
+  await page.getByRole("textbox", { name: "Filter comparison branches" }).fill("no-such-branch");
+  await page.getByText("No matching branches.", { exact: true }).waitFor();
+  await page.getByRole("textbox", { name: "Filter comparison branches" }).fill("main");
   await page.getByRole("menuitem", { name: "main", exact: true }).click();
   await page.waitForFunction(
     () =>
@@ -311,13 +415,16 @@ try {
     false,
   );
   assert.equal((await api(`/api/reviews/${id}/feedback`)).count, 0);
+  const otherComments = await api(`/api/reviews/${other.id}/feedback`);
+  assert.equal(otherComments.count, 1);
+  assert.ok(otherComments.text.includes("Keep other review"));
   assert.deepEqual(pageErrors, []);
   if (process.env.MED_VALIDATION_SCREENSHOT)
     await page.screenshot({ path: process.env.MED_VALIDATION_SCREENSHOT });
   console.log(
     JSON.stringify({
       checks:
-        "built CLI discovery and multi-repo snapshot manifest; token-free link and new-tab cookie auth; UI comments on saved and browsed commits; UI push to temporary bare remote and merge-base dropdown; copied cross-repo and cross-tab source context; same-port restart and frozen snapshots; persistent comments; cancel and confirm clear",
+        "built CLI discovery and multi-repo snapshot manifest; token-free link and new-tab cookie auth; UI comments on saved and browsed commits; stable copy controls through delayed and rejected clipboard writes; UI push to temporary bare remote and merge-base dropdown; copied cross-repo and cross-tab source context; same-port restart and frozen snapshots; persistent comments; cancel and confirm clear",
       repositories: 2,
       commentsCopied: 3,
       pageErrors,

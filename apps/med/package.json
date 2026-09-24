@@ -32,9 +32,11 @@
     "test": "vitest",
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
-    "check": "bun run format:check && bun run lint && bun run test:unit && bun run test:browser && bun run build",
+    "check": "bun run format:check && bun run lint && bun run test:integration && bun run test:browser && bun run test:unit && bun run test:e2e",
     "start": "node dist/cli.js",
-    "lint:fix": "oxlint --fix --max-warnings 0"
+    "lint:fix": "oxlint --fix --max-warnings 0",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "bun run build && node scripts/validate-review-links.mjs && node scripts/validate-multi-repo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

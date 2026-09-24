@@ -158,14 +158,16 @@ bun run dev -- /path/to/repository
 
 Open the Vite URL with the `#token=…` fragment printed by the API host. Vite proxies API requests to that host. Production builds need no proxy.
 
+Run the complete check from the Workbench root:
+
 ```sh
-bun run typecheck
-bun run lint
-bun run test:unit
-bun run test:browser
-bun run format:check
-bun run build
+bun run check:med
 ```
+
+For a focused run, use `bun run test:med` for host integrations, browser tests,
+and remaining unit regressions. `bun run --cwd apps/med test:e2e` builds med and
+exercises the real CLI and browser with temporary repositories. See
+[test design and coverage boundaries](TESTING.md) before adding tests.
 
 The UI uses React, [Pierre Diffs and Trees](https://pierre.computer/), Base UI, and StyleX. Vite 8 uses Rolldown and Oxc; Oxlint, Oxfmt, and Vitest provide checks. Zod validates the host protocol. [Architecture](../ARCHITECTURE.md) describes the boundaries and data flow.
 

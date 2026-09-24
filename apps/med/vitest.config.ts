@@ -10,7 +10,15 @@ export default defineConfig({
         test: {
           name: "unit",
           include: ["tests/**/*.test.ts"],
-          exclude: ["tests/browser/**"],
+          exclude: ["tests/browser/**", "tests/host/**", "tests/integration/**"],
+          environment: "node",
+          testTimeout: 30000,
+        },
+      },
+      {
+        test: {
+          name: "integration",
+          include: ["tests/host/**/*.test.ts", "tests/integration/**/*.test.ts"],
           environment: "node",
           testTimeout: 30000,
         },
