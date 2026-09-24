@@ -178,3 +178,119 @@ test("speaker paragraphs highlight and seek by section without overlapping rows"
     .poll(() => page.locator(".transcript-row").count())
     .toBeLessThan(25);
 });
+
+test("1.25x skips when scrubbing into a promotion and when replaying it later", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#title")).toHaveText(episode.title);
+  await page.locator("audio").evaluate((el: HTMLAudioElement) => {
+    el.muted = true;
+  });
+  await page.locator("#speed").click();
+  await expect(page.locator("#speed")).toHaveText("1.25×");
+  const skip = episode.skips[0];
+  await page.locator("#seek").evaluate((el: HTMLInputElement, time: number) => {
+    el.value = String(time);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, skip.start + 2);
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(skip.end);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator("#toast")).toBeHidden();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeLessThan(skip.start + 4);
+  await page.locator("#seek").evaluate((el: HTMLInputElement, time: number) => {
+    el.value = String(time);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, skip.start - 0.5);
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(skip.end);
+});
+
+test("restored 1.25x playback still skips; explicit preview lasts only one pass", async ({
+  page,
+}) => {
+  const skip = episode.skips[1];
+  await page.addInitScript(
+    ({ hash, time }) => {
+      localStorage.setItem(
+        `undertone:${hash}`,
+        JSON.stringify({ time, rate: 1.25, skip: true }),
+      );
+    },
+    { hash: episode.audioHash, time: skip.start + 1 },
+  );
+  await page.goto("/");
+  await expect(page.locator("#speed")).toHaveText("1.25×");
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeCloseTo(skip.start + 1, 0);
+  await page.locator("audio").evaluate((el: HTMLAudioElement) => {
+    el.muted = true;
+  });
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(skip.end);
+
+  await page.locator(".detection").nth(1).click();
+  await expect(page.locator("#toast")).toBeHidden();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeLessThan(skip.start + 4);
+  // Advance this explicit preview to its end without another player command.
+  // The following replay must no longer inherit the old preview exception.
+  await page.locator("audio").evaluate((el: HTMLAudioElement, time) => {
+    el.currentTime = time;
+  }, skip.end - 0.1);
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(skip.end + 0.1);
+  await page.locator("audio").evaluate((el: HTMLAudioElement, time) => {
+    el.currentTime = time;
+  }, skip.start + 1);
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(skip.end);
+
+  await page.getByRole("switch", { name: "Skip promotions" }).uncheck();
+  await page.locator("#seek").evaluate((el: HTMLInputElement, time: number) => {
+    el.value = String(time);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, skip.start + 1);
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeLessThan(skip.start + 4);
+  await page.getByRole("switch", { name: "Skip promotions" }).check();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(skip.end);
+});

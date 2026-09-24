@@ -51,7 +51,9 @@ let following = true,
   raf = 0,
   toastTimer = 0;
 let lastSkipped: Skip | undefined;
-const bypass = new Set<string>();
+// Only an explicit preview or Undo may bypass skipping, and only for this
+// pass through the range. Ordinary seeks and restored positions still skip.
+let previewSkip: Skip | undefined;
 let virtual: VirtualTranscript | undefined;
 let speakers = new Map<string, Speaker>();
 let waveform: HTMLElement[] = [];
@@ -68,12 +70,11 @@ function scrollToActive(instant = false) {
   if (active < 0) return;
   virtual?.scrollTo(active, instant || reduced.matches ? "instant" : "smooth");
 }
-function seekTo(time: number, preview = true) {
+function seekTo(time: number, preview?: Skip) {
   if (!data) return;
-  if (preview) {
-    const skip = data.skips.find((s) => time >= s.start && time < s.end);
-    if (skip) bypass.add(skip.id);
-  }
+  previewSkip = preview;
+  clearTimeout(toastTimer);
+  element("toast").hidden = true;
   audio.currentTime = Math.min(data.duration, Math.max(0, time));
   update();
   if (following) scrollToActive(true);
@@ -180,9 +181,11 @@ function showSkip(skip: Skip) {
 function update() {
   if (!data) return;
   let time = audio.currentTime;
+  if (previewSkip && (time < previewSkip.start || time >= previewSkip.end))
+    previewSkip = undefined;
   if (!audio.paused && skipToggle.checked) {
     const skip = data.skips.find(
-      (s) => !bypass.has(s.id) && time >= s.start && time < s.end,
+      (s) => s.id !== previewSkip?.id && time >= s.start && time < s.end,
     );
     if (skip) {
       audio.currentTime = skip.end + 0.04;
@@ -307,8 +310,7 @@ async function start() {
     hint.textContent = "Listen and check ↗";
     button.append(name, time, hint);
     button.addEventListener("click", () => {
-      bypass.add(skip.id);
-      seekTo(skip.start);
+      seekTo(skip.start, skip);
       setFollowing(true);
       void play();
     });
@@ -389,14 +391,13 @@ element("speed").addEventListener("click", () => {
   savePosition();
 });
 skipToggle.addEventListener("change", () => {
-  bypass.clear();
+  previewSkip = undefined;
   savePosition();
   update();
 });
 element("undo").addEventListener("click", () => {
   if (!lastSkipped) return;
-  bypass.add(lastSkipped.id);
-  seekTo(lastSkipped.start);
+  seekTo(lastSkipped.start, lastSkipped);
   element("toast").hidden = true;
 });
 followButton.addEventListener("click", () => setFollowing(!following));

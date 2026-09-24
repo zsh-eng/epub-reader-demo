@@ -16,7 +16,9 @@ Open **http://127.0.0.1:4378**. The prepared episode is stored in `.local/`.
 Use a chapter or transcript passage to seek. Press Space to play. Scrolling stops
 transcript following; **Follow along** returns to playback. Promotion cards let
 you listen to a detected range. **Undo** replays a skipped range without skipping
-it again. Playback position is stored against the exact audio hash.
+it again during that pass. Ordinary scrubbing and restored playback positions
+still respect the Skip promotions switch. Playback position is stored against
+the exact audio hash.
 
 The player uses actual cached audio and model results. It makes no external
 requests and contains no API key. Stop its server with Control-C.
@@ -137,7 +139,12 @@ pauses over two seconds, or 45 seconds. Display paragraphs are separate from
 these classification blocks. Each request to `/v1/systemone` uses model
 `jev-1.13.0`, `state.target` (the block text), and
 `state.surrounding_context` (speaker-labelled blocks overlapping 45 seconds
-before and after it).
+before and after it). The current Jev requests do **not** include the
+episode description. That description is saved in `source.json` and sent only
+to Luna for chapter/name enrichment. The general show description is not
+currently collected. A future context experiment should include both as
+separate background fields, without treating promotional show-note copy as
+evidence that a spoken passage is an advertisement.
 
 Three independent `noul` questions ask about paid third-party sponsorship,
 publisher self-promotion, and credits. A coarse score of at least 0.5 triggers
@@ -170,8 +177,10 @@ across speakers; sentence-level refinement can then locate their boundaries.
 - Seek feedback follows input immediately. Manual scrolling cancels following;
   reduced-motion mode removes smooth scroll. There is no claimed 120 fps result.
 - The same audio element survives chapter and transcript navigation.
-- Skip Undo bypasses that range for the session. Seeking into a promotion also
-  permits listening to it. Refreshing restores position, speed and skip setting.
+- Only Undo and Listen and check bypass a promotion, for one pass. Leaving the
+  range or seeking elsewhere clears that exception. Ordinary seeks into a
+  promotion, and restored playback inside one, still skip when playback starts.
+  Refreshing restores position, speed and skip setting.
 - Artwork and episode assets are cached locally. The server binds to loopback.
 
 ## Checks
