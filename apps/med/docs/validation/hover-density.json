@@ -1,0 +1,16 @@
+{
+  "scope": "Production Bun viewer, Chromium 1440x1000. Click through two animation frames after ready; includes Playwright input scheduling. Hover preceded click by 250ms; highlighting may finish later. OS caches warm.",
+  "commitSwitches": 24,
+  "sameCommitReselections": 8,
+  "p50Ms": 98.31995800000004,
+  "p95Ms": 181.26808400000027,
+  "hover": {
+    "file": "src/jsc/bindings/FormatStackTraceForJS.cpp",
+    "readsBeforeClick": 1,
+    "extraReadsOnClick": 0,
+    "clickThroughTwoFramesMs": 66.72520799999984,
+    "initiallyHighlighted": false,
+    "highlightedMs": 853.6357499999995
+  },
+  "errors": []
+}

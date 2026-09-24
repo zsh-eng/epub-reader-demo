@@ -1,0 +1,188 @@
+{
+  "before": {
+    "repo": "/Users/admin/med/.benchmarks/bun",
+    "entries": 21768,
+    "listRequests": 9,
+    "requests": [
+      {
+        "duration": 424.771
+      }
+    ],
+    "samples": [
+      {
+        "ms": 565.1000000014901,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 58.79999999701977,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 58.20000000298023,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 55.600000001490116,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 53.5,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 46.899999998509884,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 48.399999998509884,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 47.29999999701977,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 49.19999999552965,
+        "rows": 45,
+        "reused": false
+      }
+    ],
+    "firstOpenMs": 565.1000000014901,
+    "warmMedianMs": 51.349999997764826,
+    "warmMaxMs": 58.79999999701977,
+    "errors": [],
+    "method": "Production headless Chromium, 1440x1000. Synthetic shortcut dispatch to two animation frames with mounted rows; 8 warm opens. No CPU profiler."
+  },
+  "after": {
+    "repo": "/Users/admin/med/.benchmarks/bun",
+    "entries": 21768,
+    "listRequests": 1,
+    "requests": [
+      {
+        "duration": 541.48
+      }
+    ],
+    "samples": [
+      {
+        "ms": 671.6000000014901,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 13.899999998509884,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 14,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 13.899999998509884,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 15.200000002980232,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 17.100000001490116,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 14.899999998509884,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 17.600000001490116,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 17.600000001490116,
+        "rows": 45,
+        "reused": true
+      }
+    ],
+    "firstOpenMs": 671.6000000014901,
+    "warmMedianMs": 15.050000000745058,
+    "warmMaxMs": 17.600000001490116,
+    "errors": [],
+    "method": "Production headless Chromium, 1440x1000. Synthetic shortcut dispatch to two animation frames with mounted rows; 8 warm opens. No CPU profiler."
+  },
+  "repeat": {
+    "repo": "/Users/admin/med/.benchmarks/bun",
+    "entries": 21768,
+    "listRequests": 1,
+    "requests": [
+      {
+        "duration": 619.341
+      }
+    ],
+    "samples": [
+      {
+        "ms": 748.3999999985099,
+        "rows": 45,
+        "reused": false
+      },
+      {
+        "ms": 16.5,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 17.799999997019768,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 15.100000001490116,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 14.299999997019768,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 15.200000002980232,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 12.5,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 13.900000005960464,
+        "rows": 45,
+        "reused": true
+      },
+      {
+        "ms": 14.5,
+        "rows": 45,
+        "reused": true
+      }
+    ],
+    "firstOpenMs": 748.3999999985099,
+    "warmMedianMs": 14.800000000745058,
+    "warmMaxMs": 17.799999997019768,
+    "errors": [],
+    "method": "Production headless Chromium, 1440x1000. Synthetic shortcut dispatch to two animation frames with mounted rows; 8 warm opens. No CPU profiler."
+  }
+}

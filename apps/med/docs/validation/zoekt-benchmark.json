@@ -1,0 +1,1042 @@
+{
+  "recordedAt": "2026-09-19T14:05:52.634Z",
+  "repo": "/Users/admin/med/.benchmarks/bun",
+  "run": "/Users/admin/med/.benchmarks/zoekt-1789826752280",
+  "hardware": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "logicalCpus": 8,
+    "ramBytes": 17179869184
+  },
+  "versions": {
+    "git": "git version 2.52.0",
+    "rg": "ripgrep 15.1.0",
+    "zoektBuild": "/Users/admin/med/.benchmarks/zoekt-tools/bin/zoekt-git-index: go1.26.8\n\tpath\tgithub.com/sourcegraph/zoekt/cmd/zoekt-git-index\n\tmod\tgithub.com/sourcegraph/zoekt\tv0.0.0-20260911061844-153817f643cd\th1:e8/YDcc7aGRLdbpnmRwp7xuM9s/J17tVI3kkpXV+QCg=\n\tdep\tcloud.google.com/go\tv0.118.0\th1:tvZe1mgqRxpiVa3XlIGMiPcEUbP1gNXELgD4y/IXmeQ=\n\tdep\tcloud.google.com/go/auth\tv0.14.0\th1:A5C4dKV/Spdvxcl0ggWwWEzzP7AZMJSEIgrkngwhGYM=\n\tdep\tcloud.google.com/go/auth/oauth2adapt\tv0.2.7\th1:/Lc7xODdqcEw8IrZ9SvwnlLX6j9FHQM74z6cBk9Rw6M=\n\tdep\tcloud.google.com/go/compute/metadata\tv0.9.0\th1:pDUj4QMoPejqq20dK0Pg2N4yG9zIkYGdBtwLoEkH9Zs=\n\tdep\tcloud.google.com/go/profiler\tv0.4.2\th1:KojCmZ+bEPIQrd7bo2UFvZ2xUPLHl55KzHl7iaR4V2I=\n\tdep\tdario.cat/mergo\tv1.0.1\th1:Ra4+bf83h2ztPIQYNP99R6m+Y7KfnARDfID+a+vLl4s=\n\tdep\tgithub.com/ProtonMail/go-crypto\tv1.1.6\th1:ZcV+Ropw6Qn0AX9brlQLAUXfqLBc7Bl+f/DmNxpLfdw=\n\tdep\tgithub.com/RoaringBitmap/roaring/v2\tv2.19.0\th1:zsWtVE+biht4eVl0YDLvykUqGkftR3Qc5UCbeKB4UQ4=\n\tdep\tgithub.com/beorn7/perks\tv1.0.1\th1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=\n\tdep\tgithub.com/bits-and-blooms/bitset\tv1.24.4\th1:95H15Og1clikBrKr/DuzMXkQzECs1M6hhoGXLwLQOZE=\n\tdep\tgithub.com/bmatcuk/doublestar/v4\tv4.10.0\th1:zU9WiOla1YA122oLM6i4EXvGW62DvKZVxIe6TYWexEs=\n\tdep\tgithub.com/cespare/xxhash/v2\tv2.3.0\th1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=\n\tdep\tgithub.com/cloudflare/circl\tv1.6.3\th1:9GPOhQGF9MCYUeXyMYlqTR6a5gTrgR/fBLXvUgtVcg8=\n\tdep\tgithub.com/cyphar/filepath-securejoin\tv0.6.1\th1:5CeZ1jPXEiYt3+Z6zqprSAgSWiggmpVyciv8syjIpVE=\n\tdep\tgithub.com/dustin/go-humanize\tv1.0.1\th1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=\n\tdep\tgithub.com/emirpasic/gods\tv1.18.1\th1:FXtiHYKDGKCW2KzwZKx0iC0PQmdlorYgdFG9jPXJ1Bc=\n\tdep\tgithub.com/go-enry/go-enry/v2\tv2.9.6\th1:np63eOtMV56zfYDHnFVgpEVOk8fr2kmylcMnAZUDbSs=\n\tdep\tgithub.com/go-git/gcfg\tv1.5.1-0.20230307220236-3a3c6141e376\th1:+zs/tPmkDkHx3U66DAb0lQFJrpS6731Oaa12ikc+DiI=\n\tdep\tgithub.com/go-git/go-billy/v5\tv5.9.0\th1:jItGXszUDRtR/AlferWPTMN4j38BQ88XnXKbilmmBPA=\n\tdep\tgithub.com/go-git/go-git/v5\tv5.19.1\th1:nX27AnaU43/K5bKktKwgBmR9lawoYVe1Ckg0rgzzN00=\n\tdep\tgithub.com/go-logr/logr\tv1.4.3\th1:CjnDlHq8ikf6E492q6eKboGOC0T8CDaOvkHCIg8idEI=\n\tdep\tgithub.com/go-logr/stdr\tv1.2.2\th1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=\n\tdep\tgithub.com/gobwas/glob\tv0.2.3\th1:A4xDbljILXROh+kObIiy5kIaPYD8e96x1tgBhUI5J+Y=\n\tdep\tgithub.com/golang/groupcache\tv0.0.0-20241129210726-2c02b8208cf8\th1:f+oWsMOmNPc8JmEHVZIycC7hBoQxHH9pNKQORJNozsQ=\n\tdep\tgithub.com/google/pprof\tv0.0.0-20241210010833-40e02aabc2ad\th1:a6HEuzUHeKH6hwfN/ZoQgRgVIWFJljSWa/zetS2WTvg=\n\tdep\tgithub.com/google/s2a-go\tv0.1.9\th1:LGD7gtMgezd8a/Xak7mEWL0PjoTQFvpRudN895yqKW0=\n\tdep\tgithub.com/googleapis/enterprise-certificate-proxy\tv0.3.4\th1:XYIDZApgAnrN1c855gTgghdIA6Stxb52D5RnLI1SLyw=\n\tdep\tgithub.com/googleapis/gax-go/v2\tv2.14.1\th1:hb0FFeiPaQskmvakKu5EbCbpntQn48jyHuvrkurSS/Q=\n\tdep\tgithub.com/grafana/regexp\tv0.0.0-20240607082908-2cb410fa05da\th1:BML5sNe+bw2uO8t8cQSwe5QhvoP04eHPF7bnaQma0Kw=\n\tdep\tgithub.com/grpc-ecosystem/go-grpc-middleware/v2\tv2.3.3\th1:B+8ClL/kCQkRiU82d9xajRPKYMrB7E0MbtzWVi1K4ns=\n\tdep\tgithub.com/jbenet/go-context\tv0.0.0-20150711004518-d14ea06fba99\th1:BQSFePA1RWJOlocH6Fxy8MmwDt+yVQYULKfN0RoTN8A=\n\tdep\tgithub.com/kevinburke/ssh_config\tv1.2.0\th1:x584FjTGwHzMwvHx18PXxbBVzfnxogHaAReU4gf13a4=\n\tdep\tgithub.com/klauspost/cpuid/v2\tv2.3.0\th1:S4CRMLnYUhGeDFDqkGriYKdfoFlDnMtqTiI/sFzhA9Y=\n\tdep\tgithub.com/mschoch/smat\tv0.2.0\th1:8imxQsjDm8yFEAVBe7azKmKSgzSkZXDuKkSq9374khM=\n\tdep\tgithub.com/munnerz/goautoneg\tv0.0.0-20191010083416-a7dc8b61c822\th1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=\n\tdep\tgithub.com/opentracing/opentracing-go\tv1.2.0\th1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=\n\tdep\tgithub.com/pjbgf/sha1cd\tv0.6.0\th1:3WJ8Wz8gvDz29quX1OcEmkAlUg9diU4GxJHqs0/XiwU=\n\tdep\tgithub.com/prometheus/client_golang\tv1.20.5\th1:cxppBPuYhUnsO6yo/aoRol4L7q7UFfdm+bR9r+8l63Y=\n\tdep\tgithub.com/prometheus/client_model\tv0.6.1\th1:ZKSh/rekM+n3CeS952MLRAdFwIKqeY8b62p8ais2e9E=\n\tdep\tgithub.com/prometheus/common\tv0.62.0\th1:xasJaQlnWAeyHdUBeGjXmutelfJHWMRr+Fg4QszZ2Io=\n\tdep\tgithub.com/prometheus/procfs\tv0.15.1\th1:YagwOFzUgYfKKHX6Dr+sHT7km/hxC76UB0learggepc=\n\tdep\tgithub.com/rs/xid\tv1.6.0\th1:fV591PaemRlL6JfRxGDEPl69wICngIQ3shQtzfy2gxU=\n\tdep\tgithub.com/sergi/go-diff\tv1.3.2-0.20230802210424-5b0b94c5c0d3\th1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=\n\tdep\tgithub.com/skeema/knownhosts\tv1.3.1\th1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnBY8=\n\tdep\tgithub.com/sourcegraph/go-ctags\tv0.0.0-20250729094530-349a251d78d8\th1:hpCD/FvbXLR7/034fKD0CQ8LmT4zoQfT2DzJIjqMzUI=\n\tdep\tgithub.com/tetratelabs/wazero\tv1.9.0\th1:IcZ56OuxrtaEz8UYNRHBrUa9bYeX9oVY93KspZZBf/I=\n\tdep\tgithub.com/wasilibs/go-re2\tv1.10.0\th1:vQZEBYZOCA9jdBMmrO4+CvqyCj0x4OomXTJ4a5/urQ0=\n\tdep\tgithub.com/wasilibs/wazero-helpers\tv0.0.0-20240620070341-3dff1577cd52\th1:OvLBa8SqJnZ6P+mjlzc2K7PM22rRUPE1x32G9DTPrC4=\n\tdep\tgithub.com/xanzy/ssh-agent\tv0.3.3\th1:+/15pJfg/RsTxqYcX6fHqOXZwwMP+2VyYWJeWM2qQFM=\n\tdep\tgo.opentelemetry.io/auto/sdk\tv1.2.1\th1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=\n\tdep\tgo.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc\tv0.63.0\th1:YH4g8lQroajqUwWbq/tr2QX1JFmEXaDLgG+ew9bLMWo=\n\tdep\tgo.opentelemetry.io/otel\tv1.43.0\th1:mYIM03dnh5zfN7HautFE4ieIig9amkNANT+xcVxAj9I=\n\tdep\tgo.opentelemetry.io/otel/metric\tv1.43.0\th1:d7638QeInOnuwOONPp4JAOGfbCEpYb+K6DVWvdxGzgM=\n\tdep\tgo.opentelemetry.io/otel/trace\tv1.43.0\th1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=\n\tdep\tgo.uber.org/atomic\tv1.11.0\th1:ZvwS0R+56ePWxUNi+Atn9dWONBPp/AUETXlHW0DxSjE=\n\tdep\tgo.uber.org/automaxprocs\tv1.6.0\th1:O3y2/QNTOdbF+e/dpXNNW7Rx2hZ4sTIPyybbxyNqTUs=\n\tdep\tgolang.org/x/crypto\tv0.54.0\th1:YLIA59K4fiNzHzjnZt2tUJQjQtUWfWbeHBqKtk3eScw=\n\tdep\tgolang.org/x/net\tv0.57.0\th1:K5+3DljvIuDG9/Jv9rvyMywYNFCQ9RSUY6OOTTkT+tE=\n\tdep\tgolang.org/x/oauth2\tv0.36.0\th1:peZ/1z27fi9hUOFCAZaHyrpWG5lwe0RJEEEeH0ThlIs=\n\tdep\tgolang.org/x/sync\tv0.22.0\th1:SZjpbeLmrCk4xhRSZFNZW5gFUeCeFgjekvI/+gfScek=\n\tdep\tgolang.org/x/sys\tv0.47.0\th1:o7XGOvZQCADBQQ4Y7VNq2dRWQR7JmOUW8Kxx4ZsNgWs=\n\tdep\tgolang.org/x/text\tv0.40.0\th1:Ub2Z6/xjgF1WrYQz2nuITOEegKFtiIy+rieRJ5lHZKs=\n\tdep\tgolang.org/x/time\tv0.14.0\th1:MRx4UaLrDotUKUdCIqzPC48t1Y9hANFKIRpNx+Te8PI=\n\tdep\tgoogle.golang.org/api\tv0.217.0\th1:GYrUtD289o4zl1AhiTZL0jvQGa2RDLyC+kX1N/lfGOU=\n\tdep\tgoogle.golang.org/genproto\tv0.0.0-20250115164207-1a7da9e5054f\th1:387Y+JbxF52bmesc8kq1NyYIp33dnxCw6eiA7JMsTmw=\n\tdep\tgoogle.golang.org/genproto/googleapis/api\tv0.0.0-20260414002931-afd174a4e478\th1:yQugLulqltosq0B/f8l4w9VryjV+N/5gcW0jQ3N8Qec=\n\tdep\tgoogle.golang.org/genproto/googleapis/rpc\tv0.0.0-20260414002931-afd174a4e478\th1:RmoJA1ujG+/lRGNfUnOMfhCy5EipVMyvUE+KNbPbTlw=\n\tdep\tgoogle.golang.org/grpc\tv1.82.1\th1:NnAxzGRA0677vCa4BUkOAnO5+FfQqVl9iUXeD0IqcGE=\n\tdep\tgoogle.golang.org/protobuf\tv1.36.11\th1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=\n\tdep\tgopkg.in/warnings.v0\tv0.1.2\th1:wFXVbFY8DY5/xOe1ECiWdKCzZlxgshcYVNkBHstARME=\n\tbuild\t-buildmode=exe\n\tbuild\t-compiler=gc\n\tbuild\tDefaultGODEBUG=cryptocustomrand=1,tlssecpmlkem=0,urlstrictcolons=0\n\tbuild\tCGO_ENABLED=0\n\tbuild\tGOARCH=arm64\n\tbuild\tGOOS=darwin\n\tbuild\tGOARM64=v8.0\n"
+  },
+  "settings": {
+    "ctags": false,
+    "parallelism": 4,
+    "fileLimit": 8388608,
+    "maxTrigrams": 1000000,
+    "resultLimit": 200,
+    "trials": 10,
+    "queryCase": "insensitive",
+    "queryKind": "literal",
+    "caches": "OS cache not purged; warm repetitions; first request recorded separately"
+  },
+  "before": {
+    "head": "26e7a4b3690dce60d4dcd7f47a12b531deb00837",
+    "refs": "49f2859b4946d0a4a542b4021cffd77539aa3c22c5279931707d7cdeae118c27",
+    "status": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktrees": "50544c8492960f87a0855e23b236ab585d61becb8957df7f53f71eb9115950b0",
+    "index": "4b19d5e64120c983443551d8a78043424306893dbdf68d492323f0b2bdf38b00"
+  },
+  "excludedLargeFiles": [
+    "src/jsc/bindings/sqlite/sqlite3.c",
+    "test/bundler/transpiler/fixtures/lots-of-for-loop.js"
+  ],
+  "builds": [
+    {
+      "label": "one-branch-initial",
+      "args": [
+        "-index",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/index",
+        "-branches",
+        "benchmark/b0",
+        "-submodules=false",
+        "-disable_ctags",
+        "-parallelism",
+        "4",
+        "-file_limit",
+        "8388608",
+        "-max_trigram_count",
+        "1000000",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git"
+      ],
+      "wallMs": 6589.34,
+      "peakRssBytes": 1228210176,
+      "indexBytes": 410551174,
+      "log": "2026/09/19 22:05:54 setTemplatesFromRepo(/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git): unknown git hosting site \"/Users/admin/med/.benchmarks/bun\"\n2026/09/19 22:05:54 attempting to index 19810 total files (0 via cat-file, 19810 via go-git)\n2026/09/19 22:06:00 finished shard /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00001.zoekt: 118537644 index bytes (overhead 2.9), 9349 files processed \n2026/09/19 22:06:01 finished shard /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00000.zoekt: 292013530 index bytes (overhead 2.8), 10461 files processed \n",
+      "resourceUsage": "        6.58 real         7.25 user         0.89 sys\n          1228210176  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n              100863  page reclaims\n                1382  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   4  messages sent\n                   0  messages received\n                 560  signals received\n                 179  voluntary context switches\n               50152  involuntary context switches\n         81437071783  instructions retired\n         24570604069  cycles elapsed\n          1300055576  peak memory footprint\n"
+    },
+    {
+      "label": "one-branch-unchanged",
+      "args": [
+        "-index",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/index",
+        "-branches",
+        "benchmark/b0",
+        "-submodules=false",
+        "-disable_ctags",
+        "-parallelism",
+        "4",
+        "-file_limit",
+        "8388608",
+        "-max_trigram_count",
+        "1000000",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git"
+      ],
+      "wallMs": 57.15,
+      "peakRssBytes": 50757632,
+      "indexBytes": 410551174,
+      "log": "2026/09/19 22:06:01 setTemplatesFromRepo(/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git): unknown git hosting site \"/Users/admin/med/.benchmarks/bun\"\n",
+      "resourceUsage": "        0.05 real         0.03 user         0.02 sys\n            50757632  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4199  page reclaims\n                  11  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   1  messages sent\n                   0  messages received\n                  21  signals received\n                   6  voluntary context switches\n                 542  involuntary context switches\n           328254116  instructions retired\n           119481531  cycles elapsed\n            32113312  peak memory footprint\n"
+    },
+    {
+      "label": "one-commit-delta",
+      "args": [
+        "-index",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/index",
+        "-branches",
+        "benchmark/b0",
+        "-submodules=false",
+        "-disable_ctags",
+        "-parallelism",
+        "4",
+        "-file_limit",
+        "8388608",
+        "-max_trigram_count",
+        "1000000",
+        "-delta",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git"
+      ],
+      "wallMs": 107.54,
+      "peakRssBytes": 130678784,
+      "indexBytes": 412080475,
+      "log": "2026/09/19 22:06:01 setTemplatesFromRepo(/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git): unknown git hosting site \"/Users/admin/med/.benchmarks/bun\"\n2026/09/19 22:06:01 attempting to index 10 total files (0 via cat-file, 10 via go-git)\n2026/09/19 22:06:01 finished shard /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00002.zoekt: 1527453 index bytes (overhead 3.2), 10 files processed \n",
+      "resourceUsage": "        0.10 real         0.10 user         0.03 sys\n           130678784  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                9095  page reclaims\n                   7  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   3  messages sent\n                   0  messages received\n                  34  signals received\n                   4  voluntary context switches\n                 770  involuntary context switches\n          1213171736  instructions retired\n           368109404  cycles elapsed\n           111313592  peak memory footprint\n"
+    },
+    {
+      "label": "ten-branches-delta-request",
+      "args": [
+        "-index",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/index",
+        "-branches",
+        "benchmark/b0,benchmark/b1,benchmark/b2,benchmark/b3,benchmark/b4,benchmark/b5,benchmark/b6,benchmark/b7,benchmark/b8,benchmark/b9",
+        "-submodules=false",
+        "-disable_ctags",
+        "-parallelism",
+        "4",
+        "-file_limit",
+        "8388608",
+        "-max_trigram_count",
+        "1000000",
+        "-delta",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git"
+      ],
+      "wallMs": 6282.61,
+      "peakRssBytes": 1233747968,
+      "indexBytes": 488991272,
+      "log": "2026/09/19 22:06:18 setTemplatesFromRepo(/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git): unknown git hosting site \"/Users/admin/med/.benchmarks/bun\"\n2026/09/19 22:06:18 delta build: falling back to normal build since delta build failed, repository=\"bun\", err=requested branch set in build options (\"benchmark/b0, benchmark/b1, benchmark/b2, benchmark/b3, benchmark/b4, benchmark/b5, benchmark/b6, benchmark/b7, benchmark/b8, benchmark/b9\") != branch set found on disk (\"benchmark/b0\") - branch set must be the same for delta shards\n2026/09/19 22:06:19 attempting to index 20215 total files (0 via cat-file, 20215 via go-git)\n2026/09/19 22:06:23 finished shard /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00000.zoekt: 290909458 index bytes (overhead 2.8), 9096 files processed \n2026/09/19 22:06:25 finished shard /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00001.zoekt: 198081814 index bytes (overhead 2.8), 11119 files processed \n2026/09/19 22:06:25 removing old shard file: /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00000.zoekt.meta\n2026/09/19 22:06:25 removing old shard file: /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00001.zoekt.meta\n2026/09/19 22:06:25 removing old shard file: /Users/admin/med/.benchmarks/zoekt-1789826752280/index/bun_v16.00002.zoekt\n",
+      "resourceUsage": "        6.27 real         7.69 user         0.77 sys\n          1233747968  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n               95043  page reclaims\n                1385  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   8  messages sent\n                   0  messages received\n                 802  signals received\n                 227  voluntary context switches\n               29375  involuntary context switches\n         88749246012  instructions retired\n         25981075359  cycles elapsed\n          1290880560  peak memory footprint\n"
+    },
+    {
+      "label": "ten-branches-unchanged",
+      "args": [
+        "-index",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/index",
+        "-branches",
+        "benchmark/b0,benchmark/b1,benchmark/b2,benchmark/b3,benchmark/b4,benchmark/b5,benchmark/b6,benchmark/b7,benchmark/b8,benchmark/b9",
+        "-submodules=false",
+        "-disable_ctags",
+        "-parallelism",
+        "4",
+        "-file_limit",
+        "8388608",
+        "-max_trigram_count",
+        "1000000",
+        "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git"
+      ],
+      "wallMs": 92.53,
+      "peakRssBytes": 52379648,
+      "indexBytes": 488991272,
+      "log": "2026/09/19 22:06:25 setTemplatesFromRepo(/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git): unknown git hosting site \"/Users/admin/med/.benchmarks/bun\"\n",
+      "resourceUsage": "        0.08 real         0.04 user         0.03 sys\n            52379648  maximum resident set size\n                   0  average shared memory size\n                   0  average unshared data size\n                   0  average unshared stack size\n                4299  page reclaims\n                   5  page faults\n                   0  swaps\n                   0  block input operations\n                   0  block output operations\n                   1  messages sent\n                   0  messages received\n                  16  signals received\n                  10  voluntary context switches\n                1220  involuntary context switches\n           372880118  instructions retired\n           152546798  cycles elapsed\n            33555104  peak memory footprint\n"
+    }
+  ],
+  "phases": [
+    {
+      "label": "one-branch",
+      "startupMs": 484.5,
+      "listing": {
+        "Repos": [
+          {
+            "Repository": {
+              "TenantID": 0,
+              "ID": 0,
+              "Name": "bun",
+              "URL": "",
+              "Metadata": null,
+              "Source": "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git",
+              "Branches": [
+                {
+                  "Name": "benchmark/b0",
+                  "Version": "26e7a4b3690dce60d4dcd7f47a12b531deb00837"
+                }
+              ],
+              "SubRepoMap": {},
+              "CommitURLTemplate": "",
+              "FileURLTemplate": "",
+              "LineFragmentTemplate": "",
+              "RawConfig": null,
+              "Rank": 0,
+              "IndexOptions": "2f5bd8a448b007929a9ec7c63e8a4f6f2438aa52",
+              "HasSymbols": false,
+              "Tombstone": false,
+              "LatestCommitDate": "2026-09-18T20:40:05-07:00",
+              "FileTombstones": {
+                "scripts/build/deps/webkit.ts": {},
+                "src/jsc/bindings/ErrorCode.cpp": {},
+                "src/jsc/bindings/ErrorStackTrace.cpp": {},
+                "src/jsc/bindings/ErrorStackTrace.h": {},
+                "src/jsc/bindings/FormatStackTraceForJS.cpp": {},
+                "src/jsc/bindings/FormatStackTraceForJS.h": {},
+                "src/jsc/bindings/ZigException.cpp": {},
+                "test/js/bun/module-graph/module-graph-matrix.test.ts": {},
+                "test/js/node/process/process.test.js": {},
+                "test/js/node/v8/capture-stack-trace.test.js": {}
+              }
+            },
+            "IndexMetadata": {
+              "IndexFormatVersion": 16,
+              "IndexFeatureVersion": 12,
+              "IndexMinReaderVersion": 10,
+              "IndexTime": "2026-09-19T22:05:54.763342+08:00",
+              "PlainASCII": false,
+              "LanguageMap": {
+                "": 3,
+                "Astro": 32,
+                "Batchfile": 36,
+                "C": 9,
+                "C++": 11,
+                "CSS": 12,
+                "Checksums": 35,
+                "Diff": 16,
+                "Dockerfile": 20,
+                "Dotenv": 24,
+                "Git Attributes": 26,
+                "Go Template": 33,
+                "HTML": 17,
+                "INI": 6,
+                "Ignore List": 14,
+                "JSON": 2,
+                "JSON with Comments": 0,
+                "JSON5": 23,
+                "JavaScript": 4,
+                "Makefile": 25,
+                "Markdown": 5,
+                "Prisma": 29,
+                "Protocol Buffer": 27,
+                "Python": 13,
+                "Rust": 34,
+                "SQL": 21,
+                "SVG": 28,
+                "Shell": 15,
+                "Svelte": 18,
+                "TOML": 8,
+                "TSX": 19,
+                "Text": 7,
+                "TypeScript": 1,
+                "Windows Registry Entries": 30,
+                "XML": 22,
+                "XML Property List": 31,
+                "YAML": 10
+              },
+              "ZoektVersion": "",
+              "ID": "dan9dghvg87cntfvakag"
+            },
+            "Stats": {
+              "Repos": 0,
+              "Shards": 3,
+              "Documents": 19820,
+              "IndexBytes": 1416292,
+              "ContentBytes": 146830520,
+              "NewLinesCount": 3928818,
+              "DefaultBranchNewLinesCount": 3928818,
+              "OtherBranchesNewLinesCount": 0
+            }
+          }
+        ],
+        "ReposMap": {},
+        "Crashes": 0,
+        "Stats": {
+          "Repos": 1,
+          "Shards": 3,
+          "Documents": 19820,
+          "IndexBytes": 1416292,
+          "ContentBytes": 146830520,
+          "NewLinesCount": 3928818,
+          "DefaultBranchNewLinesCount": 3928818,
+          "OtherBranchesNewLinesCount": 0
+        }
+      },
+      "queries": [
+        {
+          "query": "rewriteForProxiedHttp",
+          "firstZoektRequestMs": 3.12,
+          "initialStats": {
+            "ContentBytesLoaded": 57329,
+            "IndexBytesLoaded": 1175,
+            "Crashes": 0,
+            "Duration": 841042,
+            "FileCount": 1,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 2,
+            "FilesLoaded": 2,
+            "FilesSkipped": 0,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 2,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 1,
+            "MatchCount": 5,
+            "NgramMatches": 9,
+            "NgramLookups": 368,
+            "Wait": 3166,
+            "MatchTreeConstruction": 908041,
+            "MatchTreeSearch": 460959,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 5,
+          "timings": {
+            "zoekt": {
+              "samples": [1, 1.22, 30.92, 1.96, 1.42, 1.33, 1.45, 1.5, 1.45, 1.23],
+              "medianMs": 1.44,
+              "minMs": 1,
+              "maxMs": 30.92
+            },
+            "git": {
+              "samples": [
+                213.84, 282.98, 437.21, 274.07, 204.86, 198.61, 207.8, 223.63, 226.57, 198.63
+              ],
+              "medianMs": 218.74,
+              "minMs": 198.61,
+              "maxMs": 437.21
+            },
+            "rg": {
+              "samples": [
+                996.42, 338.63, 932.43, 359.18, 403.36, 283.5, 373.28, 324.35, 304.63, 299.27
+              ],
+              "medianMs": 348.91,
+              "minMs": 283.5,
+              "maxMs": 996.42
+            }
+          },
+          "firstOutput": {
+            "git": {
+              "samples": [74.26, 83.43, 224.52, 88.2, 67.14, 65.31, 63.87, 77.33, 74.86, 62.53],
+              "medianMs": 74.56,
+              "minMs": 62.53,
+              "maxMs": 224.52
+            },
+            "rg": {
+              "samples": [51.91, 23.7, 22.47, 22.03, 18.23, 47.92, 208.58, 21.25, 45.96, 17.77],
+              "medianMs": 23.09,
+              "minMs": 17.77,
+              "maxMs": 208.58
+            }
+          },
+          "exhaustive": {
+            "zoektLines": 5,
+            "gitLines": 5,
+            "rgLines": 5,
+            "fullResultMs": {
+              "zoekt": 1.79,
+              "git": 239.65,
+              "rg": 311.86
+            },
+            "zoektStats": {
+              "ContentBytesLoaded": 57329,
+              "IndexBytesLoaded": 1175,
+              "Crashes": 0,
+              "Duration": 230791,
+              "FileCount": 1,
+              "ShardFilesConsidered": 0,
+              "FilesConsidered": 2,
+              "FilesLoaded": 2,
+              "FilesSkipped": 0,
+              "FilesSkippedDueToCancellation": 0,
+              "ShardsScanned": 2,
+              "ShardsSkipped": 0,
+              "ShardsSkippedFilter": 1,
+              "MatchCount": 5,
+              "NgramMatches": 9,
+              "NgramLookups": 368,
+              "Wait": 4583,
+              "MatchTreeConstruction": 216542,
+              "MatchTreeSearch": 113666,
+              "RegexpsConsidered": 0,
+              "FlushReason": 0
+            },
+            "zoektMissingVsGit": [],
+            "zoektExtraVsGit": [],
+            "rgMissingVsGit": [],
+            "rgExtraVsGit": []
+          }
+        },
+        {
+          "query": "setTimeout",
+          "firstZoektRequestMs": 26.05,
+          "initialStats": {
+            "ContentBytesLoaded": 10977208,
+            "IndexBytesLoaded": 32699,
+            "Crashes": 0,
+            "Duration": 24097000,
+            "FileCount": 171,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 299,
+            "FilesLoaded": 299,
+            "FilesSkipped": 16766,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 3,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 0,
+            "MatchCount": 416,
+            "NgramMatches": 2760,
+            "NgramLookups": 252,
+            "Wait": 4833,
+            "MatchTreeConstruction": 5331293,
+            "MatchTreeSearch": 29454666,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 198,
+          "timings": {
+            "zoekt": {
+              "samples": [3.67, 3.13, 2.97, 2.98, 3.06, 2.93, 3.48, 2.96, 2.85, 2.83],
+              "medianMs": 2.98,
+              "minMs": 2.83,
+              "maxMs": 3.67
+            },
+            "git": {
+              "samples": [80.21, 74.2, 71.84, 71.88, 87.55, 85.06, 87.48, 93.23, 75.79, 76.45],
+              "medianMs": 78.33,
+              "minMs": 71.84,
+              "maxMs": 93.23
+            },
+            "rg": {
+              "samples": [34.63, 25.91, 25.36, 37.36, 27.72, 28.13, 56.52, 44.21, 46.56, 38.69],
+              "medianMs": 36,
+              "minMs": 25.36,
+              "maxMs": 56.52
+            }
+          },
+          "firstOutput": {
+            "git": {
+              "samples": [10.36, 10.08, 9.79, 9.86, 11.05, 10.18, 12.66, 11.8, 10.17, 10.56],
+              "medianMs": 10.27,
+              "minMs": 9.79,
+              "maxMs": 12.66
+            },
+            "rg": {
+              "samples": [8.38, 8.14, 7.63, 7.9, 8.67, 8.21, 8.89, 9.17, 8.5, 7.33],
+              "medianMs": 8.3,
+              "minMs": 7.33,
+              "maxMs": 9.17
+            }
+          },
+          "exhaustive": {
+            "zoektLines": 2918,
+            "gitLines": 2918,
+            "rgLines": 2918,
+            "fullResultMs": {
+              "zoekt": 71.87,
+              "git": 286.65,
+              "rg": 361.23
+            },
+            "zoektStats": {
+              "ContentBytesLoaded": 40418516,
+              "IndexBytesLoaded": 104670,
+              "Crashes": 0,
+              "Duration": 61964958,
+              "FileCount": 895,
+              "ShardFilesConsidered": 0,
+              "FilesConsidered": 1329,
+              "FilesLoaded": 1327,
+              "FilesSkipped": 0,
+              "FilesSkippedDueToCancellation": 0,
+              "ShardsScanned": 3,
+              "ShardsSkipped": 0,
+              "ShardsSkippedFilter": 0,
+              "MatchCount": 2918,
+              "NgramMatches": 8303,
+              "NgramLookups": 252,
+              "Wait": 3750,
+              "MatchTreeConstruction": 144959,
+              "MatchTreeSearch": 113008166,
+              "RegexpsConsidered": 0,
+              "FlushReason": 0
+            },
+            "zoektMissingVsGit": [],
+            "zoektExtraVsGit": [],
+            "rgMissingVsGit": [],
+            "rgExtraVsGit": []
+          }
+        },
+        {
+          "query": "export",
+          "firstZoektRequestMs": 5.62,
+          "initialStats": {
+            "ContentBytesLoaded": 1042083,
+            "IndexBytesLoaded": 6346,
+            "Crashes": 0,
+            "Duration": 3311167,
+            "FileCount": 51,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 51,
+            "FilesLoaded": 51,
+            "FilesSkipped": 19689,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 3,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 0,
+            "MatchCount": 508,
+            "NgramMatches": 571,
+            "NgramLookups": 144,
+            "Wait": 7625,
+            "MatchTreeConstruction": 4254250,
+            "MatchTreeSearch": 2723791,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 185,
+          "timings": {
+            "zoekt": {
+              "samples": [1.24, 1.68, 1.48, 1.61, 1.65, 1.58, 1.54, 1.51, 2.58, 1.56],
+              "medianMs": 1.57,
+              "minMs": 1.24,
+              "maxMs": 2.58
+            },
+            "git": {
+              "samples": [13.52, 13.21, 13.67, 13.45, 13.19, 13.42, 13.88, 13.67, 14.05, 15.92],
+              "medianMs": 13.6,
+              "minMs": 13.19,
+              "maxMs": 15.92
+            },
+            "rg": {
+              "samples": [10.43, 10.52, 10.2, 10.51, 10.12, 8.73, 10.03, 10.15, 9.68, 14.28],
+              "medianMs": 10.18,
+              "minMs": 8.73,
+              "maxMs": 14.28
+            }
+          },
+          "firstOutput": {
+            "git": {
+              "samples": [8.81, 8.36, 8.48, 8.16, 8.19, 8.55, 8.33, 8.52, 8.84, 9.59],
+              "medianMs": 8.5,
+              "minMs": 8.16,
+              "maxMs": 9.59
+            },
+            "rg": {
+              "samples": [5.83, 5.74, 5.61, 5.81, 5.86, 5.42, 5.85, 5.62, 5.39, 7],
+              "medianMs": 5.78,
+              "minMs": 5.39,
+              "maxMs": 7
+            }
+          },
+          "exhaustive": {
+            "zoektLines": 35914,
+            "gitLines": 35914,
+            "rgLines": 35914,
+            "fullResultMs": {
+              "zoekt": 271.7,
+              "git": 243.94,
+              "rg": 381.62
+            },
+            "zoektStats": {
+              "ContentBytesLoaded": 72714034,
+              "IndexBytesLoaded": 532621,
+              "Crashes": 0,
+              "Duration": 159560125,
+              "FileCount": 5805,
+              "ShardFilesConsidered": 0,
+              "FilesConsidered": 5811,
+              "FilesLoaded": 5805,
+              "FilesSkipped": 0,
+              "FilesSkippedDueToCancellation": 0,
+              "ShardsScanned": 3,
+              "ShardsSkipped": 0,
+              "ShardsSkippedFilter": 0,
+              "MatchCount": 35914,
+              "NgramMatches": 38550,
+              "NgramLookups": 144,
+              "Wait": 3292,
+              "MatchTreeConstruction": 137917,
+              "MatchTreeSearch": 203501791,
+              "RegexpsConsidered": 0,
+              "FlushReason": 0
+            },
+            "zoektMissingVsGit": [],
+            "zoektExtraVsGit": [],
+            "rgMissingVsGit": [],
+            "rgExtraVsGit": []
+          }
+        },
+        {
+          "query": "MED_NO_MATCH_7cd25ead8973",
+          "firstZoektRequestMs": 1.47,
+          "initialStats": {
+            "ContentBytesLoaded": 0,
+            "IndexBytesLoaded": 0,
+            "Crashes": 0,
+            "Duration": 207875,
+            "FileCount": 0,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 0,
+            "FilesLoaded": 0,
+            "FilesSkipped": 0,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 0,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 3,
+            "MatchCount": 0,
+            "NgramMatches": 0,
+            "NgramLookups": 70,
+            "Wait": 3333,
+            "MatchTreeConstruction": 194833,
+            "MatchTreeSearch": 0,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 0,
+          "timings": {
+            "zoekt": {
+              "samples": [0.6, 1.91, 1, 1.82, 1.29, 1.06, 1.79, 1.07, 1.1, 1.04],
+              "medianMs": 1.09,
+              "minMs": 0.6,
+              "maxMs": 1.91
+            },
+            "git": {
+              "samples": [
+                260.49, 194.45, 239.04, 226.3, 207.25, 226.56, 194.79, 232.22, 213.51, 192.54
+              ],
+              "medianMs": 219.91,
+              "minMs": 192.54,
+              "maxMs": 260.49
+            },
+            "rg": {
+              "samples": [
+                357.41, 358.55, 348.19, 405.56, 390.18, 292.68, 310.98, 299, 336.55, 257.94
+              ],
+              "medianMs": 342.37,
+              "minMs": 257.94,
+              "maxMs": 405.56
+            }
+          },
+          "firstOutput": {},
+          "exhaustive": {
+            "zoektLines": 0,
+            "gitLines": 0,
+            "rgLines": 0,
+            "fullResultMs": {
+              "zoekt": 0.92,
+              "git": 207.83,
+              "rg": 265.27
+            },
+            "zoektStats": {
+              "ContentBytesLoaded": 0,
+              "IndexBytesLoaded": 0,
+              "Crashes": 0,
+              "Duration": 64166,
+              "FileCount": 0,
+              "ShardFilesConsidered": 0,
+              "FilesConsidered": 0,
+              "FilesLoaded": 0,
+              "FilesSkipped": 0,
+              "FilesSkippedDueToCancellation": 0,
+              "ShardsScanned": 0,
+              "ShardsSkipped": 0,
+              "ShardsSkippedFilter": 3,
+              "MatchCount": 0,
+              "NgramMatches": 0,
+              "NgramLookups": 70,
+              "Wait": 9375,
+              "MatchTreeConstruction": 53876,
+              "MatchTreeSearch": 0,
+              "RegexpsConsidered": 0,
+              "FlushReason": 0
+            },
+            "zoektMissingVsGit": [],
+            "zoektExtraVsGit": [],
+            "rgMissingVsGit": [],
+            "rgExtraVsGit": []
+          }
+        }
+      ],
+      "serverRssKiB": 176320
+    },
+    {
+      "label": "ten-branches",
+      "startupMs": 471.27,
+      "listing": {
+        "Repos": [
+          {
+            "Repository": {
+              "TenantID": 0,
+              "ID": 0,
+              "Name": "bun",
+              "URL": "",
+              "Metadata": null,
+              "Source": "/Users/admin/med/.benchmarks/zoekt-1789826752280/bun.git",
+              "Branches": [
+                {
+                  "Name": "benchmark/b0",
+                  "Version": "26e7a4b3690dce60d4dcd7f47a12b531deb00837"
+                },
+                {
+                  "Name": "benchmark/b1",
+                  "Version": "0b59724b604d9bb3bd1341747768f863eef6dce3"
+                },
+                {
+                  "Name": "benchmark/b2",
+                  "Version": "91d89f41f4ed539351dc9b660ae6bb7167fdbd3d"
+                },
+                {
+                  "Name": "benchmark/b3",
+                  "Version": "8ce165a1e8a251716773f638b30e6c1b008998af"
+                },
+                {
+                  "Name": "benchmark/b4",
+                  "Version": "b4315fa55138bc295963843e87be478adbd43683"
+                },
+                {
+                  "Name": "benchmark/b5",
+                  "Version": "5c26a6cca597e8bc94d130572cb6115adc51e506"
+                },
+                {
+                  "Name": "benchmark/b6",
+                  "Version": "64669ab07c2e33bfa88d5a918d3e07a15021394c"
+                },
+                {
+                  "Name": "benchmark/b7",
+                  "Version": "b1be9ff65d0d1ef35736edc6c74b06fdcde55fda"
+                },
+                {
+                  "Name": "benchmark/b8",
+                  "Version": "1a6b0d99dbbe6274f12a4cc0dffc58c7083fb961"
+                },
+                {
+                  "Name": "benchmark/b9",
+                  "Version": "baa67e3f4e6924151432cb7a77e61578ce3e9a1c"
+                }
+              ],
+              "SubRepoMap": {},
+              "CommitURLTemplate": "",
+              "FileURLTemplate": "",
+              "LineFragmentTemplate": "",
+              "RawConfig": null,
+              "Rank": 0,
+              "IndexOptions": "2f5bd8a448b007929a9ec7c63e8a4f6f2438aa52",
+              "HasSymbols": false,
+              "Tombstone": false,
+              "LatestCommitDate": "2026-09-18T20:40:05-07:00"
+            },
+            "IndexMetadata": {
+              "IndexFormatVersion": 16,
+              "IndexFeatureVersion": 12,
+              "IndexMinReaderVersion": 10,
+              "IndexTime": "2026-09-19T22:06:19.109092+08:00",
+              "PlainASCII": false,
+              "LanguageMap": {
+                "": 3,
+                "Astro": 33,
+                "Batchfile": 37,
+                "C": 10,
+                "C++": 13,
+                "CSS": 14,
+                "Checksums": 36,
+                "Diff": 17,
+                "Dockerfile": 20,
+                "Dotenv": 26,
+                "Git Attributes": 28,
+                "Go Template": 34,
+                "HTML": 18,
+                "INI": 7,
+                "Ignore List": 15,
+                "JSON": 2,
+                "JSON with Comments": 0,
+                "JSON5": 23,
+                "JavaScript": 4,
+                "Makefile": 27,
+                "Markdown": 5,
+                "PostCSS": 25,
+                "Prisma": 30,
+                "Protocol Buffer": 29,
+                "Python": 8,
+                "Rust": 35,
+                "SQL": 21,
+                "SVG": 24,
+                "Shell": 16,
+                "Svelte": 19,
+                "TOML": 9,
+                "TSX": 11,
+                "Text": 6,
+                "TypeScript": 1,
+                "Windows Registry Entries": 31,
+                "XML": 22,
+                "XML Property List": 32,
+                "YAML": 12
+              },
+              "ZoektVersion": "",
+              "ID": "dan9dmpvg87d5il1eoe0"
+            },
+            "Stats": {
+              "Repos": 0,
+              "Shards": 2,
+              "Documents": 20215,
+              "IndexBytes": 1510276,
+              "ContentBytes": 175209982,
+              "NewLinesCount": 4654696,
+              "DefaultBranchNewLinesCount": 3917562,
+              "OtherBranchesNewLinesCount": 35114926
+            }
+          }
+        ],
+        "ReposMap": {},
+        "Crashes": 0,
+        "Stats": {
+          "Repos": 1,
+          "Shards": 2,
+          "Documents": 20215,
+          "IndexBytes": 1510276,
+          "ContentBytes": 175209982,
+          "NewLinesCount": 4654696,
+          "DefaultBranchNewLinesCount": 3917562,
+          "OtherBranchesNewLinesCount": 35114926
+        }
+      },
+      "queries": [
+        {
+          "query": "rewriteForProxiedHttp",
+          "firstZoektRequestMs": 3.27,
+          "initialStats": {
+            "ContentBytesLoaded": 57329,
+            "IndexBytesLoaded": 1469,
+            "Crashes": 0,
+            "Duration": 1350916,
+            "FileCount": 1,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 4,
+            "FilesLoaded": 2,
+            "FilesSkipped": 0,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 2,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 0,
+            "MatchCount": 5,
+            "NgramMatches": 18,
+            "NgramLookups": 336,
+            "Wait": 1875,
+            "MatchTreeConstruction": 1039208,
+            "MatchTreeSearch": 373625,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 5,
+          "timings": {
+            "zoekt": {
+              "samples": [0.81, 0.75, 0.7, 0.51, 0.46, 0.7, 0.65, 0.59, 0.65, 0.4],
+              "medianMs": 0.65,
+              "minMs": 0.4,
+              "maxMs": 0.81
+            },
+            "zoekt-all-branches": {
+              "samples": [0.99, 0.86, 0.59, 0.6, 0.57, 0.78, 0.6, 0.58, 0.49, 0.5],
+              "medianMs": 0.6,
+              "minMs": 0.49,
+              "maxMs": 0.99
+            }
+          },
+          "firstOutput": {}
+        },
+        {
+          "query": "setTimeout",
+          "firstZoektRequestMs": 25.64,
+          "initialStats": {
+            "ContentBytesLoaded": 12482969,
+            "IndexBytesLoaded": 49462,
+            "Crashes": 0,
+            "Duration": 24158375,
+            "FileCount": 156,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 328,
+            "FilesLoaded": 294,
+            "FilesSkipped": 17005,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 2,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 0,
+            "MatchCount": 401,
+            "NgramMatches": 3675,
+            "NgramLookups": 168,
+            "Wait": 2666,
+            "MatchTreeConstruction": 1316709,
+            "MatchTreeSearch": 23638708,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 199,
+          "timings": {
+            "zoekt": {
+              "samples": [3.96, 2.67, 2.82, 2.62, 2.4, 2.41, 2.39, 3.16, 4.24, 6.5],
+              "medianMs": 2.75,
+              "minMs": 2.39,
+              "maxMs": 6.5
+            },
+            "zoekt-all-branches": {
+              "samples": [8.31, 2.61, 2.31, 2.59, 3.1, 2.77, 2.52, 3.55, 3.18, 4.05],
+              "medianMs": 2.94,
+              "minMs": 2.31,
+              "maxMs": 8.31
+            }
+          },
+          "firstOutput": {}
+        },
+        {
+          "query": "export",
+          "firstZoektRequestMs": 5.09,
+          "initialStats": {
+            "ContentBytesLoaded": 714825,
+            "IndexBytesLoaded": 5088,
+            "Crashes": 0,
+            "Duration": 2958500,
+            "FileCount": 49,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 49,
+            "FilesLoaded": 49,
+            "FilesSkipped": 20077,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 2,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 0,
+            "MatchCount": 496,
+            "NgramMatches": 522,
+            "NgramLookups": 96,
+            "Wait": 4292,
+            "MatchTreeConstruction": 1593125,
+            "MatchTreeSearch": 1827875,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 198,
+          "timings": {
+            "zoekt": {
+              "samples": [1.68, 2.44, 2.35, 2.11, 1.94, 1.64, 2.95, 2.31, 1.56, 1.8],
+              "medianMs": 2.03,
+              "minMs": 1.56,
+              "maxMs": 2.95
+            },
+            "zoekt-all-branches": {
+              "samples": [1.79, 1.46, 1.62, 3.04, 3.17, 1.96, 1.96, 2.48, 1.24, 2.81],
+              "medianMs": 1.96,
+              "minMs": 1.24,
+              "maxMs": 3.17
+            }
+          },
+          "firstOutput": {}
+        },
+        {
+          "query": "MED_NO_MATCH_7cd25ead8973",
+          "firstZoektRequestMs": 1.34,
+          "initialStats": {
+            "ContentBytesLoaded": 0,
+            "IndexBytesLoaded": 0,
+            "Crashes": 0,
+            "Duration": 92167,
+            "FileCount": 0,
+            "ShardFilesConsidered": 0,
+            "FilesConsidered": 0,
+            "FilesLoaded": 0,
+            "FilesSkipped": 0,
+            "FilesSkippedDueToCancellation": 0,
+            "ShardsScanned": 0,
+            "ShardsSkipped": 0,
+            "ShardsSkippedFilter": 2,
+            "MatchCount": 0,
+            "NgramMatches": 0,
+            "NgramLookups": 68,
+            "Wait": 2583,
+            "MatchTreeConstruction": 68959,
+            "MatchTreeSearch": 0,
+            "RegexpsConsidered": 0,
+            "FlushReason": 0
+          },
+          "returnedLines": 0,
+          "timings": {
+            "zoekt": {
+              "samples": [1.34, 0.52, 0.43, 0.77, 0.59, 0.72, 0.66, 0.58, 0.55, 0.8],
+              "medianMs": 0.63,
+              "minMs": 0.43,
+              "maxMs": 1.34
+            },
+            "zoekt-all-branches": {
+              "samples": [1.65, 0.68, 1.01, 0.57, 0.52, 1.33, 0.54, 0.76, 0.58, 0.54],
+              "medianMs": 0.63,
+              "minMs": 0.52,
+              "maxMs": 1.65
+            }
+          },
+          "firstOutput": {}
+        }
+      ],
+      "serverRssKiB": 99088
+    }
+  ],
+  "branchCommits": [
+    {
+      "name": "benchmark/b0",
+      "commit": "ca415039cd0cad8b852ece588c76764b5691579b"
+    },
+    {
+      "name": "benchmark/b1",
+      "commit": "0b59724b604d9bb3bd1341747768f863eef6dce3"
+    },
+    {
+      "name": "benchmark/b2",
+      "commit": "91d89f41f4ed539351dc9b660ae6bb7167fdbd3d"
+    },
+    {
+      "name": "benchmark/b3",
+      "commit": "8ce165a1e8a251716773f638b30e6c1b008998af"
+    },
+    {
+      "name": "benchmark/b4",
+      "commit": "b4315fa55138bc295963843e87be478adbd43683"
+    },
+    {
+      "name": "benchmark/b5",
+      "commit": "5c26a6cca597e8bc94d130572cb6115adc51e506"
+    },
+    {
+      "name": "benchmark/b6",
+      "commit": "64669ab07c2e33bfa88d5a918d3e07a15021394c"
+    },
+    {
+      "name": "benchmark/b7",
+      "commit": "b1be9ff65d0d1ef35736edc6c74b06fdcde55fda"
+    },
+    {
+      "name": "benchmark/b8",
+      "commit": "1a6b0d99dbbe6274f12a4cc0dffc58c7083fb961"
+    },
+    {
+      "name": "benchmark/b9",
+      "commit": "baa67e3f4e6924151432cb7a77e61578ce3e9a1c"
+    }
+  ],
+  "tree": {
+    "entries": 19810,
+    "bytes": 200569457
+  },
+  "updatedBranchCommit": "26e7a4b3690dce60d4dcd7f47a12b531deb00837",
+  "updateFiles": " scripts/build/deps/webkit.ts                       |   2 +-\n src/jsc/bindings/ErrorCode.cpp                     |   4 +-\n src/jsc/bindings/ErrorStackTrace.cpp               | 174 +++--------\n src/jsc/bindings/ErrorStackTrace.h                 |   9 +-\n src/jsc/bindings/FormatStackTraceForJS.cpp         |  66 ++--\n src/jsc/bindings/FormatStackTraceForJS.h           |   4 +-\n src/jsc/bindings/ZigException.cpp                  |  40 +--\n .../bun/module-graph/module-graph-matrix.test.ts   | 238 ++++++++++++++-\n test/js/node/process/process.test.js               |  45 +++\n test/js/node/v8/capture-stack-trace.test.js        | 332 +++++++++++++++++++++\n 10 files changed, 694 insertions(+), 220 deletions(-)\n",
+  "after": {
+    "head": "26e7a4b3690dce60d4dcd7f47a12b531deb00837",
+    "refs": "49f2859b4946d0a4a542b4021cffd77539aa3c22c5279931707d7cdeae118c27",
+    "status": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "worktrees": "50544c8492960f87a0855e23b236ab585d61becb8957df7f53f71eb9115950b0",
+    "index": "4b19d5e64120c983443551d8a78043424306893dbdf68d492323f0b2bdf38b00"
+  },
+  "sourceUnchanged": true
+}

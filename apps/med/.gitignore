@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.test-artifacts/
+.benchmarks/
+*.tgz
+.DS_Store
+
+.vitest/

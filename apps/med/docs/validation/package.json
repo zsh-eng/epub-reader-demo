@@ -1,0 +1,24 @@
+[
+  {
+    "runner": "npx",
+    "repository": "bun",
+    "api": 200,
+    "assets": 200,
+    "pathWithSpaces": true,
+    "fontBytes": [
+      69760,
+      71596
+    ]
+  },
+  {
+    "runner": "bunx",
+    "repository": "bun",
+    "api": 200,
+    "assets": 200,
+    "pathWithSpaces": true,
+    "fontBytes": [
+      69760,
+      71596
+    ]
+  }
+]

@@ -1,0 +1,378 @@
+{
+  "measuredAt": "2026-09-19T12:55:35.763Z",
+  "scope": "Production host HTTP only: Git/filesystem, JSON transfer and decode. Excludes browser source parsing, highlighting, layout and paint. First worktree manifest is the first request to a new host; OS disk caches are not flushed. Repeat samples still repeat Git/filesystem work; this API has no manifest cache. Commit source runs after worktree source in the same host. Timing phases are client observations, not server CPU time.",
+  "runtime": "v24.19.0",
+  "hardware": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Pro",
+    "memoryBytes": 17179869184
+  },
+  "repository": {
+    "path": "/Users/admin/med/.benchmarks/bun",
+    "trackedFiles": 19810
+  },
+  "readyMs": 586.62,
+  "scopes": [
+    {
+      "source": {
+        "kind": "worktree",
+        "repo": "/Users/admin/med/.benchmarks/bun"
+      },
+      "manifest": [
+        {
+          "phase": "first-source-request",
+          "sample": 0,
+          "requestMs": 665.29,
+          "headersMs": 648.32,
+          "bodyMs": 7.41,
+          "decodeMs": 9.56,
+          "responseBytes": 1805051,
+          "entries": 21768,
+          "files": 19801,
+          "truncated": false
+        },
+        {
+          "phase": "repeat",
+          "sample": 1,
+          "requestMs": 468.99,
+          "headersMs": 460.69,
+          "bodyMs": 1.65,
+          "decodeMs": 6.64,
+          "responseBytes": 1805051,
+          "entries": 21768,
+          "files": 19801,
+          "truncated": false
+        },
+        {
+          "phase": "repeat",
+          "sample": 2,
+          "requestMs": 458.73,
+          "headersMs": 452.9,
+          "bodyMs": 1.8,
+          "decodeMs": 4.03,
+          "responseBytes": 1805051,
+          "entries": 21768,
+          "files": 19801,
+          "truncated": false
+        }
+      ],
+      "firstManifestMs": 665.29,
+      "repeatManifest": {
+        "count": 2,
+        "minMs": 458.73,
+        "medianMs": 468.99,
+        "maxMs": 468.99
+      },
+      "reads": [
+        {
+          "phase": "first-file-request",
+          "sample": 0,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "worktree:/Users/admin/med/.benchmarks/bun:current:README.md:47ed36ba05769ea0dd8a019a6569c461460a769ecbb128b6095d9bc6315e1f5c",
+          "requestMs": 6.17,
+          "headersMs": 5.89,
+          "bodyMs": 0.21,
+          "decodeMs": 0.07,
+          "responseBytes": 26965
+        },
+        {
+          "phase": "repeat",
+          "sample": 1,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "worktree:/Users/admin/med/.benchmarks/bun:current:README.md:47ed36ba05769ea0dd8a019a6569c461460a769ecbb128b6095d9bc6315e1f5c",
+          "requestMs": 4.16,
+          "headersMs": 3.93,
+          "bodyMs": 0.15,
+          "decodeMs": 0.07,
+          "responseBytes": 26965
+        },
+        {
+          "phase": "repeat",
+          "sample": 2,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "worktree:/Users/admin/med/.benchmarks/bun:current:README.md:47ed36ba05769ea0dd8a019a6569c461460a769ecbb128b6095d9bc6315e1f5c",
+          "requestMs": 3.61,
+          "headersMs": 3.47,
+          "bodyMs": 0.08,
+          "decodeMs": 0.06,
+          "responseBytes": 26965
+        },
+        {
+          "phase": "repeat",
+          "sample": 3,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "worktree:/Users/admin/med/.benchmarks/bun:current:README.md:47ed36ba05769ea0dd8a019a6569c461460a769ecbb128b6095d9bc6315e1f5c",
+          "requestMs": 3.59,
+          "headersMs": 3.12,
+          "bodyMs": 0.4,
+          "decodeMs": 0.06,
+          "responseBytes": 26965
+        },
+        {
+          "phase": "repeat",
+          "sample": 4,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "worktree:/Users/admin/med/.benchmarks/bun:current:README.md:47ed36ba05769ea0dd8a019a6569c461460a769ecbb128b6095d9bc6315e1f5c",
+          "requestMs": 2.58,
+          "headersMs": 2.43,
+          "bodyMs": 0.08,
+          "decodeMs": 0.06,
+          "responseBytes": 26965
+        }
+      ],
+      "readSummary": {
+        "count": 5,
+        "minMs": 2.58,
+        "medianMs": 3.61,
+        "maxMs": 6.17
+      }
+    },
+    {
+      "source": {
+        "kind": "commit",
+        "repo": "/Users/admin/med/.benchmarks/bun",
+        "oid": "26e7a4b3690dce60d4dcd7f47a12b531deb00837"
+      },
+      "manifest": [
+        {
+          "phase": "first-source-request",
+          "sample": 0,
+          "requestMs": 233.88,
+          "headersMs": 227.55,
+          "bodyMs": 2.14,
+          "decodeMs": 4.19,
+          "responseBytes": 1805098,
+          "entries": 21768,
+          "files": 19801,
+          "truncated": false
+        },
+        {
+          "phase": "repeat",
+          "sample": 1,
+          "requestMs": 321.12,
+          "headersMs": 306.18,
+          "bodyMs": 7.11,
+          "decodeMs": 7.83,
+          "responseBytes": 1805098,
+          "entries": 21768,
+          "files": 19801,
+          "truncated": false
+        },
+        {
+          "phase": "repeat",
+          "sample": 2,
+          "requestMs": 262.41,
+          "headersMs": 249.96,
+          "bodyMs": 3.86,
+          "decodeMs": 8.59,
+          "responseBytes": 1805098,
+          "entries": 21768,
+          "files": 19801,
+          "truncated": false
+        }
+      ],
+      "firstManifestMs": 233.88,
+      "repeatManifest": {
+        "count": 2,
+        "minMs": 262.41,
+        "medianMs": 321.12,
+        "maxMs": 321.12
+      },
+      "reads": [
+        {
+          "phase": "first-file-request",
+          "sample": 0,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "commit:/Users/admin/med/.benchmarks/bun:26e7a4b3690dce60d4dcd7f47a12b531deb00837:README.md:c507cc5dec62f46701657ed856bd69d5c3529607",
+          "requestMs": 39.38,
+          "headersMs": 39.21,
+          "bodyMs": 0.1,
+          "decodeMs": 0.06,
+          "responseBytes": 27019
+        },
+        {
+          "phase": "repeat",
+          "sample": 1,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "commit:/Users/admin/med/.benchmarks/bun:26e7a4b3690dce60d4dcd7f47a12b531deb00837:README.md:c507cc5dec62f46701657ed856bd69d5c3529607",
+          "requestMs": 42.06,
+          "headersMs": 41.88,
+          "bodyMs": 0.11,
+          "decodeMs": 0.07,
+          "responseBytes": 27019
+        },
+        {
+          "phase": "repeat",
+          "sample": 2,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "commit:/Users/admin/med/.benchmarks/bun:26e7a4b3690dce60d4dcd7f47a12b531deb00837:README.md:c507cc5dec62f46701657ed856bd69d5c3529607",
+          "requestMs": 111.4,
+          "headersMs": 111.15,
+          "bodyMs": 0.11,
+          "decodeMs": 0.14,
+          "responseBytes": 27019
+        },
+        {
+          "phase": "repeat",
+          "sample": 3,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "commit:/Users/admin/med/.benchmarks/bun:26e7a4b3690dce60d4dcd7f47a12b531deb00837:README.md:c507cc5dec62f46701657ed856bd69d5c3529607",
+          "requestMs": 48.31,
+          "headersMs": 48.05,
+          "bodyMs": 0.19,
+          "decodeMs": 0.07,
+          "responseBytes": 27019
+        },
+        {
+          "phase": "repeat",
+          "sample": 4,
+          "path": "README.md",
+          "sizeBytes": 26195,
+          "kind": "text",
+          "plain": false,
+          "identity": "commit:/Users/admin/med/.benchmarks/bun:26e7a4b3690dce60d4dcd7f47a12b531deb00837:README.md:c507cc5dec62f46701657ed856bd69d5c3529607",
+          "requestMs": 39.44,
+          "headersMs": 39.21,
+          "bodyMs": 0.15,
+          "decodeMs": 0.07,
+          "responseBytes": 27019
+        }
+      ],
+      "readSummary": {
+        "count": 5,
+        "minMs": 39.38,
+        "medianMs": 42.06,
+        "maxMs": 111.4
+      }
+    }
+  ],
+  "integrity": {
+    "unchanged": true,
+    "before": {
+      "refsHash": "49f2859b4946d0a4a542b4021cffd77539aa3c22c5279931707d7cdeae118c27",
+      "worktrees": [
+        {
+          "path": "/Users/admin/med/.benchmarks/bun",
+          "head": "26e7a4b3690dce60d4dcd7f47a12b531deb00837",
+          "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "indexHash": "4b19d5e64120c983443551d8a78043424306893dbdf68d492323f0b2bdf38b00"
+        }
+      ]
+    },
+    "after": {
+      "refsHash": "49f2859b4946d0a4a542b4021cffd77539aa3c22c5279931707d7cdeae118c27",
+      "worktrees": [
+        {
+          "path": "/Users/admin/med/.benchmarks/bun",
+          "head": "26e7a4b3690dce60d4dcd7f47a12b531deb00837",
+          "statusHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "indexHash": "4b19d5e64120c983443551d8a78043424306893dbdf68d492323f0b2bdf38b00"
+        }
+      ]
+    }
+  },
+  "fixture": {
+    "reads": [
+      {
+        "path": "fixtures/binary.bin",
+        "kind": "binary",
+        "sizeBytes": 40,
+        "hasText": false,
+        "requestMs": 28.79,
+        "headersMs": 28.6,
+        "bodyMs": 0.18,
+        "decodeMs": 0.02,
+        "responseBytes": 368
+      },
+      {
+        "path": "fixtures/oversize.txt",
+        "kind": "too-large",
+        "sizeBytes": 9437184,
+        "hasText": false,
+        "requestMs": 20.98,
+        "headersMs": 20.83,
+        "bodyMs": 0.13,
+        "decodeMs": 0.03,
+        "responseBytes": 385
+      },
+      {
+        "path": "fixtures/large.ts",
+        "kind": "text",
+        "sizeBytes": 1297780,
+        "hasText": true,
+        "plain": true,
+        "requestMs": 51.45,
+        "headersMs": 43.16,
+        "bodyMs": 6.88,
+        "decodeMs": 1.42,
+        "responseBytes": 1338121
+      }
+    ],
+    "integrity": {
+      "unchanged": true,
+      "before": {
+        "refsHash": "08c7d67f624d6ed4b256f99228b273b8a48cededddd307b081a1d52947a52a9f",
+        "worktrees": [
+          {
+            "path": "/Users/admin/med/.test-artifacts/ui-worktrees/med-demo",
+            "head": "668f1907000abf07fe03ba9c6f2781f729e7e74d",
+            "statusHash": "a9df82f2fa4e7739a5388aa2b66548c93205353d359542d6bb2fccf5b7ead62f",
+            "indexHash": "35a4399ee9e2c36787c1d6a02c8646136e12f45fc19aae396e3ba739cd195579"
+          },
+          {
+            "path": "/Users/admin/med/.test-artifacts/ui-worktrees/review-worktree",
+            "head": "668f1907000abf07fe03ba9c6f2781f729e7e74d",
+            "statusHash": "e6c5c8bd722f31dbc1b8ecfda2cb7bcde8f4f6ed0d589faee1fd1afe72fa775f",
+            "indexHash": "22eaf48dbed576915053a1af4d00abad96ecb26e166687e101a915ce009fa377"
+          }
+        ]
+      },
+      "after": {
+        "refsHash": "08c7d67f624d6ed4b256f99228b273b8a48cededddd307b081a1d52947a52a9f",
+        "worktrees": [
+          {
+            "path": "/Users/admin/med/.test-artifacts/ui-worktrees/med-demo",
+            "head": "668f1907000abf07fe03ba9c6f2781f729e7e74d",
+            "statusHash": "a9df82f2fa4e7739a5388aa2b66548c93205353d359542d6bb2fccf5b7ead62f",
+            "indexHash": "35a4399ee9e2c36787c1d6a02c8646136e12f45fc19aae396e3ba739cd195579"
+          },
+          {
+            "path": "/Users/admin/med/.test-artifacts/ui-worktrees/review-worktree",
+            "head": "668f1907000abf07fe03ba9c6f2781f729e7e74d",
+            "statusHash": "e6c5c8bd722f31dbc1b8ecfda2cb7bcde8f4f6ed0d589faee1fd1afe72fa775f",
+            "indexHash": "22eaf48dbed576915053a1af4d00abad96ecb26e166687e101a915ce009fa377"
+          }
+        ]
+      }
+    },
+    "note": "Fixture file reads. Binary and too-large responses verified to omit text."
+  }
+}

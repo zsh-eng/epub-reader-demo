@@ -1,0 +1,52 @@
+{
+  "date": "2026-09-20",
+  "browser": "Chromium headless through Vitest browser",
+  "samplesPerScenario": 70,
+  "method": "Synthetic keydown handler duration, then animation frames until a visible caret has the requested logical line and column. These are DOM/frame observations, not presentation timestamps.",
+  "results": [
+    {
+      "scenario": "40000-lines-local",
+      "bytes": 1297780,
+      "samples": 70,
+      "handlerP50Ms": 0.6000000000931323,
+      "handlerP95Ms": 0.7999999998137355,
+      "handlerMaxMs": 0.8999999999068677,
+      "nextFrameP50Ms": 17.399999999906868,
+      "nextFrameP95Ms": 18.600000000093132,
+      "mountedRows": 26
+    },
+    {
+      "scenario": "40000-lines-scroll",
+      "bytes": 1297780,
+      "samples": 70,
+      "handlerP50Ms": 0.10000000009313226,
+      "handlerP95Ms": 0.7000000001862645,
+      "handlerMaxMs": 1,
+      "nextFrameP50Ms": 22.59999999962747,
+      "nextFrameP95Ms": 38.200000000186265,
+      "mountedRows": 38
+    },
+    {
+      "scenario": "40000-lines-far-jump",
+      "bytes": 1297780,
+      "samples": 70,
+      "handlerP50Ms": 0.10000000009313226,
+      "handlerP95Ms": 0.20000000018626451,
+      "handlerMaxMs": 0.3000000002793968,
+      "nextFrameP50Ms": 19.100000000093132,
+      "nextFrameP95Ms": 39.200000000186265,
+      "mountedRows": 20
+    },
+    {
+      "scenario": "100000-character-line",
+      "bytes": 100011,
+      "samples": 70,
+      "handlerP50Ms": 2,
+      "handlerP95Ms": 3.5,
+      "handlerMaxMs": 3.6000000000931323,
+      "nextFrameP50Ms": 17.300000000279397,
+      "nextFrameP95Ms": 18.699999999720603,
+      "mountedRows": 3
+    }
+  ]
+}

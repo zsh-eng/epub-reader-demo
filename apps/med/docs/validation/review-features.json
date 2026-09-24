@@ -1,0 +1,28 @@
+{
+  "measuredAt": "2026-09-20T07:57:48.781Z",
+  "repository": "Bun",
+  "file": "src/css/selectors/parser.rs",
+  "samples": 40,
+  "searchKeyHandlerP50Ms": 0.10000000149011612,
+  "searchKeyHandlerP95Ms": 0.20000000298023224,
+  "definitionMs": 38.45645800000011,
+  "rangeMs": 381.3989999999999,
+  "mountedBlameCells": 65,
+  "repeatedRangesMs": [
+    132.38625000000002, 132.29620799999998, 108.205375, 61.333624999999984, 75.35337499999969,
+    56.47116599999981, 64.75849999999991, 50.17679099999987
+  ],
+  "rapidRangeChanges": 5,
+  "blameReads": [
+    {
+      "startLine": 1,
+      "endLine": 200,
+      "ms": 61.711999999999996
+    }
+  ],
+  "cachedToggleMs": 55.43279199999961,
+  "firstTooltipMs": 303.3422499999997,
+  "scanTooltipMs": 14.530625000000327,
+  "errors": [],
+  "method": "Production Chromium; search measures synchronous keydown work, excluding frame presentation. Definition and range include Playwright input and polling."
+}

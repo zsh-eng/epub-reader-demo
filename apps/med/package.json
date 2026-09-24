@@ -1,0 +1,83 @@
+{
+  "name": "med-diff",
+  "version": "0.1.0",
+  "description": "Local continuous diff review with commit history",
+  "license": "MIT",
+  "bin": {
+    "med-diff": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "upstream",
+    "tools/zoekt",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:web && npm run build:server",
+    "build:web": "vite build --config vite.config.ts",
+    "build:server": "vite build --config vite.server.config.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --max-warnings 0",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "vitest",
+    "test:unit": "vitest run --project unit",
+    "test:browser": "vitest run --project browser",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run build",
+    "start": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.8.0",
+    "@pierre/diffs": "1.4.3",
+    "@pierre/trees": "1.0.0-beta.6",
+    "@stylexjs/stylex": "0.19.1",
+    "@twinkleplop/bash": "0.1.4",
+    "@twinkleplop/core": "0.2.1",
+    "@twinkleplop/css": "0.1.4",
+    "@twinkleplop/diff": "0.1.4",
+    "@twinkleplop/dotenv": "0.1.4",
+    "@twinkleplop/go": "0.1.4",
+    "@twinkleplop/html": "0.1.4",
+    "@twinkleplop/http": "0.1.4",
+    "@twinkleplop/ini": "0.1.4",
+    "@twinkleplop/javascript": "0.1.4",
+    "@twinkleplop/json": "0.1.4",
+    "@twinkleplop/jsonc": "0.1.1",
+    "@twinkleplop/markdown": "0.1.4",
+    "@twinkleplop/python": "0.1.4",
+    "@twinkleplop/rust": "0.1.4",
+    "@twinkleplop/shellsession": "0.1.4",
+    "@twinkleplop/sql": "0.1.4",
+    "@twinkleplop/svelte": "0.1.4",
+    "@twinkleplop/toml": "0.1.4",
+    "@twinkleplop/tsx": "0.1.4",
+    "@twinkleplop/typescript": "0.1.4",
+    "@twinkleplop/yaml": "0.1.4",
+    "chokidar": "5.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@stylexjs/eslint-plugin": "0.19.1",
+    "@stylexjs/unplugin": "0.19.1",
+    "@types/node": "26.6.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "@vitest/browser-playwright": "5.0.1",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0",
+    "playwright": "1.63.0",
+    "typescript": "7.0.2",
+    "unplugin": "2.3.11",
+    "vite": "8.3.0",
+    "vitest": "5.0.1"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}
