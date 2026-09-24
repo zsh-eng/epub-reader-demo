@@ -25,6 +25,11 @@ and local development files. Shared packages must not import app code.
   Reader Worker supplies authentication and database/object-storage bindings.
   It is a package, not a separate deployed service.
 
+- **podcast-lab** owns the one-episode Undertone experiment: local audio files,
+  local transcription/diarization, hosted text classification, and a loopback
+  player. It has no deployed service or sync. See its
+  [experiment report](../apps/podcast-lab/README.md).
+
 ## Dependency and storage rules
 
 Use Bun workspaces and the root `bun.lock`. Put dependencies in the manifest

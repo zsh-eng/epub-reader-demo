@@ -1,0 +1,60 @@
+{
+  "audioHash": "dc786808eef98383063a4eb5477db56f123f4f73a3db68666a20f5e0fe559566",
+  "durationSeconds": 4063.7125,
+  "referenceMethod": "Assistant text review of three promotional passages and adjacent editorial blocks. Boundaries inherit ASR uncertainty; not an independently listened gold standard or exhaustive error audit. Used during prompt development, not held-out evaluation.",
+  "referencePromotionSeconds": 138.56,
+  "suggestedSkipSeconds": 84.64,
+  "overlapSeconds": 84.64,
+  "uncoveredPromotionSeconds": 53.92,
+  "outsideReferenceSeconds": 0.0,
+  "coverageOfDevelopmentReference": 0.6109,
+  "transcriptRows": 1081,
+  "chapters": 10,
+  "limits": [
+    "No verified paid third-party sponsor example in this download.",
+    "Ad montage speaker IDs can coincide with interview speaker IDs.",
+    "Some model word spans extend into silence and require display-time bounds."
+  ],
+  "asr": {
+    "engine": "mlx",
+    "device": "Metal",
+    "loadSeconds": 4.056,
+    "inferenceSeconds": 130.421,
+    "totalSeconds": 134.477,
+    "peakRSSBytes": 1097662464
+  },
+  "diarization": {
+    "engine": "diarize",
+    "device": "CoreML/CPU",
+    "loadSeconds": 100.699,
+    "inferenceSeconds": 11.022,
+    "totalSeconds": 111.721,
+    "peakRSSBytes": 2408595456
+  },
+  "mlx-benchmark": {
+    "engine": "mlx",
+    "device": "Metal",
+    "loadSeconds": 1.979,
+    "inferenceSeconds": 6.025,
+    "totalSeconds": 8.005,
+    "peakRSSBytes": 840663040
+  },
+  "redux-benchmark": {
+    "engine": "redux",
+    "device": "cpu",
+    "loadSeconds": 11.894,
+    "inferenceSeconds": 6.335,
+    "totalSeconds": 18.23,
+    "peakRSSBytes": 2372583424
+  },
+  "redux-mps-benchmark": {
+    "engine": "redux",
+    "device": "mps",
+    "loadSeconds": 5.797,
+    "inferenceSeconds": 9.302,
+    "totalSeconds": 15.099,
+    "peakRSSBytes": 796246016
+  },
+  "measurementNote": "First-run device labels corrected from the CLI default; timings unchanged. RSS excludes a complete accounting of GPU/ANE allocations. Single runs, not a controlled repeated benchmark.",
+  "classificationSeconds": 47.618
+}

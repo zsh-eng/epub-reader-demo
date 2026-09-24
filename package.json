@@ -6,7 +6,8 @@
     "apps/med",
     "apps/arctic/Web",
     "packages/*",
-    "apps/spaced2"
+    "apps/spaced2",
+    "apps/podcast-lab"
   ],
   "type": "module",
   "scripts": {
@@ -56,7 +57,9 @@
     "lint:spaced2": "bun run --cwd apps/spaced2 lint",
     "deploy:spaced2": "bun run --cwd apps/spaced2 deploy",
     "preview:spaced2": "bun run --cwd apps/spaced2 preview",
-    "dev:spaced2-server": "bun run --cwd apps/spaced2 dev:server"
+    "dev:spaced2-server": "bun run --cwd apps/spaced2 dev:server",
+    "dev:podcast": "bun run --cwd apps/podcast-lab dev",
+    "test:podcast": "bun run --cwd apps/podcast-lab test"
   },
   "devDependencies": {
     "oxfmt": "^0.46.0",

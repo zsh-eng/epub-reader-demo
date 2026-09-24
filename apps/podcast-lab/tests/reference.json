@@ -1,0 +1,27 @@
+{
+  "audioHash": "dc786808eef98383063a4eb5477db56f123f4f73a3db68666a20f5e0fe559566",
+  "method": "Assistant text review of three promotional passages and adjacent editorial blocks. Boundaries inherit ASR uncertainty; not an independently listened gold standard or exhaustive error audit. Used during prompt development, not held-out evaluation.",
+  "promotions": [
+    {
+      "start": 0.4,
+      "end": 28.24,
+      "note": "Popcast trailer"
+    },
+    {
+      "start": 1438.96,
+      "end": 1510.88,
+      "note": "New York Times app promotion"
+    },
+    {
+      "start": 2726.96,
+      "end": 2765.76,
+      "note": "Publisher anniversary montage and subscription pitch"
+    }
+  ],
+  "thirdPartyPaidAds": 0,
+  "limitations": [
+    "No verified paid third-party sponsor example in this download.",
+    "Ad montage speaker IDs can coincide with interview speaker IDs.",
+    "Some model word spans extend into silence and require display-time bounds."
+  ]
+}
