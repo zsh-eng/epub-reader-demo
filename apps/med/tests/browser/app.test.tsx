@@ -300,12 +300,10 @@ describe("graphical review", () => {
     const row = document.getElementById(`commit-${firstCommit}`)!;
     const date = row.querySelector("time")!;
     expect(date.dateTime).toBe("2026-09-20T13:08:05.000Z");
-    expect(date.textContent).toBe(
-      new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
-        new Date("2026-09-20T13:08:05.000Z"),
-      ),
+    expect(date.textContent).toMatch(
+      /^(?:just now|\d+ (?:min|hr|days?|mo|yr) ago|in \d+ (?:min|hr|days?|mo|yr))$/,
     );
-    expect(date.title).toContain("2026");
+    expect(date.title).toBe("");
   });
   test("saved review return and target selection restore Changes after live file browsing", async () => {
     const { controller } = await mountApp({ savedReview: true, branches: true });

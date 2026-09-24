@@ -1,13 +1,18 @@
+import { Tooltip } from "@base-ui/react/tooltip";
 import * as stylex from "@stylexjs/stylex";
 import { useMemo, useState, useRef, useEffect, useLayoutEffect } from "react";
 import type { Commit } from "../../shared/protocol";
 import { layoutHistory, type GraphRow } from "./history-layout";
 import { tokens, ui } from "../theme.stylex";
 import { Icon } from "./Icon";
+import { relativeTime } from "../data/relative-time";
 
 const rowHeight = 48;
 const colors = ["#8cabdf", "#b5a0d6", "#82b6ad", "#d0ad7e", "#ce97ad", "#a2b97b"];
-const dateFormatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+const dateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "full",
+  timeStyle: "long",
+});
 
 function Graph({ row }: { row: GraphRow }) {
   const x = (lane: number) => 10 + lane * 12;
@@ -72,6 +77,12 @@ export function HistoryPanel({
   working: boolean;
   workingAvailable?: boolean;
 }) {
+  const tooltip = useMemo(() => Tooltip.createHandle<Commit>(), []);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const pendingSelection = useRef(selected);
   const anchor = useRef(selected);
   const rangeStart = commits.findIndex((commit) => commit.id === selectedRange?.head);
@@ -121,121 +132,173 @@ export function HistoryPanel({
     }
   };
   return (
-    <section {...stylex.props(styles.panel)} aria-label="Commit history">
-      <div {...stylex.props(styles.heading)}>
-        <span {...stylex.props(ui.row)}>
-          <Icon name="history" size={14} />
-          History
-        </span>
-        <span {...stylex.props(ui.faint, ui.mono)}>
-          {commits.length}
-          {hasMore ? "+" : ""}
-        </span>
-      </div>
-      {workingAvailable && (
-        <button
-          {...stylex.props(styles.working, working && styles.selected)}
-          onClick={() => {
-            pendingSelection.current = undefined;
-            anchor.current = undefined;
-            onWorking();
-          }}
-          aria-pressed={working}
-        >
-          <span {...stylex.props(styles.workingDot)} />
-          <span>Working changes</span>
-          <span {...stylex.props(ui.grow)} />
-          <Icon name="branch" size={12} />
-        </button>
-      )}
-      <div
-        ref={container}
-        {...stylex.props(styles.scroll)}
-        tabIndex={0}
-        role="listbox"
-        aria-label="Commits"
-        aria-multiselectable={!!onSelectRange}
-        aria-activedescendant={
-          rows.slice(start, end).some((row) => row.commit.id === selected)
-            ? `commit-${selected}`
-            : undefined
-        }
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-            event.preventDefault();
-            selectRelative(event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
-          }
-        }}
-        onScroll={(event) => {
-          const node = event.currentTarget;
-          setViewport({ top: node.scrollTop, height: node.clientHeight });
-          if (node.scrollHeight - node.scrollTop - node.clientHeight < 180 && hasMore && !loading)
-            onLoadMore();
-        }}
-      >
-        <div style={{ height: rows.length * rowHeight, position: "relative" }}>
-          {rows.slice(start, end).map((row, offset) => (
-            <button
-              id={`commit-${row.commit.id}`}
-              key={row.commit.id}
-              role="option"
-              aria-selected={isSelected(row.commit.id, start + offset)}
-              tabIndex={-1}
-              title={`${row.commit.subject}\n${row.commit.id}\n${row.commit.author}`}
-              onClick={(event) => selectCommit(row.commit.id, event.shiftKey)}
-              className={
-                stylex.props(
-                  styles.commit,
-                  isSelected(row.commit.id, start + offset) && styles.selected,
-                ).className
-              }
-              style={{ top: (start + offset) * rowHeight }}
-            >
-              <Graph row={row} />
-              <span {...stylex.props(styles.commitText)}>
-                <span {...stylex.props(styles.subject)}>
-                  {row.commit.subject || "(no commit message)"}
-                </span>
-                <span {...stylex.props(styles.metadata)}>
-                  {row.commit.refs.length > 0 && (
-                    <span {...stylex.props(styles.refs)}>{row.commit.refs.join(" · ")}</span>
-                  )}
-                  <span {...stylex.props(ui.truncate)}>{row.commit.author}</span>
-                  <time
-                    dateTime={new Date(row.commit.timestamp).toISOString()}
-                    title={`Author date: ${new Date(row.commit.timestamp).toString()}`}
-                  >
-                    {dateFormatter.format(row.commit.timestamp)}
-                  </time>
-                </span>
-              </span>
-              <span {...stylex.props(styles.commitHash)}>{row.commit.id.slice(0, 7)}</span>
-            </button>
-          ))}
+    <Tooltip.Provider delay={450} closeDelay={60} timeout={800}>
+      <section {...stylex.props(styles.panel)} aria-label="Commit history">
+        <div {...stylex.props(styles.heading)}>
+          <span {...stylex.props(ui.row)}>
+            <Icon name="history" size={14} />
+            History
+          </span>
+          <span {...stylex.props(ui.faint, ui.mono)}>
+            {commits.length}
+            {hasMore ? "+" : ""}
+          </span>
         </div>
-        {commits.length === 0 && !loading && !error && (
-          <div {...stylex.props(styles.empty)}>No commits yet</div>
-        )}
-        {error && (
-          <div role="alert" {...stylex.props(styles.empty)}>
-            {error}
-          </div>
-        )}
-        {(hasMore || loading) && (
+        {workingAvailable && (
           <button
-            {...stylex.props(ui.button, styles.loadMore)}
-            onClick={onLoadMore}
-            disabled={loading}
+            {...stylex.props(styles.working, working && styles.selected)}
+            onClick={() => {
+              pendingSelection.current = undefined;
+              anchor.current = undefined;
+              onWorking();
+            }}
+            aria-pressed={working}
           >
-            {loading ? "Loading history…" : "Load earlier commits"}
+            <span {...stylex.props(styles.workingDot)} />
+            <span>Working changes</span>
+            <span {...stylex.props(ui.grow)} />
+            <Icon name="branch" size={12} />
           </button>
         )}
-      </div>
-    </section>
+        <div
+          ref={container}
+          {...stylex.props(styles.scroll)}
+          tabIndex={0}
+          role="listbox"
+          aria-label="Commits"
+          aria-multiselectable={!!onSelectRange}
+          aria-activedescendant={
+            rows.slice(start, end).some((row) => row.commit.id === selected)
+              ? `commit-${selected}`
+              : undefined
+          }
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault();
+              selectRelative(event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
+            }
+          }}
+          onScroll={(event) => {
+            const node = event.currentTarget;
+            setViewport({ top: node.scrollTop, height: node.clientHeight });
+            if (node.scrollHeight - node.scrollTop - node.clientHeight < 180 && hasMore && !loading)
+              onLoadMore();
+          }}
+        >
+          <div style={{ height: rows.length * rowHeight, position: "relative" }}>
+            {rows.slice(start, end).map((row, offset) => (
+              <Tooltip.Trigger
+                handle={tooltip}
+                payload={row.commit}
+                id={`commit-${row.commit.id}`}
+                key={row.commit.id}
+                role="option"
+                aria-selected={isSelected(row.commit.id, start + offset)}
+                tabIndex={-1}
+                onClick={(event) => selectCommit(row.commit.id, event.shiftKey)}
+                className={
+                  stylex.props(
+                    styles.commit,
+                    isSelected(row.commit.id, start + offset) && styles.selected,
+                  ).className
+                }
+                style={{ top: (start + offset) * rowHeight }}
+              >
+                <Graph row={row} />
+                <span {...stylex.props(styles.commitText)}>
+                  <span {...stylex.props(styles.subject)}>
+                    {row.commit.subject || "(no commit message)"}
+                  </span>
+                  <span {...stylex.props(styles.metadata)}>
+                    {row.commit.refs.length > 0 && (
+                      <span {...stylex.props(styles.refs)}>{row.commit.refs.join(" · ")}</span>
+                    )}
+                    <span {...stylex.props(ui.truncate)}>{row.commit.author}</span>
+                    <time
+                      {...stylex.props(styles.time)}
+                      dateTime={new Date(row.commit.timestamp).toISOString()}
+                    >
+                      {relativeTime(row.commit.timestamp, now)}
+                    </time>
+                  </span>
+                </span>
+                <span {...stylex.props(styles.commitHash)}>{row.commit.id.slice(0, 7)}</span>
+              </Tooltip.Trigger>
+            ))}
+          </div>
+          {commits.length === 0 && !loading && !error && (
+            <div {...stylex.props(styles.empty)}>No commits yet</div>
+          )}
+          {error && (
+            <div role="alert" {...stylex.props(styles.empty)}>
+              {error}
+            </div>
+          )}
+          {(hasMore || loading) && (
+            <button
+              {...stylex.props(ui.button, styles.loadMore)}
+              onClick={onLoadMore}
+              disabled={loading}
+            >
+              {loading ? "Loading history…" : "Load earlier commits"}
+            </button>
+          )}
+        </div>
+      </section>
+      <Tooltip.Root handle={tooltip} disabled={!commits.length}>
+        {({ payload }) => (
+          <Tooltip.Portal>
+            <Tooltip.Positioner
+              side="right"
+              align="start"
+              sideOffset={10}
+              {...stylex.props(styles.tooltipPositioner)}
+            >
+              <Tooltip.Popup role="tooltip" {...stylex.props(styles.tooltip, ui.instant)}>
+                {payload && (
+                  <>
+                    <strong>{payload.subject || "(no commit message)"}</strong>
+                    <span {...stylex.props(ui.muted)}>{payload.author}</span>
+                    <time
+                      dateTime={new Date(payload.timestamp).toISOString()}
+                      {...stylex.props(ui.muted)}
+                    >
+                      Author date: {dateFormatter.format(payload.timestamp)}
+                    </time>
+                    <span {...stylex.props(styles.tooltipHash)}>{payload.id}</span>
+                  </>
+                )}
+              </Tooltip.Popup>
+            </Tooltip.Positioner>
+          </Tooltip.Portal>
+        )}
+      </Tooltip.Root>
+    </Tooltip.Provider>
   );
 }
 
 const styles = stylex.create({
+  time: { flexShrink: 0, whiteSpace: "nowrap" },
+  tooltipPositioner: { zIndex: 100 },
+  tooltip: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    maxWidth: 400,
+    padding: 10,
+    backgroundColor: tokens.raised,
+    color: tokens.text,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: tokens.border,
+    borderRadius: 6,
+    boxShadow: tokens.shadow,
+    fontFamily: tokens.ui,
+    fontSize: 12,
+    lineHeight: 1.5,
+    overflowWrap: "anywhere",
+  },
+  tooltipHash: { fontFamily: tokens.code, fontSize: 10, color: tokens.muted },
   panel: {
     display: "flex",
     flexDirection: "column",
