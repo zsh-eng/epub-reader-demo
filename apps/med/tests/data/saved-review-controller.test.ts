@@ -60,6 +60,7 @@ function fixture({
     targets,
   };
   const noteRevisions = [1, 2, 0];
+  let liveRevision = 0;
   const repositories = missing
     ? []
     : ["/one", "/two"].map((repo, index) => ({
@@ -146,11 +147,19 @@ function fixture({
           { status: 409 },
         );
       for (let index = 0; index < noteRevisions.length; index++) noteRevisions[index] += 1;
+      liveRevision += 1;
       saved = { ...saved, revision: saved.revision + 1, commentCount: 0 };
       return Response.json(saved);
     }
     if (url.pathname === "/api/review")
       return Response.json({ ...review(0), id: "live", comparison: body.comparison });
+    if (url.pathname === "/api/reviews/saved/browsing/live/notes") {
+      if (init?.method === "POST") {
+        liveRevision += 1;
+        saved = { ...saved, revision: saved.revision + 1, commentCount: saved.commentCount + 1 };
+      }
+      return Response.json({ reviewId: "live", revision: liveRevision, notes: [] });
+    }
     if (url.pathname === "/api/notes")
       return Response.json({ reviewId: "live", revision: 0, notes: [] });
     throw new Error(`Unexpected request ${url}`);
@@ -528,4 +537,40 @@ describe("saved review navigation", () => {
     expect(controller.getSnapshot().status).toBe("ready");
     controller.dispose();
   });
+});
+
+test("counts and copies comments on browsed commits after changing repository tabs", async () => {
+  const { controller, calls } = fixture();
+  const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+  vi.stubGlobal("navigator", { clipboard: { writeText } });
+  try {
+    await controller.initialize();
+    await controller.selectComparison({ kind: "commit", commit: C });
+    expect(controller.getSnapshot().savedView).toBe(false);
+    await vi.waitFor(() => expect(controller.getSnapshot().notes?.reviewId).toBe("live"));
+    const writing = controller.mutateNote({
+      type: "add",
+      note: {
+        path: "file.ts",
+        side: "new",
+        line: 1,
+        text: "Comment on selected commit",
+      },
+    });
+    expect(controller.getSnapshot().savedReview?.commentCount).toBe(4);
+    await writing;
+    expect(
+      calls.some((call) => call.path === "/api/reviews/saved/browsing/live/notes" && call.body),
+    ).toBe(true);
+    expect(calls.some((call) => call.path === "/api/notes" && call.body)).toBe(false);
+    await controller.selectSavedTarget("t3");
+    expect((await controller.copyFeedback()).count).toBe(4);
+    await controller.selectComparison({ kind: "commit", commit: C });
+    await controller.clearSavedComments(controller.getSnapshot().savedReview!.revision);
+    expect(controller.getSnapshot().savedReview?.commentCount).toBe(0);
+    expect(controller.getSnapshot().notes?.notes).toEqual([]);
+  } finally {
+    controller.dispose();
+    vi.unstubAllGlobals();
+  }
 });

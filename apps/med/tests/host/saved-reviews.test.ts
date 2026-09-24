@@ -514,3 +514,22 @@ describe("saved reviews", () => {
     ).rejects.toMatchObject({ code: "invalid-note" });
   });
 });
+
+it("stops capture when the aggregate record bound is reached", async () => {
+  const store = new SavedReviewStore(directory);
+  let captures = 0;
+  await expect(
+    store.create(
+      {
+        title: "Large multi-target review",
+        targets: Array.from({ length: 16 }, () => input.targets[0]!),
+      },
+      async () => {
+        captures++;
+        return capture("/repo/a", "a".repeat(5 * 1024 * 1024));
+      },
+    ),
+  ).rejects.toThrow("64 MiB");
+  expect(captures).toBeLessThan(16);
+  expect((await readdir(directory)).filter((name) => name.endsWith(".json"))).toEqual([]);
+});

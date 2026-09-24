@@ -176,3 +176,128 @@ test("saved metadata allows recovery while source access waits for repository re
   expect((await api("/api/repositories", { path: repos[0] })).status).toBe(200);
   expect((await api(`/api/reviews/${saved.id}/targets/${target.id}/review`)).status).toBe(200);
 });
+
+test("comments on browsed commits across repositories join the saved review and survive restart", async () => {
+  const { repos, launch } = await fixture();
+  let connection = await launch();
+  const saved = await (
+    await connection.api("/api/reviews", {
+      title: "Cross-tab comments",
+      targets: [{ repo: repos[0], comparison: { kind: "working" } }],
+    })
+  ).json();
+  const original = saved.targets[0];
+  await connection.api(`/api/reviews/${saved.id}/targets/${original.id}/notes`, {
+    expectedRevision: 0,
+    mutation: {
+      type: "add",
+      note: { path: "same.ts", side: "new", line: 1, text: "Original target" },
+    },
+  });
+  const paths: string[] = [];
+  for (const [index, repo] of repos.entries()) {
+    const review = await (
+      await connection.api("/api/review", {
+        repo,
+        comparison: { kind: "commit", commit: git(repo, "rev-parse", "HEAD") },
+      })
+    ).json();
+    const path = `/api/reviews/${saved.id}/browsing/${review.id}/notes`;
+    paths.push(path);
+    expect(await (await connection.api(path)).json()).toMatchObject({
+      reviewId: review.id,
+      revision: 0,
+      notes: [],
+    });
+    const response = await connection.api(path, {
+      reviewId: review.id,
+      expectedRevision: 0,
+      mutation: {
+        type: "add",
+        note: { path: "same.ts", side: "new", line: 1, text: `Commit tab ${index}` },
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ reviewId: review.id, revision: 1 });
+  }
+  const updated = await (await connection.api(`/api/reviews/${saved.id}`)).json();
+  expect(updated.commentCount).toBe(3);
+  expect(updated.targets).toHaveLength(3);
+  expect(updated.targets[0]).toEqual(original);
+  const exported = await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json();
+  expect(exported.count).toBe(3);
+  expect(exported.repositoryCount).toBe(2);
+  expect(exported.text).toContain("Original target");
+  expect(exported.text).toContain("Commit tab 0");
+  expect(exported.text).toContain("Commit tab 1");
+  expect(exported.text).toContain("one before");
+  await connection.host.close();
+  hosts.splice(hosts.indexOf(connection.host), 1);
+  await writeFile(join(repos[0]!, "same.ts"), "later content\n");
+  connection = await launch();
+  expect(await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).toEqual(
+    exported,
+  );
+  const persisted = await (await connection.api(paths[1]!)).json();
+  expect(persisted.notes[0].text).toBe("Commit tab 1");
+  const deleted = await connection.api(paths[1]!, {
+    reviewId: persisted.reviewId,
+    expectedRevision: persisted.revision,
+    mutation: { type: "remove", id: persisted.notes[0].id },
+  });
+  expect(deleted.status).toBe(200);
+  expect((await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).count).toBe(2);
+  expect(
+    (await connection.api(`/api/reviews/${saved.id}/clear`, { expectedRevision: updated.revision }))
+      .status,
+  ).toBe(409);
+  const latest = await (await connection.api(`/api/reviews/${saved.id}`)).json();
+  expect(
+    (await connection.api(`/api/reviews/${saved.id}/clear`, { expectedRevision: latest.revision }))
+      .status,
+  ).toBe(200);
+  expect((await (await connection.api(paths[0]!)).json()).notes).toEqual([]);
+});
+
+test("browsed comments skip gitlinks, reject invalid first notes atomically, and survive removed worktrees", async () => {
+  const { repos, launch } = await fixture();
+  const repo = repos[0]!;
+  const link = `${repo}-linked`;
+  const base = git(repo, "rev-parse", "HEAD");
+  git(repo, "worktree", "add", "-b", "linked-topic", link, base);
+  await writeFile(join(link, "same.ts"), "export const linked = true;\n");
+  git(link, "add", "same.ts");
+  git(link, "update-index", "--add", "--cacheinfo", `160000,${base},submodule`);
+  git(link, "commit", "-m", "text and gitlink");
+  const connection = await launch();
+  const saved = await (
+    await connection.api("/api/reviews", {
+      title: "Edge cases",
+      targets: [{ repo, comparison: { kind: "working" } }],
+    })
+  ).json();
+  const review = await (
+    await connection.api("/api/review", {
+      repo: link,
+      comparison: { kind: "commit", commit: git(link, "rev-parse", "HEAD") },
+    })
+  ).json();
+  const path = `/api/reviews/${saved.id}/browsing/${review.id}/notes`;
+  const request = (line: number) => ({
+    reviewId: review.id,
+    expectedRevision: 0,
+    mutation: { type: "add", note: { path: "same.ts", side: "new", line, text: "Linked comment" } },
+  });
+  expect((await connection.api(path, request(9999))).status).toBe(400);
+  expect(await (await connection.api(`/api/reviews/${saved.id}`)).json()).toEqual(saved);
+  const response = await connection.api(path, request(1));
+  expect(response.status).toBe(200);
+  git(repo, "worktree", "remove", "--force", link);
+  await connection.api("/api/repositories");
+  const notes = await connection.api(path);
+  expect(notes.status).toBe(200);
+  expect((await notes.json()).notes[0].text).toBe("Linked comment");
+  expect((await (await connection.api(`/api/reviews/${saved.id}/feedback`)).json()).text).toContain(
+    "export const linked = true;",
+  );
+});

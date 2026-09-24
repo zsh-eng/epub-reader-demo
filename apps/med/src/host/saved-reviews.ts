@@ -93,6 +93,7 @@ const targetSchema = z.object({
   base: text,
   head: text,
   captured: z.boolean(),
+  commentReviewId: text.optional(),
 });
 const savedSchema = z.object({
   id: z.string().regex(REVIEW_ID),
@@ -100,7 +101,7 @@ const savedSchema = z.object({
   createdAt: text,
   revision: natural,
   commentCount: natural,
-  targets: z.array(targetSchema).min(1).max(16),
+  targets: z.array(targetSchema).min(1).max(128),
 });
 const recordSchema = z.object({
   version: z.literal(1),
@@ -119,7 +120,7 @@ const recordSchema = z.object({
       }),
     )
     .min(1)
-    .max(16),
+    .max(128),
 });
 type SavedRecord = z.infer<typeof recordSchema>;
 
@@ -440,6 +441,72 @@ export class SavedReviewStore {
     return target;
   }
 
+  private appendCapture(
+    record: SavedRecord,
+    result: CapturedReviewTarget,
+    commentReviewId?: string,
+  ) {
+    const id = record.saved.id;
+    const targetId = `t_${randomBytes(12).toString("hex")}`;
+    const reviewId = `${id}:${targetId}`;
+    // Freeze symbolic refs after capture. Inclusive range resolution has already
+    // shifted the base to its parent, so do not apply includeBase a second time.
+    const comparison =
+      result.review.comparison.kind === "range"
+        ? {
+            kind: "range" as const,
+            base: result.review.base,
+            head: result.review.head,
+            includeBase: false,
+          }
+        : result.review.comparison.kind === "commit"
+          ? { kind: "commit" as const, commit: result.review.head }
+          : result.review.comparison;
+    const review = responseSchema.parse({
+      ...result.review,
+      comparison,
+      id: reviewId,
+      repo: result.repo,
+    });
+    const sources = result.sources.map((source) => sourceSchema.parse({ ...source, reviewId }));
+    if (
+      new Set(sources.map((source) => source.path)).size !== sources.length ||
+      sources.some((source) => !review.files.some((file) => file.path === source.path))
+    )
+      throw new HostError("invalid-capture", "Captured source paths do not match the review.");
+    if (Buffer.byteLength(JSON.stringify({ review, sources })) > MAX_RECORD_BYTES)
+      throw new HostError(
+        "saved-review-limit",
+        "This review exceeds the 64 MiB snapshot limit.",
+        413,
+      );
+    record.saved.targets.push({
+      id: targetId,
+      ...(commentReviewId ? { commentReviewId } : {}),
+      repositoryId: result.repositoryId,
+      repo: result.repo,
+      branch: result.branch,
+      label: review.label,
+      comparison: review.comparison,
+      base: review.base,
+      head: review.head,
+      captured: ["working", "staged", "unstaged"].includes(review.comparison.kind),
+    });
+    record.captures.push({
+      targetId,
+      review,
+      sources,
+      notes: { reviewId, revision: 0, notes: [] },
+    });
+    if (Buffer.byteLength(JSON.stringify(record)) > MAX_RECORD_BYTES)
+      throw new HostError(
+        "saved-review-limit",
+        "This review exceeds the 64 MiB snapshot limit.",
+        413,
+      );
+    return record.saved.targets.at(-1)!;
+  }
+
   create(
     input: SavedReviewCreate,
     capture: (target: SavedReviewCreate["targets"][number]) => Promise<CapturedReviewTarget>,
@@ -462,60 +529,9 @@ export class SavedReviewStore {
         },
         captures: [],
       };
-      let size = 0;
       for (const requested of input.targets) {
         const result = await capture(requested);
-        const targetId = `t_${randomBytes(12).toString("hex")}`;
-        const reviewId = `${id}:${targetId}`;
-        // Freeze symbolic refs after capture. Inclusive range resolution has already
-        // shifted the base to its parent, so do not apply includeBase a second time.
-        const comparison =
-          result.review.comparison.kind === "range"
-            ? {
-                kind: "range" as const,
-                base: result.review.base,
-                head: result.review.head,
-                includeBase: false,
-              }
-            : result.review.comparison.kind === "commit"
-              ? { kind: "commit" as const, commit: result.review.head }
-              : result.review.comparison;
-        const review = responseSchema.parse({
-          ...result.review,
-          comparison,
-          id: reviewId,
-          repo: result.repo,
-        });
-        const sources = result.sources.map((source) => sourceSchema.parse({ ...source, reviewId }));
-        if (
-          new Set(sources.map((source) => source.path)).size !== sources.length ||
-          sources.some((source) => !review.files.some((file) => file.path === source.path))
-        )
-          throw new HostError("invalid-capture", "Captured source paths do not match the review.");
-        size += Buffer.byteLength(JSON.stringify({ review, sources }));
-        if (size > MAX_RECORD_BYTES)
-          throw new HostError(
-            "saved-review-limit",
-            "This review exceeds the 64 MiB snapshot limit.",
-            413,
-          );
-        record.saved.targets.push({
-          id: targetId,
-          repositoryId: result.repositoryId,
-          repo: result.repo,
-          branch: result.branch,
-          label: review.label,
-          comparison: review.comparison,
-          base: review.base,
-          head: review.head,
-          captured: ["working", "staged", "unstaged"].includes(review.comparison.kind),
-        });
-        record.captures.push({
-          targetId,
-          review,
-          sources,
-          notes: { reviewId, revision: 0, notes: [] },
-        });
+        this.appendCapture(record, result);
       }
       await this.write(record, beforeCommit);
       return record.saved;
@@ -552,9 +568,32 @@ export class SavedReviewStore {
     expectedRevision: number,
     input: NoteMutation,
     beforeCommit?: () => void,
+    commentCapture?: () => Promise<CapturedReviewTarget>,
   ): Promise<NoteState> {
     return this.writing(async () => {
       const record = await this.read(id);
+      if (commentCapture) {
+        let attached = record.saved.targets.find((item) => item.commentReviewId === targetId);
+        if (!attached) {
+          if (expectedRevision !== 0 || input.type !== "add")
+            throw new HostError(
+              "stale-notes",
+              "Refresh this comparison before changing comments.",
+              409,
+            );
+          if (record.saved.targets.length >= 128)
+            throw new HostError(
+              "saved-review-limit",
+              "A review can contain at most 128 commented comparisons.",
+              413,
+            );
+          const result = await commentCapture();
+          if (result.review.id !== targetId)
+            throw new HostError("invalid-capture", "The comment comparison changed.", 409);
+          attached = this.appendCapture(record, result, targetId);
+        }
+        targetId = attached.id;
+      }
       const target = this.target(record, targetId);
       if (target.notes.revision !== expectedRevision)
         throw new HostError("stale-notes", "The notes changed. Refresh before retrying.", 409);

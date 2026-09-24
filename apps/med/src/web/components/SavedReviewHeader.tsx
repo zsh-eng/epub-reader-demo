@@ -105,7 +105,7 @@ export function SavedReviewHeader({
                   {browsing
                     ? `Browsing files · ${browsingSourceLabel ?? "Current files"}.`
                     : "Browsing outside the saved comparison."}{" "}
-                  Only comments on the saved comparison are copied.
+                  Comments across all tabs and comparisons in this review are copied.
                 </p>
               )}
             </Popover.Popup>
@@ -138,7 +138,7 @@ export function SavedReviewHeader({
         <button
           {...stylex.props(ui.button, ui.active, styles.fixed)}
           aria-label="Return to review"
-          title="Return to the saved comparison. Only comments on that comparison are copied."
+          title="Return to the original saved comparison."
           onClick={onReturn}
         >
           Return<span {...stylex.props(styles.desktop)}>to review</span>

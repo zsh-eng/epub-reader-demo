@@ -27,6 +27,7 @@ export const savedReviewTargetSchema = z.object({
   base: z.string(),
   head: z.string(),
   captured: z.boolean(),
+  commentReviewId: z.string().optional(),
 });
 export type SavedReviewTarget = z.infer<typeof savedReviewTargetSchema>;
 export const savedReviewSchema = z.object({

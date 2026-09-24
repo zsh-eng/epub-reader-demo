@@ -107,6 +107,9 @@ try {
     );
     repositories.push(repo);
   }
+  const bareRemote = join(directory, "review-remote.git");
+  git(directory, "init", "--bare", bareRemote);
+  git(repositories[0], "remote", "add", "origin", bareRemote);
   connection = await launch();
   const manifestPath = join(directory, "review.json");
   await writeFile(
@@ -230,6 +233,52 @@ try {
     assert.ok(clipboard.includes(expected), `Feedback must include ${expected}`);
   assert.match(clipboard, /2/);
 
+  // Browse a commit outside the initial snapshot, then return and copy all scopes.
+  await page.getByRole("option").filter({ hasText: "baseline" }).first().click();
+  await page.locator('[data-review-status="ready"]').waitFor();
+  await page
+    .locator('[data-additions] [data-column-number="1"] [data-line-number-content]')
+    .click();
+  await page.getByRole("button", { name: "Add note", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Review note text" })
+    .fill("Comment on an individual commit");
+  await page.getByRole("button", { name: "Save note", exact: true }).click();
+  await page
+    .getByRole("article")
+    .getByText("Comment on an individual commit", { exact: true })
+    .waitFor();
+  await page.waitForFunction(() =>
+    document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("3"),
+  );
+  await page.getByRole("button", { name: "Push", exact: true }).click();
+  await page
+    .getByRole("combobox", { name: "Destination branch" })
+    .fill("review/browser-validation");
+  await page.getByRole("button", { name: "Push to origin", exact: true }).click();
+  await page.getByRole("status").filter({ hasText: "Pushed" }).waitFor();
+  assert.equal(
+    git(bareRemote, "rev-parse", "refs/heads/review/browser-validation"),
+    git(repositories[0], "rev-parse", "HEAD"),
+  );
+  await page.getByRole("button", { name: "Compare against base branch" }).click();
+  await page.getByRole("menuitem", { name: "main", exact: true }).click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector('[data-review-status="ready"]')?.getAttribute("data-file-count") ===
+      "0",
+  );
+  await header.getByRole("button", { name: "Return to review", exact: true }).click();
+  await page.locator('[data-review-status="ready"]').waitFor();
+  await copyButton.click();
+  await page.waitForFunction(async () =>
+    (await navigator.clipboard.readText()).includes("Comment on an individual commit"),
+  );
+  const allComments = await page.evaluate(() => navigator.clipboard.readText());
+  assert.ok(allComments.includes("Frontend feedback from the browser"));
+  assert.ok(allComments.includes("Backend feedback across repositories"));
+  assert.ok(allComments.includes("frontendBefore"));
+
   const previousToken = connection.token;
   const previousPort = connection.port;
   await stopHost();
@@ -237,13 +286,13 @@ try {
   connection = await launch(previousPort);
   assert.equal(connection.token, previousToken);
   saved = await api(`/api/reviews/${id}`);
-  assert.equal(saved.commentCount, 2);
+  assert.equal(saved.commentCount, 3);
   const source = await api(`/api/reviews/${id}/targets/${saved.targets[0].id}/source?path=same.ts`);
   assert.ok(source.new.includes("frontendAfter"));
   assert.ok(!source.new.includes("changedAfterCapture"));
   await page.reload();
   await page.waitForFunction(() =>
-    document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("2"),
+    document.querySelector('button[aria-label="Copy comments"]')?.textContent?.trim().endsWith("3"),
   );
   await page
     .getByRole("article")
@@ -253,7 +302,7 @@ try {
   await page.getByText("Backend feedback across repositories", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Clear all comments", exact: true }).click();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  assert.equal((await api(`/api/reviews/${id}/feedback`)).count, 2);
+  assert.equal((await api(`/api/reviews/${id}/feedback`)).count, 3);
   await page.getByRole("button", { name: "Clear all comments", exact: true }).click();
   await page.getByRole("button", { name: "Confirm clear", exact: true }).click();
   await header.getByText("Comments cleared", { exact: true }).waitFor();
@@ -268,9 +317,9 @@ try {
   console.log(
     JSON.stringify({
       checks:
-        "built CLI discovery and multi-repo snapshot manifest; token-free link and new-tab cookie auth; UI comment; copied cross-repo source context; same-port restart and frozen snapshots; persistent comments; cancel and confirm clear",
+        "built CLI discovery and multi-repo snapshot manifest; token-free link and new-tab cookie auth; UI comments on saved and browsed commits; UI push to temporary bare remote and merge-base dropdown; copied cross-repo and cross-tab source context; same-port restart and frozen snapshots; persistent comments; cancel and confirm clear",
       repositories: 2,
-      commentsCopied: 2,
+      commentsCopied: 3,
       pageErrors,
     }),
   );

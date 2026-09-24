@@ -256,6 +256,14 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       ? `/api/reviews/${encodeURIComponent(snapshot.savedReview.id)}/targets/${encodeURIComponent(snapshot.savedTargetId)}`
       : null;
   }
+  function savedNoteUrl(reviewId = snapshot.review?.id) {
+    return (
+      savedTargetUrl() ??
+      (snapshot.savedReview && reviewId
+        ? `/api/reviews/${encodeURIComponent(snapshot.savedReview.id)}/browsing/${encodeURIComponent(reviewId)}`
+        : null)
+    );
+  }
   async function refreshSavedMetadata() {
     const id = snapshot.savedReview?.id;
     // The saved review has its own revision and count. Refresh only after local
@@ -272,8 +280,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
     ) {
       const changed = savedReview.revision > snapshot.savedReview.revision;
       update({ savedReview });
-      if (changed && snapshot.savedView && snapshot.review)
-        await loadNotes(snapshot.review.id, reviewGeneration);
+      if (changed && snapshot.review) await loadNotes(snapshot.review.id, reviewGeneration);
     }
   }
   let savedRefresh: Promise<void> | undefined;
@@ -293,7 +300,9 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
   async function loadNotes(reviewId: string, generation: number): Promise<void> {
     try {
       const notes = await api.json(
-        savedTargetUrl() ? `${savedTargetUrl()}/notes` : `/api/notes?${query({ reviewId })}`,
+        savedNoteUrl(reviewId)
+          ? `${savedNoteUrl(reviewId)}/notes`
+          : `/api/notes?${query({ reviewId })}`,
         notesSchema,
         {
           signal: reviewAbort?.signal,
@@ -1099,7 +1108,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       ? new Promise<void>((resolve) => noteIdleWaiters.push(resolve))
       : Promise.resolve();
   let temporaryNoteId = 0;
-  function noteQueueKey(reviewId: string, url = savedTargetUrl() ?? "/api/notes") {
+  function noteQueueKey(reviewId: string, url = savedNoteUrl() ?? "/api/notes") {
     return `${url}:${reviewId}`;
   }
   function resolvedMutation(queue: NoteQueue, mutation: NoteMutation): NoteMutation {
@@ -1272,14 +1281,14 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
       throw new Error("Wait for notes to load.");
     if (mutation.type === "remove") validateReviewNoteRemoval(mutation.id, current.notes);
     else validateReviewNoteText(mutation.type === "add" ? mutation.note.text : mutation.text);
-    const url = savedTargetUrl() ?? "/api/notes";
+    const url = savedNoteUrl() ?? "/api/notes";
     const key = noteQueueKey(review.id, url);
     let queue = noteQueues.get(key);
     if (!queue) {
       queue = {
         key,
         url,
-        savedId: snapshot.savedView ? snapshot.savedReview?.id : undefined,
+        savedId: snapshot.savedReview?.id,
         reviewId: review.id,
         authoritative: current,
         pending: [],
@@ -1400,8 +1409,7 @@ export function createReviewController(options: ReviewControllerOptions = {}): R
         if (disposed || snapshot.savedReview?.id !== saved.id) return;
         if (cleared.revision >= snapshot.savedReview.revision) update({ savedReview: cleared });
         // Clearing spans all targets, including one selected while the request was pending.
-        if (snapshot.savedView && snapshot.review)
-          await loadNotes(snapshot.review.id, reviewGeneration);
+        if (snapshot.review) await loadNotes(snapshot.review.id, reviewGeneration);
       } catch (error) {
         await refreshSavedMetadata();
         throw error;

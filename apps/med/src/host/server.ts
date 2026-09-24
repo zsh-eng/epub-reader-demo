@@ -417,6 +417,108 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
             );
             return;
           }
+          const browsingNotes = /^\/api\/reviews\/([^/]+)\/browsing\/([a-f0-9]{64})\/notes$/.exec(
+            url.pathname,
+          );
+          if (browsingNotes) {
+            const [, id, reviewId] = browsingNotes;
+            const bundle = await savedReviews.get(id!);
+            const target = bundle.targets.find((item) => item.commentReviewId === reviewId);
+            if (target) {
+              const family = registry.snapshot().find((item) => item.id === target.repositoryId);
+              if (!family)
+                throw new HostError(
+                  "repository-unavailable",
+                  "Register the repository to open these comments.",
+                  409,
+                );
+              const repo = await requireRepo(family.path);
+              if (
+                (await registry.require(repo, abort.signal)).repository.id !== target.repositoryId
+              )
+                throw new HostError(
+                  "repository-changed",
+                  "This comment belongs to another repository.",
+                  409,
+                );
+            } else {
+              await requireReview(reviewId!);
+            }
+            if (request.method === "GET") {
+              const state = target
+                ? await savedReviews.notes(id!, target.id)
+                : { reviewId: reviewId!, revision: 0, notes: [] };
+              send({ ...state, reviewId });
+              return;
+            }
+            if (request.method !== "POST")
+              throw new HostError("method-not-allowed", "Use GET or POST for comments.", 405);
+            const input = notesRequestSchema.parse(await readBody(request));
+            if (input.reviewId !== reviewId)
+              throw new HostError("invalid-note", "The comment comparison does not match.", 409);
+            const state = await savedReviews.mutate(
+              id!,
+              target?.id ?? reviewId!,
+              input.expectedRevision,
+              input.mutation,
+              assertRequestAccess,
+              target
+                ? undefined
+                : async () => {
+                    const review = reviews.get(await requireReview(reviewId!)).response;
+                    if (review.comparison.kind === "files" || review.comparison.kind === "patch")
+                      throw new HostError(
+                        "git-required",
+                        "Saved comments require a Git comparison.",
+                        422,
+                      );
+                    const owner = await registry.require(review.repo, abort.signal);
+                    const info = await resolveRepository(review.repo, abort.signal);
+                    if (review.files.length > 500)
+                      throw new HostError(
+                        "saved-review-too-large",
+                        "Narrow this comparison to at most 500 changed files.",
+                        413,
+                      );
+                    const sources = [];
+                    let bytes = Buffer.byteLength(review.patch);
+                    for (const file of review.files) {
+                      if (file.binary || file.tooLarge) continue;
+                      let source;
+                      try {
+                        source = await reviews.sources(reviewId!, file.path, abort.signal);
+                      } catch (error) {
+                        if (
+                          error instanceof HostError &&
+                          ["unsupported-source", "source-unavailable", "binary-source"].includes(
+                            error.code,
+                          )
+                        )
+                          continue;
+                        throw error;
+                      }
+                      bytes += Buffer.byteLength(source.old) + Buffer.byteLength(source.new);
+                      if (bytes > 24 * 1024 * 1024)
+                        throw new HostError(
+                          "saved-review-too-large",
+                          "Comment context exceeds 24 MiB. Narrow this comparison.",
+                          413,
+                        );
+                      sources.push(source);
+                    }
+                    assertRequestAccess();
+                    return {
+                      repositoryId: owner.repository.id,
+                      repo: review.repo,
+                      branch: info.branch === "Detached HEAD" ? null : info.branch,
+                      review,
+                      sources,
+                    };
+                  },
+            );
+            send({ ...state, reviewId });
+            return;
+          }
           const savedRoute =
             /^\/api\/reviews\/([^/]+)(?:\/targets\/([^/]+)\/(review|source|notes)|\/(feedback|clear))?$/.exec(
               url.pathname,
