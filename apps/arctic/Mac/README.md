@@ -6,6 +6,10 @@ project compiles the existing article, annotation, reading-session, metadata,
 tagging, image-codec and WebKit-resource sources directly. These are shared
 sources, not copies or a new database implementation.
 
+The local optimized build is at `../.build/mac/Arctic.app`. Build products are
+ignored by Git; the Xcode project is the reproducible source. This is a local
+development build, not a notarized distribution.
+
 ## Interaction
 
 - The native, resizable sidebar holds library folders, collections and open
@@ -97,6 +101,8 @@ No test resets the user's real library.
 ## Evidence and limits — 24 September 2026
 
 - Debug and optimized Release Mac builds and the iOS Simulator regression build passed.
+- The shared WebView suite passed all 22 tests. Repository lint and strict
+  formatting checks for the Mac Swift sources passed.
 - Six native core checks passed: pool bounds/reuse and deallocation; immutable
   link identity and saved HTML; background preparation with no visits/time;
   archived favourites; drafts across eviction; cold versus warm preparation.
