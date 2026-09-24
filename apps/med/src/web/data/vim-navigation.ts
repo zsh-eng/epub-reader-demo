@@ -45,8 +45,10 @@ export class VimNavigation {
   private marks = new Map<string, { line: number; column: number }>();
   private previousJump: { line: number; column: number } | undefined;
   visual: { mode: VisualMode; line: number; column: number } | null = null;
+  private objectRange: VisualRange | null = null;
   get visualRange(): VisualRange | null {
     if (!this.visual) return null;
+    if (this.objectRange) return this.objectRange;
     const anchor = this.starts[this.visual.line]! + this.visual.column;
     const forward = anchor <= this.offset;
     const startLine = forward ? this.visual.line : this.line;
@@ -78,6 +80,7 @@ export class VimNavigation {
     return range ? this.text.slice(range.start, range.end) : "";
   }
   clearVisual() {
+    this.objectRange = null;
     this.visual = null;
   }
 
@@ -155,6 +158,7 @@ export class VimNavigation {
     );
   }
   jump(line: number, column = 0, preserve = false) {
+    this.objectRange = null;
     this.line = Math.max(0, Math.min(this.lines.length - 1, line));
     const { columns, display } = this.geometry();
     const index = floorIndex(preserve ? display : columns, column);
@@ -253,6 +257,151 @@ export class VimNavigation {
     }
     this.jumpOffset(Math.min(Math.max(0, end - 1), position));
   }
+  /** Text objects use source offsets, so selections can cross virtualized rows. */
+  private textObject(object: string, around: boolean, count: number) {
+    const previousRange = this.visualRange;
+    if (object === "p") {
+      const blank = (line: number) => this.lines[line] === "";
+      let start = this.line;
+      while (start > 0 && blank(start - 1) === blank(start)) start--;
+      let end = this.line;
+      const runEnd = (line: number) => {
+        while (line + 1 < this.lines.length && blank(line + 1) === blank(line)) line++;
+        return line;
+      };
+      for (let i = 0; i < count; i++) {
+        end = runEnd(end);
+        if (around && blank(end) && end + 1 < this.lines.length) end = runEnd(end + 1);
+        if (around && end + 1 < this.lines.length && blank(end + 1)) end = runEnd(end + 1);
+        if (i + 1 < count && end + 1 < this.lines.length) end++;
+      }
+      if (around && !blank(end) && end === this.lines.length - 1)
+        while (start > 0 && blank(start - 1)) start--;
+      if (previousRange?.mode === "line") {
+        if (
+          start === previousRange.startLine &&
+          end === previousRange.endLine &&
+          end + 1 < this.lines.length
+        )
+          end = runEnd(end + 1);
+        start = Math.min(start, previousRange.startLine);
+        end = Math.max(end, previousRange.endLine);
+      }
+      this.visual = { mode: "line", line: start, column: 0 };
+      this.jump(end);
+      return;
+    }
+    if (object !== "w" && object !== "W") {
+      this.delimitedObject(object, around, count);
+      return;
+    }
+    if (!this.lines[this.line]!.length) return;
+    const typeAt = (offset: number) => {
+      const char = String.fromCodePoint(this.text.codePointAt(offset) ?? 32);
+      return object === "W" ? (/\s/u.test(char) ? 0 : 1) : kind(char);
+    };
+    const next = (offset: number) =>
+      offset + ((this.text.codePointAt(offset) ?? 0) > 0xffff ? 2 : 1);
+    const before = (offset: number) =>
+      offset - (/[\uDC00-\uDFFF]/.test(this.text[offset - 1] ?? "") ? 2 : 1);
+    const horizontal = (offset: number) => /[^\S\r\n]/u.test(this.text[offset] ?? "x");
+    const runEnd = (offset: number) => {
+      const type = typeAt(offset);
+      while (offset < this.text.length && typeAt(offset) === type) offset = next(offset);
+      return offset;
+    };
+    let start = this.offset;
+    const type = typeAt(start);
+    while (start > this.starts[this.line]! && typeAt(before(start)) === type) start = before(start);
+    let end = this.offset;
+    for (let i = 0; i < count; i++) {
+      if (around && typeAt(end) === 0) end = runEnd(end);
+      end = runEnd(end);
+      if (around) while (end < this.text.length && horizontal(end)) end++;
+      if (i + 1 < count && end < this.text.length && around && typeAt(end) === 0) end = runEnd(end);
+    }
+    if (around && end > start && !horizontal(end - 1) && type !== 0)
+      while (start > this.starts[this.line]! && horizontal(start - 1)) start--;
+    // A repeated object extends an existing selection by the next unit.
+    if (
+      previousRange?.mode === "character" &&
+      (this.objectRange || previousRange.end - previousRange.start > this.characterLength)
+    ) {
+      if (start >= previousRange.start && end <= previousRange.end && end < this.text.length) {
+        if (around && typeAt(end) === 0) end = runEnd(end);
+        end = runEnd(end);
+        if (around) while (end < this.text.length && horizontal(end)) end++;
+      }
+      start = Math.min(start, previousRange.start);
+      end = Math.max(end, previousRange.end);
+    }
+    this.selectObject(start, end);
+  }
+  private selectObject(start: number, end: number) {
+    this.jumpOffset(start);
+    const empty = start === end;
+    if (start < this.starts[this.line]! + this.lines[this.line]!.length) start = this.offset;
+    const startLine = this.line;
+    this.visual = { mode: "character", line: this.line, column: this.column };
+    this.jumpOffset(Math.max(start, end - 1));
+    end = empty ? start : Math.max(end, this.offset + this.characterLength);
+    this.objectRange = { mode: "character", start, end, startLine, endLine: this.line };
+  }
+  private delimitedObject(object: string, around: boolean, count: number) {
+    const quote = ['"', "'", "`"].includes(object);
+    const pair = ["()", "[]", "{}", "<>"].find((pair) => pair.includes(object));
+    if (!quote && !pair && object !== "b" && object !== "B") return;
+    const [open, close] = quote ? [object, object] : (pair ?? (object === "b" ? "()" : "{}"));
+    const ranges: [number, number][] = [];
+    const stack: number[] = [];
+    const from = quote ? this.starts[this.line]! : 0;
+    const to = quote ? from + this.lines[this.line]!.length : this.text.length;
+    let quoted = "";
+    for (let offset = from; offset < to; offset++) {
+      const char = this.text[offset]!;
+      if (char === "\\") {
+        offset++;
+        continue;
+      }
+      if (!quote) {
+        // Ignore delimiters in quoted source. This is a lexical object, not a parser.
+        if (quoted) {
+          if (char === quoted || (char === "\n" && quoted !== "`")) quoted = "";
+          continue;
+        }
+        if (['"', "'", "`"].includes(char)) {
+          quoted = char;
+          continue;
+        }
+      }
+      if (char === close && stack.length) ranges.push([stack.pop()!, offset]);
+      else if (char === open) stack.push(offset);
+    }
+    const selection = this.visualRange;
+    const enclosing = ranges.filter(([start, end]) => start <= this.offset && end >= this.offset);
+    // Quotes can also select the next quoted string on the current line.
+    if (quote && !enclosing.length) {
+      const next = ranges.find(([start]) => start > this.offset);
+      if (next) enclosing.push(next);
+    }
+    enclosing.sort((a, b) => a[1] - a[0] - (b[1] - b[0]));
+    let index = count - 1;
+    if (!quote && selection && this.objectRange && enclosing[index]) {
+      const [start, end] = enclosing[index]!;
+      if (selection.start === start + (around ? 0 : 1) && selection.end === end + (around ? 1 : 0))
+        index++;
+    }
+    const target = enclosing[index];
+    if (!target) return;
+    let [start, end] = target;
+    start += around ? 0 : 1;
+    end += around ? 1 : 0;
+    if (quote && around) {
+      while (end < to && /\s/u.test(this.text[end]!)) end++;
+      if (end === target[1] + 1) while (start > from && /\s/u.test(this.text[start - 1]!)) start--;
+    }
+    this.selectObject(start, end);
+  }
   private characterFind(key: string, char: string, count: number, repeated = false) {
     const forward = key === "f" || key === "t";
     const till = key.toLowerCase() === "t";
@@ -290,7 +439,11 @@ export class VimNavigation {
       this.count = (this.count + key).slice(0, 6);
       return { handled: true };
     }
-    if (!this.prefix && ["g", "z", "f", "F", "t", "T", "m", "'", "`"].includes(key)) {
+    if (
+      !this.prefix &&
+      ((this.visual && (key === "i" || key === "a")) ||
+        ["g", "z", "f", "F", "t", "T", "m", "'", "`"].includes(key))
+    ) {
       this.prefix = key;
       return { handled: true };
     }
@@ -299,6 +452,10 @@ export class VimNavigation {
     const prefix = this.prefix;
     this.prefix = "";
     this.count = "";
+    if (prefix === "i" || prefix === "a") {
+      this.textObject(key, prefix === "a", n);
+      return { handled: true };
+    }
     if (prefix === "m") {
       if (/^[a-z]$/.test(key)) this.marks.set(key, { line: this.line, column: this.column });
       return { handled: true };
@@ -331,6 +488,7 @@ export class VimNavigation {
       return { handled: true, ...(align ? { align } : {}) };
     }
     if (key === "v" || key === "V") {
+      this.objectRange = null;
       const mode = key === "v" ? "character" : "line";
       if (this.visual?.mode === mode) this.clearVisual();
       else

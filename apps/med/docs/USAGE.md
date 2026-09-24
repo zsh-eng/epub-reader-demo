@@ -132,6 +132,11 @@ Symbol extraction uses Universal Ctags. Install it with `brew install universal-
 Vim navigation is enabled by default. Use the command palette to disable or enable it. This preference is saved for the current browser address. Files take keyboard focus when opened, ready for normal-mode navigation:
 
 - `h j k l`, `w b e`, `0 ^ $`, and counts such as `10j`.
+- `v` selects characters; `V` selects whole lines. Use motions to extend the selection, `o` to move to the other end, `y` to copy, and Escape to cancel. Selection and copy include source lines outside the visible view.
+- `viw` selects a word or punctuation group; `vaw` includes adjacent spaces. `viW` / `vaW` select a non-space WORD, including its punctuation. `v2iw` selects the word and the next space group; `v2aw` selects two words.
+- `vip` selects the current paragraph; `vap` includes the adjacent empty lines. Empty lines separate paragraphs; a line with only spaces stays in its paragraph. `v2ap` selects two paragraphs. Repeat `ip` or `ap` in visual mode to extend the selection.
+- `vi"` / `va"`, `vi'` / `va'`, and backtick objects select quoted text on the current line. Inner objects omit the quotes; around objects include the quotes and adjacent spaces. Escaped quotes stay inside the selection.
+- `vi(` / `va(`, `vi[` / `va[`, and `vi{` / `va{` select nested bracket contents or the whole pair across lines. Closing brackets work too; `ib` / `ab` are parentheses and `iB` / `aB` are braces. A count such as `v2i(` selects the next outer pair. Repeat the object to expand outward. These are lexical pairs; they do not parse language syntax.
 - `gd` finds declarations for the identifier at the cursor. It first checks the current file with Universal Ctags, then the ctags-backed project index. Multiple candidates open a picker; project results open their indexed commit. Ctags does not resolve types or imports like an LSP.
 - `gg`, `G`, `42G`, `{` / `}` for paragraphs, and `Ctrl+D` / `Ctrl+U` for half pages.
 - `''` returns to the previous jump's line at its first non-space character; double backtick returns to the exact column. Repeating either swaps between the two locations. Line-number jumps, file/paragraph jumps, search matches, and accepted in-file symbol/definition jumps record the origin. Cancelled previews do not.

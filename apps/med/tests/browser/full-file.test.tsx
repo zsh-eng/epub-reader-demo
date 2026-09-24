@@ -1459,3 +1459,68 @@ test.each([
   key("G");
   await assertEmpty(6);
 });
+
+test("Vim text objects paint and copy words and paragraphs across virtualized rows", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const paragraph = "one.two  𝒜e\u0301\r\n" + "continuation\r\n".repeat(4000);
+  render(
+    <FullFileView
+      {...props}
+      file={{ ...base, plain: true, identity: "text-objects", text: paragraph + "\r\nlast" }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard("lviw");
+  expect(
+    visualRanges().flatMap(([, highlight]) =>
+      [...highlight].map((range) => (range as Range).toString()),
+    ),
+  ).toEqual(["one"]);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[0]?.[0]).toBe("one");
+  await userEvent.keyboard("vaW");
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[1]?.[0]).toBe("one.two  ");
+  await userEvent.keyboard("vip");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "line");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "4001");
+  expect(lines()!.length).toBeLessThan(300);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[2]?.[0]).toBe(paragraph);
+  await userEvent.keyboard("vap");
+  await expect.element(pane).toHaveAttribute("data-vim-line", "4002");
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[3]?.[0]).toBe(paragraph + "\r\n");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "normal");
+});
+
+test("quote and nested bracket objects copy exact source through the file pane", async () => {
+  const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+  const inside = "\r\n" + "  item,\r\n".repeat(4000);
+  render(
+    <FullFileView
+      {...props}
+      file={{
+        ...base,
+        plain: true,
+        identity: "delimiter-objects",
+        text: `call("value", (${inside}));`,
+      }}
+      vimEnabled
+    />,
+  );
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await expect.element(pane).toBeVisible();
+  await userEvent.keyboard('vi"y');
+  await expect.poll(() => write.mock.calls[0]?.[0]).toBe("value");
+  await userEvent.keyboard("2000Gvi(");
+  await expect.element(pane).toHaveAttribute("data-vim-mode", "character");
+  expect(lines()!.length).toBeLessThan(300);
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[1]?.[0]).toBe(inside);
+  await userEvent.keyboard("2000Gv2a(");
+  await userEvent.keyboard("y");
+  await expect.poll(() => write.mock.calls[2]?.[0]).toBe(`("value", (${inside}))`);
+});

@@ -285,3 +285,157 @@ test("search previews do not overwrite jump-back, but accepted search and match 
   keys(model, "n``");
   expect(model.line).toBe(3);
 });
+
+test("inner words distinguish keyword, punctuation, whitespace, and WORD objects", () => {
+  const model = new VimNavigation("one.two  𝒜e\u0301🙂\n");
+  keys(model, "lviw");
+  expect(model.selectedText()).toBe("one");
+  model.key("Escape");
+  model.jump(0, 3);
+  keys(model, "viw");
+  expect(model.selectedText()).toBe(".");
+  model.key("Escape");
+  model.jump(0, 7);
+  keys(model, "viw");
+  expect(model.selectedText()).toBe("  ");
+  model.key("Escape");
+  model.jump(0, 11);
+  keys(model, "viw");
+  expect(model.selectedText()).toBe("𝒜e\u0301");
+  model.key("Escape");
+  model.jump(0, 2);
+  keys(model, "viW");
+  expect(model.selectedText()).toBe("one.two");
+});
+
+test("around words use trailing spaces or leading spaces at line end", () => {
+  const model = new VimNavigation("one  two.three\nnext");
+  keys(model, "vaw");
+  expect(model.selectedText()).toBe("one  ");
+  model.key("Escape");
+  model.jump(0, 4);
+  keys(model, "vaw");
+  expect(model.selectedText()).toBe("  two");
+  model.key("Escape");
+  model.jump(0, 10);
+  keys(model, "vaW");
+  expect(model.selectedText()).toBe("  two.three");
+});
+
+test("word counts include whitespace units for inner objects and words for around objects", () => {
+  for (const [sequence, expected] of [
+    ["v2iw", "one  "],
+    ["v3iw", "one  two"],
+    ["v2aw", "one  two "],
+    ["viwiw", "one  "],
+  ]) {
+    const model = new VimNavigation("one  two three");
+    keys(model, sequence!);
+    expect(model.selectedText()).toBe(expected);
+  }
+});
+
+test("paragraph objects select linewise source including CRLF and blank separators", () => {
+  const text = "one\r\ntwo\r\n\r\n\r\nthree\r\nfour";
+  const model = new VimNavigation(text);
+  model.jump(1, 1);
+  keys(model, "vip");
+  expect(model.visual?.mode).toBe("line");
+  expect(model.selectedText()).toBe("one\r\ntwo\r\n");
+  model.key("Escape");
+  keys(model, "vap");
+  expect(model.selectedText()).toBe("one\r\ntwo\r\n\r\n\r\n");
+  model.key("Escape");
+  model.jump(2);
+  keys(model, "vip");
+  expect(model.selectedText()).toBe("\r\n\r\n");
+  model.key("Escape");
+  keys(model, "vap");
+  expect(model.selectedText()).toBe("\r\n\r\nthree\r\nfour");
+  model.key("Escape");
+  model.jump(5);
+  keys(model, "vap");
+  expect(model.selectedText()).toBe("\r\n\r\nthree\r\nfour");
+});
+
+test("paragraph counts and repeated objects cross empty runs but keep whitespace-only lines", () => {
+  const text = "one\n \ntwo\n\n\nthree\n";
+  for (const [sequence, expected] of [
+    ["v2ip", "one\n \ntwo\n\n\n"],
+    ["vipip", "one\n \ntwo\n\n\n"],
+    ["v2ap", text],
+  ]) {
+    const model = new VimNavigation(text);
+    keys(model, sequence!);
+    expect(model.selectedText()).toBe(expected);
+  }
+});
+
+test("canceled and unknown text objects preserve the read-only cursor and reset prefixes", () => {
+  const model = new VimNavigation("one\n\nlast");
+  expect(model.key("i").handled).toBe(false);
+  keys(model, "vi");
+  model.key("Escape");
+  expect(model.visualRange).toBeNull();
+  keys(model, "jviw");
+  expect([model.line, model.column]).toEqual([1, 0]);
+  expect(model.selectedText()).toBe("\n");
+  keys(model, "ix");
+  expect(model.prefix).toBe("");
+  expect(model.text).toBe("one\n\nlast");
+  const empty = new VimNavigation("");
+  keys(empty, "vip");
+  expect(empty.selectedText()).toBe("");
+});
+
+test("quoted objects handle escapes, adjacent whitespace, and empty contents", () => {
+  for (const quote of ['"', "'", "`"])
+    for (const around of [false, true]) {
+      const model = new VimNavigation(`call(${quote}a\\${quote}b${quote}  );`);
+      model.jump(0, 7);
+      keys(model, `v${around ? "a" : "i"}${quote}`);
+      expect(model.selectedText()).toBe(around ? `${quote}a\\${quote}b${quote}  ` : `a\\${quote}b`);
+    }
+  const empty = new VimNavigation('call("");');
+  empty.jump(0, 5);
+  keys(empty, 'vi"');
+  expect(empty.selectedText()).toBe("");
+  keys(empty, "l");
+  expect(empty.selectedText()).toBe('")');
+  empty.key("Escape");
+  expect(empty.visualRange).toBeNull();
+});
+
+test("bracket objects handle nested multiline pairs, counts, and quoted delimiters", () => {
+  for (const [open, close] of [
+    ["(", ")"],
+    ["[", "]"],
+    ["{", "}"],
+  ]) {
+    const text = `${open}\r\n  ${open}one "${close}" two${close}\r\n${close}`;
+    const model = new VimNavigation(text);
+    model.jump(1, 4);
+    keys(model, `vi${open}`);
+    expect(model.selectedText()).toBe(`one "${close}" two`);
+    keys(model, `i${open}`);
+    expect(model.selectedText()).toBe(`\r\n  ${open}one "${close}" two${close}\r\n`);
+    model.key("Escape");
+    model.jump(1, 4);
+    keys(model, `v2a${close}`);
+    expect(model.selectedText()).toBe(text);
+  }
+  const empty = new VimNavigation("()");
+  keys(empty, "vib");
+  expect(empty.selectedText()).toBe("");
+  keys(empty, "ab");
+  expect(empty.selectedText()).toBe("()");
+});
+
+test("unmatched objects leave selections unchanged and word objects keep full graphemes", () => {
+  const model = new VimNavigation("a (unclosed");
+  keys(model, "vi(");
+  expect(model.selectedText()).toBe("a");
+  const emoji = new VimNavigation("☀️ next");
+  keys(emoji, "viw");
+  expect(emoji.selectedText()).toBe("☀️");
+});
