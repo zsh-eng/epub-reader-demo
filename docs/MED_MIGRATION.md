@@ -43,10 +43,10 @@ branch or worktree. Read the [agent integration guide](../apps/med/docs/AGENT_IN
 for repository selection and review creation. Confirm that guidance with the
 user before adding it to their `AGENTS.md`.
 
-The former `~/med` checkout is retained for existing sessions and historical
-review links. Those links refer to that repository's original paths and commit
-IDs. Keep it registered while reviewing old links; new Workbench reviews use
-Workbench's paths. Development should use `~/workbench/apps/med`.
+The former `~/med` checkout has been removed. The host now runs from Workbench
+on the same port with the same saved state. New Workbench review links continue
+to work. Historical links that target `~/med` retain their saved data, but that
+repository path is no longer available. Development uses `~/workbench/apps/med`.
 
 Historical benchmark reports retain their recorded source hashes and paths.
 Run med's comparison scripts from `apps/med`; the production recording script
