@@ -28,3 +28,14 @@ need a diff and link review, not a build.
 
 Keep deployment resource names and production data separate from repository
 names. Do not deploy or run remote migrations as a side effect of a refactor.
+
+## Test design
+
+- Prefer integration and end-to-end tests for behavior. Exercise production
+  wiring and assert observable results.
+- Avoid unit tests by default. Add them only for important regressions that
+  integration tests cannot catch.
+- Do not test intermediate behavior, private helpers, trivial accessors, or
+  framework behavior. Do not repeat the same coverage at each layer.
+- Use the smallest fixture that proves the behavior. Mock dependencies outside
+  the tested path when needed; do not mock the mechanism under test.
