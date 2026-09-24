@@ -1,6 +1,6 @@
 # med
 
-A local Git review app for macOS and Omarchy Linux. Review changes, explore branches, and read code without changing your checkout.
+Workbench’s local Git review app for macOS and Omarchy Linux. Review changes, explore branches, and read code without changing your checkout.
 
 Review commits and working changes in a continuous split or unified diff. Expand context, wrap lines, and comment on a line or range.
 
@@ -36,20 +36,20 @@ med runs in your browser with a local server. It does not edit reviewed files, s
 
 ## Get started
 
-From a checkout of this project, with Git and Node **22.12 or newer** installed:
+From the Workbench root, with Bun, Git, and Node **22.12 or newer** installed:
 
 ```sh
-npm ci
-npm run build
-node dist/cli.js /path/to/repository
+bun install --frozen-lockfile
+bun run build:med
+bun run med /path/to/repository
 ```
 
-The command opens the app in your browser. Keep the terminal open; press `Ctrl+C` to stop it. The npm package is not published yet.
+The command opens the app in your browser. Keep the terminal open; press `Ctrl+C` to stop it. med is the private `@workbench/med` app in this monorepo.
 
 Pass several repository paths to open them in one app:
 
 ```sh
-node dist/cli.js /path/to/frontend /path/to/backend
+node apps/med/dist/cli.js /path/to/frontend /path/to/backend
 ```
 
 Use **Open branch** (`+`) to select a branch or worktree, or to add and remove repositories for the current session. Removing a repository from med does not delete its files or branches.
@@ -59,7 +59,7 @@ Use **Open branch** (`+`) to select a branch or worktree, or to add and remove r
 The local server uses port **4173** by default. With med already running, an agent can create a review from exact start and end commits:
 
 ```sh
-node dist/cli.js review create --title "Agent changes" \
+node apps/med/dist/cli.js review create --title "Agent changes" \
   --repo /path/to/repository --base <start-commit> --head <end-commit>
 ```
 
@@ -72,7 +72,7 @@ See [agent integration](docs/AGENT_INTEGRATION.md) for multi-repository manifest
 ### Optional search tools
 
 - **Universal Ctags** enables symbol search. Install it with `brew install universal-ctags` on macOS or `sudo pacman -S ctags` on Omarchy.
-- **Zoekt** adds indexed branch search and is required for project symbol search. With Go installed, run `node dist/cli.js --setup-search` once.
+- **Zoekt** adds indexed branch search and is required for project symbol search. With Go installed, run `node apps/med/dist/cli.js --setup-search` once.
 
 Content search reads **committed content**. It does not include uncommitted or untracked changes. Without Zoekt, content search falls back to Git. Symbol language support depends on the installed Ctags parsers.
 
@@ -117,8 +117,10 @@ Build and test tools: TypeScript, Vite, Vitest, Playwright, Oxlint, and Oxfmt. S
 
 ## Development
 
+Install dependencies from the Workbench root. Use the root `bun.lock`; do not create an app lockfile. Run app-specific checks with `bun run check:med`.
+
 ```sh
-npm run dev -- /path/to/repository
+bun run dev:med /path/to/repository
 ```
 
 Open the Vite URL with the `#token=…` fragment printed by the API host.

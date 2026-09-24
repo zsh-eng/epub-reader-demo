@@ -4,13 +4,13 @@ med connects an agent's changes to a local review. A review can contain comparis
 
 ## Start and connect
 
-Build med, then start it with the repositories you want to review:
+From the Workbench root, run `bun install --frozen-lockfile` and `bun run build:med`. Then start med with the repositories you want to review:
 
 ```sh
-node /Users/admin/med/dist/cli.js \
+node /Users/admin/workbench/apps/med/dist/cli.js \
   /Users/admin/spaced2 \
   /Users/admin/epub-reader-demo \
-  /Users/admin/med
+  /Users/admin/workbench
 ```
 
 The default address is `http://127.0.0.1:4173`. An occupied port produces an error; med does not silently change the address. Use `--port` to choose another port. Keep the host running while using review links.
@@ -24,8 +24,10 @@ The CLI finds the running host through a private local connection file. The defa
 An agent can inspect the user's registered repositories and worktrees:
 
 ```sh
-node /Users/admin/med/dist/cli.js review repos
+node /Users/admin/workbench/apps/med/dist/cli.js review repos
 ```
+
+In Workbench, med belongs to the Workbench repository. Use the Workbench root as `--repo`; `apps/med` is an app directory, not a separate Git repository.
 
 This list is the user's review scope, not a request to include every listed repository. The agent should compare it with the task, its working directory, Git repository root, linked worktree paths, and the files it actually changed. Include only the repositories affected by the task. Use canonical local paths to distinguish separate clones with the same name or remote URL. A worktree belongs to its repository family but has its own working files.
 
@@ -36,9 +38,9 @@ The host discovers new linked worktrees when the catalogue refreshes. If the tas
 Record the starting commit before work, then use the exact start and end commits for the handoff:
 
 ```sh
-node /Users/admin/med/dist/cli.js review create \
+node /Users/admin/workbench/apps/med/dist/cli.js review create \
   --title "Fix navigation" \
-  --repo /Users/admin/med \
+  --repo /Users/admin/workbench \
   --base <commit-before-work> \
   --head <commit-after-work>
 ```
@@ -56,7 +58,7 @@ The base is the state before the task's changes, not the first changed commit. m
 Both `--base` and `--head` accept branch names and other local Git refs. Run this command against the feature worktree:
 
 ```sh
-node /path/to/med/dist/cli.js review create \
+node /path/to/workbench/apps/med/dist/cli.js review create \
   --title "Feature changes against main" \
   --repo /path/to/feature-worktree \
   --base main --head HEAD
@@ -68,7 +70,7 @@ For a pull-request-style review that excludes changes made only on the base bran
 
 ```sh
 review_base=$(git -C /path/to/feature-worktree merge-base main HEAD)
-node /path/to/med/dist/cli.js review create \
+node /path/to/workbench/apps/med/dist/cli.js review create \
   --title "Feature changes" \
   --repo /path/to/feature-worktree \
   --base "$review_base" --head HEAD
@@ -83,7 +85,7 @@ In the app, open **Compare revisions…** from the review toolbar menu and enter
 For uncommitted changes:
 
 ```sh
-node /Users/admin/med/dist/cli.js review create \
+node /Users/admin/workbench/apps/med/dist/cli.js review create \
   --title "Navigation draft" \
   --repo /path/to/worktree \
   --working
@@ -110,7 +112,7 @@ For multiple repositories or multiple comparisons in one repository, write a man
 ```
 
 ```sh
-node /Users/admin/med/dist/cli.js review create --manifest /path/to/review.json
+node /Users/admin/workbench/apps/med/dist/cli.js review create --manifest /path/to/review.json
 ```
 
 A manifest accepts commit, range, working, staged, and unstaged comparisons. Patch and arbitrary file-pair inputs are not saved-review targets. Use `review create --help` for connection options. Keep generated manifests outside the reviewed changes unless they are intended project files.
@@ -137,7 +139,7 @@ Suggested text:
 When handing off code changes, provide a med review link if the user's med host is running.
 
 - At the start, record the relevant repositories/worktrees, starting commit IDs, and any pre-existing changes.
-- Use `node /path/to/med/dist/cli.js review repos` to discover the user's registered review scope.
+- Use `node /path/to/workbench/apps/med/dist/cli.js review repos` to discover the user's registered review scope.
 - Match the task's actual working directories to that list. Include only repositories changed for this task. Do not include every registered repository.
 - Prefer exact before/after commit IDs for completed changes. For uncommitted work, use `--working` and explain any pre-existing changes included in the snapshot.
 - For a feature review, use that repository's intended base branch (`main`, `develop`, or another agreed ref). `--base <branch> --head HEAD` compares tips directly. To exclude changes made only on the base branch, pass `git merge-base <base-branch> HEAD`'s result as `--base`. Recalculate after merging the base branch and create a new link. Do not guess the same base for every repository or fetch without authorization.

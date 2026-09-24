@@ -4,10 +4,10 @@ import type { DiffsHighlighter } from "@pierre/diffs";
 import { tokenize } from "@twinkleplop/typescript";
 import { createTwinkleplopAdapter, type AdapterTheme } from "../../src/web/highlighting/adapter";
 // These tests deliberately guard the version-pinned Pierre adapter boundary.
-import { renderFileWithHighlighter } from "../../node_modules/@pierre/diffs/dist/utils/renderFileWithHighlighter.js";
-import { renderDiffWithHighlighter } from "../../node_modules/@pierre/diffs/dist/utils/renderDiffWithHighlighter.js";
-import { parsePatchFiles } from "../../node_modules/@pierre/diffs/dist/utils/parsePatchFiles.js";
-import { createTransformerWithState } from "../../node_modules/@pierre/diffs/dist/utils/createTransformerWithState.js";
+import { renderFileWithHighlighter } from "@pierre/diffs";
+import { renderDiffWithHighlighter } from "@pierre/diffs";
+import { parsePatchFiles } from "@pierre/diffs";
+import { createTransformerWithState } from "@pierre/diffs";
 
 const ts = tokenize({ fidelity: "high" });
 const themes: Record<string, AdapterTheme> = {

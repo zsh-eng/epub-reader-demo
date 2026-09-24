@@ -7,7 +7,8 @@ import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { cpus, platform, arch } from "node:os";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const root = process.cwd();
 const isolated = resolve(".benchmarks/highlighters");
@@ -147,7 +148,7 @@ const result = {
   quality: {},
 };
 for (const [name, path] of [
-  ["shiki", "node_modules/shiki"],
+  ["shiki", dirname(fileURLToPath(import.meta.resolve("shiki/package.json")))],
   ["core", `${isolated}/node_modules/@twinkleplop/core`],
   ["languages", `${isolated}/node_modules/@twinkleplop/typescript`],
 ])

@@ -1,15 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { createTwinkleplopAdapter } from "./highlighters/pierre-adapter.mjs";
-// Private entry points are intentional for this version-pinned experiment.
-// Do not use them as med's production integration contract.
-import { renderFileWithHighlighter } from "../node_modules/@pierre/diffs/dist/utils/renderFileWithHighlighter.js";
-import { renderDiffWithHighlighter } from "../node_modules/@pierre/diffs/dist/utils/renderDiffWithHighlighter.js";
-import { parsePatchFiles } from "../node_modules/@pierre/diffs/dist/utils/parsePatchFiles.js";
+// The probe checks renderer contracts against the pinned Pierre version.
+import { renderFileWithHighlighter } from "@pierre/diffs";
+import { renderDiffWithHighlighter } from "@pierre/diffs";
+import { parsePatchFiles } from "@pierre/diffs";
 
 assert.equal(
   JSON.parse(
-    await readFile(new URL("../node_modules/@pierre/diffs/package.json", import.meta.url), "utf8"),
+    await readFile(new URL("../package.json", import.meta.resolve("@pierre/diffs")), "utf8"),
   ).version,
   "1.4.3",
   "Re-audit private renderer contracts before running this probe on another Pierre version",

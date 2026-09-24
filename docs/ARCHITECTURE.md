@@ -6,6 +6,7 @@ and local development files. Shared packages must not import app code.
 
 ## Current boundaries
 
+- **med** owns the local Git review host, browser UI, review links, syntax rendering, and video comparison helpers. Read its [architecture](../apps/med/ARCHITECTURE.md) and [agent integration](../apps/med/docs/AGENT_INTEGRATION.md). It has no deployed service.
 - **Reader** owns the web EPUB app and its deployed Hono Worker. Read
   [Reader architecture](../apps/reader/docs/ARCHITECTURE.md) before changing
   its data loading, storage, caches, or Reader lifecycle.
@@ -24,7 +25,7 @@ and local development files. Shared packages must not import app code.
 
 Use Bun workspaces and the root `bun.lock`. Put dependencies in the manifest
 of the app or package that imports them. Root scripts provide common entry
-points; commands execute in the owning app directory.
+points; commands execute in the owning app directory. Reader keeps its explicit `rolldown-vite@7.3.1` alias; med uses Vite 8. Do not apply a root Vite override across these apps.
 
 Keep metadata separate from large files. Local writes must not wait for the
 network. Do not put API keys in synchronized records. Preserve the existing

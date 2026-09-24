@@ -24,7 +24,7 @@ export function pierreHighlighter(): Plugin {
     },
     buildStart() {
       const pkg = JSON.parse(
-        readFileSync(resolve("node_modules/@pierre/diffs/package.json"), "utf8"),
+        readFileSync(new URL("../package.json", import.meta.resolve("@pierre/diffs")), "utf8"),
       );
       if (!baseline && pkg.version !== "1.4.3")
         throw new Error("Re-audit the Twinkleplop integration before upgrading Pierre 1.4.3");

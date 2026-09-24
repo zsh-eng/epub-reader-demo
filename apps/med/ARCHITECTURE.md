@@ -6,7 +6,7 @@ Read-only full-file browsing now uses a right sidebar and center file tabs besid
 
 ## Product and layout
 
-One npm package starts a local Node host and serves a compiled React application. A compact shell uses StyleX, Base UI, and Pierre Diffs/Trees. Selecting a commit reads its Git objects. It does not change HEAD or check out files.
+The `apps/med` workspace starts a local Node host and serves a compiled React application. A compact shell uses StyleX, Base UI, and Pierre Diffs/Trees. Selecting a commit reads its Git objects. It does not change HEAD or check out files.
 
 ```text
 ┌ Repository / worktree     Working · Staged · Unstaged · Compare   ┐
@@ -126,7 +126,7 @@ The first request transfers one bounded patch and all file metadata. Initial pat
 
 Twinkleplop supplies tokens for both the worker and main-thread rendering paths. `tools/pierre-highlighter.ts` applies a version-checked integration patch to Pierre 1.4.3 at build time. Pierre retains the worker protocol, queue, cache, diff layout, and line transforms. The adapter in `src/web/highlighting` converts UTF-16 token ranges to Pierre's HAST format, including word-change decorations and theme colours. Markdown fences load their embedded grammars. Unsupported languages use plain text.
 
-The normal build has no Shiki tokenizer or grammar modules. Theme data, theme normalization, and Pierre's token transform utility remain transitive Shiki dependencies. The patch rejects a different Pierre version or a missing source boundary; builds also reject Shiki engine/grammar modules in emitted chunks. Upgrading Pierre requires a new integration audit. `MED_HIGHLIGHTER=shiki npm run build:web` produces the comparison baseline, with the original Pierre engine. Engines cannot switch within a running build, so cached render results cannot cross engines. See [the integration and video comparison](docs/validation/HIGHLIGHTER_INTEGRATION.md).
+The normal build has no Shiki tokenizer or grammar modules. Theme data, theme normalization, and Pierre's token transform utility remain transitive Shiki dependencies. The patch rejects a different Pierre version or a missing source boundary; builds also reject Shiki engine/grammar modules in emitted chunks. Upgrading Pierre requires a new integration audit. `MED_HIGHLIGHTER=shiki bun run build:web` produces the comparison baseline, with the original Pierre engine. Engines cannot switch within a running build, so cached render results cannot cross engines. See [the integration and video comparison](docs/validation/HIGHLIGHTER_INTEGRATION.md).
 
 Full object IDs permit immutable review caching. Symbolic revisions, patches, file pairs, and working changes are re-read. Browser fetches and note loads carry request-generation checks so late responses cannot replace a newer comparison. Note mutations carry an expected revision. The server rejects outdated mutations.
 

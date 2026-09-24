@@ -4,13 +4,14 @@ A monorepo for personal apps and shared local-first software.
 
 ## Apps and packages
 
-| Path | Purpose |
-| --- | --- |
-| [apps/reader](apps/reader/README.md) | Web EPUB Reader. React, IndexedDB, and a Cloudflare Worker. |
-| [apps/arctic](apps/arctic/README.md) | Arctic, the native iOS and Mac article reader, plus the iOS share extension. |
-| [packages/local-sync](packages/local-sync/README.md) | Shared sync protocol, engine, and Dexie/Hono adapters. |
-| [packages/text-highlighter](packages/text-highlighter/README.md) | DOM text selection and highlight restoration. |
-| [packages/arctic-sync-server](packages/arctic-sync-server/README.md) | Private Arctic auth and sync routes, hosted by the Reader Worker. |
+| Path                                                                 | Purpose                                                                      |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [apps/med](apps/med/README.md)                                       | Local Git review, file navigation, and agent review links.                   |
+| [apps/reader](apps/reader/README.md)                                 | Web EPUB Reader. React, IndexedDB, and a Cloudflare Worker.                  |
+| [apps/arctic](apps/arctic/README.md)                                 | Arctic, the native iOS and Mac article reader, plus the iOS share extension. |
+| [packages/local-sync](packages/local-sync/README.md)                 | Shared sync protocol, engine, and Dexie/Hono adapters.                       |
+| [packages/text-highlighter](packages/text-highlighter/README.md)     | DOM text selection and highlight restoration.                                |
+| [packages/arctic-sync-server](packages/arctic-sync-server/README.md) | Private Arctic auth and sync routes, hosted by the Reader Worker.            |
 
 Arctic works locally. Its native sync storage integration remains dormant;
 this repository move does not enable it.
@@ -27,17 +28,21 @@ bun run dev:reader
 For Arctic, open `apps/arctic/ArticleReader.xcodeproj` in Xcode and select the
 **ArticleReader** scheme. See its README for signing and device setup.
 
-| Command, from this directory | Action |
-| --- | --- |
-| `bun run build` | Build shared libraries and the web Reader. |
-| `bun run test:client --run` | Run Reader client tests. |
-| `bun run test:server --run` | Run Worker tests with local D1. |
-| `bun run test:packages` | Test shared packages. |
-| `bun run test:e2e` | Run Reader browser tests. |
-| `bun run build:arctic-web` | Bundle Arctic's WebView extraction code. |
-| `bun run test:arctic-web` | Test Arctic's WebView code. |
-| `bun run lint` | Check TypeScript and JavaScript sources. |
-| `bun run deploy` | Build and deploy the existing Reader Worker. |
+| Command, from this directory          | Action                                                         |
+| ------------------------------------- | -------------------------------------------------------------- |
+| `bun run build`                       | Build shared libraries and the web Reader.                     |
+| `bun run test:client --run`           | Run Reader client tests.                                       |
+| `bun run test:server --run`           | Run Worker tests with local D1.                                |
+| `bun run test:packages`               | Test shared packages.                                          |
+| `bun run test:e2e`                    | Run Reader browser tests.                                      |
+| `bun run build:med`                   | Type-check and build med’s browser UI and local host.          |
+| `bun run med /path/to/repository`     | Start med; pass more repository paths to review them together. |
+| `bun run dev:med /path/to/repository` | Start med’s development UI and local host.                     |
+| `bun run check:med`                   | Check med’s formatting, lint, tests, and build.                |
+| `bun run build:arctic-web`            | Bundle Arctic's WebView extraction code.                       |
+| `bun run test:arctic-web`             | Test Arctic's WebView code.                                    |
+| `bun run lint`                        | Check TypeScript and JavaScript sources.                       |
+| `bun run deploy`                      | Build and deploy the existing Reader Worker.                   |
 
 The default `dev`, `build`, `test`, `deploy`, database, and diagnostic commands
 still target Reader. Each app owns its dependencies, tests, and configuration.
@@ -45,6 +50,9 @@ Reader environment files belong in `apps/reader/`; start with its
 [environment examples](apps/reader/.env.example) and
 [Worker secret names](apps/reader/.dev.vars.example).
 Deployment names, domains, database bindings, and iOS bundle IDs are unchanged.
+
+med is developed in `apps/med`. It uses the root Bun install and retains its local port, review links, and state directory. See [med setup](apps/med/README.md) and [agent review guidance](apps/med/docs/AGENT_INTEGRATION.md), and
+[migration notes](docs/MED_MIGRATION.md).
 
 ## Guides for future projects
 

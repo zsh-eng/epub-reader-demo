@@ -1,10 +1,13 @@
 import { test, expect } from "vitest";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, dirname } from "node:path";
+import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 const run = promisify(execFile);
+const require = createRequire(import.meta.url);
+const oxlint = join(dirname(require.resolve("oxlint/package.json")), "bin/oxlint");
 
 test("Oxlint executes the actual StyleX validation plugin", async () => {
   const dir = await mkdtemp(join(tmpdir(), "med-stylex-"));
@@ -16,7 +19,7 @@ test("Oxlint executes the actual StyleX validation plugin", async () => {
         jsPlugins: [
           {
             name: "stylex",
-            specifier: resolve("node_modules/@stylexjs/eslint-plugin/lib/index.js"),
+            specifier: require.resolve("@stylexjs/eslint-plugin"),
           },
         ],
         rules: { "stylex/valid-styles": "error" },
@@ -27,16 +30,12 @@ test("Oxlint executes the actual StyleX validation plugin", async () => {
       file,
       "import * as stylex from '@stylexjs/stylex'; export const styles = stylex.create({root:{color:'red'}});",
     );
-    await expect(
-      run(resolve("node_modules/.bin/oxlint"), ["--config", config, file]),
-    ).resolves.toBeDefined();
+    await expect(run(oxlint, ["--config", config, file])).resolves.toBeDefined();
     await writeFile(
       file,
       "import * as stylex from '@stylexjs/stylex'; export const styles = stylex.create({root:{unknownProperty:2}});",
     );
-    const result = await run(resolve("node_modules/.bin/oxlint"), ["--config", config, file]).catch(
-      (error) => error,
-    );
+    const result = await run(oxlint, ["--config", config, file]).catch((error) => error);
     expect(result.code).toBe(1);
     expect(`${result.stdout}${result.stderr}`).toContain("stylex(valid-styles)");
   } finally {

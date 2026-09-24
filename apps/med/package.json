@@ -1,8 +1,14 @@
 {
-  "name": "med-diff",
+  "name": "@workbench/med",
   "version": "0.1.0",
+  "private": true,
   "description": "Local continuous diff review with commit history",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zsh-eng/workbench.git",
+    "directory": "apps/med"
+  },
   "bin": {
     "med-diff": "dist/cli.js"
   },
@@ -16,7 +22,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build:web && npm run build:server",
+    "build": "bun run typecheck && bun run build:web && bun run build:server",
     "build:web": "vite build --config vite.config.ts",
     "build:server": "vite build --config vite.server.config.ts",
     "typecheck": "tsc --noEmit",
@@ -26,8 +32,9 @@
     "test": "vitest",
     "test:unit": "vitest run --project unit",
     "test:browser": "vitest run --project browser",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run build",
-    "start": "node dist/cli.js"
+    "check": "bun run format:check && bun run lint && bun run test:unit && bun run test:browser && bun run build",
+    "start": "node dist/cli.js",
+    "lint:fix": "oxlint --fix --max-warnings 0"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -62,8 +69,11 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@shikijs/langs": "4.4.3",
+    "@shikijs/themes": "4.4.3",
     "@stylexjs/eslint-plugin": "0.19.1",
     "@stylexjs/unplugin": "0.19.1",
+    "@types/hast": "3.0.4",
     "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
@@ -72,6 +82,7 @@
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0",
     "playwright": "1.63.0",
+    "shiki": "4.4.3",
     "typescript": "7.0.2",
     "unplugin": "2.3.11",
     "vite": "8.3.0",

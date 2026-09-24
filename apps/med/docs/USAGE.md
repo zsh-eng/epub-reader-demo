@@ -8,7 +8,7 @@ Use an existing checkout of this project. Install Git and Node **22.12 or newer*
 
 ```sh
 npm ci
-npm run build
+bun run build
 node dist/cli.js /path/to/repository
 ```
 
@@ -31,7 +31,7 @@ To have an agent set it up, give it this instruction:
 ```sh
 node dist/cli.js /path/to/frontend /path/to/backend
 # Development:
-npm run dev -- /path/to/frontend /path/to/backend
+bun run dev -- /path/to/frontend /path/to/backend
 ```
 
 Use **Open branch** (`+`) to search the registered repositories' branches and worktrees. The picker shows repository groups and worktree paths. Add another repository by entering its local path in the picker. Remove a repository there to close its views and release its resources; this does not delete files or Git branches.
@@ -145,19 +145,21 @@ The file remains read-only. While a Vim file pane has focus, `?` searches backwa
 
 ## Development
 
+med lives in `apps/med`. Install dependencies from the Workbench root with `bun install --frozen-lockfile`. The commands below run from `apps/med`; root shortcuts include `bun run dev:med`, `bun run build:med`, and `bun run check:med`.
+
 ```sh
-npm run dev -- /path/to/repository
+bun run dev -- /path/to/repository
 ```
 
 Open the Vite URL with the `#token=…` fragment printed by the API host. Vite proxies API requests to that host. Production builds need no proxy.
 
 ```sh
-npm run typecheck
-npm run lint
-npm run test:unit
-npm run test:browser
-npm run format:check
-npm run build
+bun run typecheck
+bun run lint
+bun run test:unit
+bun run test:browser
+bun run format:check
+bun run build
 ```
 
 The UI uses React, [Pierre Diffs and Trees](https://pierre.computer/), Base UI, and StyleX. Vite 8 uses Rolldown and Oxc; Oxlint, Oxfmt, and Vitest provide checks. Zod validates the host protocol. [Architecture](../ARCHITECTURE.md) describes the boundaries and data flow.

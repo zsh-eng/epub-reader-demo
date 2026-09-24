@@ -1,17 +1,18 @@
 {
   "name": "workbench",
   "private": true,
-  "type": "module",
   "workspaces": [
     "apps/reader",
+    "apps/med",
     "apps/arctic/Web",
     "packages/*"
   ],
+  "type": "module",
   "scripts": {
     "dev": "bun run --cwd apps/reader dev",
     "build": "bun run --cwd apps/reader build",
-    "lint": "oxlint apps/reader packages apps/arctic/Web",
-    "lint:fix": "oxlint --fix apps/reader packages apps/arctic/Web",
+    "lint": "oxlint apps/reader packages apps/arctic/Web && bun run --cwd apps/med lint",
+    "lint:fix": "oxlint --fix apps/reader packages apps/arctic/Web && bun run --cwd apps/med lint:fix",
     "preview": "bun run --cwd apps/reader preview",
     "deploy": "bun run --cwd apps/reader deploy",
     "cf-typegen": "bun run --cwd apps/reader cf-typegen",
@@ -31,21 +32,26 @@
     "benchmark:highlights": "bun run --cwd apps/reader benchmark:highlights",
     "benchmark:reader-startup": "bun run --cwd apps/reader benchmark:reader-startup",
     "db:backup-remote": "bun run --cwd apps/reader db:backup-remote",
-    "format": "oxfmt apps/reader packages apps/arctic/Web *.md package.json",
-    "format:check": "oxfmt --check apps/reader packages apps/arctic/Web *.md package.json",
+    "format": "oxfmt apps/reader packages apps/arctic/Web *.md package.json && bun run --cwd apps/med format",
+    "format:check": "oxfmt --check apps/reader packages apps/arctic/Web *.md package.json && bun run --cwd apps/med format:check",
     "build:packages": "bun run --cwd packages/text-highlighter build && bun run --cwd packages/local-sync build",
     "test:sync": "bun run --cwd apps/reader test:sync",
     "dev:reader": "bun run --cwd apps/reader dev",
     "build:reader": "bun run --cwd apps/reader build",
     "build:arctic-web": "bun run --cwd apps/arctic/Web build",
     "test:arctic-web": "bun run --cwd apps/arctic/Web test",
-    "test:packages": "bun run build:packages && bun run --cwd packages/local-sync test && bun run --cwd packages/text-highlighter test && bun run --cwd packages/arctic-sync-server test"
+    "test:packages": "bun run build:packages && bun run --cwd packages/local-sync test && bun run --cwd packages/text-highlighter test && bun run --cwd packages/arctic-sync-server test",
+    "med": "node apps/med/dist/cli.js",
+    "dev:med": "node apps/med/scripts/dev.mjs",
+    "build:med": "bun run --cwd apps/med build",
+    "test:med": "bun run --cwd apps/med test:unit && bun run --cwd apps/med test:browser",
+    "check:med": "bun run --cwd apps/med check",
+    "lint:med": "bun run --cwd apps/med lint",
+    "format:med": "bun run --cwd apps/med format",
+    "format:check:med": "bun run --cwd apps/med format:check"
   },
   "devDependencies": {
-    "oxlint": "^1.61.0",
-    "oxfmt": "^0.46.0"
-  },
-  "overrides": {
-    "vite": "npm:rolldown-vite@7.3.1"
+    "oxfmt": "^0.46.0",
+    "oxlint": "^1.61.0"
   }
 }

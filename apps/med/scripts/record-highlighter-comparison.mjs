@@ -1,7 +1,7 @@
 // Reproduction and interpretation: docs/validation/HIGHLIGHTER_INTEGRATION.md
 import { spawn, execFileSync } from "node:child_process";
 import { mkdir, copyFile, writeFile, readFile } from "node:fs/promises";
-import { resolve, join } from "node:path";
+import { resolve, join, relative } from "node:path";
 import { createHash } from "node:crypto";
 import { cpus, platform, arch } from "node:os";
 import { chromium } from "playwright";
@@ -13,6 +13,9 @@ const engineArgument = process.argv.indexOf("--engine");
 const engines = engineArgument < 0 ? ["shiki", "twinkleplop"] : [process.argv[engineArgument + 1]];
 if (engines.some((engine) => !["shiki", "twinkleplop"].includes(engine)))
   throw new Error("Unknown engine");
+const workbench = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+  encoding: "utf8",
+}).trim();
 const cases = [
   {
     id: "bun-http2",
@@ -20,12 +23,17 @@ const cases = [
     repo: resolve(".benchmarks/bun"),
     file: "src/js/node/http2.ts",
   },
-  { id: "med-app", label: "med App", repo: resolve("."), file: "src/web/App.tsx" },
+  {
+    id: "med-app",
+    label: "med App",
+    repo: workbench,
+    file: relative(workbench, resolve("src/web/App.tsx")).replaceAll("\\", "/"),
+  },
 ];
 await mkdir(directory, { recursive: true });
 if (!process.argv.includes("--skip-build")) {
   for (const engine of engines) {
-    execFileSync("npx", ["vite", "build", "--outDir", join(directory, engine, "web")], {
+    execFileSync("bun", ["run", "vite", "build", "--outDir", join(directory, engine, "web")], {
       env: { ...process.env, MED_HIGHLIGHTER: engine },
       stdio: "inherit",
     });
