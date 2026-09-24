@@ -40,3 +40,11 @@ names. Do not deploy or run remote migrations as a side effect of a refactor.
   framework behavior. Do not repeat the same coverage at each layer.
 - Use the smallest fixture that proves the behavior. Mock dependencies outside
   the tested path when needed; do not mock the mechanism under test.
+
+## Local process cleanup
+
+Track servers, watchers, test browsers, and build processes started for a task.
+Stop them when the task no longer needs them. Keep shared app services and
+processes used by other active tasks running. Before stopping a process, check
+its command, working directory, and parent process. Avoid concurrent heavy
+builds or browser suites when the machine is under memory or CPU pressure.

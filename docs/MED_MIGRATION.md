@@ -43,7 +43,9 @@ branch or worktree. Read the [agent integration guide](../apps/med/docs/AGENT_IN
 for repository selection and review creation. Confirm that guidance with the
 user before adding it to their `AGENTS.md`.
 
-The former `~/med` checkout has been removed. The host now runs from Workbench
+The former `~/med` checkout has been removed. The old
+[GitHub repository](https://github.com/zsh-eng/med) is archived.
+The host now registers Workbench only and runs from Workbench
 on the same port with the same saved state. New Workbench review links continue
 to work. Historical links that target `~/med` retain their saved data, but that
 repository path is no longer available. Development uses `~/workbench/apps/med`.

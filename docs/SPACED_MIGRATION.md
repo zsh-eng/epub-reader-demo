@@ -57,9 +57,13 @@ original absolute paths as evidence, not as instructions to use the old repo.
   shows both required-field errors. No production account or data was used.
 
 The canonical local app is `/Users/admin/workbench/apps/spaced2`. The former
-`/Users/admin/spaced2` directory contains only a location note. Open Workbench
-for future work. A directory symlink cannot be used here because Codex rejects
-symlinks at configured workspace roots.
-The retired checkout is kept under ignored `migration-backups.local/spaced2`;
-private environment files, Wrangler state and `.local` data directories moved
-to the canonical app. The archive is for recovery, not continued development.
+`~/spaced2` directory, retired checkout, and legacy benchmark worktree were
+removed on 24 September 2026. The old [GitHub repository](https://github.com/zsh-eng/spaced2)
+is archived. Future development uses Workbench.
+
+Private environment files, Wrangler state, and `.local` data remain in the
+canonical app. Recovery files are kept outside Git under
+`migration-backups.local/retired-repositories-2026-09-24`: a verified Git bundle
+preserves all old refs and both stashes; a small archive preserves untracked
+benchmark source and results. Dependencies and benchmark build output were
+removed. These recovery files are not an active repository or worktree.
