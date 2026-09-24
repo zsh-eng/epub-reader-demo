@@ -35,21 +35,25 @@ import Foundation
     let revived = mergedHistory.articles.first { $0.id == history.id }!
     precondition(revived.saved && revived.isArchived == false)
     precondition(revived.savedAt == entries[1].savedAt && revived.lastVisitedAt == now)
-    let longHTML = (0..<10_000).map {
-      "<a href='https://example.com/item-\($0)' ADD_DATE='\(1_700_000_000 + $0)'>Story \($0)</a>"
-    }.joined()
-    let began = ContinuousClock.now
-    let longEntries = try ReadingListImport.parse(longHTML)
-    let longResult = ReadingListImport.merge(longEntries, into: [], now: now)
-    precondition(longResult.added.count == 10_000)
-    precondition(longResult.articles.first?.url.lastPathComponent == "item-0")
-    precondition(longResult.articles.last?.savedAt?.timeIntervalSince1970 == 1_700_009_999)
-    print(
-      "PASS: dates, entities, unsafe URLs, duplicates, source order, missing dates, history revival, persistence; 10,000 import: \(began.duration(to: .now))"
-    )
-    if CommandLine.arguments.count > 1 {
+    print("PASS: source dates, duplicates, unsafe links, history revival and persisted import")
+    // Large inputs measure throughput; ordinary correctness needs only three links.
+    if CommandLine.arguments.contains("--benchmark") {
+      let longHTML = (0..<10_000).map {
+        "<a href='https://example.com/item-\($0)' ADD_DATE='\(1_700_000_000 + $0)'>Story \($0)</a>"
+      }.joined()
+      let began = ContinuousClock.now
+      let longEntries = try ReadingListImport.parse(longHTML)
+      let longResult = ReadingListImport.merge(longEntries, into: [], now: now)
+      precondition(longResult.added.count == 10_000)
+      precondition(longResult.articles.first?.url.lastPathComponent == "item-0")
+      precondition(longResult.articles.last?.savedAt?.timeIntervalSince1970 == 1_700_009_999)
+      print(
+        "PASS: dates, entities, unsafe URLs, duplicates, source order, missing dates, history revival, persistence; 10,000 import: \(began.duration(to: .now))"
+      )
+    }
+    if let export = CommandLine.arguments.dropFirst().first(where: { $0 != "--benchmark" }) {
       let real = try ReadingListImport.parse(
-        String(contentsOfFile: CommandLine.arguments[1], encoding: .utf8))
+        String(contentsOfFile: export, encoding: .utf8))
       precondition(real.allSatisfy { $0.savedAt != nil })
       print("PASS: supplied Chrome export has \(real.count) valid links with source dates")
     }

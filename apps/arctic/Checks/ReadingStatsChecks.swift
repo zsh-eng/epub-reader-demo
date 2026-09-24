@@ -24,16 +24,12 @@ import Foundation
     precondition(stats.todaySeconds == 45 && stats.visits == 4 && stats.articles == 2)
     precondition(stats.activeDays == 3)
     precondition(calendar.component(.day, from: stats.days.first!.date) == 4)
-    // The DST transition is a calendar day, not a fixed 24-hour subtraction.
+    // Guard our calendar aggregation across DST. UI tests cover displayed labels.
     precondition(stats.days[5].date.timeIntervalSince(stats.days[4].date) == 23 * 3600)
     let article = ReadingStats(sessions: sessions, now: now, calendar: calendar, articleURL: b)
     precondition(article.weekSeconds == 120 && article.totalSeconds == 120 && article.visits == 1)
     let empty = ReadingStats(sessions: [], now: now, calendar: calendar)
     precondition(empty.weekSeconds == 0 && empty.articles == 0 && empty.days.count == 7)
-    precondition(ReadingStats.duration(0) == "0 min")
-    precondition(ReadingStats.duration(45) == "<1 min")
-    precondition(ReadingStats.duration(3600) == "1 hr")
-    precondition(ReadingStats.duration(4860) == "1 hr 21 min")
     print(
       "Reading stats: calendar boundaries, DST, zero/invalid/future visits, URL scope and totals passed"
     )

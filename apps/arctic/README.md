@@ -315,6 +315,28 @@ Availability depends on the Chrome data stored in your Google account.
 Sources: [Chrome export help](https://support.google.com/chrome/answer/10248834)
 and [Google's Reading List HTML schema](https://developers.google.com/data-portability/schema-reference/chrome).
 
+## Test scope
+
+Prefer production integration paths and observable results. Keep one owner for
+normal behavior: native UI tests own saved/history/favourite filters, paste
+choices, and manual tag edits; Web tests own extraction, text anchors, and paint.
+`Sync/Tests` owns durable transport/journal behavior. The isolated domain-sync
+harness tests the dormant repository, not live ArticleStore sync.
+
+Keep small lower-level checks only where normal UI flows cannot expose the
+failure: malformed font requests, codec alpha/orientation/MIME handling,
+calendar boundaries, cancelled work, storage failures, and authentication
+validation. Do not repeat accessors, derived labels, or framework encoding tests.
+Use real files and the shipping implementation for persistence checks. Existing
+source-extraction harnesses are limited checks, not proof of app wiring.
+
+Throughput is opt-in. Pass `--benchmark` to `Tests/check-reading-list.py` for
+10,000 imports, use `Tests/check-article-sync.py --performance --configuration
+release` for journal profiling, or set `ARCTIC_RUN_BENCHMARKS=1` in the Mac test
+scheme environment for cold/warm timings. Normal fixtures stay small. Keep the
+large native scrolling fixtures: they exercise list virtualization rather than
+repeat a small-list assertion. None of these timings establishes device FPS.
+
 ## Build and checks
 
 The Xcode project is independent of the parent web app. Xcode resolves the pinned
@@ -327,8 +349,8 @@ bun install --frozen-lockfile
 bun run build
 ```
 
-From the repository root, run `bun test apps/arctic/Web/reader.test.ts` for
-metadata extraction, lead-image deduplication and syntax-highlighting checks.
+From the repository root, run `bun run test:arctic-web` for extraction,
+annotations, and rendered reading-position checks.
 These use the repository’s Playwright Chromium installation and local fixtures.
 
 From the repository root (replace the simulator name if necessary):

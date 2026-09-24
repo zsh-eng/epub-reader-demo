@@ -189,6 +189,35 @@ final class ArticleTaggingUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Your next good read."].waitForExistence(timeout: 5))
   }
 
+  @MainActor func testManualTagRemovalAndCustomTagSurviveRelaunch() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-test-tagging", "-test-clipboard"]
+    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
+    app.launch()
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
+    app.buttons["open-copied-link"].tap()
+    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.buttons["reader-save"].value as? String, "Not saved")
+    XCTAssertFalse(app.otherElements["tagging-notice"].exists)
+    app.buttons["reader-save"].tap()
+    XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 15))
+    app.buttons["edit-automatic-tags"].tap()
+    let tag = app.buttons["tag-option-Engineering"]
+    XCTAssertTrue(tag.waitForExistence(timeout: 5))
+    XCTAssertEqual(tag.value as? String, "Selected")
+    tag.tap()
+    app.textFields["tag-name"].tap()
+    app.textFields["tag-name"].typeText("Keep")
+    app.buttons["save-tags"].tap()
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-test-tagging"]
+    app.launchEnvironment = [:]
+    app.launch()
+    XCTAssertTrue(app.buttons["folder-tag-Keep"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.buttons["folder-tag-Engineering"].exists)
+    XCTAssertFalse(app.otherElements["tagging-notice"].exists)
+  }
+
   @MainActor private func launchTagging(failure: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [

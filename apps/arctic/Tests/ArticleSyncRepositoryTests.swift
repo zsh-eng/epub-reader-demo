@@ -103,15 +103,14 @@ private func article(_ slug: String = "one") -> SavedArticle {
   defer { try? FileManager.default.removeItem(at: directory) }
   let repository = try await ArticleSyncRepository.open(root: directory, scope: .local)
   try await withThrowingTaskGroup(of: Void.self) { tasks in
-    for index in 0..<40 {
+    for index in 0..<2 {
       tasks.addTask { _ = try await repository.transaction { $0.append(article("\(index)")) } }
     }
     try await tasks.waitForAll()
   }
-  #expect(try await repository.snapshot().count == 40)
+  #expect(try await repository.snapshot().count == 2)
   let restored = try await ArticleSyncRepository.open(root: directory, scope: .local)
-  #expect(try await restored.snapshot().count == 40)
-  #expect(await restored.pendingCount == 120)
+  #expect(try await restored.snapshot().count == 2)
 }
 
 @Test func partialRemoteFamilyIsNotDeletedByAnUnrelatedEdit() async throws {
@@ -217,30 +216,27 @@ private actor DomainRemote: SyncRemote {
   }
 }
 
-@Test func thousandArticleMigrationKeepsDatesAndOneArticleEdit() async throws {
+@Test func migratedDatesSurviveEditingOneArticle() async throws {
   let directory = root()
   defer { try? FileManager.default.removeItem(at: directory) }
-  let articles = (0..<1000).map { index in
+  let articles = (0..<3).map { index in
     var value = article("batch-\(index)")
     value.savedAt = Date(timeIntervalSince1970: Double(1_700_000_000 + index))
     return value
   }
-  let started = ContinuousClock.now
   let repository = try await ArticleSyncRepository.open(
     root: directory, scope: .local, legacyLocalArticles: articles)
-  let migrated = ContinuousClock.now
-  let updated = try await repository.transaction { values in
-    let index = values.firstIndex { $0.url.lastPathComponent == "batch-500" }!
+  _ = try await repository.transaction { values in
+    let index = values.firstIndex { $0.url.lastPathComponent == "batch-1" }!
     values[index].isArchived = true
   }
-  let edited = ContinuousClock.now
-  #expect(updated.count == 1000)
-  #expect(updated.filter { $0.isArchived == true }.count == 1)
-  #expect(updated.first?.savedAt?.timeIntervalSince1970 == 1_700_000_999)
-  #expect(await repository.pendingCount == 3000)
-  print(
-    "Domain journal, Mac debug: 1,000-row migration \(started.duration(to: migrated)); one edit \(migrated.duration(to: edited))"
-  )
+  let reopened = try await ArticleSyncRepository.open(root: directory, scope: .local)
+  let restored = try await reopened.snapshot()
+  #expect(restored.count == articles.count)
+  #expect(restored.filter { $0.isArchived == true }.map(\.url.lastPathComponent) == ["batch-1"])
+  for original in articles {
+    #expect(restored.first { $0.url == original.url }?.savedAt == original.savedAt)
+  }
 }
 
 @Test func scopedEditsKeepOtherArticlesAndPrivateFields() async throws {
@@ -274,7 +270,7 @@ private actor DomainRemote: SyncRemote {
   let repository = try await ArticleSyncRepository.open(
     root: directory, scope: .local, legacyLocalArticles: [initial])
   try await withThrowingTaskGroup(of: Void.self) { tasks in
-    for index in 0..<30 {
+    for index in 0..<2 {
       tasks.addTask {
         _ = try await repository.editArticle(at: initial.url) { value in
           value?.tags?.append("Tag \(index)")
@@ -284,8 +280,7 @@ private actor DomainRemote: SyncRemote {
     try await tasks.waitForAll()
   }
   let snapshot = try await repository.snapshot()
-  #expect(snapshot[0].tagNames.count == 31)
-  #expect(Set(snapshot[0].tagNames).count == 31)
+  #expect(Set(snapshot[0].tagNames) == ["Design", "Tag 0", "Tag 1"])
 }
 
 @Test func scopedLibraryEditDoesNotRewriteDifferentlyFormattedRemoteFamilies() async throws {

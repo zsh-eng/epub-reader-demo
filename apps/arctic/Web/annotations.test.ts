@@ -48,32 +48,6 @@ test('context relocates repeated quotes and leaves ambiguous changed passages un
   await p.close();
 });
 
-test('17.0 fallback merges overlapping marks and removes them without text or markup loss', async () => {
-  const p = await page();
-  const paragraph = await select(p, 'p');
-  const phrase = await select(p, 'em');
-  const before = await p.locator('article').innerHTML();
-  await p.evaluate(() => { (globalThis as any).Highlight = undefined; });
-  expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(paragraph), record(phrase, 'two')])).toEqual([]);
-  expect(await p.locator('mark[data-arctic-highlight]').count()).toBe(3);
-  expect(await p.locator('article').textContent()).toBe(paragraph.exact + 'Another quiet thought stays here.');
-  await p.evaluate(() => (globalThis as any).arcticAnnotations.render([]));
-  expect(await p.locator('article').innerHTML()).toBe(before);
-  await p.close();
-});
-
-test('non-highlight notes remain revealable, empty and outside selections cannot be saved', async () => {
-  const p = await page();
-  const quote = await select(p, 'em');
-  expect(await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [{ ...record(quote), isHighlighted: false }])).toEqual([]);
-  expect(await p.evaluate(() => CSS.highlights.get('arctic-yellow')?.size ?? 0)).toBe(0);
-  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.reveal('one'))).toBe(true);
-  await p.evaluate(() => window.getSelection()!.removeAllRanges());
-  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.selection())).toBeNull();
-  await p.close();
-});
-
-
 test('recolour updates the painted ranges and tap bridge without changing the article', async () => {
   const p = await page();
   const quote = await select(p, 'em');
@@ -97,7 +71,7 @@ test('recolour updates the painted ranges and tap bridge without changing the ar
   await p.close();
 });
 
-test('fallback retains mixed colours, tap ranges and original text across recolours', async () => {
+test('17.0 fallback paints overlapping mixed colours and removes them without markup loss', async () => {
   const p = await page();
   const paragraph = await select(p, 'p');
   const phrase = await select(p, 'em');
@@ -105,7 +79,8 @@ test('fallback retains mixed colours, tap ranges and original text across recolo
   await p.evaluate(() => { (globalThis as any).Highlight = undefined; window.getSelection()!.removeAllRanges(); });
   await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records), [record(paragraph), { ...record(phrase, 'two'), colour: 'blue' }]);
   expect(await p.locator('em mark[data-arctic-highlight="blue"]').innerText()).toBe(phrase.exact);
-  expect(await p.locator('mark mark').count()).toBe(0);
+  expect((await p.locator('mark[data-arctic-highlight]').allTextContents()).join('')).toBe(paragraph.exact);
+  expect(await p.locator('article').textContent()).toBe(paragraph.exact + 'Another quiet thought stays here.');
   await p.evaluate(() => (globalThis as any).arcticAnnotations.render([]));
   expect(await p.locator('article').innerHTML()).toBe(before);
   await p.close();
@@ -226,5 +201,14 @@ test('reading activity excludes synthetic input and restored scroll, and throttl
   await p.locator('em').click();
   await p.keyboard.press('ArrowDown');
   expect(await p.evaluate(() => (globalThis as any).activityMessages)).toEqual(['reading-document']);
+  await p.close();
+});
+
+// These checks exercise the shipping selection bridge, not browser selection itself.
+test('empty and outside-article selections cannot become saved quotes', async () => {
+  const p = await page();
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.selection())).toBeNull();
+  await p.evaluate(() => document.body.insertAdjacentHTML('afterbegin', '<header>Publisher navigation</header>'));
+  expect(await select(p, 'header')).toBeNull();
   await p.close();
 });

@@ -30,9 +30,6 @@ with tempfile.TemporaryDirectory(prefix="arctic-domain-check-") as directory:
     (target / "Catalog.swift").write_text(production_tag_catalog(root))
     (target / "Models.swift").write_text("import Foundation\n" + models)
     (target / "ArticleSyncRepository.swift").write_text((root / "Sources/ArticleSyncRepository.swift").read_text())
-    folders = (root / "Sources/ArticleTagsSheet.swift").read_text()
-    projection = (root / "Sources/LibraryPreloading.swift").read_text()
-    (target / "Filters.swift").write_text("import Foundation\n" + folders[folders.index("enum ArticleFolder:"):folders.index("struct ArticleTagsSheet:")] + projection[projection.index("@MainActor final class LibraryProjection"):])
     if not arguments.performance:
         (tests / "FavouritesChecks.swift").write_text((root / "Tests/FavouritesChecks.swift").read_text())
     test_name = "ArticleSyncPerformanceChecks.swift" if arguments.performance else "ArticleSyncRepositoryTests.swift"

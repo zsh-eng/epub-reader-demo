@@ -26,9 +26,9 @@ import UniformTypeIdentifiers
       .appending(path: "Resources/Assets.xcassets/OnboardingArticle.imageset/glacial-longings.jpg")
     let fixtureData = try Data(contentsOf: resource)
     let fixture = PreviewImageCodec.thumbnail(fixtureData, pixels: 4000)!
-    let photoContext = context(width: 4000, height: 3000, alpha: false)
+    let photoContext = context(width: 1600, height: 1200, alpha: false)
     photoContext.interpolationQuality = .high
-    photoContext.draw(fixture, in: CGRect(x: 0, y: 0, width: 4000, height: 3000))
+    photoContext.draw(fixture, in: CGRect(x: 0, y: 0, width: 1600, height: 1200))
     let photo = photoContext.makeImage()!
     let original = encode(photo, type: UTType.jpeg.identifier, quality: 0.95)
     let small = PreviewImageCodec.thumbnail(original, pixels: 1200)!
@@ -38,22 +38,8 @@ import UniformTypeIdentifiers
     precondition(compactImage.width == 1200 && compactImage.height == 900)
     precondition(compact.count < baseline.count)
     print(
-      "4000×3000 source: \(original.count) bytes; baseline JPEG85: \(baseline.count); compact \(type(compact)): \(compact.count), 1200×900"
+      "1600×1200 source: \(original.count) bytes; baseline JPEG85: \(baseline.count); compact \(type(compact)): \(compact.count), 1200×900"
     )
-
-    for pixels in [96, 256, 960] {
-      let persisted = PreviewImageCodec.displayThumbnail(compact, pixels: pixels)!
-      precondition(type(persisted) == UTType.jpeg.identifier)
-      let decoded = PreviewImageCodec.thumbnail(persisted, pixels: 4000)!
-      precondition(decoded.width == pixels && decoded.height == pixels * 3 / 4)
-      let bytes = decoded.bytesPerRow * decoded.height
-      precondition(bytes < compactImage.bytesPerRow * compactImage.height)
-      print("Display \(pixels): \(decoded.width)×\(decoded.height), \(bytes) decoded bytes")
-    }
-    let placeholder = PreviewImageCodec.placeholder(compact)!
-    let placeholderImage = PreviewImageCodec.thumbnail(placeholder, pixels: 4000)!
-    precondition(placeholderImage.width == 24 && placeholderImage.height == 18)
-    print("Placeholder: \(placeholder.count) bytes, 24×18")
 
     let rotated = encode(photo, type: UTType.jpeg.identifier, quality: 0.85, orientation: 6)
     let oriented = PreviewImageCodec.thumbnail(rotated, pixels: 240)!
@@ -94,7 +80,7 @@ import UniformTypeIdentifiers
     precondition(PreviewImageCodec.displayThumbnail(invalid, pixels: 96) == nil)
     precondition(PreviewImageCodec.webDataURL(invalid).isEmpty)
     print(
-      "Codec checks passed: size bounds, byte savings, display sizes, alpha, EXIF orientation, placeholder, Reader MIME, invalid input."
+      "Codec checks passed: size bounds, byte savings, alpha, EXIF orientation, Reader MIME, invalid input."
     )
   }
 

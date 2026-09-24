@@ -153,19 +153,6 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["Sort and filter"].waitForExistence(timeout: 5))
   }
 
-  @MainActor func testPasteOffersOnlyOpen() {
-    let app = XCUIApplication()
-    app.launchArguments = ["-ui-testing", "-reset-store", "-test-tagging", "-test-clipboard"]
-    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
-    app.launch()
-    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
-    XCTAssertFalse(app.buttons["save-copied-link"].exists)
-    app.buttons["open-copied-link"].tap()
-    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 5))
-    XCTAssertEqual(app.buttons["reader-save"].value as? String, "Not saved")
-    XCTAssertFalse(app.buttons["edit-automatic-tags"].exists)
-  }
-
   @MainActor func testDarkOnboardingAndLargeText() {
     let app = XCUIApplication()
     app.launchArguments = [
@@ -192,36 +179,6 @@ final class ArticleOnboardingUITests: XCTestCase {
     XCTAssertTrue(app.buttons["onboarding-skip"].isHittable)
     app.buttons["onboarding-skip"].tap()
     XCTAssertTrue(app.buttons["folder-saved"].waitForExistence(timeout: 5))
-  }
-
-  @MainActor func testTagsOnlyAfterSaveAndManualRemovalPersists() {
-    let app = XCUIApplication()
-    app.launchArguments = ["-ui-testing", "-reset-store", "-test-tagging", "-test-clipboard"]
-    app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/story"
-    app.launch()
-    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
-    app.buttons["open-copied-link"].tap()
-    XCTAssertTrue(app.buttons["reader-save"].waitForExistence(timeout: 10))
-    XCTAssertEqual(app.buttons["reader-save"].value as? String, "Not saved")
-    XCTAssertFalse(app.otherElements["tagging-notice"].exists)
-    app.buttons["reader-save"].tap()
-    XCTAssertTrue(app.buttons["edit-automatic-tags"].waitForExistence(timeout: 15))
-    capture(app, "automatic-tags-feedback")
-    app.buttons["edit-automatic-tags"].tap()
-    let tag = app.buttons["tag-option-Engineering"]
-    XCTAssertTrue(tag.waitForExistence(timeout: 5))
-    XCTAssertEqual(tag.value as? String, "Selected")
-    tag.tap()
-    app.textFields["tag-name"].tap()
-    app.textFields["tag-name"].typeText("Keep")
-    app.buttons["save-tags"].tap()
-    app.terminate()
-    app.launchArguments = ["-ui-testing", "-test-tagging"]
-    app.launchEnvironment = [:]
-    app.launch()
-    XCTAssertTrue(app.buttons["folder-tag-Keep"].waitForExistence(timeout: 5))
-    XCTAssertFalse(app.buttons["folder-tag-Engineering"].exists)
-    XCTAssertFalse(app.otherElements["tagging-notice"].exists)
   }
 
   @MainActor func testKeyEntryFloatsAboveKeyboardWithoutMovingIllustration() {

@@ -21,7 +21,7 @@ import XCTest
       preview: ArticlePreview(
         title: "Article \(index)", subtitle: "", taggingText: "Fixture", imageURL: nil,
         faviconURL: nil))
-    let paragraphs = (0..<60).map {
+    let paragraphs = (0..<8).map {
       "<p>Passage \($0). The winter light falls across the water. An article stays separate from links opened from its pages.</p>"
     }.joined()
     await store.saveReader(
@@ -47,15 +47,19 @@ import XCTest
       reader.start()
       try await awaitReady(reader)
     }
-    let warmStart = ContinuousClock.now
-    for index in 0..<300 {
-      let reader = pool.acquire(urls[index % 3], store: store)
+    // A few real WebKit reads prove retained documents still serve the right
+    // article. Repeated timing loops belong in the opt-in benchmark below.
+    for index in [0, 2, 1, 0] {
+      let reader = pool.acquire(urls[index], store: store)
       reader.start()
-      XCTAssertTrue(reader.ready)
+      let title = try await reader.readerView.evaluateJavaScript(
+        "document.querySelector('h1').textContent")
+      XCTAssertEqual(title as? String, "Article \(index)")
       XCTAssertEqual(reader.loadCount, 1)
-      if index % 3 == 0 { XCTAssertTrue(reader === first) }
     }
-    print("MAC_BENCH warm_300_switches=\(warmStart.duration(to: .now))")
+    // Make the first reader least recently used before adding the fourth.
+    _ = pool.acquire(urls[1], store: store)
+    _ = pool.acquire(urls[2], store: store)
     XCTAssertEqual(pool.count, 3)
     weak var evicted = first
     first = nil
@@ -98,17 +102,6 @@ import XCTest
     XCTAssertEqual(ReadingSessions.shared.snapshot(), before)
     reader.discard()
   }
-  func testArchiveAndFavouriteFilters() async throws {
-    let url = try await seed(30)
-    let id = try XCTUnwrap(store.article(for: url)?.id)
-    store.setFavourite(true, for: id)
-    try store.archive(id)
-    let article = try XCTUnwrap(store.article(for: url))
-    XCTAssertTrue(MacLibraryFolder.favourites.contains(article))
-    XCTAssertTrue(MacLibraryFolder.downloaded.contains(article))
-    XCTAssertFalse(MacLibraryFolder.saved.contains(article))
-    XCTAssertTrue(MacLibraryFolder.archive.contains(article))
-  }
   func testEvictionKeepsDraftAndQuotedContext() async throws {
     let urls = try await [seed(40), seed(41), seed(42), seed(43)]
     let pool = MacReaderPool()
@@ -124,6 +117,9 @@ import XCTest
   }
 
   func testColdVersusWarmDocumentPreparation() async throws {
+    try XCTSkipUnless(
+      ProcessInfo.processInfo.environment["ARCTIC_RUN_BENCHMARKS"] == "1",
+      "Opt-in timing diagnostic; not a regression or frame-rate assertion")
     let urls = try await [seed(50), seed(51), seed(52)]
     let pool = MacReaderPool()
     var cold: [Double] = []

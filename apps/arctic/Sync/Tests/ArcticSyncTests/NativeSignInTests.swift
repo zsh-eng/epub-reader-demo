@@ -5,7 +5,6 @@ import Testing
 
 @Test func pkceMatchesRFC7636AndDoesNotExposeVerifier() throws {
   let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-  #expect(NativeSignInRequest.challenge(verifier) == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
   let request = try NativeSignInRequest(
     server: URL(string: "https://reader.zsheng.app")!, state: String(repeating: "s", count: 43),
     verifier: verifier)

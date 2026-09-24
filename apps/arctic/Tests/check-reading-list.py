@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run production import checks without an iOS simulator.
 
-Usage: python3 check-reading-list.py /path/to/SwiftSoup [Chrome-export.html]
+Usage: python3 check-reading-list.py /path/to/SwiftSoup [Chrome-export.html] [--benchmark]
 Pass an existing SwiftSoup checkout to keep validation offline.
 """
 import json
