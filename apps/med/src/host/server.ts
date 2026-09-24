@@ -15,6 +15,8 @@ import {
   type Repository,
   type Session,
 } from "../shared/protocol";
+import { gitTargets, pushBranch } from "./repository/git-actions";
+import { pushRequestSchema } from "../shared/git-actions";
 import { loadHistory, resolveRepository } from "./repository/history";
 import { ReviewService } from "./repository/review";
 import { HostError } from "./runtime/errors";
@@ -582,6 +584,16 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
             const input = browseBlameRequestSchema.parse(await readBody(request));
             input.source.repo = await requireRepo(input.source.repo);
             send(await blameBrowse(input, abort.signal));
+            return;
+          }
+          if (url.pathname === "/api/git/targets" && request.method === "GET") {
+            send(await gitTargets(await requireRepo(url.searchParams.get("repo")), abort.signal));
+            return;
+          }
+          if (url.pathname === "/api/git/push" && request.method === "POST") {
+            const input = pushRequestSchema.parse(await readBody(request));
+            input.repo = await requireRepo(input.repo);
+            send(await pushBranch(input, abort.signal));
             return;
           }
           if (url.pathname === "/api/branches" && request.method === "GET") {

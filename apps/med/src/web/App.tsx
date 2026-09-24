@@ -39,6 +39,7 @@ import { FullFileView, type BeginFileSymbolPreview } from "./components/FullFile
 import { FileViewTabs } from "./components/FileViewTabs";
 import { readBrowserToken } from "./data/auth";
 import { SavedReviewHeader } from "./components/SavedReviewHeader";
+import { ComparisonActions } from "./components/ComparisonActions";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
 
 import { createFilePrefetch } from "./data/file-prefetch";
@@ -1290,6 +1291,16 @@ export function App({
         ]
       : []),
   ];
+  const actionRepo = state.review?.repo ?? state.session?.repository.path;
+  const actionBranch = state.savedView
+    ? (state.savedReview?.targets.find((target) => target.id === state.savedTargetId)?.branch ?? "")
+    : (state.activeBranch ?? "");
+  const actionHead =
+    state.savedView || state.comparison.kind === "commit" || state.comparison.kind === "range"
+      ? (state.review?.head ?? "")
+      : (state.branches.find((branch) => branch.name === state.activeBranch)?.head ??
+        state.session?.repository.head ??
+        "");
   const added = state.review?.files.reduce((sum, file) => sum + file.additions, 0) ?? 0;
   const deleted = state.review?.files.reduce((sum, file) => sum + file.deletions, 0) ?? 0;
   const skipped = files.filter((file) => !file.metadata);
@@ -1601,6 +1612,26 @@ export function App({
                       void controller.selectComparison({ kind: value } as Comparison);
                   }}
                 />
+                {actionRepo &&
+                  state.status === "ready" &&
+                  state.session?.repository.git !== false && (
+                    <ComparisonActions
+                      key={`${actionRepo}:${actionHead}:${actionBranch}`}
+                      repo={actionRepo}
+                      head={actionHead}
+                      sourceBranch={actionBranch}
+                      comparison={state.comparison}
+                      onCompare={(base, head) => {
+                        fileWorkspace.select("changes");
+                        void controller.selectComparison({
+                          kind: "range",
+                          base,
+                          head,
+                          mergeBase: true,
+                        });
+                      }}
+                    />
+                  )}
                 <span {...stylex.props(styles.compareLabel)}>
                   {state.review
                     ? `${state.review.base.slice(0, 7)} → ${state.review.head.slice(0, 7)}`

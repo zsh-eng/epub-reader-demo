@@ -10,6 +10,7 @@ export const comparisonSchema = z.discriminatedUnion("kind", [
     base: z.string().min(1).max(256),
     head: z.string().min(1).max(256),
     includeBase: z.boolean().optional(),
+    mergeBase: z.boolean().optional(),
   }),
   z.object({ kind: z.literal("patch"), path: z.string().min(1).max(4096) }),
   z.object({
@@ -24,7 +25,11 @@ export type Comparison = z.infer<typeof comparisonSchema>;
 export function comparisonKey(value: Comparison): string {
   const parsed = comparisonSchema.parse(value);
   if (parsed.kind === "range")
-    return JSON.stringify({ ...parsed, includeBase: !!parsed.includeBase });
+    return JSON.stringify({
+      ...parsed,
+      includeBase: !!parsed.includeBase,
+      mergeBase: !!parsed.mergeBase,
+    });
   return JSON.stringify(parsed);
 }
 

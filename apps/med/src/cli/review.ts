@@ -18,6 +18,7 @@ export const reviewHelp = `Usage: med-diff review create --title <title> --repo 
        med-diff review create --manifest <json-path>
        med-diff review repos
 
+--merge-base compares the common ancestor of --base and --head with --head (for pull requests and stacked branches).
 Options: --port <port> (default ${DEFAULT_PORT}), --state-dir <path> (or MED_STATE_DIR)
 The running host must already have the target repositories registered.
 --working captures the current changes, including pre-existing changes.
@@ -44,6 +45,7 @@ export async function parseReviewCommand(args: string[]): Promise<ReviewCommand>
       base: { type: "string" },
       head: { type: "string" },
       working: { type: "boolean" },
+      "merge-base": { type: "boolean" },
       manifest: { type: "string" },
     },
   });
@@ -54,7 +56,14 @@ export async function parseReviewCommand(args: string[]): Promise<ReviewCommand>
   if (values.help) return { ...common, kind: "help" };
   if (positionals.length !== 1 || !["repos", "create"].includes(positionals[0]!))
     throw new Error(reviewHelp);
-  const targetOptions = [values.title, values.repo, values.base, values.head, values.working];
+  const targetOptions = [
+    values.title,
+    values.repo,
+    values.base,
+    values.head,
+    values.working,
+    values["merge-base"],
+  ];
   if (positionals[0] === "repos") {
     if (values.manifest !== undefined || targetOptions.some((value) => value !== undefined))
       throw new Error("The repos command accepts only --port and --state-dir.");
@@ -72,8 +81,11 @@ export async function parseReviewCommand(args: string[]): Promise<ReviewCommand>
   } else {
     if (!values.title || !values.repo)
       throw new Error("Use --title and --repo, or supply --manifest.");
-    if (values.working && (values.base !== undefined || values.head !== undefined))
-      throw new Error("Use --working without --base or --head.");
+    if (
+      values.working &&
+      (values.base !== undefined || values.head !== undefined || values["merge-base"])
+    )
+      throw new Error("Use --working without --base, --head, or --merge-base.");
     if (!values.working && (!values.base || !values.head))
       throw new Error(
         "Supply both --base and --head, or use --working to capture current changes.",
@@ -85,7 +97,12 @@ export async function parseReviewCommand(args: string[]): Promise<ReviewCommand>
           repo: values.repo,
           comparison: values.working
             ? { kind: "working" }
-            : { kind: "range", base: values.base, head: values.head },
+            : {
+                kind: "range",
+                base: values.base,
+                head: values.head,
+                ...(values["merge-base"] ? { mergeBase: true } : {}),
+              },
         },
       ],
     };

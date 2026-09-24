@@ -94,7 +94,7 @@ The port retains review actions, anchors, document projection, geometry, identit
 
 The original proposal considered retaining Hunk's daemon transport and publication protocol. The implemented host uses a smaller direct HTTP contract instead. It does not claim compatibility with Hunk agents, extensions, producer protocols, or publication deltas. The host owns source snapshots and notes. Selection, filtering, scroll, and presentation remain browser-local. There is no shared cursor or cross-client note push.
 
-JJ/Sapling, rich STML, terminal modes, extension execution, branch mutation, merge editing, Zed theme import, and native desktop installation remain outside this version.
+JJ/Sapling, rich STML, terminal modes, extension execution, local branch mutation, merge editing, Zed theme import, and native desktop installation remain outside this version.
 
 ## Requests, identity, and invalidation
 
@@ -150,7 +150,9 @@ Use Git CLI argument arrays with an explicit repository directory. Disable exter
 | File pair | Explicit old file snapshot | Explicit new file snapshot              |
 | Patch     | Patch-provided before side | Patch-provided after side               |
 
-Range means a direct endpoint comparison, not an implicit merge-base comparison. Worktree selection reads a different working directory and index, with shared Git objects. It does not execute `git switch`. Git CLI is the first backend; libgit2 would require a measured advantage plus matching behavior and packaging tests.
+Range means a direct endpoint comparison by default. `mergeBase: true` resolves one common ancestor before diffing; missing or multiple merge bases produce a clear error. Saved reviews freeze the resolved endpoints. The comparison dropdown uses this mode for feature and stacked branches. Worktree selection reads a different working directory and index, with shared Git objects. It does not execute `git switch`. Git CLI is the first backend; libgit2 would require a measured advantage plus matching behavior and packaging tests.
+
+An explicit Push dialog publishes one exact commit to a named branch of a configured remote. The host validates refs, preserves push hooks, and disables force, mirror, tag following, and recursive submodule pushes. It rejects remotes with multiple push URLs and does not expose remote diagnostics that can contain credentials. No browsing or comparison action pushes.
 
 Review and source caches have byte and entry bounds. Browser canonical parsed reviews and sources have separate budgets. Pierre receives a separate render copy because context hydration mutates metadata. These cache limits are not a total-process memory cap; active hydrated render models need separate profiling. Host requests, event streams, file inputs, note text, and total notes also have bounds. Large or non-text files keep explicit metadata. Output limits, source limits, parsing, syntax work, and DOM virtualization are separate controls.
 

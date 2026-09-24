@@ -537,11 +537,40 @@ export class ReviewService {
         resolveCommit(repo, comparison.head, signal),
       ]);
       const oldest = base;
+      if (comparison.mergeBase) {
+        if (comparison.includeBase)
+          throw new HostError(
+            "invalid-comparison",
+            "Choose merge-base or inclusive range, not both.",
+          );
+        const ancestors = (
+          await git(repo, ["merge-base", "--all", base, head], {
+            signal,
+            maxBytes: 8192,
+            acceptedExitCodes: [0, 1],
+          })
+        )
+          .toString("utf8")
+          .trim()
+          .split("\n")
+          .filter(Boolean);
+        if (ancestors.length !== 1)
+          throw new HostError(
+            "merge-base-unavailable",
+            ancestors.length
+              ? "This comparison has multiple merge bases. Choose an exact base commit."
+              : "These branches have no available common ancestor. Fetch more history or choose an exact base commit.",
+            422,
+          );
+        base = ancestors[0]!;
+      }
       if (comparison.includeBase) base = (await parentOrEmpty(base)).parent;
       args = [base, head];
-      label = comparison.includeBase
-        ? `${oldest.slice(0, 8)}…${head.slice(0, 8)} · inclusive`
-        : `${base.slice(0, 8)} → ${head.slice(0, 8)}`;
+      label = comparison.mergeBase
+        ? `${comparison.base} … ${head.slice(0, 8)} · merge base ${base.slice(0, 8)}`
+        : comparison.includeBase
+          ? `${oldest.slice(0, 8)}…${head.slice(0, 8)} · inclusive`
+          : `${base.slice(0, 8)} → ${head.slice(0, 8)}`;
     } else if (comparison.kind === "unstaged") {
       base = "index";
       head = "worktree";
