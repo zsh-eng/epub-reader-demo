@@ -9,7 +9,6 @@
   --blue: oklch(0.809 0.105 251.813);
   --yellow: oklch(0.905 0.182 98.111);
   --surface: color-mix(in srgb, var(--background) 86%, transparent);
-  --row-height: 160px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
@@ -265,19 +264,19 @@ h1 {
   position: absolute;
   left: 0;
   right: 0;
-  padding: 15px 35px;
-  height: var(--row-height);
+  padding: 14px 35px;
+  height: auto;
   contain: layout style;
   cursor: pointer;
   transition: opacity 180ms ease-out;
-  color: var(--muted-foreground);
+  color: var(--foreground);
 }
 .speaker-line {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   letter-spacing: 0.15px;
 }
 .avatar {
@@ -297,27 +296,31 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 .transcript-text {
-  font-size: 25px;
-  line-height: 1.4;
-  font-weight: 500;
-  letter-spacing: -0.6px;
-  text-wrap: pretty;
+  font-size: 18px;
+  line-height: 1.65;
+  font-weight: 400;
+  letter-spacing: -0.15px;
 }
-.transcript-row.active {
-  color: var(--foreground);
-}
-.transcript-row .word {
-  transition: color 100ms;
-}
-.transcript-row.active .word.future {
-  color: var(--muted-foreground);
-}
-.transcript-row.active .word.current {
-  color: var(--foreground);
-  background: color-mix(in srgb, var(--blue) 27%, transparent);
-  border-radius: 4px;
+.transcript-row .sentence {
+  cursor: pointer;
+  border-radius: 3px;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  transition: background 140ms ease-out;
+}
+.transcript-row .sentence:hover {
+  background: var(--muted);
+}
+.transcript-row .sentence.current {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--blue) 25%, transparent);
+}
+.transcript-row .sentence:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.transcript {
+  overflow-anchor: none;
 }
 .transcript-row.promotion .speaker-line::after {
   content: "Promotion";
@@ -634,19 +637,6 @@ details p,
   background: var(--background);
   z-index: 6;
 }
-.row-seek {
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  z-index: 1;
-}
-.row-seek:focus-visible {
-  outline-offset: -5px;
-}
-.transcript-text,
-.speaker-line {
-  pointer-events: none;
-}
 .skip-panel {
   overflow-y: auto;
 }
@@ -658,7 +648,7 @@ details p,
     padding-inline: 55px;
   }
   .transcript-text {
-    font-size: 28px;
+    font-size: 19px;
   }
 }
 @media (max-width: 1100px) {
@@ -682,9 +672,6 @@ details p,
   }
 }
 @media (max-width: 700px) {
-  :root {
-    --row-height: 180px;
-  }
   .app-header {
     height: 60px;
     padding: 0 20px;
@@ -716,7 +703,7 @@ details p,
     padding-inline: 25px;
   }
   .transcript-text {
-    font-size: 24px;
+    font-size: 17px;
   }
   .player {
     height: 135px;

@@ -85,6 +85,9 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
   });
 }
 if (import.meta.main) {
-  const server = createServer(process.env.PODCAST_DATA_DIR);
+  const server = createServer(
+    process.env.PODCAST_DATA_DIR,
+    Number(process.env.PORT ?? 4378),
+  );
   console.log(`Undertone → ${server.url}`);
 }

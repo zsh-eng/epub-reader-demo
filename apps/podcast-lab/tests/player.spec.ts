@@ -106,3 +106,75 @@ test("phone and reduced motion retain readable rows and keyboard controls", asyn
   );
   await page.screenshot({ path: ".local/player-phone.png" });
 });
+
+test("speaker paragraphs highlight and seek by section without overlapping rows", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const row = episode.rows.find(
+    (row: { start: number; parts: unknown[] }) =>
+      row.start > 500 && row.parts.length >= 3,
+  );
+  const section = row.parts[1];
+  await page.locator("#seek").evaluate(
+    (el: HTMLInputElement, time: number) => {
+      el.value = String(time);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    },
+    (section.start + section.end) / 2,
+  );
+  await expect(page.locator(".sentence.current")).toHaveText(section.text);
+  await expect(page.locator(".transcript-row.active")).toContainText(
+    row.parts[0].text,
+  );
+  await page.locator("audio").evaluate((el: HTMLAudioElement) => {
+    el.muted = true;
+  });
+  await page.locator(".transcript-row.active .sentence").nth(2).click();
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((el: HTMLAudioElement) => el.currentTime),
+    )
+    .toBeGreaterThanOrEqual(row.parts[2].start);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.locator(".sentence.current")).toHaveText(row.parts[2].text);
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect
+      .poll(() =>
+        page.locator(".transcript-row").evaluateAll((nodes) => {
+          const rects = nodes.map((node) => node.getBoundingClientRect());
+          return rects.every(
+            (rect, i) => i === 0 || rect.top >= rects[i - 1].bottom - 1,
+          );
+        }),
+      )
+      .toBe(true);
+    await page.screenshot({ path: `.local/paragraphs-${width}.png` });
+  }
+  await page.locator("#transcript").hover();
+  await page.mouse.wheel(0, 3000);
+  await expect(page.locator("#follow")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await page.mouse.wheel(0, -2000);
+  await expect
+    .poll(() =>
+      page
+        .locator(".transcript-row")
+        .evaluateAll((nodes) =>
+          nodes.every(
+            (node, i) =>
+              i === 0 ||
+              Number((node as HTMLElement).dataset.index) >
+                Number((nodes[i - 1] as HTMLElement).dataset.index),
+          ),
+        ),
+    )
+    .toBe(true);
+  await expect
+    .poll(() => page.locator(".transcript-row").count())
+    .toBeLessThan(25);
+});

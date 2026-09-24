@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipeline"))
 from align import align
 from download import download
+from paragraphs import make_paragraphs
 
 
 class DownloadIntegration(unittest.TestCase):
@@ -102,6 +103,55 @@ class DownloadIntegration(unittest.TestCase):
         self.assertEqual(blocks[0]["end"], 2)
         self.assertTrue(
             all(a["end"] <= b["start"] for a, b in itertools.pairwise(blocks))
+        )
+
+
+class ParagraphIntegration(unittest.TestCase):
+    def test_joined_display_preserves_words_and_bounds_passages(self):
+        tokens = [
+            {
+                "text": f" word{i}" + ("." if i % 20 == 19 else ""),
+                "start": i * 0.2,
+                "end": i * 0.2 + 0.15,
+            }
+            for i in range(180)
+        ]
+        blocks = align(
+            {"sentences": [{"tokens": tokens}]},
+            [{"speaker": 1, "start": 0, "end": 40}],
+            max_seconds=3,
+        )
+        rows = make_paragraphs(blocks, [])
+        self.assertLess(len(rows), len(blocks))
+        self.assertTrue(any(len(row["blockIds"]) > 1 for row in rows))
+        self.assertTrue(all(len(row["words"]) <= 75 for row in rows))
+        original = [word for block in blocks for word in block["words"]]
+        self.assertEqual([word for row in rows for word in row["words"]], original)
+        for row in rows:
+            self.assertEqual(
+                " ".join(part["text"] for part in row["parts"]), row["text"]
+            )
+            self.assertTrue(
+                all(len(part["text"].split()) <= 28 for part in row["parts"])
+            )
+        self.assertTrue(all(row["text"].endswith(".") for row in rows))
+
+    def test_speakers_pauses_and_skip_boundaries_remain_separate(self):
+        tokens = [
+            {"text": f" word{i}", "start": time, "end": time + 0.4}
+            for i, time in enumerate([0, 1, 2, 3, 4, 8])
+        ]
+        blocks = align(
+            {"sentences": [{"tokens": tokens}]},
+            [
+                {"speaker": 1, "start": 0, "end": 4},
+                {"speaker": 2, "start": 4, "end": 9},
+            ],
+        )
+        rows = make_paragraphs(blocks, [{"id": "ad", "start": 1, "end": 3}])
+        self.assertEqual(
+            [row["text"] for row in rows],
+            ["word0", "word1 word2", "word3", "word4", "word5"],
         )
 
 

@@ -1,0 +1,138 @@
+/** Variable-height paragraphs, measured only near the viewport. Preserve the
+ * first visible paragraph when measurements above it change, so reflow does
+ * not pull the reader away from their place. No layout reads on playback ticks. */
+export class VirtualTranscript {
+  readonly nodes = new Map<number, HTMLElement>();
+  private heights: number[] = [];
+  private offsets: number[] = [];
+  private width = 0;
+  private observer: ResizeObserver;
+  private containerObserver: ResizeObserver;
+  private frame = 0;
+
+  constructor(
+    private viewport: HTMLElement,
+    private space: HTMLElement,
+    private texts: string[],
+    private create: (index: number) => HTMLElement,
+    private decorate: () => void,
+  ) {
+    this.observer = new ResizeObserver((entries) => {
+      const anchor = this.indexAt(this.viewport.scrollTop);
+      const previousTop = this.offsets[anchor] ?? 0;
+      let changed = false;
+      for (const entry of entries) {
+        const index = Number((entry.target as HTMLElement).dataset.index);
+        if (this.nodes.get(index) !== entry.target) continue;
+        const height =
+          entry.borderBoxSize[0]?.blockSize ??
+          entry.target.getBoundingClientRect().height;
+        if (Math.abs(this.heights[index] - height) < 0.5) continue;
+        this.heights[index] = height;
+        changed = true;
+      }
+      if (!changed) return;
+      this.reflow();
+      this.viewport.scrollTop += this.offsets[anchor] - previousTop;
+      this.render();
+    });
+    this.containerObserver = new ResizeObserver(() => this.resize());
+    this.viewport.addEventListener("scroll", this.onScroll, { passive: true });
+    this.containerObserver.observe(viewport);
+    this.resize();
+  }
+
+  private onScroll = () => {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      this.render();
+    });
+  };
+
+  private indexAt(offset: number) {
+    let lo = 0,
+      hi = this.texts.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (this.offsets[mid] <= offset) lo = mid + 1;
+      else hi = mid;
+    }
+    return Math.max(0, lo - 1);
+  }
+
+  private resize() {
+    const width = this.viewport.clientWidth;
+    if (width !== this.width) {
+      const anchor = this.indexAt(this.viewport.scrollTop);
+      const within = this.viewport.scrollTop - (this.offsets[anchor] ?? 0);
+      this.width = width;
+      // Estimates are replaced with actual border-box sizes before scrolling.
+      const charsPerLine = Math.max(20, (width - 68) / 8.5);
+      this.heights = this.texts.map(
+        (text) => 58 + Math.ceil(text.length / charsPerLine) * 30,
+      );
+      for (const node of this.nodes.values()) {
+        this.observer.unobserve(node);
+        node.remove();
+      }
+      this.nodes.clear();
+      this.reflow();
+      this.viewport.scrollTop = this.offsets[anchor] + within;
+    } else this.reflow();
+    this.render();
+  }
+
+  private reflow() {
+    let top = 0;
+    this.offsets = this.heights.map((height) => {
+      const start = top;
+      top += height;
+      return start;
+    });
+    this.space.style.height = `${top + this.viewport.clientHeight * 0.6}px`;
+    for (const [index, node] of this.nodes)
+      node.style.top = `${this.offsets[index]}px`;
+  }
+
+  private render() {
+    const first = this.indexAt(Math.max(0, this.viewport.scrollTop - 350));
+    const last = Math.min(
+      this.texts.length,
+      this.indexAt(this.viewport.scrollTop + this.viewport.clientHeight + 350) +
+        1,
+    );
+    for (const [index, node] of this.nodes) {
+      if (
+        (index >= first && index < last) ||
+        node.contains(document.activeElement)
+      )
+        continue;
+      this.observer.unobserve(node);
+      node.remove();
+      this.nodes.delete(index);
+    }
+    for (let index = first; index < last; index++) {
+      if (this.nodes.has(index)) continue;
+      const node = this.create(index);
+      node.style.top = `${this.offsets[index]}px`;
+      this.nodes.set(index, node);
+      // Keep keyboard and screen-reader order aligned with visual order,
+      // including when rows are mounted while scrolling upward.
+      const nextIndex = [...this.nodes.keys()]
+        .filter((candidate) => candidate > index)
+        .sort((a, b) => a - b)[0];
+      this.space.insertBefore(node, this.nodes.get(nextIndex) ?? null);
+      this.observer.observe(node);
+    }
+    this.decorate();
+  }
+
+  scrollTo(index: number, behavior: ScrollBehavior) {
+    this.viewport.scrollTo({
+      top: Math.max(0, this.offsets[index] - this.viewport.clientHeight * 0.2),
+      behavior,
+    });
+    this.render();
+  }
+}

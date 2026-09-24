@@ -132,19 +132,41 @@ codec. The WAV is a regenerable working file. Raw audio, transcripts, generated
 artwork thumbnails, model outputs, logs, and local environments are Git-ignored.
 The player serves a 640 px WebP cover and 130 waveform bins, not the source WAV.
 
-The classifier uses bounded speaker blocks, with surrounding context. Only
-candidate blocks get sentence-boundary refinement; refinements retain the full
-surrounding context. Request results are cached by model, questions, and input.
-A score threshold of 0.85 is provisional, not an independently calibrated
-probability for this task. Credits are classified but not automatically skipped.
+Jev receives joined words from one detected speaker, split at speaker changes,
+pauses over two seconds, or 45 seconds. Display paragraphs are separate from
+these classification blocks. Each request to `/v1/systemone` uses model
+`jev-1.13.0`, `state.target` (the block text), and
+`state.surrounding_context` (speaker-labelled blocks overlapping 45 seconds
+before and after it).
+
+Three independent `noul` questions ask about paid third-party sponsorship,
+publisher self-promotion, and credits. A coarse score of at least 0.5 triggers
+refinement at sentence endings or 14 seconds. Refined requests retain the same
+context; a highest score of at least 0.85 becomes a candidate. Both cutoffs are
+provisional, not calibrated probabilities. Credits are not automatically skipped.
+At most four requests run concurrently. Results are cached by the complete
+model, questions, and input. Adjacent same-category candidates merge across
+gaps up to 2.5 seconds only when no unclassified speech occupies the gap.
+
+This grouping is incomplete: 38 of 166 blocks are shorter than three seconds.
+Fast montage speaker changes produce fragments, and a low coarse score prevents
+refinement. The next experiment should group complete promotional sequences
+across speakers; sentence-level refinement can then locate their boundaries.
 
 ## Player boundaries and performance
 
 - The local server supports bounded, suffix and open-ended byte ranges for seek.
 - Only explicit player routes are exposed. Model logs and credentials are not.
-- 1,081 transcript passages exist in data; only the viewport plus six rows on each
-  side is mounted. Rows hold at most 12 words with a fixed responsive height.
-- Playback updates the active word and progress, rather than rebuilding the list.
+- 297 speaker paragraphs replace the former 12-word lines. Paragraphs prefer
+  sentence endings after 40 words and stop at 75 words or about 32 seconds.
+  Speaker changes, pauses, and detected promotion boundaries remain separate.
+- Only the viewport plus 350 px on each side is mounted, with any focused row
+  retained. Measured variable heights replace estimates while preserving the
+  first visible paragraph. DOM order matches reading order.
+- Playback highlights a sentence or short section inside each paragraph without
+  rebuilding the list or measuring layout on playback ticks.
+- Removing unused word-level data reduced the player JSON from 1,044,923 to
+  213,007 bytes. Raw word timings remain in the local pipeline artifacts.
 - Seek feedback follows input immediately. Manual scrolling cancels following;
   reduced-motion mode removes smooth scroll. There is no claimed 120 fps result.
 - The same audio element survives chapter and transcript navigation.
@@ -164,7 +186,8 @@ uvx ruff check pipeline tests/test_pipeline.py
 
 Browser checks cover chapter seek, manual/follow scrolling, a bounded row count,
 automatic skipping, Undo without immediate re-skip, playback resume, phone
-layout, keyboard controls, and reduced motion. Screenshots and failure traces
+layout, paragraph seeking and highlighting, variable-height row spacing, keyboard
+controls, and reduced motion. Screenshots and failure traces
 stay in `.local/`. Tests do not claim audio-boundary accuracy or physical-device
 frame rates.
 

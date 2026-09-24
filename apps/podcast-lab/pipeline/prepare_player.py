@@ -4,6 +4,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from paragraphs import make_paragraphs
+
 
 def prepare(root=Path(".local")):
     source = json.loads((root / "source.json").read_text())
@@ -57,22 +59,11 @@ def prepare(root=Path(".local")):
                     "blockIds": [c["blockId"]],
                 }
             )
-    rows = []
-    for block in blocks:
-        # Bounded rows allow a fixed-height virtual transcript at phone and desktop widths.
-        for offset in range(0, len(block["words"]), 12):
-            words = block["words"][offset : offset + 12]
-            rows.append(
-                {
-                    "id": f"{block['id']}-{offset}",
-                    "blockId": block["id"],
-                    "speaker": block["speaker"],
-                    "start": words[0]["start"],
-                    "end": words[-1]["end"],
-                    "words": words,
-                    "text": " ".join(w["text"] for w in words),
-                }
-            )
+    rows = make_paragraphs(blocks, skips)
+    # Word timing remains in local model artifacts. The paragraph player needs
+    # only sentence/part timestamps, so avoid transferring duplicate word data.
+    for row in rows:
+        row.pop("words")
     output = {
         "title": source["title"],
         "show": source["show"],

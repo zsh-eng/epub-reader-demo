@@ -1,3 +1,4 @@
+import { VirtualTranscript } from "./virtual-transcript";
 type Word = { text: string; start: number; end: number };
 type Row = {
   id: string;
@@ -5,7 +6,7 @@ type Row = {
   speaker: string;
   start: number;
   end: number;
-  words: Word[];
+  parts: Word[];
   text: string;
 };
 type Speaker = { id: string; name: string; role: string; confidence: string };
@@ -44,15 +45,14 @@ const fmt = (seconds: number) =>
 const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 let data: Episode;
 let active = -1,
-  activeWord = -1,
+  activePart = -1,
   activeChapter = -2;
 let following = true,
-  rowHeight = 160,
   raf = 0,
   toastTimer = 0;
 let lastSkipped: Skip | undefined;
 const bypass = new Set<string>();
-const mounted = new Map<number, HTMLElement>();
+let virtual: VirtualTranscript | undefined;
 let speakers = new Map<string, Speaker>();
 let waveform: HTMLElement[] = [];
 let waveIndex = -1;
@@ -66,10 +66,7 @@ function setFollowing(value: boolean) {
 }
 function scrollToActive(instant = false) {
   if (active < 0) return;
-  transcript.scrollTo({
-    top: Math.max(0, active * rowHeight - transcript.clientHeight * 0.28),
-    behavior: instant || reduced.matches ? "instant" : "smooth",
-  });
+  virtual?.scrollTo(active, instant || reduced.matches ? "instant" : "smooth");
 }
 function seekTo(time: number, preview = true) {
   if (!data) return;
@@ -100,7 +97,6 @@ function createRow(index: number) {
   const node = document.createElement("article");
   node.className = "transcript-row";
   node.dataset.index = String(index);
-  node.style.top = `${index * rowHeight}px`;
   if (promotion(row)) node.classList.add("promotion");
   const header = document.createElement("div");
   header.className = "speaker-line";
@@ -128,63 +124,45 @@ function createRow(index: number) {
   header.append(avatar, label, time);
   const text = document.createElement("p");
   text.className = "transcript-text";
-  row.words.forEach((word, i) => {
+  row.parts.forEach((part, i) => {
     const span = document.createElement("span");
-    span.className = "word";
-    span.textContent = word.text + (i < row.words.length - 1 ? " " : "");
+    span.className = "sentence";
+    span.textContent = part.text + (i < row.parts.length - 1 ? " " : "");
+    span.tabIndex = 0;
+    span.setAttribute("role", "button");
+    span.setAttribute(
+      "aria-label",
+      `Play from ${fmt(part.start)}: ${part.text}`,
+    );
+    const activate = () => {
+      seekTo(part.start);
+      setFollowing(true);
+      void play();
+    };
+    span.addEventListener("click", () => {
+      if (!window.getSelection()?.toString()) activate();
+    });
+    span.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      event.stopPropagation();
+      activate();
+    });
     text.append(span);
   });
-  const button = document.createElement("button");
-  button.className = "row-seek";
-  button.setAttribute("aria-label", `Play from ${fmt(row.start)}: ${row.text}`);
-  button.addEventListener("click", () => {
-    seekTo(row.start);
-    setFollowing(true);
-    void play();
-  });
-  node.append(header, text, button);
+  node.append(header, text);
   return node;
 }
-/** Fixed-height, bounded rows: only the visible transcript and six neighbours
- * are mounted. Playback changes classes on the active words, not the whole list. */
-function renderWindow() {
-  if (!data) return;
-  const first = Math.max(0, Math.floor(transcript.scrollTop / rowHeight) - 6);
-  const last = Math.min(
-    data.rows.length,
-    Math.ceil((transcript.scrollTop + transcript.clientHeight) / rowHeight) + 6,
-  );
-  for (const [index, node] of mounted) {
-    if (index < first || index >= last) {
-      node.remove();
-      mounted.delete(index);
-    }
-  }
-  for (let i = first; i < last; i++) {
-    if (!mounted.has(i)) {
-      const node = createRow(i);
-      space.append(node);
-      mounted.set(i, node);
-    }
-  }
-  paintWords();
-}
-function paintWords() {
-  for (const [index, node] of mounted) {
+function paintParts() {
+  if (!virtual) return;
+  for (const [index, node] of virtual.nodes) {
     const isActive = index === active;
     node.classList.toggle("active", isActive);
-    if (!isActive) {
-      node
-        .querySelectorAll(".current,.future")
-        .forEach((el) => el.classList.remove("current", "future"));
-      continue;
-    }
-    node.querySelectorAll(".word").forEach((word, i) => {
-      word.classList.toggle("current", i === activeWord);
-      word.classList.toggle(
-        "future",
-        data.rows[index].words[i].start > audio.currentTime,
-      );
+    node.querySelectorAll(".sentence").forEach((part, i) => {
+      part.classList.toggle("current", isActive && i === activePart);
+      if (isActive && i === activePart)
+        part.setAttribute("aria-current", "true");
+      else part.removeAttribute("aria-current");
     });
   }
 }
@@ -215,11 +193,13 @@ function update() {
   const next = findRow(time);
   const changed = next !== active;
   active = next;
-  const words = data.rows[active].words;
-  const wordIndex = words.findIndex((w) => time >= w.start && time < w.end);
-  if (changed || wordIndex !== activeWord) {
-    activeWord = wordIndex;
-    paintWords();
+  const parts = data.rows[active].parts;
+  const partIndex = parts.findIndex(
+    (part) => time >= part.start && time < part.end,
+  );
+  if (changed || partIndex !== activePart) {
+    activePart = partIndex;
+    paintParts();
     if (changed && following) scrollToActive();
   }
   seek.value = String(time);
@@ -348,20 +328,13 @@ async function start() {
     element("waveform").append(bar);
     waveform.push(bar);
   }
-  function resize() {
-    rowHeight = parseInt(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        "--row-height",
-      ),
-    );
-    space.style.height = `${data.rows.length * rowHeight + transcript.clientHeight * 0.65}px`;
-    for (const node of mounted.values()) node.remove();
-    mounted.clear();
-    renderWindow();
-    if (following) scrollToActive(true);
-  }
-  new ResizeObserver(resize).observe(transcript);
-  resize();
+  virtual = new VirtualTranscript(
+    transcript,
+    space,
+    data.rows.map((row) => row.text),
+    createRow,
+    paintParts,
+  );
   update();
   const restore = () => {
     try {
@@ -427,7 +400,6 @@ element("undo").addEventListener("click", () => {
   element("toast").hidden = true;
 });
 followButton.addEventListener("click", () => setFollowing(!following));
-transcript.addEventListener("scroll", renderWindow, { passive: true });
 transcript.addEventListener("wheel", () => setFollowing(false), {
   passive: true,
 });
