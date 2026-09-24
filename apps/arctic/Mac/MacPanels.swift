@@ -111,21 +111,17 @@ struct MacNotesPane: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
       HStack {
-        Text("Notes").font(.system(size: 21, weight: .medium, design: .rounded))
+        Text("Notes").font(.system(size: 13, weight: .medium))
         Spacer()
-        Button {
-          workspace.showNotes = false
-        } label: {
-          Image(systemName: "sidebar.right")
-        }.buttonStyle(.plain)
-      }.padding(22)
+        Button("Hide") { workspace.showNotes = false }
+          .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(.secondary)
+          .accessibilityLabel("Hide notes")
+      }.padding(.horizontal, 20).frame(height: 46)
       let notes = workspace.annotations.annotations(for: reader.url).sorted {
         $0.createdAt < $1.createdAt
       }
       if notes.isEmpty {
         VStack(spacing: 12) {
-          Image(systemName: "text.quote").font(.system(size: 28, weight: .ultraLight))
-            .foregroundStyle(ArcticBrand.accent)
           Text("A thought worth keeping.").font(.system(size: 19, design: .serif))
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
@@ -166,7 +162,8 @@ struct MacNotesPane: View {
         }
       }.padding(14).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 20))
         .padding(16)
-    }.background(.background)
+    }.background(Color(nsColor: .textBackgroundColor))
+      .modifier(MacPanelReveal())
   }
   private func send() {
     let text = reader.draft.trimmingCharacters(in: .whitespacesAndNewlines)

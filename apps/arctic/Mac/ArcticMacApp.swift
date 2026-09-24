@@ -129,20 +129,21 @@ struct MacWorkspaceView: View {
   @Environment(\.scenePhase) private var scenePhase
   @State private var visibility: NavigationSplitViewVisibility = .all
   @State private var keyMonitor: Any?
-  @Namespace private var selection
 
   private var layout: some View {
     NavigationSplitView(columnVisibility: $visibility) {
-      sidebar.navigationSplitViewColumnWidth(min: 205, ideal: 245, max: 340)
+      MacNavigationSidebar(workspace: workspace)
+        .navigationSplitViewColumnWidth(min: 180, ideal: 232, max: 320)
     } detail: {
-      Group {
+      VStack(spacing: 0) {
+        MacArticleTabStrip(workspace: workspace)
+        Divider().opacity(0.5)
         if let reader = workspace.selectedReader {
           HStack(spacing: 0) {
             MacReaderPane(reader: reader, workspace: workspace)
             if workspace.showNotes {
-              Divider()
-              MacNotesPane(workspace: workspace, reader: reader).frame(width: 310)
-                .transition(.move(edge: .trailing).combined(with: .opacity))
+              Divider().opacity(0.5)
+              MacNotesPane(workspace: workspace, reader: reader).frame(width: 300)
             }
           }
         } else if workspace.showNotebook {
@@ -154,6 +155,7 @@ struct MacWorkspaceView: View {
       .background(Color(nsColor: .textBackgroundColor))
       .toolbar { workspaceToolbar }
     }
+    .navigationTitle("")
   }
 
   private var blocksReading: Bool {
@@ -163,9 +165,6 @@ struct MacWorkspaceView: View {
 
   private var observedLayout: some View {
     layout
-      .animation(
-        reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1), value: workspace.showNotes
-      )
       .onChange(of: workspace.sidebarVisible) { _, visible in
         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 1)) {
           visibility = visible ? .all : .detailOnly
@@ -223,40 +222,17 @@ struct MacWorkspaceView: View {
 
   @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {
 
-    ToolbarItem(placement: .navigation) {
-      Button {
-        workspace.library()
-      } label: {
-        Image(systemName: "square.grid.2x2")
-      }
-      .help("Library · ⌘L").accessibilityLabel("Show library")
-    }
-    ToolbarItem(placement: .principal) {
-      Text(
-        workspace.selectedTab?.title
-          ?? (workspace.showNotebook ? "Notebook" : workspace.folder.title)
-      )
-      .font(.system(size: 13, weight: .medium)).lineLimit(1)
-    }
     ToolbarItemGroup(placement: .primaryAction) {
       if let reader = workspace.selectedReader {
-        Button {
-          reader.toggleWebsite()
-        } label: {
-          Image(systemName: reader.websiteVisible ? "doc.richtext" : "globe")
-        }.help(reader.websiteVisible ? "Show Reader" : "Show website")
-        Button {
-          workspace.saveCurrent()
-        } label: {
-          Image(systemName: workspace.selectedArticle?.saved == true ? "bookmark.fill" : "bookmark")
-        }.help("Save article · ⌘S").accessibilityLabel("Save article")
-        Button {
-          workspace.showNotes.toggle()
-        } label: {
-          Image(systemName: "sidebar.right")
-        }
-        .help("Notes · ⇧⌘N").accessibilityLabel("Toggle notes")
+        Button(reader.websiteVisible ? "Reader" : "Website") { reader.toggleWebsite() }
+          .help(reader.websiteVisible ? "Show Reader" : "Show website")
+        Button("Notes") { workspace.showNotes.toggle() }
+          .help("Notes · ⇧⌘N").accessibilityLabel("Toggle notes")
         Menu {
+          Button(workspace.selectedArticle?.saved == true ? "Saved" : "Save article") {
+            workspace.saveCurrent()
+          }.disabled(workspace.selectedArticle?.saved == true)
+          Divider()
           Button("Copy link") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(reader.url.absoluteString, forType: .string)
@@ -285,143 +261,19 @@ struct MacWorkspaceView: View {
 
   }
 
-  private var sidebar: some View {
-    VStack(spacing: 0) {
-      HStack(spacing: 9) {
-        ArcticMark().frame(width: 25, height: 25)
-        Text("Arctic").font(.system(size: 20, weight: .semibold, design: .rounded))
-        Spacer()
-        Button {
-          workspace.showOpen = true
-        } label: {
-          Image(systemName: "plus")
-        }
-        .buttonStyle(.plain).help("Open article · ⌘K").accessibilityLabel("Open article")
-      }.padding(.horizontal, 20).padding(.top, 18).padding(.bottom, 16)
-      Button {
-        workspace.showOpen = true
-      } label: {
-        HStack {
-          Image(systemName: "magnifyingglass")
-          Text("Find or open")
-          Spacer()
-          Text("⌘K").font(.caption)
-        }
-        .foregroundStyle(.secondary).padding(10).background(
-          .quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
-      }.buttonStyle(.plain).padding(.horizontal, 12).padding(.bottom, 14)
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 3) {
-          ForEach([MacLibraryFolder.saved, .favourites, .downloaded], id: \.self) { folder in
-            folderRow(folder)
-          }
-          if !workspace.tabs.isEmpty {
-            sectionTitle("OPEN ARTICLES")
-            ForEach(workspace.tabs) { tab in
-              HStack(spacing: 8) {
-                Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 18)
-                Button {
-                  workspace.select(tab.url)
-                } label: {
-                  Text(tab.title).lineLimit(2).multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-                    .contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityIdentifier("tab-" + tab.url.lastPathComponent)
-                Button {
-                  workspace.close(tab.url)
-                } label: {
-                  Image(systemName: "xmark").font(.system(size: 10, weight: .semibold)).frame(
-                    width: 20, height: 24)
-                }
-                .buttonStyle(.plain).foregroundStyle(.tertiary).help("Close article")
-                .accessibilityLabel("Close " + tab.title)
-              }.padding(.horizontal, 10).padding(.vertical, 3)
-                .background {
-                  if workspace.selectedURL == tab.url {
-                    RoundedRectangle(cornerRadius: 10).fill(ArcticBrand.accent.opacity(0.13))
-                      .matchedGeometryEffect(id: "tab-selection", in: selection)
-                  }
-                }
-                .contextMenu {
-                  Button("Close article") { workspace.close(tab.url) }
-                  Button("Copy link") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(tab.url.absoluteString, forType: .string)
-                  }
-                }
-            }
-          }
-          if !workspace.store.allTags.isEmpty {
-            sectionTitle("COLLECTIONS")
-            ForEach(workspace.store.allTags, id: \.self) { folderRow(.tag($0)) }
-          }
-          sectionTitle("YOUR LIBRARY")
-          sidebarButton("Notebook", symbol: "text.book.closed", selected: workspace.showNotebook) {
-            workspace.library()
-            workspace.showNotebook = true
-          }
-          sidebarButton("Reading stats", symbol: "chart.bar", selected: false) {
-            workspace.showStats = true
-          }
-          folderRow(.history)
-          folderRow(.archive)
-        }.padding(.horizontal, 12).padding(.bottom, 16)
-      }
-      Divider().padding(.horizontal, 18)
-      HStack {
-        Button {
-          workspace.importList()
-        } label: {
-          Label("Import", systemImage: "square.and.arrow.down")
-        }
-        Spacer()
-        Button {
-          workspace.showSettings = true
-        } label: {
-          Image(systemName: "gearshape")
-        }.help("Automatic tags")
-        Button {
-          workspace.showShortcuts = true
-        } label: {
-          Image(systemName: "questionmark.circle")
-        }.help("Keyboard shortcuts · ?")
-      }.buttonStyle(.plain).foregroundStyle(.secondary).padding(18)
-    }
-    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: workspace.selectedURL)
-  }
-
-  private func sectionTitle(_ title: String) -> some View {
-    Text(title).font(.system(size: 9, weight: .semibold)).tracking(1.2).foregroundStyle(.tertiary)
-      .padding(.horizontal, 10).padding(.top, 19).padding(.bottom, 7)
-  }
-  private func folderRow(_ folder: MacLibraryFolder) -> some View {
-    sidebarButton(
-      folder.title, symbol: folder.symbol,
-      selected: workspace.selectedURL == nil && !workspace.showNotebook
-        && workspace.folder == folder
-    ) { workspace.library(folder) }
-  }
-  private func sidebarButton(
-    _ title: String, symbol: String, selected: Bool, action: @escaping () -> Void
-  ) -> some View {
-    Button(action: action) {
-      HStack(spacing: 10) {
-        Image(systemName: symbol).frame(width: 18).foregroundStyle(
-          selected ? ArcticBrand.accent : .secondary)
-        Text(title).lineLimit(1)
-        Spacer(minLength: 0)
-      }.font(.system(size: 13, weight: selected ? .medium : .regular))
-        .padding(.horizontal, 10).padding(.vertical, 9).contentShape(
-          RoundedRectangle(cornerRadius: 9)
-        )
-        .background(
-          selected ? ArcticBrand.accent.opacity(0.10) : .clear,
-          in: RoundedRectangle(cornerRadius: 9))
-    }.buttonStyle(.plain)
-  }
   private func installKeyMonitor() {
     guard keyMonitor == nil else { return }
     keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      // macOS reserves Command-? for Help search. Handle our documented
+      // shortcut before menu dispatch, including when a text field has focus.
+      let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+      if modifiers.contains([.command, .shift]),
+        !modifiers.contains(.option), !modifiers.contains(.control),
+        ["/", "?"].contains(event.charactersIgnoringModifiers ?? "")
+      {
+        workspace.showShortcuts = true
+        return nil
+      }
       guard event.characters == "?", !event.modifierFlags.contains(.command),
         !workspace.showOpen, !workspace.showSettings,
         !(NSApp.keyWindow?.firstResponder is NSTextView)

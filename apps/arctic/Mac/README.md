@@ -12,9 +12,17 @@ development build, not a notarized distribution.
 
 ## Interaction
 
-- The native, resizable sidebar holds library folders, collections and open
-  articles. Its toggle respects Reduce Motion. The active article has a quiet
-  glacier-blue selection; switching articles does not slide through other pages.
+- The left sidebar holds library folders and collections in compact, text-only
+  rows. Open articles sit in a horizontal strip above the content. Notes open
+  on the right. Selection uses a neutral wash in both system appearances.
+- Tabs have fixed widths and reserved close-button space, so hover does not
+  move their titles. Overflow scrolls to reveal the selected tab. Close is also
+  available through the context menu and keyboard.
+- Hover and selection washes use a 140 ms fade; Reduce Motion removes it.
+  Article switches mount the retained reader immediately. Opening notes changes
+  the reader width once, without a spring resizing WebKit on every frame. The
+  notes content enters with a 180 ms fade and 6 pt translation inside its final
+  bounds; Reduce Motion removes both.
 - **⌘K** finds a library article or opens a URL. Opening does not save it.
   Saved, Favourites, Downloaded, History and Archive keep the iPhone rules.
 - **⇧⌘[ / ⇧⌘]** switch articles; **⌘W** closes an article;
@@ -124,3 +132,33 @@ Use Instruments for compositor hitches and physical high-refresh performance;
 these counters cannot establish sustained 120 fps. Compare cold extraction,
 cold saved HTML and warm tab switches separately, using the replay server rather
 than live publisher timing.
+
+## Design reference
+
+The sidebar proportions and restrained hierarchy reference [Search by Office
+Commun](https://github.com/driceroland/Search/tree/245a26145cf7a7e7bd5bf47744a334bcaeea5096).
+Its `Design.swift` and `Side.swift` use a neutral canvas, soft selection, compact
+rows, and a small motion vocabulary. Arctic uses its own native components and
+system colours. The reference's sidebar tab layout becomes library navigation
+here; articles remain across the top and notes remain on the right. No Search
+source or assets are bundled.
+
+Keep frequent keyboard navigation immediate. Apply hover motion to small
+backgrounds, not to the document, table, or a whole view hierarchy. Preserve the
+bounded reader pool and native reusable library rows when changing this chrome.
+
+### Chrome validation — 24 September 2026
+
+Release Mac build, iOS Simulator regression build, strict Swift formatting, and
+code-signature verification passed. Direct computer-use checks on the Mac
+confirmed saved-article opening, five top tabs with overflow reveal, keyboard
+cycling, close/reopen, sidebar toggling, right-side notes, per-article draft
+retention, and shortcut help. The temporary draft was cleared without saving.
+The Command-? Help-menu conflict found during these checks was corrected and
+rechecked on the packaged Release build.
+
+Screenshots were checked in the Mac's dark appearance. Light appearance and
+Reduce Motion use semantic colours and motion guards but were not visually
+checked in this pass. XCTest UI startup failed before executing a test with
+“Timed out while enabling automation mode” (`/tmp/arctic-chrome-ui.xcresult`).
+This pass does not establish a frame-rate or hitch improvement.
