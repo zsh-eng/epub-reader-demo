@@ -57,7 +57,9 @@ original absolute paths as evidence, not as instructions to use the old repo.
   shows both required-field errors. No production account or data was used.
 
 The canonical local app is `/Users/admin/workbench/apps/spaced2`. The former
-`/Users/admin/spaced2` path is a compatibility symlink to this app.
+`/Users/admin/spaced2` directory contains only a location note. Open Workbench
+for future work. A directory symlink cannot be used here because Codex rejects
+symlinks at configured workspace roots.
 The retired checkout is kept under ignored `migration-backups.local/spaced2`;
 private environment files, Wrangler state and `.local` data directories moved
 to the canonical app. The archive is for recovery, not continued development.
