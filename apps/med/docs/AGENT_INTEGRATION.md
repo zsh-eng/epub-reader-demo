@@ -64,21 +64,21 @@ node /path/to/workbench/apps/med/dist/cli.js review create \
   --base main --head HEAD
 ```
 
-Use the repository's intended base branch, such as `main`, `develop`, or `origin/main`. med compares the two tips directly. It does not fetch remote refs or calculate their common ancestor. A remote-tracking ref such as `origin/main` uses its locally stored commit.
+Use the repository's intended base branch, such as `main`, `develop`, or `origin/main`. Without `--merge-base`, med compares the two tips directly. It does not fetch remote refs. A remote-tracking ref such as `origin/main` uses its locally stored commit.
 
-For a pull-request-style review that excludes changes made only on the base branch, calculate the common ancestor first:
+For a pull-request-style review, use the intended base branch and `--merge-base`. This compares the common ancestor with the feature tip and excludes changes made only on the base branch:
 
 ```sh
-review_base=$(git -C /path/to/feature-worktree merge-base main HEAD)
-node /path/to/workbench/apps/med/dist/cli.js review create \
-  --title "Feature changes" \
-  --repo /path/to/feature-worktree \
-  --base "$review_base" --head HEAD
+node /Users/admin/workbench/apps/med/dist/cli.js review create \
+  --title "Feature review" --repo /path/to/feature-worktree \
+  --base main --head HEAD --merge-base
 ```
 
-After merging `main` or `develop` into the feature branch, calculate the base again and create a new review. Saved links resolve branch names to exact commits at creation time; they do not move when a branch changes. A before/after task range can include changes from a base-branch merge, so use the common ancestor when the intended scope is the feature's changes. Set the base separately for each repository in a multi-repository review. Manifest range endpoints also accept branch names.
+Use `develop` when that is the integration branch. For a stacked change, use the preceding feature branch as the base. Choose the base separately for each repository. After merging or rebasing, create a new review. The host resolves the common ancestor and head to exact commits; an existing link keeps its captured comparison. Manifest ranges use `"mergeBase": true` for the same behavior. Without this flag, range comparisons remain direct endpoint comparisons. Remote-tracking refs use locally available history; med does not fetch automatically.
 
-In the app, open **Compare revisions…** from the review toolbar menu and enter the base and head refs. This also compares the two tips directly.
+In the app, **Compare against** lists local branches and remote-tracking branches. It uses the common ancestor of the chosen base and the selected tip. Changing the comparison starts browsing; **Return to review** restores the original captured comparison. The saved review is unchanged. **Compare revisions…** remains available for exact, direct endpoint comparisons.
+
+**Push** opens a dialog with the exact commit, repository, remote, and destination branch. Select an existing branch or type a new name, then select **Push to remote**. This pushes committed history only. med does not force, delete remote branches, or push tags. Repository push hooks still run. A rejected push reports how to proceed. A captured working comparison cannot be pushed as a commit.
 
 ### Capture working changes
 
@@ -123,7 +123,7 @@ A link opens its first target. The compact review bar shows a target selector wh
 
 Add comments to lines or line ranges in the saved diff. The comment card shows **You** and the selected lines: **L** for the old side, **R** for the new side. Write the comment, then select **Comment** or press Cmd/Ctrl+Enter. **Cancel** or Escape closes the draft. Saved cards keep the same text layout, with **Reply**, **Edit**, and **Delete** below the text. Clicking away, **Cancel**, or Escape clears the line selection. With a comment draft open, selecting another line range moves the editor to that range. Comment additions, edits, and deletions appear immediately while med saves them in the background. If saving fails, med restores the affected content and reports the error; unsaved comment text remains available for retry. **Copy comments** waits for pending writes before exporting.
 
-**Copy comments** collects comments from all targets in that review, including inactive targets. It uses the same field names as Codex diff comments: **File**, **Workspace**, **Side**, **Lines**, **Diff hunk**, and **Comment**. Each comment also includes the exact comparison endpoints, capture type, and repository, target, and comment IDs. Replies refer to their parent comment. Diff excerpts include the selected lines and up to three nearby patch rows on each side. If the saved patch does not cover the selection, the export uses clearly labelled captured source lines instead. It never reads current working files for this context. After a successful copy, the copy icon changes to a checkmark briefly. Copying does not delete comments. Paste the text into the agent that should handle it.
+**Copy comments** collects comments from all comparisons and tabs visited within that review, including inactive tabs and commits selected from history. The first comment on another comparison captures its source for later export. The original review targets remain unchanged. It uses the same field names as Codex diff comments: **File**, **Workspace**, **Side**, **Lines**, **Diff hunk**, and **Comment**. Each comment also includes the exact comparison endpoints, capture type, and repository, target, and comment IDs. Replies refer to their parent comment. Diff excerpts include the selected lines and up to three nearby patch rows on each side. If the saved patch does not cover the selection, the export uses clearly labelled captured source lines instead. It never reads current working files for this context. After a successful copy, the copy icon changes to a checkmark briefly. Copying does not delete comments. Paste the text into the agent that should handle it.
 
 Use **Clear** next to **Copy comments**, then **Confirm clear**, to remove comments from this review across its targets. Other saved reviews are unchanged. If comments changed after the confirmation was opened, med rejects the stale clear request. Clearing comments does not delete the captured review or change source files.
 
@@ -141,8 +141,8 @@ When handing off code changes, provide a med review link if the user's med host 
 - At the start, record the relevant repositories/worktrees, starting commit IDs, and any pre-existing changes.
 - Use `node /path/to/workbench/apps/med/dist/cli.js review repos` to discover the user's registered review scope.
 - Match the task's actual working directories to that list. Include only repositories changed for this task. Do not include every registered repository.
-- Prefer exact before/after commit IDs for completed changes. For uncommitted work, use `--working` and explain any pre-existing changes included in the snapshot.
-- For a feature review, use that repository's intended base branch (`main`, `develop`, or another agreed ref). `--base <branch> --head HEAD` compares tips directly. To exclude changes made only on the base branch, pass `git merge-base <base-branch> HEAD`'s result as `--base`. Recalculate after merging the base branch and create a new link. Do not guess the same base for every repository or fetch without authorization.
+- For work directly on `main`, use the recorded pre-task commit and completed commit as exact before/after endpoints. Comparing `main` with `HEAD` after committing on `main` would be empty. For uncommitted work, use `--working` and explain any pre-existing changes included in the snapshot.
+- For a feature review, use that repository's intended base branch (`main`, `develop`, or another agreed ref). Use `--base <branch> --head HEAD --merge-base` to exclude changes made only on the base branch. For stacked changes, use the previous feature branch as the base. Recalculate after merging the base branch and create a new link. Do not guess the same base for every repository or fetch without authorization.
 - Use `review create` for one target, or `review create --manifest` for several repositories or comparisons. Include its Markdown link in the final response.
 - Do not commit, switch branches, add unrelated repositories, or edit AGENTS.md just to generate a link. Follow the user's authorization for those actions.
 - If the host is unavailable or a relevant repository is missing, state what is needed. Do not invent a URL or print the host's access token.
@@ -153,4 +153,4 @@ When handing off code changes, provide a med review link if the user's med host 
 
 Saved reviews are local to the machine running med. A localhost link will not open the same review on another person's computer. Registration is still session-local; saved review records and comments are persistent. Clear comments when they are no longer needed.
 
-One review can contain up to 16 targets. Capture is bounded to 500 changed files and 24 MiB of patch/source content per target. The store permits 64 MiB per saved record, 128 records, 512 MiB total saved data, and 500 comments per review. Comment export is limited to 8 MiB. It reports an error instead of truncating comments; narrow selected line ranges or remove unneeded comments before copying. A capture limit produces an error; narrow the comparison. Binary or oversized files retain diff metadata but cannot supply text context for comments. There is no automatic deletion of old saved reviews.
+One review can start with up to 16 targets and retain up to 128 captures in total, including other comparisons where comments were added. Capture is bounded to 500 changed files and 24 MiB of patch/source content per target. The store permits 64 MiB per saved record, 128 records, 512 MiB total saved data, and 500 comments per review. Comment export is limited to 8 MiB. It reports an error instead of truncating comments; narrow selected line ranges or remove unneeded comments before copying. A capture limit produces an error; narrow the comparison. Binary or oversized files retain diff metadata but cannot supply text context for comments. There is no automatic deletion of old saved reviews.
