@@ -16,6 +16,11 @@ const engines =
   builds?.split(",") ??
   (process.argv.includes("--native-only") ? ["twinkleplop"] : ["shiki", "twinkleplop"]);
 const profile = process.argv.includes("--profile");
+const rounds = Number(
+  process.argv.find((argument) => argument.startsWith("--rounds="))?.slice(9) ?? 3,
+);
+if (!Number.isInteger(rounds) || rounds < 1 || rounds > 20)
+  throw new Error("--rounds must be 1–20");
 const corpus = JSON.parse(await readFile("helpers/highlighting/corpus.json", "utf8"));
 await mkdir(directory, { recursive: true });
 for (const engine of engines) {
@@ -50,7 +55,7 @@ try {
     "Corpus",
   ]);
   browser = await chromium.launch({ headless: true });
-  for (let round = 0; round < 3; round++)
+  for (let round = 0; round < rounds; round++)
     for (const engine of round % 2 ? [...engines].reverse() : engines) {
       host = spawn(
         process.execPath,
@@ -229,7 +234,49 @@ try {
             await writeFile(join(directory, `${file.name}-${engine}-${round}.trace.json`), trace);
             await cdp.detach();
           }
-          const result = { round, engine, file: file.name, ms, stages, errors };
+          // Reopen through the production tab action. The cache may already have syntax,
+          // so readiness must not require another worker reply.
+          await page.getByRole("tab", { name: "Changes", exact: true }).click();
+          await page.locator('[data-file-pane="main"]').waitFor({ state: "hidden" });
+          const tab = page.getByRole("tab", { name: file.name, exact: true });
+          const reopened = await tab.evaluate(
+            (element) =>
+              new Promise((accept, reject) => {
+                window.__stages = [];
+                window.__start = performance.now();
+                element.click();
+                const observe = () => {
+                  const pane = document.querySelector('[data-file-pane="main"]');
+                  const tokens = [];
+                  function collect(root) {
+                    tokens.push(...root.querySelectorAll("[data-line] span[style]"));
+                    for (const child of root.querySelectorAll("*"))
+                      if (child.shadowRoot) collect(child.shadowRoot);
+                  }
+                  if (pane) collect(pane);
+                  if (
+                    tokens.length >= 20 &&
+                    new Set(tokens.map((t) => getComputedStyle(t).color)).size >= 3
+                  ) {
+                    const visible = performance.now() - window.__start;
+                    requestAnimationFrame(() =>
+                      requestAnimationFrame(() =>
+                        accept({
+                          visible,
+                          ms: performance.now() - window.__start,
+                          stages: window.__stages,
+                        }),
+                      ),
+                    );
+                  } else if (performance.now() - window.__start > 30000)
+                    reject(new Error("Reopen timeout"));
+                  else requestAnimationFrame(observe);
+                };
+                requestAnimationFrame(observe);
+              }),
+          );
+          if (errors.length) throw new Error(errors.join("\n"));
+          const result = { round, engine, file: file.name, ms, stages, reopened, errors };
           reports.push(result);
           console.log(JSON.stringify(result));
           if (round === 0)
@@ -241,11 +288,12 @@ try {
                 capturedAt: new Date().toISOString(),
                 profiling: profile,
                 engines,
+                rounds,
                 machine: cpus()[0].model,
                 browser: browser.version(),
                 corpus,
                 method:
-                  "Fresh browser context; production host and worker. Timer starts at release of an already fetched file response. Ends after a file worker reply, visible highlighted main pane, and two animation frames. Excludes app startup and Git read; includes worker language loading, message transfer, virtualized UI, and observer overhead. Three rounds per engine; engine order alternates when comparing engines. OS caches warm. Phase timestamps use the same start; worker-reply is observed before pool decoding, and visible is detected before the two final animation frames.",
+                  "Fresh browser context; production host and worker. Timer starts at release of an already fetched file response. Ends after a file worker reply, visible highlighted main pane, and two animation frames. Excludes app startup and Git read; includes worker language loading, message transfer, virtualized UI, and observer overhead. Configured rounds per engine; engine order alternates when comparing engines. OS caches warm. Reopened measurements start immediately before a programmatic click on the existing file tab, after returning to Changes; they include fresh file I/O and accept cached syntax. Phase timestamps use the same start; worker-reply is observed before pool decoding, and visible is detected before the two final animation frames.",
                 runs: reports,
               },
               null,

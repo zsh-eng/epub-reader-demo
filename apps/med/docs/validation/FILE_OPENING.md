@@ -1,4 +1,7 @@
-# File-opening performance
+# File-opening performance: first pass
+
+This is the earlier measurement record. The [second pass](FILE_OPENING_SECOND_PASS.md)
+replaces the full HAST transfer and changes file-open scheduling.
 
 Java/C++ support shipped on remote main as `1e213b1` and `0dec97c`. This next
 pass reduces rendering work for all supported languages. It does not change
