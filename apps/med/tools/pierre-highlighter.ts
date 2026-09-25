@@ -7,6 +7,7 @@ export function pierreHighlighter(): Plugin {
   const baseline = process.env.MED_HIGHLIGHTER === "shiki";
   const runtime = JSON.stringify(resolve("src/web/highlighting/runtime.ts"));
   const languages = JSON.stringify(resolve("src/web/highlighting/languages.ts"));
+  const compact = JSON.stringify(resolve("src/web/highlighting/compact-file.ts"));
   function replace(source: string, from: string, to: string) {
     if (!source.includes(from))
       throw new Error(`Pierre integration changed; missing ${from.slice(0, 70)}`);
@@ -67,18 +68,29 @@ export async function resolveLanguage(name) {
 }`;
       }
       if (id.endsWith("/worker/WorkerPoolManager.js")) {
-        return replace(
+        // Native workers load their own small grammars. The main thread only
+        // needs plaintext while waiting; fallback rendering loads syntax on demand.
+        source = replace(
           source,
-          "\n\thandleWorkerMessage(managedWorker, response) {",
-          `\n\thandleWorkerMessage(managedWorker, response) {
-    if (response.type === "success" && response.requestType === "file" && typeof response.result === "string")
-      response.result = JSON.parse(response.result);`,
+          "const mainThreadLangs = langs.filter((lang) => !areLanguagesAttached(lang));",
+          "const mainThreadLangs = [];",
         );
+        // Decode only current file responses, inside Pierre's error boundary.
+        source = replace(
+          source,
+          'case "file": {\n\t\t\t\t\t\tif (task.type !== "file") throw new Error("handleWorkerMessage: task/response dont match");\n\t\t\t\t\t\tconst { result, options } = response;',
+          'case "file": {\n\t\t\t\t\t\tif (task.type !== "file") throw new Error("handleWorkerMessage: task/response dont match");\n\t\t\t\t\t\tconst { options } = response;',
+        );
+        source = replace(
+          source,
+          "if (!this.isCurrentRenderTask(task) || !areFileRenderOptionsEqual(options, this.getFileRenderOptions())) throw IGNORE_RESPONSE;",
+          'if (!this.isCurrentRenderTask(task) || !areFileRenderOptionsEqual(options, this.getFileRenderOptions())) throw IGNORE_RESPONSE;\nconst result = typeof response.result === "string" ? expandCompactFile(JSON.parse(response.result)) : response.result;',
+        );
+        return `import { expandCompactFile } from ${compact};\n${source}`;
       }
       if (id.endsWith("/worker/worker.js")) {
-        // File render results are a dense, JSON-compatible HAST tree. A string
-        // avoids structured-cloning thousands of nested objects across threads.
-        // Decode at the pool boundary so Pierre's cache/render API is unchanged.
+        // Transfer compact styled lines. The pool constructs HAST lazily for
+        // the viewport while preserving the full lexical state of the file.
         source = replace(
           source,
           "\nfunction sendFileSuccess(id, result, options) {",
@@ -108,6 +120,21 @@ export async function resolveLanguage(name) {
           "\n\tconst fileOptions = {",
           "\n\tawait highlighter.prepareSource(file.lang ?? getFiletypeFromFileName(file.name), file.contents);\n\tconst fileOptions = {",
         );
+        source = replace(
+          source,
+          "renderFileWithHighlighter(file, highlighter, fileOptions), fileOptions",
+          `compactFile(file.contents, highlighter, {
+            lang: file.lang ?? getFiletypeFromFileName(file.name),
+            ...(typeof fileOptions.theme === "string" ? { theme: fileOptions.theme } : { themes: fileOptions.theme }),
+            cssVariablePrefix: formatCSSVariablePrefix("token"),
+            tokenizeMaxLineLength: fileOptions.tokenizeMaxLineLength,
+          }, {
+            themeStyles: getHighlighterThemeStyles({ theme: fileOptions.theme, highlighter }),
+            baseThemeType: typeof fileOptions.theme === "string" ? highlighter.getTheme(fileOptions.theme).type : undefined,
+            useTokenTransformer: fileOptions.useTokenTransformer === true,
+          }), fileOptions`,
+        );
+        source = `import { compactFile } from ${compact};\n${source}`;
         source = replace(
           source,
           "\n\tsendDiffSuccess(id,",

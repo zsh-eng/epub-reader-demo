@@ -1787,3 +1787,57 @@ test.each(["java", "cpp"])("%s is highlighted by the real syntax worker", async 
     .toBeGreaterThan(2);
   expect(mount!.textContent).not.toContain("Syntax highlighting is not available");
 });
+
+test("worker highlighting preserves distant multiline state across file switches", async () => {
+  const text = [
+    "class Demo {",
+    "/*",
+    ...Array.from({ length: 300 }, (_, i) => `comment ${i}`),
+    "*/",
+    "int count = 42;",
+    "}",
+  ].join("\n");
+  function Harness() {
+    const [second, setSecond] = useState(false);
+    return (
+      <WorkerPoolContextProvider
+        highlighterOptions={{ theme: "github-dark" }}
+        poolOptions={{ workerFactory: () => new PierreWorker(), poolSize: 1 }}
+      >
+        <button onClick={() => setSecond((value) => !value)}>Switch file</button>
+        <FullFileView
+          {...props}
+          vimEnabled
+          line={second ? 1 : 290}
+          file={{
+            ...base,
+            path: "Demo.java",
+            identity: second ? "short" : "long",
+            text: second ? "class Other { int value = 7; }" : text,
+          }}
+        />
+      </WorkerPoolContextProvider>
+    );
+  }
+  render(<Harness />);
+  const shadow = () => document.querySelector("diffs-container")?.shadowRoot;
+  const line = (number: number) => shadow()?.querySelector(`[data-line="${number}"]`);
+  const color = (number: number) =>
+    line(number)?.querySelector("span[style]")?.getAttribute("style")?.toLowerCase();
+  await expect.poll(() => line(290)?.textContent).toBe("comment 287");
+  await expect.poll(() => color(290)).toContain("#6a737d");
+  expect(lines()!.length).toBeLessThan(300);
+  const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
+  await pane.click();
+  await userEvent.keyboard("gg");
+  await expect.poll(() => line(1)?.textContent).toBe("class Demo {");
+  await expect.poll(() => color(1)).toContain("#f97583");
+  await userEvent.keyboard("G");
+  await expect.poll(() => line(304)?.textContent).toBe("int count = 42;");
+  await expect.poll(() => color(304)).toContain("#f97583");
+  await page.getByRole("button", { name: "Switch file" }).click();
+  await expect.poll(() => line(1)?.textContent).toBe("class Other { int value = 7; }");
+  await page.getByRole("button", { name: "Switch file" }).click();
+  await expect.poll(() => line(290)?.textContent).toBe("comment 287");
+  await expect.poll(() => color(290)).toContain("#6a737d");
+});

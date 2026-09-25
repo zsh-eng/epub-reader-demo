@@ -5,6 +5,7 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import {
   renderDiffWithHighlighter,
   renderFileWithHighlighter,
+  getHighlighterThemeStyles,
   parsePatchFiles,
   type DiffsHighlighter,
 } from "@pierre/diffs";
@@ -17,6 +18,8 @@ import {
   themeNames,
   twinkleplop,
 } from "../../helpers/highlighting/parity";
+
+import { compactFile, expandCompactFile } from "../../src/web/highlighting/compact-file";
 
 let reference: Awaited<ReturnType<typeof createHighlighter>>;
 let actual: Awaited<ReturnType<typeof twinkleplop>>;
@@ -48,6 +51,58 @@ function compare(
   const t = reference.getTheme(theme);
   return compareRuns(normalizedRuns(expected, t.fg, t.bg), normalizedRuns(observed, t.fg, t.bg));
 }
+describe("compact files through Pierre's renderer contract", () => {
+  it.each(fixtures)(
+    "preserves complete HAST for %s, including lines opened out of order",
+    (name) => {
+      const lang = name.endsWith("java") ? "java" : "cpp";
+      const source = readFileSync(
+        new URL(`../fixtures/highlighting/${name}`, import.meta.url),
+        "utf8",
+      );
+      for (const ending of ["\n", "\r\n", "\r"])
+        for (const theme of [...themeNames, { light: "github-light", dark: "github-dark" }])
+          for (const useTokenTransformer of [false, true]) {
+            const text = source.replaceAll("\n", ending);
+            const expected = renderFileWithHighlighter(
+              { name, lang, contents: text },
+              actual as unknown as DiffsHighlighter,
+              { theme, useTokenTransformer, tokenizeMaxLineLength: 1000 },
+            );
+            const packet = compactFile(
+              text,
+              actual,
+              {
+                lang,
+                ...(typeof theme === "string" ? { theme } : { themes: theme }),
+                cssVariablePrefix: "--diffs-token-",
+                tokenizeMaxLineLength: 1000,
+              },
+              {
+                themeStyles: getHighlighterThemeStyles({
+                  theme,
+                  highlighter: actual as unknown as DiffsHighlighter,
+                }),
+                baseThemeType:
+                  typeof theme === "string"
+                    ? (actual.getTheme(theme).type as "light" | "dark")
+                    : undefined,
+                useTokenTransformer,
+              },
+            );
+            const result = expandCompactFile(JSON.parse(JSON.stringify(packet)));
+            const last = result.code.length - 1;
+            expect(JSON.parse(JSON.stringify(result.code[last]))).toEqual(
+              JSON.parse(JSON.stringify(expected.code[last])),
+            );
+            expect(JSON.parse(JSON.stringify(result))).toEqual(
+              JSON.parse(JSON.stringify(expected)),
+            );
+          }
+    },
+  );
+});
+
 describe("Java/C++ through production language loading, adapter, and Pierre", () => {
   it.each(fixtures)(
     "matches the pinned Shiki renderer for %s in every theme and line ending",

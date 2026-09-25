@@ -21,7 +21,7 @@ export interface AdapterOptions {
   tokenize(source: string, lang: string): Tokenization | undefined;
   getTheme(name: string): AdapterTheme;
 }
-interface Token {
+export interface StyledToken {
   content: string;
   offset: number;
   __lineChar: number;
@@ -35,14 +35,14 @@ interface Context {
 }
 interface Transformer {
   preprocess?(this: Context, source: string, options: HighlightOptions): string | void;
-  tokens?(this: Context, lines: Token[][]): Token[][] | void;
+  tokens?(this: Context, lines: StyledToken[][]): StyledToken[][] | void;
   span?(
     this: Context,
     node: Element,
     line: number,
     column: number,
     parent: Element,
-    token: Token,
+    token: StyledToken,
   ): Element | void;
   line?(this: Context, node: Element, line: number): Element | void;
   code?(this: Context, node: Element): Element | void;
@@ -237,132 +237,139 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
     styles.set(key, cached);
     return cached;
   }
-  return {
-    getTheme,
-    codeToHast(input: string, options: HighlightOptions): Root {
-      const transformers = options.transformers ?? [];
-      const context: Context = {
-        addClassToHast(node, ...classes) {
-          const existing = node.properties.class ?? node.properties.className;
-          node.properties.class = [
-            ...(Array.isArray(existing) ? existing : existing ? [existing] : []),
-            ...classes,
-          ].join(" ");
-          return node;
-        },
-      };
-      let source = input.replace(/\r\n?/g, "\n");
-      for (const transform of transformers)
-        source = transform.preprocess?.call(context, source, options) ?? source;
-      const result =
-        options.lang === "text" || options.lang === "plaintext"
-          ? undefined
-          : dependencies.tokenize(source, options.lang);
-      const spans: { start: number; end: number; kind: string }[] = [];
-      let cursor = 0;
-      if (result) {
-        for (let index = 0; index < result.tokens.length; index += 3) {
-          const kind = result.tokens[index];
-          const start = result.tokens[index + 1];
-          const end = result.tokens[index + 2];
-          if (start < cursor || end < start || end > source.length)
-            throw new Error("Invalid Twinkleplop token range");
-          if (start > cursor) spans.push({ start: cursor, end: start, kind: "plain" });
-          if (end > start) spans.push({ start, end, kind: result.token_types[kind] ?? "plain" });
-          cursor = end;
+  const createContext = (): Context => ({
+    addClassToHast(node, ...classes) {
+      const existing = node.properties.class ?? node.properties.className;
+      node.properties.class = [
+        ...(Array.isArray(existing) ? existing : existing ? [existing] : []),
+        ...classes,
+      ].join(" ");
+      return node;
+    },
+  });
+
+  function codeToTokens(
+    input: string,
+    options: HighlightOptions,
+    context = createContext(),
+  ): StyledToken[][] {
+    const transformers = options.transformers ?? [];
+    let source = input.replace(/\r\n?/g, "\n");
+    for (const transform of transformers)
+      source = transform.preprocess?.call(context, source, options) ?? source;
+    const result =
+      options.lang === "text" || options.lang === "plaintext"
+        ? undefined
+        : dependencies.tokenize(source, options.lang);
+    const spans: { start: number; end: number; kind: string }[] = [];
+    let cursor = 0;
+    if (result) {
+      for (let index = 0; index < result.tokens.length; index += 3) {
+        const kind = result.tokens[index];
+        const start = result.tokens[index + 1];
+        const end = result.tokens[index + 2];
+        if (start < cursor || end < start || end > source.length)
+          throw new Error("Invalid Twinkleplop token range");
+        if (start > cursor) spans.push({ start: cursor, end: start, kind: "plain" });
+        if (end > start) spans.push({ start, end, kind: result.token_types[kind] ?? "plain" });
+        cursor = end;
+      }
+    }
+    if (cursor < source.length) spans.push({ start: cursor, end: source.length, kind: "plain" });
+    const selectedThemes = options.themes
+      ? Object.entries(options.themes)
+      : [["", options.theme ?? ""]];
+    type Style = Pick<StyledToken, "color" | "fontStyle"> & { htmlStyle: Record<string, string> };
+    const kindStyles = new Map<string, Style>();
+    const equivalentStyles = new Map<string, Style>();
+    const styleFor = (kind: string): Style => {
+      const cached = kindStyles.get(kind);
+      if (cached) return cached;
+      const token: Style = { htmlStyle: {} };
+      for (const [mode, name] of selectedThemes) {
+        const style =
+          kind === "plain" ? { color: getTheme(name).fg, fontStyle: 0 } : tokenStyle(name, kind);
+        if (!mode) {
+          token.color = style.color;
+          token.fontStyle = style.fontStyle;
+          token.htmlStyle.color = style.color;
+          if (style.fontStyle) Object.assign(token.htmlStyle, fontCSS(style.fontStyle));
+        } else {
+          const prefix = `${options.cssVariablePrefix ?? "--shiki-"}${mode}`;
+          token.htmlStyle[prefix] = style.color;
+          if (style.fontStyle)
+            for (const [property, value] of Object.entries(fontCSS(style.fontStyle)))
+              token.htmlStyle[`${prefix}-${property}`] = value;
         }
       }
-      if (cursor < source.length) spans.push({ start: cursor, end: source.length, kind: "plain" });
-      const selectedThemes = options.themes
-        ? Object.entries(options.themes)
-        : [["", options.theme ?? ""]];
-      type Style = Pick<Token, "color" | "fontStyle"> & { htmlStyle: Record<string, string> };
-      const kindStyles = new Map<string, Style>();
-      const equivalentStyles = new Map<string, Style>();
-      const styleFor = (kind: string): Style => {
-        const cached = kindStyles.get(kind);
-        if (cached) return cached;
-        const token: Style = { htmlStyle: {} };
-        for (const [mode, name] of selectedThemes) {
-          const style =
-            kind === "plain" ? { color: getTheme(name).fg, fontStyle: 0 } : tokenStyle(name, kind);
-          if (!mode) {
-            token.color = style.color;
-            token.fontStyle = style.fontStyle;
-            token.htmlStyle.color = style.color;
-            if (style.fontStyle) Object.assign(token.htmlStyle, fontCSS(style.fontStyle));
-          } else {
-            const prefix = `${options.cssVariablePrefix ?? "--shiki-"}${mode}`;
-            token.htmlStyle[prefix] = style.color;
-            if (style.fontStyle)
-              for (const [property, value] of Object.entries(fontCSS(style.fontStyle)))
-                token.htmlStyle[`${prefix}-${property}`] = value;
-          }
-        }
-        const key = JSON.stringify(token);
-        const style = equivalentStyles.get(key) ?? token;
-        equivalentStyles.set(key, style);
-        kindStyles.set(kind, style);
-        return style;
+      const key = JSON.stringify(token);
+      const style = equivalentStyles.get(key) ?? token;
+      equivalentStyles.set(key, style);
+      kindStyles.set(kind, style);
+      return style;
+    };
+    let offset = 0;
+    let spanIndex = 0;
+    let lines = source.split("\n").map((line) => {
+      const end = offset + line.length;
+      const tokens: StyledToken[] = [];
+      let previousStyle: Style | undefined;
+      const addToken = (content: string, start: number, column: number, kind: string) => {
+        const style = styleFor(kind);
+        const previous = tokens[tokens.length - 1];
+        // Coalesce equal visible styles before Pierre adds character offsets
+        // and diff decorations. Each emitted token owns its mutable style.
+        if (previous && style === previousStyle) previous.content += content;
+        else
+          tokens.push({
+            content,
+            offset: start,
+            __lineChar: column,
+            ...style,
+            htmlStyle: { ...style.htmlStyle },
+          });
+        previousStyle = style;
       };
-      let offset = 0;
-      let spanIndex = 0;
-      let lines = source.split("\n").map((line) => {
-        const end = offset + line.length;
-        const tokens: Token[] = [];
-        let previousStyle: Style | undefined;
-        const addToken = (content: string, start: number, column: number, kind: string) => {
-          const style = styleFor(kind);
-          const previous = tokens[tokens.length - 1];
-          // Coalesce equal visible styles before Pierre adds character offsets
-          // and diff decorations. Each emitted token owns its mutable style.
-          if (previous && style === previousStyle) previous.content += content;
-          else
-            tokens.push({
-              content,
-              offset: start,
-              __lineChar: column,
-              ...style,
-              htmlStyle: { ...style.htmlStyle },
-            });
-          previousStyle = style;
-        };
-        // Parse the whole source first: a long line can change the grammar state
-        // of the next line. Only its rendered tokens are reduced to plain text.
-        if (options.tokenizeMaxLineLength && line.length > options.tokenizeMaxLineLength) {
-          if (line.length) addToken(line, offset, 0, "plain");
-        } else {
-          while (spanIndex < spans.length && spans[spanIndex].end <= offset) spanIndex++;
-          for (let index = spanIndex; index < spans.length && spans[index].start < end; index++) {
-            const span = spans[index];
-            const start = Math.max(offset, span.start);
-            const stop = Math.min(end, span.end);
-            const value = source.slice(start, stop);
-            // Pierre requests unstyled edge whitespace for selectable tokens.
-            const match =
-              options.mergeWhitespaces === "never" && /^(\s*)(\S[\s\S]*?)(\s*)$/.exec(value);
-            if (match && (match[1] || match[3])) {
-              if (match[1]) addToken(match[1], start, start - offset, "plain");
-              addToken(
-                match[2],
-                start + match[1].length,
-                start + match[1].length - offset,
-                span.kind,
-              );
-              if (match[3])
-                addToken(
-                  match[3],
-                  stop - match[3].length,
-                  stop - match[3].length - offset,
-                  "plain",
-                );
-            } else addToken(value, start, start - offset, span.kind);
-          }
+      // Parse the whole source first: a long line can change the grammar state
+      // of the next line. Only its rendered tokens are reduced to plain text.
+      if (options.tokenizeMaxLineLength && line.length > options.tokenizeMaxLineLength) {
+        if (line.length) addToken(line, offset, 0, "plain");
+      } else {
+        while (spanIndex < spans.length && spans[spanIndex].end <= offset) spanIndex++;
+        for (let index = spanIndex; index < spans.length && spans[index].start < end; index++) {
+          const span = spans[index];
+          const start = Math.max(offset, span.start);
+          const stop = Math.min(end, span.end);
+          const value = source.slice(start, stop);
+          // Pierre requests unstyled edge whitespace for selectable tokens.
+          const match =
+            options.mergeWhitespaces === "never" && /^(\s*)(\S[\s\S]*?)(\s*)$/.exec(value);
+          if (match && (match[1] || match[3])) {
+            if (match[1]) addToken(match[1], start, start - offset, "plain");
+            addToken(
+              match[2],
+              start + match[1].length,
+              start + match[1].length - offset,
+              span.kind,
+            );
+            if (match[3])
+              addToken(match[3], stop - match[3].length, stop - match[3].length - offset, "plain");
+          } else addToken(value, start, start - offset, span.kind);
         }
-        offset = end + 1;
-        return tokens;
-      });
-      for (const transform of transformers) lines = transform.tokens?.call(context, lines) ?? lines;
+      }
+      offset = end + 1;
+      return tokens;
+    });
+    for (const transform of transformers) lines = transform.tokens?.call(context, lines) ?? lines;
+    return lines;
+  }
+  return {
+    getTheme,
+    codeToTokens,
+    codeToHast(input: string, options: HighlightOptions): Root {
+      const transformers = options.transformers ?? [];
+      const context = createContext();
+      const lines = codeToTokens(input, options, context);
       const decorations = new Map<number, Decoration[]>();
       for (const decoration of options.decorations ?? []) {
         for (
