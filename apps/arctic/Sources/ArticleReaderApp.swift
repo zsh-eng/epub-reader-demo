@@ -109,6 +109,8 @@ struct LibraryView: View {
   @State private var showingTaggingSettings = false
   @State private var showingAnnotations = false
   @State private var showingReadingStats = false
+  @State private var showingWeeklyFavourites = false
+  @State private var weeklyArticleToOpen: URL?
   @State private var passageToOpen: ReaderAnnotation?
   @State private var showingOnboarding = false
   @State private var showingArticleReplay = false
@@ -178,7 +180,7 @@ struct LibraryView: View {
         isLibraryScrolling: isLibraryScrolling, clipboardURL: clipboard.url,
         enabled: selected == nil && !showingOnboarding && !showingArticleReplay
           && !showingTaggingSettings
-          && !showingAnnotations && !showingReadingStats && !choosingImport && editingTags == nil
+          && !showingAnnotations && !showingReadingStats && !showingWeeklyFavourites && !choosingImport && editingTags == nil
       )
     }
     .overlay(alignment: .bottom) {
@@ -323,6 +325,14 @@ struct LibraryView: View {
         showingAnnotations = false
       }
     }
+    .sheet(isPresented: $showingWeeklyFavourites, onDismiss: {
+      if let url = weeklyArticleToOpen {
+        weeklyArticleToOpen = nil
+        selected = browsers.open(url, store: store)
+      }
+    }) {
+      WeeklyFavouritesSheet(store: store) { weeklyArticleToOpen = $0 }
+    }
     .sheet(isPresented: $showingReadingStats) { ReadingStatsView() }
     .sheet(isPresented: $showingTaggingSettings) {
       TaggingSettingsView { store.resumeTagging() }
@@ -443,6 +453,7 @@ struct LibraryView: View {
             choosingImport = true
           }.accessibilityIdentifier("import-reading-list")
           Divider()
+          Button("Favourites this week", systemImage: "star") { showingWeeklyFavourites = true }
           Button("Reading stats", systemImage: "chart.bar.xaxis") { showingReadingStats = true }
             .accessibilityIdentifier("library-reading-stats")
           Button("Automatic tags", systemImage: "sparkles") { showingTaggingSettings = true }
@@ -654,9 +665,13 @@ struct LibraryView: View {
           GeometryReader { geometry in
             Group {
               if matches(in: item).isEmpty {
-                LibraryEmptyState(folder: item, favouritesOnly: filtersFavourites(in: item))
-                  .frame(height: max(0, viewport.size.height - headerHeight - topInset))
-                  .padding(.top, headerHeight + topInset)
+                ScrollView {
+                  VStack(spacing: 0) {
+                    if item == .saved { discoveryShelf }
+                    LibraryEmptyState(folder: item, favouritesOnly: filtersFavourites(in: item))
+                      .frame(minHeight: max(0, viewport.size.height - headerHeight - topInset - 110))
+                  }.padding(.top, headerHeight + topInset + 16)
+                }
               } else {
                 ScrollView { library(in: item) }
                   .modifier(
@@ -726,9 +741,17 @@ struct LibraryView: View {
     }
   }
 
+  private var discoveryShelf: some View {
+    LibraryDiscovery { url in
+      // ArticleBrowser applies Unwall routing. Store identity remains the publisher URL.
+      selected = browsers.open(url, store: store)
+    } weekly: { showingWeeklyFavourites = true }
+  }
+
   private func library(in item: ArticleFolder) -> some View {
     let compact = item == .history || item == .archive
     return LazyVStack(alignment: .leading, spacing: compact ? 0 : 18) {
+      if item == .saved { discoveryShelf }
       ForEach(matches(in: item)) { article in
         articleButton(article) {
           if compact {

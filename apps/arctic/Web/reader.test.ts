@@ -134,3 +134,22 @@ test('full-width media crosses the text gutter and caps portrait height', async 
   expect(icon!.width).toBe(32);
   await page.close();
 });
+
+test('renders a native-fetched X article with Defuddle and sanitizes rich content', async () => {
+  const page = await browser.newPage();
+  await page.route('https://x.com/**', route => route.fulfill({ contentType: 'text/html', body: '<html><head><title>X</title></head><body>Open in app</body></html>' }));
+  await page.goto('https://x.com/reader/status/1234');
+  await page.evaluate(script);
+  const payload = { code: 200, tweet: { author: { screen_name: 'reader' }, article: {
+    title: 'A small observation', preview_text: 'What stays with us.',
+    content: { blocks: [{ type: 'unstyled', text: '“Slow down,” she said — café, 日本語. <script>not code</script>', inlineStyleRanges: [], entityRanges: [], data: {} }], entityMap: [] },
+    media_entities: [], cover_media: {},
+  } } };
+  const result = await page.evaluate(async payload => await (globalThis as any).extractArticle(JSON.stringify(payload)), payload);
+  expect(result.title).toBe('A small observation');
+  expect(result.author).toBe('@reader');
+  expect(result.content).toContain('日本語');
+  expect(result.content).not.toContain('<script>');
+  expect(result.content).not.toContain('Open in app');
+  await page.close();
+});

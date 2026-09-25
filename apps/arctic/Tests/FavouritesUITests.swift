@@ -116,6 +116,27 @@ final class FavouritesUITests: XCTestCase {
       card.waitForExistence(timeout: 5), "Undo Unarchive must persist archive membership")
   }
 
+  @MainActor func testWeeklyFavouritesPersistOfflineAndOpenArticle() {
+    let app = launchFixtures()
+    let card = app.buttons["article-cached-0"]
+    XCTAssertTrue(card.waitForExistence(timeout: 10))
+    card.press(forDuration: 1)
+    app.buttons["favourite-article"].tap()
+    app.buttons["weekly-favourites"].tap()
+    XCTAssertTrue(app.staticTexts["1 favourite · Monday to Sunday"].waitForExistence(timeout: 5))
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = "weekly-favourites"; shot.lifetime = .keepAlways; add(shot)
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-articles-offline", "-images-offline"]
+    app.launch()
+    XCTAssertTrue(app.buttons["weekly-favourites"].waitForExistence(timeout: 10))
+    app.buttons["weekly-favourites"].tap()
+    XCTAssertTrue(app.staticTexts["1 favourite · Monday to Sunday"].waitForExistence(timeout: 5))
+    app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'weekly-article-' ")).firstMatch.tap()
+    XCTAssertTrue(app.buttons["reader-toggle"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.webViews.staticTexts["“Slow down,” she said — café, naïve, 日本語. Keep every character intact."].firstMatch.waitForExistence(timeout: 10))
+  }
+
   @MainActor private func launchFixtures() -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [

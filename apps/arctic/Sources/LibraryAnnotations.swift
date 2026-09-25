@@ -9,6 +9,7 @@ struct LibraryAnnotations: View {
   @State private var query = ""
   @State private var filter = PassageFilter.all
   @State private var editing: ReaderAnnotation?
+  @State private var sharing: PassageStory?
   @State private var errorMessage: String?
   @State private var matching: [ReaderAnnotation] = []
   @State private var hasLoaded = false
@@ -105,6 +106,7 @@ struct LibraryAnnotations: View {
     .presentationDetents([.medium, .large], selection: $detent)
     .presentationDragIndicator(.visible)
     .presentationContentInteraction(.scrolls)
+    .sheet(item: $sharing) { PassageStorySheet(story: $0) }
     .sheet(item: $editing) { annotation in
       NavigationStack { AnnotationEditor(annotation: annotation) }
         .presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
@@ -173,6 +175,9 @@ struct LibraryAnnotations: View {
         .accessibilityLabel(annotation.quote == nil ? "Open article" : "Show in article")
         .accessibilityIdentifier("library-passage-open-" + annotation.id.uuidString)
         Menu {
+          Button("Share as image", systemImage: "square.and.arrow.up") {
+            sharing = PassageStory(annotation: annotation, title: title)
+          }.accessibilityIdentifier("share-passage-image")
           Button(
             annotation.note.isEmpty ? "Add note" : "Edit note", systemImage: "square.and.pencil"
           ) {

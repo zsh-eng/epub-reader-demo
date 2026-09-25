@@ -1164,6 +1164,18 @@ final class ArticleReaderUITests: XCTestCase {
     capture(app, "live-browser")
     showReader(app)
     capture(app, "live-reader")
+    if let title = ProcessInfo.processInfo.environment["ARTICLE_READER_LIVE_TITLE"] {
+      XCTAssertTrue(app.webViews.staticTexts[title].firstMatch.waitForExistence(timeout: 15), app.debugDescription)
+      // Reopen the real extraction with networking disabled, not a fixture.
+      app.terminate()
+      app.launchArguments = ["-ui-testing", "-articles-offline", "-images-offline", "-disable-preloading"]
+      app.launch()
+      XCTAssertTrue(card.waitForExistence(timeout: 10))
+      card.tap()
+      showReader(app)
+      XCTAssertTrue(app.webViews.staticTexts[title].firstMatch.waitForExistence(timeout: 10))
+      capture(app, "live-reader-offline-reopen")
+    }
     app.navigationBars.buttons.element(boundBy: 0).tap()
     capture(app, "live-library")
   }

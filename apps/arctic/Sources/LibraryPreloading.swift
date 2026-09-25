@@ -169,7 +169,11 @@ struct LibraryPreloadDriver: View {
   // WebView initialization was visible in the physical first-keyboard trace.
   // Keep image/metadata preheating active, but give the keyboard the UI budget.
   private var browserPreloadURLs: [URL] {
-    isLibraryScrolling || keyboardIsMoving ? [] : preloadURLs
+    guard !isLibraryScrolling, !keyboardIsMoving else { return [] }
+    // Local documents can warm offline. Uncached publisher pages create script,
+    // media and redirect work that competes with launch and visible thumbnails.
+    // Open is the explicit intent that starts those websites.
+    return preloadURLs.filter { store.downloadedFile(for: $0) != nil }
   }
 
   private var imagePrefetchRequests: [ThumbnailRequest] {

@@ -161,7 +161,7 @@ final class ReaderPerformanceUITests: XCTestCase {
     return app
   }
 
-  @MainActor func testSlowPublisherPreloadsCancelBeforeStartingMore() {
+  @MainActor func testLaunchAndScrollDoNotStartSpeculativePublishers() {
     let app = XCUIApplication()
     app.launchArguments = [
       "-ui-testing", "-reset-store", "-reset-appearance", "-seed-long-list",
@@ -169,26 +169,19 @@ final class ReaderPerformanceUITests: XCTestCase {
     ]
     app.launch()
     let started = app.staticTexts["publisher-loads-started"]
-    // At least a second pair must start, proving slow rows do not block the
-    // viewport forever. Requests stay held until WebKit cancels them.
-    let progressed = expectation(
-      for: NSPredicate { _, _ in (Int(started.label) ?? 0) >= 4 }, evaluatedWith: started)
-    wait(for: [progressed], timeout: 30)
-    let active = app.staticTexts["publisher-loads-active"]
-    let bounded = expectation(
-      for: NSPredicate { _, _ in (Int(active.label) ?? 99) <= 2 }, evaluatedWith: active)
-    wait(for: [bounded], timeout: 3)
-    capture(app, "bounded-slow-publisher-preloads")
-    // Early extraction preserves the useful Reader while stopping unrelated
-    // publisher resources. Opening it must reuse that prepared document.
-    let requested = app.staticTexts["preload-requested"].label
-    let firstPath = requested.split(separator: ",").first.map(String.init) ?? "missing"
-    let first = app.buttons["article-" + firstPath]
-    XCTAssertTrue(first.exists)
-    first.tap()
-    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
+    XCTAssertTrue(started.waitForExistence(timeout: 10))
+    XCTAssertEqual(started.label, "0")
+    app.swipeUp()
+    let requested = app.staticTexts["preload-requested"]
+    let visible = expectation(for: NSPredicate(format: "label != ''"), evaluatedWith: requested)
+    wait(for: [visible], timeout: 5)
+    XCTAssertEqual(started.label, "0")
+    let firstPath = requested.label.split(separator: ",").first.map(String.init) ?? "missing"
+    app.buttons["article-" + firstPath].tap()
+    XCTAssertTrue(app.buttons["reader-toggle"].waitForExistence(timeout: 10))
     showReader(app)
-    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.webViews.staticTexts["A little room to think"].waitForExistence(timeout: 10))
+    capture(app, "local-first-launch-then-open")
   }
 
   @MainActor func testBackgroundReleasesNeighborsAndPreservesOpenReader() {
@@ -262,20 +255,16 @@ final class ReaderPerformanceUITests: XCTestCase {
     capture(app, "cached-reader-with-body-image-held")
   }
 
-  @MainActor func testPreloadedPublisherRedirectRetainsRequestedCacheIdentity() {
+  @MainActor func testPublisherRedirectRetainsRequestedCacheIdentity() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-test-clipboard", "-test-preloading"]
     // TestMode resolves this alias to story.html. Its final source URL becomes
     // fixture.example/story, while the requested library identity stays below.
     app.launchEnvironment["TEST_CLIPBOARD"] = "https://fixture.example/redirect-story"
     app.launch()
-    let ready = expectation(
-      for: NSPredicate(format: "label CONTAINS 'redirect-story'"),
-      evaluatedWith: app.staticTexts["preload-ready"])
-    wait(for: [ready], timeout: 20)
+    XCTAssertTrue(app.buttons["open-copied-link"].waitForExistence(timeout: 10))
     app.buttons["open-copied-link"].tap()
     XCTAssertTrue(app.buttons["reader-toggle"].waitForExistence(timeout: 5))
-    XCTAssertEqual(app.staticTexts["reader-open-state"].label, "prepared")
     showReader(app)
     XCTAssertTrue(app.webViews.staticTexts["A little room to think"].exists)
     capture(app, "warm-redirected-reader")

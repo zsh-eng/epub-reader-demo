@@ -271,3 +271,37 @@ Annotation persistence checks, eight JavaScript checks, fifteen host model/sync
 checks, formatting, and signed Release builds passed. Screenshots of the Share
 layout, two-line quotes, and message composer were reviewed. The update preserves
 existing data and leaves the live storage migration dormant.
+
+
+## Mobile discovery and startup request isolation (2026-09-26)
+
+The library index, bundled fonts/scripts and downloaded Reader documents are
+local. The startup issue was competing speculative website work: nearby uncached
+cards could create full publisher WebViews while metadata, thumbnails and import
+recovery were also running. The library now prewarms downloaded HTML only.
+Opening an uncached card still starts its website immediately.
+
+Network work that remains: missing thumbnails/favicons, unfinished import metadata,
+Jev tagging when enabled, live websites/Unwall after opening, the public X payload
+on first extraction, and uncached inline article images. There is no remote
+metadata database or authentication gate before library display. This change
+removes requests; it is not a measured launch-time or 120 Hz claim.
+
+Discovery uses local typographic publisher marks. Weekly favourites use stable
+article IDs and a lazy stack. Story previews are code-rendered, paginate once per
+snapshot, and retain only one exported bitmap. Template changes crossfade in
+180 ms; presses use 120 ms feedback with an opacity-only Reduce Motion variant.
+No continuous animation or per-scroll SwiftUI updates were added.
+
+Validation: 26 Web checks passed. Simulator flows passed for weekly persistence
+and offline opening, story templates/pagination/native sharing, no speculative
+publisher work during launch/scroll, redirect cache identity, and background
+Reader retention. The exported bitmap was separately inspected and measured at
+1080 × 1920. Cross-app clipboard consent is excluded from unattended tests.
+Physical-device frame-rate and slow-network startup measurements remain open.
+
+The imported public X article “Losing My Hands” passed a live simulator open,
+Reader extraction and offline process restart check. The extracted title and
+article body were inspected in the test screenshots. This verifies one public
+article, not every X post or third-party service. The opt-in check can assert a
+specific title with `TEST_RUNNER_ARTICLE_READER_LIVE_TITLE`.

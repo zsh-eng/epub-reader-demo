@@ -85,7 +85,7 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
         return ReaderAnnotation(
           id: UUID(), articleURL: URL(string: "https://fixture.example/unicode")!,
           quote: index.isMultiple(of: 2)
-            ? ReaderQuote(exact: "Fixture passage \(index)", prefix: "", suffix: "", start: 0)
+            ? ReaderQuote(exact: arguments.contains("-test-story-long") ? String(repeating: "Keep a little room for wonder. Read slowly; notice what stays with you. 日本語 — café.\n", count: 8) : "Fixture passage \(index)", prefix: "", suffix: "", start: 0)
             : nil,
           note: "Notebook thought \(index). A complete thought kept with this article.",
           isHighlighted: index.isMultiple(of: 2), createdAt: date, updatedAt: date,

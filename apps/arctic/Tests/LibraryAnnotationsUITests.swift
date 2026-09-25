@@ -1,7 +1,36 @@
 import XCTest
+import UIKit
 
 final class LibraryAnnotationsUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
+
+  @MainActor func testStoryTemplatesPaginateAndExportOffline() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "1", "-test-story-long", "-articles-offline", "-images-offline", "-dark-ui"]
+    app.launch()
+    XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
+    app.buttons["library-annotations"].tap()
+    XCTAssertTrue(app.buttons["Passage options"].waitForExistence(timeout: 5))
+    app.buttons["Passage options"].tap()
+    app.buttons["share-passage-image"].tap()
+    let preview = app.otherElements["story-preview"]
+    XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
+    capture(app, "passage-story-paper")
+    app.buttons["story-style-Ink"].tap()
+    XCTAssertTrue((preview.value as? String ?? "").hasPrefix("Ink"))
+    capture(app, "passage-story-ink")
+    app.buttons["story-style-Ice"].tap()
+    capture(app, "passage-story-ice")
+    XCTAssertTrue(app.buttons["Next card"].isEnabled)
+    let first = preview.label
+    app.buttons["Next card"].tap()
+    XCTAssertNotEqual(preview.label, first)
+    app.buttons["story-export"].tap()
+    XCTAssertTrue(app.collectionViews["activityCollectionView"].waitForExistence(timeout: 10), app.debugDescription)
+    capture(app, "passage-story-export")
+    // Bitmap dimensions were checked with Copy in the simulator. Do not read
+    // the cross-app pasteboard here: iOS consent would block unattended runs.
+  }
 
   @MainActor func testDistinctEmptyPassagesInDarkMode() {
     let app = XCUIApplication()

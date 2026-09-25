@@ -37,6 +37,7 @@ struct ReaderAnnotations: View {
   let presentation: AnnotationPresentation
   @Environment(\.dismiss) private var dismiss
   @State private var editing: ReaderAnnotation?
+  @State private var sharing: PassageStory?
   @State private var errorMessage: String?
   @State private var detent: PresentationDetent
 
@@ -92,6 +93,7 @@ struct ReaderAnnotations: View {
     .presentationDetents([.medium, .large], selection: $detent)
     .presentationDragIndicator(.visible)
     .presentationContentInteraction(.scrolls)
+    .sheet(item: $sharing) { PassageStorySheet(story: $0) }
     .sheet(item: $editing) { annotation in
       NavigationStack {
         AnnotationEditor(annotation: annotation, onChange: browser.refreshAnnotations)
@@ -131,6 +133,9 @@ struct ReaderAnnotations: View {
         }
         Spacer()
         Menu {
+          Button("Share as image", systemImage: "square.and.arrow.up") {
+            sharing = PassageStory(annotation: annotation, title: browser.readerView.title ?? browser.webView.title)
+          }.accessibilityIdentifier("share-passage-image")
           Button(
             annotation.note.isEmpty ? "Add note" : "Edit note", systemImage: "square.and.pencil"
           ) { editing = annotation }

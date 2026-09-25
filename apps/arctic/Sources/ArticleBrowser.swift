@@ -10,6 +10,18 @@ enum ArticleRouting {
     return Set(domains)
   }()
 
+  static func isX(_ url: URL) -> Bool {
+    ["x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"]
+      .contains(url.host?.lowercased() ?? "")
+  }
+
+  static func webDestination(_ url: URL) -> URL {
+    guard isX(url), var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+    parts.scheme = "https"
+    parts.host = "x.com"
+    return parts.url ?? url
+  }
+
   static func isUnwall(_ url: URL) -> Bool {
     let host = url.host?.lowercased() ?? ""
     return host == "unwall.app" || host.hasSuffix(".unwall.app")
@@ -33,7 +45,7 @@ enum ArticleRouting {
     guard !isUnwall(url), let host = url.host?.lowercased() else { return url }
     // Match hostname boundaries, never substrings such as nytimes.com.evil.test.
     let supported = domains.contains(host) || domains.contains(where: { host.hasSuffix("." + $0) })
-    return supported ? unwall(url) : url
+    return supported ? unwall(url) : webDestination(url)
   }
 }
 
@@ -304,6 +316,7 @@ enum ArticleRouting {
   @ObservationIgnored private var cachedLoadTask: Task<Void, Never>?
   @ObservationIgnored private var speculative: Bool
   @ObservationIgnored private var suspendedPublisher = false
+  @ObservationIgnored private var retriedXRedirect = false
 
   init(url: URL, store: ArticleStore, downloadedFile: URL? = nil, speculative: Bool = false) {
     self.speculative = speculative
@@ -431,6 +444,12 @@ enum ArticleRouting {
   private func loadWebsite(_ url: URL) {
     suspendedPublisher = false
     requestedWebsiteURL = ArticleRouting.original(url)
+    retriedXRedirect = false
+    // Advertise Safari on X, where app-scheme redirects broke embedded loads.
+    // Keep its browser experience in HTTPS instead of following twitter://.
+    webView.customUserAgent = ArticleRouting.isX(url)
+      ? "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+      : nil
     websiteFailure = nil
     failedWebsiteURL = nil
     errorMessage = nil
@@ -633,8 +652,17 @@ enum ArticleRouting {
           .value
         guard !Task.isCancelled, version == pageVersion else { return }
         _ = try await webView.evaluateJavaScript(script, in: nil, contentWorld: .defaultClient)
-        let result = try await webView.evaluateJavaScript(
-          "extractArticle()", in: nil, contentWorld: .defaultClient)
+        let result: Any?
+        if let endpoint = XArticlePayload.endpoint(for: sourceURL) {
+          let payload = try await XArticlePayload.fetch(endpoint)
+          guard !Task.isCancelled, version == pageVersion else { return }
+          result = try await webView.callAsyncJavaScript(
+            "return await extractArticle(payload)", arguments: ["payload": payload],
+            in: nil, contentWorld: .defaultClient)
+        } else {
+          result = try await webView.evaluateJavaScript(
+            "extractArticle()", in: nil, contentWorld: .defaultClient)
+        }
         guard !Task.isCancelled, version == pageVersion else { return }
         guard let article = result as? [String: String], article["content"] != nil else {
           throw ArticleError.message("This page could not be converted to Reader mode.")
@@ -1022,6 +1050,16 @@ enum ArticleRouting {
     guard (error as NSError).code != NSURLErrorCancelled else { return }
     if view === webView {
       guard navigation === websiteNavigation else { return }
+      let failure = error as NSError
+      if failure.domain == NSURLErrorDomain, failure.code == NSURLErrorUnsupportedURL,
+        ArticleRouting.isX(sourceURL), !retriedXRedirect {
+        // HTTP redirects to app schemes can fail before navigation policy runs.
+        // Retry once as a desktop browser; never weaken transport security.
+        retriedXRedirect = true
+        self.webView.customUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15"
+        self.webView.load(URLRequest(url: ArticleRouting.webDestination(sourceURL)))
+        return
+      }
       failWebsite(error)
       return
     } else {
@@ -1046,6 +1084,16 @@ enum ArticleRouting {
     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
   ) {
     guard let url = navigationAction.request.url else {
+      decisionHandler(.cancel)
+      return
+    }
+    // Script-driven app handoffs use .other, not .linkActivated. Do not feed
+    // twitter://, intent:// or other app schemes to WebKit as a new document:
+    // that replaces a valid HTTPS page with an unsupported-URL error.
+    let scheme = url.scheme?.lowercased() ?? ""
+    let internalScheme = url.isFileURL || ["about", "blob"].contains(scheme)
+      || (TestMode.enabled && ["arctic-recovery", "arctic-test"].contains(scheme))
+    guard ["https", "http"].contains(scheme) || internalScheme else {
       decisionHandler(.cancel)
       return
     }
@@ -1109,6 +1157,9 @@ enum ArticleRouting {
     let palette =
       ReadingPalette(rawValue: defaults.string(forKey: "reader-palette") ?? "System") ?? .system
     let theme = palette == .system ? (darkAppearance ? "Ink" : "White") : palette.rawValue
+    // The document palette can differ from the app's system appearance.
+    readerView.scrollView.indicatorStyle = ["Ink", "Night"].contains(theme) ? .white : .black
+    readerView.scrollView.showsVerticalScrollIndicator = true
     // Serialize strings as JSON; never interpolate page-supplied values into script.
     let options: [String: Any] = [
       "size": size, "padding": padding, "leading": leading, "family": family, "theme": theme,

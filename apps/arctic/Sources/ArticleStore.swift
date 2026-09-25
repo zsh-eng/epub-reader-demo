@@ -21,6 +21,7 @@ struct SavedArticle: Identifiable, Codable, Sendable {
   var isRead: Bool?
   var isArchived: Bool?
   var isFavourite: Bool?
+  var favouritedAt: Date?
   // Missing isSaved means a link from the original saved-only library.
   var isSaved: Bool?
   var savedAt: Date?
@@ -351,6 +352,7 @@ struct TaggingNotice: Identifiable {
     else { return }
     var updated = articles
     updated[index].isFavourite = favourite
+    updated[index].favouritedAt = favourite ? Date() : nil
     do { try commit(updated) } catch { errorMessage = error.localizedDescription }
   }
 

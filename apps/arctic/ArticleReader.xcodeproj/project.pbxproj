@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DD1A54CA2A1D71EAFFB0595A /* XArticlePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CE364C96E47B2909AF7180; };
+		7CEEF413F68984404819B88F /* LibraryDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3219FBDCD4EC653982EAAF95; };
+		8AA2BA029F9DACDFFF3E9EEE /* PassageStory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B076FC72C68632FA6DAA850C; };
 		B90000000000000000000001 /* LibraryPager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90000000000000000000002; };
 		AF2000000000000000000001 /* ArticleReplayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2000000000000000000002; };
 		AF1000000000000000000005 /* LibraryPreloading.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1000000000000000000006; };
@@ -102,6 +105,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		35CE364C96E47B2909AF7180 /* XArticlePayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/XArticlePayload.swift; sourceTree = "<group>"; };
+		3219FBDCD4EC653982EAAF95 /* LibraryDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryDiscovery.swift; sourceTree = "<group>"; };
+		B076FC72C68632FA6DAA850C /* PassageStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PassageStory.swift; sourceTree = "<group>"; };
 		B90000000000000000000002 /* LibraryPager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryPager.swift; sourceTree = "<group>"; };
 		AF2000000000000000000002 /* ArticleReplayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/ArticleReplayView.swift; sourceTree = "<group>"; };
 		AF1000000000000000000006 /* LibraryPreloading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryPreloading.swift; sourceTree = "<group>"; };
@@ -212,6 +218,9 @@
 				2A130218C963B16D9D88BB85 /* Sources/ArticleTagsSheet.swift */,
 				62565BDC186B64135F9A2BE7 /* Sources/LibrarySearch.swift */,
 				85A5CBD427C94BFA7B1589C6 /* Sources/ReaderTheme.swift */,
+				35CE364C96E47B2909AF7180 /* XArticlePayload.swift */,
+				3219FBDCD4EC653982EAAF95 /* LibraryDiscovery.swift */,
+				B076FC72C68632FA6DAA850C /* PassageStory.swift */,
 				A00000000000000000000001 /* THIRD_PARTY_NOTICES.txt */,
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
@@ -438,6 +447,9 @@
 				21ADEF507F9930F5FDD82263 /* Sources/ArticleTagsSheet.swift in Sources */,
 				CBC5EA5EEC97F8605680CC07 /* Sources/LibrarySearch.swift in Sources */,
 				83547CBCE7341933B72FFB38 /* Sources/ReaderTheme.swift in Sources */,
+				DD1A54CA2A1D71EAFFB0595A /* XArticlePayload.swift in Sources */,
+				7CEEF413F68984404819B88F /* LibraryDiscovery.swift in Sources */,
+				8AA2BA029F9DACDFFF3E9EEE /* PassageStory.swift in Sources */,
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,

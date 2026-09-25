@@ -58,13 +58,11 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
 - Visible library/search rows and their two nearest neighbors in each direction
   preload their Reader documents, with a ten-article window plus the last opened
   page retained. Cached HTML and fonts prepare before a tap; opening reuses that
-  same WebView, including work still in progress. Local documents prepare first,
-  with two preparation slots. Speculative website loads can make requests to
-  publishers or Unwall for articles without a downloaded copy. The queue pauses
-  during reading, onboarding, and modal settings. Backgrounding and memory
-  pressure release nearby browsers while retaining the last opened Reader.
-  A stalled speculative publisher is cancelled before its eight-second slot is
-  reused; tapping that row starts a fresh foreground load without this limit.
+  same WebView, including work still in progress. Two preparation slots load
+  downloaded documents only. Uncached publisher/Unwall pages start when opened,
+  not during library startup or scrolling. The queue pauses during reading,
+  onboarding, and modal settings. Backgrounding and memory pressure release
+  nearby browsers while retaining the last opened Reader.
   Metadata remains in memory; opening does not query a remote database.
 - **Downloaded** includes saved articles, including archived articles, whose Defuddle
   Reader view has been written to disk. Cached articles open from their styled local
@@ -80,7 +78,6 @@ enable `group.com.zsheng.ArticleReader` in App Groups for both targets. Both use
   archiving keeps it. New pages extract at DOM readiness without waiting for
   publisher images or analytics. Reader is also available during loading once
   the main document has committed; extraction still needs enough article text.
-  Background preloads stop unrelated publisher resources once Reader is ready.
 - Reader and Website share an explicit article history, including the initial
   offline Reader. Following a link uses its own save state, notes and HTML target.
   Back and Forward restore that identity; a detour cannot replace the original
@@ -370,7 +367,7 @@ views across an offline restart, short/long/no-image cards, compact tags, page b
 search and native-file-picker HTML
 import dates and aggregate tag counts, clipboard suggestions, Share extension
 saving, highlights and notes, offline fonts, 1,000-row search/scroll behavior,
-background/resume and held-resource preload cancellation. Clipboard UI tests use
+background/resume and the absence of speculative publisher requests. Clipboard UI tests use
 app-written simulator fixture text, so cross-app Allow Paste prompts still need a
 physical-device check. The import test stages a sample HTML file in Documents in debug builds
 only. Screenshots are attached to test
@@ -383,6 +380,32 @@ On 2026-09-19, this article passed both directly and through
 `https://unwall.app/stephango.com/saw` in the iPhone 17 Pro simulator. Preview and
 reader screenshots were inspected. Physical-device and paywalled-publisher
 checks remain open.
+
+## Discovery and passage images
+
+The Saved shelf opens NY Times, Financial Times, Economist, New Yorker and
+Atlantic homepages through the existing Unwall route. The marks are local text;
+the shelf makes no favicon requests. Publisher and Unwall availability still
+requires a connection.
+
+**This week** shows articles favourited from Monday to Sunday in the current
+time zone, including archived favourites. **All favourites** also includes
+older favourites without a recorded date; Arctic does not invent dates for them.
+
+In a highlight/note menu, select **Share as image**. Paper, Ink and Ice use the
+same 360 × 640 canvas for preview and 1080 × 1920 export. Long passages split
+into readable cards without dropping text. Export renders only the selected
+card, then opens the native share sheet. Save or copy the image for Instagram;
+there is no Meta account integration. Quotes keep their article title and source.
+The restrained type, source credit and safe margins draw on
+[Readwise passage sharing](https://docs.readwise.io/reader/docs/faqs/sharing) and
+[editorial quote layouts](https://www.canva.com/templates/s/quote/).
+
+X/Twitter links stay HTTPS. Reader uses Defuddle's existing rich X renderer with
+one bounded response from its documented public source,
+[FxTwitter](https://github.com/FxEmbed/FxEmbed/blob/main/docs/src/content/docs/api/introduction.mdx).
+No X cookie or Jev key is sent. Private/deleted posts and service outages remain
+unavailable. Saved Reader text reopens locally.
 
 ## Integration boundaries
 

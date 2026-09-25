@@ -22,6 +22,8 @@
 		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save a passage image to share in your story.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Fonts/DMSans.ttf</string>

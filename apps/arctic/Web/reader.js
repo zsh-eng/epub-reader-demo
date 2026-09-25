@@ -4,7 +4,7 @@ import hljs from "highlight.js/lib/common";
 
 // Unwall renders the article in a child document. Extract that document, not
 // the surrounding controls. Normal sites use their top-level document.
-globalThis.extractArticle = () => {
+globalThis.extractArticle = (xPayload = null) => {
   let source = document;
   if (location.hostname === "unwall.app" || location.hostname.endsWith(".unwall.app") ||
       (location.protocol === "file:" && document.querySelector('iframe[title="Article content"]'))) {
@@ -13,14 +13,34 @@ globalThis.extractArticle = () => {
       throw new Error("The article is not ready. Wait for it to load, then try Reader again.");
     }
   }
-  const result = new Defuddle(source, { url: source.baseURI, useAsync: false }).parse();
+  if (xPayload !== null) {
+    const url = new URL(source.baseURI);
+    if (!["x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"].includes(url.hostname)) {
+      throw new Error("X extraction requires an X article URL.");
+    }
+    const payload = JSON.parse(xPayload);
+    if (payload.code !== 200 || !payload.tweet || !(payload.tweet.article?.content?.blocks?.length || payload.tweet.text)) {
+      throw new Error("This X post is unavailable. Try the original website.");
+    }
+    // Reuse Defuddle's maintained rich X renderer. Native code supplies one
+    // bounded HTTPS response; the page cannot make arbitrary API requests.
+    const detached = document.implementation.createHTMLDocument("");
+    return new Defuddle(detached, {
+      url: url.href, useAsync: true,
+      fetch: async () => new Response(xPayload, { status: 200, headers: { "Content-Type": "application/json" } }),
+    }).parseAsync().then(result => cleanArticle(source, result, true));
+  }
+  return cleanArticle(source, new Defuddle(source, { url: source.baseURI, useAsync: false }).parse());
+};
+
+function cleanArticle(source, result, isX = false) {
   const content = DOMPurify.sanitize(result.content, {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ["form", "input", "button", "iframe", "style"],
     FORBID_ATTR: ["style", "srcset"],
   });
   const parsed = new DOMParser().parseFromString(content, "text/html");
-  if (parsed.body.textContent.trim().length < 80) {
+  if (parsed.body.textContent.trim().length < (isX ? 1 : 80)) {
     throw new Error("There is not enough article text on this page. Try opening the original page.");
   }
   // Resolve URLs before moving the article into a separate local document.
