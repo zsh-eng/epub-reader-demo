@@ -1,6 +1,7 @@
 """Behavior checks with controlled HTTP; never call a podcast host in tests."""
 
 import http.server
+import io
 import itertools
 import json
 import sys
@@ -8,9 +9,11 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipeline"))
 from align import align
+from classify import run as classify_episode
 from download import download
 from paragraphs import make_paragraphs
 
@@ -153,6 +156,77 @@ class ParagraphIntegration(unittest.TestCase):
             [row["text"] for row in rows],
             ["word0", "word1 word2", "word3", "word4", "word5"],
         )
+
+
+class ClassificationIntegration(unittest.TestCase):
+    def test_metadata_reaches_both_passes_and_invalidates_request_cache(self):
+        requests = []
+
+        def respond(request, timeout):
+            requests.append(json.loads(request.data))
+            return io.BytesIO(
+                json.dumps(
+                    {
+                        "answers": {
+                            key: {
+                                "type": "noul",
+                                "noul": 0.9 if key == "self_promotion" else 0.01,
+                            }
+                            for key in ("sponsor", "self_promotion", "credits")
+                        }
+                    }
+                ).encode()
+            )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = {
+                "show": "A show",
+                "showDescription": "<p>A &amp; B.</p>",
+                "title": "An episode",
+                "description": "<p>Topic.</p><p>Subscribe.</p>",
+            }
+            (root / "source.json").write_text(json.dumps(source))
+            blocks = align(
+                {
+                    "sentences": [
+                        {
+                            "tokens": [
+                                {"text": " Try", "start": 0, "end": 0.3},
+                                {"text": " us.", "start": 0.4, "end": 0.7},
+                                {"text": " Subscribe.", "start": 0.8, "end": 1.1},
+                            ]
+                        }
+                    ]
+                },
+                [{"speaker": 1, "start": 0, "end": 2}],
+            )
+            (root / "blocks.json").write_text(json.dumps(blocks))
+            with (
+                patch("classify.urllib.request.urlopen", side_effect=respond),
+                patch.dict("os.environ", {"JEV_API_KEY": "test-only"}),
+            ):
+                classify_episode(root)
+                self.assertEqual(len(requests), 3)
+                for body in requests:
+                    self.assertEqual(body["state"]["show"]["description"], "A & B.")
+                    self.assertEqual(
+                        body["state"]["episode"]["description"], "Topic. Subscribe."
+                    )
+                    self.assertIn("surrounding_context", body["state"])
+                result = json.loads((root / "classification.json").read_text())
+                self.assertEqual(len(result["candidates"]), 2)
+                self.assertEqual(result["metadata"]["show"]["title"], "A show")
+                classify_episode(root)
+                self.assertEqual(len(requests), 3)
+                source["showDescription"] = "Updated show context."
+                (root / "source.json").write_text(json.dumps(source))
+                classify_episode(root)
+                self.assertEqual(len(requests), 6)
+                self.assertEqual(
+                    requests[-1]["state"]["show"]["description"],
+                    "Updated show context.",
+                )
 
 
 if __name__ == "__main__":

@@ -39,6 +39,9 @@ def run():
         source = {
             "title": item.findtext("title"),
             "show": channel.findtext("title"),
+            "showDescription": channel.findtext("description")
+            or channel.findtext(ns + "summary")
+            or "",
             "published": item.findtext("pubDate"),
             "description": item.findtext("description"),
             "source": item.findtext("link"),

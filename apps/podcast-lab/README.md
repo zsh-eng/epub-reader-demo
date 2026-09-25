@@ -33,9 +33,9 @@ longer than the feed's duration.
 | --- | --- |
 | Parakeet MLX, whole episode | 130.4 s inference; 134.5 s with model loading |
 | Senko CoreML, whole episode | 11.0 s inference; 111.7 s including first-run setup |
-| Jev, final classification pass | 47.6 s; four requests in flight at most |
+| Jev, final classification pass | 48.5 s with descriptions; four requests in flight at most |
 | GPT-6 Luna via Codex | Generated 10 chapters and evidence-linked speaker labels |
-| Suggested skips | 2 ranges, 84.64 s total |
+| Suggested skips | 7 ranges, 110.24 s total |
 
 These are single runs on this 16 GB Apple Silicon Mac. They are not a repeated
 benchmark or a claim about iPhone speed. RSS memory measurements do not capture
@@ -43,11 +43,30 @@ all GPU/ANE memory.
 
 **The hypothesis is partly supported.** Local transcription is fast enough and
 the end-to-end listening flow works. Classification is not ready for unattended
-use. A text review marked 138.56 s of promotion: detected ranges cover 61.1% of
-that reference, with no detected seconds outside it. The opening trailer and
-part of the anniversary montage are missed. This was a development sample used
-while changing the prompt, not a held-out test or an audio-reviewed gold standard.
-No paid third-party ad was verified in this particular download.
+use. A text review marked 138.56 s of promotion. Adding the RSS show and episode
+descriptions improved coverage, but boundaries remain fragmented:
+
+| Same audio and review reference | Transcript context only | With descriptions |
+| --- | ---: | ---: |
+| Promotion seconds detected | 84.64 | 110.24 |
+| Reference coverage | 61.1% | 79.6% |
+| Detected seconds outside reference | 0 | 0 |
+| Missed promotion seconds | 53.92 | 28.32 |
+| Separate skip ranges | 2 | 7 |
+
+The rerun retained the model, speaker blocks, three categories, context window,
+thresholds, and reference. It added descriptions plus a rule that metadata is
+background, not evidence that the spoken target is an ad. It found 23.84 of
+27.84 seconds in the opening trailer, all 71.92 seconds of the app promotion,
+and 14.48 of 38.80 seconds in the anniversary montage. The montage includes
+isolated cuts of 0.48 and 1.28 seconds; higher coverage does not yet mean smooth
+whole-break skipping. No extra bridging or lower threshold was applied.
+
+This is one development episode, not a held-out test or an audio-reviewed gold
+standard. It does not isolate metadata from model variability or prove zero
+false positives. No paid third-party ad was verified in this download.
+Before/after artifacts and the fetched feed are retained locally under
+`.local/experiments/metadata-context/`. The preview uses the new detections.
 
 Speaker separation also merges some short ad voices with interview speakers.
 Names are inferred from the introduction and can be wrong. Initials are used
@@ -139,12 +158,18 @@ pauses over two seconds, or 45 seconds. Display paragraphs are separate from
 these classification blocks. Each request to `/v1/systemone` uses model
 `jev-1.13.0`, `state.target` (the block text), and
 `state.surrounding_context` (speaker-labelled blocks overlapping 45 seconds
-before and after it). The current Jev requests do **not** include the
-episode description. That description is saved in `source.json` and sent only
-to Luna for chapter/name enrichment. The general show description is not
-currently collected. A future context experiment should include both as
-separate background fields, without treating promotional show-note copy as
-evidence that a spoken passage is an advertisement.
+before and after it). Both passes also receive `state.show` and `state.episode`,
+each with a title and description from RSS. HTML is reduced to plain text,
+bounded to 6,000 characters for the show and 12,000 for the episode. The prompt
+treats descriptions only as background: promotional copy in show notes is not
+evidence that the spoken target is an advertisement. These fields participate
+in the request cache key and are recorded in `classification.json` for audit.
+
+New downloads save the general description as `showDescription` in
+`source.json`. An older cached source without it sends an empty show description;
+refresh that field from its feed before comparing metadata experiments. No audio
+redownload is needed. Luna continues to receive the episode description for
+chapter/name enrichment.
 
 Three independent `noul` questions ask about paid third-party sponsorship,
 publisher self-promotion, and credits. A coarse score of at least 0.5 triggers
@@ -164,7 +189,7 @@ across speakers; sentence-level refinement can then locate their boundaries.
 
 - The local server supports bounded, suffix and open-ended byte ranges for seek.
 - Only explicit player routes are exposed. Model logs and credentials are not.
-- 297 speaker paragraphs replace the former 12-word lines. Paragraphs prefer
+- 300 speaker paragraphs replace the former 12-word lines. Paragraphs prefer
   sentence endings after 40 words and stop at 75 words or about 32 seconds.
   Speaker changes, pauses, and detected promotion boundaries remain separate.
 - Only the viewport plus 350 px on each side is mounted, with any focused row
@@ -173,7 +198,7 @@ across speakers; sentence-level refinement can then locate their boundaries.
 - Playback highlights a sentence or short section inside each paragraph without
   rebuilding the list or measuring layout on playback ticks.
 - Removing unused word-level data reduced the player JSON from 1,044,923 to
-  213,007 bytes. Raw word timings remain in the local pipeline artifacts.
+  213,949 bytes. Raw word timings remain in the local pipeline artifacts.
 - Seek feedback follows input immediately. Manual scrolling cancels following;
   reduced-motion mode removes smooth scroll. There is no claimed 120 fps result.
 - The same audio element survives chapter and transcript navigation.
