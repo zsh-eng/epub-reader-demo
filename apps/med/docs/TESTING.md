@@ -54,3 +54,10 @@ do not use a lower test count as the goal.
 against pinned Shiki. `bun run compare:highlighting --fixtures-only` adds browser
 screenshots. See [the parity and performance guide](validation/JAVA_CPP_HIGHLIGHTING.md)
 for the larger corpus, exact mismatch reports, and production UI benchmarks.
+
+## File-opening performance
+
+`node scripts/benchmark-language-ui.mjs --native-only` builds and measures the
+production file viewer. Add `--profile` to write Chrome performance traces.
+See [file-opening measurements](validation/FILE_OPENING.md) for phase definitions,
+before/after results, and comparison of retained builds.

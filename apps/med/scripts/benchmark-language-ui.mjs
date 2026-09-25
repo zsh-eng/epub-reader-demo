@@ -5,9 +5,20 @@ import { join, resolve } from "node:path";
 import { tmpdir, cpus } from "node:os";
 import { chromium } from "playwright";
 const directory = resolve(".benchmarks/language-ui");
+// Compare retained production builds without changing which engine they use.
+const builds = process.argv.find((argument) => argument.startsWith("--builds="))?.slice(9);
+if (
+  builds &&
+  (!process.argv.includes("--skip-build") || !/^[a-z0-9-]+(?:,[a-z0-9-]+)*$/.test(builds))
+)
+  throw new Error("--builds requires --skip-build and comma-separated build directory names");
+const engines =
+  builds?.split(",") ??
+  (process.argv.includes("--native-only") ? ["twinkleplop"] : ["shiki", "twinkleplop"]);
+const profile = process.argv.includes("--profile");
 const corpus = JSON.parse(await readFile("helpers/highlighting/corpus.json", "utf8"));
 await mkdir(directory, { recursive: true });
-for (const engine of ["shiki", "twinkleplop"]) {
+for (const engine of engines) {
   if (!process.argv.includes("--skip-build"))
     execFileSync("bun", ["run", "vite", "build", "--outDir", join(directory, engine, "web")], {
       env: { ...process.env, MED_HIGHLIGHTER: engine },
@@ -40,7 +51,7 @@ try {
   ]);
   browser = await chromium.launch({ headless: true });
   for (let round = 0; round < 3; round++)
-    for (const engine of round % 2 ? ["twinkleplop", "shiki"] : ["shiki", "twinkleplop"]) {
+    for (const engine of round % 2 ? [...engines].reverse() : engines) {
       host = spawn(
         process.execPath,
         [
@@ -89,7 +100,29 @@ try {
           await page.addInitScript(() => {
             localStorage.setItem("med:theme:v1", "tokyo-night");
             window.__fileReplies = 0;
+            window.__stages = [];
+            window.__mark = (name, details = {}) => {
+              if (window.__start) {
+                const ms = performance.now() - window.__start;
+                window.__stages.push({ name, ms, ...details });
+                performance.mark(`med-open:${name}`);
+              }
+            };
             window.__pending = 0;
+            const originalFetch = window.fetch;
+            window.fetch = async (...args) => {
+              const response = await originalFetch(...args);
+              if (String(args[0]).includes("/api/browse/read")) {
+                window.__mark("response");
+                const json = response.json.bind(response);
+                response.json = async () => {
+                  const result = await json();
+                  window.__mark("json");
+                  return result;
+                };
+              }
+              return response;
+            };
             const WorkerBase = window.Worker;
             window.Worker = class extends WorkerBase {
               constructor(...args) {
@@ -97,11 +130,14 @@ try {
                 this.pending = new Set();
                 this.addEventListener("message", ({ data }) => {
                   if (this.pending.delete(data?.id)) window.__pending--;
-                  if (data?.type === "success" && data.requestType === "file")
+                  if (data?.type === "success" && data.requestType === "file") {
                     window.__fileReplies++;
+                    window.__mark("worker-reply", { id: data.id });
+                  }
                 });
               }
               postMessage(data, ...rest) {
+                if (data?.type === "file") window.__mark("worker-send", { id: data.id });
                 if (["file", "diff"].includes(data?.type) && !this.pending.has(data.id)) {
                   this.pending.add(data.id);
                   window.__pending++;
@@ -137,6 +173,12 @@ try {
           await page.getByRole("combobox", { name: "Find file" }).press("Enter");
           await page.getByRole("combobox", { name: "Find file" }).waitFor({ state: "hidden" });
           await page.waitForFunction(() => window.__pending === 0);
+          const cdp = profile ? await context.newCDPSession(page) : null;
+          if (cdp)
+            await cdp.send("Tracing.start", {
+              categories: "devtools.timeline,blink.user_timing,disabled-by-default-v8.cpu_profiler",
+              transferMode: "ReturnAsStream",
+            });
           await page.evaluate(() => {
             window.__fileReplies = 0;
             window.__start = performance.now();
@@ -154,10 +196,11 @@ try {
                 return nodes;
               }
               const tokens = collect(pane);
-              return (
+              const ready =
                 tokens.length >= 20 &&
-                new Set(tokens.map((t) => getComputedStyle(t).color)).size >= 3
-              );
+                new Set(tokens.map((t) => getComputedStyle(t).color)).size >= 3;
+              if (ready) window.__mark("visible");
+              return ready;
             },
             null,
             { timeout: 30000, polling: "raf" },
@@ -171,20 +214,38 @@ try {
               ),
           );
           if (errors.length) throw new Error(errors.join("\n"));
-          const result = { round, engine, file: file.name, ms, errors };
+          const stages = await page.evaluate(() => window.__stages);
+          if (cdp) {
+            const complete = new Promise((accept) => cdp.once("Tracing.tracingComplete", accept));
+            await cdp.send("Tracing.end");
+            const { stream } = await complete;
+            let trace = "";
+            while (true) {
+              const chunk = await cdp.send("IO.read", { handle: stream });
+              trace += chunk.data;
+              if (chunk.eof) break;
+            }
+            await cdp.send("IO.close", { handle: stream });
+            await writeFile(join(directory, `${file.name}-${engine}-${round}.trace.json`), trace);
+            await cdp.detach();
+          }
+          const result = { round, engine, file: file.name, ms, stages, errors };
           reports.push(result);
           console.log(JSON.stringify(result));
           if (round === 0)
             await page.screenshot({ path: join(directory, `${file.name}-${engine}.png`) });
           await writeFile(
-            join(directory, "results.json"),
+            join(directory, profile ? "profile-results.json" : "results.json"),
             JSON.stringify(
               {
+                capturedAt: new Date().toISOString(),
+                profiling: profile,
+                engines,
                 machine: cpus()[0].model,
                 browser: browser.version(),
                 corpus,
                 method:
-                  "Fresh browser context; production host and worker. Timer starts at release of an already fetched file response. Ends after a file worker reply, visible highlighted main pane, and two animation frames. Excludes app startup and Git read; includes worker language loading, message transfer, virtualized UI, and observer overhead. Three alternating rounds; OS caches warm.",
+                  "Fresh browser context; production host and worker. Timer starts at release of an already fetched file response. Ends after a file worker reply, visible highlighted main pane, and two animation frames. Excludes app startup and Git read; includes worker language loading, message transfer, virtualized UI, and observer overhead. Three rounds per engine; engine order alternates when comparing engines. OS caches warm. Phase timestamps use the same start; worker-reply is observed before pool decoding, and visible is detected before the two final animation frames.",
                 runs: reports,
               },
               null,

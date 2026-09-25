@@ -141,3 +141,7 @@ Raw samples: [renderer results](java-cpp-renderer-results.json) and
 implementation file hashes, reference versions, input hashes, and every sample.
 The UI screenshots and full mismatch reports remain in the ignored output
 directories listed above.
+
+The next renderer optimization pass is recorded separately in
+[file-opening measurements](FILE_OPENING.md). The numbers above retain the original
+language-support baseline.
