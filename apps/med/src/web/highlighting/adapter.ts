@@ -61,6 +61,7 @@ export interface HighlightOptions {
   cssVariablePrefix?: string;
   defaultColor?: string | false;
   tokenizeMaxLineLength?: number;
+  mergeWhitespaces?: boolean | "never";
   transformers?: Transformer[];
   decorations?: Decoration[];
 }
@@ -197,8 +198,14 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
     let cached = styles.get(key);
     if (cached) return cached;
     const theme = getTheme(name);
-    const baseKind = kind.replace(/_(?:open|close)$/, "");
-    const scope = scopes[kind] ?? scopes[baseKind] ?? "variable.other";
+    const scopeStack = kind
+      .split("|")
+      .map(
+        (part) =>
+          scopes[part] ??
+          scopes[part.replace(/_(?:open|close)$/, "")] ??
+          (part.includes(".") ? part : "variable.other"),
+      );
     let color = theme.fg;
     let fontStyle = 0;
     let colorRank = -1;
@@ -209,8 +216,13 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
       for (const entry of selectors) {
         const selector = entry.trim();
         // Parent/negative scope selectors cannot be reconstructed from semantic kinds.
-        if (selector && scope !== selector && !scope.startsWith(`${selector}.`)) continue;
-        const rank = selector.length;
+        const depth = selector
+          ? scopeStack.findLastIndex(
+              (scope) => scope === selector || scope.startsWith(`${selector}.`),
+            )
+          : 0;
+        if (depth < 0) continue;
+        const rank = selector ? depth * 10000 + selector.length : -1;
         if (rule.settings.foreground && rank >= colorRank) {
           color = rule.settings.foreground;
           colorRank = rank;
@@ -300,7 +312,30 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
             const span = spans[index];
             const start = Math.max(offset, span.start);
             const stop = Math.min(end, span.end);
-            tokens.push(makeToken(source.slice(start, stop), start, start - offset, span.kind));
+            const value = source.slice(start, stop);
+            // Pierre requests unstyled edge whitespace for selectable tokens.
+            const match =
+              options.mergeWhitespaces === "never" && /^(\s*)(\S[\s\S]*?)(\s*)$/.exec(value);
+            if (match && (match[1] || match[3])) {
+              if (match[1]) tokens.push(makeToken(match[1], start, start - offset, "plain"));
+              tokens.push(
+                makeToken(
+                  match[2],
+                  start + match[1].length,
+                  start + match[1].length - offset,
+                  span.kind,
+                ),
+              );
+              if (match[3])
+                tokens.push(
+                  makeToken(
+                    match[3],
+                    stop - match[3].length,
+                    stop - match[3].length - offset,
+                    "plain",
+                  ),
+                );
+            } else tokens.push(makeToken(value, start, start - offset, span.kind));
           }
         }
         offset = end + 1;

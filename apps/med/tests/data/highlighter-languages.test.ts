@@ -29,7 +29,7 @@ describe("Twinkleplop language loading", () => {
     expect(supportedLanguage("jsx")).toBe("tsx");
     expect(supportedLanguage("md")).toBe("markdown");
     expect(supportedLanguage("sh")).toBe("bash");
-    for (const name of ["cpp", "zig", "unknown", "constructor", "toString", "__proto__"]) {
+    for (const name of ["zig", "unknown", "constructor", "toString", "__proto__"]) {
       expect(supportedLanguage(name)).toBeUndefined();
       await expect(ensureLanguages([name])).resolves.toBeUndefined();
       expect(tokenize("plain source", name)).toBeUndefined();

@@ -1,6 +1,8 @@
 import type { TokenizeResult } from "@twinkleplop/core";
 
 const loaders = {
+  java: () => import("./languages/java"),
+  cpp: () => import("./languages/cpp"),
   javascript: () => import("@twinkleplop/javascript"),
   typescript: () => import("@twinkleplop/typescript"),
   tsx: () => import("@twinkleplop/tsx"),
@@ -25,6 +27,11 @@ const loaders = {
 };
 type Language = keyof typeof loaders;
 const aliases: Record<string, Language> = {
+  "c++": "cpp",
+  cc: "cpp",
+  cxx: "cpp",
+  hpp: "cpp",
+  hxx: "cpp",
   js: "javascript",
   jsx: "tsx",
   ts: "typescript",

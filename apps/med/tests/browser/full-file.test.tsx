@@ -217,13 +217,13 @@ test("an unsupported grammar keeps readable source and identifies plain highligh
   render(
     <FullFileView
       {...props}
-      file={{ ...base, path: "example.cpp", identity: "cpp:1", text: "int main() { return 0; }" }}
+      file={{ ...base, path: "example.zig", identity: "zig:1", text: "pub fn main() void {}" }}
     />,
   );
   await expect.poll(() => lines()?.length ?? 0).toBeGreaterThan(0);
-  expect(lines()![0].textContent).toContain("int main()");
+  expect(lines()![0].textContent).toContain("pub fn main()");
   expect(mount!.querySelector('[role="status"]')?.textContent).toContain(
-    "Syntax highlighting is not available for cpp",
+    "Syntax highlighting is not available for zig",
   );
 });
 
@@ -1761,4 +1761,29 @@ test("Vim half-page keys move within the visible file and return to its start", 
   await expect.poll(() => Number(pane.element().getAttribute("data-vim-line"))).toBeGreaterThan(1);
   await userEvent.keyboard("{Control>}u{/Control}");
   await expect.element(pane).toHaveAttribute("data-vim-line", "1");
+});
+
+test.each(["java", "cpp"])("%s is highlighted by the real syntax worker", async (lang) => {
+  const text = lang === "java" ? "class Demo { int count = 42; }" : "int main() { return 42; }";
+  render(
+    <WorkerPoolContextProvider
+      highlighterOptions={{ theme: "github-dark" }}
+      poolOptions={{ workerFactory: () => new PierreWorker(), poolSize: 1 }}
+    >
+      <FullFileView
+        {...props}
+        file={{ ...base, path: `example.${lang}`, identity: `${lang}:worker`, text }}
+      />
+    </WorkerPoolContextProvider>,
+  );
+  await expect.poll(() => lines()?.[0]?.textContent).toBe(text);
+  await expect
+    .poll(() => {
+      const tokens = document
+        .querySelector("diffs-container")
+        ?.shadowRoot?.querySelectorAll("[data-line] span[style]");
+      return new Set(Array.from(tokens ?? [], (token) => token.getAttribute("style"))).size;
+    })
+    .toBeGreaterThan(2);
+  expect(mount!.textContent).not.toContain("Syntax highlighting is not available");
 });
