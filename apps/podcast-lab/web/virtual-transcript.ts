@@ -9,6 +9,7 @@ export class VirtualTranscript {
   private observer: ResizeObserver;
   private containerObserver: ResizeObserver;
   private frame = 0;
+  private target: { index: number; part: number } | undefined;
 
   constructor(
     private viewport: HTMLElement,
@@ -33,8 +34,10 @@ export class VirtualTranscript {
       }
       if (!changed) return;
       this.reflow();
-      this.viewport.scrollTop += this.offsets[anchor] - previousTop;
+      if (!this.target)
+        this.viewport.scrollTop += this.offsets[anchor] - previousTop;
       this.render();
+      this.alignTarget();
     });
     this.containerObserver = new ResizeObserver(() => this.resize());
     this.viewport.addEventListener("scroll", this.onScroll, { passive: true });
@@ -81,6 +84,7 @@ export class VirtualTranscript {
       this.viewport.scrollTop = this.offsets[anchor] + within;
     } else this.reflow();
     this.render();
+    this.alignTarget();
   }
 
   private reflow() {
@@ -128,10 +132,53 @@ export class VirtualTranscript {
     this.decorate();
   }
 
-  scrollTo(index: number, behavior: ScrollBehavior) {
+  cancelFollow() {
+    this.target = undefined;
+  }
+
+  /** Resolve estimated offsets first, then anchor to the measured sentence.
+   * Reapply after ResizeObserver measurements; smooth scrolling toward a stale
+   * estimate can otherwise stop on an unrelated paragraph. */
+  scrollTo(index: number, part: number, force = true) {
+    this.target = { index, part };
+    const rect = this.targetRect();
+    const viewport = this.viewport.getBoundingClientRect();
+    if (
+      !force &&
+      rect &&
+      rect.top >= viewport.top + 25 &&
+      rect.bottom <= viewport.bottom - 85
+    )
+      return;
+    if (!rect) {
+      this.viewport.scrollTo({
+        top: Math.max(
+          0,
+          this.offsets[index] - this.viewport.clientHeight * 0.25,
+        ),
+        behavior: "instant",
+      });
+      this.render();
+    }
+    this.alignTarget();
+  }
+
+  private targetRect() {
+    if (!this.target) return;
+    const node = this.nodes.get(this.target.index);
+    const sentence = node?.querySelectorAll(".sentence")[this.target.part];
+    return sentence?.getClientRects()[0] ?? node?.getBoundingClientRect();
+  }
+
+  private alignTarget() {
+    const rect = this.targetRect();
+    if (!rect) return;
+    const viewport = this.viewport.getBoundingClientRect();
+    const delta = rect.top - viewport.top - viewport.height * 0.25;
+    if (Math.abs(delta) < 1) return;
     this.viewport.scrollTo({
-      top: Math.max(0, this.offsets[index] - this.viewport.clientHeight * 0.2),
-      behavior,
+      top: Math.max(0, this.viewport.scrollTop + delta),
+      behavior: "instant",
     });
     this.render();
   }

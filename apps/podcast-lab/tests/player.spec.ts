@@ -294,3 +294,48 @@ test("restored 1.25x playback still skips; explicit preview lasts only one pass"
     )
     .toBeGreaterThanOrEqual(skip.end);
 });
+
+for (const width of [1440, 390]) {
+  test(`Follow returns to the active sentence after a distant scroll at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+    await expect(page.locator("#title")).toHaveText(episode.title);
+    await page.locator("#follow").click();
+    const row = episode.rows.find(
+      (row: { start: number; parts: unknown[] }) =>
+        row.start > 2000 && row.parts.length >= 4,
+    );
+    const part = row.parts.at(-1);
+    await page.locator("#seek").evaluate(
+      (el: HTMLInputElement, time: number) => {
+        el.value = String(time);
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+      (part.start + part.end) / 2,
+    );
+    await page.locator("#transcript").hover();
+    await page.mouse.wheel(0, 8000);
+    await expect(page.locator("#follow")).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await page.locator("#follow").click();
+    await expect(page.locator(".sentence.current")).toHaveText(part.text);
+    await expect
+      .poll(() =>
+        page.locator(".sentence.current").evaluate((el) => {
+          const viewport = document
+            .querySelector("#transcript")!
+            .getBoundingClientRect();
+          const rect = el.getClientRects()[0];
+          return (
+            rect.top >= viewport.top + 20 && rect.bottom <= viewport.bottom - 80
+          );
+        }),
+      )
+      .toBe(true);
+    await page.screenshot({ path: `.local/follow-${width}.png` });
+  });
+}

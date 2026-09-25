@@ -112,6 +112,25 @@ Primary references:
 - [Jev API](https://api.typesafe.ai/docs)
 - [Codex non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode)
 
+## Progressive transcription
+
+The installed Parakeet MLX 0.5.0 supports two paths:
+
+- `transcribe(..., chunk_duration=90, overlap_duration=10)`, which we use,
+  returns one merged result after all chunks finish. Its `chunk_callback`
+  reports sample positions, not partial transcript text.
+- `transcribe_stream()` accepts audio through `add_audio()` and exposes
+  `result`, `finalized_tokens`, and `draft_tokens`. Draft text may change as
+  more context arrives.
+
+Our pipeline currently writes `asr.json` after full transcription, then runs
+speaker separation and classification. Streaming is available in the library
+but is not connected to this player. A progressive pipeline should publish
+stable text first, retain an overlap tail for corrections, and classify only
+after enough surrounding context is available. Speaker names and chapter
+headings can arrive later. Streaming quality and latency still need a separate
+comparison against the current batch run.
+
 ## Reproduce the pipeline
 
 Prerequisites: Apple Silicon, FFmpeg, Python, uv, Bun, the Codex CLI signed in,
@@ -199,8 +218,10 @@ across speakers; sentence-level refinement can then locate their boundaries.
   rebuilding the list or measuring layout on playback ticks.
 - Removing unused word-level data reduced the player JSON from 1,044,923 to
   213,949 bytes. Raw word timings remain in the local pipeline artifacts.
-- Seek feedback follows input immediately. Manual scrolling cancels following;
-  reduced-motion mode removes smooth scroll. There is no claimed 120 fps result.
+- Follow along jumps to the active sentence, then corrects its position after
+  nearby rows are measured. It does not animate through estimated row offsets.
+  Playback advances the view only when the active sentence leaves the readable
+  area. Manual scrolling cancels following. There is no claimed 120 fps result.
 - The same audio element survives chapter and transcript navigation.
 - Only Undo and Listen and check bypass a promotion, for one pass. Leaving the
   range or seeking elsewhere clears that exception. Ordinary seeks into a

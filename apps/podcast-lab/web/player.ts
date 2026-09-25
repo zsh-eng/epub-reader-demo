@@ -42,7 +42,6 @@ const skipToggle = element<HTMLInputElement>("skip-toggle");
 const followButton = element<HTMLButtonElement>("follow");
 const fmt = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-const reduced = matchMedia("(prefers-reduced-motion: reduce)");
 let data: Episode;
 let active = -1,
   activePart = -1,
@@ -65,10 +64,11 @@ function setFollowing(value: boolean) {
   followButton.setAttribute("aria-pressed", String(value));
   followButton.textContent = value ? "Following" : "Follow along";
   if (value) scrollToActive();
+  else virtual?.cancelFollow();
 }
-function scrollToActive(instant = false) {
+function scrollToActive(force = true) {
   if (active < 0) return;
-  virtual?.scrollTo(active, instant || reduced.matches ? "instant" : "smooth");
+  virtual?.scrollTo(active, activePart, force);
 }
 function seekTo(time: number, preview?: Skip) {
   if (!data) return;
@@ -169,8 +169,7 @@ function paintParts() {
 }
 function showSkip(skip: Skip) {
   lastSkipped = skip;
-  element("toast-text").textContent =
-    `Skipped ${fmt(skip.end - skip.start)} · Promotion`;
+  element("toast-text").textContent = `Skipped ${fmt(skip.end - skip.start)}`;
   element("toast").hidden = false;
   clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => {
@@ -203,7 +202,7 @@ function update() {
   if (changed || partIndex !== activePart) {
     activePart = partIndex;
     paintParts();
-    if (changed && following) scrollToActive();
+    if (following && (changed || partIndex >= 0)) scrollToActive(false);
   }
   seek.value = String(time);
   const elapsed = fmt(time);
@@ -280,7 +279,7 @@ async function start() {
   element("duration").textContent = fmt(data.duration);
   seek.max = String(data.duration);
   element("savings").textContent =
-    `${fmt(data.skips.reduce((sum, s) => sum + s.end - s.start, 0))} of suggested skips · ${data.skips.length} moments`;
+    `${fmt(data.skips.reduce((sum, s) => sum + s.end - s.start, 0))} · ${data.skips.length} detected`;
   element("chapter-count").textContent = String(data.chapters.length).padStart(
     2,
     "0",
@@ -303,11 +302,11 @@ async function start() {
     const button = document.createElement("button");
     button.className = "detection";
     const name = document.createElement("span");
-    name.textContent = "Publisher promotion";
+    name.textContent = skip.category === "sponsor" ? "Sponsor" : "Promotion";
     const time = document.createElement("time");
     time.textContent = `${fmt(skip.start)} — ${fmt(skip.end)}`;
     const hint = document.createElement("small");
-    hint.textContent = "Listen and check ↗";
+    hint.textContent = "Listen ↗";
     button.append(name, time, hint);
     button.addEventListener("click", () => {
       seekTo(skip.start, skip);
@@ -320,9 +319,6 @@ async function start() {
     mark.style.width = `${((skip.end - skip.start) / data.duration) * 100}%`;
     element("skip-marks").append(mark);
   }
-  element("provenance").textContent = Object.values(data.provenance).join(
-    " · ",
-  );
   const peaks = data.waveform ?? [];
   for (const peak of peaks) {
     const bar = document.createElement("i");
