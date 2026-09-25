@@ -1,6 +1,7 @@
 import * as stylex from "@stylexjs/stylex";
 import {
   CodeView,
+  useWorkerPool,
   type CodeViewHandle,
   type CodeViewItem,
   type CodeViewReactOptions,
@@ -212,6 +213,25 @@ export function FullFileView({
       },
     ];
   }, [file]);
+  const workerPool = useWorkerPool();
+  useLayoutEffect(() => {
+    if (loading || file?.kind !== "text" || file.plain || !workerPool?.isWorkingPool()) return;
+    const input = pierreFile(file);
+    if (workerPool.getFileResultCache(input)) return;
+    let cancelled = false;
+    // The pool deduplicates this with the early read and CodeView requests.
+    // Commit the visible file as soon as its result is ready instead of waiting
+    // for an additional virtualizer frame. Other files still use normal batching.
+    void workerPool
+      .primeFileHighlightCache(input)
+      .then(() => {
+        if (!cancelled) viewer.current?.getInstance()?.render(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [file, loading, workerPool]);
   const visualName = vim.visualName;
   const activeSearchName = vim.activeSearchName;
   const options = useMemo<CodeViewReactOptions<undefined, undefined>>(

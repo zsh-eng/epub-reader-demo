@@ -120,7 +120,12 @@ export function App({
     () =>
       providedBrowseApi ?? createBrowseApi(globalThis.fetch.bind(globalThis), readBrowserToken()),
   );
-  const [prefetch] = useState(() => createFilePrefetch(rawBrowseApi));
+  const [prefetch] = useState(() =>
+    createFilePrefetch(
+      rawBrowseApi,
+      workerPool ? (file) => workerPool.primeFileHighlightCache(file) : undefined,
+    ),
+  );
   const browseApi = prefetch.api;
   useEffect(() => () => prefetch.dispose(), [prefetch]);
   const [fileWorkspace] = useState(() => createFileWorkspace(browseApi));

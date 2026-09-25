@@ -1,5 +1,7 @@
 import { afterEach, expect, test } from "vitest";
 import { page, userEvent } from "vitest/browser";
+import { WorkerPoolContextProvider } from "@pierre/diffs/react";
+import PierreWorker from "@pierre/diffs/worker/worker.js?worker";
 import { createRoot, type Root } from "react-dom/client";
 import { App } from "../../src/web/App";
 import { createReviewController } from "../../src/web/data/controller";
@@ -16,7 +18,11 @@ afterEach(() => {
   mount = undefined;
   localStorage.removeItem("med:vim");
 });
-async function mountFile(vim = false, beforeRead?: () => Promise<void>) {
+async function mountFile(
+  vim = false,
+  beforeRead?: () => Promise<void>,
+  syntaxSource?: () => string,
+) {
   localStorage.setItem("med:vim", vim ? "on" : "off");
   initializeTheme();
   await page.viewport(1200, 800);
@@ -64,14 +70,15 @@ async function mountFile(vim = false, beforeRead?: () => Promise<void>) {
     if (url.pathname === "/api/browse/read") {
       await beforeRead?.();
       const { source, path } = JSON.parse(String(init?.body));
+      const contents = syntaxSource?.() ?? text;
       return Response.json({
         source,
         path,
-        identity: "fixture-text",
+        identity: contents,
         kind: "text",
-        text,
-        size: text.length,
-        plain: true,
+        text: contents,
+        size: contents.length,
+        plain: !syntaxSource,
       });
     }
     if (url.pathname === "/api/browse/symbols") {
@@ -106,7 +113,19 @@ async function mountFile(vim = false, beforeRead?: () => Promise<void>) {
   mount = document.createElement("div");
   document.body.append(mount);
   root = createRoot(mount);
-  root.render(<App controller={controller} browseApi={createBrowseApi(fetcher, "fixture")} />);
+  const app = <App controller={controller} browseApi={createBrowseApi(fetcher, "fixture")} />;
+  root.render(
+    syntaxSource ? (
+      <WorkerPoolContextProvider
+        highlighterOptions={{ theme: "github-dark" }}
+        poolOptions={{ workerFactory: () => new PierreWorker(), poolSize: 1 }}
+      >
+        {app}
+      </WorkerPoolContextProvider>
+    ) : (
+      app
+    ),
+  );
   await expect
     .poll(() => document.querySelector("[data-review-status]")?.getAttribute("data-review-status"))
     .toBe("ready");
@@ -302,4 +321,38 @@ test("Go to line is available from the command palette and focuses its prompt", 
   const pane = page.getByRole("textbox", { name: "File navigation", exact: true });
   await expect.element(pane).toHaveAttribute("data-vim-line", "80");
   await expect.poll(() => document.activeElement).toBe(pane.element());
+});
+
+test("reopening a highlighted working file shows its current contents", async () => {
+  let source = "export const original = 42;";
+  await mountFile(false, undefined, () => source);
+  const tokens = () =>
+    Array.from(
+      document.querySelector('[data-file-pane="main"]')?.querySelectorAll("diffs-container") ?? [],
+    ).flatMap((node) =>
+      Array.from(node.shadowRoot?.querySelectorAll("[data-line] span[style]") ?? []),
+    );
+  await expect
+    .poll(() =>
+      tokens()
+        .map((token) => token.textContent)
+        .join(""),
+    )
+    .toBe(source);
+  await expect
+    .poll(() => new Set(tokens().map((token) => getComputedStyle(token).color)).size)
+    .toBeGreaterThan(2);
+  await page.getByRole("tab", { name: "Changes", exact: true }).click();
+  source = 'export const revised = "fresh";';
+  await page.getByRole("tab", { name: "main.ts", exact: true }).click();
+  await expect
+    .poll(() =>
+      tokens()
+        .map((token) => token.textContent)
+        .join(""),
+    )
+    .toBe(source);
+  await expect
+    .poll(() => new Set(tokens().map((token) => getComputedStyle(token).color)).size)
+    .toBeGreaterThan(2);
 });

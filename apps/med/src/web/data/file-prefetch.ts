@@ -1,6 +1,6 @@
 import type { BrowseRead, BrowseSource } from "../../shared/browse";
 import { browseSourceKey, type BrowseApi } from "./browse";
-import type { FileContents } from "@pierre/diffs";
+import { getFiletypeFromFileName, resolveLanguages, type FileContents } from "@pierre/diffs";
 
 /** Use exactly the same identity for speculative and visible highlighting. */
 export function pierreFile(file: BrowseRead): FileContents {
@@ -13,7 +13,7 @@ export function pierreFile(file: BrowseRead): FileContents {
 }
 
 /** One-use hover cache: normal reads and explicit refreshes stay fresh. */
-export function createFilePrefetch(api: BrowseApi) {
+export function createFilePrefetch(api: BrowseApi, warm?: (file: FileContents) => Promise<void>) {
   type Entry = {
     promise: Promise<BrowseRead>;
     abort: AbortController;
@@ -39,6 +39,9 @@ export function createFilePrefetch(api: BrowseApi) {
     api: {
       ...api,
       async read(source: BrowseSource, path: string, signal?: AbortSignal) {
+        // Resolve the language descriptor while I/O is in flight. Otherwise
+        // the pool's async metadata lookup lets React mount before dispatch.
+        if (warm) void resolveLanguages([getFiletypeFromFileName(path)]).catch(() => {});
         prune();
         const key = keyFor(source, path);
         const entry = entries.get(key);
@@ -46,6 +49,15 @@ export function createFilePrefetch(api: BrowseApi) {
         signal?.throwIfAborted();
         const file = await (entry?.promise ?? api.read(source, path, signal));
         signal?.throwIfAborted();
+        // Start the real render task before React mounts the viewer. Pierre
+        // joins this task when the visible file requests the same identity.
+        if (
+          !disposed &&
+          file.kind === "text" &&
+          !file.plain &&
+          (file.text?.length ?? 0) <= 256 * 1024
+        )
+          void warm?.(pierreFile(file)).catch(() => {});
         return file;
       },
     } satisfies BrowseApi,
