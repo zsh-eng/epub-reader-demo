@@ -142,6 +142,9 @@ def run():
     subprocess.run(
         [str(local_python), str(APP / "pipeline/assets.py"), str(root)], check=True
     )
+    subprocess.run(
+        [str(local_python), str(APP / "pipeline/avatars.py"), str(root)], check=True
+    )
     from prepare_player import prepare
 
     prepare(root)

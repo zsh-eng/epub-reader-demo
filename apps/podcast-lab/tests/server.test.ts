@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "../server";
@@ -7,6 +7,11 @@ let folder: string, server: ReturnType<typeof createServer>;
 beforeAll(async () => {
   folder = await mkdtemp(join(tmpdir(), "podcast-http-"));
   await writeFile(join(folder, "episode.mp3"), "0123456789");
+  await mkdir(join(folder, "avatars"));
+  await writeFile(
+    join(folder, "avatars", "a".repeat(64) + ".webp"),
+    "portrait",
+  );
   server = createServer(folder, 0);
 });
 afterAll(async () => {
@@ -45,4 +50,17 @@ test("raw data and credentials are not exposed", async () => {
   expect(
     (await fetch(new URL("/audio", server.url), { method: "POST" })).status,
   ).toBe(405);
+});
+
+test("avatars are immutable local files with a restricted filename", async () => {
+  const path = "/avatars/" + "a".repeat(64) + ".webp";
+  const response = await fetch(new URL(path, server.url));
+  expect(response.headers.get("content-type")).toBe("image/webp");
+  expect(response.headers.get("cache-control")).toContain("immutable");
+  expect(await response.text()).toBe("portrait");
+  for (const invalid of [
+    "/avatars/source.json",
+    "/avatars/" + "b".repeat(64) + ".webp",
+  ])
+    expect((await fetch(new URL(invalid, server.url))).status).toBe(404);
 });

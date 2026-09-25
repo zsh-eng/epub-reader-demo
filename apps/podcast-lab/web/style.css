@@ -252,6 +252,9 @@ h1 {
   letter-spacing: 0.15px;
 }
 .avatar {
+  position: relative;
+  overflow: hidden;
+  flex: none;
   display: inline-grid;
   place-content: center;
   width: 24px;
@@ -697,4 +700,19 @@ details p {
   .mobile-skips {
     margin-right: 0;
   }
+}
+
+.avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#photo-credits:empty {
+  display: none;
+}
+#photo-credits a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

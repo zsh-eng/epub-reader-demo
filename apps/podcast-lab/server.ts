@@ -18,6 +18,21 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
         "/episode.json": join(dataDir, "episode.json"),
         "/artwork": join(dataDir, "artwork.webp"),
       };
+      // Only generated content-addressed WebP portraits; no arbitrary files.
+      const avatar = /^\/avatars\/([a-f0-9]{64}\.webp)$/.exec(url.pathname);
+      if (avatar) {
+        const file = Bun.file(join(dataDir, "avatars", avatar[1]));
+        if (!(await file.exists()))
+          return new Response("Not found", { status: 404 });
+        return new Response(request.method === "HEAD" ? null : file, {
+          headers: {
+            "Content-Type": "image/webp",
+            "Content-Length": String(file.size),
+            "Cache-Control": "private, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
       if (url.pathname === "/audio") {
         const file = Bun.file(join(dataDir, "episode.mp3"));
         if (!(await file.exists()))

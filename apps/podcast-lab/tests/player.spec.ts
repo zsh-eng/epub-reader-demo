@@ -339,3 +339,53 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: `.local/follow-${width}.png` });
   });
 }
+
+test("speaker portraits load locally and failed images retain initials", async ({
+  page,
+}) => {
+  const named = episode.speakers.filter((s: { avatar?: string }) => s.avatar);
+  expect(named.length).toBe(2);
+  await page.goto("/");
+  await expect(page.locator("#title")).toHaveText(episode.title);
+  for (const speaker of named) {
+    const row = episode.rows.find(
+      (r: { speaker: string; start: number; end: number }) =>
+        r.speaker === speaker.id && r.start > 300 && r.start < 1300,
+    );
+    await page.locator("#seek").evaluate((el: HTMLInputElement, time) => {
+      el.value = String(time);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, row.parts[0].start + 0.1);
+    const photo = page.locator(".transcript-row.active .avatar img");
+    await expect(photo).toHaveAttribute("src", speaker.avatar);
+    await expect
+      .poll(() =>
+        photo.evaluate(
+          (el: HTMLImageElement) =>
+            el.complete && el.naturalWidth === 96 && el.naturalHeight === 96,
+        ),
+      )
+      .toBe(true);
+  }
+  await page.screenshot({ path: ".local/avatars-light.png" });
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.screenshot({ path: ".local/avatars-dark.png" });
+  await page.route("**/avatars/**", (route) => route.abort());
+  await page.reload();
+  await expect(page.locator(".transcript-row.active .avatar")).toBeVisible();
+  await expect(page.locator(".transcript-row.active .avatar img")).toHaveCount(
+    0,
+  );
+  await expect(page.locator(".transcript-row.active .avatar")).not.toHaveText(
+    "",
+  );
+  const skip = episode.skips[0];
+  await page.locator("#seek").evaluate((el: HTMLInputElement, time) => {
+    el.value = String(time);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, skip.start + 0.1);
+  await expect(page.locator(".transcript-row.active")).toHaveClass(/promotion/);
+  await expect(page.locator(".transcript-row.active .avatar img")).toHaveCount(
+    0,
+  );
+});

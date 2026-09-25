@@ -9,7 +9,15 @@ type Row = {
   parts: Word[];
   text: string;
 };
-type Speaker = { id: string; name: string; role: string; confidence: string };
+type Speaker = {
+  id: string;
+  name: string;
+  role: string;
+  confidence: string;
+  avatar?: string;
+  avatarSource?: string;
+  avatarCredit?: string;
+};
 type Skip = {
   id: string;
   start: number;
@@ -115,6 +123,16 @@ function createRow(index: number) {
     .slice(0, 2)
     .map((n) => n[0])
     .join("");
+  if (!promotion(row) && speaker?.confidence !== "unknown" && speaker?.avatar) {
+    const photo = document.createElement("img");
+    photo.alt = "";
+    photo.width = 24;
+    photo.height = 24;
+    photo.decoding = "async";
+    photo.addEventListener("error", () => photo.remove(), { once: true });
+    photo.src = speaker.avatar;
+    avatar.append(photo);
+  }
   const label = document.createElement("span");
   label.textContent = name;
   if (!promotion(row) && speaker?.confidence !== "unknown")
@@ -270,6 +288,22 @@ async function start() {
     );
   data = await response.json();
   speakers = new Map(data.speakers.map((s) => [s.id, s]));
+  const credits = element("photo-credits");
+  const credited = new Set<string>();
+  for (const speaker of data.speakers) {
+    if (!speaker.avatar || !speaker.avatarSource || credited.has(speaker.name))
+      continue;
+    credited.add(speaker.name);
+    const link = document.createElement("a");
+    link.href = speaker.avatarSource;
+    link.target = "_blank";
+    link.rel = "noreferrer";
+    link.textContent = speaker.name;
+    link.title = speaker.avatarCredit ?? speaker.name;
+    if (credits.childNodes.length) credits.append(" · ");
+    else credits.append("Photos: ");
+    credits.append(link);
+  }
   element("title").textContent = data.title;
   element("show").textContent = data.show.toUpperCase();
   element("summary").textContent = data.summary;

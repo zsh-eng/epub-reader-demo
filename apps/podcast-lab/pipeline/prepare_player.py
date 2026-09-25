@@ -64,6 +64,21 @@ def prepare(root=Path(".local")):
     # only sentence/part timestamps, so avoid transferring duplicate word data.
     for row in rows:
         row.pop("words")
+    avatars_path = root / "avatars.json"
+    avatars = json.loads(avatars_path.read_text()) if avatars_path.exists() else {}
+    speakers = []
+    for speaker in enrichment["speakers"]:
+        portrait = avatars.get(speaker["name"])
+        entry = dict(speaker)
+        if (
+            portrait
+            and speaker["confidence"] != "unknown"
+            and speaker["role"].lower() in {"host", "guest"}
+        ):
+            entry["avatar"] = "/avatars/" + portrait["file"]
+            entry["avatarSource"] = portrait["sourcePage"]
+            entry["avatarCredit"] = portrait["credit"]
+        speakers.append(entry)
     output = {
         "title": source["title"],
         "show": source["show"],
@@ -71,7 +86,7 @@ def prepare(root=Path(".local")):
         "source": source["source"],
         "duration": duration,
         "audioHash": audio["sha256"],
-        "speakers": enrichment["speakers"],
+        "speakers": speakers,
         "chapters": enrichment["chapters"],
         "summary": enrichment["summary"],
         "rows": rows,

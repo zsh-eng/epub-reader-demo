@@ -69,8 +69,9 @@ Before/after artifacts and the fetched feed are retained locally under
 `.local/experiments/metadata-context/`. The preview uses the new detections.
 
 Speaker separation also merges some short ad voices with interview speakers.
-Names are inferred from the introduction and can be wrong. Initials are used
-instead of unverified portraits. Chapter boundaries start at existing speaker
+Names are inferred from the introduction and can be wrong. Named host/guest
+labels can use reviewed profile portraits. Unknown speakers and detected
+promotion passages retain initials; photos do not verify acoustic identity. Chapter boundaries start at existing speaker
 blocks; they are not editorially verified. ASR has occasional spelling errors
 and bad word spans. Display spans are capped at two seconds and cannot overlap
 the next word; the unmodified model output remains available locally.
@@ -111,6 +112,32 @@ Primary references:
 - [Spokenly: Parakeet and FluidAudio](https://spokenly.app/blog/parakeet-vs-whisper)
 - [Jev API](https://api.typesafe.ai/docs)
 - [Codex non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode)
+
+## Speaker avatars
+
+The batch pipeline remains unchanged. `avatar-sources.json` is a small catalog
+of profile images selected by search and checked against their source pages:
+[Ezra Klein's profile](https://x.com/ezraklein) and
+[Matt Sheehan's Carnegie profile](https://carnegieendowment.org/people/matt-sheehan).
+It is not an automatic Google Images scraper or face-recognition system.
+
+`pipeline/avatars.py` downloads each selected image once, corrects orientation,
+crops to a 96 × 96 square, and encodes WebP at quality 82. Current files are
+1,332 and 2,692 bytes, displayed at 24 CSS pixels. Originals are discarded.
+Files have content hashes and immutable browser caching; a local manifest
+retains the source, recipe, and attribution. Changing a catalog entry triggers
+a new download. Missing or failed portraits retain initials without layout
+movement. Scrolling only requests the small local files.
+
+To refresh portraits without redoing transcription or hosted inference:
+
+```sh
+.venv/bin/python pipeline/avatars.py .local
+python3 pipeline/prepare_player.py
+```
+
+Source links appear under About detection. Original photography remains with
+its respective owner; the catalog records provenance, not a licence grant.
 
 ## Progressive transcription
 
