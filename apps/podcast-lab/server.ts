@@ -11,11 +11,39 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
         return new Response("Invalid host", { status: 403 });
       if (!["GET", "HEAD"].includes(request.method))
         return new Response("Method not allowed", { status: 405 });
+      const folders: Record<string, string> = {
+        ezra: dataDir,
+        decoder: join(dataDir, "benchmark/decoder"),
+        darknet: join(dataDir, "benchmark/darknet"),
+        "99pi": join(dataDir, "benchmark/99pi"),
+      };
+      const episodeRoute =
+        /^\/episodes\/(ezra|decoder|darknet|99pi)\/(episode\.json|audio)$/.exec(
+          url.pathname,
+        );
+      const episodeDir = episodeRoute ? folders[episodeRoute[1]] : dataDir;
+      const route = episodeRoute ? "/" + episodeRoute[2] : url.pathname;
+      const showCover = /^\/shows\/(ezra|decoder|darknet|99pi)\/artwork$/.exec(
+        route,
+      );
+      if (showCover) {
+        const file = Bun.file(join(folders[showCover[1]], "artwork.webp"));
+        if (!(await file.exists()))
+          return new Response("Not found", { status: 404 });
+        return new Response(request.method === "HEAD" ? null : file, {
+          headers: {
+            "Content-Type": "image/webp",
+            "Cache-Control": "private, max-age=3600",
+          },
+        });
+      }
       const assets: Record<string, string> = {
         "/": join(app, "web/index.html"),
         "/player.js": join(app, "dist/player.js"),
         "/style.css": join(app, "web/style.css"),
-        "/episode.json": join(dataDir, "episode.json"),
+        "/episode.json": join(episodeDir, "episode.json"),
+        "/library.json": join(dataDir, "library.json"),
+        "/library.css": join(app, "web/library.css"),
         "/artwork": join(dataDir, "artwork.webp"),
       };
       // Only generated content-addressed WebP portraits; no arbitrary files.
@@ -33,8 +61,8 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
           },
         });
       }
-      if (url.pathname === "/audio") {
-        const file = Bun.file(join(dataDir, "episode.mp3"));
+      if (route === "/audio") {
+        const file = Bun.file(join(episodeDir, "episode.mp3"));
         if (!(await file.exists()))
           return new Response("Download the episode first", { status: 404 });
         const size = file.size;
@@ -83,7 +111,7 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
           },
         );
       }
-      const path = assets[url.pathname];
+      const path = assets[route];
       if (!path) return new Response("Not found", { status: 404 });
       const file = Bun.file(path);
       if (!(await file.exists()))

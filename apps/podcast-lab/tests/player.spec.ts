@@ -6,7 +6,7 @@ const episode = JSON.parse(
 test("real episode: seek, follow, bounded transcript, skip and Undo", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/#player");
   await expect(page.locator("#title")).toHaveText(episode.title);
   await expect
     .poll(() => page.locator(".transcript-row").count())
@@ -75,7 +75,7 @@ test("phone and reduced motion retain readable rows and keyboard controls", asyn
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/#player");
   await expect(page.locator("#title")).toHaveText(episode.title);
   await page
     .locator("audio")
@@ -111,7 +111,7 @@ test("speaker paragraphs highlight and seek by section without overlapping rows"
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/#player");
   const row = episode.rows.find(
     (row: { start: number; parts: unknown[] }) =>
       row.start > 500 && row.parts.length >= 3,
@@ -182,7 +182,7 @@ test("speaker paragraphs highlight and seek by section without overlapping rows"
 test("1.25x skips when scrubbing into a promotion and when replaying it later", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/#player");
   await expect(page.locator("#title")).toHaveText(episode.title);
   await page.locator("audio").evaluate((el: HTMLAudioElement) => {
     el.muted = true;
@@ -233,7 +233,7 @@ test("restored 1.25x playback still skips; explicit preview lasts only one pass"
     },
     { hash: episode.audioHash, time: skip.start + 1 },
   );
-  await page.goto("/");
+  await page.goto("/#player");
   await expect(page.locator("#speed")).toHaveText("1.25×");
   await expect
     .poll(() =>
@@ -300,7 +300,7 @@ for (const width of [1440, 390]) {
     page,
   }) => {
     await page.setViewportSize({ width, height: 844 });
-    await page.goto("/");
+    await page.goto("/#player");
     await expect(page.locator("#title")).toHaveText(episode.title);
     await page.locator("#follow").click();
     const row = episode.rows.find(
@@ -345,7 +345,7 @@ test("speaker portraits load locally and failed images retain initials", async (
 }) => {
   const named = episode.speakers.filter((s: { avatar?: string }) => s.avatar);
   expect(named.length).toBe(2);
-  await page.goto("/");
+  await page.goto("/#player");
   await expect(page.locator("#title")).toHaveText(episode.title);
   for (const speaker of named) {
     const row = episode.rows.find(
@@ -393,7 +393,7 @@ test("speaker portraits load locally and failed images retain initials", async (
 test("compact chrome and segment markers distinguish promotions from people", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/#player");
   await expect(page.locator("#title")).toHaveText(episode.title);
   const skip = episode.skips[0];
   await page.locator("#seek").evaluate((el: HTMLInputElement, time) => {

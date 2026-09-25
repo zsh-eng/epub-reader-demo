@@ -64,3 +64,38 @@ test("avatars are immutable local files with a restricted filename", async () =>
   ])
     expect((await fetch(new URL(invalid, server.url))).status).toBe(404);
 });
+
+test("library and prepared episode routes stay scoped to the selected show", async () => {
+  await mkdir(join(folder, "benchmark", "decoder"), { recursive: true });
+  await writeFile(
+    join(folder, "benchmark", "decoder", "episode.mp3"),
+    "decoder-audio",
+  );
+  await writeFile(
+    join(folder, "benchmark", "decoder", "episode.json"),
+    JSON.stringify({ title: "Decoder" }),
+  );
+  await writeFile(
+    join(folder, "library.json"),
+    JSON.stringify({ shows: [{ id: "decoder" }], episodes: [] }),
+  );
+  expect(
+    await (await fetch(new URL("/library.json", server.url))).json(),
+  ).toEqual({ shows: [{ id: "decoder" }], episodes: [] });
+  expect(
+    await (
+      await fetch(new URL("/episodes/decoder/episode.json", server.url))
+    ).json(),
+  ).toEqual({ title: "Decoder" });
+  const audio = await fetch(new URL("/episodes/decoder/audio", server.url), {
+    headers: { Range: "bytes=0-6" },
+  });
+  expect(audio.status).toBe(206);
+  expect(await audio.text()).toBe("decoder");
+  for (const path of [
+    "/episodes/decoder/source.json",
+    "/episodes/unknown/audio",
+    "/shows/unknown/artwork",
+  ])
+    expect((await fetch(new URL(path, server.url))).status).toBe(404);
+});

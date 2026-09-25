@@ -6,9 +6,51 @@
     <meta name="color-scheme" content="light dark" />
     <title>Undertone</title>
     <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/library.css" />
   </head>
-  <body>
-    <main class="workspace">
+  <body class="library-open">
+    <section
+      id="library-shell"
+      class="library-shell"
+      aria-label="Podcast library"
+    >
+      <aside class="library-sidebar">
+        <a class="wordmark" href="#home" aria-label="Undertone home"
+          ><svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+            <path
+              d="M4 12v4M9 7v14M14 3v22M19 8v12M24 12v4"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            /></svg
+          >undertone</a
+        >
+        <nav id="library-nav" aria-label="Library"></nav>
+        <p class="library-footnote">
+          Independent voices.<br />Straight from their feeds.
+        </p>
+      </aside>
+      <main id="library-main" class="library-main">
+        <header class="library-header">
+          <h1 id="library-title">Good listening.</h1>
+          <label class="library-search"
+            ><span aria-hidden="true">⌕</span
+            ><input
+              id="library-search"
+              type="search"
+              placeholder="Find a voice, a story…"
+              aria-label="Search shows and episodes"
+          /></label>
+        </header>
+        <div
+          id="library-content"
+          class="library-content"
+          aria-busy="false"
+        ></div>
+      </main>
+    </section>
+    <p id="library-status" role="status"></p>
+    <main id="reader-workspace" class="workspace" hidden>
       <aside class="episode-panel">
         <div class="cover-wrap">
           <img
@@ -34,7 +76,7 @@
       </aside>
       <section class="conversation">
         <div class="transcript-heading">
-          <a class="wordmark" href="/" aria-label="Undertone home"
+          <a class="wordmark" href="#home" aria-label="Undertone home"
             ><svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
               <path
                 d="M4 12v4M9 7v14M14 3v22M19 8v12M24 12v4"
@@ -85,13 +127,17 @@
       </aside>
     </main>
     <footer class="player">
-      <div class="player-now">
+      <button
+        id="now-playing"
+        class="player-now"
+        aria-label="Open current episode"
+      >
         <span class="now-dot"></span>
         <div>
           <p id="now-chapter"></p>
           <span id="now-speaker">The Ezra Klein Show</span>
         </div>
-      </div>
+      </button>
       <div class="transport">
         <div class="transport-buttons">
           <button id="back" class="icon-button" aria-label="Back 15 seconds">
@@ -145,7 +191,7 @@
       <span id="toast-text"></span><button id="undo">Undo</button>
     </div>
     <div id="error" class="error" role="alert" hidden></div>
-    <audio id="audio" preload="metadata" src="/audio"></audio>
+    <audio id="audio" preload="metadata"></audio>
     <script type="module" src="/player.js"></script>
   </body>
 </html>

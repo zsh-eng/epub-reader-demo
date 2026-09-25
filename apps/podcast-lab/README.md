@@ -1,8 +1,8 @@
 # Undertone · podcast tracer bullet
 
-One downloaded episode, local speech recognition, speaker-separated transcript,
-Jev promotion suggestions, and a small listening interface. **No RSS app, native
-app, accounts, or sync yet.** Undertone is a working name.
+A local podcast library and listening prototype with cached RSS metadata,
+speaker-separated transcripts and Jev promotion suggestions. Undertone is a
+working name. There is no native app, account system or sync yet.
 
 ## Try it on this Mac
 
@@ -12,7 +12,8 @@ From the Workbench root:
 bun run dev:podcast
 ```
 
-Open **http://127.0.0.1:4378**. The prepared episode is stored in `.local/`.
+Open **http://127.0.0.1:4378** for Home, or **http://127.0.0.1:4378/#player**
+for the current transcript. The prepared episodes are stored in `.local/`.
 Use a chapter or transcript passage to seek. Press Space to play. Scrolling stops
 transcript following; **Follow along** returns to playback. Promotion cards let
 you listen to a detected range. **Undo** replays a skipped range without skipping
@@ -20,8 +21,46 @@ it again during that pass. Ordinary scrubbing and restored playback positions
 still respect the Skip promotions switch. Playback position is stored against
 the exact audio hash.
 
-The player uses actual cached audio and model results. It makes no external
-requests and contains no API key. Stop its server with Control-C.
+Prepared episodes use actual local audio and model results. Other RSS episodes
+stream directly from their enclosure URL only when opened; their transcript and
+promotion detection are marked unprepared. The browser contains no API key.
+Stop the server with Control-C.
+
+## Library and show feeds
+
+The first library contains **four shows, 400 cached RSS entries and four prepared
+episodes**: Ezra Klein, Decoder, Darknet Diaries and 99% Invisible. Home has a
+current-episode card, show artwork and a recent-episode feed. Following filters
+that feed to locally followed shows. Downloads lists prepared local episodes.
+Each show has its own page, creator/publisher credit, Follow control and RSS link.
+Search matches show, creator, episode title and description. The catalog is
+show-based; it does not infer guest appearances or a social network.
+
+`pipeline/library.py` reads cached RSS XML, keeps at most 100 items per show,
+normalizes dates to UTC, strips description HTML and uses feed GUIDs for stable
+IDs (enclosure URLs when GUIDs are absent). It matches prepared audio by URL/GUID,
+never title alone. A prepared episode remains available if it leaves the feed.
+The small `library.json` contains metadata and file references, not audio or full
+transcripts. `pipeline/run.py` saves RSS and rebuilds this snapshot after preparing
+an episode. Existing data can be rebuilt without network or model calls:
+
+```sh
+python3 pipeline/library.py .local
+```
+
+TanStack Query Core caches and deduplicates catalog and prepared-transcript
+requests. The feed mounts only 20 episode rows per page. Cover images use the
+existing local 640 px WebP files, lazy loading and asynchronous decoding. Browsing
+never replaces the audio element. Switching episodes saves the old position,
+cleans up transcript observers, waits for the selected metadata and restores the
+new episode's checkpoint. A request sequence number rejects stale selections.
+Follows and the last selected episode stay in browser local storage.
+
+**Current boundary:** this is a fixed four-show catalog. Adding arbitrary RSS URLs,
+a directory search, scheduled feed refresh, OPML import, and a Download/Prepare
+job queue are not connected. Streaming does not run models in the background.
+Cached local playback works without internet while the loopback server is running;
+online streaming depends on the enclosure host. No 120 fps claim is made.
 
 ## Latest three-show check
 
@@ -199,7 +238,7 @@ python3 pipeline/run.py --local-only
 selects a different experiment directory; set `PODCAST_DATA_DIR` to that absolute
 path when starting the player. The default selected episode is fixed in
 `pipeline/run.py`. Its feed is read once to locate the enclosure and metadata;
-there is no feed-reader product code. If the episode leaves the public feed,
+the library reads the saved RSS snapshot. If the episode leaves the public feed,
 a cached `source.json` is needed.
 
 The runner resumes checkpoints. To rerun a model stage, move its generated JSON

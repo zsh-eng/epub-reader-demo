@@ -66,6 +66,7 @@ export class VirtualTranscript {
 
   private resize() {
     const width = this.viewport.clientWidth;
+    if (!width) return;
     if (width !== this.width) {
       const anchor = this.indexAt(this.viewport.scrollTop);
       const within = this.viewport.scrollTop - (this.offsets[anchor] ?? 0);
@@ -100,6 +101,7 @@ export class VirtualTranscript {
   }
 
   private render() {
+    if (!this.viewport.clientHeight) return;
     const first = this.indexAt(Math.max(0, this.viewport.scrollTop - 350));
     const last = Math.min(
       this.texts.length,
@@ -132,6 +134,16 @@ export class VirtualTranscript {
     this.decorate();
   }
 
+  destroy() {
+    cancelAnimationFrame(this.frame);
+    this.observer.disconnect();
+    this.containerObserver.disconnect();
+    this.viewport.removeEventListener("scroll", this.onScroll);
+    this.nodes.clear();
+    this.space.replaceChildren();
+    this.space.style.height = "";
+  }
+
   cancelFollow() {
     this.target = undefined;
   }
@@ -141,6 +153,7 @@ export class VirtualTranscript {
    * estimate can otherwise stop on an unrelated paragraph. */
   scrollTo(index: number, part: number, force = true) {
     this.target = { index, part };
+    if (!this.viewport.clientHeight) return;
     const rect = this.targetRect();
     const viewport = this.viewport.getBoundingClientRect();
     if (

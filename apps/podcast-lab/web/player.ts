@@ -1,3 +1,5 @@
+import { initLibrary, type FeedEpisode, type Show } from "./library";
+import { getJSON } from "./cache";
 import { VirtualTranscript } from "./virtual-transcript";
 type Word = { text: string; start: number; end: number };
 type Row = {
@@ -51,6 +53,9 @@ const followButton = element<HTMLButtonElement>("follow");
 const fmt = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 let data: Episode;
+let episodeVersion = 0;
+let episodeIdentity = "";
+let switchingEpisode = false;
 let active = -1,
   activePart = -1,
   activeChapter = -2;
@@ -242,10 +247,10 @@ function update() {
       showSkip(skip);
     }
   }
-  const next = findRow(time);
+  const next = data.rows.length ? findRow(time) : -1;
   const changed = next !== active;
   active = next;
-  const parts = data.rows[active].parts;
+  const parts = data.rows[active]?.parts ?? [];
   const partIndex = parts.findIndex(
     (part) => time >= part.start && time < part.end,
   );
@@ -262,18 +267,26 @@ function update() {
   const nextChapter = data.chapters.findLastIndex((c) => c.start <= time);
   if (nextChapter !== activeChapter) {
     activeChapter = nextChapter;
-    element("now-chapter").textContent =
-      data.chapters[nextChapter]?.title ?? "Opening";
+
     document.querySelectorAll(".chapter").forEach((node, i) => {
       node.classList.toggle("active", i === nextChapter);
       if (i === nextChapter) node.setAttribute("aria-current", "true");
       else node.removeAttribute("aria-current");
     });
   }
+  const nowTitle = document.body.classList.contains("library-open")
+    ? data.title
+    : (data.chapters[nextChapter]?.title ?? "Opening");
+  if (element("now-chapter").textContent !== nowTitle)
+    element("now-chapter").textContent = nowTitle;
   if (changed)
-    element("now-speaker").textContent = promotion(data.rows[active])
-      ? "Promotion"
-      : (speakers.get(data.rows[active].speaker)?.name ?? "Unassigned voice");
+    element("now-speaker").textContent =
+      active < 0
+        ? data.show
+        : promotion(data.rows[active])
+          ? "Promotion"
+          : (speakers.get(data.rows[active].speaker)?.name ??
+            "Unassigned voice");
   const nextWave = Math.floor((time / data.duration) * waveform.length);
   if (nextWave !== waveIndex) {
     waveIndex = nextWave;
@@ -286,6 +299,7 @@ function tick() {
 }
 async function play() {
   try {
+    if (audio.error) audio.load();
     await audio.play();
   } catch {
     showError(
@@ -298,7 +312,7 @@ function showError(message: string) {
   element("error").hidden = false;
 }
 function savePosition() {
-  if (data && Number.isFinite(audio.currentTime))
+  if (data && !switchingEpisode && Number.isFinite(audio.currentTime))
     try {
       localStorage.setItem(
         `undertone:${data.audioHash}`,
@@ -312,13 +326,82 @@ function savePosition() {
       /* Storage can be disabled; playback remains available. */
     }
 }
-async function start() {
-  const response = await fetch("/episode.json");
-  if (!response.ok)
-    throw new Error(
-      "Run the episode pipeline first. See apps/podcast-lab/README.md.",
-    );
-  data = await response.json();
+/** Fetch before changing playback. A newer selection cancels an older result;
+ * position writes pause while the new media restores its own checkpoint. */
+async function openEpisode(episode: FeedEpisode, show: Show, autoplay = false) {
+  const version = ++episodeVersion;
+  if (episodeIdentity === episode.id) {
+    if (autoplay) await play();
+    return;
+  }
+  const prepared = episode.preparedId;
+  const next = prepared
+    ? await getJSON<Episode>(`/episodes/${prepared}/episode.json`)
+    : ({
+        title: episode.title,
+        show: show.title,
+        published: episode.published,
+        source: episode.source,
+        duration: episode.duration,
+        audioHash: episode.id,
+        summary: episode.description,
+        rows: [],
+        speakers: [],
+        chapters: [],
+        skips: [],
+        provenance: {},
+      } as Episode);
+  if (version !== episodeVersion) return;
+  savePosition();
+  switchingEpisode = true;
+  audio.pause();
+  cancelAnimationFrame(raf);
+  virtual?.destroy();
+  virtual = undefined;
+  clearTimeout(toastTimer);
+  element("toast").hidden = true;
+  element("error").hidden = true;
+  element("library-status").textContent = "";
+  previewSkip = undefined;
+  lastSkipped = undefined;
+  active = -1;
+  activePart = -1;
+  activeChapter = -2;
+  waveIndex = -1;
+  waveform = [];
+  for (const id of [
+    "chapters",
+    "detections",
+    "skip-marks",
+    "waveform",
+    "photo-credits",
+    "transcript-space",
+  ])
+    element(id).replaceChildren();
+  data = next;
+  episodeIdentity = episode.id;
+  audio.onloadedmetadata = null;
+  audio.defaultPlaybackRate = audio.playbackRate;
+  audio.src = prepared ? `/episodes/${prepared}/audio` : episode.audioURL;
+  audio.load();
+  const image = element<HTMLImageElement>("artwork");
+  image.src = show.artwork;
+  image.alt = `${show.title} cover`;
+  followButton.hidden = !data.rows.length;
+  element("mobile-skips").hidden = !data.rows.length;
+  element("skip-panel").classList.toggle("unprepared", !data.rows.length);
+  skipToggle.disabled = !data.rows.length;
+  if (!data.rows.length) {
+    const empty = document.createElement("div");
+    empty.className = "transcript-empty";
+    const heading = document.createElement("h2");
+    heading.textContent = "Just listening.";
+    const note = document.createElement("p");
+    note.textContent =
+      "Streaming audio. Transcript and promotion detection are not prepared yet.";
+    empty.append(heading, note);
+    space.append(empty);
+  }
   speakers = new Map(data.speakers.map((s) => [s.id, s]));
   const credits = element("photo-credits");
   const credited = new Set<string>();
@@ -392,15 +475,23 @@ async function start() {
     element("waveform").append(bar);
     waveform.push(bar);
   }
-  virtual = new VirtualTranscript(
-    transcript,
-    space,
-    data.rows.map((row) => row.text),
-    createRow,
-    paintParts,
-  );
+  if (data.rows.length)
+    virtual = new VirtualTranscript(
+      transcript,
+      space,
+      data.rows.map((row) => row.text),
+      createRow,
+      paintParts,
+    );
+  setFollowing(true);
   update();
   const restore = () => {
+    if (episodeIdentity !== episode.id) return;
+    if (Number.isFinite(audio.duration) && audio.duration > 0) {
+      data.duration = audio.duration;
+      seek.max = String(data.duration);
+      element("duration").textContent = fmt(data.duration);
+    }
     try {
       const saved = JSON.parse(
         localStorage.getItem(`undertone:${data.audioHash}`) ?? "null",
@@ -416,15 +507,19 @@ async function start() {
     } catch {
       /* A stale local preference cannot block playback. */
     }
+    element("speed").textContent = `${audio.playbackRate}×`;
+    switchingEpisode = false;
+    if (autoplay) void play();
   };
   if (audio.readyState >= 1) restore();
-  else audio.addEventListener("loadedmetadata", restore, { once: true });
+  else audio.onloadedmetadata = restore;
 }
 element("play").addEventListener("click", () =>
   audio.paused ? void play() : audio.pause(),
 );
 audio.addEventListener("play", () => {
   element("error").hidden = true;
+  element("library-status").textContent = "";
   element("play").setAttribute("aria-label", "Pause");
   element("play")
     .querySelector("path")
@@ -481,7 +576,7 @@ transcript.addEventListener("keydown", (event) => {
 document.addEventListener("keydown", (event) => {
   if (
     event.code !== "Space" ||
-    (event.target as HTMLElement).closest("button,input,a,summary")
+    (event.target as HTMLElement).closest("button,input,a,summary,textarea")
   )
     return;
   event.preventDefault();
@@ -491,7 +586,13 @@ document.addEventListener("keydown", (event) => {
 window.addEventListener("pagehide", savePosition);
 document.addEventListener("visibilitychange", savePosition);
 window.setInterval(savePosition, 5000);
-start().catch((error) => showError(error.message));
+void initLibrary(openEpisode);
+window.addEventListener("hashchange", () => queueMicrotask(update));
+audio.addEventListener("error", () => {
+  if (data)
+    element("library-status").textContent =
+      "Audio is unavailable. Check your connection and press Play to retry.";
+});
 
 const mobileSkips = element<HTMLButtonElement>("mobile-skips");
 function closeSkips() {

@@ -28,7 +28,9 @@ def run():
     source_path = root / "source.json"
     if not source_path.exists():
         with urllib.request.urlopen(FEED, timeout=45) as response:
-            rss = ET.fromstring(response.read())
+            feed_bytes = response.read()
+            rss = ET.fromstring(feed_bytes)
+            (root / "feed.xml").write_bytes(feed_bytes)
         channel = rss.find("channel")
         item = next(
             i
@@ -148,6 +150,9 @@ def run():
     from prepare_player import prepare
 
     prepare(root)
+    from library import build as build_library
+
+    build_library(root)
     print(f"Player data ready in {root}. Run bun run dev in {APP}.")
 
 
