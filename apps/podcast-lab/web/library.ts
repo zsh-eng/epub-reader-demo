@@ -6,6 +6,7 @@ export type Show = {
   description: string;
   feed: string;
   artwork: string;
+  cached?: boolean;
 };
 export type FeedEpisode = {
   id: string;
@@ -63,10 +64,16 @@ export async function initLibrary(open: Open) {
       "Library unavailable. Reload to try again.";
     return;
   }
-  const savedFollows = stored<unknown>("undertone:follows", []);
+  const savedFollows = stored<unknown>(
+    "undertone:follows",
+    data.shows.map((show) => show.id),
+  );
   const follows = new Set<string>(
     Array.isArray(savedFollows)
-      ? savedFollows.filter((id): id is string => typeof id === "string")
+      ? savedFollows.filter(
+          (id): id is string =>
+            typeof id === "string" && data.shows.some((show) => show.id === id),
+        )
       : [],
   );
   let page = 0,
@@ -77,7 +84,21 @@ export async function initLibrary(open: Open) {
       data.episodes[0];
   let loadVersion = 0;
   let playWhenReady = false;
-  const showFor = (id: string) => data.shows.find((s) => s.id === id)!;
+  const showsById = new Map(data.shows.map((show) => [show.id, show]));
+  const showFor = (id: string) => showsById.get(id)!;
+  const searchText = new Map(
+    data.episodes.map((episode) => [
+      episode.id,
+      [
+        episode.title,
+        episode.description,
+        showFor(episode.showId).title,
+        showFor(episode.showId).creator,
+      ]
+        .join(" ")
+        .toLocaleLowerCase(),
+    ]),
+  );
   const cover = (show: Show, size: number) => {
     const image = node("img", "show-cover");
     image.src = show.artwork;
@@ -229,7 +250,7 @@ export async function initLibrary(open: Open) {
       home: "Good listening.",
       following: "Following",
       downloads: "Downloads",
-      shows: "Find your people.",
+      shows: "Your shows.",
     };
     el("library-title").textContent =
       selected?.title ?? titles[route] ?? titles.home;
@@ -269,14 +290,11 @@ export async function initLibrary(open: Open) {
         content.append(feature);
       }
       const section = node("section", "show-section");
-      section.append(
-        node(
-          "h2",
-          "section-heading",
-          route === "shows" ? "From the feeds" : "Shows to explore",
-        ),
+      section.append(node("h2", "section-heading", "Your shows"));
+      const grid = node(
+        "div",
+        route === "home" ? "show-grid home-show-shelf" : "show-grid",
       );
-      const grid = node("div", "show-grid");
       for (const show of data.shows) grid.append(showCard(show));
       section.append(grid);
       content.append(section);
@@ -284,14 +302,7 @@ export async function initLibrary(open: Open) {
     }
     if (search) {
       const q = search.toLocaleLowerCase();
-      episodes = episodes.filter((e) =>
-        [
-          e.title,
-          e.description,
-          showFor(e.showId).title,
-          showFor(e.showId).creator,
-        ].some((v) => v.toLocaleLowerCase().includes(q)),
-      );
+      episodes = episodes.filter((e) => searchText.get(e.id)!.includes(q));
     }
     const heading = node("div", "feed-heading");
     heading.append(

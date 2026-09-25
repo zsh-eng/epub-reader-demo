@@ -1,12 +1,13 @@
 """Build bounded library metadata from cached RSS; audio remains separate.
 
-No live feed access here. benchmark_sources/run own downloading. This snapshot
+No live feed access here. feeds.py owns conditional downloading. This snapshot
 can be rebuilt offline without redoing transcription or hosted inference.
 """
 
+import argparse
+import gzip
 import hashlib
 import json
-import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -14,6 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from benchmark_sources import NS, duration
+from feeds import atomic, catalog
 from metadata import plain_text
 
 
@@ -32,14 +34,24 @@ def published_iso(value):
             return ""
 
 
-def build(root):
+def build(root, catalog_entries=None, output=None):
     shows, episodes = [], []
-    for slug in ["ezra", "decoder", "darknet", "99pi"]:
+    for entry in catalog() if catalog_entries is None else catalog_entries:
+        slug = entry["id"]
         folder = root if slug == "ezra" else root / "benchmark" / slug
-        if not (folder / "source.json").exists():
-            continue
-        source = json.loads((folder / "source.json").read_text())
-        feed = folder / "feed.xml"
+        source_path = folder / "source.json"
+        source = (
+            json.loads(source_path.read_text())
+            if source_path.exists()
+            else {
+                "show": entry["title"],
+                "feed": entry["feed"],
+                "audioURL": "",
+            }
+        )
+        feed = root / "feeds" / slug / "feed.xml"
+        if not feed.exists():
+            feed = folder / "feed.xml"
         if feed.exists():
             channel = ET.fromstring(feed.read_bytes()).find("channel")
         else:
@@ -51,14 +63,28 @@ def build(root):
             )
         show = {
             "id": slug,
-            "title": channel.findtext("title"),
-            "creator": channel.findtext(NS + "author") or channel.findtext("title"),
+            "title": channel.findtext("title") or entry["title"],
+            "creator": channel.findtext(NS + "author")
+            or entry.get("creator")
+            or channel.findtext("title"),
             "description": plain_text(channel.findtext("description"), 900),
-            "feed": source["feed"],
+            "feed": entry["feed"],
             "artwork": f"/shows/{slug}/artwork",
+            "cached": feed.exists(),
         }
         shows.append(show)
-        for item in channel.findall("item")[:100]:
+        prepared_path = folder / "episode.json"
+        prepared = (
+            json.loads(prepared_path.read_text()) if prepared_path.exists() else None
+        )
+        seen = set()
+        # Newest publication dates first even when an RSS host uses archive order.
+        items = sorted(
+            channel.findall("item"),
+            key=lambda i: published_iso(i.findtext("pubDate")),
+            reverse=True,
+        )
+        for item in items:
             enclosure = item.find("enclosure")
             if enclosure is None:
                 continue
@@ -67,15 +93,14 @@ def build(root):
                 continue
             title = item.findtext("title") or "Untitled episode"
             guid = item.findtext("guid") or audio
+            if guid in seen or len(seen) >= 100:
+                continue
+            seen.add(guid)
             ready = (
                 audio == source["audioURL"]
                 or (bool(source.get("guid")) and guid == source["guid"])
-            ) and (folder / "episode.json").exists()
-            local_duration = (
-                json.loads((folder / "episode.json").read_text())["duration"]
-                if ready
-                else None
-            )
+            ) and prepared is not None
+            local_duration = prepared["duration"] if ready else None
             published = published_iso(item.findtext("pubDate"))
             episodes.append(
                 {
@@ -95,13 +120,13 @@ def build(root):
         # Preserve a prepared older episode even when it has left the feed window.
         if (
             not any(e["showId"] == slug and e["preparedId"] for e in episodes)
-            and (folder / "episode.json").exists()
+            and prepared is not None
         ):
-            data = json.loads((folder / "episode.json").read_text())
+            data = prepared
             episodes.append(
                 {
                     "id": hashlib.sha256(
-                        f"{slug}:{source['audioURL']}".encode()
+                        f"{slug}:{source.get('guid') or source['audioURL']}".encode()
                     ).hexdigest()[:20],
                     "showId": slug,
                     "title": data["title"],
@@ -115,11 +140,19 @@ def build(root):
             )
     episodes.sort(key=lambda e: e["published"], reverse=True)
     result = {"shows": shows, "episodes": episodes}
-    (root / "library.json").write_text(json.dumps(result, separators=(",", ":")))
+    target = output or root / "library.json"
+    encoded = json.dumps(result, separators=(",", ":")).encode()
+    atomic(target, encoded)
+    atomic(target.with_suffix(target.suffix + ".gz"), gzip.compress(encoded, mtime=0))
     print(
         f"Library: {len(shows)} shows, {len(episodes)} episodes, {sum(bool(e['preparedId']) for e in episodes)} prepared"
     )
 
 
 if __name__ == "__main__":
-    build(Path(sys.argv[1] if len(sys.argv) > 1 else ".local"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("root", nargs="?", type=Path, default=Path(".local"))
+    parser.add_argument("--catalog", type=Path)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    build(args.root, catalog(args.catalog) if args.catalog else None, args.output)

@@ -28,39 +28,57 @@ Stop the server with Control-C.
 
 ## Library and show feeds
 
-The first library contains **four shows, 400 cached RSS entries and four prepared
-episodes**: Ezra Klein, Decoder, Darknet Diaries and 99% Invisible. Home has a
-current-episode card, show artwork and a recent-episode feed. Following filters
-that feed to locally followed shows. Downloads lists prepared local episodes.
-Each show has its own page, creator/publisher credit, Follow control and RSS link.
-Search matches show, creator, episode title and description. The catalog is
-show-based; it does not infer guest appearances or a social network.
+The personal catalog contains **the 20 shows from your screenshots**, with
+1,336 cached entries on this refresh. `feeds.json` records the selected feed URLs
+and Apple directory provenance. The “Your Episodes” playlist is not a show.
+Decoder, Darknet Diaries and 99PI remain local benchmark fixtures and are excluded
+from the personal library. Only the existing Ezra episode is prepared locally;
+other episodes can stream on selection, without automatic model processing.
 
-`pipeline/library.py` reads cached RSS XML, keeps at most 100 items per show,
-normalizes dates to UTC, strips description HTML and uses feed GUIDs for stable
-IDs (enclosure URLs when GUIDs are absent). It matches prepared audio by URL/GUID,
-never title alone. A prepared episode remains available if it leaves the feed.
-The small `library.json` contains metadata and file references, not audio or full
-transcripts. `pipeline/run.py` saves RSS and rebuilds this snapshot after preparing
-an episode. Existing data can be rebuilt without network or model calls:
+Home has a single horizontally scrolling show shelf and recent episodes. All
+shows displays the full grid. Each show has a creator credit, RSS link and Follow
+control. New browser profiles initially follow this personal catalog; existing
+follow choices remain under user control. Search matches titles, creators and
+descriptions. The catalog does not infer guest appearances or a social network.
+
+Refresh manually from the app directory:
 
 ```sh
+bun run feeds:refresh
+# Revalidate early, still with conditional HTTP requests:
+bun run feeds:refresh --force
+# Rebuild from disk with no network:
 python3 pipeline/library.py .local
 ```
 
-TanStack Query Core caches and deduplicates catalog and prepared-transcript
-requests. The feed mounts only 20 episode rows per page. Cover images use the
-existing local 640 px WebP files, lazy loading and asynchronous decoding. Browsing
-never replaces the audio element. Switching episodes saves the old position,
-cleans up transcript observers, waits for the selected metadata and restores the
-new episode's checkpoint. A request sequence number rejects stale selections.
-Follows and the last selected episode stay in browser local storage.
+`pipeline/feeds.py` uses at most three workers, a one-hour freshness interval,
+ETag/If-None-Match and Last-Modified/If-Modified-Since. A 304 reuses cached XML.
+Invalid responses and network failures preserve the last good snapshot. Each
+response has a 20 MiB bound; the catalog and RSS files are replaced atomically.
+Refresh never fetches an episode enclosure. A warm refresh of all 20 shows
+reported **zero downloaded bytes**. Publishers without validators can still
+require a full RSS response after the freshness interval.
 
-**Current boundary:** this is a fixed four-show catalog. Adding arbitrary RSS URLs,
-a directory search, scheduled feed refresh, OPML import, and a Download/Prepare
-job queue are not connected. Streaming does not run models in the background.
-Cached local playback works without internet while the loopback server is running;
-online streaming depends on the enclosure host. No 120 fps claim is made.
+`pipeline/library.py` deduplicates GUIDs, sorts by publication time, keeps at most
+100 recent episodes per show, and preserves prepared older episodes. It separates
+metadata from audio/transcripts, retains UTC publication dates, and matches local
+audio by URL/GUID rather than title. The 2.12 MB JSON snapshot has a prebuilt
+653 KB gzip representation. The local server uses HTTP validators, so unchanged
+metadata can return 304 instead of retransmitting the catalog.
+
+Artwork is fetched once per source URL, resized to at most 384 px and stored as
+WebP quality 80. The 20 covers total **264 KB**, with a largest file of 37 KB.
+Original image bytes are not retained. Covers load lazily and decode asynchronously.
+TanStack Query caches/deduplicates metadata and transcript requests. Each feed
+mounts at most 20 rows. Search strings and the show index are built once.
+Browsing retains the same audio element and each episode's playback checkpoint.
+Browser tests confirm that personal-library browsing makes no external requests.
+
+**Current boundary:** refresh is a command, not a scheduled job or UI control.
+The browser loads the bounded catalog at startup; it is not server-paginated.
+This is suitable for this 20-show prototype, not a claim about an unlimited feed
+archive or 120 fps. Arbitrary feed imports, OPML, a download/preparation queue,
+accounts and sync are not connected. Cached playback requires the loopback server.
 
 ## Latest three-show check
 
@@ -68,8 +86,12 @@ The new [classification benchmark](BENCHMARK.md) compares six variants on Decode
 and Darknet Diaries, plus a frozen-policy check on 99% Invisible. Batched choices
 reach 97.6% and 100% of Luna-labelled ad speech on the development shows, but include
 2.08 seconds of Decoder's introduction and regress on the original montage.
-The player keeps its existing detections. See the report for whole-break coverage,
-credit errors, exact audio hashes, timing and the limits of a text-only judge.
+The newer sequence/boundary follow-up now catches the complete Ezra montage;
+that episode's preview uses it. It reaches 99.94% Ezra promotion-duration coverage,
+100% Darknet promotion-speech coverage and 94.65% Decoder promotion-speech coverage,
+with no extra editorial speech against these text references. 99PI proposes no
+promotion skips. The general pipeline remains opt-in because Decoder still has
+misses. See the report for boundary errors, hashes and evaluation limits.
 
 The player now has one compact header and an 82 px desktop / 108 px phone control
 area (plus phone safe-area inset). Unknown voices use a waveform, not initials.
@@ -119,7 +141,8 @@ This is one development episode, not a held-out test or an audio-reviewed gold
 standard. It does not isolate metadata from model variability or prove zero
 false positives. No paid third-party ad was verified in this download.
 Before/after artifacts and the fetched feed are retained locally under
-`.local/experiments/metadata-context/`. The preview uses the new detections.
+`.local/experiments/metadata-context/`. This was the earlier preview policy; the current Ezra preview uses the sequence
+follow-up described in BENCHMARK.md.
 
 Speaker separation also merges some short ad voices with interview speakers.
 Names are inferred from the introduction and can be wrong. Named host/guest
@@ -282,8 +305,9 @@ gaps up to 2.5 seconds only when no unclassified speech occupies the gap.
 This baseline grouping is incomplete: 38 of 166 blocks are shorter than three
 seconds. Fast montage speaker changes produce fragments, and a low coarse score
 prevents refinement. The [multi-show benchmark](BENCHMARK.md) tests cross-speaker
-units, batched questions, categorical decisions and complete passages. None is
-promoted automatically because the original montage regression remains.
+units, batched questions, categorical decisions and complete passages. The six earlier variants were not promoted. `pipeline/sequences.py` now provides
+an opt-in sequence detector and boundary locator; see BENCHMARK.md for the latest
+four-episode comparison and remaining Decoder limitations.
 
 ## Player boundaries and performance
 

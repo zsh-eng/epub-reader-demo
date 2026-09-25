@@ -1,0 +1,162 @@
+[
+  {
+    "id": "plain-english",
+    "title": "Plain English with Derek Thompson",
+    "creator": "The Ringer",
+    "feed": "https://feeds.megaphone.fm/plain-english",
+    "directory": "https://podcasts.apple.com/podcast/id1594471023",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/3d/7b/62/3d7b6206-83fb-453c-5143-6159be4a2ba7/mza_7900682598316426126.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "tbpn",
+    "title": "TBPN",
+    "creator": "John Coogan & Jordi Hays",
+    "feed": "https://feeds.transistor.fm/technology-brother",
+    "directory": "https://podcasts.apple.com/podcast/id1772360235",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/ea/7c/4b/ea7c4b0b-2896-b3d0-c601-b375662a3630/mza_9279396183922450909.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "dwarkesh",
+    "title": "Dwarkesh Podcast",
+    "creator": "Dwarkesh Patel",
+    "feed": "https://apple.dwarkesh-podcast.workers.dev/feed.rss",
+    "directory": "https://podcasts.apple.com/podcast/id1516093381",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/af/6f/48/af6f4828-86a2-d4c3-b998-de2af1fdc8c0/mza_949624848217027907.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "big-technology",
+    "title": "Big Technology Podcast",
+    "creator": "Alex Kantrowitz",
+    "feed": "https://feeds.megaphone.fm/LI3617121267",
+    "directory": "https://podcasts.apple.com/podcast/id1522960417",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/c3/30/67/c330676b-2402-432b-0505-12490dc3ccc1/mza_4262545472677654397.jpeg/600x600bb.jpg"
+  },
+  {
+    "id": "ezra",
+    "title": "The Ezra Klein Show",
+    "creator": "New York Times Opinion",
+    "feed": "https://feeds.simplecast.com/kEKXbjuJ",
+    "directory": "https://podcasts.apple.com/podcast/id1548604447",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/9d/ca/35/9dca35d8-e7d2-7e4f-63b5-c2ff4973a3f5/mza_16891544429738729361.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "hard-fork",
+    "title": "Hard Fork",
+    "creator": "The New York Times",
+    "feed": "https://feeds.simplecast.com/6HKOhNgS",
+    "directory": "https://podcasts.apple.com/podcast/id1528594034",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/de/c5/20/dec52092-6be0-9007-875c-6aa8e690a905/mza_12490014444602578825.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "david-senra",
+    "title": "David Senra",
+    "creator": "Scicomm Media",
+    "feed": "https://feeds.megaphone.fm/david-senra",
+    "directory": "https://podcasts.apple.com/podcast/id1836497887",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/4b/ab/c3/4babc3a1-d793-8a9c-504d-0c4d4d3e6916/mza_6363451904777860128.jpeg/600x600bb.jpg"
+  },
+  {
+    "id": "dialectic",
+    "title": "Dialectic",
+    "creator": "Jackson Dahl",
+    "feed": "https://feeds.megaphone.fm/ICDEI1431648742",
+    "directory": "https://podcasts.apple.com/podcast/id1780282402",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/4d/de/34/4dde34a7-d2e6-b914-d4d5-f95d60f7b42c/mza_17081698042994260829.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "peterman",
+    "title": "The Peterman Pod",
+    "creator": "Ryan Peterman",
+    "feed": "https://anchor.fm/s/106346b90/podcast/rss",
+    "directory": "https://podcasts.apple.com/podcast/id1777363835",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/39/59/5a/39595a76-5de4-be44-1e59-290885144b80/mza_15577888025774747923.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "cheeky-pint",
+    "title": "Cheeky Pint",
+    "creator": "Stripe",
+    "feed": "https://feeds.transistor.fm/cheeky-pint-with-john-collison",
+    "directory": "https://podcasts.apple.com/podcast/id1821055332",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/39/58/7b/39587b37-a6e1-e96b-593d-621d5ec5292a/mza_6705197557754043928.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "colin-samir",
+    "title": "The Colin and Samir Show",
+    "creator": "Colin and Samir",
+    "feed": "https://feeds.megaphone.fm/LI6529969937",
+    "directory": "https://podcasts.apple.com/podcast/id1379942034",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/58/b8/ef/58b8ef93-f8d0-e679-58bb-5541f3bacce7/mza_6519511502014591037.jpeg/600x600bb.jpg"
+  },
+  {
+    "id": "acquired",
+    "title": "Acquired",
+    "creator": "Ben Gilbert and David Rosenthal",
+    "feed": "https://feeds.transistor.fm/acquired",
+    "directory": "https://podcasts.apple.com/podcast/id1050462261",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/a8/e1/de/a8e1deff-9f88-4e55-a541-b0dc793c0cdc/mza_11539673419613154037.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "summation",
+    "title": "Summation with Auren Hoffman",
+    "creator": "Auren Hoffman",
+    "feed": "https://rss.buzzsprout.com/1783651.rss",
+    "directory": "https://podcasts.apple.com/podcast/id1570644971",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/68/bf/3d/68bf3d7d-2fb1-bfbf-1583-434c195ccbac/mza_10904211912736335537.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "y-combinator",
+    "title": "Y Combinator Startup Podcast",
+    "creator": "Y Combinator",
+    "feed": "https://anchor.fm/s/8c1524bc/podcast/rss",
+    "directory": "https://podcasts.apple.com/podcast/id1236907421",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/65/d1/1e/65d11ed6-914f-e163-bc7a-d1ea5eda5b79/mza_2184580866640883071.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "dealbook",
+    "title": "DealBook Summit",
+    "creator": "The New York Times",
+    "feed": "https://feeds.simplecast.com/HZtr0HV5",
+    "directory": "https://podcasts.apple.com/podcast/id1718472373",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ff/bd/6b/ffbd6b6c-1f97-d6c4-534f-7eacf9ea48aa/mza_402313461866120222.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "bg2",
+    "title": "BG2Pod with Brad Gerstner and Bill Gurley",
+    "creator": "BG2Pod",
+    "feed": "https://anchor.fm/s/f06c2370/podcast/rss",
+    "directory": "https://podcasts.apple.com/podcast/id1727278168",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/PodcastSource126/v4/4b/ab/e5/4babe58b-7cda-b2b3-40a5-bcac3f262764/33f9cff7-dc0b-4293-a5bf-d8cc62ab8c98.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "founders",
+    "title": "Founders",
+    "creator": "David Senra",
+    "feed": "https://feeds.megaphone.fm/DSLLC6297708582",
+    "directory": "https://podcasts.apple.com/podcast/id1141877104",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/ed/71/4f/ed714f67-f095-a4ef-f38e-d8c02300666a/mza_11432355988627368701.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "sources",
+    "title": "Sources with Alex Heath",
+    "creator": "Alex Heath",
+    "feed": "https://api.substack.com/feed/podcast/3525780.rss",
+    "directory": "https://podcasts.apple.com/podcast/id1840154537",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/80/7d/a3/807da375-ca6a-0aa0-85cc-1adcfeb1ee57/mza_8453028832480131344.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "signals-threads",
+    "title": "Signals and Threads",
+    "creator": "Jane Street",
+    "feed": "https://feeds.simplecast.com/L9810DOa",
+    "directory": "https://podcasts.apple.com/podcast/id1528917129",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts125/v4/b8/fe/29/b8fe29d0-e6fa-165c-e005-10c199af2587/mza_15015618166344408110.jpg/600x600bb.jpg"
+  },
+  {
+    "id": "uncapped",
+    "title": "Uncapped with Jack Altman",
+    "creator": "Alt Capital",
+    "feed": "https://anchor.fm/s/1156f1c04/podcast/rss",
+    "directory": "https://podcasts.apple.com/podcast/id1801867202",
+    "artworkURL": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts211/v4/3c/ac/a2/3caca267-e61a-a7d7-39b4-c408ecb90e57/mza_17074053047399337063.jpeg/600x600bb.jpg"
+  }
+]

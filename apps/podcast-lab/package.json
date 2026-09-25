@@ -6,8 +6,9 @@
     "dev": "bun run build && bun server.ts",
     "build": "tsc --noEmit && bun build web/player.ts --outdir dist --minify",
     "test": "bun test tests/server.test.ts && python3 -m unittest discover -s tests -v",
-    "test:e2e": "playwright test",
-    "lint": "oxlint web server.ts tests/*.ts"
+    "test:e2e": "python3 pipeline/library.py .local --catalog tests/fixtures/benchmark-feeds.json --output .local/benchmark/library-test.json && playwright test",
+    "lint": "oxlint web server.ts tests/*.ts",
+    "feeds:refresh": ".venv/bin/python pipeline/feeds.py"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

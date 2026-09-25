@@ -527,3 +527,15 @@
     padding-inline: 8px;
   }
 }
+
+/* Keep the personal catalog to one shelf on Home; All shows retains its grid. */
+.home-show-shelf {
+  display: flex;
+  overflow-x: auto;
+  gap: 20px;
+  padding-bottom: 8px;
+}
+.home-show-shelf .show-card {
+  flex: 0 0 160px;
+  min-width: 0;
+}

@@ -35,7 +35,7 @@ class LibraryIntegration(unittest.TestCase):
             (root / "feed.xml").write_text(
                 """<rss><channel><title>Test show</title><item><title>Repeated title</title><guid>new</guid><pubDate>Fri, 25 Sep 2026 10:00:00 GMT</pubDate><description>&lt;b&gt;New episode&lt;/b&gt;</description><link>javascript:alert(1)</link><enclosure url="https://example.com/new.mp3"/></item><item><title>Repeated title</title><guid>old</guid><pubDate>Thu, 24 Sep 2026 10:00:00 GMT</pubDate><enclosure url="https://example.com/local.mp3"/></item></channel></rss>"""
             )
-            build(root)
+            build(root, [{"id": "ezra", "title": "Test show", "feed": source["feed"]}])
             data = json.loads((root / "library.json").read_text())
             self.assertEqual(len(data["shows"]), 1)
             newer, older = data["episodes"]
@@ -46,7 +46,7 @@ class LibraryIntegration(unittest.TestCase):
             self.assertEqual(older["duration"], 610)
             self.assertEqual(older["published"], "2026-09-24T10:00:00+00:00")
             original_ids = [e["id"] for e in data["episodes"]]
-            build(root)
+            build(root, [{"id": "ezra", "title": "Test show", "feed": source["feed"]}])
             self.assertEqual(
                 [
                     e["id"]
@@ -55,7 +55,7 @@ class LibraryIntegration(unittest.TestCase):
                 original_ids,
             )
             (root / "feed.xml").unlink()
-            build(root)
+            build(root, [{"id": "ezra", "title": "Test show", "feed": source["feed"]}])
             self.assertEqual(
                 len(json.loads((root / "library.json").read_text())["episodes"]), 1
             )

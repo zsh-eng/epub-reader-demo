@@ -1,5 +1,6 @@
 /** Offline demo host. Only explicit public assets are exposed; keys and raw logs stay private. */
 import { join } from "node:path";
+import catalog from "./feeds.json";
 const app = import.meta.dir;
 export function createServer(dataDir = join(app, ".local"), port = 4378) {
   return Bun.serve({
@@ -23,11 +24,20 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
         );
       const episodeDir = episodeRoute ? folders[episodeRoute[1]] : dataDir;
       const route = episodeRoute ? "/" + episodeRoute[2] : url.pathname;
-      const showCover = /^\/shows\/(ezra|decoder|darknet|99pi)\/artwork$/.exec(
-        route,
-      );
+      const showCover = /^\/shows\/([a-z0-9-]+)\/artwork$/.exec(route);
       if (showCover) {
-        const file = Bun.file(join(folders[showCover[1]], "artwork.webp"));
+        const slug = showCover[1];
+        if (!catalog.some((show) => show.id === slug) && !folders[slug])
+          return new Response("Not found", { status: 404 });
+        const cached = Bun.file(join(dataDir, "feeds", slug, "artwork.webp"));
+        const file = (await cached.exists())
+          ? cached
+          : Bun.file(
+              join(
+                folders[slug] ?? join(dataDir, "feeds", slug),
+                "artwork.webp",
+              ),
+            );
         if (!(await file.exists()))
           return new Response("Not found", { status: 404 });
         return new Response(request.method === "HEAD" ? null : file, {
@@ -118,12 +128,47 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
         return new Response("Run the pipeline first. See README.md.", {
           status: 503,
         });
-      return new Response(request.method === "HEAD" ? null : file, {
-        headers: {
-          "Cache-Control": "no-cache",
-          "X-Content-Type-Options": "nosniff",
-        },
-      });
+      const etag = `W/"${file.size}-${file.lastModified}"`;
+      const headers = {
+        "Cache-Control": "private, no-cache",
+        ETag: etag,
+        "X-Content-Type-Options": "nosniff",
+        ...(route === "/library.json" ? { Vary: "Accept-Encoding" } : {}),
+      };
+      if (request.headers.get("If-None-Match") === etag)
+        return new Response(null, { status: 304, headers });
+      if (route === "/library.json") {
+        const compressed = Bun.file(path + ".gz");
+        const cacheHeaders = {
+          ...headers,
+          Vary: "Accept-Encoding",
+          "Content-Type": "application/json",
+        };
+        const acceptsGzip = request.headers
+          .get("Accept-Encoding")
+          ?.split(",")
+          .some((value) => {
+            const [encoding, ...parameters] = value.trim().split(";");
+            const quality = parameters
+              .map((p) => p.trim())
+              .find((p) => p.startsWith("q="));
+            return (
+              encoding === "gzip" && (!quality || Number(quality.slice(2)) > 0)
+            );
+          });
+        if (
+          acceptsGzip &&
+          (await compressed.exists()) &&
+          compressed.lastModified >= file.lastModified
+        )
+          return new Response(request.method === "HEAD" ? null : compressed, {
+            headers: { ...cacheHeaders, "Content-Encoding": "gzip" },
+          });
+        return new Response(request.method === "HEAD" ? null : file, {
+          headers: cacheHeaders,
+        });
+      }
+      return new Response(request.method === "HEAD" ? null : file, { headers });
     },
   });
 }

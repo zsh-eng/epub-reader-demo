@@ -27,7 +27,7 @@ and local development files. Shared packages must not import app code.
 
 - **podcast-lab** owns Undertone: cached RSS library metadata, local audio files,
   local transcription/diarization, hosted text classification, and a persistent
-  loopback player. Its initial catalog has four shows; it has no deployed service
+  loopback player. Its personal catalog has 20 shows with conditional disk-cached RSS refresh; it has no deployed service
   or sync. See its
   [experiment report](../apps/podcast-lab/README.md).
 

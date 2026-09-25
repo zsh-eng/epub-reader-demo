@@ -99,3 +99,41 @@ test("library and prepared episode routes stay scoped to the selected show", asy
   ])
     expect((await fetch(new URL(path, server.url))).status).toBe(404);
 });
+
+test("unchanged library responses revalidate without retransmitting metadata", async () => {
+  const first = await fetch(new URL("/library.json", server.url));
+  const etag = first.headers.get("etag")!;
+  expect(etag).toBeTruthy();
+  await first.arrayBuffer();
+  const unchanged = await fetch(new URL("/library.json", server.url), {
+    headers: { "If-None-Match": etag },
+  });
+  expect(unchanged.status).toBe(304);
+  expect(await unchanged.text()).toBe("");
+  await writeFile(
+    join(folder, "library.json"),
+    JSON.stringify({ shows: [], episodes: [{ id: "new-episode" }] }),
+  );
+  const changed = await fetch(new URL("/library.json", server.url), {
+    headers: { "If-None-Match": etag },
+  });
+  expect(changed.status).toBe(200);
+  expect((await changed.json()).episodes[0].id).toBe("new-episode");
+});
+
+test("catalog compression is prebuilt and honors gzip refusal", async () => {
+  const bytes = JSON.stringify({ shows: [{ id: "ezra" }], episodes: [] });
+  await writeFile(join(folder, "library.json"), bytes);
+  await writeFile(join(folder, "library.json.gz"), Bun.gzipSync(bytes));
+  const zipped = await fetch(new URL("/library.json", server.url), {
+    headers: { "Accept-Encoding": "gzip" },
+  });
+  expect(zipped.headers.get("content-encoding")).toBe("gzip");
+  expect(zipped.headers.get("vary")).toBe("Accept-Encoding");
+  expect(await zipped.text()).toBe(bytes);
+  const plain = await fetch(new URL("/library.json", server.url), {
+    headers: { "Accept-Encoding": "gzip;q=0" },
+  });
+  expect(plain.headers.get("content-encoding")).toBeNull();
+  expect(await plain.text()).toBe(bytes);
+});

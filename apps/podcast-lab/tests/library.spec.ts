@@ -1,8 +1,20 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 const library = JSON.parse(
-  await readFile(new URL("../.local/library.json", import.meta.url), "utf8"),
+  await readFile(
+    new URL("../.local/benchmark/library-test.json", import.meta.url),
+    "utf8",
+  ),
 );
+test.beforeEach(async ({ page }) => {
+  await page.route("**/library.json", (route) =>
+    route.fulfill({ json: library }),
+  );
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("undertone:follows"))
+      localStorage.setItem("undertone:follows", "[]");
+  });
+});
 const localEpisodes = library.episodes.filter(
   (e: { preparedId: string }) => e.preparedId,
 );
@@ -58,7 +70,9 @@ test("home, creator search, show following and downloaded episodes", async ({
   await expect(page.locator(".library-empty")).toBeVisible();
   await page.getByRole("searchbox").fill("");
   await page.getByRole("button", { name: "Next →", exact: true }).click();
-  await expect(page.locator(".feed-pagination")).toContainText("2 / 20");
+  await expect(page.locator(".feed-pagination")).toContainText(
+    `2 / ${Math.ceil(library.episodes.length / 20)}`,
+  );
   await expect(page.locator(".episode-row")).toHaveCount(20);
 });
 
@@ -227,4 +241,57 @@ test("feed Play starts the selected local episode and keeps its identity on relo
     "src",
     "/episodes/decoder/audio",
   );
+});
+
+test("personal catalog excludes benchmark shows and browsing stays local", async ({
+  page,
+}) => {
+  await page.unroute("**/library.json");
+  const external: string[] = [];
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1|localhost)/, (route) => {
+    external.push(route.request().url());
+    return route.abort();
+  });
+  const catalogResponse = await page.request.get("/library.json");
+  const personal = await catalogResponse.json();
+  expect(personal.shows).toHaveLength(20);
+  expect(
+    personal.shows.some((show: { id: string }) =>
+      ["decoder", "darknet", "99pi"].includes(show.id),
+    ),
+  ).toBe(false);
+  await page.goto("/#home");
+  await expect(page.locator(".show-card")).toHaveCount(20);
+  await expect(page.locator(".episode-row")).toHaveCount(20);
+  await page.getByRole("searchbox").fill("Dwarkesh");
+  await expect(page.locator(".episode-row")).toHaveCount(20);
+  await page.getByRole("searchbox").fill("");
+  await page.getByRole("button", { name: "Next →", exact: true }).click();
+  await expect(page.locator(".episode-row")).toHaveCount(20);
+  await page.getByRole("link", { name: "All shows", exact: true }).click();
+  await expect(page.locator(".show-card")).toHaveCount(20);
+  await expect
+    .poll(() =>
+      page
+        .locator(".show-cover")
+        .evaluateAll((images) =>
+          images.every(
+            (image) =>
+              (image as HTMLImageElement).complete &&
+              (image as HTMLImageElement).naturalWidth > 0,
+          ),
+        ),
+    )
+    .toBe(true);
+  expect(external).toEqual([]);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.screenshot({ path: `.local/personal-${width}.png` });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+  }
 });

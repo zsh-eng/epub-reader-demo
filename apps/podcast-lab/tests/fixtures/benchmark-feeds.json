@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ezra",
+    "title": "The Ezra Klein Show",
+    "feed": "https://feeds.simplecast.com/82FI35Px"
+  },
+  {
+    "id": "decoder",
+    "title": "Decoder with Nilay Patel",
+    "feed": "https://feeds.megaphone.fm/recodedecode"
+  },
+  {
+    "id": "darknet",
+    "title": "Darknet Diaries",
+    "feed": "https://podcast.darknetdiaries.com/"
+  },
+  {
+    "id": "99pi",
+    "title": "99% Invisible",
+    "feed": "https://feeds.simplecast.com/BqbsxVfO"
+  }
+]
