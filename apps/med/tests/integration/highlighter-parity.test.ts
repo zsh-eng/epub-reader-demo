@@ -2,7 +2,12 @@ import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { createHighlighter } from "shiki";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
-import { renderDiffWithHighlighter, parsePatchFiles, type DiffsHighlighter } from "@pierre/diffs";
+import {
+  renderDiffWithHighlighter,
+  renderFileWithHighlighter,
+  parsePatchFiles,
+  type DiffsHighlighter,
+} from "@pierre/diffs";
 import {
   compareRuns,
   diagnosticTheme,
@@ -99,6 +104,19 @@ describe("Java/C++ through production language loading, adapter, and Pierre", ()
       }
     },
   );
+  it("retains empty-line placeholders when token selection is disabled", () => {
+    const file = { name: "sample.java", contents: "// first\n\n/* comment\n\nend */\n\n" };
+    for (const theme of themeNames) {
+      const options = { ...renderOptions(theme), useTokenTransformer: false };
+      expect(
+        compare(
+          renderFileWithHighlighter(file, reference as unknown as DiffsHighlighter, options).code,
+          renderFileWithHighlighter(file, actual as unknown as DiffsHighlighter, options).code,
+          theme,
+        ),
+      ).toEqual([]);
+    }
+  });
   it("detects a real unhighlighted result and changed source instead of accepting a blank oracle", () => {
     const source = "int count = 42;";
     const a = renderFile(source, "cpp", "github-dark", reference);

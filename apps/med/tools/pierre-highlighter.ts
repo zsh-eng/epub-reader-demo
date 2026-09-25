@@ -66,7 +66,24 @@ export async function resolveLanguage(name) {
   return result;
 }`;
       }
+      if (id.endsWith("/worker/WorkerPoolManager.js")) {
+        return replace(
+          source,
+          "\n\thandleWorkerMessage(managedWorker, response) {",
+          `\n\thandleWorkerMessage(managedWorker, response) {
+    if (response.type === "success" && response.requestType === "file" && typeof response.result === "string")
+      response.result = JSON.parse(response.result);`,
+        );
+      }
       if (id.endsWith("/worker/worker.js")) {
+        // File render results are a dense, JSON-compatible HAST tree. A string
+        // avoids structured-cloning thousands of nested objects across threads.
+        // Decode at the pool boundary so Pierre's cache/render API is unchanged.
+        source = replace(
+          source,
+          "\nfunction sendFileSuccess(id, result, options) {",
+          "\nfunction sendFileSuccess(id, result, options) {\n\tresult = JSON.stringify(result);",
+        );
         source = replace(
           source,
           'import { createHighlighterCore } from "shiki/core";',

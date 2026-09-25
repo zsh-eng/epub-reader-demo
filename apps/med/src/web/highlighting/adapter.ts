@@ -276,9 +276,13 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
       const selectedThemes = options.themes
         ? Object.entries(options.themes)
         : [["", options.theme ?? ""]];
-      const makeToken = (content: string, offset: number, column: number, kind: string): Token => {
-        const token: Token = { content, offset, __lineChar: column };
-        token.htmlStyle = {};
+      type Style = Pick<Token, "color" | "fontStyle"> & { htmlStyle: Record<string, string> };
+      const kindStyles = new Map<string, Style>();
+      const equivalentStyles = new Map<string, Style>();
+      const styleFor = (kind: string): Style => {
+        const cached = kindStyles.get(kind);
+        if (cached) return cached;
+        const token: Style = { htmlStyle: {} };
         for (const [mode, name] of selectedThemes) {
           const style =
             kind === "plain" ? { color: getTheme(name).fg, fontStyle: 0 } : tokenStyle(name, kind);
@@ -295,17 +299,38 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
                 token.htmlStyle[`${prefix}-${property}`] = value;
           }
         }
-        return token;
+        const key = JSON.stringify(token);
+        const style = equivalentStyles.get(key) ?? token;
+        equivalentStyles.set(key, style);
+        kindStyles.set(kind, style);
+        return style;
       };
       let offset = 0;
       let spanIndex = 0;
       let lines = source.split("\n").map((line) => {
         const end = offset + line.length;
         const tokens: Token[] = [];
+        let previousStyle: Style | undefined;
+        const addToken = (content: string, start: number, column: number, kind: string) => {
+          const style = styleFor(kind);
+          const previous = tokens[tokens.length - 1];
+          // Coalesce equal visible styles before Pierre adds character offsets
+          // and diff decorations. Each emitted token owns its mutable style.
+          if (previous && style === previousStyle) previous.content += content;
+          else
+            tokens.push({
+              content,
+              offset: start,
+              __lineChar: column,
+              ...style,
+              htmlStyle: { ...style.htmlStyle },
+            });
+          previousStyle = style;
+        };
         // Parse the whole source first: a long line can change the grammar state
         // of the next line. Only its rendered tokens are reduced to plain text.
         if (options.tokenizeMaxLineLength && line.length > options.tokenizeMaxLineLength) {
-          if (line.length) tokens.push(makeToken(line, offset, 0, "plain"));
+          if (line.length) addToken(line, offset, 0, "plain");
         } else {
           while (spanIndex < spans.length && spans[spanIndex].end <= offset) spanIndex++;
           for (let index = spanIndex; index < spans.length && spans[index].start < end; index++) {
@@ -317,25 +342,21 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
             const match =
               options.mergeWhitespaces === "never" && /^(\s*)(\S[\s\S]*?)(\s*)$/.exec(value);
             if (match && (match[1] || match[3])) {
-              if (match[1]) tokens.push(makeToken(match[1], start, start - offset, "plain"));
-              tokens.push(
-                makeToken(
-                  match[2],
-                  start + match[1].length,
-                  start + match[1].length - offset,
-                  span.kind,
-                ),
+              if (match[1]) addToken(match[1], start, start - offset, "plain");
+              addToken(
+                match[2],
+                start + match[1].length,
+                start + match[1].length - offset,
+                span.kind,
               );
               if (match[3])
-                tokens.push(
-                  makeToken(
-                    match[3],
-                    stop - match[3].length,
-                    stop - match[3].length - offset,
-                    "plain",
-                  ),
+                addToken(
+                  match[3],
+                  stop - match[3].length,
+                  stop - match[3].length - offset,
+                  "plain",
                 );
-            } else tokens.push(makeToken(value, start, start - offset, span.kind));
+            } else addToken(value, start, start - offset, span.kind);
           }
         }
         offset = end + 1;
@@ -363,17 +384,20 @@ export function createTwinkleplopAdapter(dependencies: AdapterOptions) {
           properties: decoration.properties,
         }));
         for (const token of tokens) {
+          if (!token.content.length) continue;
           const start = token.__lineChar;
           const end = start + token.content.length;
-          const cuts = [
-            ...new Set([
-              start,
-              end,
-              ...marks
-                .flatMap((mark) => [mark.start, mark.end])
-                .filter((cut) => cut > start && cut < end),
-            ]),
-          ].sort((a, b) => a - b);
+          const cuts = marks.length
+            ? [
+                ...new Set([
+                  start,
+                  end,
+                  ...marks
+                    .flatMap((mark) => [mark.start, mark.end])
+                    .filter((cut) => cut > start && cut < end),
+                ]),
+              ].sort((a, b) => a - b)
+            : [start, end];
           for (let index = 0; index < cuts.length - 1; index++) {
             const from = cuts[index];
             const to = cuts[index + 1];

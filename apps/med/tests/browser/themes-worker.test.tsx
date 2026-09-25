@@ -38,10 +38,17 @@ index 1111111..2222222 100644
 `,
   "theme-worker-fixture",
 )[0].files[0];
-const items = [{ id: "example", type: "diff" as const, fileDiff }];
+const file = {
+  name: "example.ts",
+  contents: 'export const greeting = "after";\nexport function hello() { return greeting; }\n',
+  cacheKey: "theme-worker-file",
+};
+const diffItems = [{ id: "example", type: "diff" as const, fileDiff }];
+const fileItems = [{ id: "example", type: "file" as const, file }];
+type View = "file" | "diff";
 const poolOptions = { workerFactory: () => new PierreWorker(), poolSize: 1 };
 
-function Review() {
+function Review({ view }: { view: View }) {
   const pool = useWorkerPool();
   useEffect(() => {
     workerPool = pool;
@@ -49,7 +56,7 @@ function Review() {
   const { active } = useTheme();
   return (
     <CodeView
-      items={items}
+      items={view === "file" ? fileItems : diffItems}
       options={{ theme: active.pierreTheme, themeType: active.appearance }}
       style={{ height: 300, width: 700 }}
     />
@@ -74,11 +81,18 @@ function expectedColor(hex: string) {
 // This is a correctness check. Initial worker/theme modules can take more than
 // the default one-second poll while other browser suites run in parallel.
 const renderReady = { timeout: 5000 };
-async function expectRenderedTheme(id: string) {
+async function expectRenderedTheme(id: string, view: View) {
   const theme = findTheme(id);
   // A plain first paint is not proof that the worker has applied this theme.
   await expect
-    .poll(() => workerPool?.getDiffResultCache(fileDiff)?.options.theme, renderReady)
+    .poll(
+      () =>
+        (view === "file"
+          ? workerPool?.getFileResultCache(file)
+          : workerPool?.getDiffResultCache(fileDiff)
+        )?.options.theme,
+      renderReady,
+    )
     .toBe(theme.pierreTheme);
   await expect
     .poll(() => codeHost() && getComputedStyle(codeHost()!).backgroundColor, renderReady)
@@ -86,10 +100,10 @@ async function expectRenderedTheme(id: string) {
   await expect.poll(tokenColors, renderReady).toContain("greeting:");
 }
 
-test(
-  "live theme changes reach real worker-backed CodeView backgrounds and syntax",
+test.each(["file", "diff"] as const)(
+  "live theme changes reach real worker-backed %s backgrounds and syntax",
   { timeout: 30000 },
-  async () => {
+  async (view) => {
     localStorage.setItem(THEME_STORAGE_KEY, "graphite-dark");
     initializeTheme();
     mount = document.createElement("div");
@@ -101,25 +115,25 @@ test(
         highlighterOptions={{ theme: "med-graphite-dark" }}
       >
         <PierreThemeSync />
-        <Review />
+        <Review view={view} />
       </WorkerPoolContextProvider>,
     );
     await expect.poll(() => workerPool, renderReady).toBeDefined();
     await workerPool!.initialize();
-    await expectRenderedTheme("graphite-dark");
+    await expectRenderedTheme("graphite-dark", view);
     expect(workerPool?.isWorkingPool()).toBe(true);
     expect(workerPool?.isInitialized()).toBe(true);
     const originalPool = workerPool;
     const graphiteTokens = tokenColors();
     themeController.preview("tokyo-night");
-    await expectRenderedTheme("tokyo-night");
+    await expectRenderedTheme("tokyo-night", view);
     await expect.poll(tokenColors, renderReady).not.toBe(graphiteTokens);
     const tokyoTokens = tokenColors();
     themeController.preview("rose-pine");
-    await expectRenderedTheme("rose-pine");
+    await expectRenderedTheme("rose-pine", view);
     await expect.poll(tokenColors, renderReady).not.toBe(tokyoTokens);
     themeController.cancelPreview();
-    await expectRenderedTheme("graphite-dark");
+    await expectRenderedTheme("graphite-dark", view);
     await expect.poll(tokenColors, renderReady).toBe(graphiteTokens);
     expect(workerPool).toBe(originalPool);
   },
