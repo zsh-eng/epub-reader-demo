@@ -23,7 +23,11 @@
     const range = selection.getRangeAt(0);
     if (!root?.contains(range.commonAncestorContainer)) return;
     const rects = [...range.getClientRects()].filter(rect => rect.width > 0 && rect.bottom > 0 && rect.top < innerHeight);
-    const rect = rects.at(-1);
+    const rect = rects.length ? {
+      x: Math.min(...rects.map(r => r.left)), y: Math.min(...rects.map(r => r.top)),
+      width: Math.max(...rects.map(r => r.right)) - Math.min(...rects.map(r => r.left)),
+      height: Math.max(...rects.map(r => r.bottom)) - Math.min(...rects.map(r => r.top))
+    } : null;
     if (rect) send({ selection: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
   });
   document.addEventListener('keydown', event => { if (event.key === 'Escape') send({ dismissSelection: true }); });

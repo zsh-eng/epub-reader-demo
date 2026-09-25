@@ -17,12 +17,15 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
 }
 
 @MainActor @Observable final class MacReader: NSObject, WKNavigationDelegate {
+  let diagnostics = MacDiagnostics()
   let url: URL
   let readerView: WKWebView
   private(set) var websiteView: WKWebView?
   private(set) var ready = false
   private(set) var loading = false
   var websiteVisible = false { didSet { onChange?() } }
+  private(set) var sourceCommitted = false
+  private var automaticallyShowingWebsite = false
   var error: String?
   var showFind = false { didSet { onChange?() } }
   var onShortcuts: (() -> Void)?
@@ -32,9 +35,9 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   @ObservationIgnored private var selectionPopover: MacSelectionTooltip?
   @ObservationIgnored private var dismissSelectionTask: Task<Void, Never>?
   @ObservationIgnored private var appearanceObserver: NSObjectProtocol?
-  private(set) var measuredFPS: Int?
   private(set) var highRefreshAvailable = false
   @ObservationIgnored private var selectedQuote: ReaderQuote?
+  @ObservationIgnored private var selectionRect: NSRect?
   @ObservationIgnored private var selectionTask: Task<Void, Never>?
   var draft = ""
   var quotedDraft: ReaderQuote?
@@ -131,6 +134,8 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         }
       }
     } else if !localOnly {
+      automaticallyShowingWebsite = true
+      websiteVisible = true
       loadWebsite()
     } else {
       loading = false
@@ -139,6 +144,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
 
   private func loadWebsite() {
     error = nil
+    sourceCommitted = false
     let web = makeWebsite()
     if let fixture = TestMode.fixture(for: url) {
       web.loadFileURL(fixture, allowingReadAccessTo: fixture.deletingLastPathComponent())
@@ -155,7 +161,15 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     config.userContentController.add(bridge, contentWorld: .defaultClient, name: "arcticMac")
     config.userContentController.addUserScript(
       WKUserScript(
-        source: "webkit.messageHandlers.arcticMac.postMessage('sourceReady')",
+        source: """
+          for (const type of ['wheel','pointerdown','keydown']) addEventListener(type, e => {
+            if (e.isTrusted) webkit.messageHandlers.arcticMac.postMessage('sourceInteraction');
+          }, {passive: true, once: true});
+          """,
+        injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .defaultClient))
+    config.userContentController.addUserScript(
+      WKUserScript(
+        source: "webkit.messageHandlers.arcticMac.postMessage('sourceReady');",
         injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: .defaultClient))
     let view = WKWebView(frame: readerView.frame, configuration: config)
     view.navigationDelegate = self
@@ -164,9 +178,11 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   }
 
   func toggleWebsite() {
+    automaticallyShowingWebsite = false
     checkpoint()
     websiteVisible.toggle()
     if websiteVisible, websiteView == nil { loadWebsite() }
+    if !websiteVisible && !ready { extract() }
   }
 
   /// Refresh always uses this tab's immutable URL. Links create independent tabs.
@@ -203,7 +219,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         readerView.loadHTMLString(
           MacReaderAssets.prepare(rendered, css: MacAppearance.shared.css), baseURL: url)
         persistReader()
-        if !websiteVisible {
+        if !websiteVisible && !automaticallyShowingWebsite {
           source.stopLoading()
           source.navigationDelegate = nil
           source.configuration.userContentController.removeAllScriptMessageHandlers()
@@ -235,10 +251,22 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
       focusedAnnotation = body["id"].flatMap(UUID.init(uuidString:))
       if focusedAnnotation != nil {
         selectedQuote = nil
-        presentSelection()
+        let id = focusedAnnotation!.uuidString
+        selectionTask = Task {
+          let raw = try? await readerView.callAsyncJavaScript(
+            "return arcticAnnotations.bounds(id)", arguments: ["id": id], in: nil,
+            contentWorld: .defaultClient)
+          guard !Task.isCancelled, focusedAnnotation?.uuidString == id else { return }
+          selectionRect = Self.rect(raw as? [String: Double])
+          presentSelection()
+        }
       } else {
         scheduleSelectionDismissal()
       }
+      return
+    }
+    if message.body as? String == "sourceInteraction" {
+      automaticallyShowingWebsite = false
       return
     }
     if message.name == "arcticReadingActivity" || message.body as? String == "activity" {
@@ -250,7 +278,12 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
       return
     }
     if let body = message.body as? [String: Any] {
-      if body["selection"] as? [String: Double] != nil {
+      if let sample = body["diagnostics"] as? [String: Any] {
+        diagnostics.receive(sample)
+        return
+      }
+      if let bounds = body["selection"] as? [String: Double] {
+        selectionRect = Self.rect(bounds)
         selectionTask?.cancel()
         dismissSelectionTask?.cancel()
         selectionTask = Task {
@@ -268,7 +301,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     switch message.body as? String {
     case "shortcuts": onShortcuts?()
     case "sourceReady":
-      if !attemptedDOM && !websiteVisible {
+      if !attemptedDOM && loading {
         attemptedDOM = true
         extract()
       }
@@ -295,6 +328,16 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
         renderedRecords = nil
         ready = true
         loading = false
+        // Do not replace a page the reader has started using. An untouched cold
+        // page can reveal Reader once prepared; deliberate website mode stays.
+        if automaticallyShowingWebsite {
+          automaticallyShowingWebsite = false
+          websiteVisible = false
+          websiteView?.stopLoading()
+          websiteView?.navigationDelegate = nil
+          websiteView?.configuration.userContentController.removeAllScriptMessageHandlers()
+          websiteView = nil
+        }
         error = nil
         readyMilliseconds =
           Double(began.duration(to: .now).components.attoseconds) / 1e15
@@ -303,6 +346,9 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
           "Reader ready in \(self.readyMilliseconds) ms; cached=\(self.store.downloadedFile(for: self.url) != nil)"
         )
         renderAnnotations()
+        if diagnostics.enabled {
+          diagnostics.attach(to: websiteVisible ? websiteView : readerView, enabled: true)
+        }
         onChange?()
       }
     default: break
@@ -310,6 +356,7 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
   }
 
   func checkpoint() {
+    diagnostics.stop()
     dismissSelectionTask?.cancel()
     selectionTask?.cancel()
     selectionPopover?.close()
@@ -390,7 +437,21 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     guard ready, !websiteVisible, let window = readerView.window else { return }
     dismissSelectionTask?.cancel()
     if selectionPopover == nil { selectionPopover = MacSelectionTooltip(reader: self) }
-    selectionPopover?.show(in: window, near: NSEvent.mouseLocation)
+    guard let rect = selectionRect else { return }
+    let nativeRect = NSRect(
+      x: rect.minX, y: readerView.isFlipped ? rect.minY : readerView.bounds.height - rect.maxY,
+      width: rect.width, height: rect.height)
+    let anchor = window.convertToScreen(readerView.convert(nativeRect, to: nil))
+    let viewport = window.convertToScreen(readerView.convert(readerView.bounds, to: nil))
+    selectionPopover?.show(in: window, anchor: anchor, viewport: viewport)
+  }
+
+  private static func rect(_ value: [String: Double]?) -> NSRect? {
+    guard let value, let x = value["x"], let y = value["y"], let width = value["width"],
+      let height = value["height"],
+      [x, y, width, height].allSatisfy(\.isFinite), width > 0, height > 0
+    else { return nil }
+    return NSRect(x: x, y: y, width: width, height: height)
   }
 
   func colourSelection(_ colour: HighlightColour) {
@@ -446,27 +507,8 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     ) { _ in }
   }
 
-  func measureRefresh() {
-    let view = websiteVisible ? websiteView : readerView
-    view?.callAsyncJavaScript(
-      """
-      return await new Promise(resolve => {
-        let samples = [], last;
-        function tick(now) {
-          if (last !== undefined) samples.push(now - last);
-          last = now;
-          if (samples.length < 90) requestAnimationFrame(tick);
-          else { samples.sort((a,b)=>a-b); resolve(Math.round(1000 / samples[Math.floor(samples.length/2)])); }
-        }
-        requestAnimationFrame(tick);
-      });
-      """, arguments: [:], in: nil, in: .defaultClient
-    ) { [weak self] result in
-      if case .success(let fps as Int) = result { self?.measuredFPS = fps }
-    }
-  }
-
   func discard() {
+    diagnostics.stop()
     checkpoint()
     dismissSelectionTask?.cancel()
     selectionPopover?.close()
@@ -489,8 +531,12 @@ private let readerLog = Logger(subsystem: "com.zsheng.ArcticMac", category: "Rea
     websiteView = nil
   }
 
+  func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+    if webView === websiteView { sourceCommitted = true }
+  }
+
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-    if webView === websiteView, !websiteVisible, loading { extract() }
+    if webView === websiteView, loading { extract() }
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

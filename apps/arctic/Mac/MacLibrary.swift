@@ -6,6 +6,7 @@ struct MacLibrary: View {
   @Bindable var workspace: MacWorkspace
   @State private var articles: [SavedArticle] = []
   @State private var revision = 0
+  @State private var compactHeader = false
   var body: some View {
     ZStack(alignment: .top) {
       if articles.isEmpty {
@@ -25,9 +26,14 @@ struct MacLibrary: View {
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
-        MacArticleGrid(articles: articles, revision: revision, workspace: workspace)
+        grid
       }
-      libraryHeader
+      if articles.isEmpty {
+        header
+      } else {
+        MacMaterial(fades: true).frame(height: 136).allowsHitTesting(false)
+        header
+      }
       if let summary = workspace.store.importSummary {
         HStack {
           Image(systemName: "sparkles").foregroundStyle(ArcticBrand.accent)
@@ -62,19 +68,13 @@ struct MacLibrary: View {
       revision += 1
     }
   }
-  private var libraryHeader: some View {
-    HStack(alignment: .firstTextBaseline) {
-      VStack(alignment: .leading, spacing: 5) {
-        Text(workspace.folder.title).font(.system(size: 32, weight: .medium, design: .rounded))
-        Text("\(articles.count) articles").font(.subheadline).foregroundStyle(.secondary)
-      }
-      Spacer()
-      TextField("Search this collection", text: $workspace.search)
-        .textFieldStyle(.roundedBorder).frame(width: 250).accessibilityIdentifier(
-          "library-search")
-    }.padding(28).padding(.bottom, 18)
-      .background(MacMaterial(fades: true))
-
+  private var header: MacLibraryHeader {
+    MacLibraryHeader(workspace: workspace, count: articles.count, compact: compactHeader)
+  }
+  private var grid: MacArticleGrid {
+    MacArticleGrid(
+      articles: articles, revision: revision, workspace: workspace,
+      compactChanged: { compactHeader = $0 })
   }
   private struct ProjectionKey: Equatable {
     let revision: Int
@@ -89,8 +89,12 @@ struct MacArticleGrid: NSViewRepresentable {
   let articles: [SavedArticle]
   let revision: Int
   let workspace: MacWorkspace
-  func makeCoordinator() -> Coordinator { Coordinator(workspace: workspace) }
+  let compactChanged: (Bool) -> Void
+  func makeCoordinator() -> Coordinator {
+    Coordinator(workspace: workspace, compactChanged: compactChanged)
+  }
   func makeNSView(context: Context) -> NSScrollView {
+    let coordinator = context.coordinator
     let scroll = NSScrollView()
     let grid = NSCollectionView()
     grid.collectionViewLayout = MacGridLayout()
@@ -98,29 +102,30 @@ struct MacArticleGrid: NSViewRepresentable {
     grid.isSelectable = true
     grid.allowsMultipleSelection = false
     grid.register(MacArticleItem.self, forItemWithIdentifier: .init("article"))
-    grid.delegate = context.coordinator
-    grid.dataSource = context.coordinator
+    grid.delegate = coordinator
+    grid.dataSource = coordinator
     grid.setAccessibilityIdentifier("article-grid")
     scroll.documentView = grid
     scroll.hasVerticalScroller = true
     scroll.drawsBackground = false
     scroll.automaticallyAdjustsContentInsets = false
-    scroll.contentInsets.top = 118
-    context.coordinator.grid = grid
+    scroll.contentInsets.top = 108
+    coordinator.grid = grid
     scroll.contentView.postsBoundsChangedNotifications = true
-    context.coordinator.observer = NotificationCenter.default.addObserver(
+    coordinator.observer = NotificationCenter.default.addObserver(
       forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main
-    ) { [weak coordinator = context.coordinator] _ in
+    ) { [weak coordinator = coordinator] _ in
       MainActor.assumeIsolated { coordinator?.viewport() }
     }
     return scroll
   }
   func updateNSView(_ scroll: NSScrollView, context: Context) {
-    guard context.coordinator.revision != revision else { return }
-    context.coordinator.revision = revision
-    context.coordinator.articles = articles
-    context.coordinator.grid?.reloadData()
-    context.coordinator.viewport()
+    let coordinator = context.coordinator
+    guard coordinator.revision != revision else { return }
+    coordinator.revision = revision
+    coordinator.articles = articles
+    coordinator.grid?.reloadData()
+    coordinator.viewport()
   }
   static func dismantleNSView(_ view: NSScrollView, coordinator: Coordinator) {
     coordinator.dispose()
@@ -134,7 +139,12 @@ struct MacArticleGrid: NSViewRepresentable {
     weak var grid: NSCollectionView?
     var observer: NSObjectProtocol?
     private var prefetch: Task<Void, Never>?
-    init(workspace: MacWorkspace) { self.workspace = workspace }
+    private let compactChanged: (Bool) -> Void
+    private var compact = false
+    init(workspace: MacWorkspace, compactChanged: @escaping (Bool) -> Void) {
+      self.workspace = workspace
+      self.compactChanged = compactChanged
+    }
     func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int)
       -> Int
     { articles.count }
@@ -167,6 +177,14 @@ struct MacArticleGrid: NSViewRepresentable {
     func viewport() {
       prefetch?.cancel()
       guard let grid, !articles.isEmpty else { return }
+      if let scroll = grid.enclosingScrollView {
+        let offset = scroll.contentView.bounds.minY + scroll.contentInsets.top
+        let next = offset > (compact ? 12 : 48)
+        if next != compact {
+          compact = next
+          DispatchQueue.main.async { [weak self] in self?.compactChanged(next) }
+        }
+      }
       workspace.store.setLibraryScrolling(true)
       prefetch = Task { [weak self, weak grid] in
         do { try await Task.sleep(for: .milliseconds(120)) } catch { return }

@@ -60,6 +60,12 @@ test('recolour updates the painted ranges and tap bridge without changing the ar
     window.getSelection()!.removeAllRanges();
   });
   await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'document-one'), [record(quote)]);
+  const anchor = await p.evaluate(() => (globalThis as any).arcticAnnotations.bounds('one'));
+  const textBounds = await p.locator('em').boundingBox();
+  expect(anchor.x).toBeCloseTo(textBounds!.x, 0);
+  expect(anchor.y).toBeCloseTo(textBounds!.y, 0);
+  expect(anchor.width).toBeCloseTo(textBounds!.width, 0);
+  expect(await p.evaluate(() => (globalThis as any).arcticAnnotations.bounds('missing'))).toBeNull();
   await p.locator('em').click();
   expect(await p.evaluate(() => (globalThis as any).messages)).toEqual([{ id: 'one', token: 'document-one' }]);
   await p.evaluate(records => (globalThis as any).arcticAnnotations.render(records, 'document-one'), [{ ...record(quote), colour: 'rose' }]);

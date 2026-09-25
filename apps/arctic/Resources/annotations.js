@@ -199,6 +199,12 @@
       }
       return missing;
     },
+    bounds(id) {
+      const range = hitRanges.find(item => item.id === id)?.range;
+      if (!range) return null;
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    },
     reveal(id) {
       const quote = resolved.get(id);
       if (!quote) return false;

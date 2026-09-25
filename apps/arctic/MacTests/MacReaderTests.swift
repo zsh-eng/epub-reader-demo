@@ -158,6 +158,38 @@ import XCTest
     pool.trim()
   }
 
+  func testRelaunchResumesPreviewWithoutTaggingOrAnImportSheet() async throws {
+    let base = URL(string: "http://127.0.0.1:8766/one")!
+    do { _ = try await URLSession.shared.data(from: base) } catch {
+      throw XCTSkip("Start MacTests/replay-server.py for this integration check")
+    }
+    // This is the durable snapshot immediately after import, before any preview
+    // completion. One row also carries an interrupted network failure.
+    var first = SavedArticle(url: base, title: "Imported title")
+    first.savedAt = Date(timeIntervalSince1970: 1_234_567_890)
+    first.importBatchID = UUID()
+    var second = SavedArticle(url: URL(string: "http://127.0.0.1:8766/two")!, title: "Second")
+    second.previewFailed = true
+    let path = directory.appending(path: TestMode.enabled ? "test-links.json" : "links.json")
+    try JSONEncoder().encode([first, second]).write(to: path, options: .atomic)
+    let restored = ArticleStore(directory: directory)
+    restored.resumePreviews()
+    let deadline = ContinuousClock.now.advanced(by: .seconds(8))
+    while restored.articles.contains(where: { $0.previewFetchedAt == nil }),
+      ContinuousClock.now < deadline
+    {
+      try await Task.sleep(for: .milliseconds(30))
+    }
+    XCTAssertTrue(
+      restored.articles.allSatisfy {
+        $0.imageURL?.lastPathComponent == "cover.svg" && !$0.previewFailed
+      })
+    XCTAssertEqual(restored.article(for: base)?.savedAt, first.savedAt)
+    restored.flushPendingWrites()
+    let reopened = ArticleStore(directory: directory)
+    XCTAssertTrue(reopened.articles.allSatisfy { $0.previewFetchedAt != nil && !$0.needsPreview })
+  }
+
   func testFreshExtractionFromLocalReplay() async throws {
     let url = URL(string: "http://127.0.0.1:8766/one")!
     do {
@@ -172,6 +204,9 @@ import XCTest
     )
     let reader = MacReader(url: url, store: store)
     reader.start()
+    XCTAssertTrue(
+      reader.websiteVisible, "A cold article presents the website without waiting for extraction")
+    XCTAssertNotNil(reader.websiteView)
     try await awaitReady(reader)
     let title = try await reader.readerView.evaluateJavaScript(
       "document.querySelector('h1').textContent")

@@ -196,7 +196,10 @@ struct MacWorkspaceView: View {
 
   private var observedLayout: some View {
     layout
-      .onChange(of: scenePhase) { _, phase in workspace.windowActive = phase == .active }
+      .onChange(of: scenePhase) { _, phase in
+        workspace.windowActive = phase == .active
+        if phase == .active { workspace.store.resumeTagging() }
+      }
       .onChange(of: blocksReading) { workspace.updateActivity() }
       .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification))
     { _ in workspace.shutDown() }
@@ -240,7 +243,10 @@ struct MacWorkspaceView: View {
           }.padding(12).background(.regularMaterial, in: Capsule()).padding(20)
         }
       }
-      .onAppear { installKeyMonitor() }
+      .onAppear {
+        installKeyMonitor()
+        workspace.store.resumeTagging()
+      }
       .onDisappear { if let keyMonitor { NSEvent.removeMonitor(keyMonitor) } }
   }
 

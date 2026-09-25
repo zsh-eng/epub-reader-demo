@@ -16,6 +16,8 @@ struct SavedArticle: Identifiable, Codable, Sendable {
   var imageURL: URL?
   var faviconURL: URL?
   var previewFailed = false
+  var previewFetchedAt: Date?
+  var needsPreview: Bool { previewFetchedAt == nil && imageURL == nil }
   var isRead: Bool?
   var isArchived: Bool?
   var isFavourite: Bool?
@@ -652,7 +654,8 @@ struct TaggingNotice: Identifiable {
   private func enqueuePreviews(_ urls: [URL]) {
     previewArticleIDs = Dictionary(
       articles.filter {
-        $0.taggingText == nil && !$0.previewFailed && pendingPreviews[$0.id] == nil
+        ($0.needsPreview || $0.taggingText == nil) && !$0.previewFailed
+          && pendingPreviews[$0.id] == nil
       }.map { ($0.url, $0.id) }, uniquingKeysWith: { first, _ in first })
     let eligible = Set(previewArticleIDs.keys)
     var seen = Set<URL>()
@@ -765,13 +768,28 @@ struct TaggingNotice: Identifiable {
   func resumeTagging() {
     taggingDeferred.removeAll()
     taggingWaitingForForeground = false
-    if taggingAllowed {
-      enqueuePreviews(
-        articles.filter {
-          $0.saved && $0.taggingText == nil && !retaggingContextNeeded.contains($0.id)
-        }.map(\.url))
-    }
+    resumePreviews()
     scheduleTagging()
+  }
+
+  func resumePreviews() {
+    // Preview completion belongs to the saved article, not the ephemeral import
+    // sheet or Jev. Rebuild unfinished work after launch/foreground recovery.
+    var updated = articles
+    var resetFailures = false
+    for index in updated.indices
+    where updated[index].saved && updated[index].needsPreview && updated[index].previewFailed {
+      updated[index].previewFailed = false
+      resetFailures = true
+    }
+    if resetFailures {
+      do { try commit(updated) } catch { errorMessage = error.localizedDescription }
+    }
+    enqueuePreviews(
+      articles.filter {
+        $0.saved && ($0.needsPreview || $0.taggingText == nil)
+          && !retaggingContextNeeded.contains($0.id)
+      }.sorted { ($0.savedAt ?? .distantPast) > ($1.savedAt ?? .distantPast) }.map(\.url))
   }
 
   func retagSavedArticles() {
@@ -1196,6 +1214,7 @@ struct ArticlePreview: Sendable {
     article.imageURL = imageURL
     article.faviconURL = faviconURL
     article.previewFailed = false
+    article.previewFetchedAt = Date()
   }
 
   static func fetch(_ url: URL) async throws -> Self {
@@ -1242,6 +1261,7 @@ enum TestMode {
   static var enabled: Bool {
     #if DEBUG
       ProcessInfo.processInfo.arguments.contains("-ui-testing")
+        || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
     #else
       false
     #endif

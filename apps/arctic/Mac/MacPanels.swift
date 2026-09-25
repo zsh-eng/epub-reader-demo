@@ -28,7 +28,8 @@ struct MacReaderPane: View {
       }
       ZStack {
         if reader.websiteVisible, let website = reader.websiteView {
-          MacWebSurface(webView: website)
+          MacWebSurface(webView: website).opacity(reader.sourceCommitted ? 1 : 0)
+          if !reader.sourceCommitted && reader.error == nil { ProgressView().controlSize(.small) }
         } else {
           MacWebSurface(webView: reader.readerView).opacity(reader.ready ? 1 : 0)
           if !reader.ready && reader.error == nil {
@@ -50,24 +51,27 @@ struct MacReaderPane: View {
           Button("Website") { if !reader.websiteVisible { reader.toggleWebsite() } }
         }.padding(14).background(.bar)
       }
-      if workspace.showDiagnostics {
-        HStack {
-          Text(reader.measuredFPS.map { "Web rAF \($0) fps" } ?? "Web rAF —")
-          Button("Measure") { reader.measureRefresh() }
-          Text(
-            reader.highRefreshAvailable
-              ? "High-refresh flag available" : "High-refresh flag unavailable")
-        }.font(.caption).padding(.top, 6)
-        Text(
-          "Warm readers \(workspace.readers.count)/3 · hits \(workspace.readers.hits) · misses \(workspace.readers.misses) · last ready \(Int(reader.readyMilliseconds)) ms · loads \(reader.loadCount)"
-        )
-        .font(.system(size: 10, design: .monospaced)).padding(8)
-        .accessibilityIdentifier("reader-diagnostics")
-      }
     }
+    .overlay(alignment: .bottomTrailing) {
+      if workspace.showDiagnostics { MacFrameCounter(diagnostics: reader.diagnostics).padding(12) }
+    }
+    .onAppear { updateDiagnostics() }
+    .onChange(of: workspace.showDiagnostics) { updateDiagnostics() }
+    .onChange(of: reader.websiteVisible) { updateDiagnostics() }
+    .onChange(of: reader.sourceCommitted) { updateDiagnostics() }
+    .onChange(of: reader.ready) { updateDiagnostics() }
+    .onChange(of: reader.url) { updateDiagnostics() }
+    .onChange(of: workspace.windowActive) { updateDiagnostics() }
+    .onDisappear { reader.diagnostics.stop() }
     .onChange(of: workspace.annotations.records) { _, _ in reader.renderAnnotations() }
     .onAppear { reader.onShortcuts = { workspace.showShortcuts = true } }
   }
+  private func updateDiagnostics() {
+    reader.diagnostics.attach(
+      to: reader.websiteVisible ? reader.websiteView : reader.readerView,
+      enabled: workspace.showDiagnostics && workspace.windowActive)
+  }
+
 }
 
 struct MacNotesPane: View {
@@ -431,14 +435,14 @@ struct MacSelectionTools: View {
   var body: some View {
     VStack(spacing: 6) {
       if !reader.isSaved { Text("Save & highlight").font(.caption).foregroundStyle(.secondary) }
-      HStack(spacing: 10) {
+      HStack(spacing: 2) {
         ForEach(HighlightColour.allCases) { colour in
           Button {
             reader.colourSelection(colour)
           } label: {
             Circle().fill(tint(colour)).frame(width: 18, height: 18)
               .overlay(Circle().strokeBorder(.primary.opacity(0.14)))
-              .padding(4)
+              .frame(width: 34, height: 30).contentShape(Capsule())
           }.buttonStyle(MacQuietButtonStyle())
             .help(colour.name).accessibilityLabel("Highlight " + colour.name)
         }
@@ -459,7 +463,7 @@ struct MacSelectionTools: View {
         .disabled(reader.focusedAnnotation == nil)
         .opacity(reader.focusedAnnotation == nil ? 0.35 : 1)
       }
-    }.padding(10).fixedSize()
+    }.padding(.horizontal, 6).padding(.vertical, 4).fixedSize()
   }
   private func tint(_ colour: HighlightColour) -> Color {
     switch colour {
@@ -468,5 +472,25 @@ struct MacSelectionTools: View {
     case .rose: .pink
     case .blue: .cyan
     }
+  }
+}
+
+struct MacFrameCounter: View {
+  @Bindable var diagnostics: MacDiagnostics
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Web \(diagnostics.webFPS) · UI \(diagnostics.uiFPS) fps").fontWeight(.medium)
+      Text(
+        "p95 \(diagnostics.webP95, specifier: "%.1f") / \(diagnostics.uiP95, specifier: "%.1f") ms · \(diagnostics.gaps) web gaps"
+      )
+      HStack {
+        Button(diagnostics.recording ? "Stop (\(diagnostics.seconds)s)" : "Record 30s") {
+          if diagnostics.recording { diagnostics.endTrace() } else { diagnostics.beginTrace() }
+        }
+        if diagnostics.hasTrace { Button("Save trace…") { diagnostics.exportTrace() } }
+      }.buttonStyle(.borderless)
+    }.font(.system(size: 10, design: .monospaced)).padding(10)
+      .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+      .accessibilityIdentifier("reader-diagnostics")
   }
 }

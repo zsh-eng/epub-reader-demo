@@ -77,3 +77,30 @@ test('desktop headlines keep their type size when sidebars change the viewport',
   expect(await page.locator('img').evaluate(el => getComputedStyle(el).borderRadius)).toBe('12px');
   await page.close();
 });
+
+
+test('frame diagnostics stay opt-in, publish timing, and stop cleanly', async () => {
+  const page = await browser.newPage();
+  await page.clock.install();
+  await page.setContent('<p>A local frame timing replay.</p>');
+  await page.evaluate(() => {
+    (window as any).samples = [];
+    (window as any).webkit = { messageHandlers: { arcticMac: { postMessage: (v: unknown) => (window as any).samples.push(v) } } };
+  });
+  await page.evaluate(read('../Web/reader-diagnostics.js'));
+  await page.clock.runFor(1200);
+  expect(await page.evaluate(() => (window as any).samples.length)).toBe(0);
+  await page.evaluate(() => (window as any).arcticDiagnostics.start(120));
+  await page.clock.runFor(1200);
+  const first = await page.evaluate(() => (window as any).samples.at(-1).diagnostics);
+  expect(first.fps).toBeGreaterThan(0);
+  expect(first.frames).toEqual([]);
+  await page.evaluate(() => (window as any).arcticDiagnostics.record(true));
+  await page.clock.runFor(1200);
+  expect(await page.evaluate(() => (window as any).samples.at(-1).diagnostics.frames.length)).toBeGreaterThan(0);
+  await page.evaluate(() => (window as any).arcticDiagnostics.stop());
+  const stopped = await page.evaluate(() => (window as any).samples.length);
+  await page.clock.runFor(1500);
+  expect(await page.evaluate(() => (window as any).samples.length)).toBe(stopped);
+  await page.close();
+});

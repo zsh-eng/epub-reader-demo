@@ -18,7 +18,7 @@ import SwiftUI
     panel.isReleasedWhenClosed = false
     panel.contentView = NSHostingView(
       rootView: MacSelectionTools(reader: reader)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14)))
+        .background(.regularMaterial, in: Capsule()))
     observer = NotificationCenter.default.addObserver(
       forName: NSWindow.didResignKeyNotification, object: nil, queue: .main
     ) { [weak self] notification in
@@ -29,26 +29,27 @@ import SwiftUI
     }
   }
   deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
-  func show(in window: NSWindow, near point: NSPoint) {
-    let size = panel.contentView?.fittingSize ?? NSSize(width: 240, height: 48)
-    let screen = window.screen?.visibleFrame ?? window.frame
-    let frame = NSRect(
-      x: min(max(screen.minX + 8, point.x - size.width / 2), screen.maxX - size.width - 8),
-      y: min(point.y + 16, screen.maxY - size.height - 8), width: size.width, height: size.height)
+  func show(in window: NSWindow, anchor: NSRect, viewport: NSRect) {
+    let size = panel.contentView?.fittingSize ?? NSSize(width: 230, height: 38)
+    let visible = viewport.intersection(window.screen?.visibleFrame ?? window.frame).insetBy(
+      dx: 8, dy: 8)
+    let gap: CGFloat = 8
+    let x = min(max(visible.minX, anchor.midX - size.width / 2), visible.maxX - size.width)
+    // Native equivalent of position-area: top; position-try-fallbacks: flip-block.
+    // Prefer above the whole selection, then below. Shift only to avoid overflow.
+    let above = anchor.maxY + gap
+    let below = anchor.minY - gap - size.height
+    let y =
+      above + size.height <= visible.maxY
+      ? above
+      : below >= visible.minY ? below : visible.maxY - size.height
     if panel.parent !== window {
       panel.parent?.removeChildWindow(panel)
       window.addChildWindow(panel, ordered: .above)
     }
-    if isShown && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-      NSAnimationContext.runAnimationGroup { context in
-        context.duration = 0.125
-        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        panel.animator().setFrame(frame, display: true)
-      }
-    } else {
-      panel.setFrame(frame, display: true)
-      panel.orderFront(nil)
-    }
+    panel.setFrame(
+      NSRect(x: x, y: y, width: size.width, height: size.height), display: true, animate: false)
+    if !isShown { panel.orderFront(nil) }
   }
   func close() {
     panel.orderOut(nil)

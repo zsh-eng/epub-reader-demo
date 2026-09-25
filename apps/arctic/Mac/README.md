@@ -243,10 +243,18 @@ it with a public API. Safari's own preference does not configure these webviews.
 Sources: [WebKit preference definition](https://github.com/WebKit/WebKit/blob/main/Source/WTF/Scripts/Preferences/UnifiedWebPreferences.yaml)
 and [WKPreferencesPrivate.h](https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKPreferencesPrivate.h).
 
-Article options → Reader diagnostics → Measure samples 90 animation frames and
-reports median `requestAnimationFrame` cadence. This is a page-scheduling measure,
-not a compositor hitch trace or proof of sustained 120 fps scrolling. Display mode,
-power settings, window visibility and workload can still limit the observed rate.
+Article options → **Reader diagnostics** enables the live Web/UI counter.
+**Record 30s** records bounded frame intervals; **Stop** ends it early and
+**Save trace…** exports JSON. The overlay shows callback cadence, p95 interval
+and Web intervals above 1.5 display-frame budgets. Sampling is off by default,
+updates the UI once per second, and stops when the reader or window is inactive.
+The native display link requests the current screen's maximum refresh rate.
+Traces contain timing only, without article text, URLs or credentials. Web gaps
+also emit `FrameTiming` signposts for Instruments.
+
+Web measures `requestAnimationFrame`; UI measures `CADisplayLink` callbacks.
+Neither measures final compositor frame delivery. Use Instruments to confirm
+scroll hitches. Display mode, power settings and workload affect both counters.
 
 ### Validation limits
 
@@ -260,3 +268,45 @@ and opt-in timing tests remain skipped unless explicitly enabled.
 The Mac locked during this pass. Native visual checks of the new material,
 selection tooltip, hover intent and note composer, plus an on-screen refresh-rate
 measurement, remain open. Do not treat the builds or headless tests as that evidence.
+
+
+## Recovery and interaction fixes — 25 September 2026
+
+Saved articles now keep a preview completion date, including successful results
+without an OG image. Launch and foreground recovery rebuild unfinished metadata
+work independently of Jev and the import sheet. Older no-image entries receive
+one fresh metadata check; failed checks retry on the next activation. Existing
+viewport priority, bounded workers and source reading-list dates are preserved.
+
+An uncached tab displays its publisher page as the navigation commits while
+Reader extraction runs. It switches to Reader when ready only if the user has
+not started interacting with the website. Cached HTML still opens directly.
+This removes an application-imposed wait; it cannot remove publisher latency.
+
+The highlight tooltip anchors to the selected text range, tries above, then
+below, and clamps to the viewport. Position changes are immediate, with one
+reused nonactivating panel. Its placement follows the rules described in
+[Chrome's CSS anchor-positioning guide](https://developer.chrome.com/docs/css-ui/anchor-positioning-api),
+implemented with AppKit screen coordinates. Selected text remains uncovered
+when either side has enough room; a viewport-filling selection uses the top edge.
+
+Search uses a fixed-size pill with a quiet focus border. The library title
+compacts after crossing a scroll threshold; only threshold changes update
+SwiftUI. A 136 pt backdrop fades below the header using the public
+`NSVisualEffectView.maskImage` API. This is a graded material contribution,
+not a variable-radius blur. The native split-item scroll-edge experiment did
+not compose correctly inside this workspace, so it is not shipped.
+
+Validation: Release Mac and shared iOS Simulator builds passed. The 25 WebView
+checks passed, including text-anchor bounds and opt-in frame recording. Eight
+native tests completed with no failures and one opt-in benchmark skipped; the
+loopback extraction and post-relaunch metadata recovery checks both ran.
+Swift formatting, Web lint and the Release code signature passed.
+
+Native computer-use checks covered light-mode library scrolling, compact header,
+search/filter/clear, a local uncached article, repeated text selections, tooltip
+above/below placement, and the FPS/record controls. The Save panel opened; export
+completion was not verified. During the local replay, observed readings included
+Web 108–114 and UI 116–119 callbacks/s. These are spot samples, not a controlled
+before/after benchmark or a sustained 120 fps claim. Dark-mode and Reduce Motion
+visual checks remain open. The replay tab and search query were cleared.
