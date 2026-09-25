@@ -40,6 +40,11 @@ def classify(target, context, metadata, cache: Path):
             for key, definition in DEFINITIONS.items()
         },
     }
+    return request_judgments(body, cache)
+
+
+def request_judgments(body, cache: Path):
+    """Batch independent typed questions over shared state; cache the full request."""
     encoded = json.dumps(body, sort_keys=True).encode()
     key = hashlib.sha256(encoded).hexdigest()
     path = cache / f"{key}.json"
@@ -58,14 +63,29 @@ def classify(target, context, metadata, cache: Path):
             with urllib.request.urlopen(request, timeout=60) as response:
                 data = json.load(response)
             answers = data["answers"]
-            scores = {key: float(answers[key]["noul"]) for key in DEFINITIONS}
-            if any(
-                answers[k]["type"] != "noul" or not 0 <= v <= 1
-                for k, v in scores.items()
-            ):
-                raise ValueError("Invalid Jev response")
-            path.write_text(json.dumps({"scores": scores, "model": MODEL}))
-            return {"scores": scores, "model": MODEL}
+            if all(q["type"] == "choice" for q in body["questions"].values()):
+                for key, question in body["questions"].items():
+                    answer = answers[key]
+                    values = answer["probabilities"]
+                    if (
+                        answer["type"] != "choice"
+                        or answer["choice"] not in question["criteria"]
+                        or set(values) != set(question["criteria"])
+                        or any(not 0 <= v <= 1 for v in values.values())
+                        or abs(sum(values.values()) - 1) > 0.02
+                    ):
+                        raise ValueError("Invalid Jev choice response")
+                output = {"answers": answers, "model": MODEL}
+            else:
+                scores = {key: float(answers[key]["noul"]) for key in body["questions"]}
+                if any(
+                    answers[k]["type"] != "noul" or not 0 <= v <= 1
+                    for k, v in scores.items()
+                ):
+                    raise ValueError("Invalid Jev response")
+                output = {"scores": scores, "model": MODEL}
+            path.write_text(json.dumps(output))
+            return output
         except (
             http.client.RemoteDisconnected,
             urllib.error.URLError,

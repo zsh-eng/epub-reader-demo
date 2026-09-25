@@ -1,0 +1,824 @@
+{
+  "method": "Independent full-transcript GPT-6 Luna judgments; frozen before Jev comparisons; timestamps inherited from ASR, not audio-reviewed truth. Speech coverage intersects labels with aligned word spans. Whole-break coverage includes pauses and missing transcript intervals. Credits scored separately and not auto-skipped.",
+  "judgeModel": "gpt-6-luna",
+  "classifierModel": "jev-1.13.0",
+  "selection": {
+    "selected": "choice-v4",
+    "selectionReason": "Highest development promotion-speech coverage (97.6% Decoder; 100% Darknet); cheaper than two-pass fusion. Decoder includes 2.08 seconds of editorial introduction, so this remains an experimental classifier. Credits remain outside automatic skipping.",
+    "threshold": 0.7,
+    "development": [
+      "decoder",
+      "darknet"
+    ],
+    "heldOut": [
+      "99pi"
+    ],
+    "autoSkipCategories": [
+      "sponsor",
+      "self_promotion"
+    ],
+    "policyFrozenBeforeHeldOut": true
+  },
+  "episodes": [
+    {
+      "slug": "decoder",
+      "title": "I have some questions for Mark Zuckerberg",
+      "show": "Decoder with Nilay Patel",
+      "feed": "https://feeds.megaphone.fm/recodedecode",
+      "source": "https://feeds.megaphone.fm/recodedecode",
+      "audioHash": "8428b92c5097c6ef686d5ba718d2cdcd895245ac5c947649e967ebf80c333ab8",
+      "judgeRequestHash": "65d8856bcd592fdfe261375a4aa2f49c122ce5c875d6c0a0c48d2ce54aa46a3c",
+      "transcriptHash": "8b2f8c0be5a7a08adedcb4482c87f69fc4fc23f592130929ec389bc0a0024132",
+      "reference": [
+        {
+          "start": 0.4,
+          "end": 48.24,
+          "category": "sponsor"
+        },
+        {
+          "start": 54.88,
+          "end": 118.16,
+          "category": "sponsor"
+        },
+        {
+          "start": 165.84,
+          "end": 176.0,
+          "category": "self_promotion"
+        },
+        {
+          "start": 504.4,
+          "end": 577.5200000000001,
+          "category": "sponsor"
+        },
+        {
+          "start": 578.72,
+          "end": 609.68,
+          "category": "sponsor"
+        },
+        {
+          "start": 609.68,
+          "end": 665.28,
+          "category": "sponsor"
+        },
+        {
+          "start": 1037.6,
+          "end": 1080.8,
+          "category": "sponsor"
+        },
+        {
+          "start": 1081.92,
+          "end": 1157.6,
+          "category": "sponsor"
+        },
+        {
+          "start": 1158.72,
+          "end": 1165.52,
+          "category": "sponsor"
+        },
+        {
+          "start": 1527.76,
+          "end": 1539.6,
+          "category": "self_promotion"
+        },
+        {
+          "start": 1549.76,
+          "end": 1610.0,
+          "category": "sponsor"
+        },
+        {
+          "start": 1613.84,
+          "end": 1650.48,
+          "category": "sponsor"
+        }
+      ],
+      "metrics": {
+        "baseline": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 445.6,
+              "coveragePercent": 86.03,
+              "missedSeconds": 72.0,
+              "outsideReferenceSeconds": 2.24,
+              "ranges": 9
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 432.0,
+              "coveragePercent": 94.72,
+              "missedSeconds": 24.08,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 213
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 445.6,
+              "coveragePercent": 86.03,
+              "missedSeconds": 72.0,
+              "outsideReferenceSeconds": 2.24,
+              "ranges": 9
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 432.0,
+              "coveragePercent": 94.72,
+              "missedSeconds": 24.08,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 213
+            }
+          }
+        },
+        "choice-v4": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 462.24,
+              "coveragePercent": 88.81,
+              "missedSeconds": 57.68,
+              "outsideReferenceSeconds": 4.56,
+              "ranges": 11
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 447.2,
+              "coveragePercent": 97.6,
+              "missedSeconds": 10.96,
+              "outsideReferenceSeconds": 2.08,
+              "ranges": 234
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 462.24,
+              "coveragePercent": 88.81,
+              "missedSeconds": 57.68,
+              "outsideReferenceSeconds": 4.56,
+              "ranges": 11
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 447.2,
+              "coveragePercent": 97.6,
+              "missedSeconds": 10.96,
+              "outsideReferenceSeconds": 2.08,
+              "ranges": 234
+            }
+          }
+        },
+        "connected-v5": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 453.28,
+              "coveragePercent": 87.07,
+              "missedSeconds": 66.64,
+              "outsideReferenceSeconds": 4.56,
+              "ranges": 11
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 438.64,
+              "coveragePercent": 95.72,
+              "missedSeconds": 19.52,
+              "outsideReferenceSeconds": 2.08,
+              "ranges": 229
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 461.36,
+              "coveragePercent": 88.64,
+              "missedSeconds": 58.56,
+              "outsideReferenceSeconds": 4.56,
+              "ranges": 10
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 446.32,
+              "coveragePercent": 97.4,
+              "missedSeconds": 11.84,
+              "outsideReferenceSeconds": 2.08,
+              "ranges": 233
+            }
+          }
+        },
+        "context-v1": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 441.84,
+              "coveragePercent": 85.3,
+              "missedSeconds": 75.76,
+              "outsideReferenceSeconds": 2.24,
+              "ranges": 9
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 428.4,
+              "coveragePercent": 93.93,
+              "missedSeconds": 27.68,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 210
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 441.84,
+              "coveragePercent": 85.3,
+              "missedSeconds": 75.76,
+              "outsideReferenceSeconds": 2.24,
+              "ranges": 9
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 428.4,
+              "coveragePercent": 93.93,
+              "missedSeconds": 27.68,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 210
+            }
+          }
+        },
+        "context-v2": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 444.96,
+              "coveragePercent": 85.9,
+              "missedSeconds": 72.64,
+              "outsideReferenceSeconds": 2.24,
+              "ranges": 10
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 431.12,
+              "coveragePercent": 94.53,
+              "missedSeconds": 24.96,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 212
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 444.96,
+              "coveragePercent": 85.9,
+              "missedSeconds": 72.64,
+              "outsideReferenceSeconds": 2.24,
+              "ranges": 10
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 431.12,
+              "coveragePercent": 94.53,
+              "missedSeconds": 24.96,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 212
+            }
+          }
+        },
+        "passage-v6": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 460.72,
+              "coveragePercent": 88.65,
+              "missedSeconds": 58.48,
+              "outsideReferenceSeconds": 3.84,
+              "ranges": 7
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 400.4,
+              "coveragePercent": 87.79,
+              "missedSeconds": 55.68,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 200
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 460.72,
+              "coveragePercent": 88.65,
+              "missedSeconds": 58.48,
+              "outsideReferenceSeconds": 3.84,
+              "ranges": 7
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 400.4,
+              "coveragePercent": 87.79,
+              "missedSeconds": 55.68,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 200
+            }
+          }
+        },
+        "sequence-v3": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 428.32,
+              "coveragePercent": 82.44,
+              "missedSeconds": 90.48,
+              "outsideReferenceSeconds": 3.44,
+              "ranges": 15
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 415.04,
+              "coveragePercent": 90.55,
+              "missedSeconds": 43.12,
+              "outsideReferenceSeconds": 2.08,
+              "ranges": 223
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 515.36,
+              "detectedSeconds": 436.4,
+              "coveragePercent": 84.01,
+              "missedSeconds": 82.4,
+              "outsideReferenceSeconds": 3.44,
+              "ranges": 14
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 456.08,
+              "detectedSeconds": 422.72,
+              "coveragePercent": 92.23,
+              "missedSeconds": 35.44,
+              "outsideReferenceSeconds": 2.08,
+              "ranges": 227
+            }
+          }
+        }
+      },
+      "timings": {
+        "asr": {
+          "engine": "mlx",
+          "device": "Metal",
+          "loadSeconds": 2.987,
+          "inferenceSeconds": 47.155,
+          "totalSeconds": 50.141,
+          "peakRSSBytes": 713506816
+        },
+        "diarization": {
+          "engine": "diarize",
+          "device": "CoreML/CPU",
+          "loadSeconds": 18.429,
+          "inferenceSeconds": 9.914,
+          "totalSeconds": 28.343,
+          "peakRSSBytes": 1352531968
+        },
+        "baselineJevSeconds": 39.924,
+        "choiceJevSeconds": 7.47
+      }
+    },
+    {
+      "slug": "darknet",
+      "title": "178: Ubiquiti",
+      "show": "Darknet Diaries",
+      "feed": "https://podcast.darknetdiaries.com/",
+      "source": "https://darknetdiaries.com/episode/178/",
+      "audioHash": "0d2c0748b11469ce59ea2f983c28fce6c9a51883346617b8158ec6371fb0b12f",
+      "judgeRequestHash": "e60186a6097398281fc19dd46f1bcb5bbff62de010cb0b11c03c918c72d5e6d8",
+      "transcriptHash": "f8696035520f07c5b1a978e462932ece3791634efef6c53e8b1b6dbb965d85d0",
+      "reference": [
+        {
+          "start": 1.84,
+          "end": 50.480000000000004,
+          "category": "sponsor"
+        },
+        {
+          "start": 262.88,
+          "end": 326.64,
+          "category": "sponsor"
+        },
+        {
+          "start": 330.24,
+          "end": 392.48,
+          "category": "sponsor"
+        },
+        {
+          "start": 1340.56,
+          "end": 1403.6,
+          "category": "sponsor"
+        },
+        {
+          "start": 2394.0,
+          "end": 2407.2,
+          "category": "credits"
+        }
+      ],
+      "metrics": {
+        "baseline": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 220.0,
+              "coveragePercent": 92.56,
+              "missedSeconds": 17.68,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 5
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 205.52,
+              "coveragePercent": 92.24,
+              "missedSeconds": 17.28,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 103
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 233.2,
+              "coveragePercent": 92.95,
+              "missedSeconds": 17.68,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 6
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 218.64,
+              "coveragePercent": 92.68,
+              "missedSeconds": 17.28,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 116
+            }
+          }
+        },
+        "choice-v4": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 237.68,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 4
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 222.8,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 107
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 262.8,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 11.92,
+              "ranges": 7
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 247.04,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 11.12,
+              "ranges": 128
+            }
+          }
+        },
+        "connected-v5": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 237.68,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 4
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 222.8,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 107
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 250.88,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 5
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 235.92,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 120
+            }
+          }
+        },
+        "context-v1": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 222.56,
+              "coveragePercent": 93.64,
+              "missedSeconds": 15.12,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 5
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 207.92,
+              "coveragePercent": 93.32,
+              "missedSeconds": 14.88,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 104
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 235.76,
+              "coveragePercent": 93.97,
+              "missedSeconds": 15.12,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 6
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 221.04,
+              "coveragePercent": 93.69,
+              "missedSeconds": 14.88,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 117
+            }
+          }
+        },
+        "context-v2": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 222.56,
+              "coveragePercent": 93.64,
+              "missedSeconds": 15.12,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 5
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 207.92,
+              "coveragePercent": 93.32,
+              "missedSeconds": 14.88,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 104
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 235.76,
+              "coveragePercent": 93.97,
+              "missedSeconds": 15.12,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 6
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 221.04,
+              "coveragePercent": 93.69,
+              "missedSeconds": 14.88,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 117
+            }
+          }
+        },
+        "passage-v6": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 191.92,
+              "coveragePercent": 79.23,
+              "missedSeconds": 49.36,
+              "outsideReferenceSeconds": 3.6,
+              "ranges": 3
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 176.08,
+              "coveragePercent": 79.03,
+              "missedSeconds": 46.72,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 85
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 210.4,
+              "coveragePercent": 80.33,
+              "missedSeconds": 49.36,
+              "outsideReferenceSeconds": 8.88,
+              "ranges": 4
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 193.92,
+              "coveragePercent": 80.2,
+              "missedSeconds": 46.72,
+              "outsideReferenceSeconds": 4.72,
+              "ranges": 104
+            }
+          }
+        },
+        "sequence-v3": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 237.68,
+              "detectedSeconds": 237.68,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 4
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 222.8,
+              "detectedSeconds": 222.8,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 107
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 250.88,
+              "detectedSeconds": 250.88,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 5
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 235.92,
+              "detectedSeconds": 235.92,
+              "coveragePercent": 100.0,
+              "missedSeconds": 0.0,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 120
+            }
+          }
+        }
+      },
+      "timings": {
+        "asr": {
+          "engine": "mlx",
+          "device": "Metal",
+          "loadSeconds": 1.871,
+          "inferenceSeconds": 68.878,
+          "totalSeconds": 70.749,
+          "peakRSSBytes": 1118519296
+        },
+        "diarization": {
+          "engine": "diarize",
+          "device": "CoreML/CPU",
+          "loadSeconds": 12.335,
+          "inferenceSeconds": 11.374,
+          "totalSeconds": 23.708,
+          "peakRSSBytes": 1541390336
+        },
+        "baselineJevSeconds": 30.261,
+        "choiceJevSeconds": 13.32
+      }
+    },
+    {
+      "slug": "99pi",
+      "title": "The Rocky Statue",
+      "show": "99% Invisible",
+      "feed": "https://feeds.simplecast.com/BqbsxVfO",
+      "source": "https://99percentinvisible.org/?p=48384",
+      "audioHash": "bd20cd4ac102d41fd0897a87464d47916aacffb681e76c0d735300afdccb1ab2",
+      "judgeRequestHash": "511de99dba1cc094dce08d7807aa4b1f517bde42c905f10cc96324b5dbbb845e",
+      "transcriptHash": "de59e7f25350392d34a8eaf919b65066ff99cddff8458ae739b808821788a835",
+      "reference": [
+        {
+          "start": 1886.96,
+          "end": 1939.68,
+          "category": "credits"
+        }
+      ],
+      "metrics": {
+        "baseline": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 0,
+              "detectedSeconds": 0,
+              "coveragePercent": null,
+              "missedSeconds": 0,
+              "outsideReferenceSeconds": 0,
+              "ranges": 0
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 0,
+              "detectedSeconds": 0,
+              "coveragePercent": null,
+              "missedSeconds": 0,
+              "outsideReferenceSeconds": 0,
+              "ranges": 0
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 52.72,
+              "detectedSeconds": 44.16,
+              "coveragePercent": 83.76,
+              "missedSeconds": 8.56,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 2
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 50.08,
+              "detectedSeconds": 42.0,
+              "coveragePercent": 83.87,
+              "missedSeconds": 8.08,
+              "outsideReferenceSeconds": 0.0,
+              "ranges": 41
+            }
+          }
+        },
+        "choice-v4": {
+          "promotions": {
+            "wholeBreak": {
+              "referenceSeconds": 0,
+              "detectedSeconds": 0,
+              "coveragePercent": null,
+              "missedSeconds": 0,
+              "outsideReferenceSeconds": 0,
+              "ranges": 0
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 0,
+              "detectedSeconds": 0,
+              "coveragePercent": null,
+              "missedSeconds": 0,
+              "outsideReferenceSeconds": 0,
+              "ranges": 0
+            }
+          },
+          "allNonEditorial": {
+            "wholeBreak": {
+              "referenceSeconds": 52.72,
+              "detectedSeconds": 44.96,
+              "coveragePercent": 80.73,
+              "missedSeconds": 10.16,
+              "outsideReferenceSeconds": 2.4,
+              "ranges": 2
+            },
+            "transcribedSpeech": {
+              "referenceSeconds": 50.08,
+              "detectedSeconds": 43.2,
+              "coveragePercent": 81.47,
+              "missedSeconds": 9.28,
+              "outsideReferenceSeconds": 2.4,
+              "ranges": 39
+            }
+          }
+        }
+      },
+      "timings": {
+        "asr": {
+          "engine": "mlx",
+          "device": "Metal",
+          "loadSeconds": 1.878,
+          "inferenceSeconds": 44.715,
+          "totalSeconds": 46.593,
+          "peakRSSBytes": 1093730304
+        },
+        "diarization": {
+          "engine": "diarize",
+          "device": "CoreML/CPU",
+          "loadSeconds": 10.973,
+          "inferenceSeconds": 7.822,
+          "totalSeconds": 18.795,
+          "peakRSSBytes": 1473691648
+        },
+        "baselineJevSeconds": 40.631,
+        "choiceJevSeconds": 8.48
+      }
+    }
+  ]
+}

@@ -23,7 +23,21 @@ the exact audio hash.
 The player uses actual cached audio and model results. It makes no external
 requests and contains no API key. Stop its server with Control-C.
 
-## What the experiment found
+## Latest three-show check
+
+The new [classification benchmark](BENCHMARK.md) compares six variants on Decoder
+and Darknet Diaries, plus a frozen-policy check on 99% Invisible. Batched choices
+reach 97.6% and 100% of Luna-labelled ad speech on the development shows, but include
+2.08 seconds of Decoder's introduction and regress on the original montage.
+The player keeps its existing detections. See the report for whole-break coverage,
+credit errors, exact audio hashes, timing and the limits of a text-only judge.
+
+The player now has one compact header and an 82 px desktop / 108 px phone control
+area (plus phone safe-area inset). Unknown voices use a waveform, not initials.
+Promotion passages have a skip marker, a muted inset and an Auto-skip / Preview /
+Skip off label that follows the actual playback setting.
+
+## Original one-episode experiment
 
 The full **67:43** download of *The “But China!” Dilemma Driving the A.I. Race*
 from The Ezra Klein Show was used. Dynamic ads made its downloaded duration
@@ -71,7 +85,7 @@ Before/after artifacts and the fetched feed are retained locally under
 Speaker separation also merges some short ad voices with interview speakers.
 Names are inferred from the introduction and can be wrong. Named host/guest
 labels can use reviewed profile portraits. Unknown speakers and detected
-promotion passages retain initials; photos do not verify acoustic identity. Chapter boundaries start at existing speaker
+promotion passages use distinct segment symbols; photos do not verify acoustic identity. Chapter boundaries start at existing speaker
 blocks; they are not editorially verified. ASR has occasional spelling errors
 and bad word spans. Display spans are capped at two seconds and cannot overlap
 the next word; the unmodified model output remains available locally.
@@ -226,10 +240,11 @@ At most four requests run concurrently. Results are cached by the complete
 model, questions, and input. Adjacent same-category candidates merge across
 gaps up to 2.5 seconds only when no unclassified speech occupies the gap.
 
-This grouping is incomplete: 38 of 166 blocks are shorter than three seconds.
-Fast montage speaker changes produce fragments, and a low coarse score prevents
-refinement. The next experiment should group complete promotional sequences
-across speakers; sentence-level refinement can then locate their boundaries.
+This baseline grouping is incomplete: 38 of 166 blocks are shorter than three
+seconds. Fast montage speaker changes produce fragments, and a low coarse score
+prevents refinement. The [multi-show benchmark](BENCHMARK.md) tests cross-speaker
+units, batched questions, categorical decisions and complete passages. None is
+promoted automatically because the original montage regression remains.
 
 ## Player boundaries and performance
 
@@ -250,7 +265,7 @@ across speakers; sentence-level refinement can then locate their boundaries.
   Playback advances the view only when the active sentence leaves the readable
   area. Manual scrolling cancels following. There is no claimed 120 fps result.
 - The same audio element survives chapter and transcript navigation.
-- Only Undo and Listen and check bypass a promotion, for one pass. Leaving the
+- Only Undo and Listen bypass a promotion, for one pass. Leaving the
   range or seeking elsewhere clears that exception. Ordinary seeks into a
   promotion, and restored playback inside one, still skip when playback starts.
   Refreshing restores position, speed and skip setting.
@@ -273,8 +288,6 @@ controls, and reduced motion. Screenshots and failure traces
 stay in `.local/`. Tests do not claim audio-boundary accuracy or physical-device
 frame rates.
 
-Next validation should use several independent episodes with paid ads, host-read
-ads, trailers, and ordinary product discussion. Listen to candidate boundaries,
-measure missed ads and skipped editorial seconds, and test speaker names outside
-ad montages. Improve grouping/context first. Do not lower the skip threshold or
-build RSS infrastructure to hide those gaps.
+The three-show evaluation is recorded in [BENCHMARK.md](BENCHMARK.md). The next
+validation should listen to candidate boundaries and use a fresh held-out episode
+with ads. Do not treat model agreement as verified audio-boundary accuracy.
