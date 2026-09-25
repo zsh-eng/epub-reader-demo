@@ -74,6 +74,7 @@ struct MacLibrary: View {
   private var grid: MacArticleGrid {
     MacArticleGrid(
       articles: articles, revision: revision, workspace: workspace,
+      active: workspace.selectedURL == nil && !workspace.showNotebook && !workspace.showStats,
       compactChanged: { compactHeader = $0 })
   }
   private struct ProjectionKey: Equatable {
@@ -89,6 +90,7 @@ struct MacArticleGrid: NSViewRepresentable {
   let articles: [SavedArticle]
   let revision: Int
   let workspace: MacWorkspace
+  let active: Bool
   let compactChanged: (Bool) -> Void
   func makeCoordinator() -> Coordinator {
     Coordinator(workspace: workspace, compactChanged: compactChanged)
@@ -121,6 +123,8 @@ struct MacArticleGrid: NSViewRepresentable {
   }
   func updateNSView(_ scroll: NSScrollView, context: Context) {
     let coordinator = context.coordinator
+    coordinator.setActive(active)
+    guard active else { return }
     guard coordinator.revision != revision else { return }
     coordinator.revision = revision
     coordinator.articles = articles
@@ -141,6 +145,7 @@ struct MacArticleGrid: NSViewRepresentable {
     private var prefetch: Task<Void, Never>?
     private let compactChanged: (Bool) -> Void
     private var compact = false
+    private var active = true
     init(workspace: MacWorkspace, compactChanged: @escaping (Bool) -> Void) {
       self.workspace = workspace
       self.compactChanged = compactChanged
@@ -155,6 +160,9 @@ struct MacArticleGrid: NSViewRepresentable {
         collectionView.makeItem(withIdentifier: .init("article"), for: path) as! MacArticleItem
       let article = articles[path.item]
       item.configure(article)
+      (item.view as? MacArticleCardView)?.contextMenu = { [weak workspace] in
+        workspace?.articleMenu(for: article.url)
+      }
       (item.view as? MacArticleCardView)?.hover = { [weak workspace] active in
         workspace?.hover(article.url, active: active)
       }
@@ -174,9 +182,20 @@ struct MacArticleGrid: NSViewRepresentable {
         article.url, title: article.title,
         background: NSApp.currentEvent?.modifierFlags.contains(.command) == true)
     }
+    func setActive(_ value: Bool) {
+      guard value != active else { return }
+      active = value
+      if value {
+        viewport()
+        return
+      }
+      prefetch?.cancel()
+      workspace.store.setLibraryScrolling(false)
+      for item in grid?.visibleItems() ?? [] { (item.view as? MacArticleCardView)?.endHover() }
+    }
     func viewport() {
       prefetch?.cancel()
-      guard let grid, !articles.isEmpty else { return }
+      guard active, let grid, !articles.isEmpty else { return }
       if let scroll = grid.enclosingScrollView {
         let offset = scroll.contentView.bounds.minY + scroll.contentInsets.top
         let next = offset > (compact ? 12 : 48)
@@ -326,7 +345,9 @@ private final class MacGridLayout: NSCollectionViewFlowLayout {
 
 /// Labels are display-only. The card owns click and accessibility activation so
 /// a click on its title cannot be swallowed by an NSTextField editor.
-private final class MacArticleCardView: NSView {
+private final class MacArticleCardView: NSView, NSMenuDelegate {
+  var contextMenu: (() -> NSMenu?)?
+  private var menuOpen = false
   var open: (() -> Void)?
   var hover: ((Bool) -> Void)?
   private var tracking: NSTrackingArea?
@@ -344,7 +365,24 @@ private final class MacArticleCardView: NSView {
     hovered = true
     hover?(true)
   }
-  override func mouseExited(with event: NSEvent) { endHover() }
+  override func mouseExited(with event: NSEvent) { if !menuOpen { endHover() } }
+  override func menu(for event: NSEvent) -> NSMenu? {
+    let menu = contextMenu?()
+    menu?.delegate = self
+    return menu
+  }
+  func menuWillOpen(_ menu: NSMenu) {
+    menuOpen = true
+    wantsLayer = true
+    layer?.cornerRadius = 10
+    layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.35).cgColor
+    layer?.borderWidth = 1
+  }
+  func menuDidClose(_ menu: NSMenu) {
+    menuOpen = false
+    layer?.borderWidth = 0
+    endHover()
+  }
   func endHover() {
     if hovered { hover?(false) }
     hovered = false
@@ -354,7 +392,13 @@ private final class MacArticleCardView: NSView {
   override func hitTest(_ point: NSPoint) -> NSView? {
     bounds.contains(convert(point, from: superview)) ? self : nil
   }
-  override func mouseDown(with event: NSEvent) { open?() }
+  override func mouseDown(with event: NSEvent) {
+    if event.modifierFlags.contains(.control), let menu = menu(for: event) {
+      NSMenu.popUpContextMenu(menu, with: event, for: self)
+      return
+    }
+    open?()
+  }
   override func isAccessibilityElement() -> Bool { true }
   override func accessibilityRole() -> NSAccessibility.Role? { .button }
   override func accessibilityChildren() -> [Any]? { [] }
@@ -483,4 +527,57 @@ actor MacThumbnailCache {
       } catch { continue }
     }
   }
+}
+
+extension MacWorkspace {
+  /// Build menus from current store state, never from a cell's stale save flags.
+  func articleMenu(for url: URL) -> NSMenu {
+    let menu = NSMenu()
+    menu.autoenablesItems = false
+    func add(_ title: String, _ action: @escaping () -> Void) {
+      menu.addItem(MacArticleMenuItem(title: title, run: action))
+    }
+    add("Open article") { [weak self] in self?.open(url) }
+    add("Open in background tab") { [weak self] in self?.open(url, background: true) }
+    menu.addItem(.separator())
+    if let article = store.article(for: url), article.saved {
+      add(article.favourite ? "Remove from Favourites" : "Favourite") { [weak self] in
+        self?.store.setFavourite(!article.favourite, for: article.id)
+      }
+      add(article.isArchived == true ? "Move to Saved" : "Archive") { [weak self] in
+        do { try self?.store.setArchived(article.isArchived != true, ids: [article.id]) } catch {
+          self?.error = error.localizedDescription
+        }
+      }
+      add("Remove from Saved") { [weak self] in
+        do { try self?.store.setSaved(false, url: url) } catch {
+          self?.error = error.localizedDescription
+        }
+      }
+    } else {
+      add("Save article") { [weak self] in
+        do { try self?.store.setSaved(true, url: url) } catch {
+          self?.error = error.localizedDescription
+        }
+      }
+    }
+    menu.addItem(.separator())
+    add("Copy link") {
+      NSPasteboard.general.clearContents()
+      NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+    add("Open in browser") { NSWorkspace.shared.open(url) }
+    return menu
+  }
+}
+
+private final class MacArticleMenuItem: NSMenuItem {
+  private let run: () -> Void
+  init(title: String, run: @escaping () -> Void) {
+    self.run = run
+    super.init(title: title, action: #selector(invoke), keyEquivalent: "")
+    target = self
+  }
+  required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+  @objc private func invoke() { run() }
 }

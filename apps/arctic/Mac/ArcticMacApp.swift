@@ -73,7 +73,7 @@ enum MacShortcut: String, CaseIterable, Identifiable {
   }
   @MainActor func perform(_ w: MacWorkspace) {
     switch self {
-    case .open: w.showOpen = true
+    case .open: w.showOpen.toggle()
     case .library: w.library()
     case .sidebar: w.toggleSidebar(animated: false)
     case .notes: w.showNotes.toggle()
@@ -152,7 +152,13 @@ struct MacWorkspaceView: View {
         .background(MacWindowDragArea())
       Divider().opacity(0.4)
       ZStack(alignment: .leading) {
-        Group {
+        ZStack {
+          // Keep the reusable grid and its last complete projection alive under
+          // Reader. Returning must not rebuild an empty library for one frame.
+          MacLibrary(workspace: workspace)
+            .opacity(libraryVisible ? 1 : 0)
+            .allowsHitTesting(libraryVisible)
+            .accessibilityHidden(!libraryVisible)
           if let reader = workspace.selectedReader {
             HStack(spacing: 0) {
               MacReaderPane(reader: reader, workspace: workspace)
@@ -165,8 +171,6 @@ struct MacWorkspaceView: View {
             MacNotebook(workspace: workspace)
           } else if workspace.showStats {
             MacStatsPanel(stats: workspace.stats)
-          } else {
-            MacLibrary(workspace: workspace)
           }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
           .padding(.leading, workspace.sidebarVisible ? 217 : 0)
@@ -189,6 +193,10 @@ struct MacWorkspaceView: View {
     .ignoresSafeArea(.container, edges: .top)
   }
 
+  private var libraryVisible: Bool {
+    workspace.selectedURL == nil && !workspace.showNotebook && !workspace.showStats
+  }
+
   private var blocksReading: Bool {
     workspace.showNotes || workspace.showOpen || workspace.showShortcuts || workspace.showStats
       || workspace.showSettings
@@ -207,7 +215,12 @@ struct MacWorkspaceView: View {
 
   var body: some View {
     observedLayout
-      .sheet(isPresented: $workspace.showOpen) { MacOpenPanel(workspace: workspace) }
+      .background(
+        MacCommandPaletteHost(
+          workspace: workspace, isPresented: workspace.showOpen,
+          revision: workspace.store.libraryRevision
+        ).frame(width: 0, height: 0)
+      )
       .sheet(isPresented: $workspace.showShortcuts) { MacShortcutsPanel() }
       .sheet(isPresented: $workspace.showSettings) { MacTaggingSettings(workspace: workspace) }
       .alert(

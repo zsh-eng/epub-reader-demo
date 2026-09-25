@@ -36,6 +36,53 @@ import XCTest
     }
     XCTAssertTrue(reader.ready, reader.error ?? "Reader did not become ready")
   }
+  func testPaletteIsPreparedAndReturnWaitsForTheCurrentQuery() async throws {
+    let first = try await seed(0)
+    let second = try await seed(1)
+    let workspace = MacWorkspace(store: store)
+    let palette = MacCommandPalette(workspace: workspace)
+    XCTAssertEqual(palette.numberOfRows(in: palette.table), 2)
+    XCTAssertEqual(palette.table.selectedRow, 0)
+    XCTAssertEqual(palette.panel.animationBehavior, .none)
+    palette.table.selectRowIndexes([1], byExtendingSelection: false)
+    palette.updateIndex(Array(store.articles.reversed()), revision: store.libraryRevision + 1)
+    XCTAssertEqual(
+      palette.table.selectedRow, 0, "Metadata refresh must preserve the selected article")
+    palette.input.stringValue = "Article 0"
+    palette.controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+    _ = palette.control(
+      palette.input, textView: NSTextView(), doCommandBy: #selector(NSResponder.insertNewline(_:)))
+    let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+    while workspace.selectedURL == nil && ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    XCTAssertEqual(workspace.selectedURL, first)
+    XCTAssertNotEqual(workspace.selectedURL, second)
+    workspace.close(first)
+    workspace.shutDown()
+  }
+
+  func testCardMenuArchivesWithUndoAndResolvesCurrentState() async throws {
+    let url = try await seed(0)
+    let workspace = MacWorkspace(store: store)
+    let menu = workspace.articleMenu(for: url)
+    let archive = try XCTUnwrap(menu.items.first { $0.title == "Archive" })
+    XCTAssertTrue(
+      NSApp.sendAction(try XCTUnwrap(archive.action), to: archive.target, from: archive))
+    XCTAssertEqual(store.article(for: url)?.isArchived, true)
+    XCTAssertNotNil(store.archiveUndo)
+    let updated = workspace.articleMenu(for: url)
+    XCTAssertTrue(updated.items.contains { $0.title == "Move to Saved" })
+    store.undoArchive(try XCTUnwrap(store.archiveUndo).id)
+    XCTAssertEqual(store.article(for: url)?.isArchived, false)
+    let favourite = try XCTUnwrap(
+      workspace.articleMenu(for: url).items.first { $0.title == "Favourite" })
+    XCTAssertTrue(
+      NSApp.sendAction(try XCTUnwrap(favourite.action), to: favourite.target, from: favourite))
+    XCTAssertEqual(store.article(for: url)?.favourite, true)
+    workspace.shutDown()
+  }
+
   func testWebKitAcceptsTheSelectedRefreshPreference() throws {
     let preferences = WKPreferences()
     try XCTSkipUnless(

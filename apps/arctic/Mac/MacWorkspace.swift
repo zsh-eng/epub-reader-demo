@@ -47,7 +47,7 @@ enum MacLibraryFolder: Hashable {
 /// Tabs are cheap identities. Only a bounded working set owns WebKit processes.
 /// One workspace window owns reading activity; background tabs cannot credit time.
 @MainActor @Observable final class MacWorkspace {
-  let store = ArticleStore()
+  let store: ArticleStore
   let annotations = AnnotationStore.shared
   let readers = MacReaderPool()
   var tabs: [MacArticleTab] = []
@@ -78,7 +78,10 @@ enum MacLibraryFolder: Hashable {
   var selectedReader: MacReader? { selectedURL.flatMap { readers.existing($0) } }
   var selectedArticle: SavedArticle? { selectedURL.flatMap { store.article(for: $0) } }
 
-  init() {
+  convenience init() { self.init(store: ArticleStore()) }
+
+  init(store: ArticleStore) {
+    self.store = store
     refreshStats()
     if !TestMode.enabled, let bytes = UserDefaults.standard.data(forKey: tabsKey),
       let restored = try? JSONDecoder().decode([MacArticleTab].self, from: bytes)

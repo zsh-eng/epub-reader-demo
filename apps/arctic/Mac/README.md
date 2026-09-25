@@ -310,3 +310,32 @@ completion was not verified. During the local replay, observed readings included
 Web 108–114 and UI 116–119 callbacks/s. These are spot samples, not a controlled
 before/after benchmark or a sustained 120 fps claim. Dark-mode and Reduce Motion
 visual checks remain open. The replay tab and search query were cleared.
+
+
+## Command palette and library return — 25 September 2026
+
+Command-K uses one native panel and table prepared with the workspace. It opens
+without a sheet or animation, focuses the existing field, and displays prepared
+local results. Typed searches use cancellable background snapshots; Return waits
+for the current query rather than opening a stale row. Up/Down selects, Return
+opens, and Escape clears the query, then dismisses. Clicking outside dismisses.
+The fixed-size palette uses system materials, compact rows and keyboard hints,
+with keyboard behavior informed by [Raycast's search bar](https://manual.raycast.com/search-bar).
+
+The library grid stays mounted underneath the Reader, notebook and statistics.
+Its completed projection, native cells and scroll position survive article close.
+Hidden grid updates and viewport prefetch pause; returning applies any pending
+metadata revision. This retains the visible grid's bounded working set, not all
+article views or additional WebViews.
+
+Right-click or Control-click a card for Open, Open in background tab, Favourite,
+Archive/Move to Saved, Save/Remove from Saved, Copy link or Open in browser.
+Menus read current saved state and archive uses the existing Undo action. A
+subtle outline identifies the card for the duration of the menu.
+
+Release computer-use checks covered first/repeated palette opening, focus,
+keyboard selection/filtering, Return, Escape, context-menu background opening,
+and returning from an article to the unchanged scroll position (0.02442545 in
+that check). The final result row received extra clearance after visual review.
+Native integration checks cover rapid query-and-Return and menu persistence with
+archive Undo. No claim of measured hotkey-to-photon latency is made.
