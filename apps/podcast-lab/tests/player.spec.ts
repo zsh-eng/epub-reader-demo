@@ -453,3 +453,35 @@ test("compact chrome and segment markers distinguish promotions from people", as
     );
   }
 });
+
+test("anniversary montage is one continuous skip at 1.25x with Undo", async ({
+  page,
+}) => {
+  await page.goto("/#player");
+  await expect(page.locator("#title")).toHaveText(episode.title);
+  await page.locator("audio").evaluate(async (audio: HTMLAudioElement) => {
+    audio.muted = true;
+    audio.playbackRate = 1.25;
+    audio.currentTime = 2732;
+    await audio.play();
+  });
+  await expect(page.locator("#toast")).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator("audio")
+        .evaluate((audio: HTMLAudioElement) => audio.currentTime),
+    )
+    .toBeGreaterThanOrEqual(2765.76);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator("audio")
+        .evaluate((audio: HTMLAudioElement) => audio.currentTime),
+    )
+    .toBeLessThan(2730);
+  await page
+    .locator("audio")
+    .evaluate((audio: HTMLAudioElement) => audio.pause());
+});

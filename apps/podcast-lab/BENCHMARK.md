@@ -1,8 +1,66 @@
 # Three-show classification check
 
-**Keep the current player policy for now.** The best new variant improves ordinary
-sponsor reads, but regresses on the original Ezra Klein montage. All six variants
-remain experiments. The UI changes are live at http://127.0.0.1:4378.
+## Sequence and boundary follow-up
+
+The Ezra preview now uses **boundaries-v8**: three complete promotion ranges,
+including the full NYT anniversary montage. The original sentence classifier
+remains the default batch pipeline; this experiment is selected explicitly with
+`prepare_player.py --classification boundaries-v8.json`.
+
+| Episode | Labelled promotion speech caught | Extra editorial speech skipped | Whole-break coverage |
+| --- | ---: | ---: | ---: |
+| Ezra Klein | 100% | 0 s | 99.94% |
+| Decoder | 94.65% | 0 s | 88.34% |
+| Darknet Diaries | 100% | 0 s | 100% |
+| 99% Invisible | No labelled promotions | 0 s | No proposed skips |
+
+Ezra changes from seven fragments / 110.24 seconds to three ranges / 138.48
+seconds. The text reference is 138.56 seconds; the opening trailer's endpoint
+differs by 0.08 seconds. The 38.80-second anniversary montage is intact.
+Decoder still loses a mixed editorial/subscription unit and has transcript gaps.
+Its final merged ranges include 2.24 seconds outside the reference **in pauses**;
+zero extra *transcribed speech* is not zero boundary error.
+
+The first sequence trial (v7) caught Ezra but included 16.8 seconds of extra
+editorial speech on Decoder and treated 99PI's credits as self-promotion. V8 adds
+an explicit credits class and whole-interval verification. This removes those
+speech errors at the cost of some Decoder recall. It is not uniformly better
+than the earlier v4 on recall, and is not promoted as the general classifier.
+
+The method:
+
+1. Keep the editorial opening of the RSS show/episode descriptions; remove common
+   subscription/credits footers. A topic mismatch alone is never an ad signal.
+2. Inspect overlapping 180-second windows with a 90-second stride across all voices.
+3. Ask Jev whether there is a promotional **sequence** in the window.
+4. Select its first and last transcript IDs through categorical choices. Sentence
+   timestamps locate boundaries; sentence meanings are not independently gated.
+5. Check the proposed interval as a whole: promotion, mixed, credits, or content.
+   Reject mixed/uncertain ranges. Repeat on the suffix for additional breaks.
+6. Merge overlaps. Keep decisions and input hashes for audit. Bind preview output
+   to the downloaded audio hash and transcript hash before replacing player data.
+
+There are at most four requests in flight. Full requests are cached. First v8
+runs took 25.31 / 34.89 / 18.42 / 6.90 seconds respectively, with cached audio and
+ASR; timings are single runs and can include reusable classification calls.
+The frozen references never enter Jev requests. All four episodes are now
+**development/regression data**, including 99PI. These figures measure agreement
+with text references, not independent audio-boundary accuracy or generalization.
+
+See [sequence-results.json](sequence-results.json) for hashes, both trials,
+baselines, final intervals and separate speech/whole-break metrics.
+
+```sh
+python3 pipeline/sequences.py .local
+python3 pipeline/sequences.py .local/benchmark/decoder
+python3 pipeline/benchmark.py evaluate .local/benchmark/decoder --version boundaries-v8
+python3 pipeline/prepare_player.py --classification boundaries-v8.json
+```
+
+## Earlier six-variant experiment
+
+The following results predate the sequence/boundary follow-up. Those six variants
+were not promoted because they regressed on the original Ezra montage.
 
 ## Results
 

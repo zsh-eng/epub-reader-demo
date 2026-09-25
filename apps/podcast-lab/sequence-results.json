@@ -1,0 +1,545 @@
+{
+  "version": "boundaries-v8",
+  "method": "Frozen transcript references; development/regression set, not held-out or independently audio-reviewed. Credits stay audible. All audio and ASR reused.",
+  "episodes": [
+    {
+      "id": "ezra",
+      "audioHash": "dc786808eef98383063a4eb5477db56f123f4f73a3db68666a20f5e0fe559566",
+      "transcriptHash": "6eed37bc965d3a3fabc2157a89507d73d45c5807cb1da23eb81d051031a44fa5",
+      "referenceHash": "cafffeddb27b9d0313d9eb41a4c2555c2398062f670f49438ffa3894cc2d5d43",
+      "v8FirstRunSeconds": 25.31,
+      "results": {
+        "classification": {
+          "wholeBreak": {
+            "referenceSeconds": 138.56,
+            "detectedSeconds": 110.24,
+            "coveragePercent": 79.56,
+            "missedSeconds": 28.32,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 7
+          },
+          "speech": {
+            "referenceSeconds": 131.12,
+            "detectedSeconds": 104.64,
+            "coveragePercent": 79.8,
+            "missedSeconds": 26.48,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 62
+          },
+          "ranges": [
+            {
+              "start": 0.4,
+              "end": 4.48,
+              "category": "self_promotion"
+            },
+            {
+              "start": 6.0,
+              "end": 19.76,
+              "category": "self_promotion"
+            },
+            {
+              "start": 22.16,
+              "end": 28.16,
+              "category": "self_promotion"
+            },
+            {
+              "start": 1438.96,
+              "end": 1510.88,
+              "category": "self_promotion"
+            },
+            {
+              "start": 2734.56,
+              "end": 2735.04,
+              "category": "self_promotion"
+            },
+            {
+              "start": 2739.52,
+              "end": 2740.7999999999997,
+              "category": "self_promotion"
+            },
+            {
+              "start": 2753.04,
+              "end": 2765.76,
+              "category": "self_promotion"
+            }
+          ]
+        },
+        "boundaries-v7": {
+          "wholeBreak": {
+            "referenceSeconds": 138.56,
+            "detectedSeconds": 138.48,
+            "coveragePercent": 99.94,
+            "missedSeconds": 0.08,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 3
+          },
+          "speech": {
+            "referenceSeconds": 131.12,
+            "detectedSeconds": 131.12,
+            "coveragePercent": 100.0,
+            "missedSeconds": 0.0,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 90
+          },
+          "ranges": [
+            {
+              "start": 0.4,
+              "end": 28.16,
+              "category": "self_promotion"
+            },
+            {
+              "start": 1438.96,
+              "end": 1510.88,
+              "category": "self_promotion"
+            },
+            {
+              "start": 2726.96,
+              "end": 2765.76,
+              "category": "self_promotion"
+            }
+          ]
+        },
+        "boundaries-v8": {
+          "wholeBreak": {
+            "referenceSeconds": 138.56,
+            "detectedSeconds": 138.48,
+            "coveragePercent": 99.94,
+            "missedSeconds": 0.08,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 3
+          },
+          "speech": {
+            "referenceSeconds": 131.12,
+            "detectedSeconds": 131.12,
+            "coveragePercent": 100.0,
+            "missedSeconds": 0.0,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 90
+          },
+          "ranges": [
+            {
+              "start": 0.4,
+              "end": 28.16,
+              "category": "self_promotion"
+            },
+            {
+              "start": 1438.96,
+              "end": 1510.88,
+              "category": "self_promotion"
+            },
+            {
+              "start": 2726.96,
+              "end": 2765.76,
+              "category": "self_promotion"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "decoder",
+      "audioHash": "8428b92c5097c6ef686d5ba718d2cdcd895245ac5c947649e967ebf80c333ab8",
+      "transcriptHash": "8b2f8c0be5a7a08adedcb4482c87f69fc4fc23f592130929ec389bc0a0024132",
+      "referenceHash": "d106a272a16670db29d49aff50e23c34a4ff5e89570bcc7f3f2eee0a83d4f6fd",
+      "v8FirstRunSeconds": 34.89,
+      "results": {
+        "classification": {
+          "wholeBreak": {
+            "referenceSeconds": 515.36,
+            "detectedSeconds": 445.6,
+            "coveragePercent": 86.03,
+            "missedSeconds": 72.0,
+            "outsideReferenceSeconds": 2.24,
+            "ranges": 9
+          },
+          "speech": {
+            "referenceSeconds": 456.08,
+            "detectedSeconds": 432.0,
+            "coveragePercent": 94.72,
+            "missedSeconds": 24.08,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 213
+          },
+          "ranges": [
+            {
+              "start": 0.4,
+              "end": 48.24,
+              "category": "sponsor"
+            },
+            {
+              "start": 54.88,
+              "end": 118.16,
+              "category": "sponsor"
+            },
+            {
+              "start": 504.4,
+              "end": 524.08,
+              "category": "sponsor"
+            },
+            {
+              "start": 536.64,
+              "end": 577.5200000000001,
+              "category": "sponsor"
+            },
+            {
+              "start": 580.16,
+              "end": 588.0,
+              "category": "sponsor"
+            },
+            {
+              "start": 589.6,
+              "end": 665.28,
+              "category": "sponsor"
+            },
+            {
+              "start": 1037.6,
+              "end": 1165.52,
+              "category": "sponsor"
+            },
+            {
+              "start": 1549.76,
+              "end": 1575.6,
+              "category": "sponsor"
+            },
+            {
+              "start": 1613.84,
+              "end": 1650.48,
+              "category": "sponsor"
+            }
+          ]
+        },
+        "boundaries-v7": {
+          "wholeBreak": {
+            "referenceSeconds": 515.36,
+            "detectedSeconds": 484.8,
+            "coveragePercent": 90.31,
+            "missedSeconds": 49.92,
+            "outsideReferenceSeconds": 19.36,
+            "ranges": 9
+          },
+          "speech": {
+            "referenceSeconds": 456.08,
+            "detectedSeconds": 458.0,
+            "coveragePercent": 96.74,
+            "missedSeconds": 14.88,
+            "outsideReferenceSeconds": 16.8,
+            "ranges": 236
+          },
+          "ranges": [
+            {
+              "start": 0.4,
+              "end": 34.160000000000004,
+              "category": "sponsor"
+            },
+            {
+              "start": 54.88,
+              "end": 118.16,
+              "category": "sponsor"
+            },
+            {
+              "start": 165.84,
+              "end": 176.0,
+              "category": "self_promotion"
+            },
+            {
+              "start": 504.4,
+              "end": 577.5200000000001,
+              "category": "sponsor"
+            },
+            {
+              "start": 580.16,
+              "end": 665.28,
+              "category": "sponsor"
+            },
+            {
+              "start": 1037.6,
+              "end": 1165.52,
+              "category": "sponsor"
+            },
+            {
+              "start": 1510.64,
+              "end": 1539.6,
+              "category": "self_promotion"
+            },
+            {
+              "start": 1549.76,
+              "end": 1575.6,
+              "category": "sponsor"
+            },
+            {
+              "start": 1613.84,
+              "end": 1650.48,
+              "category": "sponsor"
+            }
+          ]
+        },
+        "boundaries-v8": {
+          "wholeBreak": {
+            "referenceSeconds": 515.36,
+            "detectedSeconds": 457.52,
+            "coveragePercent": 88.34,
+            "missedSeconds": 60.08,
+            "outsideReferenceSeconds": 2.24,
+            "ranges": 8
+          },
+          "speech": {
+            "referenceSeconds": 456.08,
+            "detectedSeconds": 431.68,
+            "coveragePercent": 94.65,
+            "missedSeconds": 24.4,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 214
+          },
+          "ranges": [
+            {
+              "start": 0.4,
+              "end": 34.160000000000004,
+              "category": "sponsor"
+            },
+            {
+              "start": 54.88,
+              "end": 118.16,
+              "category": "sponsor"
+            },
+            {
+              "start": 504.4,
+              "end": 577.5200000000001,
+              "category": "sponsor"
+            },
+            {
+              "start": 580.16,
+              "end": 665.28,
+              "category": "sponsor"
+            },
+            {
+              "start": 1037.6,
+              "end": 1165.52,
+              "category": "sponsor"
+            },
+            {
+              "start": 1527.76,
+              "end": 1539.6,
+              "category": "self_promotion"
+            },
+            {
+              "start": 1549.76,
+              "end": 1575.6,
+              "category": "sponsor"
+            },
+            {
+              "start": 1613.84,
+              "end": 1650.48,
+              "category": "sponsor"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "darknet",
+      "audioHash": "0d2c0748b11469ce59ea2f983c28fce6c9a51883346617b8158ec6371fb0b12f",
+      "transcriptHash": "f8696035520f07c5b1a978e462932ece3791634efef6c53e8b1b6dbb965d85d0",
+      "referenceHash": "f809d1fdd8e038263c3663579d127625f45ba97f3c04dd072cb66aaf572c453a",
+      "v8FirstRunSeconds": 18.42,
+      "results": {
+        "classification": {
+          "wholeBreak": {
+            "referenceSeconds": 237.68,
+            "detectedSeconds": 220.0,
+            "coveragePercent": 92.56,
+            "missedSeconds": 17.68,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 5
+          },
+          "speech": {
+            "referenceSeconds": 222.8,
+            "detectedSeconds": 205.52,
+            "coveragePercent": 92.24,
+            "missedSeconds": 17.28,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 103
+          },
+          "ranges": [
+            {
+              "start": 1.84,
+              "end": 4.48,
+              "category": "sponsor"
+            },
+            {
+              "start": 19.6,
+              "end": 50.480000000000004,
+              "category": "sponsor"
+            },
+            {
+              "start": 262.88,
+              "end": 326.64,
+              "category": "sponsor"
+            },
+            {
+              "start": 330.24,
+              "end": 389.92,
+              "category": "sponsor"
+            },
+            {
+              "start": 1340.56,
+              "end": 1403.6,
+              "category": "sponsor"
+            }
+          ]
+        },
+        "boundaries-v7": {
+          "wholeBreak": {
+            "referenceSeconds": 237.68,
+            "detectedSeconds": 237.68,
+            "coveragePercent": 100.0,
+            "missedSeconds": 0.0,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 4
+          },
+          "speech": {
+            "referenceSeconds": 222.8,
+            "detectedSeconds": 222.8,
+            "coveragePercent": 100.0,
+            "missedSeconds": 0.0,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 107
+          },
+          "ranges": [
+            {
+              "start": 1.84,
+              "end": 50.480000000000004,
+              "category": "sponsor"
+            },
+            {
+              "start": 262.88,
+              "end": 326.64,
+              "category": "sponsor"
+            },
+            {
+              "start": 330.24,
+              "end": 392.48,
+              "category": "sponsor"
+            },
+            {
+              "start": 1340.56,
+              "end": 1403.6,
+              "category": "sponsor"
+            }
+          ]
+        },
+        "boundaries-v8": {
+          "wholeBreak": {
+            "referenceSeconds": 237.68,
+            "detectedSeconds": 237.68,
+            "coveragePercent": 100.0,
+            "missedSeconds": 0.0,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 4
+          },
+          "speech": {
+            "referenceSeconds": 222.8,
+            "detectedSeconds": 222.8,
+            "coveragePercent": 100.0,
+            "missedSeconds": 0.0,
+            "outsideReferenceSeconds": 0.0,
+            "ranges": 107
+          },
+          "ranges": [
+            {
+              "start": 1.84,
+              "end": 50.480000000000004,
+              "category": "sponsor"
+            },
+            {
+              "start": 262.88,
+              "end": 326.64,
+              "category": "sponsor"
+            },
+            {
+              "start": 330.24,
+              "end": 392.48,
+              "category": "sponsor"
+            },
+            {
+              "start": 1340.56,
+              "end": 1403.6,
+              "category": "sponsor"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "99pi",
+      "audioHash": "bd20cd4ac102d41fd0897a87464d47916aacffb681e76c0d735300afdccb1ab2",
+      "transcriptHash": "de59e7f25350392d34a8eaf919b65066ff99cddff8458ae739b808821788a835",
+      "referenceHash": "81654f52fddb3a722e12b627b4877151a3154f2b6223bd57f43c7939bdf557d4",
+      "v8FirstRunSeconds": 6.9,
+      "results": {
+        "classification": {
+          "wholeBreak": {
+            "referenceSeconds": 0,
+            "detectedSeconds": 0,
+            "coveragePercent": null,
+            "missedSeconds": 0,
+            "outsideReferenceSeconds": 0,
+            "ranges": 0
+          },
+          "speech": {
+            "referenceSeconds": 0,
+            "detectedSeconds": 0,
+            "coveragePercent": null,
+            "missedSeconds": 0,
+            "outsideReferenceSeconds": 0,
+            "ranges": 0
+          },
+          "ranges": []
+        },
+        "boundaries-v7": {
+          "wholeBreak": {
+            "referenceSeconds": 0,
+            "detectedSeconds": 52.72,
+            "coveragePercent": null,
+            "missedSeconds": 0,
+            "outsideReferenceSeconds": 52.72,
+            "ranges": 1
+          },
+          "speech": {
+            "referenceSeconds": 0,
+            "detectedSeconds": 50.08,
+            "coveragePercent": null,
+            "missedSeconds": 0,
+            "outsideReferenceSeconds": 50.08,
+            "ranges": 45
+          },
+          "ranges": [
+            {
+              "start": 1886.96,
+              "end": 1939.68,
+              "category": "self_promotion"
+            }
+          ]
+        },
+        "boundaries-v8": {
+          "wholeBreak": {
+            "referenceSeconds": 0,
+            "detectedSeconds": 0,
+            "coveragePercent": null,
+            "missedSeconds": 0,
+            "outsideReferenceSeconds": 0,
+            "ranges": 0
+          },
+          "speech": {
+            "referenceSeconds": 0,
+            "detectedSeconds": 0,
+            "coveragePercent": null,
+            "missedSeconds": 0,
+            "outsideReferenceSeconds": 0,
+            "ranges": 0
+          },
+          "ranges": []
+        }
+      }
+    }
+  ]
+}

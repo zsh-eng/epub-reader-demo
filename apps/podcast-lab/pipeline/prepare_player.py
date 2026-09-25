@@ -1,5 +1,7 @@
 """Materialize an offline player payload. Keep original audio and raw model outputs."""
 
+import argparse
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -7,12 +9,23 @@ from pathlib import Path
 from paragraphs import make_paragraphs
 
 
-def prepare(root=Path(".local")):
+def prepare(root=Path(".local"), classification="classification.json"):
     source = json.loads((root / "source.json").read_text())
     blocks = json.loads((root / "blocks.json").read_text())
-    classified = json.loads((root / "classification.json").read_text())
+    classified = json.loads((root / classification).read_text())
     enrichment = json.loads((root / "enrichment.json").read_text())
     audio = json.loads((root / "episode.mp3.download.json").read_text())
+    if classified.get("version"):
+        with (root / "episode.mp3").open("rb") as file:
+            actual_hash = hashlib.file_digest(file, "sha256").hexdigest()
+        if (
+            classified.get("sourceHash") != actual_hash
+            or classified.get("inputHash")
+            != hashlib.sha256((root / "blocks.json").read_bytes()).hexdigest()
+        ):
+            raise ValueError(
+                "Sequence classification does not match this audio/transcript"
+            )
     duration = float(
         subprocess.check_output(
             [
@@ -47,7 +60,7 @@ def prepare(root=Path(".local")):
         ):
             prev["end"] = c["end"]
             prev["score"] = min(prev["score"], c["score"])
-            prev["blockIds"].append(c["blockId"])
+            prev["blockIds"].extend(c.get("blockIds", [c.get("blockId")]))
         else:
             skips.append(
                 {
@@ -56,7 +69,7 @@ def prepare(root=Path(".local")):
                     "end": c["end"],
                     "category": c["category"],
                     "score": c["score"],
-                    "blockIds": [c["blockId"]],
+                    "blockIds": c.get("blockIds", [c.get("blockId")]),
                 }
             )
     rows = make_paragraphs(blocks, skips)
@@ -95,6 +108,9 @@ def prepare(root=Path(".local")):
             "transcription": "Parakeet MLX · local",
             "diarization": "Senko CoreML · local",
             "classification": classified["model"],
+            "classificationPolicy": classified.get(
+                "version", "speaker-sentences-baseline"
+            ),
             "chapters": enrichment["model"],
             "note": "Automatic suggestions, not verified ad boundaries. Some promotions are missed. Names are inferred from introductions; ad montage voices can be misassigned.",
         },
@@ -108,4 +124,8 @@ def prepare(root=Path(".local")):
 
 
 if __name__ == "__main__":
-    prepare()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path(".local"))
+    parser.add_argument("--classification", default="classification.json")
+    args = parser.parse_args()
+    prepare(args.root, args.classification)
