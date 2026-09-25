@@ -389,3 +389,67 @@ test("speaker portraits load locally and failed images retain initials", async (
     0,
   );
 });
+
+test("compact chrome and segment markers distinguish promotions from people", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#title")).toHaveText(episode.title);
+  const skip = episode.skips[0];
+  await page.locator("#seek").evaluate((el: HTMLInputElement, time) => {
+    el.value = String(time);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, skip.start + 0.1);
+  const row = page.locator(".transcript-row.active");
+  await expect(row.locator(".avatar")).toHaveCount(0);
+  await expect(row.locator(".voice-marker svg")).toBeVisible();
+  await expect(row.locator(".promotion-status")).toHaveText("Auto-skip");
+  await page.getByRole("switch", { name: "Skip promotions" }).uncheck();
+  await expect(row.locator(".promotion-status")).toHaveText("Skip off");
+  await page.locator("audio").evaluate((el: HTMLAudioElement) => {
+    el.muted = true;
+  });
+  await page.locator(".detection").first().click();
+  await expect(row.locator(".promotion-status")).toHaveText("Preview");
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    const dimensions = await page.evaluate(() => ({
+      transcript: document.querySelector("#transcript")!.getBoundingClientRect()
+        .height,
+      player: document.querySelector(".player")!.getBoundingClientRect().height,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    }));
+    expect(dimensions.overflow).toBe(false);
+    expect(dimensions.transcript).toBeGreaterThan(670);
+    expect(dimensions.player).toBeLessThanOrEqual(108);
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.screenshot({
+        path: `.local/segments-${width}-${colorScheme}.png`,
+      });
+    }
+  }
+  const unknown = episode.rows.find(
+    (r: { speaker: string; start: number; end: number }) =>
+      episode.speakers.some(
+        (s: { id: string; confidence: string }) =>
+          s.id === r.speaker && s.confidence === "unknown",
+      ) &&
+      !episode.skips.some(
+        (s: { start: number; end: number }) =>
+          r.start < s.end && r.end > s.start,
+      ),
+  );
+  if (unknown) {
+    await page.locator("#seek").evaluate((el: HTMLInputElement, time) => {
+      el.value = String(time);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }, unknown.start + 0.1);
+    await expect(row.locator(".voice-marker svg")).toBeVisible();
+    await expect(row.locator(".avatar")).toHaveCount(0);
+    await expect(row.locator(".speaker-line")).toContainText(
+      "Unassigned voice",
+    );
+  }
+});

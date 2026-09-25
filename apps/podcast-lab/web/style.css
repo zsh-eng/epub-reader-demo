@@ -1,6 +1,8 @@
 /* Neutral and highlight tokens from Workbench Reader; no new palette. */
 :root {
   color-scheme: light;
+  --player-height: 82px;
+  --heading-height: 64px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -73,19 +75,11 @@ button,
 a {
   -webkit-tap-highlight-color: transparent;
 }
-.app-header {
-  height: 78px;
-  padding: 0 38px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-}
 .wordmark {
   display: flex;
   align-items: center;
-  gap: 11px;
-  font-size: 22px;
+  gap: 8px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -1px;
 }
@@ -98,7 +92,7 @@ a {
   grid-template-columns: minmax(250px, 310px) minmax(380px, 1fr) 250px;
   max-width: 1600px;
   margin: auto;
-  height: calc(100dvh - 208px);
+  height: calc(100dvh - var(--player-height));
 }
 .episode-panel {
   overflow-y: auto;
@@ -192,7 +186,7 @@ h1 {
   overflow: hidden;
 }
 .transcript-heading {
-  height: 72px;
+  height: var(--heading-height);
   padding: 16px 34px;
   display: flex;
   align-items: center;
@@ -219,7 +213,7 @@ h1 {
 }
 .transcript {
   overflow-y: auto;
-  height: calc(100% - 72px);
+  height: calc(100% - var(--heading-height));
   scrollbar-width: thin;
   overscroll-behavior: contain;
   mask-image: linear-gradient(
@@ -388,12 +382,12 @@ details p {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 130px;
+  height: var(--player-height);
   display: grid;
-  grid-template-columns: 1fr minmax(300px, 600px) 1fr;
+  grid-template-columns: minmax(160px, 230px) minmax(300px, 1fr) auto;
   gap: 28px;
   align-items: center;
-  padding: 13px 38px 20px;
+  padding: 12px 28px;
   border-top: 1px solid var(--border);
   background: var(--surface);
   backdrop-filter: blur(24px);
@@ -425,18 +419,24 @@ details p {
   font-size: 10px;
   color: var(--muted-foreground);
 }
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-width: 0;
+}
 .transport-buttons {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 24px;
-  margin-bottom: 6px;
+  gap: 6px;
+  flex: none;
 }
 .icon-button {
   display: grid;
   place-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
 }
 .icon-button svg {
   fill: none;
@@ -453,8 +453,8 @@ details p {
 .play-button {
   display: grid;
   place-content: center;
-  width: 43px;
-  height: 43px;
+  width: 44px;
+  height: 44px;
   background: var(--foreground);
   border-radius: 50%;
   color: var(--background);
@@ -468,6 +468,8 @@ details p {
   transform: translateX(-2px);
 }
 .seek-row {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -547,7 +549,7 @@ details p {
 }
 .toast {
   position: fixed;
-  bottom: 146px;
+  bottom: calc(var(--player-height) + 16px);
   left: 50%;
   transform: translateX(-50%);
   border: 1px solid var(--border);
@@ -605,20 +607,17 @@ details p {
   .episode-panel {
     padding-left: 25px;
   }
-  .app-header {
-    padding-inline: 25px;
-  }
 }
 @media (max-width: 700px) {
-  .app-header {
-    height: 60px;
-    padding: 0 20px;
+  :root {
+    --player-height: calc(108px + env(safe-area-inset-bottom, 0px));
+    --heading-height: 60px;
   }
   .episode-panel {
     display: none;
   }
   .workspace {
-    height: calc(100dvh - 195px);
+    height: calc(100dvh - var(--player-height));
     display: block;
   }
   .conversation {
@@ -626,14 +625,22 @@ details p {
     border: 0;
   }
   .transcript-heading {
-    height: 68px;
-    padding: 15px 24px;
+    padding: 8px 16px;
+    gap: 8px;
   }
   .transcript-heading h2 {
     font-size: 18px;
   }
-  .transcript {
-    height: calc(100% - 68px);
+  .wordmark {
+    font-size: 17px;
+    gap: 5px;
+  }
+  .wordmark svg {
+    width: 21px;
+  }
+  .transcript-heading .pill {
+    padding-inline: 10px;
+    min-height: 44px;
   }
   .transcript-row {
     padding-inline: 25px;
@@ -642,8 +649,7 @@ details p {
     font-size: 17px;
   }
   .player {
-    height: 135px;
-    padding: 12px 20px 16px;
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom, 0px));
     grid-template-columns: 1fr 55px;
     gap: 8px;
   }
@@ -656,11 +662,18 @@ details p {
   }
   .toast {
     width: calc(100% - 32px);
-    bottom: 150px;
     justify-content: space-between;
   }
+  .transport {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .seek-row {
+    width: 100%;
+  }
   .transport-buttons {
-    margin-bottom: 12px;
+    gap: 22px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -677,15 +690,13 @@ details p {
 @media (max-width: 1100px) {
   .mobile-skips {
     display: block;
-    margin-left: auto;
-    margin-right: 18px;
   }
   .skip-panel.open {
     display: block;
     position: fixed;
     right: 14px;
-    top: 74px;
-    bottom: 145px;
+    top: calc(var(--heading-height) + 8px);
+    bottom: calc(var(--player-height) + 10px);
     width: min(310px, calc(100vw - 28px));
     z-index: 4;
     background: var(--surface);
@@ -715,4 +726,48 @@ details p {
 #photo-credits a {
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* Segment markers are intentionally not circular person avatars. */
+.voice-marker {
+  width: 24px;
+  height: 24px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--muted-foreground);
+}
+.voice-marker svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.promotion .transcript-text {
+  padding: 10px 14px;
+  border-left: 2px dashed var(--border);
+  border-radius: 0 8px 8px 0;
+  background: var(--muted);
+  font-size: 15px;
+  color: var(--muted-foreground);
+}
+.promotion.skip-enabled .transcript-text {
+  border-left-color: color-mix(in srgb, var(--yellow) 60%, var(--border));
+}
+.promotion-status {
+  font-size: 9px;
+  padding: 3px 6px;
+  background: var(--muted);
+  border-radius: 4px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+#follow {
+  margin-left: auto;
+}
+#speed {
+  min-width: 44px;
+  min-height: 44px;
 }

@@ -8,25 +8,6 @@
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <header class="app-header">
-      <a class="wordmark" href="/" aria-label="Undertone home"
-        ><svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
-          <path
-            d="M4 12v4M9 7v14M14 3v22M19 8v12M24 12v4"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-          /></svg
-        >undertone</a
-      ><button
-        id="mobile-skips"
-        class="pill mobile-skips"
-        aria-expanded="false"
-        aria-controls="skip-panel"
-      >
-        Promotions
-      </button>
-    </header>
     <main class="workspace">
       <aside class="episode-panel">
         <div class="cover-wrap">
@@ -53,7 +34,24 @@
       </aside>
       <section class="conversation">
         <div class="transcript-heading">
-          <h2>Transcript</h2>
+          <a class="wordmark" href="/" aria-label="Undertone home"
+            ><svg viewBox="0 0 28 28" fill="none" aria-hidden="true">
+              <path
+                d="M4 12v4M9 7v14M14 3v22M19 8v12M24 12v4"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              /></svg
+            >undertone</a
+          ><button
+            id="mobile-skips"
+            class="pill mobile-skips"
+            aria-expanded="false"
+            aria-controls="skip-panel"
+          >
+            Promotions
+          </button>
+
           <button id="follow" class="pill active" aria-pressed="true">
             Follow along
           </button>

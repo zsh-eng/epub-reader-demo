@@ -85,6 +85,7 @@ function seekTo(time: number, preview?: Skip) {
   element("toast").hidden = true;
   audio.currentTime = Math.min(data.duration, Math.max(0, time));
   update();
+  paintParts();
   if (following) scrollToActive(true);
 }
 function findRow(time: number) {
@@ -106,11 +107,13 @@ function createRow(index: number) {
   const node = document.createElement("article");
   node.className = "transcript-row";
   node.dataset.index = String(index);
-  if (promotion(row)) node.classList.add("promotion");
+  const isPromotion = promotion(row);
+  const isUnknown = !speaker || speaker.confidence === "unknown";
+  if (isPromotion) node.classList.add("promotion");
   const header = document.createElement("div");
   header.className = "speaker-line";
   const avatar = document.createElement("span");
-  avatar.className = "avatar";
+  avatar.className = isPromotion || isUnknown ? "voice-marker" : "avatar";
   avatar.setAttribute("aria-hidden", "true");
   // Do not attach an interview guest name to an automatically detected ad voice.
   const name = promotion(row)
@@ -118,11 +121,18 @@ function createRow(index: number) {
     : speaker?.confidence === "unknown"
       ? "Unassigned voice"
       : (speaker?.name ?? "Unassigned voice");
-  avatar.textContent = name
-    .split(" ")
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("");
+  if (isPromotion || isUnknown) {
+    // These are segment types, not people. Keep faces only for named speakers.
+    avatar.innerHTML = isPromotion
+      ? '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 6 9 6-9 6V6ZM18 6v12"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 10v4m4-7v10m4-13v16m4-13v10m4-7v4"/></svg>';
+  } else {
+    avatar.textContent = name
+      .split(" ")
+      .slice(0, 2)
+      .map((n) => n[0])
+      .join("");
+  }
   if (!promotion(row) && speaker?.confidence !== "unknown" && speaker?.avatar) {
     const photo = document.createElement("img");
     photo.alt = "";
@@ -140,7 +150,13 @@ function createRow(index: number) {
       "Name inferred from the introduction; speaker separation can be wrong.";
   const time = document.createElement("time");
   time.textContent = fmt(row.start);
-  header.append(avatar, label, time);
+  header.append(avatar, label);
+  if (isPromotion) {
+    const status = document.createElement("span");
+    status.className = "promotion-status";
+    header.append(status);
+  }
+  header.append(time);
   const text = document.createElement("p");
   text.className = "transcript-text";
   row.parts.forEach((part, i) => {
@@ -177,6 +193,20 @@ function paintParts() {
   for (const [index, node] of virtual.nodes) {
     const isActive = index === active;
     node.classList.toggle("active", isActive);
+    const status = node.querySelector(".promotion-status");
+    if (status) {
+      const row = data.rows[index];
+      const preview =
+        previewSkip &&
+        row.start < previewSkip.end &&
+        row.end > previewSkip.start;
+      status.textContent = preview
+        ? "Preview"
+        : skipToggle.checked
+          ? "Auto-skip"
+          : "Skip off";
+      node.classList.toggle("skip-enabled", skipToggle.checked && !preview);
+    }
     node.querySelectorAll(".sentence").forEach((part, i) => {
       part.classList.toggle("current", isActive && i === activePart);
       if (isActive && i === activePart)
@@ -198,8 +228,10 @@ function showSkip(skip: Skip) {
 function update() {
   if (!data) return;
   let time = audio.currentTime;
-  if (previewSkip && (time < previewSkip.start || time >= previewSkip.end))
+  if (previewSkip && (time < previewSkip.start || time >= previewSkip.end)) {
     previewSkip = undefined;
+    paintParts();
+  }
   if (!audio.paused && skipToggle.checked) {
     const skip = data.skips.find(
       (s) => s.id !== previewSkip?.id && time >= s.start && time < s.end,
@@ -424,6 +456,7 @@ skipToggle.addEventListener("change", () => {
   previewSkip = undefined;
   savePosition();
   update();
+  paintParts();
 });
 element("undo").addEventListener("click", () => {
   if (!lastSkipped) return;
