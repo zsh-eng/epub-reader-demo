@@ -83,6 +83,7 @@
       "name": "@workbench/podcast-lab",
       "dependencies": {
         "@tanstack/query-core": "5.100.1",
+        "motion": "12.38.0",
       },
       "devDependencies": {
         "@playwright/test": "^1.58.2",

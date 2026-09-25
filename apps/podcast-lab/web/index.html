@@ -152,7 +152,8 @@
             title="Play / pause (Space)"
           >
             <svg viewBox="0 0 24 24">
-              <path class="play-shape" d="m9 5 11 7-11 7z" />
+              <path class="play-symbol" d="m9 5 11 7-11 7z" />
+              <path class="pause-symbol" d="M7 5h4v14H7zM15 5h4v14h-4z" />
             </svg></button
           ><button
             id="forward"
@@ -168,6 +169,10 @@
         <div class="seek-row">
           <time id="elapsed">0:00</time>
           <div class="track">
+            <div id="stream-track" aria-hidden="true" hidden>
+              <div id="buffered-ranges"></div>
+              <i id="stream-progress"></i>
+            </div>
             <div id="waveform" aria-hidden="true"></div>
             <div id="skip-marks" aria-hidden="true"></div>
             <input
@@ -187,9 +192,17 @@
         <button id="speed" class="pill" aria-label="Playback speed">1×</button>
       </div>
     </footer>
-    <div id="toast" class="toast" role="status" hidden>
+    <div
+      id="toast"
+      class="toast"
+      role="status"
+      data-open="false"
+      aria-hidden="true"
+      inert
+    >
       <span id="toast-text"></span><button id="undo">Undo</button>
     </div>
+    <span id="playback-status" class="sr-only" role="status"></span>
     <div id="error" class="error" role="alert" hidden></div>
     <audio id="audio" preload="metadata"></audio>
     <script type="module" src="/player.js"></script>

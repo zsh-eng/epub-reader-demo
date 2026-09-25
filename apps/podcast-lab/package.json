@@ -16,6 +16,7 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@tanstack/query-core": "5.100.1"
+    "@tanstack/query-core": "5.100.1",
+    "motion": "12.38.0"
   }
 }

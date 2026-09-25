@@ -1,7 +1,12 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "tests",
-  testMatch: ["player.spec.ts", "library.spec.ts"],
+  testMatch: [
+    "player.spec.ts",
+    "library.spec.ts",
+    "streaming.spec.ts",
+    "motion.spec.ts",
+  ],
   workers: 1,
   use: {
     baseURL: "http://127.0.0.1:4379",

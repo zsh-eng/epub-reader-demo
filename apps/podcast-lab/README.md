@@ -26,6 +26,13 @@ stream directly from their enclosure URL only when opened; their transcript and
 promotion detection are marked unprepared. The browser contains no API key.
 Stop the server with Control-C.
 
+Real streaming was checked in desktop Chromium with Plain English and Dwarkesh:
+playback, a ten-minute seek with HTTP 206 byte-range responses, browsing during
+playback, and checkpoint restoration after switching episodes. This does not
+verify every host or Safari/iPhone. Streaming alone does not create transcripts
+or skip ranges; those still require the preparation pipeline. A failed stream
+shows a compact error; Play reloads it and restores the saved position.
+
 ## Library and show feeds
 
 The personal catalog contains **the 20 shows from your screenshots**, with
@@ -334,6 +341,24 @@ four-episode comparison and remaining Decoder limitations.
   Refreshing restores position, speed and skip setting.
 - Artwork and episode assets are cached locally. The server binds to loopback.
 
+## Motion
+
+Cached cover art moves from its library card into the show or listening view
+in 240 ms. Page arrivals take 180 ms; play/pause icons crossfade in 150 ms and
+skip notices enter/leave in 180 ms without moving content. Fine pointers get a
+small cover lift. The scrubber, search results and virtual transcript remain
+direct; no animation delays playback or list updates.
+
+The cover transition uses `motion/mini`; simple feedback uses CSS. Only opacity
+and transforms animate. Rapid navigation cancels old transitions and restores
+the destination cover. Keyboard navigation is immediate. Reduced motion removes
+cover travel, scaling and the rotating loading ring. High contrast or reduced
+transparency replaces glass with solid surfaces. The minified player bundle is
+60 KB (previously 47 KB); this is not a measured frame-rate result.
+
+Streams show actual buffered ranges from the media element and a loading ring
+only while playback waits for data. They do not show an invented waveform.
+
 ## Checks
 
 ```sh
@@ -341,13 +366,17 @@ bun run build           # Strict TypeScript check + small browser bundle
 bun run lint
 bun run test            # Range server, interrupted download and alignment
 bun run test:e2e        # Real local episode; no podcast-host requests
+# Optional: real publisher audio. Requires the personal .local/library.json.
+PODCAST_LIVE_STREAM=1 bun run test:e2e tests/streaming.spec.ts
 uvx ruff check pipeline tests/test_pipeline.py
 ```
 
 Browser checks cover chapter seek, manual/follow scrolling, a bounded row count,
 automatic skipping, Undo without immediate re-skip, playback resume, phone
 layout, paragraph seeking and highlighting, variable-height row spacing, keyboard
-controls, and reduced motion. Screenshots and failure traces
+controls, reduced motion, interrupted cover transitions, and stream error recovery.
+The routine suite uses a 64 KB local MP3 prefix for the stream recovery check.
+Screenshots and failure traces
 stay in `.local/`. Tests do not claim audio-boundary accuracy or physical-device
 frame rates.
 

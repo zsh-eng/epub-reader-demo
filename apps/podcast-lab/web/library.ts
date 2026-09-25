@@ -1,3 +1,10 @@
+import {
+  arrive,
+  cancelNavigationMotion,
+  captureArtwork,
+  carryArtwork,
+  type ArtworkOrigin,
+} from "./motion";
 import { getJSON } from "./cache";
 export type Show = {
   id: string;
@@ -24,6 +31,7 @@ type Open = (
   episode: FeedEpisode,
   show: Show,
   autoplay?: boolean,
+  origin?: ArtworkOrigin,
 ) => Promise<void>;
 const el = (id: string) => document.getElementById(id)!;
 const node = <K extends keyof HTMLElementTagNameMap>(
@@ -84,6 +92,7 @@ export async function initLibrary(open: Open) {
       data.episodes[0];
   let loadVersion = 0;
   let playWhenReady = false;
+  let origin: ArtworkOrigin | undefined;
   const showsById = new Map(data.shows.map((show) => [show.id, show]));
   const showFor = (id: string) => showsById.get(id)!;
   const searchText = new Map(
@@ -186,8 +195,10 @@ export async function initLibrary(open: Open) {
     const autoplay = playWhenReady;
     playWhenReady = false;
     el("library-status").textContent = "";
+    const source = origin;
+    origin = undefined;
     try {
-      await open(episode, showFor(episode.showId), autoplay);
+      await open(episode, showFor(episode.showId), autoplay, source);
       if (version !== loadVersion) return;
       current = episode;
       try {
@@ -368,6 +379,7 @@ export async function initLibrary(open: Open) {
     }
   }
   function route() {
+    cancelNavigationMotion();
     const hash = location.hash.slice(1) || "home",
       player = hash === "player" || hash.startsWith("listen/");
     document.body.classList.toggle("library-open", !player);
@@ -387,7 +399,32 @@ export async function initLibrary(open: Open) {
     page = 0;
     render();
     renderNav();
+    if (origin && hash.startsWith("show/"))
+      carryArtwork(
+        origin,
+        el("library-content").querySelector<HTMLImageElement>(".show-hero img"),
+      );
+    origin = undefined;
+    arrive(el("library-content"));
   }
+  // Capture geometry before the route hides/removes its source. Purely visual:
+  // playback state and selection do not wait for an animation.
+  el("library-shell").addEventListener(
+    "click",
+    (event) => {
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          ".episode-title, .episode-play, .continue-card button, .show-card-link, .episode-cover-link, .show-nav",
+        )
+      )
+        origin = captureArtwork(
+          target.closest(".episode-row, .continue-card, .show-card, .show-nav"),
+        );
+      else origin = undefined;
+    },
+    true,
+  );
   const searchInput = el("library-search") as HTMLInputElement;
   searchInput.addEventListener("input", () => {
     search = searchInput.value.trim();
@@ -400,4 +437,5 @@ export async function initLibrary(open: Open) {
   // URL takes priority and does not start a competing default load.
   if (!location.hash.startsWith("#listen/") && current) void listen(current);
   route();
+  if (!el("library-shell").hidden) arrive(el("library-content"), true);
 }

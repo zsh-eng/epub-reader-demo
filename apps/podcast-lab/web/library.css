@@ -539,3 +539,20 @@
   flex: 0 0 160px;
   min-width: 0;
 }
+
+.show-cover {
+  transition: transform 160ms var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .show-card-link:hover .show-cover {
+    transform: translateY(-3px) scale(1.015);
+  }
+  .episode-cover-link:hover .show-cover {
+    transform: translateY(-2px);
+  }
+}
+@media (max-width: 700px) {
+  .home-show-shelf .show-card {
+    flex-basis: 126px;
+  }
+}
