@@ -118,6 +118,62 @@ try {
     );
   });
   assert.ok((await editor.textContent()).includes(source.split("\n")[0]));
+  // Observe the real Vim cursor after keyboard input. Pause the CSS transition
+  // to sample its rendered positions without depending on frame timing.
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const motion = async (key, property) => {
+    const result = await page.evaluate(
+      ({ key, property }) =>
+        new Promise((resolve, reject) => {
+          const caret = document.querySelector(".cm-vimCursorLayer .cm-fat-cursor");
+          const timeout = setTimeout(() => {
+            caret.removeEventListener("transitionrun", onTransition);
+            reject(new Error(`No ${property} cursor transition for ${key}`));
+          }, 3000);
+          function onTransition(event) {
+            if (event.propertyName !== property) return;
+            clearTimeout(timeout);
+            caret.removeEventListener("transitionrun", onTransition);
+            const animation = caret
+              .getAnimations()
+              .find((item) => item.transitionProperty === property);
+            animation.pause();
+            const timing = animation.effect.getTiming();
+            const positions = [0, timing.duration / 2, timing.duration].map((time) => {
+              animation.currentTime = time;
+              return parseFloat(getComputedStyle(caret)[property]);
+            });
+            animation.finish();
+            resolve({ positions, duration: timing.duration, easing: timing.easing });
+          }
+          caret.addEventListener("transitionrun", onTransition);
+          document
+            .querySelector(".cm-content")
+            .dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+        }),
+      { key, property },
+    );
+    assert.equal(result.duration, 65);
+    assert.equal(result.easing, "ease-out");
+    const [start, middle, end] = result.positions;
+    const progress = (middle - start) / (end - start);
+    assert.ok(progress > 0.5 && progress < 1, JSON.stringify(result));
+    return result;
+  };
+  const cursorMotion = { normal: await motion("w", "left") };
+  await page.keyboard.press("v");
+  cursorMotion.visual = await motion("j", "top");
+  await page.keyboard.press("Escape");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.keyboard.press("l");
+  assert.equal(
+    await page
+      .locator(".cm-vimCursorLayer .cm-fat-cursor")
+      .evaluate((caret) => getComputedStyle(caret).transitionDuration),
+    "0s",
+  );
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.keyboard.type("gg0");
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Tracing.start", {
     categories: "devtools.timeline,blink.user_timing",
@@ -178,7 +234,10 @@ try {
     file: path,
     bytes: Buffer.byteLength(source),
     browser: browser.version(),
+    cursorMotion,
     checks: [
+      "65ms ease-out cursor motion in Normal and Visual modes",
+      "reduced-motion cursor preference",
       "deep link to second repository",
       "Twinkleplop syntax colors",
       "Vim insert and :w",

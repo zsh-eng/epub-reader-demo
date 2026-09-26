@@ -188,6 +188,9 @@ per-App draft store keyed by source and file path. Changes update the store with
 rerendering React for every keystroke; saved/dirty transitions notify subscribers.
 Vim Insert typing is grouped into one undo event, including the deletion in a
 change command. Commit sources cannot enter this editor.
+Normal and Visual cursor moves use the same 65 ms ease-out as the file viewer.
+The cursor layer scrolls with the document; reduced-motion preferences disable
+the transition. Insert mode retains the standard caret.
 
 A separate, disposable worker supplies Twinkleplop text-range decorations. Input
 updates immediately; syntax runs after a 100 ms pause. Results carry a generation

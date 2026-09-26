@@ -8,6 +8,9 @@ starts the real CLI host, and opens a direct file link to the second repository.
 Verified behavior:
 
 - Twinkleplop syntax colors in the editable file.
+- Normal and Visual cursor movement with the viewer's 65 ms ease-out transition.
+  The browser check samples actual rendered positions at the start, midpoint,
+  and end, and checks that reduced-motion mode disables the transition.
 - Vim insert and `:w` save to the real file on disk.
 - Undo after saving marks the draft dirty; saving restores byte-identical source.
 - Draft contents and cursor remain available after switching tabs.
