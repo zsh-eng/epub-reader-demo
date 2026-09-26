@@ -53,14 +53,17 @@ struct StoryCardLayout {
   }
   func fits(_ text: String, style: StoryStyle) -> Bool {
     let rect = quoteRect(for: style)
-    return textHeight(text, font: style.typeface(size: minimumFontSize), width: rect.width) <= rect
-      .height - 4
+    let font = style.typeface(size: minimumFontSize)
+    guard textHeight(text, font: font, width: rect.width) <= rect.height - 4 else { return false }
+    return !style.isPrinted || PrintedPassage.fits(text, font: font, size: rect.size)
   }
 }
 
-/// Ten print traditions interpreted as reusable layouts, not baked-in quote images.
+/// Print traditions and editorial layouts with live text, not baked-in quotes.
 /// Artwork colours are independent of the app chrome. All paper assets are local.
 enum StoryStyle: String, CaseIterable, Identifiable {
+  case newsprint = "Newsprint"
+  case bookleaf = "Bookleaf"
   case paper = "Biblioteca"
   case ink = "Theatre"
   case ice = "Xuan"
@@ -72,10 +75,12 @@ enum StoryStyle: String, CaseIterable, Identifiable {
   case cutout = "Offset"
   case ribbon = "Seoul"
   var id: String { rawValue }
-  var supportsArticleImage: Bool { [.paper, .folio, .signal, .cutout].contains(self) }
+  var isPrinted: Bool { self == .newsprint || self == .bookleaf }
+  var supportsArticleImage: Bool { [.paper, .folio, .signal, .cutout, .newsprint].contains(self) }
 
   var background: Color {
     switch self {
+    case .newsprint, .bookleaf: return Color(red: 0.95, green: 0.93, blue: 0.86)
     case .paper: return Color(red: 0.95, green: 0.91, blue: 0.80)
     case .ink: return Color(red: 0.91, green: 0.84, blue: 0.63)
     case .ice: return Color(red: 0.96, green: 0.94, blue: 0.88)
@@ -100,7 +105,8 @@ enum StoryStyle: String, CaseIterable, Identifiable {
   }
   var accent: Color {
     switch self {
-    case .paper, .ice, .signal: return Color(red: 0.77, green: 0.20, blue: 0.13)
+    case .newsprint, .bookleaf, .paper, .ice, .signal:
+      return Color(red: 0.77, green: 0.20, blue: 0.13)
     case .ink: return Color(red: 0.47, green: 0.10, blue: 0.17)
     case .folio: return Color(red: 0.98, green: 0.91, blue: 0.77)
     case .field: return Color(red: 0.44, green: 0.59, blue: 0.44)
@@ -113,6 +119,7 @@ enum StoryStyle: String, CaseIterable, Identifiable {
   var font: UIFont { typeface(size: 28) }
   func typeface(size: CGFloat) -> UIFont {
     switch self {
+    case .newsprint: return UIFont(name: "Georgia", size: size) ?? .systemFont(ofSize: size)
     case .signal, .cutout:
       return UIFont(name: "HelveticaNeue-CondensedBlack", size: size)
         ?? .systemFont(ofSize: size, weight: .black)
@@ -129,6 +136,8 @@ enum StoryStyle: String, CaseIterable, Identifiable {
   var centered: Bool { [.paper, .field, .dusk].contains(self) }
   var quoteY: CGFloat {
     switch self {
+    case .newsprint: return 152
+    case .bookleaf: return 133
     case .paper: return 177
     case .ink: return 139
     case .ice: return 157
@@ -154,7 +163,11 @@ enum StoryStyle: String, CaseIterable, Identifiable {
         with: CGSize(width: rect.width, height: CGFloat.greatestFiniteMagnitude),
         options: [.usesLineFragmentOrigin, .usesFontLeading],
         attributes: [.font: font, .paragraphStyle: paragraph], context: nil)
-      if measured.height <= rect.height - 4 { return font }
+      if measured.height <= rect.height - 4,
+        !isPrinted || PrintedPassage.fits(text, font: font, size: rect.size)
+      {
+        return font
+      }
     }
     return typeface(size: layout.minimumFontSize)
   }
@@ -172,12 +185,21 @@ struct PassageStoryCard: View {
   var articleImage: UIImage?
 
   var body: some View {
-    style.background.frame(width: 360, height: layout.format.height)
+    paperColour.frame(width: 360, height: layout.format.height)
       .overlay { artwork.frame(width: 360, height: layout.format.height) }
       .overlay(alignment: .topLeading) { typography }
       .clipped()
       .environment(\.dynamicTypeSize, .medium)
       .environment(\.colorScheme, [.index, .ribbon].contains(style) ? .dark : .light)
+  }
+
+  private var paperColour: Color {
+    if style == .newsprint,
+      story.url.host == "ft.com" || story.url.host?.hasSuffix(".ft.com") == true
+    {
+      return Color(red: 1, green: 0.945, blue: 0.898)
+    }
+    return style.background
   }
 
   private var typography: some View {
@@ -203,7 +225,7 @@ struct PassageStoryCard: View {
         width: layout.format == .square ? 312 : (style == .index ? 180 : 284),
         alignment: style.centered ? .center : .leading
       )
-      .background(layout.format == .square ? style.background.opacity(0.95) : .clear)
+      .background(layout.format == .square ? paperColour.opacity(0.95) : .clear)
       .offset(x: layout.format == .square ? 24 : 38, y: layout.sourceY(for: style))
     }.frame(width: 360, height: layout.format.height, alignment: .topLeading)
   }
@@ -239,7 +261,15 @@ struct PassageStoryCard: View {
   }
   @ViewBuilder private var quote: some View {
     Group {
-      if let (first, rest, font) = lead {
+      if style == .bookleaf || style == .newsprint {
+        PrintedPassage(
+          text: text.trimmingCharacters(in: .whitespacesAndNewlines),
+          font: style.displayFont(for: text, layout: layout),
+          colour: story.highlightColour, marked: style == .bookleaf
+        )
+        .frame(
+          width: layout.quoteRect(for: style).width, height: layout.quoteRect(for: style).height)
+      } else if let (first, rest, font) = lead {
         VStack(alignment: style.centered ? .center : .leading, spacing: 16) {
           Text(first).font(Font(font))
           Text(rest).font(Font(style.typeface(size: 27)))
@@ -253,7 +283,11 @@ struct PassageStoryCard: View {
   }
   private var header: some View {
     HStack(spacing: 16) {
-      style.foreground.mask(ArcticMark()).frame(width: 15, height: 15)
+      if style == .newsprint {
+        PublisherPrintHeading(url: story.url)
+      } else {
+        style.foreground.mask(ArcticMark()).frame(width: 15, height: 15)
+      }
       if count > 1 {
         Text(String(format: "%02d / %02d", page + 1, count))
           .font(.system(size: 9, weight: .medium, design: .monospaced)).tracking(2)
@@ -292,8 +326,21 @@ struct PassageStoryCard: View {
         Image("StoryHanji").resizable().frame(width: 360, height: layout.format.height).clipped()
       }
       if layout.format == .square || layout.hasImage {
-        Rectangle().fill(style.accent).frame(width: 24, height: 3)
-          .offset(x: 145, y: -layout.format.height / 2 + 30)
+        if style == .newsprint {
+          VStack(spacing: 2) {
+            Rectangle().frame(height: 1)
+            Rectangle().frame(height: 0.5)
+          }.frame(width: layout.format == .square ? 312 : 296)
+            .foregroundStyle(style.foreground)
+            .offset(y: -layout.format.height / 2 + (layout.format == .square ? 53 : 88))
+        } else {
+          Rectangle().fill(style.accent).frame(width: 24, height: 3)
+            .offset(x: 145, y: -layout.format.height / 2 + 30)
+        }
+        if style == .bookleaf {
+          Rectangle().fill(style.foreground.opacity(0.1))
+            .frame(width: 1, height: layout.format.height - 36).offset(x: -164)
+        }
         if style == .paper {
           Rectangle().stroke(style.foreground.opacity(0.35), lineWidth: 0.5).padding(12)
         }
@@ -309,6 +356,19 @@ struct PassageStoryCard: View {
 
   @ViewBuilder private var motifs: some View {
     switch style {
+    case .newsprint:
+      VStack(spacing: 3) {
+        Rectangle().frame(height: 1.5)
+        Rectangle().frame(height: 0.5)
+      }.frame(width: 296).foregroundStyle(style.foreground).offset(y: -209)
+    case .bookleaf:
+      Rectangle().fill(style.foreground.opacity(0.10)).frame(width: 1, height: 536).offset(x: -164)
+      LinearGradient(
+        colors: [.black.opacity(0.08), .clear], startPoint: .leading, endPoint: .trailing
+      )
+      .frame(width: 18).offset(x: -171)
+      Text("A passage, kept.").font(.custom("Baskerville-Italic", size: 12))
+        .foregroundStyle(style.foreground.opacity(0.6)).offset(y: -223)
     case .paper:
       Rectangle().stroke(style.foreground, lineWidth: 0.65).padding(.horizontal, 19).padding(
         .vertical, 37)
@@ -408,6 +468,26 @@ struct PassageStoryCard: View {
       wholeAnnotation.note =
         "Pay attention. The ordinary world is full of extraordinary things. A good passage asks us to pause, then look again. Keep the sentences that change what you notice; return to them when the familiar starts to feel invisible. There is no hurry. Let a little room for wonder remain in the day, and carry that attention back into the world."
       let wholeStory = PassageStory(annotation: wholeAnnotation, title: "A practice of attention")
+      for publisher in ArcticPublisher.all {
+        let sourceAnnotation = ReaderAnnotation(
+          id: UUID(), articleURL: publisher.url, quote: nil,
+          note: wholeAnnotation.note, isHighlighted: false, createdAt: .distantPast,
+          updatedAt: .distantPast)
+        let source = PassageStory(annotation: sourceAnnotation, title: "A practice of attention")
+        for format in StoryFormat.allCases {
+          let layout = StoryCardLayout(format: format, single: true)
+          let text = layout.fits(source.text, style: .newsprint) ? source.text : shortStory.text
+          let renderer = ImageRenderer(
+            content: PassageStoryCard(
+              story: source, style: .newsprint, text: text, page: 0, count: 1, layout: layout))
+          renderer.scale = 3
+          guard let data = renderer.uiImage?.pngData() else { throw CocoaError(.fileWriteUnknown) }
+          try data.write(
+            to: directory.appending(
+              path: "publisher-\(publisher.asset)-\(format.rawValue.lowercased()).png"))
+          await Task.yield()
+        }
+      }
       for style in StoryStyle.allCases {
         for format in StoryFormat.allCases {
           for photo in [false, true] where !photo || style.supportsArticleImage {

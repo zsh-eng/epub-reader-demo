@@ -9,12 +9,14 @@ struct PassageStory: Identifiable {
   let url: URL
   let pages: [String]
   let imageURL: URL?
+  let highlightColour: HighlightColour
 
   init(annotation: ReaderAnnotation, title: String?, imageURL: URL? = nil) {
     text = annotation.quote?.exact ?? annotation.note
     self.title = title ?? annotation.articleURL.host ?? "Article"
     url = annotation.articleURL
     self.imageURL = imageURL
+    highlightColour = annotation.highlightColour
     pages = Self.paginate(annotation.quote?.exact ?? annotation.note)
   }
 
@@ -29,7 +31,7 @@ struct PassageStory: Identifiable {
     paragraph.lineSpacing = 4
     // The largest actual font metrics decide shared pagination. Binary search
     // bounds shaping work, including long notes and explicit paragraph breaks.
-    let fonts = StoryStyle.allCases.map { $0.typeface(size: layout.minimumFontSize) }
+    let styles = StoryStyle.allCases
     while !remaining.isEmpty {
       let candidate = Array(remaining.prefix(300))
       var lower = 1
@@ -37,8 +39,14 @@ struct PassageStory: Identifiable {
       while lower < upper {
         let middle = (lower + upper + 1) / 2
         let sample = String(candidate.prefix(middle)) as NSString
-        let fits = fonts.allSatisfy { font in
-          sample.boundingRect(
+        let fits = styles.allSatisfy { style in
+          let font = style.typeface(size: layout.minimumFontSize)
+          let rect = layout.quoteRect(for: .paper)
+          if style.isPrinted && !PrintedPassage.fits(sample as String, font: font, size: rect.size)
+          {
+            return false
+          }
+          return sample.boundingRect(
             with: CGSize(
               width: layout.quoteRect(for: .paper).width, height: CGFloat.greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],

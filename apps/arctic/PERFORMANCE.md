@@ -387,3 +387,26 @@ font fit for all format/image combinations. All 48 native proof files passed
 browser dimension/selection checks at 1080 × 1920 or 1080 × 1080; the board also
 passed a 390 px width check. Swift formatting and signed iOS Release build passed.
 This is not a physical-device performance measurement or an installed update.
+
+
+## Printed text and dated notebooks (2026-09-26)
+
+Newsprint and Bookleaf keep text live until export. Core Text supplies both line
+positions and fit checks. Bookleaf draws translucent marker strokes behind each
+line using the saved highlight colour; deterministic edge variation needs no
+animation timer. Newsprint uses bundled publisher marks and installed editorial
+serifs. No font or texture download is added. Existing paper assets are reused.
+
+The global notebook filters, sorts and groups by original creation day in its
+existing background task. Lazy sections retain stable day and annotation IDs;
+SwiftUI pins their small material date capsules. Local calendar changes refresh
+the labels. Cards reduce insets from 18 to 14 points, spacing from 14 to 8, and
+use subheadline note text without truncating it. The article conversation uses
+the same date header while preserving ascending time order.
+
+Simulator checks passed for sticky Today/Yesterday labels and search, complete
+note bodies and offline source navigation, all twelve templates, and optional
+image / square sharing. Native export proofs were inspected, including the FT
+mark and the marker strokes. The local board checked all 68 export dimensions,
+selection and photo eligibility, with no 390px horizontal overflow. Swift format
+checks and signed iOS Release build passed. No device FPS or installation claim.

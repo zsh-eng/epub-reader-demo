@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A914BEAD271C434F8CE72211 /* PrintedPassage.swift in Sources */ = {isa = PBXBuildFile; fileRef = A914BEAD271C434F8CE72212 /* PrintedPassage.swift */; };
 		DB50F800B094D704DBCDD70C /* StoryPosterDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B0A8523BEFBF4431FAE2E0; };
 		DECD15000000000000000002 /* LibraryDiscoveryMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DECD15000000000000000001; };
 		DD1A54CA2A1D71EAFFB0595A /* XArticlePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CE364C96E47B2909AF7180; };
@@ -107,6 +108,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A914BEAD271C434F8CE72212 /* PrintedPassage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PrintedPassage.swift; sourceTree = "<group>"; };
 		55B0A8523BEFBF4431FAE2E0 /* StoryPosterDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/StoryPosterDesign.swift; sourceTree = "<group>"; };
 		DECD15000000000000000001 /* LibraryDiscoveryMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryDiscoveryMotion.swift; sourceTree = "<group>"; };
 		35CE364C96E47B2909AF7180 /* XArticlePayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/XArticlePayload.swift; sourceTree = "<group>"; };
@@ -227,6 +229,7 @@
 				DECD15000000000000000001 /* LibraryDiscoveryMotion.swift */,
 				B076FC72C68632FA6DAA850C /* PassageStory.swift */,
 				55B0A8523BEFBF4431FAE2E0 /* StoryPosterDesign.swift */,
+				A914BEAD271C434F8CE72212 /* PrintedPassage.swift */,
 				A00000000000000000000001 /* THIRD_PARTY_NOTICES.txt */,
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
 				0A7E64B70908FC6120688D6F /* Sources/ArticleReaderApp.swift */,
@@ -458,6 +461,7 @@
 				DECD15000000000000000002 /* LibraryDiscoveryMotion.swift in Sources */,
 				8AA2BA029F9DACDFFF3E9EEE /* PassageStory.swift in Sources */,
 				DB50F800B094D704DBCDD70C /* StoryPosterDesign.swift in Sources */,
+				A914BEAD271C434F8CE72211 /* PrintedPassage.swift in Sources */,
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,
 				AC0000000000000000000001 /* LibraryCards.swift in Sources */,

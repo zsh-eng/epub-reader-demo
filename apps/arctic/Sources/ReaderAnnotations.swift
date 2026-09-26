@@ -63,17 +63,21 @@ struct ReaderAnnotations: View {
     NavigationStack {
       ScrollViewReader { proxy in
         ScrollView {
-          LazyVStack(alignment: .leading, spacing: 14) {
+          LazyVStack(alignment: .leading, spacing: 8, pinnedViews: [.sectionHeaders]) {
             if notes.isEmpty {
               ArcticEmptyState(
                 kind: .passages, title: "No notes yet", detail: "Keep a thought about this article."
               )
               .padding(.vertical, 24)
             }
-            ForEach(notes) { annotation in
-              noteBubble(annotation).id(annotation.id)
+            ForEach(NotebookDay.group(notes)) { day in
+              Section {
+                ForEach(day.records) { annotation in
+                  noteBubble(annotation).id(annotation.id)
+                }
+              } header: { NotebookDateHeader(date: day.id) }
             }
-          }.padding(20)
+          }.padding(.horizontal, 16).padding(.bottom, 16)
         }
         .defaultScrollAnchor(.bottom)
         .onChange(of: notes.last?.id) { _, id in
@@ -121,7 +125,7 @@ struct ReaderAnnotations: View {
         }
       }
       if !annotation.note.isEmpty {
-        Text(annotation.note).font(.body).textSelection(.enabled)
+        Text(annotation.note).font(.subheadline).textSelection(.enabled)
           .frame(maxWidth: .infinity, alignment: .leading)
           .accessibilityIdentifier("article-note-text-" + annotation.id.uuidString)
       }
@@ -156,7 +160,7 @@ struct ReaderAnnotations: View {
         }.accessibilityLabel("Note options")
       }
     }
-    .padding(16).background(
+    .padding(14).background(
       Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20)
     )
     .accessibilityElement(children: .contain)

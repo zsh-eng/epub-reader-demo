@@ -217,7 +217,7 @@ final class DiscoveryShelfView: UIView {
       original.draw(at: CGPoint(x: 0, y: original.size.height * 24 / 180))
     }
   }()
-  private static func publisherImage(_ name: String) -> UIImage? {
+  static func publisherImage(_ name: String) -> UIImage? {
     name == "PublisherFT" ? centeredFT : UIImage(named: name)
   }
 

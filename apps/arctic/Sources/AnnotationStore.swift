@@ -81,7 +81,9 @@ struct ReaderAnnotation: Codable, Identifiable, Equatable, Sendable {
         arguments.indices.contains(index + 1), let requested = Int(arguments[index + 1])
       else { return }
       records = (0..<max(0, min(2000, requested))).map { index in
-        let date = Date(timeIntervalSince1970: Double(1_700_000_000 + index))
+        let date = arguments.contains("-test-notebook-days")
+          ? Calendar.current.date(byAdding: .day, value: -(index / 6), to: Calendar.current.startOfDay(for: .now))!.addingTimeInterval(Double(index % 6) * 60)
+          : Date(timeIntervalSince1970: Double(1_700_000_000 + index))
         return ReaderAnnotation(
           id: UUID(), articleURL: URL(string: "https://fixture.example/unicode")!,
           quote: index.isMultiple(of: 2)

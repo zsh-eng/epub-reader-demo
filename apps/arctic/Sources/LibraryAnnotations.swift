@@ -11,7 +11,9 @@ struct LibraryAnnotations: View {
   @State private var editing: ReaderAnnotation?
   @State private var sharing: PassageStory?
   @State private var errorMessage: String?
-  @State private var matching: [ReaderAnnotation] = []
+  @State private var matching: [NotebookDay] = []
+  @State private var today = Calendar.current.startOfDay(for: .now)
+  @Environment(\.scenePhase) private var scenePhase
   @State private var hasLoaded = false
   @State private var detent: PresentationDetent
 
@@ -39,9 +41,10 @@ struct LibraryAnnotations: View {
     var titles: [URL: String]
     var text: String
     var filter: PassageFilter
+    var today: Date
 
-    func results() -> [ReaderAnnotation] {
-      records.filter { record in
+    func results() -> [NotebookDay] {
+      let filtered = records.filter { record in
         guard !Task.isCancelled, record.deletedAt == nil else { return false }
         if filter == .highlights && !record.isHighlighted { return false }
         if filter == .notes && record.note.isEmpty { return false }
@@ -54,6 +57,7 @@ struct LibraryAnnotations: View {
         if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
         return $0.id.uuidString < $1.id.uuidString
       }
+      return NotebookDay.group(filtered)
     }
   }
 
@@ -61,20 +65,26 @@ struct LibraryAnnotations: View {
     let titles = articleTitles
     let request = NotebookQuery(
       records: AnnotationStore.shared.records, titles: titles,
-      text: query.trimmingCharacters(in: .whitespacesAndNewlines), filter: filter)
+      text: query.trimmingCharacters(in: .whitespacesAndNewlines), filter: filter, today: today)
     return NavigationStack {
       ScrollView {
-        LazyVStack(spacing: 14) {
+        LazyVStack(spacing: 8, pinnedViews: [.sectionHeaders]) {
           if let loadError = AnnotationStore.shared.loadError {
             Text(loadError).font(.caption).foregroundStyle(.secondary)
           }
           if hasLoaded && matching.isEmpty {
             emptyState
           }
-          ForEach(matching) { annotation in
-            passageCard(annotation, title: titles[annotation.articleURL])
+          ForEach(matching) { day in
+            Section {
+              ForEach(day.records) { annotation in
+                passageCard(annotation, title: titles[annotation.articleURL])
+              }
+            } header: {
+              NotebookDateHeader(date: day.id, today: today)
+            }
           }
-        }.padding(20)
+        }.padding(.horizontal, 16).padding(.bottom, 20)
       }
       .accessibilityIdentifier("notebook-scroll")
       .background(Color(uiColor: .systemGroupedBackground))
@@ -102,6 +112,14 @@ struct LibraryAnnotations: View {
       } onCancel: {
         work.cancel()
       }
+    }
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active { today = Calendar.current.startOfDay(for: .now) }
+    }
+    .onReceive(
+      NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)
+    ) { _ in
+      today = Calendar.current.startOfDay(for: .now)
     }
     .presentationDetents([.medium, .large], selection: $detent)
     .presentationDragIndicator(.visible)
@@ -146,21 +164,21 @@ struct LibraryAnnotations: View {
   }
 
   private func passageCard(_ annotation: ReaderAnnotation, title: String?) -> some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: 8) {
       Button {
         editing = annotation
       } label: {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
           if let quote = annotation.quote {
             AnnotationQuote(quote: quote.exact, colour: annotation.highlightColour)
           }
           if !annotation.note.isEmpty {
-            Text(annotation.note).font(.body).fixedSize(horizontal: false, vertical: true)
+            Text(annotation.note).font(.subheadline).fixedSize(horizontal: false, vertical: true)
               .frame(maxWidth: .infinity, alignment: .leading)
           }
         }.contentShape(Rectangle())
       }.buttonStyle(.plain).accessibilityIdentifier("library-passage-" + annotation.id.uuidString)
-      HStack(alignment: .bottom, spacing: 12) {
+      HStack(alignment: .center, spacing: 8) {
         Button {
           open(annotation)
         } label: {
@@ -196,13 +214,14 @@ struct LibraryAnnotations: View {
             }
           }
         } label: {
-          Image(systemName: "ellipsis").frame(width: 44, height: 44)
+          Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(Rectangle())
+            .padding(.vertical, -8)
         }.accessibilityLabel("Passage options")
       }
     }
-    .padding(18)
+    .padding(14)
     .background(
-      Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 22))
+      Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
   }
 
   private func perform(_ action: () throws -> Void) {
@@ -258,5 +277,51 @@ struct LibraryScrollActivity: ViewModifier {
     } else {
       content
     }
+  }
+}
+
+/// Compute sections once when the records change, never during scroll layout.
+struct NotebookDay: Identifiable, Sendable {
+  let id: Date
+  var records: [ReaderAnnotation]
+
+  static func group(_ records: [ReaderAnnotation], calendar: Calendar = .current) -> [NotebookDay] {
+    var result: [NotebookDay] = []
+    for record in records {
+      let day = calendar.startOfDay(for: record.createdAt)
+      if result.last?.id == day {
+        result[result.count - 1].records.append(record)
+      } else {
+        result.append(NotebookDay(id: day, records: [record]))
+      }
+    }
+    return result
+  }
+}
+
+struct NotebookDateHeader: View {
+  let date: Date
+  var today = Calendar.current.startOfDay(for: .now)
+  private var label: String {
+    let calendar = Calendar.current
+    if calendar.isDate(date, inSameDayAs: today) { return "Today" }
+    if let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+      calendar.isDate(date, inSameDayAs: yesterday)
+    {
+      return "Yesterday"
+    }
+    let format = DateFormatter()
+    format.setLocalizedDateFormatFromTemplate(
+      calendar.component(.year, from: date) == calendar.component(.year, from: today)
+        ? "dMMM" : "dMMMyyyy")
+    return format.string(from: date)
+  }
+  var body: some View {
+    Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+      .padding(.horizontal, 12).padding(.vertical, 6)
+      .background(.regularMaterial, in: Capsule())
+      .frame(maxWidth: .infinity).padding(.vertical, 7)
+      .accessibilityAddTraits(.isHeader)
+      .accessibilityIdentifier("notebook-day-" + String(Int(date.timeIntervalSince1970)))
   }
 }

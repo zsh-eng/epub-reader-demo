@@ -394,8 +394,8 @@ requires a connection.
 time zone, including archived favourites. **All favourites** also includes
 older favourites without a recorded date; Arctic does not invent dates for them.
 
-In a highlight/note menu, select **Share as image**. Ten poster templates—
-Biblioteca, Theatre, Xuan, Modern, Jade, Swiss, Sumi, Hanji, Offset and Seoul—
+In a highlight/note menu, select **Share as image**. Twelve poster templates—
+Newsprint, Bookleaf, Biblioteca, Theatre, Xuan, Modern, Jade, Swiss, Sumi, Hanji, Offset and Seoul—
 combine live typography with local paper, ink and collage textures. Each keeps
 only a small theme-coloured Arctic mark. Short opening sentences can become
 larger display type. Stories prefer one image: longer quotes reduce type down
@@ -404,12 +404,26 @@ Pages control for either format. A quote that cannot fit shows a message and
 disables export; it never silently cuts off the passage.
 The picker shows actual miniature compositions. Preview and export share a
 360 × 640 Story or 360 × 360 Square canvas; exports are 1080 × 1920 or
-1080 × 1080. Biblioteca, Modern, Swiss and Offset offer an Article image toggle
+1080 × 1080. Biblioteca, Modern, Swiss, Offset and Newsprint offer an Article image toggle
 when the source has an image. It reuses the bounded thumbnail cache; loading
 reserves image space and export waits for it. The other templates keep their
 artwork intact. Only the selected card is rasterized
 for the native share sheet. Save or copy the image for Instagram; there is no
 Meta account integration. Quotes keep their article title and source.
+
+Newsprint matches the source host to one of the five bundled publisher marks;
+FT articles use salmon paper. Its masthead uses installed Georgia, Baskerville
+or Didot, not the publisher's proprietary typeface. FT's
+[public font package](https://github.com/Financial-Times/o-fonts) does not contain
+font assets. Bookleaf draws live Core Text with translucent, uneven marker
+strokes in the saved highlight colour. Text fit uses the same typesetter as
+export. Neither template fetches fonts or runs a texture animation.
+
+Highlights & Notes groups entries by their original creation day, newest first,
+with sticky Today / Yesterday / localized date capsules. Older years include
+the year. Editing does not move an entry to today's section. Cards keep full
+note text, two-line quote previews and smaller padding. The article notebook
+uses the same date labels while preserving its oldest-first conversation order.
 
 The [poster design board](Design/Sharing/PosterLab/index.html) shows actual native
 exports for short and long passages beside ten generated concept posters. Each
@@ -418,9 +432,9 @@ material assets and layout recipes. These are original interpretations of
 specific print traditions, not reproductions or summaries of national styles.
 
 For repeatable design review, the debug-only `-test-story-gallery` flag writes
-48 synthetic portrait/square, short/long and article-image proofs to the simulator's Documents/PosterProofs when
+68 synthetic publisher, portrait/square, short/long and article-image proofs to the simulator's Documents/PosterProofs when
 the sharing sheet opens in UI test mode. The focused story UI test checks all
-ten selections, exact text preservation across pages, whole-quote mode,
+twelve selections, exact text preservation across pages, whole-quote mode,
 format changes, image eligibility and native sharing. No proof export runs in Release.
 
 X/Twitter links stay HTTPS. Reader uses Defuddle's existing rich X renderer with

@@ -16,7 +16,7 @@ final class LibraryAnnotationsUITests: XCTestCase {
     let preview = app.otherElements["story-preview"]
     XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
     let initialText = preview.label
-    for style in ["Biblioteca", "Theatre", "Xuan", "Modern", "Jade", "Swiss", "Sumi", "Hanji", "Offset", "Seoul"] {
+    for style in ["Newsprint", "Bookleaf", "Biblioteca", "Theatre", "Xuan", "Modern", "Jade", "Swiss", "Sumi", "Hanji", "Offset", "Seoul"] {
       let button = app.buttons["story-style-" + style]
       for _ in 0..<4 {
         if button.isHittable { break }
@@ -100,6 +100,35 @@ final class LibraryAnnotationsUITests: XCTestCase {
     app.segmentedControls["story-flow"].buttons["Pages"].tap()
     XCTAssertTrue(app.buttons["story-export"].isEnabled)
     XCTAssertTrue((preview.value as? String ?? "").contains("card 1 of"))
+  }
+
+  @MainActor func testNotebookGroupsDaysWithStickyHeadersAndSearch() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "30", "-test-notebook-days", "-articles-offline", "-images-offline", "-dark-ui"]
+    app.launch()
+    XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
+    app.buttons["library-annotations"].tap()
+    let today = app.staticTexts["Today"]
+    XCTAssertTrue(today.waitForExistence(timeout: 5))
+    let y = today.frame.minY
+    let scroll = app.scrollViews["notebook-scroll"]
+    scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
+      .press(forDuration: 0.05, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.53)))
+    XCTAssertTrue(today.isHittable)
+    XCTAssertLessThanOrEqual(today.frame.minY, y + 2)
+    capture(app, "notebook-sticky-today")
+    for _ in 0..<4 {
+      if app.staticTexts["Yesterday"].isHittable { break }
+      scroll.swipeUp()
+    }
+    XCTAssertTrue(app.staticTexts["Yesterday"].isHittable)
+    let search = app.searchFields["Passage, note, or article"]
+    search.tap()
+    search.typeText("Notebook thought 0.")
+    XCTAssertTrue(today.waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Notebook thought 0. A complete thought kept with this article."].exists)
+    XCTAssertFalse(app.staticTexts["Yesterday"].exists)
+    capture(app, "notebook-day-search")
   }
 
   @MainActor func testDistinctEmptyPassagesInDarkMode() {
