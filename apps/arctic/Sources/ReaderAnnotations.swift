@@ -410,6 +410,7 @@ struct ReaderNoteComposer: View {
 struct HighlightToolbar: View {
   let annotation: ReaderAnnotation
   let browser: ArticleBrowser
+  let share: () -> Void
 
   var body: some View {
     HStack(spacing: 0) {
@@ -454,6 +455,9 @@ struct HighlightToolbar: View {
         }
         .accessibilityLabel("Remove highlight").accessibilityIdentifier("highlight-remove")
       }
+      Button(action: share) {
+        Image(systemName: "square.and.arrow.up").frame(width: 44, height: 44)
+      }.accessibilityLabel("Share passage").accessibilityIdentifier("highlight-share")
       Button {
         browser.selectedAnnotationID = nil
       } label: {
@@ -461,7 +465,7 @@ struct HighlightToolbar: View {
       }.accessibilityLabel("Close highlight controls")
     }
     .font(.body.weight(.medium)).buttonStyle(.plain)
-    .padding(.horizontal, 8).padding(.vertical, 5).readerGlass()
+    .padding(.horizontal, 2).padding(.vertical, 5).readerGlass()
   }
 
   private func perform(_ action: () throws -> Void) {

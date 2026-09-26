@@ -13,6 +13,7 @@ struct ReaderPage: View {
   @State private var readingVisible = false
   @State private var nearEnd = false
   @State private var actionError: String?
+  @State private var sharingPassage: PassageStory?
   @State private var controlsHeight: CGFloat = 60
   @AppStorage("reader-size") private var fontSize = 20.0
   @AppStorage("reader-font") private var font = "System"
@@ -33,6 +34,7 @@ struct ReaderPage: View {
 
   var body: some View {
     readingPage
+      .sheet(item: $sharingPassage) { PassageStorySheet(story: $0) }
       .sheet(item: $browser.annotationPresentation) { presentation in
         ReaderAnnotations(browser: browser, presentation: presentation)
       }
@@ -133,7 +135,7 @@ struct ReaderPage: View {
       eligible: readingVisible && scenePhase == .active && isSaved && browser.isReader
         && browser.readerReady && browser.positionReady && !appearance
         && browser.noteDraft == nil && browser.annotationPresentation == nil
-        && !browser.showingReadingTime
+        && !browser.showingReadingTime && sharingPassage == nil
         && browser.errorMessage == nil && actionError == nil)
   }
 
@@ -261,9 +263,13 @@ struct ReaderPage: View {
       } else if let id = browser.selectedAnnotationID,
         let annotation = browser.annotations.first(where: { $0.id == id }), browser.isReader
       {
-        HighlightToolbar(annotation: annotation, browser: browser)
-          .padding(.bottom, 6)
-          .transition(reduceMotion ? .opacity : .offset(y: 8).combined(with: .opacity))
+        HighlightToolbar(annotation: annotation, browser: browser) {
+          sharingPassage = PassageStory(
+            annotation: annotation, title: browser.readerView.title ?? browser.webView.title,
+            imageURL: browser.previewImageURL)
+        }
+        .padding(.bottom, 6)
+        .transition(reduceMotion ? .opacity : .offset(y: 8).combined(with: .opacity))
       } else if appearance {
         appearanceControls
       } else {

@@ -388,13 +388,17 @@ Atlantic homepages through the existing Unwall route. The actual publisher marks
 the shelf makes no favicon requests. [Asset sources](Design/publisher-marks.md) record provenance.
 When scrolling, labels fade and visible circles gather into the Arctic mark.
 The path follows the scroll offset in both directions; Reduce Motion uses a fade. Publisher and Unwall availability still
-requires a connection.
+requires a connection. A publisher shortcut starts a fresh website visit, even
+when that homepage has downloaded Reader content. In-page URL changes get their
+own history and article identity, so saving a linked article does not replace
+the homepage's Reader content.
 
 **This week** shows articles favourited from Monday to Sunday in the current
 time zone, including archived favourites. **All favourites** also includes
 older favourites without a recorded date; Arctic does not invent dates for them.
 
-In a highlight/note menu, select **Share as image**. Twelve poster templates—
+Tap **Share passage** in the selected-highlight toolbar, or select **Share as image**
+in a highlight/note menu. Twelve poster templates—
 Newsprint, Bookleaf, Biblioteca, Theatre, Xuan, Modern, Jade, Swiss, Sumi, Hanji, Offset and Seoul—
 combine live typography with local paper, ink and collage textures. Each keeps
 only a small theme-coloured Arctic mark. Short opening sentences can become

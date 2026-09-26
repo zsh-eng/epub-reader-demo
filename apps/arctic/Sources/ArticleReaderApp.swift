@@ -749,8 +749,8 @@ struct LibraryView: View {
 
   private var discoveryShelf: some View {
     LibraryDiscovery(motion: discoveryMotion) { url in
-      // ArticleBrowser applies Unwall routing. Store identity remains the publisher URL.
-      selected = browsers.open(url, store: store)
+      // A publisher shortcut is a website destination, never a cached Reader article.
+      selected = browsers.open(url, store: store, preferWebsite: true)
     } weekly: { showingWeeklyFavourites = true }
   }
 

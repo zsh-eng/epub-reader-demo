@@ -116,6 +116,27 @@ final class AnnotationUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["No notes yet"].waitForExistence(timeout: 5))
   }
 
+  @MainActor func testSelectedHighlightOpensPassageSharer() {
+    let app = openFixture(dark: true)
+    app.webViews.staticTexts[paragraph].firstMatch.tap()
+    selectPassage(in: app)
+    tapSelectionAction("Highlight", in: app)
+    let share = app.buttons["highlight-share"]
+    XCTAssertTrue(share.waitForExistence(timeout: 5))
+    XCTAssertTrue(share.isHittable)
+    capture(app, "highlight-toolbar-with-share")
+    share.tap()
+    let preview = app.otherElements["story-preview"]
+    XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
+    XCTAssertTrue(paragraph.contains(preview.label))
+    XCTAssertFalse(preview.label.isEmpty)
+    XCTAssertTrue(app.buttons["story-export"].isEnabled)
+    capture(app, "selected-highlight-passage-sharer")
+    app.buttons["Done"].tap()
+    expectValue("1 passage", on: app.buttons["reader-notes"])
+    XCTAssertTrue(app.webViews.staticTexts[paragraph].firstMatch.exists)
+  }
+
   @MainActor func testHighlightTapRecoloursAndPersistsOffline() {
     let app = openFixture(dark: true)
     selectPassage(in: app)

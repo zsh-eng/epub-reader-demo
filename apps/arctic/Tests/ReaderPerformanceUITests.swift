@@ -1,7 +1,67 @@
+import Network
 import XCTest
 
 final class ReaderPerformanceUITests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
+
+  @MainActor func testPublisherShortcutReturnsHomeAfterSavingReaderAndUnsaving() throws {
+    let ready = expectation(description: "Local publisher replay is listening")
+    let replay = try PublisherReplay(ready: ready)
+    defer { replay.stop() }
+    wait(for: [ready], timeout: 5)
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-ui-testing", "-reset-store", "-reset-appearance", "-disable-preloading",
+    ]
+    app.launchEnvironment["TEST_PUBLISHER_ORIGIN"] = replay.origin
+    app.launch()
+    let shortcut = app.buttons["publisher-www.ft.com"]
+    XCTAssertTrue(shortcut.waitForExistence(timeout: 10), app.debugDescription)
+    shortcut.tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher homepage"].waitForExistence(timeout: 10))
+    app.webViews.buttons["Read publisher article"].tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher article"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.buttons["browser-back"].isEnabled)
+    let bookmark = app.buttons["reader-save"]
+    bookmark.tap()
+    XCTAssertEqual(bookmark.value as? String, "Saved")
+    showReader(app)
+    XCTAssertTrue(app.webViews.staticTexts["Publisher article"].waitForExistence(timeout: 5))
+    bookmark.tap()
+    XCTAssertEqual(bookmark.value as? String, "Not saved")
+    // Leave directly from the extracted article: the shortcut starts at home.
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    shortcut.tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher homepage"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.buttons["reader-toggle"].label, "Reader")
+    app.webViews.buttons["Read publisher article"].tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher article"].waitForExistence(timeout: 5))
+    XCTAssertEqual(bookmark.value as? String, "Not saved")
+    showReader(app)
+    app.buttons["browser-back"].tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher homepage"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.buttons["reader-toggle"].label, "Reader")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    shortcut.tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher homepage"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.buttons["reader-toggle"].label, "Reader")
+    // An old homepage extraction must not override the publisher shortcut either.
+    showReader(app)
+    bookmark.tap()
+    bookmark.tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    shortcut.tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher homepage"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.buttons["reader-toggle"].label, "Reader")
+    app.terminate()
+    app.launchArguments = ["-ui-testing", "-disable-preloading"]
+    app.launch()
+    shortcut.tap()
+    XCTAssertTrue(app.webViews.staticTexts["Publisher homepage"].waitForExistence(timeout: 10))
+    XCTAssertEqual(app.buttons["reader-toggle"].label, "Reader")
+    XCTAssertFalse(app.buttons["browser-back"].isEnabled)
+    capture(app, "publisher-home-after-unsaved-reader-and-relaunch")
+  }
 
   @MainActor func testFailedWebsiteRetriesWithoutRestart() {
     let app = openRecoverableFailure()
@@ -360,4 +420,46 @@ final class ReaderPerformanceUITests: XCTestCase {
     attachment.lifetime = .keepAlways
     add(attachment)
   }
+}
+
+/// Real HTTP and WebKit History API navigation, without contacting a publisher.
+private final class PublisherReplay {
+  private let listener: NWListener
+  private let queue = DispatchQueue(label: "arctic.publisher-replay")
+  var origin: String { "http://127.0.0.1:\(listener.port!.rawValue)" }
+
+  init(ready: XCTestExpectation) throws {
+    listener = try NWListener(using: .tcp, on: .any)
+    listener.stateUpdateHandler = { state in
+      if case .ready = state { ready.fulfill() }
+    }
+    listener.newConnectionHandler = { [queue] connection in
+      connection.start(queue: queue)
+      connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, _ in
+        guard let data else {
+          connection.cancel()
+          return
+        }
+        let request = String(decoding: data, as: UTF8.self)
+        let isArticle = request.hasPrefix("GET /content/")
+        let title = isArticle ? "Publisher article" : "Publisher homepage"
+        let paragraphs = String(
+          repeating: "<p>A reading room holds the stories we return to. This article describes how patient attention changes our understanding of the world. A reader can save a passage, compare an idea with another writer, and return to the original source. The words remain available even when a connection is interrupted. Every article has its own address and every visit should preserve that boundary.</p>",
+          count: 5)
+        let html = """
+          <!doctype html><html><head><meta name="viewport" content="width=device-width"><title>\(title)</title><link rel="icon" href="data:,"></head>
+          <body><main><article><h1>\(title)</h1><button onclick="history.pushState({}, '', '/content/test-article'); document.title='Publisher article'; document.querySelector('h1').textContent='Publisher article'; this.remove()">Read publisher article</button>\(paragraphs)</article></main></body></html>
+          """
+        let body = Data(html.utf8)
+        var response = Data(
+          "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8)
+        response.append(body)
+        connection.send(
+          content: response, completion: .contentProcessed { _ in connection.cancel() })
+      }
+    }
+    listener.start(queue: queue)
+  }
+
+  func stop() { listener.cancel() }
 }

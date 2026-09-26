@@ -389,6 +389,9 @@ enum ArticleRouting {
       }
     }
     observations = [
+      webView.observe(\.url, options: [.new]) { [weak self] _, _ in
+        Task { @MainActor in self?.synchronizeWebsiteLocation() }
+      },
       webView.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
         Task { @MainActor in self?.isLoading = view.isLoading }
       },
@@ -458,6 +461,17 @@ enum ArticleRouting {
       failWebsite(URLError(.notConnectedToInternet))
       return
     }
+    #if DEBUG
+      if TestMode.enabled, url.host == "www.ft.com",
+        let origin = ProcessInfo.processInfo.environment["TEST_PUBLISHER_ORIGIN"],
+        var target = URLComponents(string: origin)
+      {
+        target.path = url.path.isEmpty ? "/" : url.path
+        target.query = url.query
+        webView.load(URLRequest(url: target.url!))
+        return
+      }
+    #endif
     if let fixture = TestMode.fixture(for: url) {
       #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-test-website-recovery") {
@@ -490,6 +504,59 @@ enum ArticleRouting {
     speculative = false
     if preferReader { showReader() }
     else if suspendedPublisher { loadWebsite(sourceURL) }
+  }
+
+  /// Replay URLs use publisher identities; production URLs remain unchanged.
+  private func websiteAddress(_ url: URL) -> URL {
+    #if DEBUG
+      if TestMode.enabled,
+        let origin = ProcessInfo.processInfo.environment["TEST_PUBLISHER_ORIGIN"],
+        let base = URL(string: origin), url.host == base.host, url.port == base.port
+      {
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        parts.scheme = "https"
+        parts.host = "www.ft.com"
+        parts.port = nil
+        return parts.url!
+      }
+    #endif
+    if TestMode.enabled, url.isFileURL {
+      return URL(
+        string: "https://fixture.example/" + url.deletingPathExtension().lastPathComponent)!
+    }
+    return url
+  }
+
+  /// A History API navigation has no didCommit callback. Give the new address
+  /// its own history entry, Reader extraction and annotation identity. Ignore
+  /// fragment changes because they only move within the current article.
+  private func synchronizeWebsiteLocation() {
+    guard hasLoaded, !isOpeningWebsite, let actual = webView.url, let committedURL,
+      !["about", "arctic-recovery"].contains(actual.scheme ?? "")
+    else { return }
+    let address = ArticleRouting.original(websiteAddress(actual))
+    // An anchor changes the viewport, not the article or its stored content.
+    func withoutFragment(_ url: URL) -> URL {
+      var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+      parts.fragment = nil
+      return parts.url!
+    }
+    let identity = withoutFragment(address)
+    guard identity != withoutFragment(committedURL) else { return }
+    captureReaderPosition()
+    history[historyIndex].reader = isReader
+    history = Array(history.prefix(historyIndex + 1))
+    history.append(PageEntry(url: identity, source: identity))
+    historyIndex = history.count - 1
+    resetDocument()
+    cacheIdentity = nil
+    currentURL = identity
+    articleIdentity = identity
+    self.committedURL = identity
+    requestedWebsiteURL = identity
+    hasLoaded = true
+    wantsReader = false
+    refreshWhenReady = false
   }
 
   var sourceURL: URL { ArticleRouting.original(currentURL) }
@@ -633,6 +700,7 @@ enum ArticleRouting {
 
   /// Prepare the cleaned page before a tap, without changing the visible mode.
   func prepareReader(force: Bool = false) {
+    synchronizeWebsiteLocation()
     guard hasLoaded, !isExtracting, force || !readerReady else { return }
     isExtracting = true
     if force {
@@ -987,11 +1055,8 @@ enum ArticleRouting {
     }
     if TestMode.enabled && url.scheme == "arctic-recovery" {
       currentURL = requestedWebsiteURL ?? currentURL
-    } else if TestMode.enabled && url.isFileURL {
-      currentURL = URL(
-        string: "https://fixture.example/" + url.deletingPathExtension().lastPathComponent)!
     } else {
-      currentURL = url
+      currentURL = websiteAddress(url)
     }
     // Keep the saved URL for the initial document, even after a publisher
     // redirect. Later navigation belongs to the newly viewed article.
@@ -1636,13 +1701,15 @@ struct WebSurface: UIViewRepresentable {
     browsers.filter { $0.value.readerReady }.map(\.key)
   }
 
-  func open(_ url: URL, store: ArticleStore) -> ArticleBrowser {
+  func open(_ url: URL, store: ArticleStore, preferWebsite: Bool = false) -> ArticleBrowser {
     let began = CFAbsoluteTimeGetCurrent()
     active = url
     trim()
-    // Reuse the in-flight preparation too. Never replace it with another WebView
-    // just because the user taps before fonts or local HTML have finished loading.
-    if let browser = browsers[url], browser.cacheIdentity == url {
+    // Library cards reuse in-flight preparation, including unfinished local
+    // HTML and fonts, instead of replacing it with another WebView.
+    // Publisher shortcuts start a fresh website visit. Even a pending cached
+    // Reader load must not later replace the homepage the user requested.
+    if !preferWebsite, let browser = browsers[url], browser.cacheIdentity == url {
       lastOpenState = browser.readerReady ? "prepared" : "preparing"
       browser.retryFailedWebsiteOnOpen()
       browser.activate(preferReader: store.articles.contains {
@@ -1653,7 +1720,7 @@ struct WebSurface: UIViewRepresentable {
     }
     browsers[url]?.stop()
     let browser = ArticleBrowser(
-      url: url, store: store, downloadedFile: store.downloadedFile(for: url))
+      url: url, store: store, downloadedFile: preferWebsite ? nil : store.downloadedFile(for: url))
     browsers[url] = browser
     lastOpenState = "cold"
     recordOpen(since: began)

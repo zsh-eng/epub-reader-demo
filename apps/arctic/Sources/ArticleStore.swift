@@ -1284,6 +1284,11 @@ enum TestMode {
     #endif
   }
   static func fixture(for url: URL) -> URL? {
+    if enabled, url.host == "www.ft.com",
+      ProcessInfo.processInfo.environment["TEST_PUBLISHER_ORIGIN"] != nil
+    {
+      return Bundle.main.url(forResource: "next", withExtension: "html", subdirectory: "Fixtures")
+    }
     guard enabled, url.host == "fixture.example" else { return nil }
     let name = url.lastPathComponent
     return Bundle.main.url(
