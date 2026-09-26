@@ -23,8 +23,12 @@ import { HostError } from "./runtime/errors";
 import { ProcessFailure } from "./runtime/process";
 import { watchRepository } from "./runtime/watch";
 import { NoteService } from "./notes";
-import { browseListRequestSchema, browseReadRequestSchema } from "../shared/browse";
-import { listBrowse, readBrowse } from "./repository/browse";
+import {
+  browseListRequestSchema,
+  browseReadRequestSchema,
+  browseWriteRequestSchema,
+} from "../shared/browse";
+import { listBrowse, readBrowse, writeBrowse } from "./repository/browse";
 import { browseBlameRequestSchema, browseSearchRequestSchema } from "../shared/inspect";
 import { blameBrowse } from "./repository/inspect";
 import { symbolSearchRequestSchema } from "../shared/symbols";
@@ -65,14 +69,14 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
 };
 
-async function readBody(request: IncomingMessage) {
+async function readBody(request: IncomingMessage, limit = MAX_BODY) {
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const data of request) {
     const chunk = Buffer.isBuffer(data) ? data : Buffer.from(data);
     bytes += chunk.byteLength;
-    if (bytes > MAX_BODY)
-      throw new HostError("payload-too-large", "The request body exceeds 128 KiB.", 413);
+    if (bytes > limit)
+      throw new HostError("payload-too-large", "The request body exceeds its size limit.", 413);
     chunks.push(chunk);
   }
   try {
@@ -641,6 +645,20 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
             send(await listBrowse(input.source, input.ignored, abort.signal));
             return;
           }
+          if (url.pathname === "/api/browse/write" && request.method === "POST") {
+            const input = browseWriteRequestSchema.parse(await readBody(request, 8 * 1024 * 1024));
+            input.source.repo = await requireRepo(input.source.repo);
+            send(
+              await writeBrowse(
+                input.source,
+                input.path,
+                input.expectedIdentity,
+                input.text,
+                assertRequestAccess,
+              ),
+            );
+            return;
+          }
           if (url.pathname === "/api/browse/read" && request.method === "POST") {
             const input = browseReadRequestSchema.parse(await readBody(request));
             input.source.repo = await requireRepo(input.source.repo);
@@ -785,7 +803,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       } catch {
         throw new HostError("invalid-path", "This URL path is not valid.");
       }
-      const appRoute = path === "/" || /^\/review\/[a-zA-Z0-9_-]+$/.test(path);
+      const appRoute = path === "/file" || path === "/" || /^\/review\/[a-zA-Z0-9_-]+$/.test(path);
       const file = resolve(webRoot, `.${appRoute ? "/index.html" : path}`);
       const rel = relative(webRoot, file);
       if (rel.startsWith("..") || isAbsolute(rel))

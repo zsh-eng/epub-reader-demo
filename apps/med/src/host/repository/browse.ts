@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, realpath } from "node:fs/promises";
+import { lstat, open, realpath, rename, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import {
   browseSourceSchema,
@@ -369,5 +369,94 @@ export async function readBrowse(
     if (missing(error))
       return { ...base, kind: "missing", reason: "This file does not exist in this worktree." };
     throw error;
+  }
+}
+
+// Serialize med saves per path. External edits are checked again just before replace.
+const pendingWrites = new Map<string, Promise<unknown>>();
+export async function writeBrowse(
+  source: BrowseSource,
+  path: string,
+  expectedIdentity: string,
+  text: string,
+  assertAccess: () => void = () => {},
+): Promise<BrowseRead> {
+  if (source.kind !== "worktree")
+    throw new HostError("read-only", "Commit files are read-only.", 400);
+  if (!validPath(path))
+    throw new HostError("invalid-path", "Use a file path within this workspace.", 400);
+  const content = Buffer.from(text, "utf8");
+  if (content.length > 1024 * 1024)
+    throw new HostError("file-too-large", "Editing is limited to 1 MiB files.", 413);
+  const proposed = classify(source, path, content, "draft");
+  if (content.toString("utf8") !== text || proposed.kind !== "text" || proposed.truncated)
+    throw new HostError(
+      "unsupported-content",
+      "The draft must be complete UTF-8 text within the preview limits.",
+      400,
+    );
+  const key = JSON.stringify([source.repo, path]);
+  const previous = pendingWrites.get(key);
+  const task = (async () => {
+    await previous?.catch(() => {});
+    assertAccess();
+    const current = await readBrowse(source, path);
+    if (current.kind !== "text" || current.truncated || current.size > 1024 * 1024)
+      throw new HostError(
+        "read-only",
+        "Only complete UTF-8 text files up to 1 MiB can be edited.",
+        400,
+      );
+    const conflict = () =>
+      new HostError(
+        "file-changed",
+        "This file changed on disk. Your draft is kept. Reload the file before saving again.",
+        409,
+      );
+    if (current.identity !== expectedIdentity) throw conflict();
+    const target = resolve(current.source.repo, path);
+    const info = await lstat(target);
+    if (!info.isFile() || info.nlink !== 1)
+      throw new HostError("read-only", "Linked files cannot be replaced by this editor.", 400);
+    const temporary = resolve(dirname(target), `.med-save-${randomUUID()}`);
+    const handle = await open(
+      temporary,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+      0o600,
+    );
+    try {
+      await handle.writeFile(content);
+      await handle.chmod(info.mode & 0o777);
+      await handle.sync();
+      await handle.close();
+      const latest = await readBrowse(current.source, path);
+      const latestInfo = await lstat(target);
+      if (
+        latest.identity !== expectedIdentity ||
+        latestInfo.ino !== info.ino ||
+        latestInfo.dev !== info.dev ||
+        latestInfo.mtimeMs !== info.mtimeMs ||
+        latestInfo.ctimeMs !== info.ctimeMs
+      )
+        throw conflict();
+      if (!(await parentSafe(current.source.repo, path))) throw conflict();
+      assertAccess();
+      await rename(temporary, target);
+      return classify(
+        current.source,
+        path,
+        content,
+        `worktree:${current.source.repo}:current:${path}:${createHash("sha256").update(content).digest("hex")}`,
+      );
+    } finally {
+      await handle.close().catch(() => {});
+      await unlink(temporary).catch(() => {});
+    }
+  })();
+  pendingWrites.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (pendingWrites.get(key) === task) pendingWrites.delete(key);
   }
 }

@@ -1,5 +1,17 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, open, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  open,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+  readFile,
+  chmod,
+  stat,
+  readdir,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
@@ -298,4 +310,67 @@ test("bounds text line count and line length independently of file bytes", async
       expect(result.reason?.includes("preview limit") ?? false).toBe(entry.kind === "too-large");
     }
   }
+});
+
+test("HTTP saves preserve text and permissions, reject stale writers, and serialize concurrent saves", async () => {
+  const { repo } = await fixture();
+  const path = "src/file.txt",
+    source = { kind: "worktree", repo };
+  await chmod(join(repo, path), 0o755);
+  const host = await startHost({ repo });
+  hosts.push(host);
+  const origin = `http://127.0.0.1:${host.port}`;
+  const headers = { authorization: `Bearer ${host.token}`, "content-type": "application/json" };
+  const call = (route: string, body: unknown) =>
+    fetch(`${origin}/api/browse/${route}`, { method: "POST", headers, body: JSON.stringify(body) });
+  const initial = await (await call("read", { source, path })).json();
+  const text = "// large UTF-8 draft 日本語\r\n".repeat(10000);
+  const saved = await call("write", { source, path, expectedIdentity: initial.identity, text });
+  expect(saved.status).toBe(200);
+  const result = await saved.json();
+  expect(await readFile(join(repo, path), "utf8")).toBe(text);
+  expect((await stat(join(repo, path))).mode & 0o777).toBe(0o755);
+  expect(result.identity).toBe((await (await call("read", { source, path })).json()).identity);
+  const attempts = await Promise.all(
+    ["one", "two"].map((text) =>
+      call("write", { source, path, expectedIdentity: result.identity, text }),
+    ),
+  );
+  expect(attempts.map((response) => response.status).sort()).toEqual([200, 409]);
+  const current = await (await call("read", { source, path })).json();
+  await writeFile(join(repo, path), "agent edit");
+  expect(
+    (await call("write", { source, path, expectedIdentity: current.identity, text: "stale draft" }))
+      .status,
+  ).toBe(409);
+  expect(await readFile(join(repo, path), "utf8")).toBe("agent edit");
+  expect((await readdir(join(repo, "src"))).some((name) => name.startsWith(".med-save-"))).toBe(
+    false,
+  );
+});
+
+test("HTTP save refuses snapshots, escaping paths, symlinks, and unregistered repositories", async () => {
+  const { root, repo, oid } = await fixture();
+  const host = await startHost({ repo });
+  hosts.push(host);
+  const origin = `http://127.0.0.1:${host.port}`;
+  const headers = { authorization: `Bearer ${host.token}`, "content-type": "application/json" };
+  await writeFile(join(root, "outside.txt"), "outside");
+  await symlink(join(root, "outside.txt"), join(repo, "link.txt"));
+  const initial = await readBrowse({ kind: "worktree", repo }, "src/file.txt");
+  for (const [source, path, status] of [
+    [{ kind: "commit", repo, oid }, "src/file.txt", 400],
+    [{ kind: "worktree", repo }, "../outside.txt", 400],
+    [{ kind: "worktree", repo }, "link.txt", 400],
+    [{ kind: "worktree", repo: root }, "outside.txt", 403],
+  ] as const) {
+    const response = await fetch(`${origin}/api/browse/write`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ source, path, expectedIdentity: initial.identity, text: "changed" }),
+    });
+    expect(response.status).toBe(status);
+  }
+  expect(await readFile(join(root, "outside.txt"), "utf8")).toBe("outside");
+  expect(await readFile(join(repo, "src/file.txt"), "utf8")).toBe("committed\n");
 });

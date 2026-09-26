@@ -45,3 +45,10 @@ export type BrowseRead = z.infer<typeof browseReadSchema>;
 
 export const browseListResponseSchema = browseListSchema;
 export const browseReadResponseSchema = browseReadSchema;
+
+export const browseWriteRequestSchema = z.object({
+  source: z.object({ kind: z.literal("worktree"), repo }),
+  path: z.string().min(1).max(4096),
+  expectedIdentity: z.string().min(1).max(8192),
+  text: z.string().max(1024 * 1024),
+});
