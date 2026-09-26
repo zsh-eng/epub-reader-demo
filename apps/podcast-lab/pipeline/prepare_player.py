@@ -9,7 +9,7 @@ from pathlib import Path
 from paragraphs import make_paragraphs
 
 
-def prepare(root=Path(".local"), classification="classification.json"):
+def prepare(root=Path(".local"), classification="classification.json", *, through=None):
     source = json.loads((root / "source.json").read_text())
     blocks = json.loads((root / "blocks.json").read_text())
     classified = json.loads((root / classification).read_text())
@@ -72,7 +72,13 @@ def prepare(root=Path(".local"), classification="classification.json"):
                     "blockIds": c.get("blockIds", [c.get("blockId")]),
                 }
             )
-    rows = make_paragraphs(blocks, skips)
+    display_blocks = blocks
+    if through is not None:
+        display_blocks = [
+            {**b, "words": [w for w in b["words"] if w["end"] <= through]}
+            for b in blocks
+        ]
+    rows = make_paragraphs(display_blocks, skips)
     # Word timing remains in local model artifacts. The paragraph player needs
     # only sentence/part timestamps, so avoid transferring duplicate word data.
     for row in rows:
@@ -100,7 +106,9 @@ def prepare(root=Path(".local"), classification="classification.json"):
         "duration": duration,
         "audioHash": audio["sha256"],
         "speakers": speakers,
-        "chapters": enrichment["chapters"],
+        "chapters": [
+            c for c in enrichment["chapters"] if through is None or c["start"] < through
+        ],
         "summary": enrichment["summary"],
         "rows": rows,
         "skips": skips,
@@ -117,7 +125,9 @@ def prepare(root=Path(".local"), classification="classification.json"):
     }
     if (root / "waveform.json").exists():
         output["waveform"] = json.loads((root / "waveform.json").read_text())
-    (root / "episode.json").write_text(json.dumps(output, separators=(",", ":")))
+    temp = root / "episode.json.tmp"
+    temp.write_text(json.dumps(output, separators=(",", ":")))
+    temp.replace(root / "episode.json")
     print(
         json.dumps({"rows": len(rows), "skips": skips, "duration": duration}, indent=2)
     )

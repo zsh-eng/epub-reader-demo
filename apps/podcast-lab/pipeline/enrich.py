@@ -65,6 +65,7 @@ def run(root=Path(".local")):
                 "show": source.get("show", ""),
                 "showCreator": source.get("showCreator", ""),
                 "showDescription": source.get("showDescription", ""),
+                "analysisScope": source.get("analysisScope", "Complete episode"),
                 "speakerIds": sorted({b["speaker"] for b in blocks}),
                 "blocks": [
                     {k: b[k] for k in ("id", "speaker", "start", "end", "text")}

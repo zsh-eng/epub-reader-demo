@@ -140,21 +140,26 @@ def detect_window(units, metadata, cache):
                     "firstUnit": first,
                     "lastUnit": last,
                     "text": " ".join(u["text"] for u in chosen),
+                    "endClosed": b < len(remaining) - 1,
                 }
             )
         remaining = remaining[b + 1 :]
     return candidates, decisions
 
 
-def run(root):
+def run(root, *, cache_root=None, through=None):
     started = time.monotonic()
     blocks = json.loads((root / "blocks.json").read_text())
     units = units_from_blocks(blocks)
     metadata = editorial_metadata(json.loads((root / "source.json").read_text()))
-    cache = root / "jev-cache"
+    cache = (cache_root or root) / "jev-cache"
     cache.mkdir(exist_ok=True)
     windows = [
-        [u for u in units if start <= u["start"] < start + 180]
+        [
+            {k: v for k, v in u.items() if k != "speakers"}
+            for u in units
+            if start <= u["start"] < start + 180
+        ]
         for start in range(0, int(units[-1]["end"]) + 1, 90)
     ]
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
@@ -169,10 +174,16 @@ def run(root):
     merged = []
     for candidate in candidates:
         if merged and candidate["start"] <= merged[-1]["end"]:
+            if candidate["end"] > merged[-1]["end"]:
+                merged[-1]["endClosed"] = candidate["endClosed"]
+            elif candidate["end"] == merged[-1]["end"]:
+                merged[-1]["endClosed"] |= candidate["endClosed"]
             merged[-1]["end"] = max(merged[-1]["end"], candidate["end"])
             merged[-1]["score"] = min(merged[-1]["score"], candidate["score"])
         else:
             merged.append(dict(candidate))
+    if through is not None:
+        merged = [c for c in merged if c["end"] <= through and c["endClosed"]]
     for candidate in merged:
         included = [
             u

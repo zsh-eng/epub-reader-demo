@@ -28,6 +28,8 @@ class SequenceIntegration(unittest.TestCase):
                         "end": "u0002",
                         "complete": verification,
                     }[key]
+                    if key == "sequence" and body["state"]["transcript"][0]["id"] == "u0003":
+                        choice = "content"
                     answers[key] = {
                         "type": "choice",
                         "choice": choice,
@@ -91,6 +93,38 @@ class SequenceIntegration(unittest.TestCase):
                         self.assertIn("I test mattresses.", candidate["text"])
                     run(root)
                     self.assertEqual(len(requests), 3)
+                    # A later diarization can rename every voice. Jev's unchanged
+                    # spoken window must reuse the cache, not depend on those IDs.
+                    for b in blocks:
+                        b["speaker"] = "renumbered"
+                    (root / "blocks.json").write_text(json.dumps(blocks))
+                    run(root, through=10)
+                    partial = json.loads((root / f"{VERSION}.json").read_text())
+                    self.assertEqual(partial["candidates"], [])
+                    self.assertEqual(len(requests), 3)
+                    if expected:
+                        blocks.append(
+                            {
+                                "id": "b3",
+                                "speaker": "host",
+                                "start": 10,
+                                "end": 11,
+                                "words": [
+                                    {
+                                        "text": "Now the interview.",
+                                        "start": 10,
+                                        "end": 11,
+                                    }
+                                ],
+                            }
+                        )
+                        (root / "blocks.json").write_text(json.dumps(blocks))
+                        run(root, through=6)
+                        partial = json.loads((root / f"{VERSION}.json").read_text())
+                        self.assertEqual(
+                            [(c["start"], c["end"]) for c in partial["candidates"]],
+                            [(0, 5)],
+                        )
 
 
 if __name__ == "__main__":

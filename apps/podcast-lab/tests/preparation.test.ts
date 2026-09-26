@@ -38,7 +38,27 @@ test("preparation API queues once, protects local work, persists ready assets an
   const runner = async (folder: string) => {
     const id = basename(folder);
     calls.push(id);
-    if (id === a) await gate;
+    if (id === a) {
+      await Bun.write(join(folder, "episode.mp3"), "same analyzed bytes");
+      await Bun.write(
+        join(folder, "analysis.json"),
+        JSON.stringify({
+          audioHash: "exact-version",
+          rows: ["partial speech"],
+          speakers: ["matching speaker"],
+          analysisRevision: 1,
+        }),
+      );
+      await Bun.write(
+        join(folder, "analysis-state.json"),
+        JSON.stringify({
+          analysisRevision: 1,
+          coverageEnd: 300,
+          analysisComplete: false,
+        }),
+      );
+      await gate;
+    }
     if (id === b && calls.filter((x) => x === b).length === 1)
       throw new Error("Model unavailable");
     await Bun.write(join(folder, "episode.mp3"), "same analyzed bytes");
@@ -81,6 +101,26 @@ test("preparation API queues once, protects local work, persists ready assets an
     responses.push(await post(b));
     expect(responses.map((r) => r.status)).toEqual([202, 202, 202]);
     expect(calls).toEqual([a]);
+    const deadline = Date.now() + 3000;
+    while ((await state(a)).analysisRevision !== 1 && Date.now() < deadline)
+      await Bun.sleep(10);
+    expect((await state(a)).analysisRevision).toBe(1);
+    expect(
+      await (
+        await fetch(new URL(`/episodes/${a}/analysis.json`, server.url))
+      ).json(),
+    ).toMatchObject({
+      rows: ["partial speech"],
+      speakers: ["matching speaker"],
+      analysisRevision: 1,
+    });
+    expect(
+      (
+        await fetch(new URL(`/episodes/${a}/audio`, server.url), {
+          headers: { Range: "bytes=0-3" },
+        })
+      ).status,
+    ).toBe(206);
     await Bun.write(
       join(root, "prepared", a, "draft.json"),
       JSON.stringify({ revision: 1, paragraphs: ["Draft speech"] }),

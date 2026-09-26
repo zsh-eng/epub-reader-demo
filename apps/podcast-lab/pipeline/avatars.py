@@ -13,8 +13,6 @@ import urllib.request
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageOps
-
 CATALOG = Path(__file__).resolve().parents[1] / "avatar-sources.json"
 
 
@@ -50,6 +48,8 @@ def prepare_avatars(root, shared_root=None):
             output[name] = previous
             continue
         try:
+            from PIL import Image, ImageOps
+
             request = urllib.request.Request(
                 source["imageURL"], headers={"User-Agent": "UndertoneLocalPreview/1.0"}
             )

@@ -31,6 +31,8 @@ export class Preparations {
     if (!(await file.exists()))
       return { id, phase: "idle", detail: "", ownerPID: 0 };
     const state: Preparation = await file.json();
+    const published = Bun.file(join(this.folder(id), "analysis-state.json"));
+    if (await published.exists()) Object.assign(state, await published.json());
     if (!terminal.has(state.phase)) {
       try {
         if (state.ownerPID <= 0) throw new Error("No worker");

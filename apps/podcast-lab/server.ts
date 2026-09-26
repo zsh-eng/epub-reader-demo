@@ -78,13 +78,19 @@ export function createServer(
         "99pi": join(dataDir, "benchmark/99pi"),
       };
       const episodeRoute =
-        /^\/episodes\/(ezra|decoder|darknet|99pi|[a-f0-9]{20})\/(episode\.json|audio)$/.exec(
+        /^\/episodes\/(ezra|decoder|darknet|99pi|[a-f0-9]{20})\/(episode\.json|analysis\.json|audio)$/.exec(
           url.pathname,
         );
       if (
         episodeRoute &&
         !folders[episodeRoute[1]] &&
-        (await preparations.status(episodeRoute[1])).phase !== "ready"
+        (await preparations.status(episodeRoute[1])).phase !== "ready" &&
+        !(
+          episodeRoute[2] !== "episode.json" &&
+          (await Bun.file(
+            join(preparations.folder(episodeRoute[1]), "analysis-state.json"),
+          ).exists())
+        )
       )
         return new Response("Episode is not ready", { status: 404 });
       const episodeDir = episodeRoute
@@ -119,6 +125,7 @@ export function createServer(
         "/player.js": join(app, "dist/player.js"),
         "/style.css": join(app, "web/style.css"),
         "/episode.json": join(episodeDir, "episode.json"),
+        "/analysis.json": join(episodeDir, "analysis.json"),
         "/library.json": join(dataDir, "library.json"),
         "/library.css": join(app, "web/library.css"),
         "/artwork": join(dataDir, "artwork.webp"),
