@@ -100,24 +100,28 @@ actual stages rather than an estimated percentage:
    supplies a total size. Unknown totals show received bytes without a percentage.
    Progress is written at most twice per second (plus completion) and polled by
    the UI every 1.5 seconds. Hash the complete saved file before transcription.
-2. Convert to mono 16 kHz PCM, then run Parakeet MLX and Senko sequentially.
-   Parakeet uses 90-second chunks with 10-second overlap internally; the app waits
-   for its full result, then separates speakers for the full recording.
-3. Run Jev's complete-sequence detector and Luna enrichment concurrently. Jev
-   uses three-minute windows starting every 90 seconds, with up to four windows
-   in flight. Luna receives the complete speaker blocks in one call for names
-   and chapters. Results are not pipelined from partial ASR chunks.
-4. Load known host/guest portraits from the shared cache, validate audio/transcript
-   hashes, materialize paragraphs, and mark ready.
+2. Analyse cumulative prefixes at 5 minutes, 30 minutes, and the end. Prefixes
+   include 90 seconds of extra boundary context. Each pass converts mono 16 kHz
+   PCM, then runs Parakeet MLX and Senko sequentially. Local models currently
+   repeat the accumulated prefix; short episodes omit redundant milestones.
+3. Run Jev's sequence detector and Luna enrichment concurrently per pass. Jev
+   uses three-minute windows every 90 seconds, with up to four in flight and a
+   shared request cache. Luna receives the current pass's complete speaker blocks
+   in a fresh request. Names are never carried across raw Senko IDs.
+4. Load cached portraits, validate hashes, and publish rows/names/chapters/skips
+   together. Partial skips require resolved endings inside coverage. The final
+   pass marks the episode ready. See [progressive analysis](docs/PROGRESSIVE_ANALYSIS.md).
 
-Audio keeps playing while the job runs, including while browsing. When ready,
-the player switches to the **analyzed local MP3** and installs its transcript and
+Audio keeps playing while the job runs, including while browsing. At the first
+published pass, the player switches to the **analyzed local MP3** and installs its transcript and
 skip ranges together. It keeps the same audio element and preserves play/pause,
 speed, skip preference and playback time. A brief loading pause is possible.
 Publisher streams can contain different dynamic ads from the downloaded file;
 retained seconds are approximate across that handoff. We do not apply downloaded
 skip ranges to the original publisher stream. A prepared episode reopens locally
-and appears in Downloads, including after reload.
+and appears in Downloads, including after reload. Later passes replace the
+analysis without reloading audio. Selection defers updates; manual scroll position
+is retained. A newly published skip under the playhead does not interrupt it.
 
 Jobs and model checkpoints live in `.local/prepared/<episodeId>/`, separate from
 the RSS snapshot. Completed stages are retained for retry. Failed jobs offer
@@ -304,17 +308,16 @@ the overlap tail as atomic `draft.json` snapshots. The original result is left
 untouched. The player reads new revisions, retains unchanged paragraph nodes,
 and defers off-screen paragraph layout with content visibility. Draft paragraphs
 have no speaker names, seeking, follow-along, or skipping: the publisher stream
-may differ from the analyzed download. Ready installs the analyzed audio and
-full interactive transcript together. Full `asr.json` still gates Senko, Jev,
-and Luna; we do not run those models for each partial chunk.
+may differ from the analyzed download. The first completed analysis pass installs the analyzed audio and interactive
+transcript together. Each pass's complete `asr.json` gates Senko, Jev and Luna;
+we do not run those models for each partial ASR chunk.
 
 Validation on the cached 100-second clip showed draft text before completion;
 the final ASR result exactly matched the previous run without draft capture.
 This is not a full-episode latency or speaker-accuracy benchmark.
 
-See the [progressive analysis proposal](docs/PROGRESSIVE_ANALYSIS.md) for staged
-speaker naming and skipping at 5 minutes, 30 minutes, and the end. That extension
-is not active yet.
+See [progressive analysis](docs/PROGRESSIVE_ANALYSIS.md) for the active staged
+naming/skipping path and its validation limits.
 
 ## Reproduce the pipeline
 
@@ -410,7 +413,8 @@ four-episode comparison and remaining Decoder limitations.
   Playback advances the view only when the active sentence leaves the readable
   area. Manual scrolling cancels following. There is no claimed 120 fps result.
 - The same audio element survives chapter and transcript navigation.
-- Only Undo and Listen bypass a promotion, for one pass. Leaving the
+- Undo, Listen, and a newly published range under the playhead bypass a promotion
+  for one pass. Leaving the
   range or seeking elsewhere clears that exception. Ordinary seeks into a
   promotion, and restored playback inside one, still skip when playback starts.
   Refreshing restores position, speed and skip setting.

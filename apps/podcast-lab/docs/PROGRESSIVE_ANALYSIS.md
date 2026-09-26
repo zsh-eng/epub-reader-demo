@@ -1,82 +1,107 @@
 # Progressive podcast analysis
 
-Proposal, not active behavior. Draft ASR text already appears during transcription.
-Speaker naming, chapters, and skipping currently wait for full ASR and Senko.
+Active for new preparation jobs. Existing ready episodes are not reprocessed.
+The app downloads and hashes the whole audio file first. Analysis then publishes
+cumulative snapshots; it does not analyse an incomplete network download.
 
-## Suggested release points
+## Release points
 
-Treat 5 minutes, 30 minutes, and the end as cumulative audio positions. Stop at
-sentence or complete promotional-sequence boundaries rather than an exact clock
-cut. For a short episode, omit milestones beyond its duration.
+| Pass | Audio analysed | Interactive transcript |
+| --- | --- | --- |
+| First | 0–6:30 | Through 5:00 |
+| Second | 0–31:30 | Through 30:00 |
+| Final | Full episode | Full episode |
 
-| Audio available | Result to publish |
-| --- | --- |
-| First 5 minutes plus boundary context | Initial speaker map, introductory chapters, complete promotion ranges |
-| Through 30 minutes | New speaker evidence, chapter additions, more completed promotion ranges |
-| Remainder | Remaining results and final consistency checks |
+The extra 90 seconds provide context for promotion boundaries. Omit a prefix
+pass if its end plus context reaches the episode end. A short episode therefore
+has one or two passes. Draft text appears during the first ASR pass; completed
+snapshots remain visible during later work.
 
-Jev should keep its existing 180-second windows, 90-second stride, and bounded
-parallelism. Do not send one 30-minute classification block. Schedule windows
-when their transcript context is available. Hold promotions that reach an
-unfinished analysis edge; use the next window to resolve the endpoint. A long
-promotion may need expanded context, not a forced cut at the window boundary.
+Each pass runs Parakeet MLX, then Senko. It then runs Luna and Jev concurrently.
+Speech models remain sequential under the existing worker lock. This first
+implementation repeats the cumulative audio prefix for both local models. It
+trades extra computation for simpler, consistent speaker assignment; it is not
+incremental acoustic clustering or a low-latency streaming model.
 
-## Stable speaker identity comes first
+## Fresh speaker naming
 
-The installed Senko implementation renumbers speakers by total speaking time.
-Its SPEAKER_01 from a five-minute prefix can be a different person at 30 minutes.
-The current wrapper retains segments but discards speaker centroids.
+Senko can renumber IDs between runs. Each Luna call receives all blocks from
+**that pass**, plus episode/show metadata and its analysis scope. It independently
+names those IDs. No earlier Senko ID or name map enters the next request.
 
-Persist episode-local voice identities and reconcile later clusters using
-centroids and shared-time overlap. Ambiguous matches remain unnamed. Luna may
-supply names backed by transcript/metadata evidence; it must not establish an
-acoustic identity by guessing from speaking style. Store corrections explicitly.
+The player receives rows, names, chapters, portraits and skip ranges in one
+snapshot. It replaces that snapshot as a unit. A changed acoustic ID cannot
+inherit a previous pass's name. Evidence checks still apply; uncertain names
+remain unassigned. Short prefixes can have weaker speaker evidence.
 
-First benchmark prefix diarization against the full run on cached audio. Keep
-MLX and CoreML model allocation controlled; repeated loading and repeated prefix
-analysis may erase the latency gain. Do not assume the current full-file Senko
-call provides an incremental clustering interface.
+Calls are independent, ephemeral Luna requests. There is no persistent chat or
+assumed provider input-cache saving. Identical complete enrichment requests can
+reuse the app's local checkpoint.
 
-## Luna continuation
+## Jev windows and safe coverage
 
-Use one persisted, explicitly addressed session per audio hash and prompt version.
-The current `--ephemeral` one-shot process must change before it can be resumed.
-Never use `--last` when multiple episodes can be queued.
+Jev retains its 180-second windows, 90-second stride, bounded parallel requests,
+and complete promotional-sequence boundary selection. It receives podcast and
+episode descriptions with timed text. Acoustic IDs are excluded from those
+windows: a Senko renumbering alone must not invalidate cached classifications.
 
-Send stable instructions and show metadata first. Append each new batch in a
-new message with stable speaker/block IDs. Request additions or corrections,
-not another complete transcript or chapter list. Keep validated speaker maps,
-chapters, and the analysis position in application storage, independent of the
-conversation, so a lost session can be rebuilt without duplicate UI entries.
+All passes share a request cache keyed by the full model, questions and input.
+Unchanged windows reuse local responses. Changed ASR text, boundaries or context
+correctly require new calls.
 
-[Codex supports resuming an explicit session](https://learn.chatgpt.com/docs/non-interactive-mode).
-[Prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)
-can reuse matching context, but a session alone does not guarantee a cache hit.
-Preserve earlier messages; append new ones. Measure available cache usage and
-latency. API continuation still accounts for earlier context as input;
-[conversation state](https://developers.openai.com/api/docs/guides/conversation-state)
-is not free context. API pricing does not establish Codex subscription usage.
+A partial pass publishes only ranges ending inside its displayed coverage and
+having following transcript context. An unresolved trailing promotion stays
+audible until a later pass resolves it. This is a conservative publication rule,
+not a guarantee of advertising recall. Final results retain the detector's
+existing behavior and known accuracy limitations.
 
-## Player and retry rules
+## Checkpoints and recovery
 
-- Switch to the exact hashed local download before applying any skip range.
-  Publisher-stream timestamps may differ because of dynamic ads.
-- Show the analysis coverage, for example “Skips ready through 5:00”. Unprocessed
-  audio remains playable, but has no automatic skip guarantee.
-- Keep uncovered or ambiguous intervals audible. A newly published range must
-  not suddenly jump playback when the listener is already inside it.
-- Publish versioned results atomically. Keys include audio hash, model/prompt
-  version, and covered interval. Retry the failed stage only; deduplicate ranges.
-- Retain the current paragraph, selection, playback position, and scroll anchor
-  as speaker names, portraits, and chapters arrive.
+`pipeline/progressive.py` coordinates `.local/prepared/<episodeId>/passes/`.
+Each pass records an immutable manifest with the exact audio hash, coverage,
+context end and recipe. Different audio or milestone settings cannot reuse it.
 
-## Separate implementation commits
+- Model outputs and enrichment/classification requests remain private checkpoints.
+- `published.json` is the completed pass checkpoint.
+- The worker atomically replaces `analysis.json`, then its small
+  `analysis-state.json` pointer. The payload carries its own revision and coverage.
+- The API exposes partial analysis and the exact local audio only after publication.
+- The final pass writes `episode.json`; the worker then marks the job ready.
+- Retry retains the last usable snapshot and resumes missing work. It never
+  republishes an older completed pass over a newer one.
+- Successful pass PCM files are removed; compressed source audio and model
+  checkpoints remain for audit and retry.
 
-1. Checkpoint coordinator and stable acoustic speaker identity.
-2. Persisted Luna continuation with validated incremental results and recovery.
-3. Jev partial coverage and conservative promotion-edge handling.
-4. Player coverage, exact-audio handoff, and in-place result updates.
+## Player behavior
 
-Validate on cached episodes before activation: first useful result latency,
-cache use, host/guest swaps, promotions across both milestone boundaries, new
-late speakers, interrupted/repeated jobs, and seek beyond analyzed coverage.
+The first snapshot switches playback to the exact hashed local MP3 before any
+skip applies. It retains play/pause, speed, skip preference and time. This handoff
+can briefly buffer. Publisher streams may have different dynamic ads, so keeping
+the same seconds is only an approximate position match.
+
+Later snapshots keep the same loaded media. They retain manual scroll position
+by transcript time and measured screen offset. A selected transcript passage
+defers replacement until selection is cleared. A newly detected skip under the
+playhead stays audible for that pass; seeking into it later permits normal skip
+behavior. Coverage is shown while the remaining analysis runs. Browsing does not
+start jobs or cancel an existing one; playback/explicit preparation starts work.
+
+## Validation
+
+Production-wiring integration tests cover retry after the second pass fails,
+fresh IDs and names in each snapshot, audio identity, shared Jev cache reuse,
+held trailing promotions, partial byte-range playback and final publication.
+Browser tests cover media retention at 1.25×, selection deferral, scroll retention,
+new skip behavior, navigation and duplicate preparation requests.
+
+A real-model check used a cached 100-second Ezra clip and **scaled** release
+points of 20, 50 and 100 seconds, without lookahead. It published at approximately
+31.9, 60.4 and 95.6 seconds elapsed. Every row referenced a name map from its own
+pass and every published row/skip ended within coverage. The final result had
+21 paragraphs and one promotion range; early passes had no accepted skips.
+These measurements validate wiring, not five-minute latency or speaker/ad
+accuracy. Repeated Senko startup alone took about 14–15 seconds per pass.
+
+Next performance work should compare normal 5/30-minute milestones on longer
+cached episodes and measure model reuse. Do not infer a speedup from the short
+smoke test or treat a partial empty skip list as verified ad-free audio.

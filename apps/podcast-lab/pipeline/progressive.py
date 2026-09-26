@@ -97,6 +97,7 @@ def analyse(root, status, *, milestones=(300, 1800), lookahead=90):
             )
             if revision >= old:
                 publish(payload)
+            (folder / "episode.wav").unlink(missing_ok=True)
             continue
         for name in ("episode.mp3", "episode.mp3.download.json"):
             if not (folder / name).exists():
