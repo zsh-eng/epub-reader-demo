@@ -312,6 +312,10 @@ Validation on the cached 100-second clip showed draft text before completion;
 the final ASR result exactly matched the previous run without draft capture.
 This is not a full-episode latency or speaker-accuracy benchmark.
 
+See the [progressive analysis proposal](docs/PROGRESSIVE_ANALYSIS.md) for staged
+speaker naming and skipping at 5 minutes, 30 minutes, and the end. That extension
+is not active yet.
+
 ## Reproduce the pipeline
 
 Prerequisites: Apple Silicon, FFmpeg, Python, uv, Bun, the Codex CLI signed in,
