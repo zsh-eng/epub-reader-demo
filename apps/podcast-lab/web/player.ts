@@ -1,3 +1,4 @@
+import { watchPreparation, stopPreparationWatch } from "./preparation";
 import {
   arrive,
   carryArtwork,
@@ -244,7 +245,7 @@ function update() {
     previewSkip = undefined;
     paintParts();
   }
-  if (!audio.paused && skipToggle.checked) {
+  if (!switchingEpisode && !audio.paused && skipToggle.checked) {
     const skip = data.skips.find(
       (s) => s.id !== previewSkip?.id && time >= s.start && time < s.end,
     );
@@ -281,9 +282,10 @@ function update() {
       else node.removeAttribute("aria-current");
     });
   }
-  const nowTitle = document.body.classList.contains("library-open")
-    ? data.title
-    : (data.chapters[nextChapter]?.title ?? "Opening");
+  const nowTitle =
+    document.body.classList.contains("library-open") || !data.rows.length
+      ? data.title
+      : (data.chapters[nextChapter]?.title ?? "Opening");
   if (element("now-chapter").textContent !== nowTitle)
     element("now-chapter").textContent = nowTitle;
   if (changed)
@@ -294,7 +296,7 @@ function update() {
           ? "Promotion"
           : (speakers.get(data.rows[active].speaker)?.name ??
             "Unassigned voice");
-  if (streaming && data.duration > 0)
+  if (!waveform.length && data.duration > 0)
     element("stream-progress").style.transform =
       `scaleX(${Math.min(1, time / data.duration)})`;
   const nextWave = Math.floor((time / data.duration) * waveform.length);
@@ -355,7 +357,7 @@ async function openEpisode(
   origin?: ArtworkOrigin,
 ) {
   const version = ++episodeVersion;
-  if (episodeIdentity === episode.id) {
+  if (episodeIdentity === episode.id && (!episode.preparedId || !streaming)) {
     revealEpisode(origin);
     if (autoplay) await play();
     return;
@@ -378,6 +380,19 @@ async function openEpisode(
         provenance: {},
       } as Episode);
   if (version !== episodeVersion) return;
+  const upgrading = episodeIdentity === episode.id && streaming && prepared;
+  // Capture at commit, after payload loading: the user can pause or seek while
+  // the ready transcript is fetched. If metadata is pending, restore from disk.
+  const handoff =
+    upgrading && !switchingEpisode
+      ? {
+          time: audio.currentTime,
+          rate: audio.playbackRate,
+          skip: skipToggle.checked,
+        }
+      : undefined;
+  if (upgrading) autoplay = !audio.paused;
+  stopPreparationWatch();
   savePosition();
   switchingEpisode = true;
   audio.pause();
@@ -405,8 +420,9 @@ async function openEpisode(
   ])
     element(id).replaceChildren();
   data = next;
+  element("now-speaker").textContent = data.show;
   streaming = !prepared;
-  element("stream-track").hidden = !streaming;
+  element("stream-track").hidden = Boolean(data.waveform?.length);
   element("buffered-ranges").replaceChildren();
   element("stream-progress").style.transform = "scaleX(0)";
   setPlaybackState("paused");
@@ -432,10 +448,17 @@ async function openEpisode(
     art.width = 220;
     art.height = 220;
     const heading = document.createElement("h2");
-    heading.textContent = "Just listening.";
+    heading.textContent = "Keep listening.";
     const note = document.createElement("p");
-    note.textContent = "Transcript and promotion detection not prepared.";
-    empty.append(art, heading, note);
+    note.textContent = "Your transcript is on its way.";
+    const progress = document.createElement("div");
+    progress.id = "preparation-status";
+    progress.dataset.phase = "queued";
+    progress.innerHTML =
+      '<div class="preparation-steps" aria-hidden="true">' +
+      "<i></i>".repeat(7) +
+      '</div><p role="status">Starting preparation</p><button class="pill" hidden>Retry preparation</button>';
+    empty.append(art, heading, note, progress);
     space.append(empty);
   }
   speakers = new Map(data.speakers.map((s) => [s.id, s]));
@@ -530,9 +553,13 @@ async function openEpisode(
       element("duration").textContent = fmt(data.duration);
     }
     try {
-      const saved = JSON.parse(
-        localStorage.getItem(`undertone:${data.audioHash}`) ?? "null",
-      );
+      const saved =
+        handoff ??
+        JSON.parse(
+          localStorage.getItem(`undertone:${data.audioHash}`) ??
+            localStorage.getItem(`undertone:${episode.id}`) ??
+            "null",
+        );
       if (saved) {
         skipToggle.checked = saved.skip !== false;
         audio.playbackRate = [1, 1.25, 1.5, 2].includes(saved.rate)
@@ -553,12 +580,22 @@ async function openEpisode(
   // Request playback as soon as selection resolves, before waiting for network
   // metadata. The metadata handler restores the episode's saved position.
   if (autoplay) void play();
+  if (!prepared)
+    watchPreparation(episode.id, async () => {
+      if (episodeIdentity !== episode.id) return;
+      // The analyzed download can differ from a publisher stream with dynamic ads.
+      // Upgrade both media and transcript together; never apply new skips to the
+      // old URL. A same-episode handoff preserves play/pause, time, speed and skip.
+      episode.preparedId = episode.id;
+      await openEpisode(episode, show);
+      window.dispatchEvent(new Event("undertone-prepared"));
+    });
 }
 function revealEpisode(origin?: ArtworkOrigin) {
   if (element("reader-workspace").hidden) return;
   const destination = streaming
     ? space.querySelector<HTMLImageElement>(".listening-cover")
-    : element("artwork") as HTMLImageElement;
+    : (element("artwork") as HTMLImageElement);
   carryArtwork(origin, destination);
   arrive(element("reader-workspace"));
 }
@@ -686,7 +723,7 @@ function setPlaybackState(state: PlaybackState) {
 }
 function renderBuffered() {
   if (
-    !streaming ||
+    waveform.length > 0 ||
     !data ||
     !Number.isFinite(audio.duration) ||
     audio.duration <= 0

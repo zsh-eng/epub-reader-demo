@@ -1,8 +1,14 @@
 /** Offline demo host. Only explicit public assets are exposed; keys and raw logs stay private. */
 import { join } from "node:path";
 import catalog from "./feeds.json";
+import { Preparations, type Runner } from "./preparation";
 const app = import.meta.dir;
-export function createServer(dataDir = join(app, ".local"), port = 4378) {
+export function createServer(
+  dataDir = join(app, ".local"),
+  port = 4378,
+  runner?: Runner,
+) {
+  const preparations = new Preparations(dataDir, runner);
   return Bun.serve({
     hostname: "127.0.0.1",
     port,
@@ -10,6 +16,43 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
       const url = new URL(request.url);
       if (!["127.0.0.1", "localhost"].includes(url.hostname))
         return new Response("Invalid host", { status: 403 });
+      const jobRoute = /^\/api\/preparations\/([a-f0-9]{20})$/.exec(
+        url.pathname,
+      );
+      if (jobRoute) {
+        if (request.method === "GET")
+          return Response.json(await preparations.status(jobRoute[1]), {
+            headers: { "Cache-Control": "no-store" },
+          });
+        if (request.method !== "POST")
+          return new Response("Method not allowed", { status: 405 });
+        // No cross-origin website can start downloads, inference, or paid text
+        // requests through this loopback service. Never accept caller URLs.
+        if (
+          request.headers.get("Origin") !== url.origin ||
+          request.headers.get("X-Undertone-Preparation") !== "1"
+        )
+          return new Response("Same-origin request required", { status: 403 });
+        if (process.env.PODCAST_PREPARATION_DISABLED === "1")
+          return Response.json(
+            {
+              phase: "failed",
+              detail: "Preparation is disabled in this test server.",
+            },
+            { status: 503 },
+          );
+        const state = await preparations.start(jobRoute[1]);
+        return state
+          ? Response.json(state, {
+              status: 202,
+              headers: { "Cache-Control": "no-store" },
+            })
+          : new Response("Episode not found", { status: 404 });
+      }
+      if (url.pathname === "/api/preparations" && request.method === "GET")
+        return Response.json(await preparations.ready(), {
+          headers: { "Cache-Control": "no-store" },
+        });
       if (!["GET", "HEAD"].includes(request.method))
         return new Response("Method not allowed", { status: 405 });
       const folders: Record<string, string> = {
@@ -19,10 +62,18 @@ export function createServer(dataDir = join(app, ".local"), port = 4378) {
         "99pi": join(dataDir, "benchmark/99pi"),
       };
       const episodeRoute =
-        /^\/episodes\/(ezra|decoder|darknet|99pi)\/(episode\.json|audio)$/.exec(
+        /^\/episodes\/(ezra|decoder|darknet|99pi|[a-f0-9]{20})\/(episode\.json|audio)$/.exec(
           url.pathname,
         );
-      const episodeDir = episodeRoute ? folders[episodeRoute[1]] : dataDir;
+      if (
+        episodeRoute &&
+        !folders[episodeRoute[1]] &&
+        (await preparations.status(episodeRoute[1])).phase !== "ready"
+      )
+        return new Response("Episode is not ready", { status: 404 });
+      const episodeDir = episodeRoute
+        ? (folders[episodeRoute[1]] ?? preparations.folder(episodeRoute[1]))
+        : dataDir;
       const route = episodeRoute ? "/" + episodeRoute[2] : url.pathname;
       const showCover = /^\/shows\/([a-z0-9-]+)\/artwork$/.exec(route);
       if (showCover) {

@@ -942,3 +942,47 @@ button:active {
     backdrop-filter: none;
   }
 }
+
+/* Discrete stages, not a fabricated percentage. No layout work on audio ticks. */
+#preparation-status {
+  margin: 28px auto 0;
+  max-width: 300px;
+}
+#preparation-status p {
+  font-size: 12px;
+  margin: 14px 0;
+  min-height: 2.8em;
+}
+.preparation-steps {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.preparation-steps i {
+  width: 23px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border);
+  transition: background 180ms ease;
+}
+.preparation-steps .done {
+  background: var(--foreground);
+}
+.preparation-steps .active {
+  background: var(--blue);
+  animation: preparation-breathe 1.6s ease-in-out infinite;
+}
+#preparation-status[data-phase="failed"] .active {
+  animation: none;
+  background: var(--muted-foreground);
+}
+@keyframes preparation-breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preparation-steps .active {
+    animation: none;
+  }
+}

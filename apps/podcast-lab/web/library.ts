@@ -67,6 +67,12 @@ export async function initLibrary(open: Open) {
   let data: Library;
   try {
     data = await getJSON<Library>("/library.json");
+    const ready: string[] = await fetch("/api/preparations")
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => []);
+    const prepared = new Set(ready);
+    for (const episode of data.episodes)
+      if (prepared.has(episode.id)) episode.preparedId = episode.id;
   } catch {
     el("library-content").textContent =
       "Library unavailable. Reload to try again.";
@@ -399,6 +405,24 @@ export async function initLibrary(open: Open) {
     page = 0;
     render();
     renderNav();
+    // Other selected episodes can finish while this one plays. Refresh the
+    // small ready index on library navigation, without refetching RSS metadata.
+    void fetch("/api/preparations")
+      .then((response) => (response.ok ? response.json() : []))
+      .then((ready: string[]) => {
+        const ids = new Set(ready);
+        let changed = false;
+        for (const episode of data.episodes) {
+          if (!episode.preparedId && ids.has(episode.id)) {
+            episode.preparedId = episode.id;
+            changed = true;
+          }
+        }
+        if (changed && !el("library-shell").hidden) render();
+      })
+      .catch(() => {
+        /* Offline browsing keeps its last known local state. */
+      });
     if (origin && hash.startsWith("show/"))
       carryArtwork(
         origin,
@@ -433,6 +457,9 @@ export async function initLibrary(open: Open) {
   });
   el("now-playing").addEventListener("click", () => goto("player"));
   window.addEventListener("hashchange", route);
+  window.addEventListener("undertone-prepared", () => {
+    if (!el("library-shell").hidden) render();
+  });
   // Prepare the first local episode while keeping Home visible. A direct episode
   // URL takes priority and does not start a competing default load.
   if (!location.hash.startsWith("#listen/") && current) void listen(current);

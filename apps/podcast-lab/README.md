@@ -22,15 +22,15 @@ still respect the Skip promotions switch. Playback position is stored against
 the exact audio hash.
 
 Prepared episodes use actual local audio and model results. Other RSS episodes
-stream directly from their enclosure URL only when opened; their transcript and
-promotion detection are marked unprepared. The browser contains no API key.
+stream directly from their enclosure URL when opened. Selection also queues
+background preparation on this Mac. The browser contains no API key.
 Stop the server with Control-C.
 
 Real streaming was checked in desktop Chromium with Plain English and Dwarkesh:
 playback, a ten-minute seek with HTTP 206 byte-range responses, browsing during
 playback, and checkpoint restoration after switching episodes. This does not
-verify every host or Safari/iPhone. Streaming alone does not create transcripts
-or skip ranges; those still require the preparation pipeline. A failed stream
+verify every host or Safari/iPhone. The preparation pipeline now starts on episode
+selection while streaming continues. A failed stream
 shows a compact error; Play reloads it and restores the saved position.
 
 ## Library and show feeds
@@ -40,7 +40,7 @@ The personal catalog contains **the 20 shows from your screenshots**, with
 and Apple directory provenance. The “Your Episodes” playlist is not a show.
 Decoder, Darknet Diaries and 99PI remain local benchmark fixtures and are excluded
 from the personal library. Only the existing Ezra episode is prepared locally;
-other episodes can stream on selection, without automatic model processing.
+other episodes stream on selection and enter the local preparation queue.
 
 Home has a single horizontally scrolling show shelf and recent episodes. All
 shows displays the full grid. Each show has a creator credit, RSS link and Follow
@@ -84,8 +84,49 @@ Browser tests confirm that personal-library browsing makes no external requests.
 **Current boundary:** refresh is a command, not a scheduled job or UI control.
 The browser loads the bounded catalog at startup; it is not server-paginated.
 This is suitable for this 20-show prototype, not a claim about an unlimited feed
-archive or 120 fps. Arbitrary feed imports, OPML, a download/preparation queue,
-accounts and sync are not connected. Cached playback requires the loopback server.
+archive or 120 fps. Arbitrary feed imports, OPML, accounts and sync are not
+connected. Cached playback requires the loopback server.
+
+## Background preparation
+
+Opening an unprepared episode starts a same-origin POST to
+`/api/preparations/:episodeId`. The server accepts catalog IDs only, looks up the
+source itself, and deduplicates repeat requests. One episode runs at a time.
+A cross-process file lock prevents two local speech models from running together
+if the server restarts. The UI polls the selected job every 1.5 seconds; it shows
+actual stages rather than an estimated percentage:
+
+1. Download with resumable HTTP ranges; hash the exact saved bytes.
+2. Convert to mono 16 kHz PCM, then run Parakeet MLX and Senko sequentially.
+3. Run Jev's complete-sequence detector and Luna enrichment concurrently.
+4. Validate the audio/transcript hashes, materialize paragraphs, and mark ready.
+
+Audio keeps playing while the job runs, including while browsing. When ready,
+the player switches to the **analyzed local MP3** and installs its transcript and
+skip ranges together. It keeps the same audio element and preserves play/pause,
+speed, skip preference and playback time. A brief loading pause is possible.
+Publisher streams can contain different dynamic ads from the downloaded file;
+retained seconds are approximate across that handoff. We do not apply downloaded
+skip ranges to the original publisher stream. A prepared episode reopens locally
+and appears in Downloads, including after reload.
+
+Jobs and model checkpoints live in `.local/prepared/<episodeId>/`, separate from
+the RSS snapshot. Completed stages are retained for retry. Failed jobs offer
+**Retry preparation** while ordinary audio playback remains available. Browser
+navigation does not stop work. After a server interruption, reselect/retry the
+episode to resume queued or stopped work; an existing live worker is rejoined.
+The large PCM intermediate is removed after success. Raw logs, source metadata
+and credentials are not public HTTP routes. The server needs its existing
+`JEV_API_KEY`, local speech runtimes and Codex login; it sends transcript text to
+Jev and Luna, never audio. No automatic avatar search is part of this job.
+
+Validation: the actual POST/worker path completed a 100-second cached Ezra clip,
+producing 21 transcript paragraphs, two chapters and one 0.40–28.16 promotion
+range. Parakeet took 8.46 seconds including loading, Senko 18.32 seconds, and the
+hosted work took about 14 seconds. This is an integration check, not an accuracy
+or full-episode latency benchmark. Browser tests cover streaming during work,
+background completion, media handoff, retry, selection changes and reload.
+Routine tests disable real model jobs and use local audio at the network boundary.
 
 ## Latest three-show check
 
@@ -97,8 +138,9 @@ The newer sequence/boundary follow-up now catches the complete Ezra montage;
 that episode's preview uses it. It reaches 99.94% Ezra promotion-duration coverage,
 100% Darknet promotion-speech coverage and 94.65% Decoder promotion-speech coverage,
 with no extra editorial speech against these text references. 99PI proposes no
-promotion skips. The general pipeline remains opt-in because Decoder still has
-misses. See the report for boundary errors, hashes and evaluation limits.
+promotion skips. Background preparation uses this sequence policy; the older
+CLI experiment retains its baseline classifier. Decoder still has misses. See
+the report for boundary errors, hashes and evaluation limits.
 
 The player now has one compact header and an 82 px desktop / 108 px phone control
 area (plus phone safe-area inset). Unknown voices use a waveform, not initials.
@@ -354,7 +396,7 @@ and transforms animate. Rapid navigation cancels old transitions and restores
 the destination cover. Keyboard navigation is immediate. Reduced motion removes
 cover travel, scaling and the rotating loading ring. High contrast or reduced
 transparency replaces glass with solid surfaces. The minified player bundle is
-60 KB (previously 47 KB); this is not a measured frame-rate result.
+62 KB (before motion: 47 KB); this is not a measured frame-rate result.
 
 Streams show actual buffered ranges from the media element and a loading ring
 only while playback waits for data. They do not show an invented waveform.

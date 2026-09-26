@@ -6,6 +6,7 @@ export default defineConfig({
     "library.spec.ts",
     "streaming.spec.ts",
     "motion.spec.ts",
+    "preparation.spec.ts",
   ],
   workers: 1,
   use: {
@@ -16,7 +17,7 @@ export default defineConfig({
   },
   outputDir: ".local/playwright-results",
   webServer: {
-    command: "PORT=4379 bun run dev",
+    command: "PODCAST_PREPARATION_DISABLED=1 PORT=4379 bun run dev",
     url: "http://127.0.0.1:4379",
     reuseExistingServer: false,
   },
