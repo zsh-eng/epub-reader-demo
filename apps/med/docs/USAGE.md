@@ -273,7 +273,7 @@ field to edit a file on disk. Drafts and drop previews do not survive page reloa
 When opening a full file from a diff, the line-number gutter shows green bars
 for added lines and red bars for deleted lines in the before version. A deletion
 with no remaining row appears as a red tick at its gap in the after version.
-Amber bars identify working-file additions and replacements. The header has a
+Blue bars identify working-file additions and replacements. The header has a
 compact color legend; each marker identifies its comparison on hover.
 
 Markers use the selected comparison only when its captured text matches the

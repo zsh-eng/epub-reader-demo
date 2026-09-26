@@ -28,3 +28,6 @@ These checks establish behavior, not a new performance claim.
 - [Dropped preview, dark](dropped-file-dark.png)
 - [Saved comparison gutter, light](comparison-gutter-light.png)
 - [Working-change gutter, dark](working-gutter-dark.png)
+
+Working-file markers now use blue (lighter on dark themes, darker on light
+themes) and a 4 px bar. [Light-theme working markers](working-gutter-light.png).

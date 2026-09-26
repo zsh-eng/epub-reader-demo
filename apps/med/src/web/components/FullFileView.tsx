@@ -116,6 +116,7 @@ function ReadOnlyFileView({
 }: FullFileViewProps) {
   const displayPath = path ?? file?.path;
   const { active } = useTheme();
+  const workingColor = active.appearance === "dark" ? "#7db4ff" : "#245ea8";
   const viewer = useRef<CodeViewHandle<undefined, undefined>>(null);
   const vim = useFileVim({
     text: file?.kind === "text" ? (file.text ?? "") : "",
@@ -290,7 +291,7 @@ function ReadOnlyFileView({
         [data-column-number] { position: relative; }
         [data-med-change] { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 1px; background: ${active.palette.green}; }
         [data-med-change="deleted"] { background: ${active.palette.red}; }
-        [data-med-change="working"] { background: ${active.palette.warning}; }
+        [data-med-change="working"] { background: ${workingColor}; width: 4px; }
         [data-change-edge] { width: 9px; height: 3px; top: auto; bottom: 0; }
         [data-change-edge="before"] { top: 0; bottom: auto; }
         ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }
@@ -328,6 +329,7 @@ function ReadOnlyFileView({
       blameOpen,
       canBlame,
       changes,
+      workingColor,
     ],
   );
   useLayoutEffect(() => {
@@ -378,7 +380,7 @@ function ReadOnlyFileView({
             >
               <span style={{ color: active.palette.green }}>▏</span>Added{" "}
               <span style={{ color: active.palette.red }}>▏</span>Deleted{" "}
-              <span style={{ color: active.palette.warning }}>▏</span>Working
+              <span style={{ color: workingColor }}>▏</span>Working
             </span>
           )}
           <span {...stylex.props(styles.badge)}>Read-only</span>

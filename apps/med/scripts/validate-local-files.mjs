@@ -267,6 +267,10 @@ try {
   await marker("working").first().waitFor();
   await marker("deleted").first().waitFor();
   await page.screenshot({ path: join(output, "working-gutter-dark.png") });
+  await page.evaluate(() => localStorage.setItem("med:theme:v1", "graphite-light"));
+  await page.reload();
+  await marker("working").first().waitFor();
+  await page.screenshot({ path: join(output, "working-gutter-light.png") });
   // A drop from the review keeps its file state available when returning.
   await page.evaluate(() => {
     const transfer = new DataTransfer();
