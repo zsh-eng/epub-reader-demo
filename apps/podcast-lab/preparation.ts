@@ -83,6 +83,7 @@ export class Preparations {
         JSON.stringify({
           ...episode,
           show: show.title,
+          showCreator: show.creator,
           showDescription: show.description,
           feed: show.feed,
         }),

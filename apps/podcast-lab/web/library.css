@@ -358,6 +358,33 @@
   line-height: 1.6;
   color: var(--muted-foreground);
 }
+.transcript-empty.has-draft {
+  max-width: 780px;
+  margin: 20px auto;
+}
+.transcript-empty.has-draft > img,
+.transcript-empty.has-draft > h2,
+.transcript-empty.has-draft > p {
+  display: none;
+}
+.draft-transcript {
+  text-align: left;
+}
+.draft-transcript::before {
+  content: "Draft · speakers and skipping pending";
+  display: block;
+  margin: 28px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.draft-transcript p {
+  font-size: 19px;
+  color: var(--foreground);
+  line-height: 1.65;
+  margin: 0 0 28px;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px;
+}
 .skip-panel.unprepared {
   visibility: hidden;
 }

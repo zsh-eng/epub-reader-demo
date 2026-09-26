@@ -1,5 +1,17 @@
 [
   {
+    "name": "Dwarkesh Patel",
+    "sourcePage": "https://substack.com/@dwarkesh",
+    "imageURL": "https://substack-post-media.s3.amazonaws.com/public/images/b715ffd1-f7d7-4755-af88-c48efe647f5b_400x400.jpeg",
+    "credit": "Dwarkesh Patel profile"
+  },
+  {
+    "name": "Noam Brown",
+    "sourcePage": "https://noambrown.com/",
+    "imageURL": "https://noambrown.com/assets/img/profile-poker.jpg",
+    "credit": "Noam Brown personal website"
+  },
+  {
     "name": "Ezra Klein",
     "sourcePage": "https://x.com/ezraklein",
     "imageURL": "https://pbs.twimg.com/profile_images/1874158397991378945/VzNck7yb.jpg",

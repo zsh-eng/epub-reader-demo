@@ -159,8 +159,10 @@ def prepare(root):
                 for job in jobs:
                     job.result()
             status("finishing", "Finishing your transcript")
+            from avatars import prepare_avatars
             from prepare_player import prepare as materialize
 
+            prepare_avatars(root, root.parent.parent)
             materialize(root, f"{VERSION}.json")
             # Public episode.json is only exposed after this atomic ready marker.
             status("ready", "Transcript ready")

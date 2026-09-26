@@ -13,12 +13,16 @@ async function preparationFixture(page: Page) {
     totalBytes: number | null = 10_000_000,
     completedChunks: number | undefined,
     totalChunks: number | undefined,
+    draft: { revision: number; paragraphs: string[] } | undefined,
     starts = 0;
   await page.route("**/api/preparations", (route) =>
     route.fulfill({ json: phase === "ready" ? [episode.id] : [] }),
   );
   await page.route(`**/api/preparations/${episode.id}`, (route) => {
-    if (route.request().method() === "POST") starts++;
+    if (route.request().method() === "POST") {
+      starts++;
+      if (phase === "idle") phase = "transcribing";
+    }
     return route.fulfill({
       json: {
         id: episode.id,
@@ -27,6 +31,7 @@ async function preparationFixture(page: Page) {
         totalBytes,
         completedChunks,
         totalChunks,
+        draftRevision: draft?.revision,
         detail:
           phase === "failed"
             ? "Preparation was interrupted. Retry to continue."
@@ -34,6 +39,9 @@ async function preparationFixture(page: Page) {
       },
     });
   });
+  await page.route(`**/api/preparations/${episode.id}/draft`, (route) =>
+    draft ? route.fulfill({ json: draft }) : route.fulfill({ status: 404 }),
+  );
   // Only the publisher and worker boundaries are replaced. Playback, version
   // handoff, checkpoint persistence and the transcript use production code.
   await page.route(episode.audioURL, (route) =>
@@ -64,6 +72,9 @@ async function preparationFixture(page: Page) {
     setTranscription: (completed: number, total: number) => {
       completedChunks = completed;
       totalChunks = total;
+    },
+    setDraft: (revision: number, paragraphs: string[]) => {
+      draft = { revision, paragraphs };
     },
   };
 }
@@ -113,7 +124,7 @@ test("stream plays during preparation; ready transcript switches to analyzed byt
   await page.getByRole("button", { name: "Open current episode" }).click();
   await expect(page.locator(".transcript-row").first()).toBeVisible();
   await expect(page.locator("#skip-toggle")).toBeEnabled();
-  expect(fixture.starts()).toBe(1);
+  expect(fixture.starts()).toBe(0);
   await page.locator("#play").click();
   await page.reload();
   await expect(page.locator("audio")).toHaveAttribute(
@@ -127,7 +138,45 @@ test("stream plays during preparation; ready transcript switches to analyzed byt
         .evaluate((a: HTMLAudioElement) => a.paused && a.currentTime > 300),
     )
     .toBe(true);
-  expect(fixture.starts()).toBe(1);
+  expect(fixture.starts()).toBe(0);
+});
+
+test("draft paragraphs arrive during transcription without seeking or enabling skips", async ({
+  page,
+}) => {
+  const fixture = await preparationFixture(page);
+  fixture.setDraft(1, ["The first complete passage."]);
+  await page.goto(`/#listen/${fixture.episode.id}`);
+  const draft = page.getByRole("region", {
+    name: "Draft transcript",
+    exact: true,
+  });
+  await expect(draft).toContainText("The first complete passage.");
+  await draft
+    .locator("p")
+    .first()
+    .evaluate((node) => {
+      node.dataset.retained = "yes";
+    });
+  fixture.setDraft(2, [
+    "The first complete passage.",
+    "The next passage is now available.",
+  ]);
+  await expect(draft).toContainText("The next passage is now available.");
+  await expect(draft.locator("p").first()).toHaveAttribute(
+    "data-retained",
+    "yes",
+  );
+  await expect(draft.getByRole("button")).toHaveCount(0);
+  await expect(page.locator("#skip-toggle")).toBeDisabled();
+  await expect(page.locator("audio")).toHaveAttribute(
+    "src",
+    fixture.episode.audioURL,
+  );
+  await page.screenshot({ path: ".local/draft-transcript.png" });
+  fixture.setPhase("ready");
+  await expect(page.locator(".transcript-row").first()).toBeVisible();
+  await expect(draft).toHaveCount(0);
 });
 
 test("transcription progress counts completed chunks and clears for speaker analysis", async ({
@@ -175,7 +224,7 @@ test("failed preparation can retry without replacing the current stream; another
     "src",
     fixture.episode.audioURL,
   );
-  expect(fixture.starts()).toBe(2);
+  expect(fixture.starts()).toBe(1);
   await page.getByRole("link", { name: "Undertone home" }).click();
   await page.getByRole("link", { name: "Downloads", exact: true }).click();
   await page.locator(".episode-title").first().click();
@@ -186,6 +235,58 @@ test("failed preparation can retry without replacing the current stream; another
     "/episodes/ezra/audio",
   );
   await expect(page.locator(".transcript-row").first()).toBeVisible();
+});
+
+test("browsing and restoring an episode never starts work; explicit preparation starts once", async ({
+  page,
+}) => {
+  const fixture = await preparationFixture(page);
+  fixture.setPhase("idle");
+  await page.goto(`/#listen/${fixture.episode.id}`);
+  await expect(
+    page.getByRole("button", { name: "Prepare transcript", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Undertone home" }).click();
+  await page.getByRole("button", { name: "Open current episode" }).click();
+  expect(fixture.starts()).toBe(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Prepare transcript", exact: true }),
+  ).toBeVisible();
+  expect(fixture.starts()).toBe(0);
+  await page
+    .getByRole("button", { name: "Prepare transcript", exact: true })
+    .click();
+  await expect(page.locator("#preparation-status")).toContainText(
+    "Transcribing on your Mac",
+  );
+  await page.getByRole("link", { name: "Undertone home" }).click();
+  await page.getByRole("button", { name: "Open current episode" }).click();
+  expect(fixture.starts()).toBe(1);
+});
+
+test("playing an idle episode starts preparation once, including repeated play events", async ({
+  page,
+}) => {
+  const fixture = await preparationFixture(page);
+  fixture.setPhase("idle");
+  await page.goto(`/#listen/${fixture.episode.id}`);
+  await expect(
+    page.getByRole("button", { name: "Prepare transcript", exact: true }),
+  ).toBeVisible();
+  await page.locator("audio").evaluate((audio: HTMLAudioElement) => {
+    audio.muted = true;
+  });
+  await page.locator("#play").click();
+  await expect(page.locator("#preparation-status")).toContainText(
+    "Transcribing on your Mac",
+  );
+  await page
+    .locator("audio")
+    .evaluate((audio: HTMLAudioElement) =>
+      audio.dispatchEvent(new Event("play")),
+    );
+  expect(fixture.starts()).toBe(1);
 });
 
 test("transcript preparation shows real download bytes and handles unknown totals", async ({

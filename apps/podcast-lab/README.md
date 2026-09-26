@@ -22,15 +22,14 @@ still respect the Skip promotions switch. Playback position is stored against
 the exact audio hash.
 
 Prepared episodes use actual local audio and model results. Other RSS episodes
-stream directly from their enclosure URL when opened. Selection also queues
-background preparation on this Mac. The browser contains no API key.
+stream directly from their enclosure URL when opened. Play or **Prepare transcript** queues background preparation on this Mac;
+browsing alone does not. The browser contains no API key.
 Stop the server with Control-C.
 
 Real streaming was checked in desktop Chromium with Plain English and Dwarkesh:
 playback, a ten-minute seek with HTTP 206 byte-range responses, browsing during
 playback, and checkpoint restoration after switching episodes. This does not
-verify every host or Safari/iPhone. The preparation pipeline now starts on episode
-selection while streaming continues. A failed stream
+verify every host or Safari/iPhone. The preparation pipeline starts on Play or explicit preparation while streaming continues. A failed stream
 shows a compact error; Play reloads it and restores the saved position.
 
 ## Library and show feeds
@@ -39,8 +38,8 @@ The personal catalog contains **the 20 shows from your screenshots**, with
 1,336 cached entries on this refresh. `feeds.json` records the selected feed URLs
 and Apple directory provenance. The “Your Episodes” playlist is not a show.
 Decoder, Darknet Diaries and 99PI remain local benchmark fixtures and are excluded
-from the personal library. Only the existing Ezra episode is prepared locally;
-other episodes stream on selection and enter the local preparation queue.
+from the personal library. Prepared episodes appear in Downloads. Other episodes can stream from the publisher;
+Play or Prepare transcript enters the local preparation queue.
 
 Home has a single horizontally scrolling show shelf and recent episodes. All
 shows displays the full grid. Each show has a creator credit, RSS link and Follow
@@ -89,7 +88,8 @@ connected. Cached playback requires the loopback server.
 
 ## Background preparation
 
-Opening an unprepared episode starts a same-origin POST to
+Opening an unprepared episode only reads its status. Play or **Prepare transcript**
+starts a same-origin POST to
 `/api/preparations/:episodeId`. The server accepts catalog IDs only, looks up the
 source itself, and deduplicates repeat requests. One episode runs at a time.
 A cross-process file lock prevents two local speech models from running together
@@ -107,7 +107,8 @@ actual stages rather than an estimated percentage:
    uses three-minute windows starting every 90 seconds, with up to four windows
    in flight. Luna receives the complete speaker blocks in one call for names
    and chapters. Results are not pipelined from partial ASR chunks.
-4. Validate the audio/transcript hashes, materialize paragraphs, and mark ready.
+4. Load known host/guest portraits from the shared cache, validate audio/transcript
+   hashes, materialize paragraphs, and mark ready.
 
 Audio keeps playing while the job runs, including while browsing. When ready,
 the player switches to the **analyzed local MP3** and installs its transcript and
@@ -202,7 +203,9 @@ Before/after artifacts and the fetched feed are retained locally under
 follow-up described in BENCHMARK.md.
 
 Speaker separation also merges some short ad voices with interview speakers.
-Names are inferred from the introduction and can be wrong. Named host/guest
+Names are inferred from introductions and can be wrong. A clear host may use a
+person named in RSS creator metadata, marked likely and backed by a quote
+establishing the host role. A publisher/company alone cannot name a voice. Named host/guest
 labels can use reviewed profile portraits. Unknown speakers and detected
 promotion passages use distinct segment symbols; photos do not verify acoustic identity. Chapter boundaries start at existing speaker
 blocks; they are not editorially verified. ASR has occasional spelling errors
@@ -248,15 +251,19 @@ Primary references:
 
 ## Speaker avatars
 
-The batch pipeline remains unchanged. `avatar-sources.json` is a small catalog
+The background worker now runs portrait preparation after naming.
+`avatar-sources.json` is a small catalog
 of profile images selected by search and checked against their source pages:
 [Ezra Klein's profile](https://x.com/ezraklein) and
-[Matt Sheehan's Carnegie profile](https://carnegieendowment.org/people/matt-sheehan).
+[Matt Sheehan's Carnegie profile](https://carnegieendowment.org/people/matt-sheehan),
+[Dwarkesh Patel's profile](https://substack.com/@dwarkesh), and
+[Noam Brown's website](https://noambrown.com/).
 It is not an automatic Google Images scraper or face-recognition system.
 
 `pipeline/avatars.py` downloads each selected image once, corrects orientation,
 crops to a 96 × 96 square, and encodes WebP at quality 82. Current files are
-1,332 and 2,692 bytes, displayed at 24 CSS pixels. Originals are discarded.
+roughly 1–3 KB, displayed at 24 CSS pixels. The shared cache avoids downloading
+the same host image for each episode. Originals are discarded.
 Files have content hashes and immutable browser caching; a local manifest
 retains the source, recipe, and attribution. Changing a catalog entry triggers
 a new download. Missing or failed portraits retain initials without layout
@@ -291,13 +298,19 @@ inference, so each callback confirms only the preceding chunks. A short file
 has one chunk. Completion reaches 100% only after `transcribe()` returns. This
 is work progress, not a time estimate; the bar clears for speaker analysis.
 
-Our pipeline currently writes `asr.json` after full transcription, then runs
-speaker separation and classification. Streaming is available in the library
-but is not connected to this player. A progressive pipeline should publish
-stable text first, retain an overlap tail for corrections, and classify only
-after enough surrounding context is available. Speaker names and chapter
-headings can arrive later. Streaming quality and latency still need a separate
-comparison against the current batch run.
+While the same batch call runs, we capture copies of completed chunk tokens,
+merge them with Parakeet's overlap merger, and publish complete sentences before
+the overlap tail as atomic `draft.json` snapshots. The original result is left
+untouched. The player reads new revisions, retains unchanged paragraph nodes,
+and defers off-screen paragraph layout with content visibility. Draft paragraphs
+have no speaker names, seeking, follow-along, or skipping: the publisher stream
+may differ from the analyzed download. Ready installs the analyzed audio and
+full interactive transcript together. Full `asr.json` still gates Senko, Jev,
+and Luna; we do not run those models for each partial chunk.
+
+Validation on the cached 100-second clip showed draft text before completion;
+the final ASR result exactly matched the previous run without draft capture.
+This is not a full-episode latency or speaker-accuracy benchmark.
 
 ## Reproduce the pipeline
 

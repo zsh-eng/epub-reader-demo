@@ -18,7 +18,7 @@ from PIL import Image, ImageOps
 CATALOG = Path(__file__).resolve().parents[1] / "avatar-sources.json"
 
 
-def prepare_avatars(root):
+def prepare_avatars(root, shared_root=None):
     sources = json.loads(CATALOG.read_text())
     speakers = json.loads((root / "enrichment.json").read_text())["speakers"]
     names = {
@@ -26,9 +26,10 @@ def prepare_avatars(root):
         for s in speakers
         if s["confidence"] != "unknown" and s["role"].lower() in {"host", "guest"}
     }
-    folder = root / "avatars"
+    shared_root = shared_root or root
+    folder = shared_root / "avatars"
     folder.mkdir(exist_ok=True)
-    manifest = root / "avatars.json"
+    manifest = shared_root / "avatars.json"
     cached = json.loads(manifest.read_text()) if manifest.exists() else {}
     output = {}
     for source in sources:
@@ -78,7 +79,10 @@ def prepare_avatars(root):
             print(
                 f"Portrait unavailable for {name}: {type(error).__name__}; using initials"
             )
-    manifest.write_text(json.dumps(output, indent=2))
+    # A shared catalog avoids downloading the same host portrait per episode.
+    manifest.write_text(json.dumps({**cached, **output}, indent=2))
+    if shared_root != root:
+        (root / "avatars.json").write_text(json.dumps(output, indent=2))
 
 
 if __name__ == "__main__":

@@ -19,6 +19,22 @@ export function createServer(
       const jobRoute = /^\/api\/preparations\/([a-f0-9]{20})$/.exec(
         url.pathname,
       );
+      const draftRoute = /^\/api\/preparations\/([a-f0-9]{20})\/draft$/.exec(
+        url.pathname,
+      );
+      if (draftRoute && request.method === "GET") {
+        const file = Bun.file(
+          join(preparations.folder(draftRoute[1]), "draft.json"),
+        );
+        if (!(await file.exists()))
+          return new Response("Draft unavailable", { status: 404 });
+        return new Response(file, {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store",
+          },
+        });
+      }
       if (jobRoute) {
         if (request.method === "GET")
           return Response.json(await preparations.status(jobRoute[1]), {

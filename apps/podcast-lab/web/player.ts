@@ -1,4 +1,8 @@
-import { watchPreparation, stopPreparationWatch } from "./preparation";
+import {
+  watchPreparation,
+  stopPreparationWatch,
+  requestPreparation,
+} from "./preparation";
 import {
   arrive,
   carryArtwork,
@@ -23,6 +27,7 @@ type Speaker = {
   name: string;
   role: string;
   confidence: string;
+  nameSource?: string;
   avatar?: string;
   avatarSource?: string;
   avatarCredit?: string;
@@ -160,7 +165,9 @@ function createRow(index: number) {
   label.textContent = name;
   if (!promotion(row) && speaker?.confidence !== "unknown")
     label.title =
-      "Name inferred from the introduction; speaker separation can be wrong.";
+      speaker?.nameSource === "showCreator"
+        ? "Likely host, based on show metadata and their role in the conversation."
+        : "Name inferred from the introduction; speaker separation can be wrong.";
   const time = document.createElement("time");
   time.textContent = fmt(row.start);
   header.append(avatar, label);
@@ -448,9 +455,9 @@ async function openEpisode(
     art.width = 220;
     art.height = 220;
     const heading = document.createElement("h2");
-    heading.textContent = "Keep listening.";
+    heading.textContent = "Ready when you are.";
     const note = document.createElement("p");
-    note.textContent = "Your transcript is on its way.";
+    note.textContent = "Listen while your transcript prepares.";
     const progress = document.createElement("div");
     progress.id = "preparation-status";
     progress.dataset.phase = "queued";
@@ -581,15 +588,19 @@ async function openEpisode(
   // metadata. The metadata handler restores the episode's saved position.
   if (autoplay) void play();
   if (!prepared)
-    watchPreparation(episode.id, async () => {
-      if (episodeIdentity !== episode.id) return;
-      // The analyzed download can differ from a publisher stream with dynamic ads.
-      // Upgrade both media and transcript together; never apply new skips to the
-      // old URL. A same-episode handoff preserves play/pause, time, speed and skip.
-      episode.preparedId = episode.id;
-      await openEpisode(episode, show);
-      window.dispatchEvent(new Event("undertone-prepared"));
-    });
+    watchPreparation(
+      episode.id,
+      async () => {
+        if (episodeIdentity !== episode.id) return;
+        // The analyzed download can differ from a publisher stream with dynamic ads.
+        // Upgrade both media and transcript together; never apply new skips to the
+        // old URL. A same-episode handoff preserves play/pause, time, speed and skip.
+        episode.preparedId = episode.id;
+        await openEpisode(episode, show);
+        window.dispatchEvent(new Event("undertone-prepared"));
+      },
+      autoplay,
+    );
 }
 function revealEpisode(origin?: ArtworkOrigin) {
   if (element("reader-workspace").hidden) return;
@@ -603,6 +614,7 @@ element("play").addEventListener("click", () =>
   audio.paused ? void play() : audio.pause(),
 );
 audio.addEventListener("play", () => {
+  if (streaming) requestPreparation();
   element("error").hidden = true;
   element("library-status").textContent = "";
   element("play").setAttribute("aria-label", "Pause");

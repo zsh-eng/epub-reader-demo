@@ -81,6 +81,15 @@ test("preparation API queues once, protects local work, persists ready assets an
     responses.push(await post(b));
     expect(responses.map((r) => r.status)).toEqual([202, 202, 202]);
     expect(calls).toEqual([a]);
+    await Bun.write(
+      join(root, "prepared", a, "draft.json"),
+      JSON.stringify({ revision: 1, paragraphs: ["Draft speech"] }),
+    );
+    expect(
+      await (
+        await fetch(new URL(`/api/preparations/${a}/draft`, server.url))
+      ).json(),
+    ).toEqual({ revision: 1, paragraphs: ["Draft speech"] });
     expect(
       (await fetch(new URL(`/episodes/${a}/episode.json`, server.url))).status,
     ).toBe(404);
