@@ -5,6 +5,8 @@ type Status = {
   detail: string;
   downloadedBytes?: number;
   totalBytes?: number | null;
+  completedChunks?: number;
+  totalChunks?: number;
 };
 let current: AbortController | undefined;
 let timer = 0;
@@ -22,7 +24,7 @@ export function watchPreparation(id: string, onReady: () => Promise<void>) {
   const root = document.getElementById("preparation-status")!;
   const label = root.querySelector<HTMLElement>("[role=status]")!;
   const retry = root.querySelector<HTMLButtonElement>("button")!;
-  const download = root.querySelector<HTMLProgressElement>("progress")!;
+  const progress = root.querySelector<HTMLProgressElement>("progress")!;
   const steps = [
     "queued",
     "downloading",
@@ -53,18 +55,33 @@ export function watchPreparation(id: string, onReady: () => Promise<void>) {
       if (controller.signal.aborted) return;
       root.dataset.phase = state.phase;
       label.textContent = state.detail;
-      download.hidden = state.phase !== "downloading";
-      if (!download.hidden) {
+      progress.hidden = true;
+      if (state.phase === "downloading") {
+        progress.hidden = false;
+        progress.setAttribute("aria-label", "Audio download");
         const received = state.downloadedBytes ?? 0;
         const size = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`;
         if (state.totalBytes && state.totalBytes > 0) {
           const fraction = Math.min(1, received / state.totalBytes);
-          download.value = fraction;
+          progress.value = fraction;
           label.textContent = `Downloading · ${Math.floor(fraction * 100)}% · ${size(received)} / ${size(state.totalBytes)}`;
         } else {
-          download.removeAttribute("value");
+          progress.removeAttribute("value");
           label.textContent = `Downloading · ${size(received)}`;
         }
+      } else if (state.phase === "transcribing" && state.totalChunks) {
+        const total = state.totalChunks;
+        const completed = Math.min(
+          total,
+          Math.max(0, state.completedChunks ?? 0),
+        );
+        progress.hidden = false;
+        progress.setAttribute("aria-label", "Transcription progress");
+        progress.value = completed / total;
+        label.textContent =
+          completed === total
+            ? "Transcription complete · 100%"
+            : `Transcribing · chunk ${completed + 1} of ${total} · ${Math.floor((completed / total) * 100)}%`;
       }
       retry.hidden = state.phase !== "failed";
       root.querySelectorAll(".preparation-steps i").forEach((step, index) => {
@@ -81,7 +98,7 @@ export function watchPreparation(id: string, onReady: () => Promise<void>) {
       if (controller.signal.aborted) return;
       label.textContent = "Preparation is unavailable. Audio can keep playing.";
       root.dataset.phase = "failed";
-      download.hidden = true;
+      progress.hidden = true;
       retry.hidden = false;
     }
   }

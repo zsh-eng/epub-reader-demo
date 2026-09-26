@@ -11,6 +11,8 @@ async function preparationFixture(page: Page) {
   let phase = "transcribing",
     downloadedBytes = 5_000_000,
     totalBytes: number | null = 10_000_000,
+    completedChunks: number | undefined,
+    totalChunks: number | undefined,
     starts = 0;
   await page.route("**/api/preparations", (route) =>
     route.fulfill({ json: phase === "ready" ? [episode.id] : [] }),
@@ -23,6 +25,8 @@ async function preparationFixture(page: Page) {
         phase,
         downloadedBytes,
         totalBytes,
+        completedChunks,
+        totalChunks,
         detail:
           phase === "failed"
             ? "Preparation was interrupted. Retry to continue."
@@ -57,6 +61,10 @@ async function preparationFixture(page: Page) {
       totalBytes = total;
     },
     starts: () => starts,
+    setTranscription: (completed: number, total: number) => {
+      completedChunks = completed;
+      totalChunks = total;
+    },
   };
 }
 
@@ -120,6 +128,33 @@ test("stream plays during preparation; ready transcript switches to analyzed byt
     )
     .toBe(true);
   expect(fixture.starts()).toBe(1);
+});
+
+test("transcription progress counts completed chunks and clears for speaker analysis", async ({
+  page,
+}) => {
+  const fixture = await preparationFixture(page);
+  await page.goto(`/#listen/${fixture.episode.id}`);
+  const progress = page.getByRole("progressbar", {
+    name: "Transcription progress",
+  });
+  await expect(progress).toBeHidden();
+  fixture.setTranscription(0, 3);
+  await expect(progress).toHaveAttribute("value", "0");
+  await expect(page.locator("#preparation-status")).toContainText(
+    "chunk 1 of 3 · 0%",
+  );
+  fixture.setTranscription(2, 3);
+  await expect(page.locator("#preparation-status")).toContainText(
+    "chunk 3 of 3 · 66%",
+  );
+  fixture.setTranscription(3, 3);
+  await expect(progress).toHaveAttribute("value", "1");
+  await expect(page.locator("#preparation-status")).toContainText(
+    "Transcription complete · 100%",
+  );
+  fixture.setPhase("speakers");
+  await expect(progress).toBeHidden();
 });
 
 test("failed preparation can retry without replacing the current stream; another selection wins", async ({

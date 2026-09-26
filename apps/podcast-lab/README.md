@@ -278,10 +278,18 @@ The installed Parakeet MLX 0.5.0 supports two paths:
 
 - `transcribe(..., chunk_duration=90, overlap_duration=10)`, which we use,
   returns one merged result after all chunks finish. Its `chunk_callback`
-  reports sample positions, not partial transcript text.
+  reports sample positions, not partial transcript text. Chunking is built in;
+  90 seconds and 10 seconds are our settings. The Python API defaults to no
+  chunking, with a 15-second overlap when chunking is enabled.
 - `transcribe_stream()` accepts audio through `add_audio()` and exposes
   `result`, `finalized_tokens`, and `draft_tokens`. Draft text may change as
   more context arrives.
+
+The preparation screen shows model loading, then the current chunk and the
+percentage of chunks completed. The installed callback fires **before** chunk
+inference, so each callback confirms only the preceding chunks. A short file
+has one chunk. Completion reaches 100% only after `transcribe()` returns. This
+is work progress, not a time estimate; the bar clears for speaker analysis.
 
 Our pipeline currently writes `asr.json` after full transcription, then runs
 speaker separation and classification. Streaming is available in the library

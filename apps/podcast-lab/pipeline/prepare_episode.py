@@ -51,7 +51,8 @@ def prepare(root):
                 engine,
                 str(root / "episode.wav"),
                 str(temp),
-            ],
+            ]
+            + (["--status", str(root / "status.json")] if engine == "mlx" else []),
             check=True,
             timeout=3600,
         )
