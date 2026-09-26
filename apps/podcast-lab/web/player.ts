@@ -457,7 +457,7 @@ async function openEpisode(
     progress.innerHTML =
       '<div class="preparation-steps" aria-hidden="true">' +
       "<i></i>".repeat(7) +
-      '</div><p role="status">Starting preparation</p><button class="pill" hidden>Retry preparation</button>';
+      '</div><progress class="download-progress" aria-label="Audio download" max="1" hidden></progress><p role="status">Starting preparation</p><button class="pill" hidden>Retry preparation</button>';
     empty.append(art, heading, note, progress);
     space.append(empty);
   }

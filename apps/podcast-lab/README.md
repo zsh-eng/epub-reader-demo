@@ -96,9 +96,17 @@ A cross-process file lock prevents two local speech models from running together
 if the server restarts. The UI polls the selected job every 1.5 seconds; it shows
 actual stages rather than an estimated percentage:
 
-1. Download with resumable HTTP ranges; hash the exact saved bytes.
+1. Download with resumable HTTP ranges; show bytes and percentage when the host
+   supplies a total size. Unknown totals show received bytes without a percentage.
+   Progress is written at most twice per second (plus completion) and polled by
+   the UI every 1.5 seconds. Hash the complete saved file before transcription.
 2. Convert to mono 16 kHz PCM, then run Parakeet MLX and Senko sequentially.
-3. Run Jev's complete-sequence detector and Luna enrichment concurrently.
+   Parakeet uses 90-second chunks with 10-second overlap internally; the app waits
+   for its full result, then separates speakers for the full recording.
+3. Run Jev's complete-sequence detector and Luna enrichment concurrently. Jev
+   uses three-minute windows starting every 90 seconds, with up to four windows
+   in flight. Luna receives the complete speaker blocks in one call for names
+   and chapters. Results are not pipelined from partial ASR chunks.
 4. Validate the audio/transcript hashes, materialize paragraphs, and mark ready.
 
 Audio keeps playing while the job runs, including while browsing. When ready,
@@ -386,7 +394,7 @@ four-episode comparison and remaining Decoder limitations.
 ## Motion
 
 Cached cover art moves from its library card into the show or listening view
-in 240 ms. Page arrivals take 180 ms; play/pause icons crossfade in 150 ms and
+in 240 ms. Sidebar navigation is immediate, without cover travel or page arrival. Page arrivals take 180 ms; play/pause icons crossfade in 150 ms and
 skip notices enter/leave in 180 ms without moving content. Fine pointers get a
 small cover lift. The scrubber, search results and virtual transcript remain
 direct; no animation delays playback or list updates.

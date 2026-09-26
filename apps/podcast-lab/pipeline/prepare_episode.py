@@ -11,6 +11,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1]
@@ -25,7 +26,7 @@ def atomic(path, value):
 def prepare(root):
     phase = "queued"
 
-    def status(next_phase, detail):
+    def status(next_phase, detail, **extra):
         nonlocal phase
         phase = next_phase
         atomic(
@@ -35,6 +36,7 @@ def prepare(root):
                 "phase": phase,
                 "detail": detail,
                 "ownerPID": os.getpid(),
+                **extra,
             },
         )
 
@@ -69,7 +71,24 @@ def prepare(root):
             from download import download
 
             status("downloading", "Downloading audio")
-            audio = download(source["audioURL"], root / "episode.mp3")
+            last_report = 0.0
+
+            def download_progress(received, total):
+                nonlocal last_report
+                now = time.monotonic()
+                if now - last_report < 0.5 and received != total:
+                    return
+                last_report = now
+                status(
+                    "downloading",
+                    "Downloading audio",
+                    downloadedBytes=received,
+                    totalBytes=total or None,
+                )
+
+            audio = download(
+                source["audioURL"], root / "episode.mp3", download_progress
+            )
             manifest = {
                 "audioHash": audio["sha256"],
                 "recipe": "background-1",

@@ -4,10 +4,13 @@ import hashlib
 import json
 import re
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
 
-def download(url: str, target: Path):
+def download(
+    url: str, target: Path, progress: Callable[[int, int], None] | None = None
+):
     part = target.with_suffix(target.suffix + ".part")
     meta = target.with_suffix(target.suffix + ".download.json")
     previous = json.loads(meta.read_text()) if meta.exists() else {}
@@ -19,6 +22,8 @@ def download(url: str, target: Path):
         with target.open("rb") as source:
             digest = hashlib.file_digest(source, "sha256").hexdigest()
         if digest == previous["sha256"]:
+            if progress:
+                progress(target.stat().st_size, target.stat().st_size)
             return previous
         raise ValueError("Cached audio hash changed; use a new output directory")
     offset = part.stat().st_size if part.exists() else 0
@@ -51,9 +56,15 @@ def download(url: str, target: Path):
             raise ValueError("Server changed its validator during a partial response")
         record = {"url": url, "validator": validator, "bytes": total}
         meta.write_text(json.dumps(record, indent=2))
+        received = offset if resumed else 0
+        if progress:
+            progress(received, total)
         with part.open("ab" if resumed else "wb") as output:
-            while chunk := response.read(1024 * 1024):
+            while chunk := response.read(64 * 1024):
                 output.write(chunk)
+                received += len(chunk)
+                if progress:
+                    progress(received, total)
         if total and part.stat().st_size != total:
             raise ValueError("Incomplete download; run again to resume")
     with part.open("rb") as source:

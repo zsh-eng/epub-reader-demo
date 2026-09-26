@@ -36,7 +36,8 @@ class DownloadIntegration(unittest.TestCase):
                     )
                 self.send_header("ETag", '"v2"')
                 data = content[offset:] if resume else content
-                self.send_header("Content-Length", str(len(data)))
+                if self.path != "/unknown":
+                    self.send_header("Content-Length", str(len(data)))
                 self.end_headers()
                 self.wfile.write(data)
 
@@ -58,12 +59,36 @@ class DownloadIntegration(unittest.TestCase):
                     path.with_suffix(".mp3.download.json").write_text(
                         json.dumps({"url": url, "validator": validator})
                     )
-                    first = download(url, path)
+                    updates = []
+                    first = download(
+                        url,
+                        path,
+                        lambda received, total, updates=updates: updates.append(
+                            (received, total)
+                        ),
+                    )
+                    self.assertEqual(
+                        updates[0],
+                        (len(partial) if validator == '"v2"' else 0, len(content)),
+                    )
+                    self.assertEqual(updates[-1], (len(content), len(content)))
                     self.assertEqual(path.read_bytes(), content)
                     self.assertEqual(requests[-1]["Range"], f"bytes={len(partial)}-")
                     before = len(requests)
                     self.assertEqual(download(url, path), first)
                     self.assertEqual(len(requests), before)
+            with tempfile.TemporaryDirectory() as d:
+                updates = []
+                path = Path(d) / "unknown.mp3"
+                download(
+                    f"http://127.0.0.1:{server.server_port}/unknown",
+                    path,
+                    lambda received, total, updates=updates: updates.append(
+                        (received, total)
+                    ),
+                )
+                self.assertEqual(updates[-1], (len(content), 0))
+                self.assertEqual(path.read_bytes(), content)
         finally:
             server.shutdown()
             server.server_close()

@@ -99,6 +99,7 @@ export async function initLibrary(open: Open) {
   let loadVersion = 0;
   let playWhenReady = false;
   let origin: ArtworkOrigin | undefined;
+  let immediateRoute = "";
   const showsById = new Map(data.shows.map((show) => [show.id, show]));
   const showFor = (id: string) => showsById.get(id)!;
   const searchText = new Map(
@@ -386,6 +387,8 @@ export async function initLibrary(open: Open) {
   }
   function route() {
     cancelNavigationMotion();
+    const immediate = immediateRoute === location.hash;
+    immediateRoute = "";
     const hash = location.hash.slice(1) || "home",
       player = hash === "player" || hash.startsWith("listen/");
     document.body.classList.toggle("library-open", !player);
@@ -429,7 +432,7 @@ export async function initLibrary(open: Open) {
         el("library-content").querySelector<HTMLImageElement>(".show-hero img"),
       );
     origin = undefined;
-    arrive(el("library-content"));
+    if (!immediate) arrive(el("library-content"));
   }
   // Capture geometry before the route hides/removes its source. Purely visual:
   // playback state and selection do not wait for an animation.
@@ -437,13 +440,20 @@ export async function initLibrary(open: Open) {
     "click",
     (event) => {
       const target = event.target as HTMLElement;
+      const sidebar = target.closest<HTMLAnchorElement>("#library-nav a");
+      immediateRoute = sidebar?.hash ?? "";
+      if (sidebar) {
+        origin = undefined;
+        cancelNavigationMotion();
+        return;
+      }
       if (
         target.closest(
-          ".episode-title, .episode-play, .continue-card button, .show-card-link, .episode-cover-link, .show-nav",
+          ".episode-title, .episode-play, .continue-card button, .show-card-link, .episode-cover-link",
         )
       )
         origin = captureArtwork(
-          target.closest(".episode-row, .continue-card, .show-card, .show-nav"),
+          target.closest(".episode-row, .continue-card, .show-card"),
         );
       else origin = undefined;
     },

@@ -112,3 +112,22 @@ test("stream surface uses buffered audio and a recoverable error, without fake w
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: ".local/stream-phone-dark.png" });
 });
+
+test("sidebar show selection is immediate without artwork or page movement", async ({
+  page,
+}) => {
+  await page.goto("/#home");
+  const link = page.locator("#library-nav .show-nav").first();
+  const target = await link.getAttribute("href");
+  await link.click();
+  await expect(page).toHaveURL(new RegExp(`${target}$`));
+  await expect(page.locator(".show-hero")).toBeVisible();
+  expect(await page.locator(".travelling-cover").count()).toBe(0);
+  expect(
+    await page.locator("#library-content").evaluate((el) => ({
+      transform: getComputedStyle(el).transform,
+      opacity: getComputedStyle(el).opacity,
+      animations: el.getAnimations().length,
+    })),
+  ).toEqual({ transform: "none", opacity: "1", animations: 0 });
+});

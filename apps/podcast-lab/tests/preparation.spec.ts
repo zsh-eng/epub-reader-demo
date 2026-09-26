@@ -9,6 +9,8 @@ async function preparationFixture(page: Page) {
   payload.title = episode.title;
   payload.audioHash = "preparation-test-exact-audio";
   let phase = "transcribing",
+    downloadedBytes = 5_000_000,
+    totalBytes: number | null = 10_000_000,
     starts = 0;
   await page.route("**/api/preparations", (route) =>
     route.fulfill({ json: phase === "ready" ? [episode.id] : [] }),
@@ -19,6 +21,8 @@ async function preparationFixture(page: Page) {
       json: {
         id: episode.id,
         phase,
+        downloadedBytes,
+        totalBytes,
         detail:
           phase === "failed"
             ? "Preparation was interrupted. Retry to continue."
@@ -47,6 +51,10 @@ async function preparationFixture(page: Page) {
     episode,
     setPhase: (next: string) => {
       phase = next;
+    },
+    setTransfer: (bytes: number, total: number | null) => {
+      downloadedBytes = bytes;
+      totalBytes = total;
     },
     starts: () => starts,
   };
@@ -143,4 +151,28 @@ test("failed preparation can retry without replacing the current stream; another
     "/episodes/ezra/audio",
   );
   await expect(page.locator(".transcript-row").first()).toBeVisible();
+});
+
+test("transcript preparation shows real download bytes and handles unknown totals", async ({
+  page,
+}) => {
+  const fixture = await preparationFixture(page);
+  fixture.setPhase("downloading");
+  await page.goto(`/#listen/${fixture.episode.id}`);
+  const progress = page.getByRole("progressbar", { name: "Audio download" });
+  await expect(progress).toHaveAttribute("value", "0.5");
+  await expect(page.locator("#preparation-status")).toContainText(
+    "50% · 5.0 MB / 10.0 MB",
+  );
+  await page.screenshot({ path: ".local/download-progress.png" });
+  fixture.setTransfer(7_000_000, null);
+  await expect(page.locator("#preparation-status")).toContainText(
+    "Downloading · 7.0 MB",
+  );
+  await expect(progress).not.toHaveAttribute("value");
+  fixture.setPhase("transcribing");
+  await expect(progress).toBeHidden();
+  await expect(page.locator("#preparation-status")).toContainText(
+    "Transcribing on your Mac",
+  );
 });
