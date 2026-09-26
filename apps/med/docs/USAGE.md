@@ -146,7 +146,44 @@ Vim navigation is enabled by default. Use the command palette to disable or enab
 - `zz` / `zt` / `zb` to place the current line at the middle / top / bottom of the view. These keep the cursor column. `zt` and `zb` leave four lines of space from the edge.
 - `/` / `?` for live forward/backward file search, `n` / `N` for matches, and `*` / `#` for the word at the cursor. Lowercase queries ignore case; uppercase letters enable case-sensitive matching. The current match uses the theme accent and an underline; other matches use the search color. Enter accepts the preview. Escape cancels a preview and clears highlights; in normal mode it clears highlights while keeping the search.
 
-The file remains read-only. While a Vim file pane has focus, `?` searches backward; `⌘K` / `Ctrl+K` still opens commands. Palettes and text inputs keep their normal keyboard behavior. Symbol search does not require Vim mode.
+Browsing starts read-only. Choose **Edit** for a working-tree file, or press `i` with Vim navigation enabled. While a Vim file pane has focus, `?` searches backward; `⌘K` / `Ctrl+K` still opens commands. Palettes and text inputs keep their normal keyboard behavior. Symbol search does not require Vim mode.
+
+## Edit working files
+
+Choose **Edit** to open a file in Vim Normal mode. With Vim navigation enabled,
+press `i` in the read-only file pane to enter Insert mode at the current cursor.
+Use `i`, `a`, `o`, `dd`, `ciw`, visual selections, `p`, `.`, `u`, and Ctrl+R.
+Escape returns to Normal mode. `:w`, ⌘S / Ctrl+S, or **Save** writes the file.
+`:wq` saves and returns to viewing only if the save succeeds.
+
+A hollow dot means saved. A filled dot means the draft differs from the last
+saved contents. Dirty tabs also show a dot. Undo after saving can make the file
+dirty again. **Done** / `:q` returns to viewing; unsaved text requires an explicit
+**Discard draft** or **Keep editing** choice. Saving does not stage or commit.
+
+Drafts and undo history stay in memory across tab switches and tab closes. Open
+the same working file to resume. Up to 24 drafts are retained; clean drafts can
+be evicted at that limit. Reloading or closing the browser warns about unsaved
+work but does not persist drafts. Vim starts in Normal mode when reattached.
+
+If an agent or another process changed the file, saving reports a conflict and
+keeps your draft. Copy any text you need before discarding and reopening the
+current disk version. There is no force-save command. Files from commits and
+saved review snapshots remain read-only; open the working-tree version to edit.
+Editing is limited to existing, complete UTF-8 text files up to 1 MiB. Symlinks,
+hard-linked files, and paths through nested repositories cannot be saved.
+Uniform CRLF line endings and ordinary executable permission bits are preserved.
+
+To link directly to a registered working file, URL-encode the canonical worktree
+path and repository-relative file path:
+
+```text
+http://127.0.0.1:4173/file?repo=%2Fpath%2Fto%2Frepo&path=src%2Fexample.ts&edit=1
+```
+
+Omit `edit=1` to open the read-only viewer. The browser must already be authorized
+with the host's launch URL, as for saved review links. A file link opens live
+working content; it does not freeze a review or register another repository.
 
 ## Development
 

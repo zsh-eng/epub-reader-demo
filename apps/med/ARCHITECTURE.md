@@ -179,3 +179,34 @@ The CLI uses a stable default port (4173) and private state directory (`~/.local
 The browser opens one target at a time. Saved source does not follow watcher events. The normal file browser and commit history remain available; the header shows when the user has left the saved comparison. Feedback export uses captured source, including selected lines and adjacent context. Saved file access requires the repository family to remain registered, but a surviving checkout can replace a removed linked worktree as the session anchor.
 
 See [agent integration](docs/AGENT_INTEGRATION.md) for the CLI contract, repository selection policy, data limits, and user-confirmed `AGENTS.md` guidance.
+
+## Working-file editing
+
+The read-only file/diff viewer stays on Pierre. Editing lazy-loads CodeMirror 6
+and `@replit/codemirror-vim`. Its document state and undo history live in a bounded
+per-App draft store keyed by source and file path. Changes update the store without
+rerendering React for every keystroke; saved/dirty transitions notify subscribers.
+Vim Insert typing is grouped into one undo event, including the deletion in a
+change command. Commit sources cannot enter this editor.
+
+A separate, disposable worker supplies Twinkleplop text-range decorations. Input
+updates immediately; syntax runs after a 100 ms pause. Results carry a generation
+number so an older response cannot color newer text. Full-file syntax scanning
+stays off the main thread and the editor renders only its visible document area.
+Themes use the existing palette. Shiki grammar code is not added to editing.
+
+`POST /api/browse/write` uses the existing host/origin/session and repository
+checks. It accepts a worktree source, relative path, expected content identity,
+and up to 1 MiB of UTF-8 text. Med saves serialize per file. The host validates the
+path and content, writes and flushes a sibling temporary file, checks current
+content and file metadata again, then atomically replaces the target. It checks
+repository authorization again before replacement. Detected changes return 409
+and preserve the draft. This is not a filesystem transaction against arbitrary
+external writers: another process can still write after the final check or save.
+There is no forced overwrite, automatic merge, staging, or commit.
+
+Browser unload warns when drafts are dirty or saving. Drafts are memory-only;
+closing a tab retains them, but browser reload does not. Closing the editing
+surface with dirty text requires explicit discard. Atomic replacement preserves
+ordinary file mode bits; hard-linked and symlinked files are refused. Extended
+attributes and ACL copying are not implemented.
