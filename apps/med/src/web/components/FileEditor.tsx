@@ -194,10 +194,11 @@ export default function FileEditor({
             fontSize: "12px",
           },
           ".cm-scroller": {
-            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+            fontFamily: '"Geist Mono", "SFMono-Regular", Consolas, monospace',
             lineHeight: "20px",
             overflow: "auto",
           },
+          ".cm-content": { padding: "16px 0 16px" },
           ".cm-gutters": {
             backgroundColor: active.palette.canvas,
             color: active.palette.muted,

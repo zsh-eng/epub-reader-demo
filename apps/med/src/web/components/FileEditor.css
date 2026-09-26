@@ -11,7 +11,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 12px;
+  padding: 0 12px;
+  height: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--edit-border);
   font-size: 12px;
 }
