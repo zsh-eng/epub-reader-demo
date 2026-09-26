@@ -132,6 +132,7 @@ struct LibraryView: View {
   @State private var confirmDelete = false
   @State private var browsers = BrowserPool()
   @State private var projection = LibraryProjection()
+  @State private var discoveryMotion = DiscoveryMotion()
   @State private var headerHeight: CGFloat = 48
   @State private var viewportVisibility = LibraryViewportVisibility()
   @AppStorage(LibraryFrameDiagnostics.enabledKey) private var frameDiagnostics = false
@@ -170,6 +171,10 @@ struct LibraryView: View {
             ReaderPage(browser: selected, store: store).id(ObjectIdentifier(selected))
           }
         }
+    }
+    .overlay {
+      DiscoveryFlightSurface(motion: discoveryMotion, enabled: selected == nil && !searching && folder == .saved && !showingAnnotations && !showingWeeklyFavourites)
+        .allowsHitTesting(false)
     }
     .overlay(alignment: .top) { navigationControls.accessibilityHidden(showingAnnotations) }
     .overlay(alignment: .bottomLeading) {
@@ -479,6 +484,7 @@ struct LibraryView: View {
     .overlay {
       HStack(spacing: 6) {
         ArcticMark().frame(width: 22, height: 22)
+          .background(DiscoveryTarget(motion: discoveryMotion))
         Text("Arctic").font(.system(.headline, design: .rounded, weight: .semibold))
       }.allowsHitTesting(false)
     }
@@ -742,7 +748,7 @@ struct LibraryView: View {
   }
 
   private var discoveryShelf: some View {
-    LibraryDiscovery { url in
+    LibraryDiscovery(motion: discoveryMotion) { url in
       // ArticleBrowser applies Unwall routing. Store identity remains the publisher URL.
       selected = browsers.open(url, store: store)
     } weekly: { showingWeeklyFavourites = true }
@@ -751,7 +757,7 @@ struct LibraryView: View {
   private func library(in item: ArticleFolder) -> some View {
     let compact = item == .history || item == .archive
     return LazyVStack(alignment: .leading, spacing: compact ? 0 : 18) {
-      if item == .saved { discoveryShelf }
+      if item == .saved { discoveryShelf.padding(.horizontal, -16) }
       ForEach(matches(in: item)) { article in
         articleButton(article) {
           if compact {

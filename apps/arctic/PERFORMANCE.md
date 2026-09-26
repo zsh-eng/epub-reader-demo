@@ -305,3 +305,29 @@ Reader extraction and offline process restart check. The extracted title and
 article body were inspected in the test screenshots. This verifies one public
 article, not every X post or third-party service. The opt-in check can assert a
 specific title with `TEST_RUNNER_ARTICLE_READER_LIVE_TITLE`.
+
+
+## Publisher gathering and story themes (2026-09-26)
+
+Publisher marks are five local 144–180 px assets (21.7 KB compressed, about
+542 KiB decoded RGBA). The native shelf observes its ancestor scroll view and
+updates six image layers directly. It does not publish scroll offsets into
+LibraryView, rebuild article rows, resize the content area, or run a display
+link while idle. Horizontal scrolling changes the visible source marks; reverse
+vertical scrolling retraces the same path. Reduce Motion fades in place.
+The duplicate layers have no hit targets and share the source UIImage objects.
+
+Weekly headings retain the same title and summary regions across filters.
+Story pagination measures the actual fonts once per passage snapshot using a
+bounded search; all ten styles use those same pages. Large decorative shapes
+render in fixed-size overlays so they cannot widen the passage layout. Only
+one selected image is rasterized for export. Theme-specific colour choices are
+limited to export artwork, as requested by the user.
+
+Four simulator flows passed: stable weekly filter positions and offline reopen,
+forward/reverse publisher gathering, Reduce Motion, and all ten export themes
+with unchanged text, pagination and the native share sheet. Screenshot review
+caught decoration-driven clipping that assertions alone did not detect; the
+fixed canvas was then rechecked. These are interaction/layout checks, not a
+physical-device 120 Hz measurement. The local reference board was checked at
+390 and 1440 px widths with both feed/story proportions and theme selection.

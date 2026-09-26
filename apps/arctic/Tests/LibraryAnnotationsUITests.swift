@@ -15,12 +15,19 @@ final class LibraryAnnotationsUITests: XCTestCase {
     app.buttons["share-passage-image"].tap()
     let preview = app.otherElements["story-preview"]
     XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
-    capture(app, "passage-story-paper")
-    app.buttons["story-style-Ink"].tap()
-    XCTAssertTrue((preview.value as? String ?? "").hasPrefix("Ink"))
-    capture(app, "passage-story-ink")
-    app.buttons["story-style-Ice"].tap()
-    capture(app, "passage-story-ice")
+    let initialText = preview.label
+    for style in ["Paper", "Ink", "Ice", "Folio", "Field", "Signal", "Index", "Dusk", "Cutout", "Ribbon"] {
+      let button = app.buttons["story-style-" + style]
+      for _ in 0..<4 {
+        if button.isHittable { break }
+        app.scrollViews["story-styles"].swipeLeft()
+      }
+      XCTAssertTrue(button.isHittable, style)
+      button.tap()
+      XCTAssertTrue((preview.value as? String ?? "").hasPrefix(style))
+      XCTAssertEqual(preview.label, initialText, "Changing style must not change the passage")
+      capture(app, "passage-story-" + style.lowercased())
+    }
     XCTAssertTrue(app.buttons["Next card"].isEnabled)
     let first = preview.label
     app.buttons["Next card"].tap()

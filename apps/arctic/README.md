@@ -384,20 +384,26 @@ checks remain open.
 ## Discovery and passage images
 
 The Saved shelf opens NY Times, Financial Times, Economist, New Yorker and
-Atlantic homepages through the existing Unwall route. The marks are local text;
-the shelf makes no favicon requests. Publisher and Unwall availability still
+Atlantic homepages through the existing Unwall route. The actual publisher marks are bundled assets;
+the shelf makes no favicon requests. [Asset sources](Design/publisher-marks.md) record provenance.
+When scrolling, labels fade and visible circles gather into the Arctic mark.
+The path follows the scroll offset in both directions; Reduce Motion uses a fade. Publisher and Unwall availability still
 requires a connection.
 
 **This week** shows articles favourited from Monday to Sunday in the current
 time zone, including archived favourites. **All favourites** also includes
 older favourites without a recorded date; Arctic does not invent dates for them.
 
-In a highlight/note menu, select **Share as image**. Paper, Ink and Ice use the
-same 360 × 640 canvas for preview and 1080 × 1920 export. Long passages split
+In a highlight/note menu, select **Share as image**. Ten themes—Paper, Ink, Ice,
+Folio, Field, Signal, Index, Dusk, Cutout and Ribbon—use a discreet, theme-coloured
+Arctic mark, distinct typography and graphic treatments. They share the same
+360 × 640 canvas for preview and 1080 × 1920 export. Long passages split
 into readable cards without dropping text. Export renders only the selected
 card, then opens the native share sheet. Save or copy the image for Instagram;
 there is no Meta account integration. Quotes keep their article title and source.
-The restrained type, source credit and safe margins draw on
+The [visual reference board](Design/Sharing/index.html) contains source links and
+ten original graphic studies; its browser concepts are labelled separately from
+the native templates. The type, source credit and safe margins draw on
 [Readwise passage sharing](https://docs.readwise.io/reader/docs/faqs/sharing) and
 [editorial quote layouts](https://www.canva.com/templates/s/quote/).
 

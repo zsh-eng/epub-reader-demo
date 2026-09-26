@@ -1,57 +1,33 @@
 import SwiftUI
 
-/// Static marks render immediately and make no favicon requests at launch.
+/// Bundled publisher marks render immediately and make no favicon requests at launch.
 struct ArcticPublisher: Identifiable {
   let name: String
-  let mark: String
+  let asset: String
   let address: String
   var id: String { address }
   var url: URL { URL(string: address)! }
   static let all = [
-    ArcticPublisher(name: "NY Times", mark: "N", address: "https://www.nytimes.com/"),
-    ArcticPublisher(name: "Financial Times", mark: "FT", address: "https://www.ft.com/"),
-    ArcticPublisher(name: "Economist", mark: "E", address: "https://www.economist.com/"),
-    ArcticPublisher(name: "New Yorker", mark: "NY", address: "https://www.newyorker.com/"),
-    ArcticPublisher(name: "The Atlantic", mark: "A", address: "https://www.theatlantic.com/"),
+    ArcticPublisher(
+      name: "NY Times", asset: "PublisherNYTimes", address: "https://www.nytimes.com/"),
+    ArcticPublisher(name: "Financial Times", asset: "PublisherFT", address: "https://www.ft.com/"),
+    ArcticPublisher(
+      name: "Economist", asset: "PublisherEconomist", address: "https://www.economist.com/"),
+    ArcticPublisher(
+      name: "New Yorker", asset: "PublisherNewYorker", address: "https://www.newyorker.com/"),
+    ArcticPublisher(
+      name: "The Atlantic", asset: "PublisherAtlantic", address: "https://www.theatlantic.com/"),
   ]
 }
 
 struct LibraryDiscovery: View {
+  let motion: DiscoveryMotion
   let open: (URL) -> Void
   let weekly: () -> Void
 
   var body: some View {
-    ScrollView(.horizontal) {
-      HStack(alignment: .top, spacing: 18) {
-        Button(action: weekly) {
-          VStack(spacing: 8) {
-            Image(systemName: "star.fill").font(.system(size: 22, weight: .medium))
-              .foregroundStyle(ArcticBrand.accent)
-              .frame(width: 58, height: 58)
-              .background(ArcticBrand.accent.opacity(0.1), in: Circle())
-              .overlay(Circle().strokeBorder(ArcticBrand.accent.opacity(0.4), lineWidth: 1))
-            Text("This week").font(.caption2.weight(.medium))
-          }
-        }.accessibilityLabel("Favourites this week").accessibilityIdentifier("weekly-favourites")
-        ForEach(ArcticPublisher.all) { publisher in
-          Button {
-            open(publisher.url)
-          } label: {
-            VStack(spacing: 8) {
-              Text(publisher.mark).font(.system(size: 23, weight: .semibold, design: .serif))
-                .frame(width: 58, height: 58)
-                .background(ReaderTheme.secondary, in: Circle())
-                .overlay(Circle().strokeBorder(ReaderTheme.border.opacity(0.35), lineWidth: 1))
-              Text(publisher.name).font(.caption2).lineLimit(1)
-            }.frame(width: 68)
-          }.accessibilityLabel("Browse " + publisher.name)
-            .accessibilityHint("Opens through Unwall")
-            .accessibilityIdentifier("publisher-" + (publisher.url.host ?? ""))
-        }
-      }.padding(.horizontal, 20).padding(.vertical, 4)
-    }.scrollIndicators(.hidden).buttonStyle(ArcticPressStyle())
-      .foregroundStyle(ReaderTheme.foreground)
-      .padding(.bottom, 10)
+    NativeDiscoveryShelf(motion: motion, open: open, weekly: weekly)
+      .frame(height: 98)
   }
 }
 
@@ -87,19 +63,23 @@ struct WeeklyFavouritesSheet: View {
           VStack(alignment: .leading, spacing: 14) {
             Image(systemName: "star.fill").font(.system(size: 32)).foregroundStyle(
               ArcticBrand.accent)
-            Text(all ? "Worth keeping." : "The week's\ngood finds.")
-              .font(.system(size: 38, weight: .regular, design: .serif)).tracking(-1)
+            ZStack(alignment: .topLeading) {
+              Text("The week's\ngood finds.").opacity(all ? 0 : 1).accessibilityHidden(all)
+              Text("Worth keeping.").opacity(all ? 1 : 0).accessibilityHidden(!all)
+            }
+            .font(.system(size: 38, weight: .regular, design: .serif)).tracking(-1)
+            .frame(maxWidth: .infinity, alignment: .leading)
             Text(
               all
                 ? "All your favourites, including archived articles."
                 : "\(week.count) \(week.count == 1 ? "favourite" : "favourites") · Monday to Sunday"
             )
-            .font(.subheadline).foregroundStyle(.secondary)
+            .font(.subheadline).foregroundStyle(.secondary).lineLimit(2, reservesSpace: true)
           }.padding(.top, 20).padding(.bottom, 6)
           Picker("Collection", selection: $all) {
             Text("This week").tag(false)
             Text("All favourites").tag(true)
-          }.pickerStyle(.segmented)
+          }.pickerStyle(.segmented).accessibilityIdentifier("weekly-collection")
           if articles.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
               Text("Something will stay with you.").font(.system(.title3, design: .serif))

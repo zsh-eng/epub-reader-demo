@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DECD15000000000000000002 /* LibraryDiscoveryMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DECD15000000000000000001; };
 		DD1A54CA2A1D71EAFFB0595A /* XArticlePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35CE364C96E47B2909AF7180; };
 		7CEEF413F68984404819B88F /* LibraryDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3219FBDCD4EC653982EAAF95; };
 		8AA2BA029F9DACDFFF3E9EEE /* PassageStory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B076FC72C68632FA6DAA850C; };
@@ -105,6 +106,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		DECD15000000000000000001 /* LibraryDiscoveryMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryDiscoveryMotion.swift; sourceTree = "<group>"; };
 		35CE364C96E47B2909AF7180 /* XArticlePayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/XArticlePayload.swift; sourceTree = "<group>"; };
 		3219FBDCD4EC653982EAAF95 /* LibraryDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/LibraryDiscovery.swift; sourceTree = "<group>"; };
 		B076FC72C68632FA6DAA850C /* PassageStory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sources/PassageStory.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				85A5CBD427C94BFA7B1589C6 /* Sources/ReaderTheme.swift */,
 				35CE364C96E47B2909AF7180 /* XArticlePayload.swift */,
 				3219FBDCD4EC653982EAAF95 /* LibraryDiscovery.swift */,
+				DECD15000000000000000001 /* LibraryDiscoveryMotion.swift */,
 				B076FC72C68632FA6DAA850C /* PassageStory.swift */,
 				A00000000000000000000001 /* THIRD_PARTY_NOTICES.txt */,
 				9FFC0A7EFA8751DD7B8DC244 /* Sources/ArticleBrowser.swift */,
@@ -449,6 +452,7 @@
 				83547CBCE7341933B72FFB38 /* Sources/ReaderTheme.swift in Sources */,
 				DD1A54CA2A1D71EAFFB0595A /* XArticlePayload.swift in Sources */,
 				7CEEF413F68984404819B88F /* LibraryDiscovery.swift in Sources */,
+				DECD15000000000000000002 /* LibraryDiscoveryMotion.swift in Sources */,
 				8AA2BA029F9DACDFFF3E9EEE /* PassageStory.swift in Sources */,
 				9BE38C66052403B52952CD8B /* Sources/ArticleBrowser.swift in Sources */,
 				813B25FE8AC54B581077F620 /* Sources/ArticleReaderApp.swift in Sources */,

@@ -124,6 +124,16 @@ final class FavouritesUITests: XCTestCase {
     app.buttons["favourite-article"].tap()
     app.buttons["weekly-favourites"].tap()
     XCTAssertTrue(app.staticTexts["1 favourite · Monday to Sunday"].waitForExistence(timeout: 5))
+    let picker = app.segmentedControls["weekly-collection"]
+    let initialY = picker.frame.minY
+    let firstArticle = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'weekly-article-' ")).firstMatch
+    let articleY = firstArticle.frame.minY
+    picker.buttons["All favourites"].tap()
+    XCTAssertTrue(app.staticTexts["Worth keeping."].exists)
+    XCTAssertEqual(picker.frame.minY, initialY, accuracy: 1)
+    XCTAssertEqual(firstArticle.frame.minY, articleY, accuracy: 1)
+    picker.buttons["This week"].tap()
+    XCTAssertEqual(picker.frame.minY, initialY, accuracy: 1)
     let shot = XCTAttachment(screenshot: app.screenshot())
     shot.name = "weekly-favourites"; shot.lifetime = .keepAlways; add(shot)
     app.terminate()
@@ -135,6 +145,45 @@ final class FavouritesUITests: XCTestCase {
     app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'weekly-article-' ")).firstMatch.tap()
     XCTAssertTrue(app.buttons["reader-toggle"].waitForExistence(timeout: 10))
     XCTAssertTrue(app.webViews.staticTexts["“Slow down,” she said — café, naïve, 日本語. Keep every character intact."].firstMatch.waitForExistence(timeout: 10))
+  }
+
+  @MainActor func testDiscoveryGatherReversesWithScroll() {
+    checkDiscoveryMotion(reduced: false)
+  }
+
+  @MainActor func testDiscoveryReduceMotionUsesFade() {
+    checkDiscoveryMotion(reduced: true)
+  }
+
+  @MainActor private func checkDiscoveryMotion(reduced: Bool) {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-seed-long-list", "-articles-offline", "-images-offline", "-disable-preloading", "-dark-ui"]
+    if reduced { app.launchArguments.append("-reduce-motion") }
+    app.launch()
+    let shelf = app.buttons["weekly-favourites"]
+    XCTAssertTrue(shelf.waitForExistence(timeout: 10))
+    let state = app.staticTexts["discovery-collapse"]
+    XCTAssertTrue(state.waitForExistence(timeout: 5))
+    XCTAssertEqual(state.label, reduced ? "0; fade" : "0; gather")
+    let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.70))
+    let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.64))
+    start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+    let progress = Int(state.label.split(separator: ";").first ?? "") ?? 0
+    XCTAssertGreaterThan(progress, 0)
+    XCTAssertLessThan(progress, 100)
+    let middle = XCTAttachment(screenshot: app.screenshot())
+    middle.name = reduced ? "discovery-fade-midpoint" : "discovery-gather-midpoint"
+    middle.lifetime = .keepAlways; add(middle)
+    app.swipeUp()
+    XCTAssertEqual(state.label, reduced ? "100; fade" : "100; gather")
+    for _ in 0..<5 {
+      if state.label.hasPrefix("0;") { break }
+      app.swipeDown()
+    }
+    XCTAssertEqual(state.label, reduced ? "0; fade" : "0; gather")
+    XCTAssertTrue(shelf.isHittable)
+    let restored = XCTAttachment(screenshot: app.screenshot())
+    restored.name = "discovery-restored"; restored.lifetime = .keepAlways; add(restored)
   }
 
   @MainActor private func launchFixtures() -> XCUIApplication {
