@@ -803,6 +803,7 @@ export function App({
   }, []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
+      if ((event.target as HTMLElement | null)?.closest?.("[data-standalone-files]")) return;
       const editing = event
         .composedPath()
         .some(
@@ -987,6 +988,26 @@ export function App({
         (file) => file.path === activeFile?.path || file.info.previousPath === activeFile?.path,
       )
     : undefined;
+  const loadFileChanges = useCallback(
+    async (file: import("../shared/local-file").FileRead, signal: AbortSignal) => {
+      if (!browseApi.changes || (file.source.kind !== "commit" && file.source.kind !== "worktree"))
+        return { identity: file.identity, label: "", ranges: [] };
+      return browseApi.changes(
+        file.source,
+        file.path,
+        file.identity,
+        file.source.repo === state.review?.repo ? state.review.id : undefined,
+        signal,
+        state.savedView &&
+          state.savedReview &&
+          state.savedTargetId &&
+          file.source.repo === state.review?.repo
+          ? { id: state.savedReview.id, target: state.savedTargetId }
+          : undefined,
+      );
+    },
+    [browseApi, state.review, state.savedView, state.savedReview, state.savedTargetId],
+  );
   const runFileNavigation = (keys: string, control = false) => {
     if (keys !== "/" && keys !== "?") setVimEnabled(true);
     // Run after the palette releases its focus trap.
@@ -1283,6 +1304,11 @@ export function App({
       label: sidebarVisible ? "Hide sidebar" : "Show sidebar",
       shortcut: "⌘ B",
       run: toggleReviewSidebar,
+    },
+    {
+      id: "open-local-file",
+      label: "Open standalone file",
+      run: () => window.dispatchEvent(new Event("med-open-file")),
     },
     { id: "note", label: "Add note to selected lines", shortcut: "C", run: startNote },
   ];
@@ -2137,7 +2163,10 @@ export function App({
                     ? {
                         drafts: editorDrafts,
                         key: JSON.stringify([activeFile.source, activeFile.path]),
-                        write: browseApi.write,
+                        write: (file, text) => {
+                          if (file.source.kind !== "worktree") throw new Error("Read-only source");
+                          return browseApi.write!(file.source, file.path, file.identity, text);
+                        },
                         autoEdit:
                           location.pathname === "/file" &&
                           new URLSearchParams(location.search).get("edit") === "1" &&
@@ -2151,6 +2180,7 @@ export function App({
                 error={fileState.error}
                 stale={fileState.stale}
                 loadBlame={loadBlame}
+                loadChanges={browseApi.changes ? loadFileChanges : undefined}
                 blameEnabled={blameEnabled}
                 onBlameEnabledChange={setBlameEnabled}
                 sourceLabel={activeFile.sourceLabel}

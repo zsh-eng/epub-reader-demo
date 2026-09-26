@@ -126,3 +126,8 @@ bun run dev:med /path/to/repository
 Open the Vite URL with the `#token=…` fragment printed by the API host.
 
 See the [architecture](ARCHITECTURE.md), [test design and commands](docs/TESTING.md), and [limits and validation reports](docs/USAGE.md#limits-and-evidence).
+
+Open files outside Git with `med-diff open /absolute/path/file --line 42`, or use
+**Open standalone file** in the command palette. Drop text files for read-only
+previews. Full-file views show added, deleted, and working changes in the gutter.
+See [file workspace usage](docs/USAGE.md#standalone-files-and-dropped-previews).

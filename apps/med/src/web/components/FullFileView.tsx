@@ -10,6 +10,7 @@ import {
   lazy,
   Suspense,
   useCallback,
+  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
@@ -19,8 +20,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createEditorDrafts, type EditorDrafts } from "../data/editor-drafts";
-import type { BrowseApi } from "../data/browse";
-import type { BrowseRead } from "../../shared/browse";
+import { isBrowseFile, type FileRead as BrowseRead, type FileWrite } from "../../shared/local-file";
 import type { BlameLoader } from "../data/blame";
 import { tokens, ui } from "../theme.stylex";
 import { useTheme } from "../themes";
@@ -32,6 +32,8 @@ import { getFiletypeFromFileName } from "@pierre/diffs";
 import { supportedLanguage } from "../highlighting/languages";
 import { createSearchHighlights } from "../data/search-highlights";
 import { BlameTooltips } from "./BlameTooltips";
+import type { FileChanges } from "../../shared/file-changes";
+import { createChangeGutter } from "../data/change-gutter";
 import { createBlameGutter } from "../data/blame-gutter";
 
 export interface FileSymbolPreview {
@@ -59,9 +61,11 @@ export interface FullFileViewProps {
   initialScrollTop?: number;
   onScrollPosition?(top: number): void;
   loadBlame?: BlameLoader;
+  loadChanges?(file: BrowseRead, signal: AbortSignal): Promise<FileChanges>;
   blameEnabled?: boolean;
   onBlameEnabledChange?(enabled: boolean): void;
   onRefresh(): void;
+  refreshAvailable?: boolean;
   onClose?(): void;
   onOpenBefore?(): void;
   onOpenAfter?(): void;
@@ -69,7 +73,7 @@ export interface FullFileViewProps {
   editor?: {
     drafts: EditorDrafts;
     key: string;
-    write: NonNullable<BrowseApi["write"]>;
+    write: FileWrite;
     autoEdit?: boolean;
   };
 }
@@ -100,9 +104,11 @@ function ReadOnlyFileView({
   initialScrollTop,
   onScrollPosition,
   loadBlame,
+  loadChanges,
   blameEnabled,
   onBlameEnabledChange,
   onRefresh,
+  refreshAvailable = true,
   onClose,
   onOpenBefore,
   onOpenAfter,
@@ -197,8 +203,11 @@ function ReadOnlyFileView({
   const canBlame = !!loadBlame && file?.kind === "text" && !stale && !loading && !error;
   const gutter = useMemo(
     () =>
-      createBlameGutter(file, loadBlame, !compact && canBlame, (message) =>
-        setBlameNotice({ file, message }),
+      createBlameGutter(
+        file && isBrowseFile(file) ? file : null,
+        loadBlame,
+        !compact && canBlame,
+        (message) => setBlameNotice({ file, message }),
       ),
     [file, loadBlame, compact, canBlame],
   );
@@ -209,6 +218,27 @@ function ReadOnlyFileView({
     setLocalBlameEnabled(open);
     onBlameEnabledChange?.(open);
   };
+  const changes = useMemo(createChangeGutter, []);
+  const [changeLabel, setChangeLabel] = useState("");
+  useEffect(() => {
+    changes.set(undefined);
+    if (!file || file.kind !== "text" || stale || loading || !loadChanges) return;
+    const abort = new AbortController();
+    void loadChanges(file, abort.signal)
+      .then((result) => {
+        if (!abort.signal.aborted) {
+          changes.set(result);
+          setChangeLabel(result.label);
+        }
+      })
+      .catch(() => {
+        if (!abort.signal.aborted) setChangeLabel("");
+      });
+    return () => {
+      abort.abort();
+      changes.set(undefined);
+    };
+  }, [file, stale, loading, loadChanges, changes]);
   const plain = !!file?.plain;
   const language = getFiletypeFromFileName(file?.path ?? "");
   const unsupportedSyntax =
@@ -257,6 +287,12 @@ function ReadOnlyFileView({
       pointerEventsOnScroll: true,
       tokenizeMaxLineLength: 1000,
       unsafeCSS: `[data-line] { tab-size: 2; }
+        [data-column-number] { position: relative; }
+        [data-med-change] { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 1px; background: ${active.palette.green}; }
+        [data-med-change="deleted"] { background: ${active.palette.red}; }
+        [data-med-change="working"] { background: ${active.palette.warning}; }
+        [data-change-edge] { width: 9px; height: 3px; top: auto; bottom: 0; }
+        [data-change-edge="before"] { top: 0; bottom: auto; }
         ::highlight(${highlightId}) { background-color: ${active.palette.warning}; color: ${active.palette.canvas}; }
         ::highlight(${activeSearchName}) { background-color: ${active.palette.accent}; color: ${active.palette.canvas}; text-decoration: underline; }
         ::highlight(${visualName}) { background-color: color-mix(in srgb, ${active.palette.accent} 45%, transparent); color: ${active.palette.text}; }
@@ -274,6 +310,7 @@ function ReadOnlyFileView({
         [data-vim-visual-empty]::before { content: ""; position: absolute; width: 1ch; height: 100%; background: color-mix(in srgb, ${active.palette.accent} 45%, transparent); pointer-events: none; }`,
       onPostRender(node, _instance, phase) {
         gutter.update(node, phase);
+        changes.update(node, phase);
         vimRender.current(node, phase);
         if (phase === "unmount") highlights.dispose();
         else
@@ -281,7 +318,17 @@ function ReadOnlyFileView({
       },
       layout: { gap: 0, paddingTop: 8, paddingBottom: 16 },
     }),
-    [active, highlightId, highlights, visualName, activeSearchName, gutter, blameOpen, canBlame],
+    [
+      active,
+      highlightId,
+      highlights,
+      visualName,
+      activeSearchName,
+      gutter,
+      blameOpen,
+      canBlame,
+      changes,
+    ],
   );
   useLayoutEffect(() => {
     if (!file || !items.length || loading) return;
@@ -323,6 +370,17 @@ function ReadOnlyFileView({
           <span {...stylex.props(styles.badge)} title={sourceLabel}>
             {sourceLabel.replace(/^Working files\b/, "Working file")}
           </span>
+          {loadChanges && !stale && (
+            <span
+              {...stylex.props(styles.badge)}
+              title={changeLabel || "Change markers follow the displayed file version"}
+              aria-label="Change marker legend"
+            >
+              <span style={{ color: active.palette.green }}>▏</span>Added{" "}
+              <span style={{ color: active.palette.red }}>▏</span>Deleted{" "}
+              <span style={{ color: active.palette.warning }}>▏</span>Working
+            </span>
+          )}
           <span {...stylex.props(styles.badge)}>Read-only</span>
           {onEdit && (
             <button {...stylex.props(ui.button)} onClick={onEdit}>
@@ -352,15 +410,17 @@ function ReadOnlyFileView({
               Open after
             </button>
           )}
-          <button
-            {...stylex.props(ui.button, ui.iconButton)}
-            aria-label="Refresh file"
-            title="Refresh file"
-            disabled={loading}
-            onClick={onRefresh}
-          >
-            <Icon name="refresh" size={14} />
-          </button>
+          {refreshAvailable && (
+            <button
+              {...stylex.props(ui.button, ui.iconButton)}
+              aria-label="Refresh file"
+              title="Refresh file"
+              disabled={loading}
+              onClick={onRefresh}
+            >
+              <Icon name="refresh" size={14} />
+            </button>
+          )}
           {onClose && (
             <button
               {...stylex.props(ui.button, ui.iconButton)}
@@ -667,7 +727,7 @@ export function FullFileView(props: FullFileViewProps) {
   const canEdit =
     !!props.editor &&
     !props.compact &&
-    props.file?.source.kind === "worktree" &&
+    (props.file?.source.kind === "worktree" || props.file?.source.kind === "local") &&
     props.file.kind === "text" &&
     !props.file.truncated &&
     props.file.size <= 1024 * 1024 &&

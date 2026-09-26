@@ -154,3 +154,21 @@ When handing off code changes, provide a med review link if the user's med host 
 Saved reviews are local to the machine running med. A localhost link will not open the same review on another person's computer. Registration is still session-local; saved review records and comments are persistent. Clear comments when they are no longer needed.
 
 One review can start with up to 16 targets and retain up to 128 captures in total, including other comparisons where comments were added. Capture is bounded to 500 changed files and 24 MiB of patch/source content per target. The store permits 64 MiB per saved record, 128 records, 512 MiB total saved data, and 500 comments per review. Comment export is limited to 8 MiB. It reports an error instead of truncating comments; narrow selected line ranges or remove unneeded comments before copying. A capture limit produces an error; narrow the comparison. Binary or oversized files retain diff metadata but cannot supply text context for comments. There is no automatic deletion of old saved reviews.
+
+## Link to a current file
+
+For a current file, including files outside registered repositories, use:
+
+```sh
+node /path/to/workbench/apps/med/dist/cli.js open /absolute/path/Example.java --line 42 --column 8
+```
+
+The running host validates the file and the command prints an encoded Markdown
+link. Add `--edit` only when an editing link is useful. This does not edit the
+file or register its parent directory. The link opens live disk content; use
+`review create` for a captured comparison. Dropped previews cannot supply disk
+links because the browser does not supply their absolute paths.
+
+If the user confirms adding med guidance to AGENTS.md, include this distinction:
+provide a review link for changes and a file link for a specific current file or
+line. Use only task-relevant paths. Keep access tokens out of both links.

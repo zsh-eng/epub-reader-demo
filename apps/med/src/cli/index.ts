@@ -10,9 +10,14 @@ import type { Comparison } from "../shared/protocol";
 import { ctagsSetupMessage, discoverCtags } from "../host/search/symbols";
 import { installSearchTools } from "../host/search/install";
 import { DEFAULT_PORT, getStateDirectory } from "../host/runtime/connection";
+import { runOpenCommand } from "./open";
 import { reviewHelp, runReviewCommand } from "./review";
 
 async function main() {
+  if (process.argv[2] === "open") {
+    await runOpenCommand(process.argv.slice(3));
+    return;
+  }
   if (process.argv[2] === "review") {
     await runReviewCommand(process.argv.slice(3));
     return;
@@ -27,12 +32,13 @@ async function main() {
       help: { type: "boolean", short: "h" },
       patch: { type: "string" },
       files: { type: "boolean" },
+      editor: { type: "boolean" },
       "setup-search": { type: "boolean" },
     },
   });
   if (values.help) {
     console.log(
-      "Usage: med-diff [repository ...] [--port <port>] [--no-open]\n       med-diff --patch <path|-> [--no-open]\n       med-diff --files <old> <new> [--no-open]\n       med-diff --setup-search\n\nOpen a local, read-only review. Use --patch - to read a patch from stdin.\nSetup search builds pinned Zoekt binaries once; it requires Go during setup only.\nDefault port: 4173. Use --state-dir <path> or MED_STATE_DIR to select saved review state.\n\n" +
+      "Usage: med-diff [repository ...] [--port <port>] [--no-open]\n       med-diff --patch <path|-> [--no-open]\n       med-diff --files <old> <new> [--no-open]\n       med-diff --editor [--no-open]\n       med-diff open <file> [--line N] [--edit]\n       med-diff --setup-search\n\nOpen a local, read-only review. Use --patch - to read a patch from stdin.\nSetup search builds pinned Zoekt binaries once; it requires Go during setup only.\nDefault port: 4173. Use --state-dir <path> or MED_STATE_DIR to select saved review state.\n\n" +
         reviewHelp,
     );
   } else if (values["setup-search"]) {
@@ -45,6 +51,8 @@ async function main() {
     const port = values.port === undefined ? DEFAULT_PORT : Number(values.port);
     if (port !== undefined && (!Number.isInteger(port) || port < 0 || port > 65535))
       throw new Error("Port must be between 0 and 65535.");
+    if (values.editor && (values.patch || values.files))
+      throw new Error("Use --editor without comparison inputs.");
     if (values.patch && values.files) throw new Error("Choose either --patch or --files.");
     let initialComparison: Comparison | undefined;
     let ownedTemporary: string | undefined;
@@ -80,6 +88,7 @@ async function main() {
       repo: initialComparison ? process.cwd() : resolve(positionals[0] ?? process.cwd()),
       ...(!initialComparison ? { repos: positionals.slice(1).map((path) => resolve(path)) } : {}),
       port,
+      fileMode: values.editor,
       stateDir: getStateDirectory(values["state-dir"]),
       ...(initialComparison ? { initialComparison } : {}),
       allowedInputPaths,

@@ -230,3 +230,54 @@ This is a browser app backed by a local server. Native desktop packaging, shared
 Hunk's retained semantic source and tests carry their original [MIT notice](../upstream/HUNK-LICENSE). [Source provenance](../upstream/HUNK.md) records the pinned revision and adaptations.
 
 Symbol and navigation validation: [Ctags and Zoekt benchmarks](validation/SYMBOL_SEARCH.md), [Vim cursor benchmarks](validation/VIM_NAVIGATION.md), [file symbol palette](validation/file-symbols.png), [Vim file search](validation/vim-navigation.png).
+
+## Standalone files and dropped previews
+
+Open **Open standalone file** from the command palette, or visit `/files` on the
+running host. Paste an absolute file path to open a tab. The file does not need
+to belong to a Git repository. **Edit**, Vim commands, the saved-state dot, and
+conflict-checked saves work as they do for working files. Both file toolbars are
+32 px high, so entering or leaving Edit does not move the content boundary.
+
+To start a file workspace from a directory without Git:
+
+```sh
+bun run --cwd apps/med build
+node apps/med/dist/cli.js --editor
+```
+
+An agent can print a link through the running host:
+
+```sh
+node /path/to/workbench/apps/med/dist/cli.js open /absolute/path/Example.java --line 42 --column 8
+```
+
+Add `--edit` to start in the editor. `--port` and `--state-dir` select the same
+connection as review commands. The command prints a token-free Markdown link:
+`http://127.0.0.1:4173/file/absolute/path/Example.java?line=42&column=8`.
+The browser must first open the host's launch URL. **Copy link** is also available
+in the standalone file tabs. These links read the current file, not a snapshot.
+Paths are URL-encoded; the CLI handles spaces, Unicode, `#`, and other characters.
+Opening one file grants host access to that exact file, not its parent directory.
+The host retains at most 256 standalone file grants until restart.
+
+Drop text files anywhere in med to open read-only previews. Dropped bytes stay in
+the browser. They have no Edit or Save control, disk path, or agent link. Drop up
+to 12 files / 24 MiB at once; the workspace holds at most 24 files / 32 MiB.
+Individual previews remain limited to 8 MiB of UTF-8 text; editing is limited to
+1 MiB. Binary files and folders are not supported by drop previews. Use the path
+field to edit a file on disk. Drafts and drop previews do not survive page reload.
+
+## Full-file change markers
+
+When opening a full file from a diff, the line-number gutter shows green bars
+for added lines and red bars for deleted lines in the before version. A deletion
+with no remaining row appears as a red tick at its gap in the after version.
+Amber bars identify working-file additions and replacements. The header has a
+compact color legend; each marker identifies its comparison on hover.
+
+Markers use the selected comparison only when its captured text matches the
+file being viewed. If live working content differs from that snapshot, markers
+show changes against HEAD instead. **Open before** and **Open after** show the
+exact commit versions. Markers are removed from stale views until refresh;
+line numbers from an older snapshot are not applied to new content.

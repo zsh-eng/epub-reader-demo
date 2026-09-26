@@ -213,3 +213,22 @@ closing a tab retains them, but browser reload does not. Closing the editing
 surface with dirty text requires explicit discard. Atomic replacement preserves
 ordinary file mode bits; hard-linked and symlinked files are refused. Extended
 attributes and ACL copying are not implemented.
+
+## Standalone files and full-file markers
+
+`LocalFiles` is a file workspace around the existing viewer and editor. Explicit
+local paths and browser-only dropped bytes have separate source kinds; Git
+browse requests continue to accept only worktree and commit sources. Standalone
+file grants are exact canonical paths, capped at 256 per host. The local adapter
+reuses bounded UTF-8 reads and atomic conflict-checked writes, without registering
+or indexing parent folders. The browser bounds tab count and retained bytes.
+Drops are read-only and never reach the host. `/file/<absolute-path>` and the
+`open` CLI command support current file links; `/file?repo=…&path=…` remains valid.
+
+Full-file gutter requests carry a content identity and optional runtime/saved
+comparison. The host verifies identity, then uses captured before/after sources
+only when the displayed bytes match. Otherwise a working file compares with
+HEAD. Git generates bounded zero-context hunks in a disposable directory; no
+checkout files are changed. Requests are cancellable and temporary files are
+removed. The browser indexes hunk spans once and paints only mounted Pierre
+number cells. Stale file views drop their markers until refresh.

@@ -374,3 +374,30 @@ test("HTTP save refuses snapshots, escaping paths, symlinks, and unregistered re
   expect(await readFile(join(root, "outside.txt"), "utf8")).toBe("outside");
   expect(await readFile(join(repo, "src/file.txt"), "utf8")).toBe("committed\n");
 });
+
+test("a file-only host opens and saves an exact file outside Git", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "med-no-git-")));
+  temporary.push(root);
+  const path = join(root, "Example.java");
+  await writeFile(path, "class Example {}\n");
+  const host = await startHost({ repo: root, fileMode: true, port: 0 });
+  hosts.push(host);
+  expect(new URL(host.url).pathname).toBe("/files");
+  const post = (route: string, body: unknown) =>
+    fetch(new URL(route, host.url), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${host.token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const opened = await (await post("/api/local-files/open", { path })).json();
+  expect(opened.source).toEqual({ kind: "local", path });
+  const result = await post("/api/local-files/write", {
+    path,
+    expectedIdentity: opened.identity,
+    text: "class Example { int count; }\n",
+  });
+  expect(result.status).toBe(200);
+  expect(await readFile(path, "utf8")).toBe("class Example { int count; }\n");
+  const denied = await post("/api/browse/read", { source: { kind: "local", path }, path });
+  expect(denied.status).toBe(400);
+});

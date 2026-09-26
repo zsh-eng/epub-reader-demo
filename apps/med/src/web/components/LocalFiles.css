@@ -1,0 +1,94 @@
+.med-local {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--local-bg);
+  color: var(--local-fg);
+  font-size: 12px;
+  font-family:
+    "Geist",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+}
+.med-local-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--local-border);
+}
+.med-local-label {
+  color: var(--local-muted);
+}
+.med-local-toolbar form {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+}
+.med-local input {
+  min-width: 80px;
+  width: 100%;
+  background: var(--local-panel);
+  border: 1px solid var(--local-border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: inherit;
+}
+.med-local button {
+  background: transparent;
+  border: 1px solid var(--local-border);
+  border-radius: 5px;
+  padding: 4px 9px;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.med-local button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.med-local button:active {
+  transform: scale(0.97);
+}
+.med-local-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--local-border);
+}
+.med-local-tabs [aria-selected="true"] {
+  background: var(--local-panel);
+  border-color: var(--local-accent);
+}
+.med-local-grow {
+  flex: 1;
+}
+.med-local-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--local-muted);
+}
+.med-local-empty h1 {
+  color: var(--local-fg);
+  font-size: 22px;
+}
+.med-local-notice {
+  padding: 8px 16px;
+}
+.med-local-drop {
+  position: fixed;
+  inset: 12px;
+  z-index: 100;
+  border: 2px dashed #8cabeb;
+  border-radius: 12px;
+  background: #162336ed;
+  color: white;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-size: 24px;
+}

@@ -3,7 +3,7 @@ import { browseSourceKey, type BrowseApi } from "./browse";
 import { getFiletypeFromFileName, resolveLanguages, type FileContents } from "@pierre/diffs";
 
 /** Use exactly the same identity for speculative and visible highlighting. */
-export function pierreFile(file: BrowseRead): FileContents {
+export function pierreFile(file: import("../../shared/local-file").FileRead): FileContents {
   return {
     name: file.path,
     contents: file.text ?? "",

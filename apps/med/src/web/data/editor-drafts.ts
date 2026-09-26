@@ -1,5 +1,5 @@
 import type { EditorState } from "@codemirror/state";
-import type { BrowseRead } from "../../shared/browse";
+import type { FileRead as BrowseRead } from "../../shared/local-file";
 
 export interface EditorDraft {
   file: BrowseRead;

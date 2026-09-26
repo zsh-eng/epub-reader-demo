@@ -1,3 +1,4 @@
+import { fileChangesSchema } from "../../shared/file-changes";
 import { useEffect, useMemo, useState } from "react";
 import {
   browseListResponseSchema,
@@ -18,6 +19,24 @@ export function browseSourceKey(source: BrowseSource): string {
 export function createBrowseApi(fetcher: typeof fetch, token: string) {
   const api = createApi(fetcher, token);
   return {
+    async changes(
+      source: BrowseSource,
+      path: string,
+      identity: string,
+      reviewId?: string,
+      signal?: AbortSignal,
+      saved?: { id: string; target: string },
+    ) {
+      const result = await api.json("/api/browse/changes", fileChangesSchema, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, path, identity, reviewId, saved }),
+        signal,
+      });
+      if (result.identity !== identity)
+        throw new Error("The change markers belong to another file version.");
+      return result;
+    },
     async symbols(
       source: BrowseSource,
       query: string,
@@ -98,8 +117,8 @@ export function createBrowseApi(fetcher: typeof fetch, token: string) {
   };
 }
 type CompleteBrowseApi = ReturnType<typeof createBrowseApi>;
-export type BrowseApi = Omit<CompleteBrowseApi, "search" | "symbols" | "write"> &
-  Partial<Pick<CompleteBrowseApi, "search" | "symbols" | "write">>;
+export type BrowseApi = Omit<CompleteBrowseApi, "search" | "symbols" | "write" | "changes"> &
+  Partial<Pick<CompleteBrowseApi, "search" | "symbols" | "write" | "changes">>;
 
 export function createDefaultBrowseApi(): BrowseApi {
   const token =

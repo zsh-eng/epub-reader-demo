@@ -34,7 +34,7 @@ const repo = join(temporary, "bun"),
 const path = "src/js/node/http2.ts";
 const output = resolve(".benchmarks/file-editing");
 await mkdir(output, { recursive: true });
-let host, browser;
+let host, browser, page;
 try {
   for (const root of [repo, primary]) {
     await mkdir(root, { recursive: true });
@@ -102,7 +102,7 @@ try {
   link.pathname = "/file";
   link.search = new URLSearchParams({ repo, path, edit: "1" }).toString();
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
+  page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(link.href);
@@ -257,6 +257,9 @@ try {
   };
   await writeFile(join(output, "results.json"), JSON.stringify(report, null, 2) + "\n");
   console.log(JSON.stringify(report));
+} catch (error) {
+  if (page) { console.error((await page.locator("body").innerText()).slice(0, 6000)); await page.screenshot({ path: join(output, "failure.png") }); }
+  throw error;
 } finally {
   await browser?.close();
   if (host && host.exitCode === null) {

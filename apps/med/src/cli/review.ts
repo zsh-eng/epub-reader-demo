@@ -119,7 +119,7 @@ export async function parseReviewCommand(args: string[]): Promise<ReviewCommand>
   return { ...common, kind: "create", manifest };
 }
 
-async function request(
+export async function request(
   connection: RunningConnection,
   path: string,
   fetcher: typeof fetch,

@@ -1,3 +1,7 @@
+import { fileChangesRequestSchema } from "../shared/file-changes";
+import { fileChanges } from "./repository/file-changes";
+import { LocalFiles } from "./local-files";
+import { localPathSchema } from "../shared/local-file";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -41,6 +45,7 @@ import { getPersistentToken, publishConnection } from "./runtime/connection";
 
 export interface StartHostOptions {
   repo: string;
+  fileMode?: boolean;
   repos?: readonly string[];
   port?: number;
   open?: boolean;
@@ -101,7 +106,11 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   try {
     repository = { ...(await resolveRepository(resolve(options.repo))), git: true };
   } catch (error) {
-    if (options.initialComparison?.kind !== "patch" && options.initialComparison?.kind !== "files")
+    if (
+      !options.fileMode &&
+      options.initialComparison?.kind !== "patch" &&
+      options.initialComparison?.kind !== "files"
+    )
       throw error;
     const path = await realpath(resolve(options.repo));
     if (!(await stat(path)).isDirectory())
@@ -124,6 +133,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   );
   const notes = new NoteService(reviews);
   const symbols = new FileSymbolService();
+  const localFiles = new LocalFiles();
   const temporaryState = options.stateDir
     ? undefined
     : await mkdtemp(join(tmpdir(), "med-reviews-"));
@@ -635,6 +645,53 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
               return;
             }
           }
+          if (url.pathname === "/api/local-files/open" && request.method === "POST") {
+            const input = z.object({ path: localPathSchema }).parse(await readBody(request));
+            send(await localFiles.open(input.path, abort.signal));
+            return;
+          }
+          if (url.pathname === "/api/local-files/write" && request.method === "POST") {
+            const input = z
+              .object({
+                path: localPathSchema,
+                expectedIdentity: z.string().min(1).max(8192),
+                text: z.string().max(1024 * 1024),
+              })
+              .parse(await readBody(request, 8 * 1024 * 1024));
+            send(await localFiles.write(input.path, input.expectedIdentity, input.text));
+            return;
+          }
+          if (url.pathname === "/api/browse/changes" && request.method === "POST") {
+            const input = fileChangesRequestSchema.parse(await readBody(request));
+            input.source.repo = await requireRepo(input.source.repo);
+            let comparison;
+            if (input.saved) {
+              const { id, target } = input.saved;
+              const bundle = await savedReviews.get(id);
+              const saved = bundle.targets.find((entry) => entry.id === target);
+              const owner = await registry.require(input.source.repo, abort.signal);
+              if (!saved || saved.repositoryId !== owner.repository.id)
+                throw new HostError(
+                  "invalid-source",
+                  "The saved comparison belongs to another repository.",
+                  403,
+                );
+              comparison = {
+                review: await savedReviews.review(id, target),
+                source: (path: string) => savedReviews.source(id, target, path),
+              };
+            } else if (input.reviewId) {
+              await requireReview(input.reviewId);
+              comparison = {
+                review: reviews.get(input.reviewId).response,
+                source: (path: string) => reviews.sources(input.reviewId!, path, abort.signal),
+              };
+            }
+            send(
+              await fileChanges(input.source, input.path, input.identity, comparison, abort.signal),
+            );
+            return;
+          }
           if (url.pathname === "/api/browse/list" && request.method === "POST") {
             const input = browseListRequestSchema.parse(await readBody(request));
             input.source.repo = await requireRepo(input.source.repo);
@@ -803,7 +860,12 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
       } catch {
         throw new HostError("invalid-path", "This URL path is not valid.");
       }
-      const appRoute = path === "/file" || path === "/" || /^\/review\/[a-zA-Z0-9_-]+$/.test(path);
+      const appRoute =
+        path === "/file" ||
+        path.startsWith("/file/") ||
+        path === "/files" ||
+        path === "/" ||
+        /^\/review\/[a-zA-Z0-9_-]+$/.test(path);
       const file = resolve(webRoot, `.${appRoute ? "/index.html" : path}`);
       const rel = relative(webRoot, file);
       if (rel.startsWith("..") || isAbsolute(rel))
@@ -911,7 +973,7 @@ export async function startHost(options: StartHostOptions): Promise<RunningHost>
   }, 15_000);
   heartbeat.unref();
   return {
-    url: `http://127.0.0.1:${port}/#token=${token}`,
+    url: `http://127.0.0.1:${port}/${options.fileMode ? "files" : ""}#token=${token}`,
     token,
     port,
     async close() {

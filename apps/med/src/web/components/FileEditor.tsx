@@ -21,7 +21,7 @@ import { vim, Vim, getCM } from "@replit/codemirror-vim";
 import { getFiletypeFromFileName, resolveTheme } from "@pierre/diffs";
 import { useTheme } from "../themes";
 import type { EditorDraft, EditorDrafts } from "../data/editor-drafts";
-import type { BrowseApi } from "../data/browse";
+import type { FileWrite } from "../../shared/local-file";
 import SyntaxWorker from "../highlighting/editor.worker?worker";
 import "./FileEditor.css";
 
@@ -51,7 +51,7 @@ export default function FileEditor({
 }: {
   draft: EditorDraft;
   drafts: EditorDrafts;
-  write: NonNullable<BrowseApi["write"]>;
+  write: FileWrite;
   onClose(): void;
 }) {
   const { active } = useTheme();
@@ -71,12 +71,7 @@ export default function FileEditor({
     drafts.update(draft, { saving: true, error: null });
     drafts.notify();
     try {
-      const result = await latest.current.write(
-        draft.file.source,
-        draft.file.path,
-        draft.file.identity,
-        text,
-      );
+      const result = await latest.current.write(draft.file, text);
       drafts.update(draft, {
         file: result,
         savedText: text,

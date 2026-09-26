@@ -1,0 +1,332 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+  type CSSProperties,
+} from "react";
+import { FullFileView } from "./FullFileView";
+import { ThemePicker } from "./ThemePicker";
+import { createEditorDrafts } from "../data/editor-drafts";
+import { createApi } from "../data/api";
+import { localReadSchema, type FileRead } from "../../shared/local-file";
+import { useTheme } from "../themes";
+import "./LocalFiles.css";
+
+const api = createApi(globalThis.fetch.bind(globalThis), "");
+const request = (path: string, body: object) =>
+  api.json(path, localReadSchema, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+type Tab = { id: string; file: FileRead; line?: number; column?: number; edit?: boolean };
+const initialStandalone = () =>
+  location.pathname === "/files" || location.pathname.startsWith("/file/");
+
+/** The review App stays mounted when a drop opens this file workspace. */
+export function LocalFiles({ children }: { children: ReactNode }) {
+  const { active: theme } = useTheme();
+  const [visible, setVisible] = useState(initialStandalone);
+  const [reviewMounted, setReviewMounted] = useState(() => !initialStandalone());
+  const [tabs, setTabs] = useState<Tab[]>([]);
+  const [selected, setSelected] = useState("");
+  const [path, setPath] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const [themes, setThemes] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [drafts] = useState(createEditorDrafts);
+  useSyncExternalStore(drafts.subscribe, drafts.getSnapshot);
+  const active = tabs.find((tab) => tab.id === selected);
+  const sequence = useRef(0);
+  const currentTabs = useRef(tabs);
+  currentTabs.current = tabs;
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const add = (tab: Tab) => {
+    const next = [...currentTabs.current.filter((item) => item.id !== tab.id), tab];
+    if (next.length > 24 || next.reduce((sum, item) => sum + item.file.size, 0) > 32 * 1024 * 1024)
+      throw new Error("Close a file before opening more (24 files / 32 MiB limit).");
+    currentTabs.current = next;
+    setTabs((items) => [...items.filter((item) => item.id !== tab.id), tab]);
+    setSelected(tab.id);
+    setVisible(true);
+  };
+  const open = async (path: string, line?: number, column?: number, edit = false) => {
+    const id = ++sequence.current;
+    setLoading(true);
+    setError("");
+    try {
+      const file = await request("/api/local-files/open", { path });
+      if (id !== sequence.current) return;
+      add({ id: file.path, file, line, column, edit });
+      setPath("");
+    } catch (error) {
+      if (id === sequence.current) setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (id === sequence.current) setLoading(false);
+    }
+  };
+  useEffect(() => {
+    if (location.pathname.startsWith("/file/")) {
+      try {
+        const params = new URLSearchParams(location.search);
+        const coordinate = (name: string) => {
+          const value = Number(params.get(name));
+          return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+        };
+        void open(
+          decodeURIComponent(location.pathname.slice(5)),
+          coordinate("line"),
+          coordinate("column"),
+          params.get("edit") === "1",
+        );
+      } catch {
+        queueMicrotask(() => setError("This file link is not valid."));
+      }
+    }
+    const show = () => setVisible(true);
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (drafts.hasDirty()) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    const over = (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      setDragging(true);
+    };
+    const leave = (event: DragEvent) => {
+      if (!event.relatedTarget) setDragging(false);
+    };
+    const drop = async (event: DragEvent) => {
+      if (!event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+      ++sequence.current;
+      setLoading(false);
+      setDragging(false);
+      setError("");
+      setVisible(true);
+      const files = [...event.dataTransfer.files];
+      if (!files.length) {
+        setError("Drop files, not folders.");
+        return;
+      }
+      if (files.length > 12 || files.reduce((sum, file) => sum + file.size, 0) > 24 * 1024 * 1024) {
+        setError("Drop up to 12 files and 24 MiB at a time.");
+        return;
+      }
+      for (const file of files) {
+        try {
+          if (file.size > 8 * 1024 * 1024)
+            throw new Error(`${file.name}: exceeds the 8 MiB preview limit.`);
+          const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+            await file.arrayBuffer(),
+          );
+          // Binary signatures intentionally contain control bytes.
+          // oxlint-disable-next-line no-control-regex
+          if (/[\x00-\x08\x0e-\x1f\x7f]/.test(text) || /^(?:%PDF-|GIF8[79]a)/.test(text))
+            throw new Error(`${file.name}: binary preview is unavailable.`);
+          const lines = text.split("\n");
+          if (lines.length > 200_000 || lines.some((line) => line.length > 250_000))
+            throw new Error(`${file.name}: exceeds the preview line limits.`);
+          const id = crypto.randomUUID();
+          add({
+            id,
+            file: {
+              source: { kind: "drop", id },
+              path: file.name,
+              kind: "text",
+              identity: id,
+              text,
+              size: file.size,
+              plain: file.size > 1024 * 1024 || lines.some((line) => line.length > 20_000),
+            },
+          });
+        } catch (error) {
+          setError(error instanceof Error ? error.message : "Could not preview this file.");
+        }
+      }
+    };
+    window.addEventListener("med-open-file", show);
+    window.addEventListener("beforeunload", beforeUnload);
+    window.addEventListener("dragover", over);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("drop", drop);
+    return () => {
+      // These refs hold task lifetimes, not DOM nodes.
+      // oxlint-disable-next-line react-hooks/exhaustive-deps
+      ++sequence.current;
+      clearTimeout(copiedTimer.current);
+      window.removeEventListener("med-open-file", show);
+      window.removeEventListener("beforeunload", beforeUnload);
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("drop", drop);
+    };
+  }, [drafts]);
+  return (
+    <>
+      {reviewMounted && (
+        <div style={{ height: "100%", display: visible ? "none" : undefined }}>{children}</div>
+      )}
+      {visible && (
+        <div
+          role="region"
+          aria-label="Standalone files"
+          className="med-local"
+          data-standalone-files
+          style={
+            {
+              "--local-bg": theme.palette.canvas,
+              "--local-fg": theme.palette.text,
+              "--local-panel": theme.palette.panel,
+              "--local-border": theme.palette.border,
+              "--local-muted": theme.palette.muted,
+              "--local-accent": theme.palette.accent,
+            } as CSSProperties
+          }
+        >
+          <div className="med-local-toolbar">
+            <strong>med</strong>
+            <span className="med-local-label">Files</span>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void open(path);
+              }}
+            >
+              <input
+                aria-label="Absolute file path"
+                placeholder="Open a file by absolute path…"
+                value={path}
+                onChange={(event) => setPath(event.target.value)}
+              />
+              <button disabled={!path.trim() || loading}>Open file</button>
+            </form>
+            <button onClick={() => setThemes(true)}>Theme</button>
+            <button
+              onClick={() => {
+                setReviewMounted(true);
+                setVisible(false);
+              }}
+            >
+              Repositories
+            </button>
+          </div>
+          {error && (
+            <div className="med-local-notice" role="alert">
+              {error}
+            </div>
+          )}
+          {loading && (
+            <div className="med-local-notice" role="status">
+              Opening file…
+            </div>
+          )}
+          {tabs.length > 0 && (
+            <div className="med-local-tabs" role="tablist" aria-label="Open files">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={selected === tab.id}
+                  onClick={() => {
+                    setSelected(tab.id);
+                    setCopied(false);
+                  }}
+                  title={tab.file.path}
+                >
+                  {drafts.get(tab.id)?.dirty && <span aria-label="Unsaved changes">● </span>}
+                  {tab.file.path.split("/").at(-1)}
+                </button>
+              ))}
+              <span className="med-local-grow" />
+              {active?.file.source.kind === "local" && (
+                <button
+                  onClick={() => {
+                    const url = new URL(
+                      `/file${active.file.path.split("/").map(encodeURIComponent).join("/")}`,
+                      location.origin,
+                    );
+                    if (active.line) url.searchParams.set("line", String(active.line));
+                    void navigator.clipboard
+                      .writeText(url.href)
+                      .then(() => {
+                        setCopied(true);
+                        clearTimeout(copiedTimer.current);
+                        copiedTimer.current = setTimeout(() => setCopied(false), 1400);
+                      })
+                      .catch(() => setError("Could not copy the link."));
+                  }}
+                >
+                  {copied ? "✓ Copied" : "Copy link"}
+                </button>
+              )}
+            </div>
+          )}
+          {active ? (
+            <FullFileView
+              key={active.id}
+              file={active.file}
+              loading={false}
+              error={null}
+              line={active.line}
+              column={active.column}
+              vimEnabled
+              refreshAvailable={active.file.source.kind !== "drop"}
+              sourceLabel={
+                active.file.source.kind === "drop" ? "Dropped file · preview only" : "Local file"
+              }
+              onRefresh={() => {
+                if (active.file.source.kind === "local") void open(active.file.path);
+              }}
+              onClose={() => {
+                if (drafts.get(active.id)?.dirty || drafts.get(active.id)?.saving) {
+                  setError("Save or discard this draft with Done before closing the file.");
+                  return;
+                }
+                setTabs((items) => items.filter((tab) => tab.id !== active.id));
+                setSelected(tabs.find((tab) => tab.id !== active.id)?.id ?? "");
+              }}
+              editor={
+                active.file.source.kind === "local"
+                  ? {
+                      drafts,
+                      key: active.id,
+                      autoEdit: active.edit,
+                      write: async (file, text) => {
+                        const result = await request("/api/local-files/write", {
+                          path: file.path,
+                          expectedIdentity: file.identity,
+                          text,
+                        });
+                        setTabs((items) =>
+                          items.map((tab) =>
+                            tab.id === active.id ? { ...tab, file: result } : tab,
+                          ),
+                        );
+                        return result;
+                      },
+                    }
+                  : undefined
+              }
+            />
+          ) : (
+            <div className="med-local-empty">
+              <h1>Open a file</h1>
+              <p>Paste a file path above to view or edit it.</p>
+              <p>Or drop a text file here for a read-only preview.</p>
+            </div>
+          )}
+          <ThemePicker open={themes} onOpenChange={setThemes} />
+        </div>
+      )}
+      {dragging && <div className="med-local-drop">Drop files to preview</div>}
+    </>
+  );
+}
