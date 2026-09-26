@@ -118,6 +118,67 @@ class DownloadIntegration(unittest.TestCase):
         self.assertEqual([b["speaker"] for b in blocks], ["1", "2"])
         self.assertEqual(blocks[0]["words"][1]["end"], 0.8)
 
+    def test_standalone_spaces_survive_alignment_and_player_paragraphs(self):
+        pieces = [
+            " A",
+            " system",
+            " of",
+            " ",
+            "1",
+            "0",
+            ",",
+            "0",
+            "0",
+            "0",
+            " spent",
+            " ",
+            "1",
+            "3",
+            "0",
+            " billion",
+            " over",
+            "\u00a0",
+            "8",
+            "8",
+            " hours",
+            " with",
+            " O",
+            "1",
+            ",",
+            " B",
+            "2",
+            "B",
+            ",",
+            " $",
+            "1",
+            "0",
+            ".",
+            "5",
+            "0",
+            " and",
+            " 2",
+            "1",
+            "st",
+            ".",
+        ]
+        tokens = [
+            {"text": text, "start": i * 0.1, "end": (i + 1) * 0.1}
+            for i, text in enumerate(pieces)
+        ]
+        blocks = align(
+            {"sentences": [{"tokens": tokens}]},
+            [{"speaker": "host", "start": 0, "end": 10}],
+        )
+        rows = make_paragraphs(blocks, [])
+        self.assertEqual(
+            rows[0]["text"],
+            "A system of 10,000 spent 130 billion over 88 hours with O1, B2B, $10.50 and 21st.",
+        )
+        self.assertEqual(" ".join(p["text"] for p in rows[0]["parts"]), rows[0]["text"])
+        number = next(w for w in blocks[0]["words"] if w["text"] == "10,000")
+        self.assertEqual(number["start"], tokens[4]["start"])
+        self.assertEqual(number["end"], tokens[9]["end"])
+
     def test_alignment_bounds_silence_and_sorts_chunk_stitching(self):
         asr = {
             "sentences": [

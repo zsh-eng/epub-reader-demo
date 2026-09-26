@@ -12,17 +12,22 @@ def align(asr, diarization, max_seconds=45):
     # Parakeet tokens are subwords. Reassemble words before speaker assignment.
     for sentence in asr["sentences"]:
         merged = []
+        word_boundary = False
         for token in sentence["tokens"]:
             text = token["text"]
             if not text.strip():
+                # Numbers often follow a standalone space token. It has no word
+                # timing of its own, but still separates the next token.
+                word_boundary = word_boundary or bool(text)
                 continue
-            if not merged or text.startswith(" "):
+            if not merged or word_boundary or text[0].isspace():
                 merged.append(
                     {"text": text.strip(), "start": token["start"], "end": token["end"]}
                 )
             else:
-                merged[-1]["text"] += text
+                merged[-1]["text"] += text.rstrip()
                 merged[-1]["end"] = token["end"]
+            word_boundary = text[-1].isspace()
         raw_words.extend(merged)
     # Chunk stitching can put punctuation tokens out of order or stretch a word
     # across a music break. Sort once and bound display spans, retaining ASR times.
