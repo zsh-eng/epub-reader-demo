@@ -1,6 +1,63 @@
 import SwiftUI
 import UIKit
 
+enum StoryFormat: String, CaseIterable, Identifiable {
+  case story = "Story"
+  case square = "Square"
+  var id: Self { self }
+  var height: CGFloat { self == .story ? 640 : 360 }
+}
+enum StoryFlow: String, CaseIterable, Identifiable {
+  case single = "One image"
+  case pages = "Pages"
+  var id: Self { self }
+}
+
+/// One layout contract drives text measurement, preview and export. Format and
+/// image changes reflow the full quote instead of cropping a portrait bitmap.
+struct StoryCardLayout {
+  var format: StoryFormat = .story
+  var hasImage = false
+  var single = false
+  var minimumFontSize: CGFloat {
+    if single { return format == .story ? 18 : 16 }
+    return format == .story && !hasImage ? 28 : (hasImage && format == .square ? 20 : 22)
+  }
+  var headerY: CGFloat { format == .story ? 58 : 25 }
+  func quoteRect(for style: StoryStyle) -> CGRect {
+    if format == .square {
+      return CGRect(x: 24, y: hasImage ? 164 : 68, width: 312, height: hasImage ? 110 : 206)
+    }
+    if hasImage { return CGRect(x: 32, y: 278, width: 296, height: 226) }
+    let height = single ? (style == .folio ? 284 : 460 - style.quoteY) : 232
+    return CGRect(x: 32, y: style.quoteY, width: 296, height: height)
+  }
+  var imageRect: CGRect {
+    format == .story
+      ? CGRect(x: 32, y: 96, width: 296, height: 158)
+      : CGRect(x: 24, y: 58, width: 312, height: 92)
+  }
+  func sourceY(for style: StoryStyle) -> CGFloat {
+    if format == .square { return 292 }
+    if hasImage { return 530 }
+    return style == .folio ? 106 : 484
+  }
+  func textHeight(_ text: String, font: UIFont, width: CGFloat) -> CGFloat {
+    let paragraph = NSMutableParagraphStyle()
+    paragraph.lineSpacing = 4
+    return (text as NSString).boundingRect(
+      with: CGSize(width: width, height: CGFloat.greatestFiniteMagnitude),
+      options: [.usesLineFragmentOrigin, .usesFontLeading],
+      attributes: [.font: font, .paragraphStyle: paragraph], context: nil
+    ).height
+  }
+  func fits(_ text: String, style: StoryStyle) -> Bool {
+    let rect = quoteRect(for: style)
+    return textHeight(text, font: style.typeface(size: minimumFontSize), width: rect.width) <= rect
+      .height - 4
+  }
+}
+
 /// Ten print traditions interpreted as reusable layouts, not baked-in quote images.
 /// Artwork colours are independent of the app chrome. All paper assets are local.
 enum StoryStyle: String, CaseIterable, Identifiable {
@@ -15,6 +72,7 @@ enum StoryStyle: String, CaseIterable, Identifiable {
   case cutout = "Offset"
   case ribbon = "Seoul"
   var id: String { rawValue }
+  var supportsArticleImage: Bool { [.paper, .folio, .signal, .cutout].contains(self) }
 
   var background: Color {
     switch self {
@@ -86,18 +144,19 @@ enum StoryStyle: String, CaseIterable, Identifiable {
 
   /// Short selections become display typography. Long pages use the same measured
   /// region and minimum font as pagination, so no style drops or clips words.
-  func displayFont(for text: String) -> UIFont {
+  func displayFont(for text: String, layout: StoryCardLayout) -> UIFont {
+    let rect = layout.quoteRect(for: self)
     let paragraph = NSMutableParagraphStyle()
     paragraph.lineSpacing = 4
-    for size in stride(from: 44.0, through: 28.0, by: -1) {
+    for size in stride(from: 44.0, through: layout.minimumFontSize, by: -1) {
       let font = typeface(size: size)
-      let rect = (text as NSString).boundingRect(
-        with: CGSize(width: 296, height: CGFloat.greatestFiniteMagnitude),
+      let measured = (text as NSString).boundingRect(
+        with: CGSize(width: rect.width, height: CGFloat.greatestFiniteMagnitude),
         options: [.usesLineFragmentOrigin, .usesFontLeading],
         attributes: [.font: font, .paragraphStyle: paragraph], context: nil)
-      if rect.height <= 228 { return font }
+      if measured.height <= rect.height - 4 { return font }
     }
-    return font
+    return typeface(size: layout.minimumFontSize)
   }
 }
 
@@ -109,10 +168,12 @@ struct PassageStoryCard: View {
   let text: String
   let page: Int
   let count: Int
+  var layout = StoryCardLayout()
+  var articleImage: UIImage?
 
   var body: some View {
-    style.background.frame(width: 360, height: 640)
-      .overlay { artwork.frame(width: 360, height: 640) }
+    style.background.frame(width: 360, height: layout.format.height)
+      .overlay { artwork.frame(width: 360, height: layout.format.height) }
       .overlay(alignment: .topLeading) { typography }
       .clipped()
       .environment(\.dynamicTypeSize, .medium)
@@ -120,21 +181,37 @@ struct PassageStoryCard: View {
   }
 
   private var typography: some View {
-    ZStack(alignment: .topLeading) {
-      header.frame(width: 296).offset(x: 32, y: 58)
-      quote.frame(width: 296, alignment: style.centered ? .center : .leading)
-        .offset(x: 32, y: style.quoteY)
-      source.frame(
-        width: style == .index ? 180 : 284, alignment: style.centered ? .center : .leading
+    let rect = layout.quoteRect(for: style)
+    return ZStack(alignment: .topLeading) {
+      header.frame(width: rect.width).offset(x: rect.minX, y: layout.headerY)
+      if layout.hasImage {
+        Group {
+          if let articleImage {
+            Image(uiImage: articleImage).resizable().scaledToFill()
+          } else {
+            Rectangle().fill(style.foreground.opacity(0.06))
+          }
+        }.frame(width: layout.imageRect.width, height: layout.imageRect.height)
+          .clipped().overlay(Rectangle().stroke(style.foreground.opacity(0.25), lineWidth: 0.5))
+          .offset(x: layout.imageRect.minX, y: layout.imageRect.minY)
+      }
+      quote.frame(
+        width: rect.width, height: rect.height, alignment: style.centered ? .top : .topLeading
       )
-      .offset(x: 38, y: style == .folio ? 106 : 484)
-    }.frame(width: 360, height: 640, alignment: .topLeading)
+      .clipped().offset(x: rect.minX, y: rect.minY)
+      source.frame(
+        width: layout.format == .square ? 312 : (style == .index ? 180 : 284),
+        alignment: style.centered ? .center : .leading
+      )
+      .background(layout.format == .square ? style.background.opacity(0.95) : .clear)
+      .offset(x: layout.format == .square ? 24 : 38, y: layout.sourceY(for: style))
+    }.frame(width: 360, height: layout.format.height, alignment: .topLeading)
   }
   /// A short opening sentence can act as the poster headline. The combined
   /// block must fit before using this hierarchy; otherwise render one full quote.
   private var lead: (String, String, UIFont)? {
     let passage = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard passage.count <= 180,
+    guard passage.count <= 180, layout.format == .story, !layout.hasImage,
       let stop = passage.firstIndex(where: { ".!?。！？".contains($0) }),
       passage.distance(from: passage.startIndex, to: stop) <= 40
     else { return nil }
@@ -154,7 +231,9 @@ struct PassageStoryCard: View {
     let bodyHeight = height(rest, style.typeface(size: 27))
     for size in stride(from: 62.0, through: 44.0, by: -2) {
       let font = style.typeface(size: size)
-      if height(first, font) + bodyHeight + 16 <= 228 { return (first, rest, font) }
+      if height(first, font) + bodyHeight + 16 <= layout.quoteRect(for: style).height - 4 {
+        return (first, rest, font)
+      }
     }
     return nil
   }
@@ -167,7 +246,7 @@ struct PassageStoryCard: View {
         }
       } else {
         Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
-          .font(Font(style.displayFont(for: text)))
+          .font(Font(style.displayFont(for: text, layout: layout)))
       }
     }.lineSpacing(4).multilineTextAlignment(style.centered ? .center : .leading)
       .foregroundStyle(style.foreground).fixedSize(horizontal: false, vertical: true)
@@ -184,10 +263,15 @@ struct PassageStoryCard: View {
     }
   }
   private var source: some View {
-    VStack(alignment: style.centered ? .center : .leading, spacing: 8) {
+    VStack(
+      alignment: style.centered ? .center : .leading, spacing: layout.format == .square ? 4 : 8
+    ) {
       Rectangle().fill(style.foreground).frame(width: 24, height: 1)
-      Text(story.title).font(.system(size: 13, weight: .medium, design: .serif))
-        .lineLimit(3).multilineTextAlignment(style.centered ? .center : .leading)
+      Text(story.title).font(
+        .system(size: layout.format == .square ? 10 : 13, weight: .medium, design: .serif)
+      )
+      .lineLimit(layout.format == .square ? 2 : 3).multilineTextAlignment(
+        style.centered ? .center : .leading)
       Text(story.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
         .font(.system(size: 8, weight: .medium, design: .monospaced)).tracking(0.6)
         .lineLimit(1)
@@ -197,22 +281,30 @@ struct PassageStoryCard: View {
   @ViewBuilder private var artwork: some View {
     ZStack {
       if style == .ice {
-        Image("StoryXuan").resizable().scaledToFill().frame(width: 360, height: 640).clipped()
+        Image("StoryXuan").resizable().frame(width: 360, height: layout.format.height).clipped()
       } else if style == .index {
-        Image("StoryIndigo").resizable().scaledToFill().frame(width: 360, height: 640).clipped()
+        Image("StoryIndigo").resizable().frame(width: 360, height: layout.format.height).clipped()
       } else if style == .ink {
-        Image("StoryTheatre").resizable().scaledToFill().frame(width: 360, height: 640).clipped()
+        Image("StoryTheatre").resizable().frame(width: 360, height: layout.format.height).clipped()
       } else if style == .field {
-        Image("StoryJade").resizable().scaledToFill().frame(width: 360, height: 640).clipped()
+        Image("StoryJade").resizable().frame(width: 360, height: layout.format.height).clipped()
       } else if style == .dusk {
-        Image("StoryHanji").resizable().scaledToFill().frame(width: 360, height: 640).clipped()
+        Image("StoryHanji").resizable().frame(width: 360, height: layout.format.height).clipped()
       }
-      motifs
+      if layout.format == .square || layout.hasImage {
+        Rectangle().fill(style.accent).frame(width: 24, height: 3)
+          .offset(x: 145, y: -layout.format.height / 2 + 30)
+        if style == .paper {
+          Rectangle().stroke(style.foreground.opacity(0.35), lineWidth: 0.5).padding(12)
+        }
+      } else {
+        motifs
+      }
       // Substrate sits over the printed shapes as well as the paper field.
       // Multiply leaves type colours intact; no full-size blurred layers or timer.
-      Image("StoryPaper").resizable().scaledToFill().frame(width: 360, height: 640).clipped()
+      Image("StoryPaper").resizable().frame(width: 360, height: layout.format.height).clipped()
         .blendMode(.multiply).opacity(style == .index ? 0.09 : 0.55)
-    }.frame(width: 360, height: 640).clipped()
+    }.frame(width: 360, height: layout.format.height).clipped()
   }
 
   @ViewBuilder private var motifs: some View {
@@ -312,7 +404,36 @@ struct PassageStoryCard: View {
         note: "Pay attention. The ordinary world is full of extraordinary things.",
         isHighlighted: false, createdAt: .distantPast, updatedAt: .distantPast)
       let shortStory = PassageStory(annotation: annotation, title: "A practice of attention")
+      var wholeAnnotation = annotation
+      wholeAnnotation.note =
+        "Pay attention. The ordinary world is full of extraordinary things. A good passage asks us to pause, then look again. Keep the sentences that change what you notice; return to them when the familiar starts to feel invisible. There is no hurry. Let a little room for wonder remain in the day, and carry that attention back into the world."
+      let wholeStory = PassageStory(annotation: wholeAnnotation, title: "A practice of attention")
       for style in StoryStyle.allCases {
+        for format in StoryFormat.allCases {
+          for photo in [false, true] where !photo || style.supportsArticleImage {
+            let layout = StoryCardLayout(format: format, hasImage: photo)
+            let pages = longStory.pages(for: layout)
+            guard pages.joined() == longStory.text,
+              pages.allSatisfy({ layout.fits($0, style: style) })
+            else { throw CocoaError(.coderInvalidValue) }
+            let single = StoryCardLayout(format: format, hasImage: photo, single: true)
+            let full = single.fits(wholeStory.text, style: style) ? wholeStory : shortStory
+            let renderer = ImageRenderer(
+              content: PassageStoryCard(
+                story: full, style: style, text: full.text, page: 0, count: 1,
+                layout: single, articleImage: photo ? UIImage(named: "OnboardingArticle") : nil))
+            renderer.scale = 3
+            guard let image = renderer.uiImage, let data = image.pngData(),
+              image.cgImage?.width == 1080, image.cgImage?.height == Int(format.height * 3)
+            else { throw CocoaError(.coderInvalidValue) }
+            try data.write(
+              to: directory.appending(
+                path:
+                  "\(format.rawValue.lowercased())-\(photo ? "photo" : "whole")-\(style.rawValue.lowercased()).png"
+              ), options: .atomic)
+            await Task.yield()
+          }
+        }
         for (prefix, story) in [("short", shortStory), ("long", longStory)] {
           let renderer = ImageRenderer(
             content: PassageStoryCard(

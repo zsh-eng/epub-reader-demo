@@ -494,6 +494,7 @@ enum ArticleRouting {
 
   var sourceURL: URL { ArticleRouting.original(currentURL) }
   var libraryURL: URL { articleIdentity }
+  var previewImageURL: URL? { store?.articles.first { $0.url == articleIdentity }?.imageURL }
 
   func back() {
     guard canGoBack else { return }

@@ -398,9 +398,16 @@ In a highlight/note menu, select **Share as image**. Ten poster templates—
 Biblioteca, Theatre, Xuan, Modern, Jade, Swiss, Sumi, Hanji, Offset and Seoul—
 combine live typography with local paper, ink and collage textures. Each keeps
 only a small theme-coloured Arctic mark. Short opening sentences can become
-larger display type; long passages use measured pages without dropping text.
+larger display type. Stories prefer one image: longer quotes reduce type down
+to a readable limit. Square defaults to pages, with an explicit One image /
+Pages control for either format. A quote that cannot fit shows a message and
+disables export; it never silently cuts off the passage.
 The picker shows actual miniature compositions. Preview and export share a
-360 × 640 canvas; exports are 1080 × 1920. Only the selected card is rasterized
+360 × 640 Story or 360 × 360 Square canvas; exports are 1080 × 1920 or
+1080 × 1080. Biblioteca, Modern, Swiss and Offset offer an Article image toggle
+when the source has an image. It reuses the bounded thumbnail cache; loading
+reserves image space and export waits for it. The other templates keep their
+artwork intact. Only the selected card is rasterized
 for the native share sheet. Save or copy the image for Instagram; there is no
 Meta account integration. Quotes keep their article title and source.
 
@@ -411,9 +418,10 @@ material assets and layout recipes. These are original interpretations of
 specific print traditions, not reproductions or summaries of national styles.
 
 For repeatable design review, the debug-only `-test-story-gallery` flag writes
-20 synthetic short/long proofs to the simulator's Documents/PosterProofs when
+48 synthetic portrait/square, short/long and article-image proofs to the simulator's Documents/PosterProofs when
 the sharing sheet opens in UI test mode. The focused story UI test checks all
-ten selections, pagination and native sharing. No proof export runs in Release.
+ten selections, exact text preservation across pages, whole-quote mode,
+format changes, image eligibility and native sharing. No proof export runs in Release.
 
 X/Twitter links stay HTTPS. Reader uses Defuddle's existing rich X renderer with
 one bounded response from its documented public source,

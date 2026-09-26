@@ -176,7 +176,9 @@ struct LibraryAnnotations: View {
         .accessibilityIdentifier("library-passage-open-" + annotation.id.uuidString)
         Menu {
           Button("Share as image", systemImage: "square.and.arrow.up") {
-            sharing = PassageStory(annotation: annotation, title: title)
+            sharing = PassageStory(
+              annotation: annotation, title: title,
+              imageURL: articles.first { $0.url == annotation.articleURL }?.imageURL)
           }.accessibilityIdentifier("share-passage-image")
           Button(
             annotation.note.isEmpty ? "Add note" : "Edit note", systemImage: "square.and.pencil"

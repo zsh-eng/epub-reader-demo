@@ -168,6 +168,21 @@ struct TaggingNotice: Identifiable {
         articles = try JSONDecoder().decode([SavedArticle].self, from: Data(contentsOf: fileURL))
       }
       try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true)
+      #if DEBUG && canImport(UIKit)
+        if TestMode.enabled, ProcessInfo.processInfo.arguments.contains("-test-story-image"), articles.isEmpty {
+          // Exercise the real article metadata and thumbnail path using bundled bytes.
+          let photoURL = downloads.appending(path: "story-photo.jpg")
+          guard let photo = UIImage(named: "OnboardingArticle")?.jpegData(compressionQuality: 0.9)
+          else { throw CocoaError(.fileReadCorruptFile) }
+          try photo.write(to: photoURL, options: .atomic)
+          var article = SavedArticle(url: URL(string: "https://fixture.example/unicode")!, title: "A practice of attention")
+          article.imageURL = photoURL
+          article.taggingText = "A complete local article preview for the image sharing fixture."
+          article.previewFetchedAt = Date()
+          articles = [article]
+          try JSONEncoder().encode(articles).write(to: fileURL, options: .atomic)
+        }
+      #endif
       #if DEBUG
         if TestMode.enabled && ProcessInfo.processInfo.arguments.contains("-seed-preload-fixtures"),
           articles.isEmpty

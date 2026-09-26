@@ -39,6 +39,69 @@ final class LibraryAnnotationsUITests: XCTestCase {
     // the cross-app pasteboard here: iOS consent would block unattended runs.
   }
 
+  @MainActor func testStoryFormatsWholeQuoteAndOptionalArticleImage() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "1", "-test-story-image", "-articles-offline", "-disable-preloading"]
+    app.launch()
+    XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
+    app.buttons["library-annotations"].tap()
+    XCTAssertTrue(app.buttons["Passage options"].waitForExistence(timeout: 5))
+    app.buttons["Passage options"].tap()
+    app.buttons["share-passage-image"].tap()
+    let preview = app.otherElements["story-preview"]
+    XCTAssertTrue(preview.waitForExistence(timeout: 5))
+    let completeQuote = preview.label
+    XCTAssertTrue(app.segmentedControls["story-flow"].buttons["One image"].isSelected)
+    XCTAssertFalse(app.buttons["Next card"].exists)
+    let imageToggle = app.switches["story-include-image"]
+    XCTAssertTrue(imageToggle.exists)
+    imageToggle.coordinate(withNormalizedOffset: CGVector(dx: 0.94, dy: 0.5)).tap()
+    XCTAssertEqual(imageToggle.value as? String, "1")
+    expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: app.buttons["story-export"])
+    waitForExpectations(timeout: 10)
+    XCTAssertTrue((preview.value as? String ?? "").contains("with image"))
+    capture(app, "story-with-article-image")
+    app.buttons["story-style-Theatre"].tap()
+    XCTAssertFalse(imageToggle.exists)
+    XCTAssertTrue((preview.value as? String ?? "").contains("text only"))
+    app.buttons["story-style-Biblioteca"].tap()
+    XCTAssertEqual(imageToggle.value as? String, "1")
+    app.segmentedControls["story-format"].buttons["Square"].tap()
+    XCTAssertTrue(app.segmentedControls["story-flow"].buttons["Pages"].isSelected)
+    app.segmentedControls["story-flow"].buttons["One image"].tap()
+    XCTAssertEqual(preview.label, completeQuote)
+    XCTAssertTrue((preview.value as? String ?? "").contains("Square, with image, card 1 of 1"))
+    capture(app, "square-whole-quote-with-image")
+    app.buttons["story-export"].tap()
+    XCTAssertTrue(app.collectionViews["activityCollectionView"].waitForExistence(timeout: 10))
+  }
+
+  @MainActor func testLongSquareQuoteCanSwitchFromLaterPageWithoutDroppingText() {
+    let app = XCUIApplication()
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "1", "-test-story-long", "-articles-offline", "-images-offline"]
+    app.launch()
+    XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
+    app.buttons["library-annotations"].tap()
+    XCTAssertTrue(app.buttons["Passage options"].waitForExistence(timeout: 5))
+    app.buttons["Passage options"].tap()
+    app.buttons["share-passage-image"].tap()
+    let preview = app.otherElements["story-preview"]
+    XCTAssertTrue(preview.waitForExistence(timeout: 5))
+    app.segmentedControls["story-format"].buttons["Square"].tap()
+    var text = preview.label
+    while app.buttons["Next card"].isEnabled {
+      app.buttons["Next card"].tap()
+      text += preview.label
+    }
+    app.segmentedControls["story-flow"].buttons["One image"].tap()
+    XCTAssertEqual(preview.label, text)
+    XCTAssertTrue(app.staticTexts["story-too-long"].exists)
+    XCTAssertFalse(app.buttons["story-export"].isEnabled)
+    app.segmentedControls["story-flow"].buttons["Pages"].tap()
+    XCTAssertTrue(app.buttons["story-export"].isEnabled)
+    XCTAssertTrue((preview.value as? String ?? "").contains("card 1 of"))
+  }
+
   @MainActor func testDistinctEmptyPassagesInDarkMode() {
     let app = XCUIApplication()
     app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-dark-ui"]

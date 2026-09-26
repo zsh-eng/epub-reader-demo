@@ -361,3 +361,29 @@ and motif/credit collisions. The board's ten short/long pairs, picker and 390px
 layout passed browser checks. Strict Swift formatting and the signed iOS Release
 build passed. Physical-device installation was attempted but the connection
 reset; this pass makes no device frame-rate claim.
+
+
+## Share formats and complete quotes (2026-09-26)
+
+Story and Square use one layout contract for measurement, preview and export.
+Stories prefer one image when the complete passage fits. Square defaults to
+pages. The user can select either mode. Single-image type has a minimum of
+18 points in Story and 16 in Square, before 3× export; overflow disables export
+and asks for Pages. Pagination preserves the exact original string across pages.
+
+Four templates can include article imagery. The sheet requests a 1080 px
+variant from the existing bounded thumbnail cache only when enabled. It keeps
+one decoded image, reserves the image region while loading, and offers retry
+on failure. Export captures the selected composition before yielding, so a
+later control change cannot alter that export. The FT publisher mark is
+centered once and reused by the shelf and its moving copy.
+
+Validation: the existing ten-theme share flow, long Square page/whole-quote
+switching, optional-image flow and publisher gather/reverse flow passed on the
+simulator. The photo fixture uses complete local metadata so background import
+work cannot replace its image with a different fixture response. Native
+screenshots were inspected. The debug renderer checks text preservation and
+font fit for all format/image combinations. All 48 native proof files passed
+browser dimension/selection checks at 1080 × 1920 or 1080 × 1080; the board also
+passed a 390 px width check. Swift formatting and signed iOS Release build passed.
+This is not a physical-device performance measurement or an installed update.

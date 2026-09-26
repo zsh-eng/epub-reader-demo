@@ -134,7 +134,9 @@ struct ReaderAnnotations: View {
         Spacer()
         Menu {
           Button("Share as image", systemImage: "square.and.arrow.up") {
-            sharing = PassageStory(annotation: annotation, title: browser.readerView.title ?? browser.webView.title)
+            sharing = PassageStory(
+              annotation: annotation, title: browser.readerView.title ?? browser.webView.title,
+              imageURL: browser.previewImageURL)
           }.accessibilityIdentifier("share-passage-image")
           Button(
             annotation.note.isEmpty ? "Add note" : "Edit note", systemImage: "square.and.pencil"

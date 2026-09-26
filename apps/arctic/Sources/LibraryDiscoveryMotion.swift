@@ -185,7 +185,7 @@ final class DiscoveryShelfView: UIView {
         ? UIImage(
           systemName: "star.fill",
           withConfiguration: UIImage.SymbolConfiguration(pointSize: 22, weight: .medium))
-        : UIImage(named: ArcticPublisher.all[index - 1].asset)
+        : Self.publisherImage(ArcticPublisher.all[index - 1].asset)
       let label = UILabel()
       label.text = title
       label.font = .preferredFont(forTextStyle: .caption2)
@@ -205,6 +205,21 @@ final class DiscoveryShelfView: UIView {
     updatePalette()
   }
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+  // The official FT avatar places the letters 24px above the canvas centre.
+  // Normalize the artwork once so both the shelf and its flying copy are centred.
+  private static let centeredFT: UIImage? = {
+    guard let original = UIImage(named: "PublisherFT") else { return nil }
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = original.scale
+    return UIGraphicsImageRenderer(size: original.size, format: format).image { _ in
+      original.draw(at: .zero)
+      original.draw(at: CGPoint(x: 0, y: original.size.height * 24 / 180))
+    }
+  }()
+  private static func publisherImage(_ name: String) -> UIImage? {
+    name == "PublisherFT" ? centeredFT : UIImage(named: name)
+  }
 
   func updatePalette() {
     icons[0].tintColor = UIColor(ArcticBrand.accent)
