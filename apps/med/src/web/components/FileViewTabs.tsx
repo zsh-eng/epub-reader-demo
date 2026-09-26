@@ -8,6 +8,7 @@ export interface FileViewTab {
   id: string;
   path: string;
   pinned: boolean;
+  dirty?: boolean;
   sourceLabel?: string;
 }
 export function FileViewTabs({
@@ -65,6 +66,19 @@ export function FileViewTabs({
             >
               <Icon name="file" size={13} />
               <span {...stylex.props(styles.name)}>{labels[index]}</span>
+              {tab.dirty && (
+                <span
+                  aria-label="Unsaved changes"
+                  title="Unsaved changes"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "currentColor",
+                    flexShrink: 0,
+                  }}
+                />
+              )}
             </Tabs.Tab>
             <button
               {...stylex.props(ui.button, styles.close)}

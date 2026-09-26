@@ -1,0 +1,66 @@
+.med-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--edit-bg);
+  color: var(--edit-fg);
+}
+.med-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--edit-border);
+  font-size: 12px;
+}
+.med-editor-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.med-editor button {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--edit-border);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.med-editor button:active {
+  transform: scale(0.96);
+}
+.med-editor button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.med-save-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+}
+.med-save-dot[data-dirty="true"] {
+  background: currentColor;
+}
+.med-editor-message {
+  padding: 7px 12px;
+  font-size: 12px;
+}
+.med-editor-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.med-editor-body .cm-editor {
+  height: 100%;
+}
+.med-editor-mode {
+  min-width: 48px;
+  color: var(--edit-muted);
+  font-size: 10px;
+}

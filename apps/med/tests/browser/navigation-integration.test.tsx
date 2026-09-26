@@ -22,6 +22,7 @@ async function mountFile(
   vim = false,
   beforeRead?: () => Promise<void>,
   syntaxSource?: () => string,
+  onWrite?: (text: string, identity: string) => void,
 ) {
   localStorage.setItem("med:vim", vim ? "on" : "off");
   initializeTheme();
@@ -67,6 +68,18 @@ async function mountFile(
     }
     if (url.pathname === "/api/notes")
       return Response.json({ reviewId: url.searchParams.get("reviewId"), revision: 0, notes: [] });
+    if (url.pathname === "/api/browse/write") {
+      const { source, path, expectedIdentity, text } = JSON.parse(String(init?.body));
+      try {
+        onWrite?.(text, expectedIdentity);
+      } catch {
+        return Response.json(
+          { error: { code: "file-changed", message: "File changed on disk. Your draft is kept." } },
+          { status: 409 },
+        );
+      }
+      return Response.json({ source, path, identity: text, text, size: text.length, kind: "text" });
+    }
     if (url.pathname === "/api/browse/read") {
       await beforeRead?.();
       const { source, path } = JSON.parse(String(init?.body));
@@ -355,4 +368,94 @@ test("reopening a highlighted working file shows its current contents", async ()
   await expect
     .poll(() => new Set(tokens().map((token) => getComputedStyle(token).color)).size)
     .toBeGreaterThan(2);
+});
+
+test("Vim edits, undo, retained drafts, and :w use the production file API", async () => {
+  let source = "const count = 1;\r\n";
+  await mountFile(
+    true,
+    undefined,
+    () => source,
+    (text, identity) => {
+      expect(identity).toBe(source);
+      source = text;
+    },
+  );
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "Edit main.ts", exact: true });
+  await expect.element(editor).toBeVisible();
+  await userEvent.keyboard("wciwtotal{Escape}");
+  await expect.element(editor).toHaveTextContent("const total = 1;");
+  await expect
+    .element(page.getByRole("img", { name: "Unsaved changes", exact: true }))
+    .toBeVisible();
+  await page.getByRole("tab", { name: "Changes", exact: true }).click();
+  await page.getByRole("tab", { name: /main.ts/ }).click();
+  await expect.element(editor).toHaveTextContent("const total = 1;");
+  await userEvent.keyboard("u");
+  await expect.element(editor).toHaveTextContent("const count = 1;");
+  await expect.element(page.getByRole("img", { name: "Saved", exact: true })).toBeVisible();
+  await userEvent.keyboard("{Control>}r{/Control}");
+  await expect.element(editor).toHaveTextContent("const total = 1;");
+  await userEvent.keyboard(":w{Enter}");
+  await expect.poll(() => source).toBe("const total = 1;\r\n");
+  await expect.element(page.getByRole("img", { name: "Saved", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect
+    .poll(
+      () =>
+        document.querySelector('[data-file-pane="main"] diffs-container')?.shadowRoot?.textContent,
+    )
+    .toContain("const total = 1;");
+});
+
+test("a conflicting save keeps the draft until explicit discard", async () => {
+  let source = "const count = 1;";
+  await mountFile(
+    false,
+    undefined,
+    () => source,
+    (text, identity) => {
+      if (identity !== source) throw new Error("conflict");
+      source = text;
+    },
+  );
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "Edit main.ts", exact: true });
+  await expect.element(editor).toBeVisible();
+  await userEvent.keyboard("wciwdraft{Escape}");
+  source = "const agent = 2;";
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect
+    .element(page.getByRole("alert"))
+    .toHaveTextContent("File changed on disk. Your draft is kept.");
+  await expect.element(editor).toHaveTextContent("const draft = 1;");
+  expect(source).toBe("const agent = 2;");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Keep editing", exact: true }).click();
+  await expect.element(editor).toHaveTextContent("const draft = 1;");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Discard draft", exact: true }).click();
+  await expect
+    .poll(
+      () =>
+        document.querySelector('[data-file-pane="main"] diffs-container')?.shadowRoot?.textContent,
+    )
+    .toContain("const agent = 2;");
+});
+
+test("i enters editing at the read-only Vim cursor and a clean reopen uses fresh contents", async () => {
+  let source = "const count = 1;";
+  await mountFile(true, undefined, () => source);
+  await userEvent.keyboard("wi");
+  const editor = page.getByRole("textbox", { name: "Edit main.ts", exact: true });
+  await expect.element(editor).toBeVisible();
+  await userEvent.keyboard("fresh{Escape}");
+  await expect.element(editor).toHaveTextContent("const freshcount = 1;");
+  await userEvent.keyboard("u");
+  await expect.element(editor).toHaveTextContent("const count = 1;");
+  await page.getByRole("tab", { name: "Changes", exact: true }).click();
+  source = "const external = 2;";
+  await page.getByRole("tab", { name: "main.ts", exact: true }).click();
+  await expect.element(editor).toHaveTextContent(source);
 });

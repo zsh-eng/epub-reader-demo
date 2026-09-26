@@ -7,6 +7,8 @@ import {
   type CodeViewReactOptions,
 } from "@pierre/diffs/react";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useId,
   useLayoutEffect,
@@ -16,6 +18,8 @@ import {
   useSyncExternalStore,
   type CSSProperties,
 } from "react";
+import { createEditorDrafts, type EditorDrafts } from "../data/editor-drafts";
+import type { BrowseApi } from "../data/browse";
 import type { BrowseRead } from "../../shared/browse";
 import type { BlameLoader } from "../data/blame";
 import { tokens, ui } from "../theme.stylex";
@@ -61,6 +65,13 @@ export interface FullFileViewProps {
   onClose?(): void;
   onOpenBefore?(): void;
   onOpenAfter?(): void;
+  onEdit?(): void;
+  editor?: {
+    drafts: EditorDrafts;
+    key: string;
+    write: NonNullable<BrowseApi["write"]>;
+    autoEdit?: boolean;
+  };
 }
 
 const notices = {
@@ -71,7 +82,7 @@ const notices = {
 };
 
 /** One read-only, virtualized file. Metadata responses never reach Pierre. */
-export function FullFileView({
+function ReadOnlyFileView({
   file,
   path,
   loading,
@@ -95,6 +106,7 @@ export function FullFileView({
   onClose,
   onOpenBefore,
   onOpenAfter,
+  onEdit,
 }: FullFileViewProps) {
   const displayPath = path ?? file?.path;
   const { active } = useTheme();
@@ -312,6 +324,11 @@ export function FullFileView({
             {sourceLabel.replace(/^Working files\b/, "Working file")}
           </span>
           <span {...stylex.props(styles.badge)}>Read-only</span>
+          {onEdit && (
+            <button {...stylex.props(ui.button)} onClick={onEdit}>
+              Edit
+            </button>
+          )}
           {loadBlame && (
             <button
               {...stylex.props(ui.button)}
@@ -637,3 +654,91 @@ const styles = stylex.create({
     fontSize: 11,
   },
 });
+
+const EditableFile = lazy(() => import("./FileEditor"));
+const noDrafts = createEditorDrafts();
+export function FullFileView(props: FullFileViewProps) {
+  const store = props.editor?.drafts ?? noDrafts;
+  useSyncExternalStore(store.subscribe, store.getSnapshot);
+  const draft = props.editor ? store.get(props.editor.key) : undefined;
+  const [editError, setEditError] = useState("");
+  const canEdit =
+    !!props.editor &&
+    !props.compact &&
+    props.file?.source.kind === "worktree" &&
+    props.file.kind === "text" &&
+    !props.file.truncated &&
+    props.file.size <= 1024 * 1024 &&
+    !props.loading;
+  const begin = (insert = false, position?: { line: number; column: number }) => {
+    if (!canEdit || !props.file || !props.editor) return;
+    try {
+      const draft = store.open(props.editor.key, props.file, position?.line ?? props.line);
+      store.update(draft, { insertOnOpen: insert, column: position?.column ?? props.column });
+      setEditError("");
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : String(error));
+    }
+  };
+  const editorKey = props.editor?.key;
+  // Reconcile only a new host read, not a save notification with old view props.
+  useLayoutEffect(() => {
+    if (!editorKey || props.loading || props.file?.kind !== "text") return;
+    const existing = store.get(editorKey);
+    if (
+      existing?.editing &&
+      !existing.dirty &&
+      !existing.saving &&
+      existing.file.identity !== props.file.identity
+    )
+      store.open(editorKey, props.file, props.line);
+  }, [store, editorKey, props.file, props.loading, props.line]);
+  const autoOpened = useRef(false);
+  useLayoutEffect(() => {
+    if (props.editor?.autoEdit && canEdit && !autoOpened.current) {
+      autoOpened.current = true;
+      begin();
+    }
+  });
+  if (draft?.editing && props.editor)
+    return (
+      <Suspense fallback={<div role="status">Opening editor…</div>}>
+        <EditableFile
+          key={props.editor.key}
+          draft={draft}
+          drafts={store}
+          write={props.editor.write}
+          onClose={props.onRefresh}
+        />
+      </Suspense>
+    );
+  return (
+    <div
+      style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, minWidth: 0 }}
+      onKeyDownCapture={(event) => {
+        if (
+          canEdit &&
+          props.vimEnabled &&
+          event.key === "i" &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey &&
+          (event.target as HTMLElement).closest('[aria-label="File navigation"]')
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          const pane = (event.target as HTMLElement).closest<HTMLElement>(
+            '[aria-label="File navigation"]',
+          )!;
+          begin(true, {
+            line: Number(pane.dataset.vimLine ?? 1),
+            column: Number(pane.dataset.vimColumn ?? 1),
+          });
+        }
+      }}
+    >
+      {editError && <div role="alert">{editError}</div>}
+      <ReadOnlyFileView {...props} onEdit={canEdit ? () => begin() : undefined} />
+    </div>
+  );
+}

@@ -74,6 +74,16 @@ export function createBrowseApi(fetcher: typeof fetch, token: string) {
         throw new Error("The file list belongs to another workspace.");
       return result;
     },
+    async write(source: BrowseSource, path: string, expectedIdentity: string, text: string) {
+      const result = await api.json("/api/browse/write", browseReadResponseSchema, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, path, expectedIdentity, text }),
+      });
+      if (browseSourceKey(result.source) !== browseSourceKey(source) || result.path !== path)
+        throw new Error("The saved file belongs to another workspace.");
+      return result;
+    },
     async read(source: BrowseSource, path: string, signal?: AbortSignal) {
       const result = await api.json("/api/browse/read", browseReadResponseSchema, {
         method: "POST",
@@ -88,8 +98,8 @@ export function createBrowseApi(fetcher: typeof fetch, token: string) {
   };
 }
 type CompleteBrowseApi = ReturnType<typeof createBrowseApi>;
-export type BrowseApi = Omit<CompleteBrowseApi, "search" | "symbols"> &
-  Partial<Pick<CompleteBrowseApi, "search" | "symbols">>;
+export type BrowseApi = Omit<CompleteBrowseApi, "search" | "symbols" | "write"> &
+  Partial<Pick<CompleteBrowseApi, "search" | "symbols" | "write">>;
 
 export function createDefaultBrowseApi(): BrowseApi {
   const token =

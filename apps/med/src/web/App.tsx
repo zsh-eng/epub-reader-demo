@@ -15,6 +15,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
 } from "react";
 import type { Comparison, Note, NoteInput } from "../shared/protocol";
@@ -42,6 +43,7 @@ import { SavedReviewHeader } from "./components/SavedReviewHeader";
 import { ComparisonActions } from "./components/ComparisonActions";
 import { createBlameLoader, type BlameLoader } from "./data/blame";
 
+import { createEditorDrafts } from "./data/editor-drafts";
 import { createFilePrefetch } from "./data/file-prefetch";
 import { createRenderDiagnostics } from "./data/render-diagnostics";
 import { findDefinitions } from "./data/definitions";
@@ -129,6 +131,19 @@ export function App({
   const browseApi = prefetch.api;
   useEffect(() => () => prefetch.dispose(), [prefetch]);
   const [fileWorkspace] = useState(() => createFileWorkspace(browseApi));
+  const [editorDrafts] = useState(createEditorDrafts);
+  useSyncExternalStore(editorDrafts.subscribe, editorDrafts.getSnapshot);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (editorDrafts.hasDirty()) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editorDrafts]);
+
   const [loadBlame] = useState(
     () =>
       providedBlameLoader ??
@@ -1296,6 +1311,51 @@ export function App({
         ]
       : []),
   ];
+  const fileLinkOpened = useRef(false);
+  const fileLinkSelecting = useRef(false);
+  const [fileLinkError, setFileLinkError] = useState("");
+  useEffect(() => {
+    if (
+      location.pathname !== "/file" ||
+      fileLinkOpened.current ||
+      !state.session ||
+      !browseSource ||
+      !fileState.source
+    )
+      return;
+    const params = new URLSearchParams(location.search);
+    const repo = params.get("repo"),
+      path = params.get("path");
+    if (!repo || !path) return;
+    if (browseSource.kind !== "worktree" || browseSource.repo !== repo) {
+      if (fileLinkSelecting.current) return;
+      const repository = state.repositories.find((item) =>
+        item.worktrees.some((worktree) => worktree.path === repo),
+      );
+      if (!repository) {
+        fileLinkOpened.current = true;
+        // The URL can only be resolved after the host catalogue arrives.
+        // oxlint-disable-next-line react/set-state-in-effect
+        setFileLinkError("Register this worktree before opening its file link.");
+        return;
+      }
+      fileLinkSelecting.current = true;
+      void controller
+        .selectWorktree(repo, repository.id)
+        .catch((error) => setFileLinkError(String(error)));
+      return;
+    }
+    if (sourceKey(fileState.source) !== sourceKey(browseSource)) return;
+    fileLinkOpened.current = true;
+    fileWorkspace.open(path, true, undefined, browseSource, "Working files");
+  }, [
+    state.session,
+    state.repositories,
+    browseSource,
+    fileState.source,
+    fileWorkspace,
+    controller,
+  ]);
   const actionRepo = state.review?.repo ?? state.session?.repository.path;
   const actionBranch = state.savedView
     ? (state.savedReview?.targets.find((target) => target.id === state.savedTargetId)?.branch ?? "")
@@ -1585,9 +1645,13 @@ export function App({
           />
         )}
         <main {...stylex.props(styles.main)} aria-label="Continuous review">
+          {fileLinkError && <div role="alert">{fileLinkError}</div>}
           {!!browseSource && (
             <FileViewTabs
-              tabs={fileState.tabs}
+              tabs={fileState.tabs.map((tab) => ({
+                ...tab,
+                dirty: !!editorDrafts.get(JSON.stringify([tab.source, tab.path]))?.dirty,
+              }))}
               active={fileState.active}
               onSelect={fileWorkspace.select}
               onClose={fileWorkspace.close}
@@ -2068,6 +2132,19 @@ export function App({
             </div>
             {activeFile && (
               <FullFileView
+                editor={
+                  activeFile.source.kind === "worktree" && browseApi.write
+                    ? {
+                        drafts: editorDrafts,
+                        key: JSON.stringify([activeFile.source, activeFile.path]),
+                        write: browseApi.write,
+                        autoEdit:
+                          location.pathname === "/file" &&
+                          new URLSearchParams(location.search).get("edit") === "1" &&
+                          new URLSearchParams(location.search).get("path") === activeFile.path,
+                      }
+                    : undefined
+                }
                 file={fileState.file}
                 path={activeFile.path}
                 loading={fileState.loading}
@@ -2124,9 +2201,11 @@ export function App({
         <span {...stylex.props(styles.statusDot)} />
         <span>
           {activeFile
-            ? vimEnabled
-              ? "Read-only file · Vim"
-              : "Read-only file"
+            ? editorDrafts.get(JSON.stringify([activeFile.source, activeFile.path]))?.editing
+              ? "Editing file · Vim"
+              : vimEnabled
+                ? "Read-only file · Vim"
+                : "Read-only file"
             : state.comparison.kind === "patch"
               ? "Patch review"
               : state.comparison.kind === "files"
