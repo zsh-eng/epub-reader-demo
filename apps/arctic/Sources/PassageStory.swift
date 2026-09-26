@@ -38,7 +38,7 @@ struct PassageStory: Identifiable {
             with: CGSize(width: 296, height: CGFloat.greatestFiniteMagnitude),
             options: [.usesLineFragmentOrigin, .usesFontLeading],
             attributes: [.font: font, .paragraphStyle: paragraph], context: nil
-          ).height <= 232
+          ).height <= 228
         }
         if fits { lower = middle } else { upper = middle - 1 }
       }
@@ -53,250 +53,6 @@ struct PassageStory: Identifiable {
       remaining = remaining[end...]
     }
     return result.isEmpty ? [""] : result
-  }
-}
-
-/// Editorial treatments are local vector layouts, not full-size bitmap backgrounds.
-/// Type and source attribution remain crisp in every exported card.
-enum StoryStyle: String, CaseIterable, Identifiable {
-  case paper = "Paper"
-  case ink = "Ink"
-  case ice = "Ice"
-  case folio = "Folio"
-  case field = "Field"
-  case signal = "Signal"
-  case index = "Index"
-  case dusk = "Dusk"
-  case cutout = "Cutout"
-  case ribbon = "Ribbon"
-  var id: String { rawValue }
-
-  var background: Color {
-    switch self {
-    case .paper: return Color(red: 0.97, green: 0.95, blue: 0.89)
-    case .ink: return Color(red: 0.10, green: 0.11, blue: 0.12)
-    case .ice: return Color(red: 0.90, green: 0.96, blue: 0.96)
-    case .folio: return Color(red: 0.90, green: 0.90, blue: 0.98)
-    case .field: return Color(red: 0.91, green: 0.92, blue: 0.82)
-    case .signal: return Color(red: 0.94, green: 0.23, blue: 0.13)
-    case .index: return Color(red: 0.95, green: 0.93, blue: 0.86)
-    case .dusk: return Color(red: 0.19, green: 0.15, blue: 0.32)
-    case .cutout: return Color(red: 0.83, green: 0.89, blue: 0.98)
-    case .ribbon: return Color(red: 0.98, green: 0.76, blue: 0.79)
-    }
-  }
-  var foreground: Color {
-    switch self {
-    case .ink, .dusk: return Color(red: 0.98, green: 0.96, blue: 0.91)
-    case .signal: return Color(red: 0.02, green: 0.02, blue: 0.02)
-    case .folio: return Color(red: 0.24, green: 0.22, blue: 0.52)
-    case .field: return Color(red: 0.17, green: 0.28, blue: 0.20)
-    case .cutout: return Color(red: 0.12, green: 0.24, blue: 0.50)
-    case .ribbon: return Color(red: 0.46, green: 0.12, blue: 0.27)
-    default: return Color(red: 0.13, green: 0.14, blue: 0.13)
-    }
-  }
-  var accent: Color {
-    switch self {
-    case .paper, .index: return Color(red: 0.67, green: 0.24, blue: 0.18)
-    case .ink: return Color(red: 0.81, green: 0.97, blue: 0.49)
-    case .ice: return Color(red: 0.22, green: 0.48, blue: 0.55)
-    case .folio: return Color(red: 0.55, green: 0.33, blue: 0.60)
-    case .field: return Color(red: 0.44, green: 0.49, blue: 0.22)
-    case .signal: return Color(red: 0.98, green: 0.94, blue: 0.85)
-    case .dusk: return Color(red: 0.91, green: 0.62, blue: 0.58)
-    case .cutout: return Color(red: 0.91, green: 0.35, blue: 0.24)
-    case .ribbon: return Color(red: 0.88, green: 0.23, blue: 0.11)
-    }
-  }
-  var font: UIFont {
-    switch self {
-    case .ink: return .systemFont(ofSize: 27, weight: .medium)
-    case .signal: return .systemFont(ofSize: 28, weight: .bold)
-    case .index: return .monospacedSystemFont(ofSize: 23, weight: .regular)
-    case .ribbon: return .systemFont(ofSize: 28, weight: .heavy)
-    case .folio, .dusk:
-      let descriptor = UIFont.systemFont(ofSize: 28).fontDescriptor.withDesign(.serif)!
-      return UIFont(descriptor: descriptor.withSymbolicTraits(.traitItalic) ?? descriptor, size: 28)
-    default:
-      return UIFont(
-        descriptor: UIFont.systemFont(ofSize: 28).fontDescriptor.withDesign(.serif)!, size: 28)
-    }
-  }
-}
-
-/// All themes share a measured 296 × 232 passage region and a fixed 360 × 640
-/// canvas. Their composition differs, but changing style never changes pagination.
-struct PassageStoryCard: View {
-  let story: PassageStory
-  let style: StoryStyle
-  let text: String
-  let page: Int
-  let count: Int
-
-  var body: some View {
-    // Background ornaments must not enlarge the text's layout proposal. Oversized
-    // ellipses and rotated paper may bleed, but the reading canvas stays fixed.
-    style.background.frame(width: 360, height: 640)
-      .overlay { decoration.frame(width: 360, height: 640) }
-      .overlay { composition.frame(width: 360, height: 640) }
-      .clipped()
-      .environment(\.dynamicTypeSize, .medium)
-      .environment(\.colorScheme, [.ink, .dusk].contains(style) ? .dark : .light)
-  }
-
-  @ViewBuilder private var composition: some View {
-    switch style {
-    case .folio:
-      VStack(alignment: .leading, spacing: 0) {
-        header
-        source(serif: true).padding(.top, 20)
-        Rectangle().fill(style.foreground.opacity(0.25)).frame(height: 1).padding(.vertical, 20)
-        quote
-        Spacer(minLength: 10)
-        Text("A PASSAGE TO KEEP").font(.system(size: 8, weight: .medium)).tracking(3)
-      }.padding(.horizontal, 32).padding(.vertical, 64)
-    case .index:
-      VStack(alignment: .leading, spacing: 0) {
-        header
-        Text("EXCERPT / \(String(format: "%03d", page + 1))")
-          .font(.system(size: 10, design: .monospaced)).tracking(1).padding(.top, 28)
-        Rectangle().fill(style.foreground.opacity(0.3)).frame(height: 1).padding(.vertical, 16)
-        quote
-        Spacer(minLength: 14)
-        source(serif: false)
-      }.padding(.horizontal, 32).padding(.vertical, 66)
-    case .signal:
-      VStack(alignment: .leading, spacing: 0) {
-        header
-        Text("READ / RETAIN.").font(.system(size: 28, weight: .black)).tracking(-1.4)
-          .padding(.top, 24).padding(.bottom, 24)
-        quote
-        Spacer(minLength: 14)
-        source(serif: false)
-      }.padding(.horizontal, 32).padding(.vertical, 54)
-    case .cutout:
-      VStack(alignment: .leading, spacing: 0) {
-        header
-        Spacer(minLength: 20)
-        quote.padding(.vertical, 15).background(style.background.opacity(0.97))
-        Spacer(minLength: 20)
-        source(serif: true).padding(.vertical, 12)
-      }.padding(.horizontal, 32).padding(.vertical, 70)
-    default:
-      VStack(alignment: .leading, spacing: 0) {
-        header
-        Spacer(minLength: 14)
-        if style == .ink {
-          Rectangle().fill(style.accent).frame(width: 48, height: 4).padding(.bottom, 20)
-        } else if style == .ribbon {
-          Text("A GOOD LINE.").font(.system(size: 11, weight: .black)).tracking(2)
-            .padding(.bottom, 18)
-        } else {
-          Text("“").font(.system(size: 62, design: .serif)).foregroundStyle(style.accent)
-            .frame(height: 42, alignment: .topLeading).padding(.bottom, 10)
-        }
-        quote
-        Spacer(minLength: 16)
-        source(serif: style == .paper || style == .field)
-      }.padding(.horizontal, 32).padding(.vertical, 64)
-    }
-  }
-
-  private var quote: some View {
-    Text(text.trimmingCharacters(in: .whitespacesAndNewlines))
-      .font(Font(style.font)).lineSpacing(4)
-      .foregroundStyle(style.foreground)
-      .fixedSize(horizontal: false, vertical: true)
-      .frame(width: 296, alignment: .leading)
-  }
-
-  private var header: some View {
-    HStack {
-      // Reuse the real mark's silhouette while applying this edition's ink colour.
-      style.foreground.opacity(0.72).mask(ArcticMark()).frame(width: 17, height: 17)
-      Spacer()
-      if count > 1 {
-        Text(String(format: "%02d / %02d", page + 1, count))
-          .font(.system(size: 10, design: .monospaced)).foregroundStyle(
-            style.foreground.opacity(0.85))
-      }
-    }
-  }
-
-  private func source(serif: Bool) -> some View {
-    VStack(alignment: .leading, spacing: 7) {
-      Text(story.title).font(
-        .system(size: serif ? 14 : 12, weight: .medium, design: serif ? .serif : .default)
-      )
-      .lineLimit(3).foregroundStyle(style.foreground)
-      Text(story.url.host?.replacingOccurrences(of: "www.", with: "") ?? "")
-        .font(.system(size: 9, design: style == .index ? .monospaced : .default))
-        .foregroundStyle(style.foreground.opacity(0.85))
-    }
-  }
-
-  @ViewBuilder private var decoration: some View {
-    switch style {
-    case .paper:
-      Rectangle().stroke(style.accent.opacity(0.35), lineWidth: 0.5).padding(18)
-      Rectangle().fill(style.accent).frame(width: 26, height: 2).offset(x: -135, y: 251)
-    case .ink:
-      Text("”").font(.system(size: 300, weight: .black, design: .serif))
-        .foregroundStyle(style.foreground.opacity(0.035)).offset(x: 98, y: -164)
-    case .ice:
-      LinearGradient(
-        colors: [style.background, Color.white.opacity(0.4), style.accent.opacity(0.16)],
-        startPoint: .topLeading, endPoint: .bottomTrailing)
-      Image("EmptySaved").resizable().scaledToFit().frame(width: 360)
-        .opacity(0.18).blendMode(.multiply).offset(y: 215)
-    case .folio:
-      Rectangle().fill(style.foreground.opacity(0.055)).frame(width: 118).offset(x: 122)
-      Rectangle().fill(style.accent).frame(width: 360, height: 10).offset(y: 315)
-    case .field:
-      Image("EmptyFavourites").resizable().scaledToFit().frame(width: 240)
-        .saturation(0).opacity(0.13).blendMode(.multiply).offset(x: 115, y: 208)
-      Path { path in
-        path.move(to: CGPoint(x: 20, y: 48))
-        path.addLine(to: CGPoint(x: 20, y: 592))
-      }.stroke(style.accent.opacity(0.5), lineWidth: 0.75)
-    case .signal:
-      Rectangle().fill(style.accent).frame(width: 45, height: 6).rotationEffect(.degrees(-45))
-        .offset(x: 128, y: -199)
-    case .index:
-      Canvas { context, size in
-        for y in stride(from: 30.0, through: 610.0, by: 24) {
-          var line = Path()
-          line.move(to: CGPoint(x: 0, y: y))
-          line.addLine(to: CGPoint(x: size.width, y: y))
-          context.stroke(line, with: .color(style.foreground.opacity(0.055)), lineWidth: 0.5)
-        }
-      }
-      Rectangle().fill(style.accent.opacity(0.4)).frame(width: 1).offset(x: -158)
-    case .dusk:
-      LinearGradient(
-        colors: [style.background, Color(red: 0.45, green: 0.26, blue: 0.38), style.background],
-        startPoint: .topLeading, endPoint: .bottomTrailing)
-      Circle().fill(
-        RadialGradient(
-          colors: [style.accent.opacity(0.24), .clear], center: .center,
-          startRadius: 0, endRadius: 160)
-      ).frame(width: 320, height: 320).offset(x: 110, y: 190)
-      Circle().stroke(style.foreground.opacity(0.12), lineWidth: 0.7)
-        .frame(width: 430, height: 430).offset(x: 155, y: -245)
-    case .cutout:
-      Rectangle().fill(style.accent).frame(width: 400, height: 122).rotationEffect(.degrees(-9))
-        .offset(y: -229)
-      Rectangle().fill(Color(red: 0.98, green: 0.94, blue: 0.85)).frame(width: 326, height: 466)
-        .rotationEffect(.degrees(2)).offset(y: 15)
-      Rectangle().fill(style.foreground.opacity(0.15)).frame(width: 64, height: 21)
-        .rotationEffect(.degrees(-12)).offset(x: 107, y: -220)
-    case .ribbon:
-      Rectangle().fill(style.accent).frame(width: 360, height: 42).offset(y: -299)
-      Rectangle().fill(style.foreground).frame(width: 360, height: 38).offset(y: 301)
-      Circle().fill(style.accent.opacity(0.18)).frame(width: 170, height: 170).offset(
-        x: 177, y: -150)
-    }
   }
 }
 
@@ -345,15 +101,17 @@ struct PassageStorySheet: View {
                 withAnimation(.easeOut(duration: reduceMotion ? 0.1 : 0.18)) { style = item }
               } label: {
                 VStack(spacing: 7) {
-                  ZStack(alignment: .bottomLeading) {
-                    item.background
-                    Rectangle().fill(item.accent).frame(width: 22, height: 3).padding(7)
-                    Text("Aa").font(Font(item.font).bold()).foregroundStyle(item.foreground)
-                      .frame(maxWidth: .infinity, maxHeight: .infinity)
-                  }.frame(width: 58, height: 58).clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(
-                      RoundedRectangle(cornerRadius: 12).strokeBorder(
-                        style == item ? ArcticBrand.accent : .clear, lineWidth: 2))
+                  PassageStoryCard(
+                    story: story, style: item, text: pages[page], page: page, count: pages.count
+                  )
+                  .scaleEffect(0.16, anchor: .topLeading)
+                  .frame(width: 57.6, height: 102.4, alignment: .topLeading)
+                  .clipShape(RoundedRectangle(cornerRadius: 6))
+                  .overlay(
+                    RoundedRectangle(cornerRadius: 6).strokeBorder(
+                      style == item ? ArcticBrand.accent : .clear, lineWidth: 2)
+                  )
+                  .accessibilityHidden(true)
                   Text(item.rawValue).font(.caption2).foregroundStyle(.secondary)
                 }
               }.buttonStyle(ArcticPressStyle()).accessibilityLabel(item.rawValue)
@@ -375,6 +133,15 @@ struct PassageStorySheet: View {
         .navigationTitle("Share a passage").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
     }.tint(ArcticBrand.accent)
+      .task {
+        #if DEBUG
+          if TestMode.enabled, ProcessInfo.processInfo.arguments.contains("-test-story-gallery") {
+            do { try await PassageStoryCard.writeDesignProofs(longStory: story) } catch {
+              self.error = "Design proof failed: \(error.localizedDescription)"
+            }
+          }
+        #endif
+      }
       .sheet(item: $export) { item in StoryActivity(image: item.image) }
       .alert(
         "Could not create image",

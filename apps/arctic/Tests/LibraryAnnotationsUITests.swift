@@ -6,7 +6,7 @@ final class LibraryAnnotationsUITests: XCTestCase {
 
   @MainActor func testStoryTemplatesPaginateAndExportOffline() {
     let app = XCUIApplication()
-    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "1", "-test-story-long", "-articles-offline", "-images-offline", "-dark-ui"]
+    app.launchArguments = ["-ui-testing", "-reset-store", "-reset-appearance", "-test-notebook-count", "1", "-test-story-long", "-test-story-gallery", "-articles-offline", "-images-offline", "-dark-ui"]
     app.launch()
     XCTAssertTrue(app.buttons["library-annotations"].waitForExistence(timeout: 10))
     app.buttons["library-annotations"].tap()
@@ -16,7 +16,7 @@ final class LibraryAnnotationsUITests: XCTestCase {
     let preview = app.otherElements["story-preview"]
     XCTAssertTrue(preview.waitForExistence(timeout: 5), app.debugDescription)
     let initialText = preview.label
-    for style in ["Paper", "Ink", "Ice", "Folio", "Field", "Signal", "Index", "Dusk", "Cutout", "Ribbon"] {
+    for style in ["Biblioteca", "Theatre", "Xuan", "Modern", "Jade", "Swiss", "Sumi", "Hanji", "Offset", "Seoul"] {
       let button = app.buttons["story-style-" + style]
       for _ in 0..<4 {
         if button.isHittable { break }

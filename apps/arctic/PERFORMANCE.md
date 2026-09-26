@@ -331,3 +331,33 @@ caught decoration-driven clipping that assertions alone did not detect; the
 fixed canvas was then rechecked. These are interaction/layout checks, not a
 physical-device 120 Hz measurement. The local reference board was checked at
 390 and 1440 px widths with both feed/story proportions and theme selection.
+
+
+## Printed passage templates (2026-09-26)
+
+The ten sharing templates use six bundled JPEG material assets (2,590,715 bytes
+in total). Full-resolution source artwork stays under Design, outside app
+resources. The largest material is 941 × 1672; the shared paper is 1080 square.
+Assets are reused across previews; no network request or animation timer is
+needed. The native picker renders small versions of the same composition. Only
+the selected card is exported to a 1080 × 1920 bitmap in normal use.
+
+Pagination measures each style's actual minimum font. A short quote can use a
+larger opening sentence only when its combined headline/body metrics fit the
+text region. Long content keeps the same pages across styles. Every texture has
+an explicit canvas frame before clipping, so its intrinsic bitmap dimensions
+cannot shift the motif or type layout.
+
+The opt-in debug proof path renders one synthetic image at a time and yields
+between images. It is excluded from Release. The design board stores compact
+JPEG copies of actual native short/long exports, distinct from generated concept
+studies; it is not a second implementation of the templates. Native export and
+UI checks establish layout/interaction, not physical-device frame rate.
+
+Validation: the final focused simulator flow passed all ten templates, unchanged
+passage text, pagination and native sharing. Twenty real renderer proofs were
+checked at 1080 × 1920; visual review corrected intrinsic-image layout expansion
+and motif/credit collisions. The board's ten short/long pairs, picker and 390px
+layout passed browser checks. Strict Swift formatting and the signed iOS Release
+build passed. Physical-device installation was attempted but the connection
+reset; this pass makes no device frame-rate claim.

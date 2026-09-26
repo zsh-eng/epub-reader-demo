@@ -394,18 +394,26 @@ requires a connection.
 time zone, including archived favourites. **All favourites** also includes
 older favourites without a recorded date; Arctic does not invent dates for them.
 
-In a highlight/note menu, select **Share as image**. Ten themes—Paper, Ink, Ice,
-Folio, Field, Signal, Index, Dusk, Cutout and Ribbon—use a discreet, theme-coloured
-Arctic mark, distinct typography and graphic treatments. They share the same
-360 × 640 canvas for preview and 1080 × 1920 export. Long passages split
-into readable cards without dropping text. Export renders only the selected
-card, then opens the native share sheet. Save or copy the image for Instagram;
-there is no Meta account integration. Quotes keep their article title and source.
-The [visual reference board](Design/Sharing/index.html) contains source links and
-ten original graphic studies; its browser concepts are labelled separately from
-the native templates. The type, source credit and safe margins draw on
-[Readwise passage sharing](https://docs.readwise.io/reader/docs/faqs/sharing) and
-[editorial quote layouts](https://www.canva.com/templates/s/quote/).
+In a highlight/note menu, select **Share as image**. Ten poster templates—
+Biblioteca, Theatre, Xuan, Modern, Jade, Swiss, Sumi, Hanji, Offset and Seoul—
+combine live typography with local paper, ink and collage textures. Each keeps
+only a small theme-coloured Arctic mark. Short opening sentences can become
+larger display type; long passages use measured pages without dropping text.
+The picker shows actual miniature compositions. Preview and export share a
+360 × 640 canvas; exports are 1080 × 1920. Only the selected card is rasterized
+for the native share sheet. Save or copy the image for Instagram; there is no
+Meta account integration. Quotes keep their article title and source.
+
+The [poster design board](Design/Sharing/PosterLab/index.html) shows actual native
+exports for short and long passages beside ten generated concept posters. Each
+regional exploration links primary design references, exact generation prompts,
+material assets and layout recipes. These are original interpretations of
+specific print traditions, not reproductions or summaries of national styles.
+
+For repeatable design review, the debug-only `-test-story-gallery` flag writes
+20 synthetic short/long proofs to the simulator's Documents/PosterProofs when
+the sharing sheet opens in UI test mode. The focused story UI test checks all
+ten selections, pagination and native sharing. No proof export runs in Release.
 
 X/Twitter links stay HTTPS. Reader uses Defuddle's existing rich X renderer with
 one bounded response from its documented public source,

@@ -1,3 +1,5 @@
+> Historical first studies. The current native templates and generated material studies are in [PosterLab](PosterLab/index.html).
+
 # Arctic sharing references
 
 Open [the visual board](index.html). It works offline and includes ten original CSS/SVG studies. The format control compares 4:5 feed and 9:16 story composition. These are design explorations coordinated with the native export theme names. They use placeholder copy and browser fonts; exact native composition and long-text behavior must be reviewed in the app.
