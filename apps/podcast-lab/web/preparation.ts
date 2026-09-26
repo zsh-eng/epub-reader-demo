@@ -6,6 +6,8 @@ type Status = {
   completedChunks?: number;
   totalChunks?: number;
   draftRevision?: number;
+  analysisRevision?: number;
+  coverageEnd?: number;
 };
 let current: AbortController | undefined;
 let timer = 0;
@@ -25,6 +27,8 @@ export function watchPreparation(
   id: string,
   onReady: () => Promise<void>,
   start = false,
+  onAnalysis?: (revision: number) => Promise<boolean>,
+  initialAnalysisRevision = 0,
 ) {
   stopPreparationWatch();
   const controller = new AbortController();
@@ -46,11 +50,17 @@ export function watchPreparation(
   let revision = 0;
   let phase: string | undefined;
   let draftRevision = -1;
+  let analysisRevision = initialAnalysisRevision;
+  const coverage = document.createElement("p");
+  coverage.className = "analysis-coverage";
+  coverage.hidden = true;
+  root.prepend(coverage);
   const draft = document.createElement("section");
   draft.className = "draft-transcript";
   draft.setAttribute("aria-label", "Draft transcript");
   draft.hidden = true;
-  root.parentElement!.append(draft);
+  const draftHost = document.querySelector(".transcript-empty");
+  draftHost?.append(draft);
   async function poll(start = false) {
     clearTimeout(timer);
     const version = ++revision;
@@ -67,6 +77,10 @@ export function watchPreparation(
       phase = state.phase;
       root.dataset.phase = state.phase;
       label.textContent = state.detail;
+      if (state.coverageEnd !== undefined) {
+        coverage.hidden = false;
+        coverage.textContent = `Analysed through ${Math.floor(state.coverageEnd / 60)}:${String(Math.floor(state.coverageEnd % 60)).padStart(2, "0")}`;
+      }
       progress.hidden = true;
       if (state.phase === "downloading") {
         progress.hidden = false;
@@ -104,6 +118,19 @@ export function watchPreparation(
         step.classList.toggle("done", index < steps.indexOf(state.phase));
         step.classList.toggle("active", index === steps.indexOf(state.phase));
       });
+      if (
+        state.analysisRevision &&
+        state.analysisRevision > analysisRevision &&
+        onAnalysis
+      ) {
+        const applied = await onAnalysis(state.analysisRevision);
+        if (controller.signal.aborted || version !== revision) return;
+        if (applied) analysisRevision = state.analysisRevision;
+        else {
+          timer = window.setTimeout(() => void poll(), 1500);
+          return;
+        }
+      }
       if (state.phase === "ready") {
         await onReady();
         return;
@@ -111,10 +138,12 @@ export function watchPreparation(
       // Stages after ASR replace status fields. Keep the existing draft, or fetch
       // it once when reopening an episode whose speaker analysis is in progress.
       if (
-        (state.draftRevision !== undefined &&
+        draftHost &&
+        !analysisRevision &&
+        ((state.draftRevision !== undefined &&
           state.draftRevision !== draftRevision) ||
-        (draftRevision < 0 &&
-          ["speakers", "analysing", "finishing"].includes(state.phase))
+          (draftRevision < 0 &&
+            ["speakers", "analysing", "finishing"].includes(state.phase)))
       ) {
         const response = await fetch(`${path}/draft`, {
           signal: controller.signal,

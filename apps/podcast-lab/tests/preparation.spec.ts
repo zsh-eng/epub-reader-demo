@@ -14,6 +14,7 @@ async function preparationFixture(page: Page) {
     completedChunks: number | undefined,
     totalChunks: number | undefined,
     draft: { revision: number; paragraphs: string[] } | undefined,
+    analysis: typeof payload | undefined,
     starts = 0;
   await page.route("**/api/preparations", (route) =>
     route.fulfill({ json: phase === "ready" ? [episode.id] : [] }),
@@ -32,6 +33,8 @@ async function preparationFixture(page: Page) {
         completedChunks,
         totalChunks,
         draftRevision: draft?.revision,
+        analysisRevision: analysis?.analysisRevision,
+        coverageEnd: analysis?.coverageEnd,
         detail:
           phase === "failed"
             ? "Preparation was interrupted. Retry to continue."
@@ -59,8 +62,45 @@ async function preparationFixture(page: Page) {
   await page.route(`**/episodes/${episode.id}/episode.json`, (route) =>
     route.fulfill({ json: payload }),
   );
+  await page.route(`**/episodes/${episode.id}/analysis.json?*`, (route) =>
+    route.fulfill({ json: analysis }),
+  );
   return {
     episode,
+    setAnalysis: (revision: number, complete = false) => {
+      analysis = structuredClone(payload);
+      analysis.analysisRevision = revision;
+      analysis.coverageEnd = complete
+        ? payload.duration
+        : revision === 1
+          ? 300
+          : 1800;
+      analysis.analysisComplete = complete;
+      analysis.speakers = [
+        {
+          id: `voice-${revision}`,
+          name: `Host pass ${revision}`,
+          role: "Host",
+          confidence: "likely",
+        },
+      ];
+      analysis.rows.forEach((row: { speaker: string }) => {
+        row.speaker = `voice-${revision}`;
+      });
+      analysis.skips =
+        revision > 1
+          ? [
+              {
+                id: "new-ad",
+                start: 290,
+                end: 330,
+                category: "sponsor",
+                score: 1,
+              },
+            ]
+          : [];
+      if (complete) phase = "ready";
+    },
     setPhase: (next: string) => {
       phase = next;
     },
@@ -138,6 +178,120 @@ test("stream plays during preparation; ready transcript switches to analyzed byt
         .evaluate((a: HTMLAudioElement) => a.paused && a.currentTime > 300),
     )
     .toBe(true);
+  expect(fixture.starts()).toBe(0);
+});
+
+test("cumulative analysis replaces speaker maps without reloading audio or disturbing selection", async ({
+  page,
+}) => {
+  const fixture = await preparationFixture(page);
+  await page.goto(`/#listen/${fixture.episode.id}`);
+  await expect(page.locator("#preparation-status")).toContainText(
+    "Transcribing on your Mac",
+  );
+  await page.locator("audio").evaluate((audio: HTMLAudioElement) => {
+    audio.muted = true;
+  });
+  await page.locator("#play").click();
+  await page.locator("#speed").click();
+  await page.locator("#seek").evaluate((input: HTMLInputElement) => {
+    input.value = "300";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  fixture.setAnalysis(1);
+  await expect(page.locator(".transcript-row").first()).toContainText(
+    "Host pass 1",
+  );
+  await expect(page.locator(".analysis-coverage")).toHaveText(
+    "Analysed through 5:00",
+  );
+  await expect
+    .poll(() =>
+      page
+        .locator("audio")
+        .evaluate((a: HTMLAudioElement) => !a.paused && a.currentTime > 300),
+    )
+    .toBe(true);
+  await page.locator("audio").evaluate((a: HTMLAudioElement) => {
+    a.dataset.loads = "0";
+    a.addEventListener("loadstart", () => {
+      a.dataset.loads = String(Number(a.dataset.loads) + 1);
+    });
+  });
+  await page.locator("#follow").click();
+  const anchor = await page
+    .locator(".transcript-row")
+    .first()
+    .evaluate((node) => ({
+      id: (node as HTMLElement).dataset.index,
+      y: node.getBoundingClientRect().top,
+    }));
+  fixture.setAnalysis(2);
+  await expect(page.locator(".transcript-row").first()).toContainText(
+    "Host pass 2",
+  );
+  await expect(page.locator("#follow")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(page.locator(".analysis-coverage")).toHaveText(
+    "Analysed through 30:00",
+  );
+  await expect(page.locator("audio")).toHaveAttribute("data-loads", "0");
+  const state = await page.locator("audio").evaluate((a: HTMLAudioElement) => ({
+    paused: a.paused,
+    rate: a.playbackRate,
+    time: a.currentTime,
+  }));
+  expect(state.paused).toBe(false);
+  expect(state.rate).toBe(1.25);
+  expect(state.time).toBeLessThan(330);
+  const moved = await page
+    .locator(".transcript-row")
+    .first()
+    .evaluate((node) => ({
+      id: (node as HTMLElement).dataset.index,
+      y: node.getBoundingClientRect().top,
+    }));
+  expect(moved.id).toBe(anchor.id);
+  expect(Math.abs(moved.y - anchor.y)).toBeLessThan(3);
+  await page
+    .locator(".transcript-row")
+    .first()
+    .evaluate((node) => {
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+  fixture.setAnalysis(3, true);
+  // Observe the next status poll, then confirm it did not replace selected text.
+  await page.waitForResponse((response) =>
+    response.url().endsWith(`/api/preparations/${fixture.episode.id}`),
+  );
+  await expect(page.locator(".transcript-row").first()).toContainText(
+    "Host pass 2",
+  );
+  expect(
+    await page.evaluate(() => window.getSelection()?.toString()),
+  ).toContain("Host pass 2");
+  await page.evaluate(() => window.getSelection()?.removeAllRanges());
+  await expect(page.locator(".transcript-row").first()).toContainText(
+    "Host pass 3",
+  );
+  await expect(page.locator("#preparation-status")).toHaveCount(0);
+  await expect(page.locator("audio")).toHaveAttribute("data-loads", "0");
+  // The deferred range is eligible again after an explicit seek.
+  await page.locator("#seek").evaluate((input: HTMLInputElement) => {
+    input.value = "305";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect
+    .poll(() =>
+      page.locator("audio").evaluate((a: HTMLAudioElement) => a.currentTime),
+    )
+    .toBeGreaterThan(330);
   expect(fixture.starts()).toBe(0);
 });
 

@@ -53,6 +53,9 @@ type Episode = {
   skips: Skip[];
   waveform?: number[];
   provenance: Record<string, string>;
+  analysisRevision?: number;
+  coverageEnd?: number;
+  analysisComplete?: boolean;
 };
 const element = <T extends HTMLElement>(id: string) =>
   document.getElementById(id) as T;
@@ -76,8 +79,8 @@ let following = true,
   raf = 0,
   toastTimer = 0;
 let lastSkipped: Skip | undefined;
-// Only an explicit preview or Undo may bypass skipping, and only for this
-// pass through the range. Ordinary seeks and restored positions still skip.
+// Preview, Undo, or publication of a range already under the playhead bypasses
+// skipping for this pass only. Ordinary seeks and restored positions still skip.
 let previewSkip: Skip | undefined;
 let virtual: VirtualTranscript | undefined;
 let speakers = new Map<string, Speaker>();
@@ -362,32 +365,58 @@ async function openEpisode(
   show: Show,
   autoplay = false,
   origin?: ArtworkOrigin,
+  snapshot?: Episode,
 ) {
   const version = ++episodeVersion;
-  if (episodeIdentity === episode.id && (!episode.preparedId || !streaming)) {
+  if (
+    !snapshot &&
+    episodeIdentity === episode.id &&
+    (!episode.preparedId || !streaming)
+  ) {
     revealEpisode(origin);
     if (autoplay) await play();
     return;
   }
   const prepared = episode.preparedId;
-  const next = prepared
-    ? await getJSON<Episode>(`/episodes/${prepared}/episode.json`)
-    : ({
-        title: episode.title,
-        show: show.title,
-        published: episode.published,
-        source: episode.source,
-        duration: episode.duration,
-        audioHash: episode.id,
-        summary: episode.description,
-        rows: [],
-        speakers: [],
-        chapters: [],
-        skips: [],
-        provenance: {},
-      } as Episode);
+  const next =
+    snapshot ??
+    (prepared
+      ? await getJSON<Episode>(`/episodes/${prepared}/episode.json`)
+      : ({
+          title: episode.title,
+          show: show.title,
+          published: episode.published,
+          source: episode.source,
+          duration: episode.duration,
+          audioHash: episode.id,
+          summary: episode.description,
+          rows: [],
+          speakers: [],
+          chapters: [],
+          skips: [],
+          provenance: {},
+        } as Episode));
   if (version !== episodeVersion) return;
-  const upgrading = episodeIdentity === episode.id && streaming && prepared;
+  const upgrading =
+    episodeIdentity === episode.id && streaming && (prepared || snapshot);
+  const refreshing = Boolean(
+    snapshot &&
+    episodeIdentity === episode.id &&
+    !streaming &&
+    data?.audioHash === snapshot.audioHash,
+  );
+  const wasFollowing = following;
+  let anchor: { time: number; offset: number } | undefined;
+  if (refreshing && virtual) {
+    const top = transcript.getBoundingClientRect().top;
+    for (const [index, node] of [...virtual.nodes].sort(([a], [b]) => a - b)) {
+      const rect = node.getBoundingClientRect();
+      if (rect.bottom > top) {
+        anchor = { time: data.rows[index].start, offset: rect.top - top };
+        break;
+      }
+    }
+  }
   // Capture at commit, after payload loading: the user can pause or seek while
   // the ready transcript is fetched. If metadata is pending, restore from disk.
   const handoff =
@@ -400,10 +429,13 @@ async function openEpisode(
       : undefined;
   if (upgrading) autoplay = !audio.paused;
   stopPreparationWatch();
+  document.getElementById("preparation-status")?.remove();
   savePosition();
-  switchingEpisode = true;
-  audio.pause();
-  cancelAnimationFrame(raf);
+  if (!refreshing) {
+    switchingEpisode = true;
+    audio.pause();
+    cancelAnimationFrame(raf);
+  }
   virtual?.destroy();
   virtual = undefined;
   clearTimeout(toastTimer);
@@ -428,16 +460,25 @@ async function openEpisode(
     element(id).replaceChildren();
   data = next;
   element("now-speaker").textContent = data.show;
-  streaming = !prepared;
+  streaming = !prepared && !snapshot;
   element("stream-track").hidden = Boolean(data.waveform?.length);
   element("buffered-ranges").replaceChildren();
   element("stream-progress").style.transform = "scaleX(0)";
-  setPlaybackState("paused");
+  if (!refreshing) setPlaybackState("paused");
   episodeIdentity = episode.id;
-  audio.onloadedmetadata = null;
-  audio.defaultPlaybackRate = audio.playbackRate;
-  audio.src = prepared ? `/episodes/${prepared}/audio` : episode.audioURL;
-  audio.load();
+  if (!refreshing) {
+    audio.onloadedmetadata = null;
+    audio.defaultPlaybackRate = audio.playbackRate;
+    audio.src =
+      prepared || snapshot
+        ? `/episodes/${prepared ?? episode.id}/audio`
+        : episode.audioURL;
+    audio.load();
+  }
+  if (snapshot && (refreshing || upgrading)) {
+    const time = handoff?.time ?? audio.currentTime;
+    previewSkip = data.skips.find((s) => time >= s.start && time < s.end);
+  }
   const image = element<HTMLImageElement>("artwork");
   image.src = show.artwork;
   image.alt = `${show.title} cover`;
@@ -458,6 +499,10 @@ async function openEpisode(
     heading.textContent = "Ready when you are.";
     const note = document.createElement("p");
     note.textContent = "Listen while your transcript prepares.";
+    empty.append(art, heading, note);
+    space.append(empty);
+  }
+  if (!prepared && !snapshot?.analysisComplete) {
     const progress = document.createElement("div");
     progress.id = "preparation-status";
     progress.dataset.phase = "queued";
@@ -465,8 +510,9 @@ async function openEpisode(
       '<div class="preparation-steps" aria-hidden="true">' +
       "<i></i>".repeat(7) +
       '</div><progress class="download-progress" aria-label="Audio download" max="1" hidden></progress><p role="status">Starting preparation</p><button class="pill" hidden>Retry preparation</button>';
-    empty.append(art, heading, note, progress);
-    space.append(empty);
+    const empty = space.querySelector(".transcript-empty");
+    if (empty) empty.append(progress);
+    else element("summary").after(progress);
   }
   speakers = new Map(data.speakers.map((s) => [s.id, s]));
   const credits = element("photo-credits");
@@ -549,9 +595,13 @@ async function openEpisode(
       createRow,
       paintParts,
     );
-  setFollowing(true);
+  if (refreshing) {
+    following = wasFollowing;
+    if (anchor) virtual?.restoreAnchor(findRow(anchor.time), anchor.offset);
+  } else setFollowing(true);
   update();
-  revealEpisode(origin);
+  if (refreshing) renderBuffered();
+  if (!refreshing) revealEpisode(origin);
   const restore = () => {
     if (episodeIdentity !== episode.id) return;
     if (Number.isFinite(audio.duration) && audio.duration > 0) {
@@ -573,7 +623,10 @@ async function openEpisode(
           ? saved.rate
           : 1;
         element("speed").textContent = `${audio.playbackRate}×`;
-        seekTo(saved.time >= data.duration - 1 ? 0 : saved.time);
+        seekTo(
+          saved.time >= data.duration - 1 ? 0 : saved.time,
+          snapshot ? previewSkip : undefined,
+        );
       }
     } catch {
       /* A stale local preference cannot block playback. */
@@ -582,12 +635,14 @@ async function openEpisode(
     switchingEpisode = false;
     renderBuffered();
   };
-  if (audio.readyState >= 1) restore();
-  else audio.onloadedmetadata = restore;
+  if (!refreshing) {
+    if (audio.readyState >= 1) restore();
+    else audio.onloadedmetadata = restore;
+  }
   // Request playback as soon as selection resolves, before waiting for network
   // metadata. The metadata handler restores the episode's saved position.
-  if (autoplay) void play();
-  if (!prepared)
+  if (autoplay && !refreshing) void play();
+  if (!prepared && !snapshot?.analysisComplete)
     watchPreparation(
       episode.id,
       async () => {
@@ -599,7 +654,41 @@ async function openEpisode(
         await openEpisode(episode, show);
         window.dispatchEvent(new Event("undertone-prepared"));
       },
-      autoplay,
+      autoplay && !upgrading && !snapshot,
+      async (revision) => {
+        if (episodeIdentity !== episode.id) return false;
+        const hasSelection = () => {
+          const selected = window.getSelection();
+          return (
+            selected &&
+            !selected.isCollapsed &&
+            selected.anchorNode &&
+            space.contains(selected.anchorNode)
+          );
+        };
+        if (hasSelection()) return false;
+        const expectedVersion = episodeVersion;
+        const payload = await getJSON<Episode>(
+          `/episodes/${episode.id}/analysis.json?revision=${revision}`,
+        );
+        if (
+          episodeIdentity !== episode.id ||
+          episodeVersion !== expectedVersion ||
+          hasSelection()
+        )
+          return false;
+        if (!streaming && payload.audioHash !== data.audioHash)
+          throw new Error("Analysis audio changed");
+        // Payload contains rows AND their names from one pass. Never merge raw
+        // Senko IDs from different passes, even when their strings are equal.
+        await openEpisode(episode, show, false, undefined, payload);
+        if (payload.analysisComplete) {
+          episode.preparedId = episode.id;
+          window.dispatchEvent(new Event("undertone-prepared"));
+        }
+        return true;
+      },
+      snapshot?.analysisRevision ?? 0,
     );
 }
 function revealEpisode(origin?: ArtworkOrigin) {

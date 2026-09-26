@@ -9,7 +9,7 @@ export class VirtualTranscript {
   private observer: ResizeObserver;
   private containerObserver: ResizeObserver;
   private frame = 0;
-  private target: { index: number; part: number } | undefined;
+  private target: { index: number; part: number; offset?: number } | undefined;
 
   constructor(
     private viewport: HTMLElement,
@@ -148,6 +148,13 @@ export class VirtualTranscript {
     this.target = undefined;
   }
 
+  restoreAnchor(index: number, offset: number) {
+    this.target = { index, part: -1, offset };
+    this.viewport.scrollTop = Math.max(0, this.offsets[index] - offset);
+    this.render();
+    this.alignTarget();
+  }
+
   /** Resolve estimated offsets first, then anchor to the measured sentence.
    * Reapply after ResizeObserver measurements; smooth scrolling toward a stale
    * estimate can otherwise stop on an unrelated paragraph. */
@@ -187,7 +194,8 @@ export class VirtualTranscript {
     const rect = this.targetRect();
     if (!rect) return;
     const viewport = this.viewport.getBoundingClientRect();
-    const delta = rect.top - viewport.top - viewport.height * 0.25;
+    const delta =
+      rect.top - viewport.top - (this.target?.offset ?? viewport.height * 0.25);
     if (Math.abs(delta) < 1) return;
     this.viewport.scrollTo({
       top: Math.max(0, this.viewport.scrollTop + delta),
